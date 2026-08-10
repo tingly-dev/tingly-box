@@ -35,6 +35,22 @@ export function serviceToConfigProvider(service: any): ConfigProvider {
 }
 
 /**
+ * Compacts tier numbering so tiers are contiguous starting at 0 while
+ * preserving relative order: tiers {1, 3} become {0, 1}. Mirrors the
+ * backend's save-time normalization (loadbalance.NormalizeServiceTiers) so
+ * the graph shows exactly what gets persisted — emptying T0 (delete or move)
+ * immediately promotes the tiers below it.
+ */
+export function normalizeProviderTiers<T extends { tier?: number }>(providers: T[]): T[] {
+    const distinct = [...new Set(providers.map((p) => p.tier ?? 0))].sort((a, b) => a - b);
+    const rank = new Map(distinct.map((tier, index) => [tier, index]));
+    return providers.map((p) => {
+        const normalized = rank.get(p.tier ?? 0) ?? 0;
+        return normalized === (p.tier ?? 0) ? p : { ...p, tier: normalized };
+    });
+}
+
+/**
  * Converts smart routing services to ensure UUID presence
  * NOTE: Also ensures smart routing rules have UUIDs (backend may not preserve them)
  */
@@ -55,7 +71,9 @@ export function normalizeSmartRoutingServices(smartRouting: SmartRouting[]): Sma
  */
 export function ruleToConfigRecord(rule: Rule): ConfigRecord {
     const services = rule.services || [];
-    const providersList: ConfigProvider[] = services.map(serviceToConfigProvider);
+    // Normalize tiers on load so pre-normalization data (e.g. a persisted
+    // T1/T3 gap) renders in the same canonical shape a save would produce.
+    const providersList: ConfigProvider[] = normalizeProviderTiers(services.map(serviceToConfigProvider));
     const smartRouting = normalizeSmartRoutingServices(rule.smart_routing || []);
 
     return {

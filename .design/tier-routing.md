@@ -223,12 +223,23 @@ This is pinned down by `TestTierRouting_EndToEnd` in `internal/server/priority_r
 
 Breaker accounting is owned by the failover loop itself (`dispatchWithPriorityFailover`), which evaluates every attempt's outcome anyway: a committed gate records `RecordServiceSuccess(ruleUUID, serviceID)`, a retryable failure records `RecordServiceFailure(ruleUUID, serviceID)` for **that attempt's** service before re-selecting. (Originally this bridge lived in `ProtocolRecorder`; #1326 moved it into the loop so breaker updates happen even when request recording is disabled.) The `serviceID` is `FormatServiceID(provider.UUID, model)` = `"provider/model"`, and the breaker key is `FormatBreakerKey(ruleUUID, serviceID)` = `"ruleUUID/provider/model"` — matching `Service.ServiceID()`, so the breaker registry's keys line up exactly with the selection pool.
 
+### Tier normalization (整流)
+
+Tier numbers are **always contiguous starting at 0** — the numbering is canonical, not free-form. `{1, 3}` is rewritten to `{0, 1}` preserving relative order, so deleting or moving the last T0 service automatically promotes the tiers below it (T1 becomes the new T0). Rules never carry gaps or a missing T0.
+
+Both sides enforce the same deterministic compaction (distinct tiers, sorted, remapped to their rank), so they always agree:
+
+- **Backend (authoritative):** `loadbalance.NormalizeServiceTiers` runs on every save (`Config.AddRule` / `Config.UpdateRule`, covering the rule's default pool and each smart-routing partition independently) and once at load via `normalizeRuleBasics` in the migration baseline, which repairs configs persisted before normalization existed.
+- **Frontend (immediate feedback):** `normalizeProviderTiers` (`rule-card/utils.ts`) mirrors it at every mutation point — tier arrows, service delete — plus on load (`ruleToConfigRecord`) and defensively in `buildRuleUpdatePayload`, so the graph shows the exact shape a save will persist.
+
+Consequences for the arrows: moving the **sole** service of the bottom tier further down is a no-op (it would just be renumbered back), so its ↓ arrow is hidden — symmetric with ↑ being hidden on T0. Moving the last T0 service down merges it into the next tier (which becomes the new T0) rather than leaving an empty T0 row.
+
 ### Frontend UX
 
 The routing graph always renders tier rows, even when only one tier exists (T0 is always shown as a visual guide). Each row has a `TierNode` label on the left (`T0`, `T1`, …) and service cards on the right:
 
 - `TierNode` shows a neutral badge (52 px wide, paper background, `text.secondary` label). Hovering it reveals a tooltip explaining what the tier means and how to move services.
-- Each service card has **↑ / ↓ arrow buttons** that move it one tier up or down. The ↑ arrow is hidden on T0 services (can't go higher). ↓ always works and creates a new tier if none exists below.
+- Each service card has **↑ / ↓ arrow buttons** that move it one tier up or down. The ↑ arrow is hidden on T0 services (can't go higher); the ↓ arrow is hidden on the sole service of the bottom tier (see Tier normalization). ↓ on a bottom tier that holds several services still splits a new tier off below.
 - Services in the same tier share load via the sub-tactic (random by default).
 
 The design choice here is **implicit mode activation**: assigning any service a tier flips the rule's `lb_tactic` to `tier` on save. No separate tactic-selector UI is exposed. Moving all services back to a single tier leaves the tactic as `tier` (consistent; the round-trip is safe).

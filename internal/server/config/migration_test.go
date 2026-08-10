@@ -486,3 +486,77 @@ func TestDefaultBuiltinRuleFlagsOnce_PreservesUserOff(t *testing.T) {
 		t.Error("migration re-enabled user-disabled flags; one-time gate is broken")
 	}
 }
+
+func TestNormalizeLegacyConfigBaseline_CompactsTierGaps(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{
+				UUID:     "gappy",
+				Scenario: typ.ScenarioOpenAI,
+				Services: []*loadbalance.Service{
+					{Provider: "p0", Model: "a", Active: true, Tier: 1},
+					{Provider: "p1", Model: "b", Active: true, Tier: 3},
+				},
+			},
+		},
+	}
+
+	normalizeLegacyConfigBaseline(c)
+
+	got := c.Rules[0].Services
+	if got[0].Tier != 0 || got[1].Tier != 1 {
+		t.Fatalf("tiers = [%d, %d], want [0, 1]", got[0].Tier, got[1].Tier)
+	}
+}
+
+func TestUpdateRule_NormalizesTiers(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	prov := &typ.Provider{
+		UUID:     "tier-norm-prov",
+		Name:     "tier-norm-prov",
+		APIBase:  "https://example.com/v1",
+		APIStyle: "openai",
+		Enabled:  true,
+	}
+	if err := cfg.AddProvider(prov); err != nil {
+		t.Fatalf("AddProvider error: %v", err)
+	}
+
+	rule := typ.Rule{
+		UUID:         "tier-norm",
+		Scenario:     typ.ScenarioOpenAI,
+		RequestModel: "tier-norm-model",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			// The T0 service was "deleted": remaining tiers must promote.
+			{Provider: prov.UUID, Model: "a", Active: true, Tier: 1},
+			{Provider: prov.UUID, Model: "b", Active: true, Tier: 2},
+		},
+	}
+	if err := cfg.AddRule(rule); err != nil {
+		t.Fatalf("AddRule error: %v", err)
+	}
+	saved := cfg.GetRuleByUUID("tier-norm")
+	if saved == nil {
+		t.Fatal("rule not found after AddRule")
+	}
+	if saved.Services[0].Tier != 0 || saved.Services[1].Tier != 1 {
+		t.Fatalf("AddRule tiers = [%d, %d], want [0, 1]", saved.Services[0].Tier, saved.Services[1].Tier)
+	}
+
+	rule.Services = []*loadbalance.Service{
+		{Provider: prov.UUID, Model: "a", Active: true, Tier: 2},
+		{Provider: prov.UUID, Model: "b", Active: true, Tier: 5},
+	}
+	if err := cfg.UpdateRule("tier-norm", rule); err != nil {
+		t.Fatalf("UpdateRule error: %v", err)
+	}
+	saved = cfg.GetRuleByUUID("tier-norm")
+	if saved.Services[0].Tier != 0 || saved.Services[1].Tier != 1 {
+		t.Fatalf("UpdateRule tiers = [%d, %d], want [0, 1]", saved.Services[0].Tier, saved.Services[1].Tier)
+	}
+}

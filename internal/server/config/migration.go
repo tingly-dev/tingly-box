@@ -276,6 +276,11 @@ func normalizeRuleBasics(c *Config) bool {
 			rule.LBTactic = normalizedTactic
 			needsSave = true
 		}
+		// Compact tier numbering (contiguous from 0) for configs written
+		// before saves started normalizing tiers.
+		if normalizeRuleServiceTiers(&rule) {
+			needsSave = true
+		}
 		valid = append(valid, rule)
 	}
 	if len(valid) != len(c.Rules) {

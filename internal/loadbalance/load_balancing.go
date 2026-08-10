@@ -20,6 +20,43 @@ type Service struct {
 	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 
+// NormalizeServiceTiers compacts Service.Tier values so tiers are contiguous
+// starting at 0 while preserving relative order: e.g. tiers {1, 3} become
+// {0, 1}. This keeps the persisted shape canonical no matter how services are
+// added, moved, or deleted — emptying T0 automatically promotes T1 to T0.
+// Returns true when any tier was rewritten.
+func NormalizeServiceTiers(services []*Service) bool {
+	distinct := make(map[int]struct{}, len(services))
+	for _, svc := range services {
+		if svc != nil {
+			distinct[svc.Tier] = struct{}{}
+		}
+	}
+	if len(distinct) == 0 {
+		return false
+	}
+	tiers := make([]int, 0, len(distinct))
+	for tier := range distinct {
+		tiers = append(tiers, tier)
+	}
+	slices.Sort(tiers)
+	rank := make(map[int]int, len(tiers))
+	for i, tier := range tiers {
+		rank[tier] = i
+	}
+	changed := false
+	for _, svc := range services {
+		if svc == nil {
+			continue
+		}
+		if normalized := rank[svc.Tier]; normalized != svc.Tier {
+			svc.Tier = normalized
+			changed = true
+		}
+	}
+	return changed
+}
+
 // ServiceID returns a unique string identifier for the service (provider:model).
 func (s *Service) ServiceID() string {
 	return s.GetServiceID().String()

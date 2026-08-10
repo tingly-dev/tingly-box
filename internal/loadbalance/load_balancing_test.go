@@ -632,3 +632,47 @@ func TestServiceStats_GetStats_NewFields(t *testing.T) {
 		t.Errorf("Expected WindowCostTokens = %d, got %d", stats.WindowCostTokens, copy.WindowCostTokens)
 	}
 }
+
+func TestNormalizeServiceTiers(t *testing.T) {
+	svc := func(tier int) *Service { return &Service{Provider: "p", Model: "m", Tier: tier} }
+
+	t.Run("gaps compact preserving order", func(t *testing.T) {
+		services := []*Service{svc(1), svc(3), svc(3), svc(7)}
+		if !NormalizeServiceTiers(services) {
+			t.Fatal("expected change to be reported")
+		}
+		got := []int{services[0].Tier, services[1].Tier, services[2].Tier, services[3].Tier}
+		want := []int{0, 1, 1, 2}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("tiers = %v, want %v", got, want)
+			}
+		}
+	})
+
+	t.Run("already contiguous is a no-op", func(t *testing.T) {
+		services := []*Service{svc(0), svc(1), svc(1), svc(2)}
+		if NormalizeServiceTiers(services) {
+			t.Fatal("expected no change")
+		}
+	})
+
+	t.Run("empty and nil-safe", func(t *testing.T) {
+		if NormalizeServiceTiers(nil) {
+			t.Fatal("nil slice must not report change")
+		}
+		if NormalizeServiceTiers([]*Service{nil, svc(2)}) == false {
+			t.Fatal("expected sole tier-2 service to be promoted to 0")
+		}
+	})
+
+	t.Run("inactive services keep their relative tier", func(t *testing.T) {
+		inactive := svc(1)
+		inactive.Active = false
+		services := []*Service{svc(4), inactive}
+		NormalizeServiceTiers(services)
+		if inactive.Tier != 0 || services[0].Tier != 1 {
+			t.Fatalf("tiers = [%d, %d], want inactive first at 0", services[0].Tier, inactive.Tier)
+		}
+	})
+}

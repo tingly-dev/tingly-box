@@ -612,6 +612,8 @@ func (c *Config) AddRule(rule typ.Rule) error {
 		return err
 	}
 
+	normalizeRuleServiceTiers(&rule)
+
 	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
 		if rc.RequestModel == rule.RequestModel && rc.Scenario == rule.Scenario {
@@ -644,6 +646,8 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	if err := validateSmartRoutingRules(rule); err != nil {
 		return err
 	}
+
+	normalizeRuleServiceTiers(&rule)
 
 	// Claude Desktop pulls its model picker from /v1/models, which lists rule
 	// request models verbatim — the [1m] context-window advertisement must
@@ -2551,6 +2555,21 @@ func validateSmartRoutingRules(rule typ.Rule) error {
 		}
 	}
 	return nil
+}
+
+// normalizeRuleServiceTiers keeps every service pool's tier numbering
+// contiguous from 0 (T0 always exists, no gaps): deleting or moving the last
+// T0 service automatically promotes the tiers below. The rule's default pool
+// and each smart-routing partition are independent pools, normalized
+// separately. Returns true when any tier was rewritten.
+func normalizeRuleServiceTiers(rule *typ.Rule) bool {
+	changed := loadbalance.NormalizeServiceTiers(rule.Services)
+	for i := range rule.SmartRouting {
+		if loadbalance.NormalizeServiceTiers(rule.SmartRouting[i].Services) {
+			changed = true
+		}
+	}
+	return changed
 }
 
 // validateRuleServices checks that all provider UUIDs referenced by services exist

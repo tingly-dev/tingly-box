@@ -8,6 +8,7 @@ import {
     createEmptySmartRouting,
     exportRuleAsJsonlToClipboard,
     exportRuleAsBase64ToClipboard,
+    normalizeProviderTiers,
     pickLbTactic,
 } from './utils';
 import { buildRuleUpdatePayload } from './ruleUpdatePayload';
@@ -332,7 +333,10 @@ export function useSmartRoutingHandlers({
 
         const updated: ConfigRecord = {
             ...configRecord,
-            providers: configRecord.providers.filter((p) => p.uuid !== providerUuid),
+            // Re-compact tiers so removing a tier's last service closes the gap.
+            providers: normalizeProviderTiers(
+                configRecord.providers.filter((p) => p.uuid !== providerUuid),
+            ),
         };
 
         const previousRecord = { ...configRecord };

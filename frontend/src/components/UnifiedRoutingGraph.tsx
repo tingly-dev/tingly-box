@@ -304,6 +304,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Tier layout: all tier groups rendered with TierNode label, always shown.
     // T0 row is always present (even with no providers) to guide users.
     // Each service has up/down arrows; up from T0 is hidden (already highest).
+    // Tiers are kept contiguous from 0 (normalizeProviderTiers on every
+    // mutation + backend save), so down is also hidden for the sole service
+    // of the bottom tier — moving it further would just be renumbered back.
     const renderTierLayout = React.useCallback(() => {
         // Always show at least T0, even when no providers exist
         const groups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
@@ -338,7 +341,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 showTier={false}
                                 forceShowActions={shouldShowActions ?? (hoveredTier === group.tier)}
                                 onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
-                                onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, group.tier + 1) : undefined}
+                                onMoveTierDown={onTierChange && !(idx === groups.length - 1 && group.providers.length === 1) ? () => onTierChange(p.uuid, group.tier + 1) : undefined}
                             />
                         ))}
                         <ActionAddNode

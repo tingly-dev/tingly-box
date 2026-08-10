@@ -76,3 +76,35 @@ describe('buildRuleUpdatePayload', () => {
         ]);
     });
 });
+
+describe('tier normalization', () => {
+    it('compacts tier gaps in the payload (contiguous from 0)', () => {
+        const gappy = makeConfig({
+            providers: [
+                { uuid: 'svc-1', provider: 'prov-1', model: 'a', tier: 1 },
+                { uuid: 'svc-2', provider: 'prov-1', model: 'b', tier: 3 },
+                { uuid: 'svc-3', provider: 'prov-1', model: 'c', tier: 3 },
+            ],
+        });
+
+        const payload = buildRuleUpdatePayload(baseRule, gappy);
+
+        expect(payload.services.map((s) => s.tier)).toEqual([0, 1, 1]);
+    });
+
+    it('normalizes after the filter, so a dropped incomplete entry closes its tier', () => {
+        const withIncomplete = makeConfig({
+            providers: [
+                // Incomplete (no model) entry holds T0 alone — it is filtered
+                // out of the payload, so the survivors must renumber from 0.
+                { uuid: 'svc-0', provider: 'prov-1', model: '', tier: 0 },
+                { uuid: 'svc-1', provider: 'prov-1', model: 'a', tier: 1 },
+                { uuid: 'svc-2', provider: 'prov-1', model: 'b', tier: 2 },
+            ],
+        });
+
+        const payload = buildRuleUpdatePayload(baseRule, withIncomplete);
+
+        expect(payload.services.map((s) => s.tier)).toEqual([0, 1]);
+    });
+});
