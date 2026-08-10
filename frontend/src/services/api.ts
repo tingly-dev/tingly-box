@@ -90,6 +90,22 @@ async function botAccessAPI(path: string, options: RequestInit = {}): Promise<an
 const listBotCapabilities = (botUUID: string) =>
     botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/capabilities`);
 
+// openapi-fetch leaves `data` undefined on non-2xx responses and puts the
+// parsed error body on `error`. Returning `response.data` raw meant every
+// server-side rejection (e.g. rule validation failures) surfaced to callers
+// as `undefined`, crashing `result.success` reads and losing the backend's
+// error message. Normalize into the standard `{success, error}` envelope.
+const unwrap = (response: { data?: any; error?: any }): any => {
+    if (response.data !== undefined) return response.data;
+    const err = response.error;
+    const message =
+        (typeof err === 'string' && err) ||
+        err?.error ||
+        err?.message ||
+        'Request failed';
+    return {success: false, error: message};
+};
+
 // Capability records are exposed separately from the generated bot settings
 // model. Keep the join in one place so every bot surface gets the same
 // per-bot failure fallback while SDK codegen catches up.
@@ -116,7 +132,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/status', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -149,7 +165,7 @@ export const api = {
             if (response.error) {
                 return {success: false, error: 'Request failed'};
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -194,7 +210,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/history', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -210,7 +226,7 @@ export const api = {
                 params: {query: {force} as any},
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -224,7 +240,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -239,7 +255,7 @@ export const api = {
                 params: {path: {uuid}},
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -253,7 +269,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -267,7 +283,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -284,7 +300,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/server/start', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -295,7 +311,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/server/stop', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -306,7 +322,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/server/restart', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -320,7 +336,7 @@ export const api = {
                 headers,
                 body: {client_id: clientId}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -331,7 +347,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/token', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -354,7 +370,7 @@ export const api = {
             if (response.error) {
                 return {success: false, error: 'Request failed', data: []};
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message, data: []};
         }
@@ -368,7 +384,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -382,7 +398,7 @@ export const api = {
                 headers,
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -397,7 +413,7 @@ export const api = {
                 params: {path: {uuid}},
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -411,7 +427,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -433,7 +449,7 @@ export const api = {
                     on_provider_conflict: onProviderConflict,
                 },
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -449,7 +465,7 @@ export const api = {
                 headers,
                 params: {query: {uuid, format}},
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -734,7 +750,7 @@ export const api = {
                     message: 'Hello, this is a test message. Please respond with a short greeting.',
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -756,7 +772,7 @@ export const api = {
                     auth_type: auth_type,
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -777,7 +793,7 @@ export const api = {
                     message: 'Hello, this is a test message. Please respond with a short greeting.',
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -811,7 +827,7 @@ export const api = {
             if (response.error) {
                 return {success: false, error: 'Request failed'};
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -888,7 +904,7 @@ export const api = {
                     }
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -920,7 +936,7 @@ export const api = {
                     } as any
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -956,7 +972,7 @@ export const api = {
                     } as any
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -986,7 +1002,7 @@ export const api = {
                     }
                 }
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1013,7 +1029,7 @@ export const api = {
                 headers,
                 body: data as any
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1028,7 +1044,7 @@ export const api = {
                 headers,
                 params: {query: {session_id}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1043,7 +1059,7 @@ export const api = {
                 headers,
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1065,7 +1081,7 @@ export const api = {
             if (err) {
                 return {success: false, error: 'Request failed', data: err};
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1077,7 +1093,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/oauth/providers', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1092,7 +1108,7 @@ export const api = {
                 headers,
                 params: {path: {type}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1138,7 +1154,7 @@ export const api = {
             if (response.error) {
                 return { success: false, message: 'Failed to apply Codex configuration' };
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return { success: false, message: error?.message || 'Failed to apply Codex configuration' };
         }
@@ -1165,7 +1181,7 @@ export const api = {
             if (response.error) {
                 return { success: false, message: 'Failed to preview Codex configuration' };
             }
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return { success: false, message: error?.message || 'Failed to preview Codex configuration' };
         }
@@ -1197,7 +1213,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/skill-locations', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1216,7 +1232,7 @@ export const api = {
                 headers,
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1231,7 +1247,7 @@ export const api = {
                 headers,
                 params: {path: {id}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1246,7 +1262,7 @@ export const api = {
                 headers,
                 params: {path: {id}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1261,7 +1277,7 @@ export const api = {
                 headers,
                 params: {path: {id}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1273,7 +1289,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/skill-locations/discover', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1288,7 +1304,7 @@ export const api = {
                 headers,
                 body: {locations}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1300,7 +1316,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/skill-locations/scan', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1320,7 +1336,7 @@ export const api = {
                     ...(skillPath && {skill_path: skillPath}),
                 } as any},
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1560,7 +1576,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/imbot-platforms', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1572,7 +1588,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/imbot-settings', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1758,7 +1774,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1788,7 +1804,7 @@ export const api = {
                 headers,
                 body: data as any
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -1817,7 +1833,7 @@ export const api = {
                 params: {path: {uuid}},
                 body: data
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1834,7 +1850,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1851,7 +1867,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1868,7 +1884,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1893,7 +1909,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data as any;
+            return unwrap(response) as any;
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -1918,7 +1934,7 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            return response.data as any;
+            return unwrap(response) as any;
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};
@@ -2036,7 +2052,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/config', {headers});
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -2051,7 +2067,7 @@ export const api = {
                 headers,
                 body: config
             });
-            return response.data;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
