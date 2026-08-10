@@ -48,12 +48,12 @@ func TestRuleThinkingTransform_AnthropicAdaptivePreserved(t *testing.T) {
 	}
 }
 
-func TestRuleThinkingTransform_AnthropicEffortCollapses(t *testing.T) {
-	// Anthropic's ladder has no minimal (→low); xhigh is SDK-defined but not
-	// advertised by any current model (→high).
+func TestRuleThinkingTransform_AnthropicEffortMapping(t *testing.T) {
+	// Anthropic has no minimal level, while xhigh is a distinct native level
+	// on supported models. Model-specific clamping happens in the vendor stage.
 	for level, want := range map[string]anthropic.OutputConfigEffort{
 		typ.ThinkingEffortMinimal: anthropic.OutputConfigEffortLow,
-		typ.ThinkingEffortXHigh:   anthropic.OutputConfigEffortHigh,
+		typ.ThinkingEffortXHigh:   anthropic.OutputConfigEffortXhigh,
 	} {
 		req := &anthropic.MessageNewParams{}
 		ctx := &TransformContext{Request: req}

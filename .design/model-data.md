@@ -19,7 +19,7 @@
 - Schema 直接采用 OpenRouter 模型列表的 `reasoning` 块命名(`supported_efforts` 等),
   而非 Anthropic `capabilities.effort.<level>.supported` 的嵌套布尔树:
   ```json
-  { "id": "claude-opus-4-7", "reasoning": { "dialects": ["adaptive"], "supported_efforts": ["low","medium","high","max"] } }
+  { "id": "claude-opus-4-7", "reasoning": { "dialects": ["adaptive"], "supported_efforts": ["low","medium","high","xhigh","max"] } }
   ```
   `supported_efforts` = `output_config.effort` 支持的档位列表,省略即无 effort 支持;
   没有 `reasoning` 块的模型 = 完全不支持 extended thinking。
@@ -54,6 +54,6 @@
 
 ## 注意
 
-- 最新一代条目(opus-4-8 / sonnet-5 / opus-5 / fable-5)的能力按 opus-4-7 的
-  adaptive-only + effort profile 推断填写(providers.json 仅提供限额),官方 capabilities
-  披露后应回填核对。
+- opus-4-7 / opus-4-8 / sonnet-5 / opus-5 / fable-5 的 effort 档位按 Anthropic
+  官方 effort 文档维护；这些模型明确支持 `xhigh`，运行时不得提前折叠为 `high`。
+  thinking dialect 仍需按官方模型 capabilities 持续核对。

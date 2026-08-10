@@ -49,6 +49,7 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 		require.True(t, ok)
 		assert.False(t, caps.ThinkingEnabled)
 		assert.True(t, caps.ThinkingAdaptive)
+		assert.True(t, caps.EffortLevels["xhigh"])
 	})
 
 	t.Run("no thinking at all", func(t *testing.T) {
@@ -79,6 +80,7 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 			require.True(t, ok, model)
 			assert.False(t, caps.ThinkingEnabled, model)
 			assert.True(t, caps.ThinkingAdaptive, model)
+			assert.True(t, caps.EffortLevels["xhigh"], model)
 			assert.True(t, caps.EffortLevels["max"], model)
 		}
 	})

@@ -25,7 +25,7 @@ func TestAnthropicModelThinkingCaps(t *testing.T) {
 			model:    "claude-opus-4-7",
 			adaptive: true,
 			budget:   false,
-			effort:   []string{"low", "medium", "high", "max"},
+			effort:   []string{"low", "medium", "high", "xhigh", "max"},
 		},
 		{
 			name:     "Claude Opus 4.6",
@@ -102,19 +102,22 @@ func TestAnthropicModelThinkingCaps(t *testing.T) {
 			for _, level := range tt.effort {
 				assert.True(t, caps.EffortLevels[level], "level %s should be supported", level)
 			}
-			assert.False(t, caps.EffortLevels["xhigh"], "no cataloged model advertises xhigh yet")
+			assert.Equal(t, strings.Contains(strings.Join(tt.effort, ","), "xhigh"), caps.EffortLevels["xhigh"])
 		})
 	}
 }
 
 func TestClampAnthropicEffort(t *testing.T) {
 	caps46 := anthropicModelThinkingCaps("claude-opus-4-6")           // low/medium/high/max
+	caps47 := anthropicModelThinkingCaps("claude-opus-4-7")           // low/medium/high/xhigh/max
 	caps45 := anthropicModelThinkingCaps("claude-opus-4-5")           // low/medium/high
 	capsOld := anthropicModelThinkingCaps("claude-sonnet-4-20250514") // no effort
 
 	assert.Equal(t, anthropic.OutputConfigEffortMax, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps46))
 	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortXhigh, caps46),
 		"xhigh steps down to the nearest supported level")
+	assert.Equal(t, anthropic.OutputConfigEffortXhigh, clampAnthropicEffort(anthropic.OutputConfigEffortXhigh, caps47),
+		"Opus 4.7 preserves its native xhigh level")
 	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps45),
 		"Opus 4.5 has no max, steps down to high")
 	assert.Equal(t, anthropic.OutputConfigEffortLow, clampAnthropicEffort("minimal", caps46),
