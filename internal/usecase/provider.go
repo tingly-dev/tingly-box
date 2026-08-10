@@ -172,7 +172,7 @@ type RefreshModelsResult struct {
 // RefreshModels forces a re-resolution of the provider's model list,
 // bypassing the cache (ResolveProviderModels(forceRefresh=true, ...)).
 func (uc *ProviderUseCase) RefreshModels(req RefreshModelsRequest) (RefreshModelsResult, error) {
-	resolved, err := uc.cfg.ResolveProviderModels(true, req.UUID)
+	resolved, err := uc.cfg.ResolveProviderModels(true, false, req.UUID)
 	if err != nil {
 		return RefreshModelsResult{}, err
 	}
@@ -199,7 +199,7 @@ type AvailableModelsResult struct {
 // vmodel level and so could not see virtual providers — see
 // .design/usecase-layer.md, "Known behavioral differences not yet resolved".
 func (uc *ProviderUseCase) AvailableModels(req AvailableModelsRequest) (AvailableModelsResult, error) {
-	resolved, err := uc.cfg.ResolveProviderModels(false, req.UUID)
+	resolved, err := uc.cfg.ResolveProviderModels(false, false, req.UUID)
 	if err != nil {
 		return AvailableModelsResult{}, err
 	}
