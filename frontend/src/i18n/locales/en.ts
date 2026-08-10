@@ -465,6 +465,7 @@ export default {
     },
     "service": {
       "providerNotFound": "Provider not found. Please refresh or re-import.",
+      "providerDisabled": "Provider is disabled — routing skips this service until it is re-enabled.",
       "selectProvider": "Select Provider",
       "selectModel": "Select Model",
       "testService": "Test Service",

@@ -467,6 +467,7 @@ export default {
     },
     "service": {
       "providerNotFound": "找不到该提供商，请刷新或重新导入。",
+      "providerDisabled": "该提供商已禁用——路由会跳过此服务，直到重新启用。",
       "selectProvider": "选择提供商",
       "selectModel": "选择模型",
       "testService": "测试服务",

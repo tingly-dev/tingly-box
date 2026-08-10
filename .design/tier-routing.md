@@ -234,6 +234,12 @@ Both sides enforce the same deterministic compaction (distinct tiers, sorted, re
 
 Consequences for the arrows: moving the **sole** service of the bottom tier further down is a no-op (it would just be renumbered back), so its ↓ arrow is hidden — symmetric with ↑ being hidden on T0. Moving the last T0 service down merges it into the next tier (which becomes the new T0) rather than leaving an empty T0 row.
 
+### Provider-reference validation is incremental (disabled providers don't lock rules)
+
+`Config.validateRuleServices` validates **only references newly introduced by a save**: a reference must point at an existing, enabled provider the moment it is *added* to a rule (typo / stale UUID / picking a disabled provider outside the normal flow are genuine input errors). References the persisted rule already carries are grandfathered — the rule stays fully editable (tier moves, renames, removing the dead reference itself) even after its provider is disabled or deleted.
+
+Rationale: disabling a provider is a temporary, reversible state that the runtime already tolerates — `routing/selector.go` skips services whose provider is missing or disabled at dispatch time — and provider disable/delete never cascade-checks rules, so the "invalid" state is reachable regardless. A save-time hard reject therefore protected no invariant; it only made rules read-only from an unrelated surface (violating "done ≠ locked" / "scope side effects to the current surface"). Instead of blocking, the state is made **visible**: `ServiceNode` shows a warning badge + tooltip ("provider disabled — routing skips this service") on services whose provider is disabled, mirroring the existing provider-missing warning.
+
 ### Frontend UX
 
 The routing graph always renders tier rows, even when only one tier exists (T0 is always shown as a visual guide). Each row has a `TierNode` label on the left (`T0`, `T1`, …) and service cards on the right:

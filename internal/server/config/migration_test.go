@@ -560,3 +560,73 @@ func TestUpdateRule_NormalizesTiers(t *testing.T) {
 		t.Fatalf("UpdateRule tiers = [%d, %d], want [0, 1]", saved.Services[0].Tier, saved.Services[1].Tier)
 	}
 }
+
+// Grandfathered provider references: a rule that already references a
+// provider stays fully editable after that provider is disabled or deleted —
+// only *newly introduced* references are validated strictly.
+func TestUpdateRule_GrandfathersExistingProviderRefs(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	prov := &typ.Provider{
+		UUID:     "gf-prov",
+		Name:     "gf-prov",
+		APIBase:  "https://example.com/v1",
+		APIStyle: "openai",
+		Enabled:  true,
+	}
+	if err := cfg.AddProvider(prov); err != nil {
+		t.Fatalf("AddProvider error: %v", err)
+	}
+
+	rule := typ.Rule{
+		UUID:         "gf-rule",
+		Scenario:     typ.ScenarioOpenAI,
+		RequestModel: "gf-model",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			{Provider: prov.UUID, Model: "a", Active: true, Tier: 0},
+			{Provider: prov.UUID, Model: "b", Active: true, Tier: 1},
+		},
+	}
+	if err := cfg.AddRule(rule); err != nil {
+		t.Fatalf("AddRule error: %v", err)
+	}
+
+	// Disable the provider the rule references.
+	prov.Enabled = false
+	if err := cfg.UpdateProvider(prov.UUID, prov); err != nil {
+		t.Fatalf("disable provider: %v", err)
+	}
+
+	// Editing the rule (e.g. a tier move) must still succeed.
+	rule.Services[0].Tier = 1
+	rule.Services[1].Tier = 0
+	if err := cfg.UpdateRule("gf-rule", rule); err != nil {
+		t.Fatalf("UpdateRule with grandfathered disabled provider: %v", err)
+	}
+
+	// A NEW reference to a disabled provider is still rejected.
+	withNew := rule
+	withNew.Services = append([]*loadbalance.Service{}, rule.Services...)
+	withNew.Services = append(withNew.Services, &loadbalance.Service{Provider: "does-not-exist", Model: "c", Active: true})
+	if err := cfg.UpdateRule("gf-rule", withNew); err == nil {
+		t.Fatal("expected new non-existent provider reference to be rejected")
+	}
+
+	// A brand-new rule referencing the disabled provider is also rejected.
+	fresh := typ.Rule{
+		UUID:         "gf-rule-2",
+		Scenario:     typ.ScenarioOpenAI,
+		RequestModel: "gf-model-2",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			{Provider: prov.UUID, Model: "a", Active: true},
+		},
+	}
+	if err := cfg.AddRule(fresh); err == nil {
+		t.Fatal("expected new rule referencing disabled provider to be rejected")
+	}
+}

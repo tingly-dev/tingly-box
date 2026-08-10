@@ -227,6 +227,10 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
     const providerInfo = getProviderInfo(provider.provider, providersData);
     const isProviderMissing = provider.provider && !providerInfo.exists;
+    // A disabled provider is a legitimate, editable state: routing skips the
+    // service at dispatch time and saves are allowed — surface it instead of
+    // blocking (see .design/tier-routing.md / validateRuleServices).
+    const isProviderDisabled = providerInfo.exists && providerInfo.provider?.enabled === false;
     const hasDualApiStyle = !!(providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic);
     const apiStyleLabel = hasDualApiStyle ? 'openai / anthropic' : apiStyle;
 
@@ -237,7 +241,8 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
             ? `Model: ${provider.model}`
             : `Model: (${t('rule.service.selectModel')})`;
         const styleLine = apiStyleLabel ? `API Style: ${apiStyleLabel}` : '';
-        return [`Provider: ${providerInfo.name}`, modelLine, styleLine].filter(Boolean).join('\n');
+        const disabledLine = isProviderDisabled ? t('rule.service.providerDisabled') : '';
+        return [`Provider: ${providerInfo.name}`, modelLine, styleLine, disabledLine].filter(Boolean).join('\n');
     })();
 
     const handleMenuClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setMenuAnchorEl(e.currentTarget); };
@@ -322,11 +327,16 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
                         {/* Row 2: provider name (center) + api style tag (right) */}
                         <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, position: 'relative', px: '28px' }}>
-                            {isProviderMissing && (
-                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
+                            {(isProviderMissing || isProviderDisabled) && (
+                                <NodeTooltip
+                                    title={isProviderMissing ? t('rule.service.providerNotFound') : t('rule.service.providerDisabled')}
+                                    placement="bottom"
+                                >
+                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
+                                </NodeTooltip>
                             )}
                             <Typography variant="body2" noWrap
-                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
+                                color={isProviderMissing || isProviderDisabled ? 'warning.main' : 'text.secondary'}
                                 sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, maxWidth: '100%', textAlign: 'center' }}>
                                 {providerInfo.name}
                             </Typography>

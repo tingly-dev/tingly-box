@@ -604,8 +604,8 @@ func (c *Config) AddRule(rule typ.Rule) error {
 
 	applyScenarioCreateDefaults(&rule)
 
-	// Validate that all service provider UUIDs exist
-	if err := c.validateRuleServices(rule); err != nil {
+	// A brand-new rule has no grandfathered references — validate everything.
+	if err := c.validateRuleServices(rule, nil); err != nil {
 		return err
 	}
 	if err := validateSmartRoutingRules(rule); err != nil {
@@ -639,8 +639,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Validate that all service provider UUIDs exist
-	if err := c.validateRuleServices(rule); err != nil {
+	// Incremental validation: references the persisted rule already carries
+	// stay editable even if their provider was disabled/deleted since.
+	if err := c.validateRuleServices(rule, c.findRuleByUUID(uid)); err != nil {
 		return err
 	}
 	if err := validateSmartRoutingRules(rule); err != nil {
@@ -2572,48 +2573,70 @@ func normalizeRuleServiceTiers(rule *typ.Rule) bool {
 	return changed
 }
 
-// validateRuleServices checks that all provider UUIDs referenced by services exist
-// and are enabled. This includes both regular services and smart routing services.
-// Returns an error if any service references a non-existent or disabled provider.
-func (c *Config) validateRuleServices(rule typ.Rule) error {
+// validateRuleServices checks provider references incrementally: only
+// references *newly introduced* by this save (absent from the persisted rule,
+// when one exists) must point at an existing, enabled provider — those are
+// genuine input errors (typo, stale UUID, picking a disabled provider outside
+// the normal UI flow). References the rule already carried are always allowed
+// through, even when their provider has since been disabled or deleted:
+// disabling a provider is a temporary, reversible state the runtime already
+// tolerates (the selector skips such services at dispatch time), and blocking
+// every edit of the rule — tier moves, renames, even removing the dead
+// reference itself — would make the rule read-only from an unrelated surface.
+func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 	if c.providerStore == nil {
 		return nil // Skip validation if provider store is not initialized
 	}
 
-	// Validate regular services
+	grandfathered := make(map[string]struct{})
+	if existing != nil {
+		for _, svc := range existing.Services {
+			if svc != nil {
+				grandfathered[svc.Provider] = struct{}{}
+			}
+		}
+		for _, sr := range existing.SmartRouting {
+			for _, svc := range sr.Services {
+				if svc != nil {
+					grandfathered[svc.Provider] = struct{}{}
+				}
+			}
+		}
+	}
+
+	check := func(providerUUID, context string) error {
+		if _, ok := grandfathered[providerUUID]; ok {
+			return nil
+		}
+		provider, err := c.providerStore.GetByUUID(providerUUID)
+		if err != nil {
+			return fmt.Errorf("%s references non-existent provider '%s': %w", context, providerUUID, err)
+		}
+		if provider == nil {
+			return fmt.Errorf("%s references non-existent provider '%s'", context, providerUUID)
+		}
+		if !provider.Enabled {
+			return fmt.Errorf("%s references disabled provider '%s'", context, providerUUID)
+		}
+		return nil
+	}
+
 	for _, svc := range rule.Services {
 		if svc == nil {
 			continue
 		}
-
-		provider, err := c.providerStore.GetByUUID(svc.Provider)
-		if err != nil {
-			return fmt.Errorf("service references non-existent provider '%s': %w", svc.Provider, err)
-		}
-		if provider == nil {
-			return fmt.Errorf("service references non-existent provider '%s'", svc.Provider)
-		}
-		if !provider.Enabled {
-			return fmt.Errorf("service references disabled provider '%s'", svc.Provider)
+		if err := check(svc.Provider, "service"); err != nil {
+			return err
 		}
 	}
 
-	// Validate smart routing services
 	for _, sr := range rule.SmartRouting {
 		for _, svc := range sr.Services {
 			if svc == nil {
 				continue
 			}
-
-			provider, err := c.providerStore.GetByUUID(svc.Provider)
-			if err != nil {
-				return fmt.Errorf("smart routing service references non-existent provider '%s': %w", svc.Provider, err)
-			}
-			if provider == nil {
-				return fmt.Errorf("smart routing service references non-existent provider '%s'", svc.Provider)
-			}
-			if !provider.Enabled {
-				return fmt.Errorf("smart routing service references disabled provider '%s'", svc.Provider)
+			if err := check(svc.Provider, "smart routing service"); err != nil {
+				return err
 			}
 		}
 	}
