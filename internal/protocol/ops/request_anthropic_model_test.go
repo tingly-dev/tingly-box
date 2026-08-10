@@ -141,40 +141,36 @@ func TestApplyAnthropicModelTransform_V1_Claude3Haiku_EnabledDisables(t *testing
 	assert.NotNil(t, result.Thinking.OfDisabled)
 }
 
-func TestApplyAnthropicModelTransform_V1_DisabledThinkingStripsStaleEffort(t *testing.T) {
-	// Regression: a client (or a stale UI selector) can send thinking=disabled
-	// together with a leftover output_config.effort. Effort only makes sense
-	// paired with active thinking, so it must be scrubbed even on a model that
-	// otherwise supports effort — not just clamped to a supported level.
+func TestApplyAnthropicModelTransform_V1_EffortWithoutThinkingPreserved(t *testing.T) {
+	// Effort controls the whole response and does not require a thinking block.
+	// A native client may therefore send output_config.effort by itself.
 	req := &anthropic.MessageNewParams{
-		Model:        anthropic.Model("claude-opus-4-5-20251101"),
+		Model:        anthropic.Model("claude-opus-5"),
 		MaxTokens:    int64(4096),
-		Thinking:     anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}},
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortMedium},
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
 		},
 	}
 
-	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-5-20251101")
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-5")
 
-	assert.Equal(t, anthropic.OutputConfigEffort(""), result.OutputConfig.Effort)
+	assert.Equal(t, anthropic.OutputConfigEffortMedium, result.OutputConfig.Effort)
 }
 
-func TestApplyAnthropicModelTransform_Beta_DisabledThinkingStripsStaleEffort(t *testing.T) {
+func TestApplyAnthropicModelTransform_Beta_EffortWithoutThinkingPreserved(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
-		Model:        anthropic.Model("claude-opus-4-5-20251101"),
+		Model:        anthropic.Model("claude-opus-5"),
 		MaxTokens:    int64(4096),
-		Thinking:     anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}},
-		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortHigh},
+		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortMedium},
 		Messages: []anthropic.BetaMessageParam{
 			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
 		},
 	}
 
-	result := ApplyAnthropicBetaModelTransform(req, "claude-opus-4-5-20251101")
+	result := ApplyAnthropicBetaModelTransform(req, "claude-opus-5")
 
-	assert.Equal(t, anthropic.BetaOutputConfigEffort(""), result.OutputConfig.Effort)
+	assert.Equal(t, anthropic.BetaOutputConfigEffortMedium, result.OutputConfig.Effort)
 }
 
 func TestApplyAnthropicModelTransform_V1_AdaptiveWithEffort_FallsBackToBudget(t *testing.T) {

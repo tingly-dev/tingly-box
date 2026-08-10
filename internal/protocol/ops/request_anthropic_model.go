@@ -41,15 +41,6 @@ var anthropicEffortLadder = []anthropic.OutputConfigEffort{
 	anthropic.OutputConfigEffortMax,
 }
 
-// effortSurvives reports whether output_config.effort should be kept on the
-// outbound request: only when the final thinking config actually ends up
-// enabled or adaptive. Effort paired with disabled/unset thinking is
-// meaningless to Anthropic's API and must not reach the wire — e.g. a client
-// that toggles thinking off but leaves a stale effort selector set.
-func effortSurvives(hasEnabled, hasAdaptive bool) bool {
-	return hasEnabled || hasAdaptive
-}
-
 // clampAnthropicEffort clamps an effort value to the model's supported set:
 // the nearest supported level at or below the requested one wins, stepping up
 // only when nothing at or below is supported. Returns "" when the model has no
@@ -86,9 +77,9 @@ func clampAnthropicEffort(effort anthropic.OutputConfigEffort, caps catalog.Clau
 //   - enabled(budget) requested on an adaptive-only model (Opus 4.7+) →
 //     adaptive, with output_config.effort derived from the budget via
 //     typ.ThinkingEffortFromBudget (effort is the fallback in that direction).
-//   - output_config.effort stripped/clamped to the model's supported levels;
-//     stripped entirely when the final thinking config is disabled/unset,
-//     since effort paired with no active thinking is meaningless to the API.
+//   - output_config.effort clamped to the model's supported levels independently
+//     of thinking mode. Anthropic effort controls the whole response and is
+//     valid without explicitly enabled thinking.
 //
 // Note: This applies to ALL Anthropic API requests, regardless of authentication method
 // (API key or OAuth token). The limitation is in the Anthropic API itself, not the auth method.
@@ -125,11 +116,7 @@ func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model strin
 		}
 	}
 
-	if effortSurvives(req.Thinking.OfEnabled != nil, req.Thinking.OfAdaptive != nil) {
-		req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort, caps)
-	} else {
-		req.OutputConfig.Effort = ""
-	}
+	req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort, caps)
 
 	return req
 }
@@ -169,12 +156,8 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 		}
 	}
 
-	if effortSurvives(req.Thinking.OfEnabled != nil, req.Thinking.OfAdaptive != nil) {
-		req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
-			clampAnthropicEffort(anthropic.OutputConfigEffort(req.OutputConfig.Effort), caps))
-	} else {
-		req.OutputConfig.Effort = ""
-	}
+	req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
+		clampAnthropicEffort(anthropic.OutputConfigEffort(req.OutputConfig.Effort), caps))
 
 	return req
 }
