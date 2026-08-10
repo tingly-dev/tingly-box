@@ -44,10 +44,24 @@ export function serviceToConfigProvider(service: any): ConfigProvider {
 export function normalizeProviderTiers<T extends { tier?: number }>(providers: T[]): T[] {
     const distinct = [...new Set(providers.map((p) => p.tier ?? 0))].sort((a, b) => a - b);
     const rank = new Map(distinct.map((tier, index) => [tier, index]));
-    return providers.map((p) => {
-        const normalized = rank.get(p.tier ?? 0) ?? 0;
-        return normalized === (p.tier ?? 0) ? p : { ...p, tier: normalized };
-    });
+    return providers.map((p) => ({ ...p, tier: rank.get(p.tier ?? 0)! }));
+}
+
+/**
+ * Normalizes every tier pool of a ConfigRecord: the default provider pool and
+ * each smart-routing partition are independent pools, compacted separately —
+ * mirroring the backend's normalizeRuleServiceTiers so a save can never
+ * persist a shape the graph isn't already showing.
+ */
+export function normalizeConfigRecordTiers(record: ConfigRecord): ConfigRecord {
+    return {
+        ...record,
+        providers: normalizeProviderTiers(record.providers),
+        smartRouting: (record.smartRouting || []).map((sr) => ({
+            ...sr,
+            services: normalizeProviderTiers(sr.services || []),
+        })),
+    };
 }
 
 /**

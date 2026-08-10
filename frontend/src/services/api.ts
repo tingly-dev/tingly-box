@@ -6,9 +6,11 @@ import type {BotChat, BotSettings} from '@/types/bot';
 import {getApiBaseUrl} from '../utils/protocol';
 import {
     controlApi,
+    errorMessage,
     getControlApiClient as getClient,
     getControlApiHeaders as getAuthHeaders,
     resetControlApiClient as resetClient,
+    unwrap,
 } from './openapi';
 
 // Get user auth token for UI and control API from localStorage
@@ -90,21 +92,6 @@ async function botAccessAPI(path: string, options: RequestInit = {}): Promise<an
 const listBotCapabilities = (botUUID: string) =>
     botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/capabilities`);
 
-// openapi-fetch leaves `data` undefined on non-2xx responses and puts the
-// parsed error body on `error`. Returning `response.data` raw meant every
-// server-side rejection (e.g. rule validation failures) surfaced to callers
-// as `undefined`, crashing `result.success` reads and losing the backend's
-// error message. Normalize into the standard `{success, error}` envelope.
-const unwrap = (response: { data?: any; error?: any }): any => {
-    if (response.data !== undefined) return response.data;
-    const err = response.error;
-    const message =
-        (typeof err === 'string' && err) ||
-        err?.error ||
-        err?.message ||
-        'Request failed';
-    return {success: false, error: message};
-};
 
 // Capability records are exposed separately from the generated bot settings
 // model. Keep the join in one place so every bot surface gets the same
@@ -143,7 +130,7 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/providers', {headers});
-            const body = response.data;
+            const body = unwrap(response);
             if (body?.success && body?.data) {
                 // Sort providers alphabetically by name to reduce UI changes
                 body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -160,11 +147,6 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/provider-templates', {headers});
-            // openapi-fetch returns { data, error, response }
-            // Check for error in response first
-            if (response.error) {
-                return {success: false, error: 'Request failed'};
-            }
             return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
@@ -179,10 +161,9 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            const body = response.data;
             // Model ordering is authoritative from the backend
             // (config.SortProviderModels); do not re-sort here.
-            return body;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -196,10 +177,9 @@ export const api = {
                 headers,
                 params: {path: {uuid}}
             });
-            const body = response.data;
             // Model ordering is authoritative from the backend
             // (config.SortProviderModels); do not re-sort here.
-            return body;
+            return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -366,9 +346,8 @@ export const api = {
                 headers,
                 params: {query: {scenario}}
             });
-            // openapi-fetch returns { data, error, response }
             if (response.error) {
-                return {success: false, error: 'Request failed', data: []};
+                return {success: false, error: errorMessage(response.error), data: []};
             }
             return unwrap(response);
         } catch (error: any) {
@@ -823,10 +802,6 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/info/version/check', {headers});
-            // openapi-fetch returns { data, error, response }
-            if (response.error) {
-                return {success: false, error: 'Request failed'};
-            }
             return unwrap(response);
         } catch (error: any) {
             return {success: false, error: error.message};
@@ -1151,8 +1126,10 @@ export const api = {
                     oauthProviderUuid: oauthProviderUuid ?? '',
                 },
             });
+            // Callers read `message` (not `error`) on this endpoint — keep the
+            // shape but carry the backend's real message instead of a generic.
             if (response.error) {
-                return { success: false, message: 'Failed to apply Codex configuration' };
+                return { success: false, message: errorMessage(response.error) };
             }
             return unwrap(response);
         } catch (error: any) {
@@ -1179,7 +1156,7 @@ export const api = {
                 },
             });
             if (response.error) {
-                return { success: false, message: 'Failed to preview Codex configuration' };
+                return { success: false, message: errorMessage(response.error) };
             }
             return unwrap(response);
         } catch (error: any) {

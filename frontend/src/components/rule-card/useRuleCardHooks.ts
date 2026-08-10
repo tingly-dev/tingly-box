@@ -8,7 +8,7 @@ import {
     createEmptySmartRouting,
     exportRuleAsJsonlToClipboard,
     exportRuleAsBase64ToClipboard,
-    normalizeProviderTiers,
+    normalizeConfigRecordTiers,
     pickLbTactic,
 } from './utils';
 import { buildRuleUpdatePayload } from './ruleUpdatePayload';
@@ -145,6 +145,10 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
         [rule, onRuleChange, showNotification]
     );
 
+    // Both commit paths normalize tiers (contiguous from 0, per pool) before
+    // display + save, so every mutation — tier moves, deletes, future editors —
+    // shows exactly the shape the backend will persist without each handler
+    // having to remember to normalize.
     const updateField = useCallback(
         async (
             configRecord: ConfigRecord | null,
@@ -155,7 +159,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
             if (!configRecord) return false;
 
             const previousRecord = { ...configRecord };
-            const updated = { ...configRecord, [field]: value };
+            const updated = normalizeConfigRecordTiers({ ...configRecord, [field]: value });
             setConfigRecord(updated);
 
             const success = await autoSave(updated);
@@ -176,9 +180,10 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
             if (!configRecord) return false;
 
             const previousRecord = { ...configRecord };
-            setConfigRecord(newConfigRecord);
+            const updated = normalizeConfigRecordTiers(newConfigRecord);
+            setConfigRecord(updated);
 
-            const success = await autoSave(newConfigRecord);
+            const success = await autoSave(updated);
             if (!success) {
                 setConfigRecord(previousRecord);
             }
@@ -312,10 +317,12 @@ export function useSmartRoutingHandlers({
             return rule;
         });
 
-        const updated: ConfigRecord = {
+        // Normalize so removing a partition tier's last service closes the gap
+        // in the display exactly like the backend will in the persisted rule.
+        const updated: ConfigRecord = normalizeConfigRecordTiers({
             ...configRecord,
             smartRouting: updatedSmartRouting,
-        };
+        });
 
         const previousRecord = { ...configRecord };
         setConfigRecord(updated);
@@ -331,13 +338,11 @@ export function useSmartRoutingHandlers({
     const handleDeleteDefaultProvider = useCallback(async (providerUuid: string) => {
         if (!configRecord) return;
 
-        const updated: ConfigRecord = {
+        // Re-compact tiers so removing a tier's last service closes the gap.
+        const updated: ConfigRecord = normalizeConfigRecordTiers({
             ...configRecord,
-            // Re-compact tiers so removing a tier's last service closes the gap.
-            providers: normalizeProviderTiers(
-                configRecord.providers.filter((p) => p.uuid !== providerUuid),
-            ),
-        };
+            providers: configRecord.providers.filter((p) => p.uuid !== providerUuid),
+        });
 
         const previousRecord = { ...configRecord };
         setConfigRecord(updated);

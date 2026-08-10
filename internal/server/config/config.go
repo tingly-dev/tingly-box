@@ -2588,35 +2588,42 @@ func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 		return nil // Skip validation if provider store is not initialized
 	}
 
-	grandfathered := make(map[string]struct{})
+	// Grandfathering is per exact (provider, model) reference, not per
+	// provider UUID: a provider-level pass would also waive validation for
+	// brand-new services that happen to reuse an already-referenced (but
+	// disabled/deleted) provider, letting a rule accumulate fresh dangling
+	// references. Pair granularity keeps the promised edits working — tier
+	// moves, renames, removing the dead reference — while any new reference
+	// still has to point at an existing, enabled provider.
+	var grandfathered map[string]struct{}
 	if existing != nil {
-		for _, svc := range existing.Services {
-			if svc != nil {
-				grandfathered[svc.Provider] = struct{}{}
-			}
-		}
-		for _, sr := range existing.SmartRouting {
-			for _, svc := range sr.Services {
+		grandfathered = make(map[string]struct{})
+		addRefs := func(services []*loadbalance.Service) {
+			for _, svc := range services {
 				if svc != nil {
-					grandfathered[svc.Provider] = struct{}{}
+					grandfathered[svc.ServiceID()] = struct{}{}
 				}
 			}
 		}
+		addRefs(existing.Services)
+		for _, sr := range existing.SmartRouting {
+			addRefs(sr.Services)
+		}
 	}
 
-	check := func(providerUUID, context string) error {
-		if _, ok := grandfathered[providerUUID]; ok {
+	check := func(svc *loadbalance.Service, context string) error {
+		if _, ok := grandfathered[svc.ServiceID()]; ok {
 			return nil
 		}
-		provider, err := c.providerStore.GetByUUID(providerUUID)
+		provider, err := c.providerStore.GetByUUID(svc.Provider)
 		if err != nil {
-			return fmt.Errorf("%s references non-existent provider '%s': %w", context, providerUUID, err)
+			return fmt.Errorf("%s references non-existent provider '%s': %w", context, svc.Provider, err)
 		}
 		if provider == nil {
-			return fmt.Errorf("%s references non-existent provider '%s'", context, providerUUID)
+			return fmt.Errorf("%s references non-existent provider '%s'", context, svc.Provider)
 		}
 		if !provider.Enabled {
-			return fmt.Errorf("%s references disabled provider '%s'", context, providerUUID)
+			return fmt.Errorf("%s references disabled provider '%s'", context, svc.Provider)
 		}
 		return nil
 	}
@@ -2625,7 +2632,7 @@ func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 		if svc == nil {
 			continue
 		}
-		if err := check(svc.Provider, "service"); err != nil {
+		if err := check(svc, "service"); err != nil {
 			return err
 		}
 	}
@@ -2635,7 +2642,7 @@ func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 			if svc == nil {
 				continue
 			}
-			if err := check(svc.Provider, "smart routing service"); err != nil {
+			if err := check(svc, "smart routing service"); err != nil {
 				return err
 			}
 		}

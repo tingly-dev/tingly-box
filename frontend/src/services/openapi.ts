@@ -38,7 +38,7 @@ export const getControlApiHeaders = async (): Promise<Record<string, string>> =>
     return {};
 };
 
-const errorMessage = (error: unknown): string => {
+export const errorMessage = (error: unknown): string => {
     if (error instanceof Error) {
         return error.message;
     }
@@ -46,7 +46,21 @@ const errorMessage = (error: unknown): string => {
         const value = error as { error?: string; message?: string };
         return value.error || value.message || 'Request failed';
     }
+    if (typeof error === 'string' && error) {
+        return error;
+    }
     return 'Request failed';
+};
+
+// unwrap normalizes a raw openapi-fetch response for call sites that manage
+// their own client/headers/try-catch (unlike controlApi, which owns all of
+// that): non-2xx leaves `data` undefined and puts the parsed error body on
+// `error`, so returning `data` raw would crash `result.success` readers and
+// swallow the backend's message. Lives here so the message-extraction ladder
+// (errorMessage) exists exactly once.
+export const unwrap = (response: { data?: any; error?: any }): any => {
+    if (response.data !== undefined) return response.data;
+    return {success: false, error: errorMessage(response.error)};
 };
 
 export const controlApi = async (

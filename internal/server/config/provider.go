@@ -373,6 +373,10 @@ func (c *Config) removeProviderServicesFromRules(providerUUID string) {
 		}
 
 		if ruleModified {
+			// This cascade writes rules without going through UpdateRule, so
+			// it must re-compact tiers itself — deleting a tier's last
+			// service would otherwise persist a gap (e.g. {1,2} with no T0).
+			normalizeRuleServiceTiers(rule)
 			updatedRuleUUIDs = append(updatedRuleUUIDs, rule.UUID)
 		}
 	}

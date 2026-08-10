@@ -26,20 +26,14 @@ type Service struct {
 // added, moved, or deleted — emptying T0 automatically promotes T1 to T0.
 // Returns true when any tier was rewritten.
 func NormalizeServiceTiers(services []*Service) bool {
-	distinct := make(map[int]struct{}, len(services))
+	tiers := make([]int, 0, len(services))
 	for _, svc := range services {
 		if svc != nil {
-			distinct[svc.Tier] = struct{}{}
+			tiers = append(tiers, svc.Tier)
 		}
 	}
-	if len(distinct) == 0 {
-		return false
-	}
-	tiers := make([]int, 0, len(distinct))
-	for tier := range distinct {
-		tiers = append(tiers, tier)
-	}
 	slices.Sort(tiers)
+	tiers = slices.Compact(tiers)
 	rank := make(map[int]int, len(tiers))
 	for i, tier := range tiers {
 		rank[tier] = i

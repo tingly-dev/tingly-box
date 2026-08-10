@@ -17,7 +17,7 @@ import { QuickProbeButton } from '@/components/probe';
 import { Box } from '@mui/material';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
-import { formatRuleFlags, normalizeProviderTiers, parseRuleFlags } from '@/components/rule-card/utils';
+import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
@@ -167,14 +167,12 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         await updateField(configRecord, setConfigRecord, 'smartEnabled', !configRecord.smartEnabled);
     }, [configRecord, updateField]);
 
-    // Handler: Delete provider. Re-compact tiers afterwards so removing a
-    // tier's last service closes the gap (T1 promotes to T0, etc.).
+    // Handler: Delete provider. updateField re-compacts tiers on commit, so
+    // removing a tier's last service closes the gap (T1 promotes to T0).
     const handleDeleteProvider = useCallback(
         async (_recordId: string, providerId: string) => {
             if (configRecord) {
-                const remaining = normalizeProviderTiers(
-                    configRecord.providers.filter((p) => p.uuid !== providerId),
-                );
+                const remaining = configRecord.providers.filter((p) => p.uuid !== providerId);
                 await updateField(configRecord, setConfigRecord, 'providers', remaining);
             }
         },
@@ -200,15 +198,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Handler: Update a service's tier. Setting any service's tier to > 0
     // flips the rule into "tier" tactic on save (handled in pickLbTactic).
-    // Tiers are re-compacted after the move so numbering stays contiguous
-    // from T0 — moving the last T0 service down promotes the tiers below,
-    // and moving past the bottom tier is a no-op instead of minting T(n+1).
+    // updateField re-compacts tiers on commit, so moving the last T0 service
+    // down promotes the tiers below and moving past the bottom is a no-op.
     const handleProviderTierChange = useCallback(
         async (providerUuid: string, tier: number) => {
             if (!configRecord) return;
-            const updated = normalizeProviderTiers(configRecord.providers.map((p) =>
+            const updated = configRecord.providers.map((p) =>
                 p.uuid === providerUuid ? { ...p, tier } : p,
-            ));
+            );
             await updateField(configRecord, setConfigRecord, 'providers', updated);
         },
         [configRecord, updateField, setConfigRecord]
