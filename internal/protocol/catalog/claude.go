@@ -143,3 +143,35 @@ func LookupClaudeThinkingCaps(model string) (ClaudeThinkingCaps, bool) {
 	}
 	return ClaudeThinkingCaps{}, false
 }
+
+// hasClaudeCatalogEntry is the strict identity check used by completeness
+// tests. Provider decorations are normalized, but the resulting model id must
+// equal a full or date-stripped catalog key; a future family must not inherit
+// an older entry merely because runtime lookup allows decorated substrings.
+func hasClaudeCatalogEntry(model string) bool {
+	m, ok := normalizeClaudeCatalogID(model)
+	if !ok {
+		return false
+	}
+	for _, e := range claudeCapsIndex() {
+		if m == e.key {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeClaudeCatalogID(model string) (string, bool) {
+	m := strings.ToLower(strings.TrimSpace(model))
+	start := strings.Index(m, "claude-")
+	if start < 0 {
+		return "", false
+	}
+	m = m[start:]
+	m = strings.TrimSuffix(m, "-v1:0")
+	m = strings.TrimSuffix(m, "-thinking")
+	if at := strings.IndexByte(m, '@'); at >= 0 {
+		m = m[:at]
+	}
+	return m, m != ""
+}

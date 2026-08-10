@@ -11,8 +11,9 @@ import (
 
 // TestClaudeCatalogCoversProvidersJSON is the completeness invariant between
 // the offering registry and this capability catalog: every Claude model any
-// provider offers must resolve to a catalog entry. When this fails, add the
-// new model to claude.models.json — do not special-case it in code.
+// provider offers must match a catalog entry after known provider decorations
+// are removed. When this fails, add the new model to claude.models.json — do
+// not let a future family pass through runtime substring matching.
 func TestClaudeCatalogCoversProvidersJSON(t *testing.T) {
 	raw, err := os.ReadFile("../../data/providers.json")
 	require.NoError(t, err)
@@ -34,8 +35,7 @@ func TestClaudeCatalogCoversProvidersJSON(t *testing.T) {
 				continue
 			}
 			checked++
-			_, ok := LookupClaudeThinkingCaps(m.ID)
-			require.True(t, ok,
+			require.True(t, hasClaudeCatalogEntry(m.ID),
 				"provider %q offers %q but the Claude catalog has no entry for it — add it to claude.models.json",
 				providerID, m.ID)
 		}

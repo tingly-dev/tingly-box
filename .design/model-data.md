@@ -41,7 +41,9 @@
 - 查询按"完整 id + 去日期 family 名"双索引、最长 key 优先做子串匹配,所以裸名
   (`claude-opus-4-5`)、带日期 id、云厂商修饰名(`us.anthropic.…-v1:0`、`…@20251001`)都能解析。
 - **完备性不变式**:`catalog/completeness_test.go` 断言 providers.json 中出现的每个 Claude
-  模型 id 都能在 catalog 中解析。加新模型先加 catalog,再加 providers.json,否则测试失败。
+  模型 id 去除已知云厂商修饰后必须与 catalog 的完整 id 或去日期 family **精确相等**。
+  完备性检查不复用运行时的宽松子串查询,避免新模型误借旧 family 的能力。加新模型先加
+  catalog,再加 providers.json,否则测试失败。
 - 不在 catalog 中的模型(第三方代理模型、比快照新的发布)由消费方给保守兜底
   (thinking 场景:budget-only、剥离 effort,见 `ops.anthropicModelThinkingCaps`)。
 

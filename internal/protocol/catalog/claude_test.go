@@ -94,3 +94,22 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func TestHasClaudeCatalogEntryUsesStrictNormalizedIdentity(t *testing.T) {
+	for _, model := range []string{
+		"claude-opus-4-7",
+		"anthropic.claude-haiku-4-5-20251001-v1:0",
+		"claude-haiku-4-5@20251001",
+		"claude-opus-4-6-thinking",
+	} {
+		assert.True(t, hasClaudeCatalogEntry(model), model)
+	}
+
+	// Runtime lookup intentionally accepts decorated substrings, but that
+	// permissiveness must not make the completeness invariant accept a new
+	// model by borrowing an older family's capabilities.
+	_, runtimeMatch := LookupClaudeThinkingCaps("claude-sonnet-4-7")
+	assert.True(t, runtimeMatch, "regression fixture must demonstrate the permissive runtime lookup")
+	assert.False(t, hasClaudeCatalogEntry("claude-sonnet-4-7"))
+	assert.False(t, hasClaudeCatalogEntry("claude-opus-4-7-experimental"))
+}
