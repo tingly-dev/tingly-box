@@ -6,7 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // RemotePairEnable enables or disables RequirePairing for a bot.

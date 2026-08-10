@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // settingsStoreInterface is a test interface for the settings store

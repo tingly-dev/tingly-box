@@ -224,7 +224,7 @@ leads with access-key/secret, bearer optional; encryption deferred.
 
 | File | Role |
 |---|---|
-| `ai/provider.go`, `internal/data/db/provider_store.go` | Auth types, bundle, persistence — reused as-is |
+| `ai/provider.go`, `../internal/db/provider_store.go` | Auth types, bundle, persistence — reused as-is |
 | `ai/credential.go` | Field keys, `CredentialSchema`, `ValidateCredential`, `IsSecretCredentialField` |
 | `internal/client/{bedrock,vertex,azure}_client.go` | Per-cloud constructors + bundle→SDK translation |
 | `internal/client/{openai,anthropic,google}.go`, `pool.go` | Skip empty key / Vertex config branch / dispatch |

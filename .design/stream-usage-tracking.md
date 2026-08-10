@@ -381,7 +381,7 @@ TPS = (output_tokens - 1) / (completion_time - first_token_time)
 
 ---
 
-## 6. 持久化：`internal/data/db/usage_record.go`
+## 6. 持久化：`../internal/db/usage_record.go`
 
 ### 6.1 模型
 

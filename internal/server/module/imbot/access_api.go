@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 )
@@ -279,6 +279,7 @@ func (h *Handler) PutDirectChatBlocked(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, OKResponse{OK: true})
 }
+
 // PutDirectChatPermissions applies a batch of explicit Direct Chat permission
 // rows in one store transaction, so a preset can never half-apply.
 func (h *Handler) PutDirectChatPermissions(c *gin.Context) {

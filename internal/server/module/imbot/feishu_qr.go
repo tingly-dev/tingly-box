@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // FeishuRegHandler drives the Feishu/Lark one-click app registration flow

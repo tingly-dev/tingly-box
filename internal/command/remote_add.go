@@ -9,7 +9,7 @@ import (
 	"time"
 
 	imbotweixin "github.com/tingly-dev/tingly-box/imbot/platform/weixin"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 

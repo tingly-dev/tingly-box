@@ -98,7 +98,7 @@ append 一条消息要重新 marshal 整个 sessions 文件 → 消息数增长�
 - `Chat.AgentState []byte`（chats.json 里的 blob，`chat_store.go:124`）和
   `smart_guide.SessionStore`（每 chat 一个文件）都在存会话/handoff 状态。
 - `bot.BotSetting`（`chat_store.go:22`）和 `db.Settings`
-  （`internal/data/db/imbot_settings_store.go:21`）是两个手工同步的结构体，
+  （`../internal/db/imbot_settings_store.go:21`）是两个手工同步的结构体，
   已经漂移：`BotSetting` 有 `Token`/`Verbose` 而 `Settings` 没有 `Verbose`，
   `ImBotSettingsRecord` 有 `Debug` 而两个 DTO 都没有。
 - `Chat.ProjectPath` + `Chat.ProjectHistory []string` 是同一个事实的两份表示，
@@ -261,13 +261,13 @@ remote_bindings                   -- 取代 imbot_settings.scenarios JSON 列
   `bot.SettingsStore` + `bot.BotSetting` 也在 `remote/control/bot`。
   评审时设想过 `remote/store` 中立包，最终没必要 —— 接口归领域、实现归 db
   本身就够干净，多一层包反而把「Chat 的接口」和「Chat 的类型」拆到两处。
-- 实现落在 `internal/data/db`，由 `StoreManager` 统一初始化并注入。
+- 实现落在 `../internal/db`，由 `StoreManager` 统一初始化并注入。
   `db.RemoteChatStore` / `db.RemoteSessionStore` 直接实现 remote 的接口，
   返回 remote 的领域类型（`*bot.Chat` / `*session.Session`）——
   **依赖方向是 `db → remote`，单向无环**。
 - **`remote/*` 运行时代码不 import `internal/`**：库叶子
   （access/interaction/channel/scenario/session/binding）零 `internal/` 依赖；
-  宿主胶水（`remote/control/{bot,remoteagent}`）运行时代码零 `internal/data/db`
+  宿主胶水（`remote/control/{bot,remoteagent}`）运行时代码零 `../internal/db`
   类型引用。host↔主模块的唯一胶水是 `remote/control/adapter/`
   （`settings.go` 把 `db.Settings` 映射成 `bot.BotSetting`，
   `persistence.go` 把 `db.Settings` 映射成 `binding.BotInfo`）。
@@ -279,7 +279,7 @@ remote_bindings                   -- 取代 imbot_settings.scenarios JSON 列
 
 ## 6. 数据迁移
 
-复用 `internal/data/db/migrations/` 的既有模式（见 `migrate_imbot_credentials.go`）：
+复用 `../internal/db/migrations/` 的既有模式（见 `migrate_imbot_credentials.go`）：
 
 - 启动时一次性 importer：`bot_chats.json` / `bot_sessions.json` /
   `<dataDir>/sessions/*.json` → 建表 → 逐条 upsert。

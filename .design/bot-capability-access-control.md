@@ -1248,7 +1248,7 @@ data/db stores
 Bot Supervisor / Capabilities / API
 ```
 
-领域类型不放在 `internal/data/db`；存储实现依赖领域，领域不依赖 GORM。
+领域类型不放在 `../internal/db`；存储实现依赖领域，领域不依赖 GORM。
 
 ---
 

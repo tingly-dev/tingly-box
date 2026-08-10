@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )

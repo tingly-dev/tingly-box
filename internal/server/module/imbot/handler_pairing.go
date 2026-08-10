@@ -8,7 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // resolveRequirePairing applies the same tri-state logic as

@@ -18,7 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/claude/fixture"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	bot2 "github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
 	"github.com/tingly-dev/tingly-box/remote/session"

@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // The (agent type → request model, scenario) routing-key mapping that

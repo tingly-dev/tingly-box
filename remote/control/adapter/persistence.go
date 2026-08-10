@@ -5,7 +5,7 @@
 package adapter
 
 import (
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 )
 

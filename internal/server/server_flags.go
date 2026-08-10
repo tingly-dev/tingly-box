@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"

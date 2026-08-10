@@ -20,7 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"

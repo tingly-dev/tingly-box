@@ -392,6 +392,6 @@ Use the repository `ui-preview` workflow to inspect:
 - Parse `YYYY-MM-DD` as local midnight (`new Date(\`${date}T00:00:00\`)`), not bare UTC-parsed dates.
 - `usage_daily` has no scenario/rule/status dimension; those filters require raw scans unless the aggregate schema is extended.
 - Adding a new summed column to both `usage_records` and `usage_daily` does not require dropping `usage_daily`; historical source rows contribute the migrated zero value.
-- A true aggregate layout change must update the schema-rebuild condition and preserve merged/raw equivalence tests in `internal/data/db/usage_daily_test.go`.
+- A true aggregate layout change must update the schema-rebuild condition and preserve merged/raw equivalence tests in `../internal/db/usage_daily_test.go`.
 - `middleware.Gzip()` is JSON-only; never attach it to streaming/SSE routes.
 - API additions start from backend models and Swagger definitions, followed by `task codegen`; generated files are never hand-edited.

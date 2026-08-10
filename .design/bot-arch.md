@@ -72,7 +72,7 @@ remote/control/service.go       NewCore: the one call a host makes to stand
 ```
 
 The runtime packages (`bot`, `remoteagent`) import no `internal/` package;
-`internal/data/db` implements `bot.ChatStoreInterface` / `session.SessionStore`
+`../internal/db` implements `bot.ChatStoreInterface` / `session.SessionStore`
 against the remote-owned domain types directly (the dependency runs
 `db → remote`, never the reverse — same shape as `remote/session`). The host
 exports the shared prompt-reply mechanics (`bot.HandlePromptCallback` /
