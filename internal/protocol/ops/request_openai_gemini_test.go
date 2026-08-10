@@ -316,12 +316,12 @@ func TestApplyGeminiThinkingConfig(t *testing.T) {
 	})
 
 	t.Run("Gemini 3 uses thinking_level", func(t *testing.T) {
-		// The blob's level flows through to thinking_level; Gemini 3 Pro has
-		// no "medium" so it rounds up to "high".
+		// All Gemini 3 models use the same provider-wide effort mapping.
 		models := map[string]string{
-			"gemini-3.0-flash": "medium",
-			"gemini-3.5-pro":   "high",
-			"gemini-3-flash":   "medium",
+			"gemini-3-flash-preview":      "medium",
+			"gemini-3-pro-preview":        "medium",
+			"gemini-3.1-pro-preview":      "medium",
+			"gemini-3.1-pro-preview-live": "medium",
 		}
 
 		for model, wantLevel := range models {
@@ -519,24 +519,20 @@ func TestApplyGeminiPoeTransform(t *testing.T) {
 func TestGetThinkingLevel(t *testing.T) {
 	tests := []struct {
 		name     string
-		model    string
 		effort   string
 		expected string
 	}{
-		{"minimal", "gemini-3.0-flash", "minimal", "minimal"},
-		{"low", "gemini-3.0-flash", "low", "low"},
-		{"medium", "gemini-3.0-flash", "medium", "medium"},
-		{"high", "gemini-3.0-flash", "high", "high"},
-		{"xhigh collapses to high", "gemini-3.0-flash", "xhigh", "high"},
-		{"max collapses to high", "gemini-3-flash-exp", "max", "high"},
-		{"pro rounds minimal up to low", "gemini-3.5-pro", "minimal", "low"},
-		{"pro rounds medium up to high", "gemini-3.5-pro", "medium", "high"},
-		{"pro keeps low", "gemini-3.5-pro", "low", "low"},
+		{"minimal", "minimal", "minimal"},
+		{"low", "low", "low"},
+		{"medium", "medium", "medium"},
+		{"high", "high", "high"},
+		{"xhigh collapses to high", "xhigh", "high"},
+		{"max collapses to high", "max", "high"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getThinkingLevel(tt.model, tt.effort)
+			result := getThinkingLevel(tt.effort)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -592,9 +588,9 @@ func TestBuildGeminiThinkingConfig(t *testing.T) {
 
 	t.Run("Gemini 3 models use thinking_level", func(t *testing.T) {
 		models := []string{
-			"gemini-3.0-flash",
-			"gemini-3.5-pro",
-			"gemini-3-flash",
+			"gemini-3-flash-preview",
+			"gemini-3-pro-preview",
+			"gemini-3.1-pro-preview",
 			"gemini-pro", // fallback to thinking_level
 		}
 

@@ -185,29 +185,21 @@ func buildGeminiThinkingConfig(modelLower, effort string) map[string]interface{}
 	// Gemini 3 uses thinking_level
 	return map[string]interface{}{
 		"thinking_config": map[string]interface{}{
-			"thinking_level": getThinkingLevel(modelLower, effort),
+			"thinking_level": getThinkingLevel(effort),
 		},
 	}
 }
 
 // getThinkingLevel maps a ladder effort level to a Gemini 3 thinking_level
-// (minimal/low/medium/high; xhigh and max collapse to high). Gemini 3 Pro
-// only supports low/high, so minimal rounds up and medium rounds up to keep
-// the "real thinking" intent (Pro's own default is dynamic high).
-func getThinkingLevel(model, effort string) string {
-	isPro := strings.Contains(model, "pro")
+// using one provider-wide mapping: minimal/low/medium/high remain distinct,
+// while xhigh and max collapse to high.
+func getThinkingLevel(effort string) string {
 	switch effort {
 	case thinking.LevelMinimal:
-		if isPro {
-			return "low"
-		}
 		return "minimal"
 	case thinking.LevelLow:
 		return "low"
 	case thinking.LevelMedium:
-		if isPro {
-			return "high"
-		}
 		return "medium"
 	default: // high / xhigh / max / unknown
 		return "high"
