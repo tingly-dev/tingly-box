@@ -12,6 +12,7 @@ import KimiSvg from '@lobehub/icons-static-svg/icons/kimi.svg?url';
 import OpenClawSvg from '@lobehub/icons-static-svg/icons/openclaw.svg?url';
 import OpenAISvg from '@lobehub/icons-static-svg/icons/openai.svg?url';
 import OpenCodeSvg from '@lobehub/icons-static-svg/icons/opencode.svg?url';
+import PiSvg from '@lobehub/icons-static-svg/icons/pi.svg?url';
 import QwenSvg from '@lobehub/icons-static-svg/icons/qwen.svg?url';
 import DeepSeekSvg from '@lobehub/icons-static-svg/icons/deepseek.svg?url';
 import MinimaxSvg from '@lobehub/icons-static-svg/icons/minimax.svg?url';
@@ -55,7 +56,6 @@ import WeComSvg from '@/assets/icons/wecom.svg?url';
 import WeixinSvg from '@/assets/icons/weixin.svg?url';
 import XcodeSvg from '@/assets/icons/xcode.svg?url';
 import VSCodeSvg from '@/assets/icons/vscode.svg?url';
-import PiSvg from '@/assets/icons/pi.svg?url';
 
 interface BrandIconProps {
     size?: number;
