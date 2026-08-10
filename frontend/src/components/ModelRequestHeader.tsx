@@ -162,7 +162,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const handleSetWildcard = () => {
         handleMenuClose();
         if (onModelChange) {
-            onModelChange('[any]');
+            onModelChange('*');
         }
     };
 

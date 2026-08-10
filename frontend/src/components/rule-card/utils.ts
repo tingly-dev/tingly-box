@@ -11,7 +11,7 @@ import { getFlagValue, setFlagValue, flagDefault, isFlagActive, snakeToCamel, ap
  * Checks if a model name is a wildcard that matches any model
  */
 export function isWildcardModelName(modelName: string): boolean {
-    return modelName === '*' || modelName === '[any]';
+    return modelName === '*';
 }
 
 // ============================================================================

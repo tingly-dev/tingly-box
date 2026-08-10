@@ -11,8 +11,7 @@ import (
 
 // Wildcard rule names that match any model
 const (
-	WildcardRuleName    = "*"
-	WildcardRuleNameAlt = "[any]"
+	WildcardRuleName = "*"
 )
 
 // GetEffectiveAffinity returns the effective affinity TTL for a rule.
@@ -268,7 +267,7 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleSce
 // This function is thread-safe as it only performs constant string comparisons
 // and does not access any shared state. It can be called without holding Config.mu.
 func IsWildcardRuleName(name string) bool {
-	return name == WildcardRuleName || name == WildcardRuleNameAlt
+	return name == WildcardRuleName
 }
 
 // MatchRuleByModelAndScenario finds a rule by model name with wildcard support

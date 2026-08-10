@@ -111,7 +111,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
     const handleSetWildcard = () => {
         handleMenuClose();
         if (onUpdate) {
-            onUpdate('[any]');
+            onUpdate('*');
         }
     };
 
