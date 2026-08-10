@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,37 @@ func anthropicExtra() map[string]interface{} {
 		"device":  "integration-test-device",
 		"user_id": "integration-test-account-uuid",
 	}
+}
+
+func TestFullChain_RuleThinkingOffStaysOffForGemini(t *testing.T) {
+	chain := NewTransformChain([]Transform{
+		NewBaseTransform(protocol.TypeOpenAIChat),
+		NewConsistencyTransform(protocol.TypeOpenAIChat),
+		NewRuleThinkingTransform(typ.ThinkingEffortOff),
+		NewVendorTransform(),
+	})
+
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("gemini-2.5-flash"),
+		MaxTokens: 4096,
+		Thinking:  anthropic.ThinkingConfigParamOfEnabled(2048),
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+	ctx := newFullChainContext(req, "https://generativelanguage.googleapis.com", nil)
+
+	result, err := chain.Execute(ctx)
+	require.NoError(t, err)
+	out, ok := result.Request.(*openai.ChatCompletionNewParams)
+	require.True(t, ok)
+	assert.Empty(t, out.ReasoningEffort)
+	assert.NotContains(t, out.ExtraFields(), "thinking")
+	assert.NotContains(t, out.ExtraFields(), "extra_body",
+		"vendor transform must not re-enable thinking from stale base metadata")
+	require.NotNil(t, result.Config.OpenAIConfig)
+	assert.False(t, result.Config.OpenAIConfig.HasThinking)
+	assert.Empty(t, result.Config.OpenAIConfig.ReasoningEffort)
 }
 
 // =============================================

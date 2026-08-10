@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -151,7 +152,13 @@ func TestRuleThinkingTransform_OpenAIOffStripsThinkingExtra(t *testing.T) {
 		"thinking": map[string]interface{}{"type": "enabled"},
 	})
 
-	ctx := &TransformContext{Request: req}
+	ctx := &TransformContext{
+		Request: req,
+		Config: TransformConfig{OpenAIConfig: &protocol.OpenAIConfig{
+			HasThinking:     true,
+			ReasoningEffort: shared.ReasoningEffortMedium,
+		}},
+	}
 	if err := NewRuleThinkingTransform(typ.ThinkingEffortOff).Apply(ctx); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -160,6 +167,12 @@ func TestRuleThinkingTransform_OpenAIOffStripsThinkingExtra(t *testing.T) {
 	}
 	if _, has := req.ExtraFields()["thinking"]; has {
 		t.Errorf("expected `thinking` extra field to be stripped, still present: %#v", req.ExtraFields())
+	}
+	if ctx.Config.OpenAIConfig.HasThinking {
+		t.Error("stale base config still reports thinking enabled")
+	}
+	if ctx.Config.OpenAIConfig.ReasoningEffort != "" {
+		t.Errorf("config reasoning_effort = %q, want empty", ctx.Config.OpenAIConfig.ReasoningEffort)
 	}
 }
 
@@ -233,13 +246,25 @@ func TestRuleThinkingTransform_AnthropicBetaOffDisables(t *testing.T) {
 func TestRuleThinkingTransform_ResponsesOff(t *testing.T) {
 	req := &responses.ResponseNewParams{}
 	req.Reasoning.Effort = shared.ReasoningEffortMedium
-	ctx := &TransformContext{Request: req}
+	ctx := &TransformContext{
+		Request: req,
+		Config: TransformConfig{ResponsesConfig: &protocol.OpenAIConfig{
+			HasThinking:     true,
+			ReasoningEffort: shared.ReasoningEffortMedium,
+		}},
+	}
 
 	if err := NewRuleThinkingTransform(typ.ThinkingEffortOff).Apply(ctx); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	if req.Reasoning.Effort != "" {
 		t.Errorf("reasoning.effort = %q, want empty", req.Reasoning.Effort)
+	}
+	if ctx.Config.ResponsesConfig.HasThinking {
+		t.Error("stale responses config still reports thinking enabled")
+	}
+	if ctx.Config.ResponsesConfig.ReasoningEffort != "" {
+		t.Errorf("config reasoning_effort = %q, want empty", ctx.Config.ResponsesConfig.ReasoningEffort)
 	}
 }
 
