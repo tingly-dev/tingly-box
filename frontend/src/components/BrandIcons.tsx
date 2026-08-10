@@ -55,6 +55,7 @@ import WeComSvg from '@/assets/icons/wecom.svg?url';
 import WeixinSvg from '@/assets/icons/weixin.svg?url';
 import XcodeSvg from '@/assets/icons/xcode.svg?url';
 import VSCodeSvg from '@/assets/icons/vscode.svg?url';
+import PiSvg from '@/assets/icons/pi.svg?url';
 
 interface BrandIconProps {
     size?: number;
@@ -131,6 +132,7 @@ export const Mistral = createBrandIcon(MistralSvg, 'Mistral', false, true);
 export const OpenRouter = createBrandIcon(OpenRouterSvg, 'OpenRouter', false, true);
 export const Xcode = createBrandIcon(XcodeSvg, 'Xcode', true);
 export const VSCode = createBrandIcon(VSCodeSvg, 'VS Code', true);
+export const Pi = createBrandIcon(PiSvg, 'Pi', false, true);
 
 // Reuse Claude icon for Claude Desktop
 export const ClaudeDesktop = Claude;

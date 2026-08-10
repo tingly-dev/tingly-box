@@ -59,6 +59,7 @@ const (
 	ScenarioCodex         RuleScenario = "codex"
 	ScenarioClaudeCode    RuleScenario = "claude_code"
 	ScenarioOpenCode      RuleScenario = "opencode"
+	ScenarioPi            RuleScenario = "pi" // Pi agent (https://github.com/earendil-works/pi)
 	ScenarioXcode         RuleScenario = "xcode"
 	ScenarioVSCode        RuleScenario = "vscode"
 	ScenarioClaudeDesktop RuleScenario = "claude_desktop"
@@ -77,6 +78,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioCodex,
 		ScenarioClaudeCode,
 		ScenarioOpenCode,
+		ScenarioPi,
 		ScenarioXcode,
 		ScenarioVSCode,
 		ScenarioClaudeDesktop,

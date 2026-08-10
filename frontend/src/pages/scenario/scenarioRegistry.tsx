@@ -17,6 +17,7 @@ import {
     OpenAI,
     OpenClaw,
     OpenCode,
+    Pi,
     VSCode,
     Xcode,
 } from '@/components/BrandIcons';
@@ -62,6 +63,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.opencode',
         path: '/agent/opencode',
         icon: (size) => <OpenCode size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'pi',
+        labelKey: 'layout.nav.usePi',
+        descKey: 'scenarioOverview.descriptions.pi',
+        path: '/agent/pi',
+        icon: (size) => <Pi size={size} />,
         hideable: true,
     },
     {

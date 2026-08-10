@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Pi, Xcode, VSCode, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
 import {
     SettingsApplications,
     BarChart as IconChartBar,
@@ -102,6 +102,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'claude_desktop', nav: { path: '/agent/claude_desktop', label: t('layout.nav.useClaudeDesktop', { defaultValue: 'Claude Desktop' }), icon: <ClaudeDesktop size={20} /> } },
             { id: 'codex', nav: { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> } },
             { id: 'opencode', nav: { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> } },
+            { id: 'pi', nav: { path: '/agent/pi', label: t('layout.nav.usePi', { defaultValue: 'Pi' }), icon: <Pi size={20} /> } },
             { id: 'xcode', nav: { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> } },
             { id: 'vscode', nav: { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> } },
         ]);

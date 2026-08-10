@@ -45,6 +45,7 @@ export default {
       "useClaudeCode": "Claude Code",
       "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
+      "usePi": "Pi",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
       "useEmbed": "Embedding",
@@ -1570,6 +1571,7 @@ export default {
       "opencode": "OpenCode AI development environment with BYOK support",
       "xcode": "Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development",
       "vscode": "Bring Your Own Key: Use your own API keys with VS Code Copilot through Tingly Box proxy",
+      "pi": "Pi coding agent through Tingly Box proxy",
       "imagegen": "AI-powered image generation through Tingly Box proxy with multiple model support"
     },
     "vscode": {
@@ -1581,6 +1583,15 @@ export default {
       "openGuide": "Open Guide",
       "configTitle": "Configure VS Code",
       "modalDescription": "Install the Tingly Box extension, then follow the setup guide inside VS Code. The extension handles the required endpoint and API key configuration for you.",
+    },
+    "pi": {
+      "installDescription": "Install pi on your local machine — see the repo for setup instructions.",
+      "viewRepo": "View on GitHub",
+      "applyStepLabel": "Configure Pi",
+      "applyStepDescription": "Point pi's provider base URL and API key at the values above — see pi's docs for the exact config option names.",
+      "openGuide": "View Config",
+      "configTitle": "Configure Pi",
+      "modalDescription": "Point pi's provider base URL and API key at the values shown on this page, then check the repo below for pi's exact configuration options."
     }
   },
   "scenarioOverview": {
@@ -1600,6 +1611,7 @@ export default {
       "opencode": "Open-source coding agent powered by your provider.",
       "xcode": "Bring your model into Xcode's coding intelligence.",
       "vscode": "Power VS Code Copilot Chat through Tingly Box.",
+      "pi": "Route the pi coding agent through your provider.",
       "openai": "Drop-in OpenAI-compatible SDK endpoint.",
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",

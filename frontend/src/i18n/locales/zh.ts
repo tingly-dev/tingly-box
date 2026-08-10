@@ -47,6 +47,7 @@ export default {
       "useClaudeCode": "Claude Code",
       "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
+      "usePi": "Pi",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
       "useEmbed": "Embedding",
@@ -1570,6 +1571,7 @@ export default {
       "opencode": "支持自带密钥（BYOK）的 OpenCode AI 开发环境",
       "xcode": "通过 Tingly Box 代理，在 Xcode 中用于 iOS/macOS 开发的 AI 编码助手",
       "vscode": "自带密钥：通过 Tingly Box 代理，在 VS Code Copilot 中使用你自己的 API Key",
+      "pi": "通过 Tingly Box 代理使用 pi 编码 Agent",
       "imagegen": "通过 Tingly Box 代理进行 AI 图像生成，支持多种模型",
     },
     "vscode": {
@@ -1581,6 +1583,15 @@ export default {
       "openGuide": "打开指引",
       "configTitle": "配置 VS Code",
       "modalDescription": "安装 Tingly Box 扩展，然后按 VS Code 内的设置指引操作。扩展会自动为你处理所需的端点和 API 密钥配置。",
+    },
+    "pi": {
+      "installDescription": "在本机安装 pi —— 具体安装步骤请参考仓库说明。",
+      "viewRepo": "在 GitHub 上查看",
+      "applyStepLabel": "配置 Pi",
+      "applyStepDescription": "把 pi 的 provider base URL 和 API Key 配置为上方的值 —— 具体配置项名称请参考 pi 的文档。",
+      "openGuide": "查看配置",
+      "configTitle": "配置 Pi",
+      "modalDescription": "把 pi 的 provider base URL 和 API Key 配置为本页面上方显示的值，具体配置项请参考下方仓库中的说明。",
     },
   },
   "scenarioOverview": {

@@ -40,6 +40,7 @@ const UseAgentPage = lazy(() => import('./pages/scenario/UseAgentPage'));
 const UseTeamPage = lazy(() => import('./pages/scenario/UseTeamPage'));
 const AgentOverviewPage = lazy(() => import('./pages/scenario/AgentOverviewPage'));
 const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
+const UsePiPage = lazy(() => import('./pages/scenario/UsePiPage'));
 const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const UseVSCodePage = lazy(() => import('./pages/scenario/UseVSCodePage'));
 const UseEmbedPage = lazy(() => import('./pages/scenario/UseEmbedPage'));
@@ -228,6 +229,7 @@ function AppContent() {
                     <Route path="/agent/agent" element={<UseAgentPage />} />
                     <Route path="/agent/team" element={<UseTeamPage />} />
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
+                    <Route path="/agent/pi" element={<UsePiPage />} />
                     <Route path="/agent/xcode" element={<UseXcodePage />} />
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
