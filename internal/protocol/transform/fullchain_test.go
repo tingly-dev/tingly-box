@@ -91,7 +91,7 @@ func TestFullChain_AnthropicV1_To_AnthropicV1_Passthrough(t *testing.T) {
 // Full Chain: Anthropic v1 → Anthropic v1 (Haiku, unsupported model)
 // =============================================
 
-func TestFullChain_AnthropicV1_Haiku_AdaptivePassesThrough(t *testing.T) {
+func TestFullChain_AnthropicV1_Haiku_AdaptiveStripped(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
@@ -117,10 +117,11 @@ func TestFullChain_AnthropicV1_Haiku_AdaptivePassesThrough(t *testing.T) {
 	out, ok := result.Request.(*anthropic.MessageNewParams)
 	require.True(t, ok)
 
-	// Thinking config passes through unchanged regardless of model.
-	assert.NotNil(t, out.Thinking.OfAdaptive, "adaptive thinking should pass through for Haiku")
+	// Adaptive thinking stripped for Haiku
+	assert.Nil(t, out.Thinking.OfAdaptive, "adaptive thinking should be stripped for Haiku")
+	assert.Nil(t, out.Thinking.OfEnabled, "enabled thinking should also be nil")
 
-	// Billing header and metadata still injected
+	// But billing header and metadata still injected
 	require.NotEmpty(t, out.System)
 	assert.Contains(t, out.System[0].Text, "x-anthropic-billing-header")
 	assert.True(t, out.Metadata.UserID.Valid())
@@ -304,7 +305,7 @@ func TestFullChain_AnthropicV1_NonAnthropicProvider_NoVendorTransform(t *testing
 // Full Chain: Anthropic v1 → Anthropic v1 (multi-turn with thinking blocks)
 // =============================================
 
-func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksPreserved(t *testing.T) {
+func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
@@ -345,19 +346,18 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksPreserved(t *testing.T) {
 	// All 4 messages preserved
 	require.Len(t, out.Messages, 4)
 
-	// Thinking blocks preserved in both assistant messages, alongside text blocks
+	// Thinking blocks removed from both assistant messages, text blocks preserved
 	for _, msgIdx := range []int{1, 3} {
-		foundThinking := false
+		for _, block := range out.Messages[msgIdx].Content {
+			assert.Nil(t, block.OfThinking, "thinking block should be filtered in message %d", msgIdx)
+		}
 		foundText := false
 		for _, block := range out.Messages[msgIdx].Content {
-			if block.OfThinking != nil {
-				foundThinking = true
-			}
 			if block.OfText != nil {
 				foundText = true
+				break
 			}
 		}
-		assert.True(t, foundThinking, "thinking block should be preserved in message %d", msgIdx)
 		assert.True(t, foundText, "text block should be preserved in message %d", msgIdx)
 	}
 }
@@ -468,7 +468,7 @@ func TestFullChain_AnthropicV1_Haiku_ExplicitThinkingPreserved(t *testing.T) {
 	})
 
 	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
+		Model:     anthropic.Model("claude-haiku-4-5-20251001"),
 		MaxTokens: 8192,
 		Thinking: anthropic.ThinkingConfigParamUnion{
 			OfEnabled: &anthropic.ThinkingConfigEnabledParam{
@@ -488,8 +488,8 @@ func TestFullChain_AnthropicV1_Haiku_ExplicitThinkingPreserved(t *testing.T) {
 	out, ok := result.Request.(*anthropic.MessageNewParams)
 	require.True(t, ok)
 
-	// Explicitly enabled thinking should be preserved even on unsupported models
-	assert.NotNil(t, out.Thinking.OfEnabled, "explicitly enabled thinking should be preserved on Haiku")
+	// Haiku 4.5 supports budget thinking, so explicit enabled passes through
+	assert.NotNil(t, out.Thinking.OfEnabled, "explicitly enabled thinking should be preserved on Haiku 4.5")
 }
 
 // =============================================
@@ -535,6 +535,56 @@ func TestFullChain_AnthropicV1_SupportedModels(t *testing.T) {
 				"adaptive thinking should be preserved for %s", model)
 
 			// Billing header and metadata should always be present for Anthropic provider
+			require.NotEmpty(t, out.System)
+			assert.Contains(t, out.System[0].Text, "x-anthropic-billing-header")
+			assert.True(t, out.Metadata.UserID.Valid())
+		})
+	}
+}
+
+// =============================================
+// Full Chain: Anthropic v1 → Anthropic v1 (multiple unsupported models table-driven)
+// =============================================
+
+func TestFullChain_AnthropicV1_UnsupportedModels(t *testing.T) {
+	models := []string{
+		"claude-3-5-haiku-20241022",
+		"claude-3-5-sonnet-20241022",
+		"claude-3-7-opus-20250214",
+	}
+
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			chain := NewTransformChain([]Transform{
+				NewBaseTransform(protocol.TypeAnthropicV1),
+				NewConsistencyTransform(protocol.TypeAnthropicV1),
+				NewVendorTransform(),
+			})
+
+			req := &anthropic.MessageNewParams{
+				Model:     anthropic.Model(model),
+				MaxTokens: 4096,
+				Thinking: anthropic.ThinkingConfigParamUnion{
+					OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+				},
+				Messages: []anthropic.MessageParam{
+					anthropic.NewUserMessage(anthropic.NewTextBlock("test")),
+				},
+			}
+
+			ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+
+			result, err := chain.Execute(ctx)
+			require.NoError(t, err)
+
+			out, ok := result.Request.(*anthropic.MessageNewParams)
+			require.True(t, ok)
+
+			assert.Nil(t, out.Thinking.OfAdaptive,
+				"adaptive thinking should be stripped for %s", model)
+			assert.Nil(t, out.Thinking.OfEnabled)
+
+			// But billing header and metadata still injected
 			require.NotEmpty(t, out.System)
 			assert.Contains(t, out.System[0].Text, "x-anthropic-billing-header")
 			assert.True(t, out.Metadata.UserID.Valid())

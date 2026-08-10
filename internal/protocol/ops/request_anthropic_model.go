@@ -4,10 +4,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/protocol/catalog"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 const ClaudeCodeVersion = "2.1.86"
@@ -15,6 +18,28 @@ const ClaudeCodeVersion = "2.1.86"
 // FingerprintSalt is the salt used in computeFingerprint.
 // IMPORTANT: Must stay in sync with Claude Code's FINGERPRINT_SALT constant.
 const FingerprintSalt = "59cf53e54c78"
+
+// anthropicModelThinkingCaps resolves a model's thinking dialect support from
+// the embedded catalog (internal/protocol/catalog/claude.models.json) — updating that
+// catalog is how new models get correct treatment. Models absent from the
+// catalog (aliases, proxy models, releases newer than the snapshot) keep the
+// conservative legacy profile: budget-based thinking only, no effort field.
+func anthropicModelThinkingCaps(model string) catalog.ClaudeThinkingCaps {
+	if caps, ok := catalog.LookupClaudeThinkingCaps(model); ok {
+		return caps
+	}
+	return catalog.ClaudeThinkingCaps{ThinkingEnabled: true}
+}
+
+// anthropicEffortLadder orders Anthropic effort levels ascending, for clamping
+// a requested level onto a model's supported set.
+var anthropicEffortLadder = []anthropic.OutputConfigEffort{
+	anthropic.OutputConfigEffortLow,
+	anthropic.OutputConfigEffortMedium,
+	anthropic.OutputConfigEffortHigh,
+	anthropic.OutputConfigEffortXhigh,
+	anthropic.OutputConfigEffortMax,
+}
 
 // effortSurvives reports whether output_config.effort should be kept on the
 // outbound request: only when the final thinking config actually ends up
@@ -25,26 +50,44 @@ func effortSurvives(hasEnabled, hasAdaptive bool) bool {
 	return hasEnabled || hasAdaptive
 }
 
-// clampAnthropicEffort clamps an effort value to Anthropic's valid
-// output_config.effort enum. This is model-agnostic: it doesn't know which
-// models actually accept which levels, it just maps ladder-only values
-// (minimal, xhigh) onto the nearest level Anthropic defines.
-func clampAnthropicEffort(effort anthropic.OutputConfigEffort) anthropic.OutputConfigEffort {
-	switch effort {
-	case "minimal": // not an Anthropic level; clamp up to the ladder minimum
-		return anthropic.OutputConfigEffortLow
-	case anthropic.OutputConfigEffortXhigh: // SDK-defined but no current model advertises it
-		return anthropic.OutputConfigEffortHigh
+// clampAnthropicEffort clamps an effort value to the model's supported set:
+// the nearest supported level at or below the requested one wins, stepping up
+// only when nothing at or below is supported. Returns "" when the model has no
+// effort support at all.
+func clampAnthropicEffort(effort anthropic.OutputConfigEffort, caps catalog.ClaudeThinkingCaps) anthropic.OutputConfigEffort {
+	if effort == "" || !caps.SupportsEffort() {
+		return ""
 	}
-	return effort
+	if effort == "minimal" { // not an Anthropic level; enters the ladder at its minimum
+		effort = anthropic.OutputConfigEffortLow
+	}
+	idx := slices.Index(anthropicEffortLadder, effort)
+	if idx < 0 {
+		idx = slices.Index(anthropicEffortLadder, anthropic.OutputConfigEffortMedium)
+	}
+	for i := idx; i >= 0; i-- {
+		if caps.EffortLevels[string(anthropicEffortLadder[i])] {
+			return anthropicEffortLadder[i]
+		}
+	}
+	for i := idx + 1; i < len(anthropicEffortLadder); i++ {
+		if caps.EffortLevels[string(anthropicEffortLadder[i])] {
+			return anthropicEffortLadder[i]
+		}
+	}
+	return ""
 }
 
-// ApplyAnthropicV1ModelTransform passes the request's thinking config through
-// unchanged and reconciles output_config.effort:
-//   - clamped to Anthropic's valid enum (minimal→low, xhigh→high; other
-//     levels pass through as-is) — sent for every model, since this package
-//     doesn't track per-model capability.
-//   - stripped entirely when the final thinking config is disabled/unset,
+// ApplyAnthropicV1ModelTransform reconciles the request's thinking config with
+// what the target model actually supports:
+//   - adaptive requested on a non-adaptive model → enabled(budget) derived from
+//     output_config.effort via typ.ThinkingBudgetMapping, or disabled when no
+//     effort is present (budget is the fallback dialect).
+//   - enabled(budget) requested on an adaptive-only model (Opus 4.7+) →
+//     adaptive, with output_config.effort derived from the budget via
+//     typ.ThinkingEffortFromBudget (effort is the fallback in that direction).
+//   - output_config.effort stripped/clamped to the model's supported levels;
+//     stripped entirely when the final thinking config is disabled/unset,
 //     since effort paired with no active thinking is meaningless to the API.
 //
 // Note: This applies to ALL Anthropic API requests, regardless of authentication method
@@ -53,9 +96,37 @@ func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model strin
 	if req == nil {
 		return req
 	}
+	caps := anthropicModelThinkingCaps(model)
+
+	if !caps.ThinkingAdaptive {
+		req.Messages = filterThinkingBlocksInMessages(req.Messages)
+		if req.Thinking.OfAdaptive != nil {
+			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok && caps.ThinkingEnabled {
+				if req.MaxTokens > 0 && budget > req.MaxTokens {
+					budget = req.MaxTokens
+				}
+				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
+			} else {
+				req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+			}
+		}
+	}
+
+	if !caps.ThinkingEnabled && req.Thinking.OfEnabled != nil {
+		if caps.ThinkingAdaptive {
+			if req.OutputConfig.Effort == "" {
+				req.OutputConfig.Effort = anthropic.OutputConfigEffort(
+					typ.ThinkingEffortFromBudget(req.Thinking.OfEnabled.BudgetTokens))
+			}
+			req.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
+		} else {
+			// No thinking dialect at all (e.g. claude-3-haiku).
+			req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+		}
+	}
 
 	if effortSurvives(req.Thinking.OfEnabled != nil, req.Thinking.OfAdaptive != nil) {
-		req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort)
+		req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort, caps)
 	} else {
 		req.OutputConfig.Effort = ""
 	}
@@ -69,15 +140,136 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 	if req == nil {
 		return req
 	}
+	caps := anthropicModelThinkingCaps(model)
+
+	if !caps.ThinkingAdaptive {
+		req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
+		if req.Thinking.OfAdaptive != nil {
+			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok && caps.ThinkingEnabled {
+				if req.MaxTokens > 0 && budget > req.MaxTokens {
+					budget = req.MaxTokens
+				}
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
+			} else {
+				req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+			}
+		}
+	}
+
+	if !caps.ThinkingEnabled && req.Thinking.OfEnabled != nil {
+		if caps.ThinkingAdaptive {
+			if req.OutputConfig.Effort == "" {
+				req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
+					typ.ThinkingEffortFromBudget(req.Thinking.OfEnabled.BudgetTokens))
+			}
+			req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
+		} else {
+			// No thinking dialect at all (e.g. claude-3-haiku).
+			req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+		}
+	}
 
 	if effortSurvives(req.Thinking.OfEnabled != nil, req.Thinking.OfAdaptive != nil) {
 		req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
-			clampAnthropicEffort(anthropic.OutputConfigEffort(req.OutputConfig.Effort)))
+			clampAnthropicEffort(anthropic.OutputConfigEffort(req.OutputConfig.Effort), caps))
 	} else {
 		req.OutputConfig.Effort = ""
 	}
 
 	return req
+}
+
+// filterThinkingBlocksInMessages removes thinking blocks from message content for v1 API.
+// This handles inline thinking blocks in assistant messages.
+func filterThinkingBlocksInMessages(messages []anthropic.MessageParam) []anthropic.MessageParam {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	filtered := make([]anthropic.MessageParam, 0, len(messages))
+
+	for _, msg := range messages {
+		// Check if message has thinking blocks
+		hasThinking := false
+		for _, block := range msg.Content {
+			if block.OfThinking != nil {
+				hasThinking = true
+				break
+			}
+		}
+
+		// If no thinking blocks, keep original message
+		if !hasThinking {
+			filtered = append(filtered, msg)
+			continue
+		}
+
+		// Filter out thinking blocks from content
+		filteredBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
+		for _, block := range msg.Content {
+			// Skip thinking blocks
+			if block.OfThinking != nil {
+				continue
+			}
+			filteredBlocks = append(filteredBlocks, block)
+		}
+
+		// Only keep message if it still has content
+		if len(filteredBlocks) > 0 {
+			filtered = append(filtered, anthropic.MessageParam{
+				Role:    msg.Role,
+				Content: filteredBlocks,
+			})
+		}
+	}
+
+	return filtered
+}
+
+// filterBetaThinkingBlocksInMessages removes thinking blocks from message content for beta API.
+func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	filtered := make([]anthropic.BetaMessageParam, 0, len(messages))
+
+	for _, msg := range messages {
+		// Check if message has thinking blocks
+		hasThinking := false
+		for _, block := range msg.Content {
+			if block.OfThinking != nil {
+				hasThinking = true
+				break
+			}
+		}
+
+		// If no thinking blocks, keep original message
+		if !hasThinking {
+			filtered = append(filtered, msg)
+			continue
+		}
+
+		// Filter out thinking blocks from content
+		filteredBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(msg.Content))
+		for _, block := range msg.Content {
+			// Skip thinking blocks
+			if block.OfThinking != nil {
+				continue
+			}
+			filteredBlocks = append(filteredBlocks, block)
+		}
+
+		// Only keep message if it still has content
+		if len(filteredBlocks) > 0 {
+			filtered = append(filtered, anthropic.BetaMessageParam{
+				Role:    msg.Role,
+				Content: filteredBlocks,
+			})
+		}
+	}
+
+	return filtered
 }
 
 // =============================================

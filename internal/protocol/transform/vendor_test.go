@@ -205,10 +205,9 @@ func TestVendorTransform_AnthropicV1_ProviderMatching(t *testing.T) {
 			require.True(t, ok)
 
 			if tt.shouldApply {
-				// For Anthropic provider, effort is reconciled but thinking
-				// config itself passes through unchanged regardless of model.
-				assert.NotNil(t, result.Thinking.OfAdaptive,
-					"adaptive thinking should pass through for Haiku on Anthropic provider %s", tt.providerURL)
+				// For Anthropic provider, adaptive thinking should be disabled for Haiku
+				assert.Nil(t, result.Thinking.OfAdaptive,
+					"adaptive thinking should be disabled for Haiku on Anthropic provider %s", tt.providerURL)
 			} else {
 				// Non-Anthropic provider: no transform applied, adaptive should remain
 				assert.NotNil(t, result.Thinking.OfAdaptive,
@@ -294,6 +293,62 @@ func TestVendorTransform_AnthropicV1_SupportedModel_AdaptivePreserved(t *testing
 			uid := result.Metadata.UserID.String()
 			assert.Contains(t, uid, "test-device-id")
 			assert.Contains(t, uid, "test-account-uuid")
+		})
+	}
+}
+
+func TestVendorTransform_AnthropicV1_UnsupportedModel_AdaptiveDisabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{"Haiku", "claude-3-5-haiku-20241022"},
+		{"Sonnet 3.5", "claude-3-5-sonnet-20241022"},
+		{"Opus 3.7", "claude-3-7-opus-20250214"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vt := NewVendorTransform()
+			req := &anthropic.MessageNewParams{
+				Model:     anthropic.Model(tt.model),
+				MaxTokens: 4096,
+				Thinking: anthropic.ThinkingConfigParamUnion{
+					OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+				},
+				Messages: []anthropic.MessageParam{
+					anthropic.NewUserMessage(anthropic.NewTextBlock("test")),
+				},
+			}
+
+			ctx := &TransformContext{
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
+				Extra: map[string]interface{}{
+					"device":  "test-device-id",
+					"user_id": "test-account-uuid",
+				},
+			}
+
+			err := vt.Apply(ctx)
+			require.NoError(t, err)
+
+			result, ok := ctx.Request.(*anthropic.MessageNewParams)
+			require.True(t, ok)
+
+			// Adaptive thinking should be disabled for unsupported models
+			assert.Nil(t, result.Thinking.OfAdaptive,
+				"adaptive thinking should be disabled for %s", tt.model)
+			assert.Nil(t, result.Thinking.OfEnabled,
+				"enabled thinking should also be nil for %s", tt.model)
+
+			// Billing header should still be injected
+			require.NotEmpty(t, result.System, "system should have billing header")
+			assert.Contains(t, result.System[0].Text, "x-anthropic-billing-header")
+
+			// Metadata should contain user_id
+			assert.True(t, result.Metadata.UserID.Valid())
+			t.Log(result.Metadata.UserID)
 		})
 	}
 }
@@ -409,9 +464,9 @@ func TestVendorTransform_AnthropicV1_NoSystemPrompt(t *testing.T) {
 func TestVendorTransform_AnthropicV1_EnabledThinkingPreserved(t *testing.T) {
 	vt := NewVendorTransform()
 
-	// Enabled thinking should be preserved even on unsupported models
+	// Haiku 4.5 supports budget thinking; explicit enabled must pass through
 	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
+		Model:     anthropic.Model("claude-haiku-4-5-20251001"),
 		MaxTokens: 4096,
 		Thinking: anthropic.ThinkingConfigParamUnion{
 			OfEnabled: &anthropic.ThinkingConfigEnabledParam{},
@@ -438,7 +493,7 @@ func TestVendorTransform_AnthropicV1_EnabledThinkingPreserved(t *testing.T) {
 
 	// Enabled thinking should be preserved
 	assert.NotNil(t, result.Thinking.OfEnabled,
-		"explicitly enabled thinking should be preserved even on Haiku")
+		"explicitly enabled thinking should be preserved on Haiku 4.5")
 }
 
 // =============================================
@@ -490,8 +545,8 @@ func TestVendorTransform_AnthropicBeta_ProviderMatching(t *testing.T) {
 			require.True(t, ok)
 
 			if tt.shouldApply {
-				assert.NotNil(t, result.Thinking.OfAdaptive,
-					"adaptive thinking should pass through for Haiku on Anthropic provider %s", tt.providerURL)
+				assert.Nil(t, result.Thinking.OfAdaptive,
+					"adaptive thinking should be disabled for Haiku on Anthropic provider %s", tt.providerURL)
 			} else {
 				assert.NotNil(t, result.Thinking.OfAdaptive,
 					"adaptive thinking should be preserved for non-Anthropic provider %s", tt.providerURL)
@@ -567,6 +622,46 @@ func TestVendorTransform_AnthropicBeta_SupportedModel_AdaptivePreserved(t *testi
 			uid := result.Metadata.UserID.String()
 			assert.Contains(t, uid, "test-device-id")
 			assert.Contains(t, uid, "test-account-uuid")
+		})
+	}
+}
+
+func TestVendorTransform_AnthropicBeta_UnsupportedModel_AdaptiveDisabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{"Haiku", "claude-3-5-haiku-20241022"},
+		{"Sonnet 3.5", "claude-3-5-sonnet-20241022"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vt := NewVendorTransform()
+			req := newBetaRequest(tt.model, anthropic.BetaThinkingConfigParamUnion{
+				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
+			})
+
+			ctx := &TransformContext{
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
+				Extra: map[string]interface{}{
+					"device":  "test-device-id",
+					"user_id": "test-account-uuid",
+				},
+			}
+
+			err := vt.Apply(ctx)
+			require.NoError(t, err)
+
+			result, ok := ctx.Request.(*anthropic.BetaMessageNewParams)
+			require.True(t, ok)
+
+			assert.Nil(t, result.Thinking.OfAdaptive,
+				"adaptive thinking should be disabled for %s", tt.model)
+
+			// Metadata still injected
+			assert.True(t, result.Metadata.UserID.Valid())
 		})
 	}
 }
@@ -674,7 +769,7 @@ func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
 func TestVendorTransform_AnthropicBeta_EnabledThinkingPreserved(t *testing.T) {
 	vt := NewVendorTransform()
 
-	req := newBetaRequest("claude-3-5-haiku-20241022", anthropic.BetaThinkingConfigParamUnion{
+	req := newBetaRequest("claude-haiku-4-5-20251001", anthropic.BetaThinkingConfigParamUnion{
 		OfEnabled: &anthropic.BetaThinkingConfigEnabledParam{},
 	})
 
@@ -694,15 +789,13 @@ func TestVendorTransform_AnthropicBeta_EnabledThinkingPreserved(t *testing.T) {
 	require.True(t, ok)
 
 	assert.NotNil(t, result.Thinking.OfEnabled,
-		"explicitly enabled thinking should be preserved even on Haiku")
+		"explicitly enabled thinking should be preserved on Haiku 4.5")
 }
 
-func TestVendorTransform_AnthropicBeta_ThinkingBlocksPreserved(t *testing.T) {
+func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
 	vt := NewVendorTransform()
 
-	// Assistant message with thinking + text blocks — no message filtering
-	// happens anymore since there's no model-gated dialect conversion to
-	// trigger it.
+	// Assistant message with thinking + text blocks
 	req := &anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
 		MaxTokens: 4096,
@@ -734,23 +827,26 @@ func TestVendorTransform_AnthropicBeta_ThinkingBlocksPreserved(t *testing.T) {
 	result, ok := ctx.Request.(*anthropic.BetaMessageNewParams)
 	require.True(t, ok)
 
+	// Assistant message should have thinking block removed, text block preserved
 	require.Len(t, result.Messages, 3, "all 3 messages should be preserved")
 
 	assistantMsg := result.Messages[1]
 	assert.Equal(t, "assistant", string(assistantMsg.Role))
 
-	foundThinking := false
+	// Should only have text block, no thinking
+	for _, block := range assistantMsg.Content {
+		assert.Nil(t, block.OfThinking, "thinking blocks should be filtered out")
+	}
+
+	// Text block should still be present
 	foundText := false
 	for _, block := range assistantMsg.Content {
-		if block.OfThinking != nil {
-			foundThinking = true
-		}
 		if block.OfText != nil && block.OfText.Text == "Here is my answer." {
 			foundText = true
+			break
 		}
 	}
-	assert.True(t, foundThinking, "thinking block should be preserved")
-	assert.True(t, foundText, "text block should be preserved")
+	assert.True(t, foundText, "text block should be preserved after filtering thinking blocks")
 }
 
 func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
@@ -777,8 +873,8 @@ func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
 	result, ok := ctx.Request.(*anthropic.BetaMessageNewParams)
 	require.True(t, ok)
 
-	// 1. Model transform: thinking config passes through unchanged
-	assert.NotNil(t, result.Thinking.OfAdaptive, "adaptive thinking should pass through")
+	// 1. Model transform: adaptive thinking disabled for Haiku
+	assert.Nil(t, result.Thinking.OfAdaptive, "adaptive thinking should be disabled")
 
 	// 2. Billing header injected
 	require.NotEmpty(t, result.System)
@@ -796,7 +892,7 @@ func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
 	assert.Contains(t, uid, "session_id")
 }
 
-func TestVendorTransform_AnthropicV1_ThinkingBlocksPreserved(t *testing.T) {
+func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
 	vt := NewVendorTransform()
 
 	req := &anthropic.MessageNewParams{
@@ -835,16 +931,16 @@ func TestVendorTransform_AnthropicV1_ThinkingBlocksPreserved(t *testing.T) {
 	assistantMsg := result.Messages[1]
 	assert.Equal(t, "assistant", string(assistantMsg.Role))
 
-	foundThinking := false
+	for _, block := range assistantMsg.Content {
+		assert.Nil(t, block.OfThinking, "thinking blocks should be filtered out")
+	}
+
 	foundText := false
 	for _, block := range assistantMsg.Content {
-		if block.OfThinking != nil {
-			foundThinking = true
-		}
 		if block.OfText != nil && block.OfText.Text == "Here is my answer." {
 			foundText = true
+			break
 		}
 	}
-	assert.True(t, foundThinking, "thinking block should be preserved")
 	assert.True(t, foundText, "text block should be preserved")
 }
