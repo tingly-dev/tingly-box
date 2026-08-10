@@ -359,7 +359,13 @@ func ruleFlagCases() []flagCase {
 		// ── thinking_effort ──────────────────────────────────────────────────
 		{key: "thinking_effort", run: func(t flagTB, env *TestEnv) {
 			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
-			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, nil, nil)
+			// The base request's max_tokens (64) is far below "high"'s mapped
+			// budget (20480); fitAnthropicThinkingBudget requires max_tokens
+			// to exceed the 1024 floor, so raise it here to keep this case
+			// about thinking_effort, not an unrelated budget-fit rejection.
+			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, func(m map[string]any) {
+				m["max_tokens"] = 32000
+			}, nil)
 			body := env.virtual.LastRequest(EndpointAnthropic).JSON()
 			thinking, ok := body["thinking"].(map[string]any)
 			if !ok {
