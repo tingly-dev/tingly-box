@@ -93,10 +93,11 @@ func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model strin
 		req.Messages = filterThinkingBlocksInMessages(req.Messages)
 		if req.Thinking.OfAdaptive != nil {
 			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok && caps.ThinkingEnabled {
-				if req.MaxTokens > 0 && budget > req.MaxTokens {
-					budget = req.MaxTokens
+				if budget, err := fitAnthropicThinkingBudget(budget, req.MaxTokens); err == nil {
+					req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
+				} else {
+					req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 				}
-				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
 			} else {
 				req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 			}
@@ -133,10 +134,11 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 		req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
 		if req.Thinking.OfAdaptive != nil {
 			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok && caps.ThinkingEnabled {
-				if req.MaxTokens > 0 && budget > req.MaxTokens {
-					budget = req.MaxTokens
+				if budget, err := fitAnthropicThinkingBudget(budget, req.MaxTokens); err == nil {
+					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
+				} else {
+					req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 				}
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
 			} else {
 				req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 			}

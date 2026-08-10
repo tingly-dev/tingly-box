@@ -1,6 +1,8 @@
 package ops
 
 import (
+	"fmt"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -24,19 +26,19 @@ import (
 //     effort dialect on Claude 4.5+) plus a budget_tokens fallback; the
 //     vendor-stage model transform reconciles per-model support (see
 //     request_anthropic_model.go).
-func ApplyThinkingEffort(req interface{}, effort string) {
+func ApplyThinkingEffort(req interface{}, effort string) error {
 	switch effort {
 	case typ.ThinkingEffortDefault:
-		return
+		return nil
 	case typ.ThinkingEffortOff:
 		disableThinking(req)
-		return
+		return nil
 	}
 	budget, ok := typ.ThinkingBudgetMapping[effort]
 	if !ok {
-		return
+		return nil
 	}
-	enableThinking(req, effort, budget)
+	return enableThinking(req, effort, budget)
 }
 
 // disableThinking turns thinking off on the target request and scrubs any
@@ -67,39 +69,63 @@ func disableThinking(req interface{}) {
 // For Anthropic requests: output_config.effort carries the level natively
 // (Claude 4.5+). The thinking config keeps the request's existing dialect —
 // adaptive stays adaptive (effort is its control knob), everything else is
-// forced to enabled(budget). budget_tokens is capped at max_tokens so the
-// budget never exceeds the operator's hard limit. When max_tokens itself is
-// below 1024 (Anthropic's minimum for extended thinking) we still cap at
-// max_tokens and let the API surface the conflict — silently raising the
-// budget above max_tokens would violate the operator limit.
+// forced to enabled(budget). budget_tokens is fitted without raising the
+// operator limit, so it remains at least 1024 and strictly below max_tokens,
+// as required by Anthropic. An impossible limit is returned as a local error
+// rather than emitting a request that the upstream will reject.
 // Per-model reconciliation (models without effort / budget / adaptive
 // support) happens later in the vendor-stage model transform.
-func enableThinking(req interface{}, effort string, budget int64) {
+func enableThinking(req interface{}, effort string, budget int64) error {
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
+		if r.Thinking.OfAdaptive != nil {
+			r.OutputConfig.Effort = anthropicOutputEffort(effort)
+			return nil
+		}
+		fitted, err := fitAnthropicThinkingBudget(budget, r.MaxTokens)
+		if err != nil {
+			return err
+		}
 		r.OutputConfig.Effort = anthropicOutputEffort(effort)
-		if r.Thinking.OfAdaptive != nil {
-			return
-		}
-		if r.MaxTokens > 0 && budget > r.MaxTokens {
-			budget = r.MaxTokens
-		}
-		r.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
+		r.Thinking = anthropic.ThinkingConfigParamOfEnabled(fitted)
 	case *anthropic.BetaMessageNewParams:
-		r.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(anthropicOutputEffort(effort))
 		if r.Thinking.OfAdaptive != nil {
-			return
+			r.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(anthropicOutputEffort(effort))
+			return nil
 		}
-		if r.MaxTokens > 0 && budget > r.MaxTokens {
-			budget = r.MaxTokens
+		fitted, err := fitAnthropicThinkingBudget(budget, r.MaxTokens)
+		if err != nil {
+			return err
 		}
-		r.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
+		r.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(anthropicOutputEffort(effort))
+		r.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(fitted)
 	case *openai.ChatCompletionNewParams:
 		r.ReasoningEffort = openaiReasoningEffort(effort)
 		stripOpenAIThinkingExtra(r)
 	case *responses.ResponseNewParams:
 		r.Reasoning.Effort = openaiReasoningEffort(effort)
 	}
+	return nil
+}
+
+const minAnthropicThinkingBudget int64 = 1024
+
+// fitAnthropicThinkingBudget enforces Anthropic's wire constraints without
+// raising max_tokens: budget_tokens >= 1024 and budget_tokens < max_tokens.
+func fitAnthropicThinkingBudget(budget, maxTokens int64) (int64, error) {
+	if budget < minAnthropicThinkingBudget {
+		budget = minAnthropicThinkingBudget
+	}
+	if maxTokens <= 0 {
+		return budget, nil
+	}
+	if maxTokens <= minAnthropicThinkingBudget {
+		return 0, fmt.Errorf("anthropic thinking requires max_tokens greater than %d (got %d)", minAnthropicThinkingBudget, maxTokens)
+	}
+	if budget >= maxTokens {
+		budget = maxTokens - 1
+	}
+	return budget, nil
 }
 
 // stripOpenAIThinkingExtra removes any non-standard `thinking` blob from an

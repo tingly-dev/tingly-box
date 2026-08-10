@@ -217,9 +217,38 @@ func TestApplyAnthropicModelTransform_V1_AdaptiveBudgetFallbackCappedByMaxTokens
 	result := ApplyAnthropicV1ModelTransform(req, "claude-haiku-4-5-20251001")
 
 	if assert.NotNil(t, result.Thinking.OfEnabled) {
-		assert.LessOrEqual(t, result.Thinking.OfEnabled.BudgetTokens, int64(2048),
-			"fallback budget must not exceed max_tokens")
+		assert.Equal(t, int64(2047), result.Thinking.OfEnabled.BudgetTokens,
+			"fallback budget must be strictly below max_tokens")
 	}
+}
+
+func TestApplyAnthropicModelTransform_Beta_AdaptiveBudgetFallbackUsesStrictBound(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Model:        anthropic.Model("claude-haiku-4-5-20251001"),
+		MaxTokens:    2048,
+		Thinking:     anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}},
+		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortMax},
+	}
+
+	result := ApplyAnthropicBetaModelTransform(req, "claude-haiku-4-5-20251001")
+
+	if assert.NotNil(t, result.Thinking.OfEnabled) {
+		assert.Equal(t, int64(2047), result.Thinking.OfEnabled.BudgetTokens)
+	}
+}
+
+func TestApplyAnthropicModelTransform_AdaptiveBudgetFallbackDisablesWhenImpossible(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:        anthropic.Model("claude-haiku-4-5-20251001"),
+		MaxTokens:    1024,
+		Thinking:     anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortLow},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-haiku-4-5-20251001")
+
+	assert.Nil(t, result.Thinking.OfEnabled)
+	assert.NotNil(t, result.Thinking.OfDisabled)
 }
 
 func TestApplyAnthropicModelTransform_V1_Opus47_BudgetConvertsToAdaptive(t *testing.T) {
