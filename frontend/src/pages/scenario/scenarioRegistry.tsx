@@ -154,6 +154,11 @@ const DEFAULTS_VERSION = 3;
 // reset by the DEFAULT_HIDDEN merge — a rename isn't a new scenario, so it
 // must not force-hide a scenario a user had explicitly chosen to show under
 // its old id.
+//
+// Composition with DEFAULT_HIDDEN/DEFAULTS_VERSION below: this rename runs
+// first and unconditionally (every read, not just on a version bump), then
+// the version-gated merge treats the *renamed* id as already-decided and
+// only folds in defaults for ids that were never a rename target.
 const RENAMED_SCENARIO_IDS: Record<string, string> = {
     agent: 'custom', // OpenClaw
 };
@@ -171,7 +176,12 @@ const readHidden = (): string[] => {
             ? parsed.filter((x): x is string => typeof x === 'string')
             : [];
 
-        stored = Array.from(new Set(stored.map((id) => RENAMED_SCENARIO_IDS[id] ?? id)));
+        // Skip the rename pass entirely once nothing in storage is on an old
+        // id — true for every read after the first post-rename one, i.e.
+        // almost always.
+        if (stored.some((id) => id in RENAMED_SCENARIO_IDS)) {
+            stored = Array.from(new Set(stored.map((id) => RENAMED_SCENARIO_IDS[id] ?? id)));
+        }
 
         // Merge any new default-hidden entries that existing users haven't
         // seen yet (i.e. the stored defaults-version is behind the current

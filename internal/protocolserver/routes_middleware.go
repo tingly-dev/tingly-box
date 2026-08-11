@@ -48,20 +48,21 @@ func rewriteScenarioParam(c *gin.Context, rawScenario, rewritten string) {
 // the new scenario the moment the config loads (see
 // migrateAgentScenarioToCustom) and nothing is ever stored under the old id
 // again.
+//
+// No profile-suffix handling here (contrast profileAliasMiddleware): every
+// scenario in legacyScenarioAliases predates and never supported profiles
+// (SupportsProfiles is false for all of them), so a raw scenario param is
+// matched as-is — a "legacy:suffix" shape simply isn't a known alias and
+// falls through to fail normally downstream.
 func (ph *ProtocolHandler) legacyScenarioAliasMiddleware(c *gin.Context) {
 	rawScenario := c.Param("scenario")
-	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
 
-	canonical, ok := typ.ResolveScenarioAlias(base)
+	canonical, ok := typ.ResolveScenarioAlias(typ.RuleScenario(rawScenario))
 	if !ok {
 		c.Next()
 		return
 	}
-
 	rewritten := string(canonical)
-	if profileID != "" {
-		rewritten = string(typ.ProfiledScenarioName(canonical, profileID))
-	}
 
 	rewriteScenarioParam(c, rawScenario, rewritten)
 
