@@ -472,6 +472,69 @@ func TestMigrateAgentScenarioToCustom_RenamesRulesAndScenarioConfig(t *testing.T
 	}
 }
 
+// TestMigrateAgentScenarioToCustom_ClawRuleUpgradesFromOldestLegacyForm boots a
+// real config from the oldest legacy shape (hyphenated "built-in-agent-claw"
+// UUID, "agent" scenario) — the second half of the old agent/OpenClaw default
+// pair alongside "tingly-agent" — and confirms the full Migrate() pipeline
+// (normalizeBuiltinRuleIdentity's UUID rename + migrateAgentScenarioToCustom's
+// scenario rename) lands it on the modern "custom" identity without touching
+// the request_model a client may already be pointed at.
+func TestMigrateAgentScenarioToCustom_ClawRuleUpgradesFromOldestLegacyForm(t *testing.T) {
+	tmpDir := t.TempDir()
+	legacy := `{
+		"rules": [
+			{"uuid": "built-in-agent-claw", "scenario": "agent", "request_model": "tingly-claw", "active": true}
+		]
+	}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte(legacy), 0644); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+
+	cfg, err := NewConfig(WithConfigDir(tmpDir))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	r := cfg.GetRuleByUUID(RuleUUIDCustomClaw)
+	if r == nil {
+		t.Fatal("expected the claw rule to be found under the modern builtin:custom:claw UUID")
+	}
+	if r.Scenario != typ.ScenarioCustom {
+		t.Errorf("claw rule scenario = %q, want %q", r.Scenario, typ.ScenarioCustom)
+	}
+	if r.RequestModel != "tingly-claw" {
+		t.Errorf("claw rule request_model = %q, want unchanged %q", r.RequestModel, "tingly-claw")
+	}
+	if r := cfg.GetRuleByUUID(RuleUUIDBuiltinAgentClaw); r != nil {
+		t.Errorf("legacy built-in-agent-claw UUID should be gone after upgrade, still found: %+v", r)
+	}
+
+	// The routing layer must still resolve it via both the modern path and
+	// the permanently-aliased legacy one.
+	if !typ.CanUseScenarioInPath(typ.ScenarioCustom) {
+		t.Error("custom scenario should be usable directly in the request path")
+	}
+	canonical, ok := typ.ResolveScenarioAlias(typ.ScenarioAgent)
+	if !ok || canonical != typ.ScenarioCustom {
+		t.Errorf("ResolveScenarioAlias(agent) = (%q, %v), want (%q, true)", canonical, ok, typ.ScenarioCustom)
+	}
+
+	// Second boot: stable, no duplicate/resurrected legacy rule.
+	cfg2, err := NewConfig(WithConfigDir(tmpDir))
+	if err != nil {
+		t.Fatalf("NewConfig (reload) error: %v", err)
+	}
+	count := 0
+	for _, rule := range cfg2.Rules {
+		if rule.UUID == RuleUUIDCustomClaw {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("reload: expected exactly 1 rule with UUID %q, found %d", RuleUUIDCustomClaw, count)
+	}
+}
+
 func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 	separate := newCCProfileRules(typ.RuleScenario("claude_code:p3"), false)
 	wantSeparate := map[string]string{
