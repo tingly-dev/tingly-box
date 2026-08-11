@@ -2,6 +2,7 @@ package mutate
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -50,6 +51,17 @@ func RewriteAnthropicToolUseEvent(
 	streamState *protocol.GuardrailsStreamState,
 	event interface{},
 ) (bool, []AnthropicBufferedEvent, error) {
+	kind, rewritten, err := RewriteAnthropicToolUseEventDecision(credentialMask, streamState, event)
+	return kind != AnthropicToolUseDecisionNone, rewritten, err
+}
+
+// RewriteAnthropicToolUseEventDecision is the decision-preserving form used by
+// callers that must distinguish a policy block from buffered passthrough.
+func RewriteAnthropicToolUseEventDecision(
+	credentialMask *guardrailscore.CredentialMaskState,
+	streamState *protocol.GuardrailsStreamState,
+	event interface{},
+) (AnthropicToolUseDecisionKind, []AnthropicBufferedEvent, error) {
 	var (
 		eventType string
 		index     int
@@ -60,7 +72,7 @@ func RewriteAnthropicToolUseEvent(
 	switch evt := event.(type) {
 	case *anthropic.MessageStreamEventUnion:
 		if evt == nil {
-			return false, nil, nil
+			return AnthropicToolUseDecisionNone, nil, nil
 		}
 		eventType = evt.Type
 		index = int(evt.Index)
@@ -68,23 +80,26 @@ func RewriteAnthropicToolUseEvent(
 		rawJSON = strings.Clone(evt.RawJSON())
 	case *anthropic.BetaRawMessageStreamEventUnion:
 		if evt == nil {
-			return false, nil, nil
+			return AnthropicToolUseDecisionNone, nil, nil
 		}
 		eventType = evt.Type
 		index = int(evt.Index)
 		block = evt.ContentBlock
 		rawJSON = strings.Clone(evt.RawJSON())
 	default:
-		return false, nil, nil
+		return AnthropicToolUseDecisionNone, nil, nil
 	}
 
 	if !ShouldRewriteAnthropicEvent(streamState, eventType, block) {
-		return false, nil, nil
+		return AnthropicToolUseDecisionNone, nil, nil
 	}
 
 	var eventMap map[string]interface{}
 	if err := json.Unmarshal([]byte(rawJSON), &eventMap); err != nil {
-		return false, nil, err
+		return AnthropicToolUseDecisionNone, nil, err
+	}
+	if eventMap == nil {
+		return AnthropicToolUseDecisionNone, nil, fmt.Errorf("decode Anthropic stream event: payload is not an object")
 	}
 	if eventType != "" {
 		eventMap["type"] = eventType
@@ -93,15 +108,15 @@ func RewriteAnthropicToolUseEvent(
 	decision := HandleAnthropicToolUseBuffer(credentialMask, streamState, eventType, index, block, eventMap)
 	switch decision.Kind {
 	case AnthropicToolUseDecisionBuffer:
-		return true, nil, nil
+		return decision.Kind, nil, nil
 	case AnthropicToolUseDecisionBlock:
 		if decision.BlockMessage == "" {
-			return true, nil, nil
+			return decision.Kind, nil, nil
 		}
 		if streamState != nil {
 			streamState.RewroteBlockedToolUse = true
 		}
-		return true, []AnthropicBufferedEvent{
+		return decision.Kind, []AnthropicBufferedEvent{
 			{
 				EventType: anthropicEventTypeContentBlockStart,
 				Payload: map[string]interface{}{
@@ -133,9 +148,9 @@ func RewriteAnthropicToolUseEvent(
 			},
 		}, nil
 	case AnthropicToolUseDecisionPassthrough:
-		return true, decision.Passthrough, nil
+		return decision.Kind, decision.Passthrough, nil
 	default:
-		return false, nil, nil
+		return AnthropicToolUseDecisionNone, nil, nil
 	}
 }
 

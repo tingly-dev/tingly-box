@@ -83,7 +83,7 @@ func (ph *ProtocolHandler) buildOpenAIToAnthropicMCPHooks(
 				return stream.ErrMCPStreamContinue
 			}
 
-			mcp.StoreOpenAIContinuationSegment(typ.GetSessionID(ctx), providerUUID, segment)
+			mcp.StoreOpenAIContinuationSegment(typ.GetSessionID(ctx), providerUUID, segment, externalIDs)
 			return nil
 		},
 	}

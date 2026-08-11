@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
@@ -156,6 +157,36 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 			}
 			out = append(out, openai.ChatCompletionFunctionTool(def))
 		}
+	}
+	return out
+}
+
+// ListServerToolsForAnthropicBetaInjection returns the same enabled
+// server-visible virtual tools directly in the Beta working protocol. The
+// ToolLoop Stage can therefore stay Beta-native instead of routing tool
+// definitions through an OpenAI DTO first.
+func (r *Runtime) ListServerToolsForAnthropicBetaInjection(ctx context.Context) []anthropic.BetaToolUnionParam {
+	if r == nil || r.virtualRegistry == nil {
+		return nil
+	}
+	virtualTools := r.virtualRegistry.ListVirtualTools()
+	out := make([]anthropic.BetaToolUnionParam, 0, len(virtualTools))
+	for _, vt := range virtualTools {
+		if !r.isVirtualServerToolInjectable(vt) {
+			continue
+		}
+		schema := anthropic.BetaToolInputSchemaParam{Properties: map[string]any{}}
+		if schemaBytes, err := json.Marshal(vt.InputSchema); err == nil && string(schemaBytes) != "null" {
+			var converted anthropic.BetaToolInputSchemaParam
+			if json.Unmarshal(schemaBytes, &converted) == nil {
+				schema = converted
+			}
+		}
+		tool := anthropic.BetaToolUnionParamOfTool(schema, NormalizeToolName("builtin", vt.Name))
+		if vt.Description != "" {
+			tool.OfTool.Description = anthropic.Opt(vt.Description)
+		}
+		out = append(out, tool)
 	}
 	return out
 }

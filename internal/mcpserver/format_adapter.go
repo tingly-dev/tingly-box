@@ -46,6 +46,9 @@ type ToolExecutionResult struct {
 	ToolUseID string
 	Contents  []coretool.ToolContent
 	IsError   bool
+	// Dispatched is true once execution crossed into the tool runtime. An
+	// error after this point may still have produced irreversible effects.
+	Dispatched bool
 }
 
 // TextContent returns the concatenated text of all text content items.

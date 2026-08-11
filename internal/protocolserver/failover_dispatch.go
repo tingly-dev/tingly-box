@@ -21,6 +21,8 @@ package protocolserver
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +63,7 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
+	observeProtocolStageSetupFailure(c, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
 			Message: err.Error(),
@@ -108,11 +111,35 @@ func isRetryableStatus(status int) bool {
 //     (valid only while uncommitted).
 type firstChunkGate struct {
 	gin.ResponseWriter
-	real      gin.ResponseWriter
-	buf       bytes.Buffer
-	hdr       http.Header
-	status    int
-	committed bool
+	real                 gin.ResponseWriter
+	buf                  bytes.Buffer
+	hdr                  http.Header
+	status               int
+	committed            bool
+	sideEffectsCommitted bool
+	attemptErr           error
+}
+
+func (g *firstChunkGate) MarkAttemptFailed(err error) {
+	if g != nil && err != nil {
+		g.attemptErr = err
+	}
+}
+
+func (g *firstChunkGate) AttemptError() error {
+	if g == nil {
+		return nil
+	}
+	return g.attemptErr
+}
+
+func markProtocolStageAttemptFailed(c *gin.Context, err error) {
+	if c == nil || err == nil {
+		return
+	}
+	if gate, ok := c.Writer.(*firstChunkGate); ok {
+		gate.MarkAttemptFailed(err)
+	}
 }
 
 func newFirstChunkGate(w gin.ResponseWriter) *firstChunkGate {
@@ -202,6 +229,24 @@ func (g *firstChunkGate) Committed() bool {
 	return g.committed
 }
 
+// SideEffectsCommitted reports whether retrying the attempt could replay an
+// already successful server-owned operation, even though no bytes reached the
+// client yet.
+func (g *firstChunkGate) SideEffectsCommitted() bool {
+	return g.sideEffectsCommitted
+}
+
+// MarkSideEffectsCommittedIfGate records an irreversible in-process action on
+// the active failover gate. It intentionally does not flush buffered output.
+func MarkSideEffectsCommittedIfGate(w gin.ResponseWriter) bool {
+	gate, ok := w.(*firstChunkGate)
+	if !ok {
+		return false
+	}
+	gate.sideEffectsCommitted = true
+	return true
+}
+
 // CommitFirstChunk is the producer's "first real chunk arrived" signal.
 // It flushes captured headers + status + buffered body to the real
 // writer and switches to pass-through. Idempotent.
@@ -268,6 +313,7 @@ func (g *firstChunkGate) Discard() {
 	}
 	g.buf.Reset()
 	g.status = 0
+	g.attemptErr = nil
 	for k := range g.hdr {
 		delete(g.hdr, k)
 	}
@@ -354,6 +400,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 ) {
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
+		setProtocolStageAttempt(c, 1)
 		attempt(initialProvider, initialModel)
 		return
 	}
@@ -393,11 +440,34 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			rec.SetActiveService(provider, model)
 		}
 
+		setProtocolStageAttempt(c, i+1)
 		attempt(provider, model)
 
 		// A committed gate means the stream's first real chunk reached
 		// the wire — bytes have left the process, retry is impossible.
 		if gate.Committed() {
+			if attemptErr := gate.AttemptError(); attemptErr != nil {
+				if isProtocolStageClientCancellation(c, attemptErr) {
+					fields := failoverLogFields(c, rule, provider, model, serviceID)
+					fields["stage"] = "failover_committed_cancelled"
+					fields["attempt"] = i + 1
+					fields["active_services"] = len(activeServices)
+					logrus.WithContext(c.Request.Context()).WithFields(fields).Debug(
+						"[failover] client cancelled after response commit",
+					)
+					return
+				}
+				loadbalance.RecordServiceFailure(rule.UUID, serviceID)
+				fields := failoverLogFields(c, rule, provider, model, serviceID)
+				fields["stage"] = "failover_committed_failure"
+				fields["attempt"] = i + 1
+				fields["active_services"] = len(activeServices)
+				fields["error"] = attemptErr.Error()
+				logrus.WithContext(c.Request.Context()).WithFields(fields).Warn(
+					"[failover] stream failed after response commit; retry is impossible",
+				)
+				return
+			}
 			loadbalance.RecordServiceSuccess(rule.UUID, serviceID)
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_success"
@@ -406,6 +476,16 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			fields["routed_model"] = model
 			fields["routed_provider"] = provider.Name
 			logrus.WithContext(c.Request.Context()).WithFields(fields).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
+			return
+		}
+		if gate.SideEffectsCommitted() {
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_side_effect_boundary"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["status"] = gate.Status()
+			logrus.WithContext(c.Request.Context()).WithFields(fields).
+				Warn("[failover] retry stopped because tool side effects were committed")
 			return
 		}
 		status := gate.Status()
@@ -487,6 +567,17 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		provider = nextProvider
 		model = nextService.Model
 	}
+}
+
+func isProtocolStageClientCancellation(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	return c != nil && c.Request != nil && c.Request.Context().Err() != nil &&
+		errors.Is(err, c.Request.Context().Err())
 }
 
 func failoverLogFields(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, serviceID string) logrus.Fields {

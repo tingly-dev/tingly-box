@@ -77,3 +77,29 @@ func TestBuildTransformChain_PreBaseBeforeBase(t *testing.T) {
 	assert.Equal(t, 0, cursor, "pre-Base rule transform must be first in the chain")
 	assert.Less(t, cursor, base, "pre-Base rule transform must run before base_convert")
 }
+
+func TestProtocolStageProviderTransformsPutChatCleanupLast(t *testing.T) {
+	transforms := protocolStageProviderTransforms(
+		protocol.TypeOpenAIChat,
+		[]transform.Transform{
+			transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
+			transform.NewVendorTransform(),
+		},
+	)
+	names := make([]string, 0, len(transforms))
+	for _, current := range transforms {
+		names = append(names, current.Name())
+	}
+	assert.Equal(t, []string{
+		"consistency_normalize",
+		"vendor_adjust",
+		"openai_chat_provider_cleanup",
+	}, names)
+
+	nonChat := protocolStageProviderTransforms(
+		protocol.TypeAnthropicBeta,
+		[]transform.Transform{transform.NewVendorTransform()},
+	)
+	require.Len(t, nonChat, 1)
+	assert.Equal(t, "vendor_adjust", nonChat[0].Name())
+}

@@ -108,20 +108,7 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 	newReq := *reqParams
 	newMessages := append([]anthropic.BetaMessageParam{}, reqParams.Messages...)
 	newMessages = append(newMessages, betaMessageToParamPreservingThinking(msg))
-
-	// Convert results to tool result blocks
-	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, len(results))
-	for i, r := range results {
-		tr := r.(ToolExecutionResult)
-		resultBlocks[i] = anthropic.BetaContentBlockParamUnion{
-			OfToolResult: &anthropic.BetaToolResultBlockParam{
-				ToolUseID: tr.ToolUseID,
-				Content:   toolContentsToAnthropicBeta(tr.Contents),
-				IsError:   anthropic.Bool(tr.IsError),
-			},
-		}
-	}
-	newMessages = append(newMessages, anthropic.NewBetaUserMessage(resultBlocks...))
+	newMessages = append(newMessages, anthropic.NewBetaUserMessage(betaStageToolResultBlocks(results)...))
 
 	newReq.Messages = newMessages
 	return &newReq, nil
@@ -200,8 +187,22 @@ func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messag
 	}
 
 	merged := append([]anthropic.BetaMessageParam{}, segment...)
-	lastIdx := len(merged) - 1
-	merged[lastIdx].Content = append(append([]anthropic.BetaContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	externalResults := append([]anthropic.BetaContentBlockParamUnion{}, messages[toolResultIdx].Content...)
+	last := len(merged) - 1
+	if merged[last].Role == anthropic.BetaMessageParamRoleUser && betaMessageHasToolResult(merged[last]) {
+		// The segment ends with the managed-results user turn; fold the
+		// client's external results into that same results message.
+		merged[last].Content = append(merged[last].Content, externalResults...)
+	} else {
+		// The segment ends with the current round's assistant message (an
+		// external-only round after internal rounds). The client's external
+		// results form a new trailing user turn so every tool_result still
+		// follows its assistant tool_use in the merged request.
+		merged = append(merged, anthropic.BetaMessageParam{
+			Role:    anthropic.BetaMessageParamRoleUser,
+			Content: externalResults,
+		})
+	}
 	if assistantIdx == -1 || toolResultIdx < assistantIdx {
 		result := append([]anthropic.BetaMessageParam{}, merged...)
 		result = append(result, messages[:toolResultIdx]...)
@@ -213,6 +214,18 @@ func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messag
 	result = append(result, merged...)
 	result = append(result, messages[toolResultIdx+1:]...)
 	return result
+}
+
+// betaMessageHasToolResult reports whether a user message carries any tool
+// result blocks. The merge folds incoming results into a trailing results user
+// message; anything else receives a fresh results turn instead.
+func betaMessageHasToolResult(message anthropic.BetaMessageParam) bool {
+	for _, block := range message.Content {
+		if block.OfToolResult != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.BetaMessageParam {

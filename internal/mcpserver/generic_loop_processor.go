@@ -227,7 +227,7 @@ func (p *GenericLoopProcessor) handleMixed(response, req any) (any, error) {
 		return p.adapter.FilterVirtualTools(response, external)
 	}
 	key := continuationKey(typ.GetSessionID(p.ctx), p.provider.UUID, p.adapterID())
-	mixedContinuationStore.put(key, segment)
+	mixedContinuationStore.put(key, segment, externalIDs)
 
 	// Filter response to only include external tools
 	filteredResponse, err := p.adapter.FilterVirtualTools(response, external)
@@ -312,7 +312,7 @@ func (p *GenericLoopProcessor) adapterID() string {
 func (p *GenericLoopProcessor) applyStoredContinuation(req any) any {
 	sessionID := typ.GetSessionID(p.ctx)
 	key := continuationKey(sessionID, p.provider.UUID, p.adapterID())
-	segment, ok := mixedContinuationStore.pop(key)
+	segment, ok := mixedContinuationStore.pop(key, req)
 	if !ok {
 		return req
 	}

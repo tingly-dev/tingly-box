@@ -35,6 +35,7 @@ type StartCmdKong struct {
 	Host                 string `kong:"flag,name='host',help='Server host'"`
 	EnableUI             bool   `kong:"flag,name='ui',short='u',default='true',help='Enable web UI'"`
 	EnableDebug          bool   `kong:"flag,name='debug',help='Enable debug mode'"`
+	EnableProtocolStage  bool   `kong:"flag,name='stage',help='Enable the Protocol Stage request pipeline'"`
 	EnableOpenBrowser    bool   `kong:"flag,name='browser',default='true',help='Auto-open browser'"`
 	EnableStyleTransform bool   `kong:"flag,name='adapter',default='true',help='Enable API style transform'"`
 	Daemon               bool   `kong:"flag,name='daemon',help='Run as daemon'"`
@@ -55,6 +56,7 @@ func (s *StartCmdKong) Run(appManager *AppManager, source LaunchSource) error {
 		Host:                 s.Host,
 		EnableUI:             s.EnableUI,
 		EnableDebug:          s.EnableDebug,
+		EnableProtocolStage:  s.EnableProtocolStage,
 		EnableOpenBrowser:    s.EnableOpenBrowser,
 		EnableStyleTransform: s.EnableStyleTransform,
 		Daemon:               s.Daemon,
@@ -129,6 +131,7 @@ func (r *RestartCmdKong) Run(appManager *AppManager, source LaunchSource) error 
 		Host:                 r.Host,
 		EnableUI:             r.EnableUI,
 		EnableDebug:          r.EnableDebug,
+		EnableProtocolStage:  r.EnableProtocolStage,
 		EnableOpenBrowser:    r.EnableOpenBrowser,
 		EnableStyleTransform: r.EnableStyleTransform,
 		Daemon:               r.Daemon,
@@ -303,16 +306,17 @@ func resolveStartCmdKongOptions(start *StartCmdKong, appConfig *config.AppConfig
 	}
 
 	return options.StartServerOptions{
-		Host:              start.Host,
-		Port:              resolvedPort,
-		EnableUI:          start.EnableUI,
-		EnableDebug:       resolvedDebug,
-		EnableOpenBrowser: start.EnableOpenBrowser,
-		Daemon:            start.Daemon,
-		LogFile:           start.LogFile,
-		PromptRestart:     start.PromptRestart,
-		RecordMode:        start.RecordMode,
-		RecordDir:         resolvedRecordDir,
+		Host:                start.Host,
+		Port:                resolvedPort,
+		EnableUI:            start.EnableUI,
+		EnableDebug:         resolvedDebug,
+		EnableProtocolStage: start.EnableProtocolStage,
+		EnableOpenBrowser:   start.EnableOpenBrowser,
+		Daemon:              start.Daemon,
+		LogFile:             start.LogFile,
+		PromptRestart:       start.PromptRestart,
+		RecordMode:          start.RecordMode,
+		RecordDir:           resolvedRecordDir,
 	}
 }
 
@@ -573,6 +577,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	serverManager := NewServerManager(
 		appConfig,
 		server.WithDebug(opts.EnableDebug),
+		server.WithProtocolStage(opts.EnableProtocolStage),
 		server.WithUI(opts.EnableUI),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
