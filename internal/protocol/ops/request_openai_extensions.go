@@ -26,6 +26,11 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 		strings.Contains(url, "opencode.ai/zen/go") && strings.Contains(modelLower, "deepseek"):
 		return applyDeepSeekTransform(req, providerURL, model, config)
 
+	case strings.Contains(url, "integrate.api.nvidia.com"):
+		// NVIDIA NIM rejects prompt-cache fields that Claude Code sends:
+		// "Unsupported parameter(s): `prompt_cache_options`". Strip them.
+		return applyDefaultTransform(stripPromptCacheForNVIDIA(req), config)
+
 	case strings.Contains(url, "generativelanguage.googleapis.com") && strings.Contains(modelLower, "gemini"):
 		return applyGeminiTransform(req, providerURL, model, config)
 
