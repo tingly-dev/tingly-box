@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -19,6 +22,13 @@ const maxConcurrentRefreshes = 5
 // warningUsedPercent is where a provider counts as close to running out.
 const warningUsedPercent = 80
 
+const (
+	initialRetryDelay = 200 * time.Millisecond
+	maxRetryDelay     = 2 * time.Second
+	retryJitter       = 100 * time.Millisecond
+	failedRefreshTTL  = time.Minute
+)
+
 // Manager coordinates quota fetching, storage, and refreshes.
 type Manager struct {
 	config      *Config
@@ -27,6 +37,8 @@ type Manager struct {
 	providerMgr ProviderManager
 	logger      *logrus.Logger
 	refresher   *Refresher
+	retryDelay  func(attempt int) time.Duration
+	refreshes   sync.Map // provider UUID -> chan struct{}
 }
 
 // ProviderManager provides access to configured providers.
@@ -47,6 +59,7 @@ func NewManager(config *Config, store Store, providerMgr ProviderManager, logger
 		registry:    NewRegistry(),
 		providerMgr: providerMgr,
 		logger:      logger,
+		retryDelay:  quotaRetryDelay,
 	}
 
 	// Create the background refresher.
@@ -261,6 +274,45 @@ func (m *Manager) IsProviderSupported(providerUUID string) bool {
 // fetchProviderQuota fetches and stores quota data for one provider.
 // It always returns ProviderUsage, either successful or containing error details.
 func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider) (*ProviderUsage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	requestedAt := time.Now()
+	gate := m.providerRefreshGate(provider.UUID)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case gate <- struct{}{}:
+	}
+	defer func() { <-gate }()
+
+	// A refresh that started after this caller arrived may have completed while
+	// it waited for the gate. Reuse that result rather than repeating the same
+	// upstream call. Each caller retains its own context; one canceled request
+	// cannot abort another caller's refresh.
+	if usage, err := m.store.Get(ctx, provider.UUID); err == nil && refreshedSince(usage, requestedAt) {
+		return usage, nil
+	}
+
+	return m.fetchProviderQuotaOnce(ctx, provider)
+}
+
+func (m *Manager) providerRefreshGate(providerUUID string) chan struct{} {
+	gate, _ := m.refreshes.LoadOrStore(providerUUID, make(chan struct{}, 1))
+	return gate.(chan struct{})
+}
+
+func refreshedSince(usage *ProviderUsage, requestedAt time.Time) bool {
+	if usage == nil {
+		return false
+	}
+	if !usage.FetchedAt.Before(requestedAt) {
+		return true
+	}
+	return usage.LastErrorAt != nil && !usage.LastErrorAt.Before(requestedAt)
+}
+
+func (m *Manager) fetchProviderQuotaOnce(ctx context.Context, provider *typ.Provider) (*ProviderUsage, error) {
 	providerType := inferProviderType(provider)
 	now := time.Now()
 
@@ -295,16 +347,29 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 		return usage, nil
 	}
 
-	// Fetch quota data.
+	// Read the fallback before the remote call while the request context is
+	// still usable. If the fetch later exhausts that context, stale quota can
+	// still be returned without replacing it with an empty error record.
+	cached, cachedErr := m.store.Get(ctx, provider.UUID)
+
+	// Fetch quota data. Quota reads are idempotent, so retry only transient
+	// transport failures and keep the retry local to this provider.
 	start := time.Now()
-	usage, err := f.Fetch(ctx, provider)
+	usage, err := m.fetchWithRetry(ctx, f, provider, log)
 	elapsed := time.Since(start)
 	if err != nil {
+		failedAt := time.Now()
 		log.WithFields(logrus.Fields{
 			"duration_ms": elapsed.Milliseconds(),
 			"error":       err.Error(),
 		}).Warn("quota fetch failed")
-		usage = m.unreadable(provider, providerType, now, err.Error())
+		if ctx.Err() != nil {
+			return cached, ctx.Err()
+		}
+		if cachedErr != nil && !errors.Is(cachedErr, ErrUsageNotFound) {
+			return nil, fmt.Errorf("load cached quota after fetch failure: %w", cachedErr)
+		}
+		usage = m.preserveLastSuccess(cached, provider, providerType, failedAt, err)
 	} else {
 		fields := logrus.Fields{
 			"duration_ms": elapsed.Milliseconds(),
@@ -322,6 +387,94 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	}
 
 	return usage, nil
+}
+
+func (m *Manager) fetchWithRetry(ctx context.Context, f Fetcher, provider *typ.Provider, log *logrus.Entry) (*ProviderUsage, error) {
+	attempts := 1
+	if m.config.RetryOnFailure && m.config.MaxRetries > 0 {
+		attempts += m.config.MaxRetries
+	}
+
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		var usage *ProviderUsage
+		usage, err = f.Fetch(ctx, provider)
+		if err == nil {
+			return usage, nil
+		}
+		if attempt == attempts || !isTransientQuotaError(err) || ctx.Err() != nil {
+			return nil, err
+		}
+
+		delay := m.retryDelay(attempt)
+		log.WithFields(logrus.Fields{
+			"attempt":      attempt,
+			"max_attempts": attempts,
+			"retry_in_ms":  delay.Milliseconds(),
+			"error":        err.Error(),
+		}).Warn("transient quota fetch failure; retrying")
+
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, err
+}
+
+func isTransientQuotaError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary())
+}
+
+func quotaRetryDelay(attempt int) time.Duration {
+	delay := initialRetryDelay
+	for step := 1; step < attempt && delay < maxRetryDelay; step++ {
+		delay = min(delay*2, maxRetryDelay)
+	}
+	return delay + time.Duration(rand.Int64N(int64(retryJitter)+1))
+}
+
+// preserveLastSuccess keeps the last readable snapshot visible while recording
+// why its refresh failed. FetchedAt and the quota payload remain untouched, so
+// callers can distinguish stale data from a successful refresh.
+func (m *Manager) preserveLastSuccess(usage *ProviderUsage, provider *typ.Provider, providerType ProviderType, now time.Time, fetchErr error) *ProviderUsage {
+	if !hasSuccessfulSnapshot(usage) {
+		return m.unreadable(provider, providerType, now, fetchErr.Error())
+	}
+
+	usage.MarkUnreadable(fetchErr.Error(), now)
+	retryTTL := min(m.config.CacheTTL, failedRefreshTTL)
+	if retryTTL <= 0 {
+		retryTTL = failedRefreshTTL
+	}
+	usage.ExpiresAt = now.Add(retryTTL)
+	return usage
+}
+
+func hasSuccessfulSnapshot(usage *ProviderUsage) bool {
+	if usage == nil || usage.FetchedAt.IsZero() {
+		return false
+	}
+	if usage.LastErrorAt == nil {
+		return usage.LastError == ""
+	}
+	return usage.FetchedAt.Before(*usage.LastErrorAt)
 }
 
 // unreadable records a provider whose quota could not be read.
