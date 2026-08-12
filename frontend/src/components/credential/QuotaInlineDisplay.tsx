@@ -111,7 +111,10 @@ export function QuotaInlineDisplay({
     <>
       <Box
         sx={{
-          pl: 8,
+          // Aligns with the Name column's left edge — the Status column
+          // (first column in ApiKeyTable/OAuthTable) is 72px wide, so this
+          // indent must match that, not an arbitrary spacing value.
+          pl: '86px',
           pr: 2,
           py: 1,
           display: 'flex',

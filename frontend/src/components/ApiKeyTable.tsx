@@ -72,6 +72,20 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
+// Column widths, in one place — tweak here rather than hunting through the
+// TableHead/TableBody JSX. `align`/`sx` are merged onto both the header
+// TableCell's default styling; body cells still render their own content.
+const COLUMNS: { label: string; width: number; align?: "center"; sx?: object }[] = [
+    {label: "Status", width: 72},
+    {label: "Name", width: 140},
+    {label: "API Style", width: 88, align: "center", sx: {px: 1, whiteSpace: "nowrap"}},
+    {label: "API Base URL", width: 150},
+    {label: "API Key", width: 140},
+    {label: "Proxy", width: 60},
+    {label: "Actions", width: 190},
+];
+const TABLE_MIN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
+
 const ApiKeyTable = ({
                          providers,
                          onEdit,
@@ -231,20 +245,20 @@ const ApiKeyTable = ({
                 overflowX: "auto",
             }}
         >
-            <Table sx={{tableLayout: "fixed", width: '100%', minWidth: {xs: 720, md: 840, xl: 1120}}}>
+            {/* Fixed column widths (see COLUMNS above); the table itself
+                scrolls horizontally below minWidth instead of columns resizing. */}
+            <Table sx={{tableLayout: "fixed", width: '100%', minWidth: TABLE_MIN_WIDTH}}>
                 <TableHead>
                     <TableRow sx={{bgcolor: "action.hover"}}>
-                        <TableCell sx={{fontWeight: 600, width: {xs: 72, xl: 90}, py: 1.25}}>Status</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: {xs: 130, xl: 140}, py: 1.25}}>Name</TableCell>
-                        <TableCell align="center" sx={{fontWeight: 600, width: 88, px: 1, py: 1.25, whiteSpace: 'nowrap'}}>
-                            API Style
-                        </TableCell>
-                        <TableCell sx={{fontWeight: 600, width: {xs: 180, xl: 200}, py: 1.25}}>
-                            API Base URL
-                        </TableCell>
-                        <TableCell sx={{fontWeight: 600, width: {xs: 125, xl: 140}, py: 1.25}}>API Key</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 60, py: 1.25, display: {xs: 'none', xl: 'table-cell'}}}>Proxy</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: {xs: 205, xl: 250}, py: 1.25}}>Actions</TableCell>
+                        {COLUMNS.map((col) => (
+                            <TableCell
+                                key={col.label}
+                                align={col.align}
+                                sx={{fontWeight: 600, width: col.width, py: 1.25, ...col.sx}}
+                            >
+                                {col.label}
+                            </TableCell>
+                        ))}
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -292,7 +306,7 @@ const ApiKeyTable = ({
                                             variant="body2"
                                             sx={{
                                                 fontWeight: 500,
-                                                maxWidth: 120,
+                                                maxWidth: 140,
                                                 overflow: "hidden",
                                                 textOverflow: "ellipsis",
                                                 whiteSpace: "nowrap",
@@ -371,7 +385,7 @@ const ApiKeyTable = ({
                                     </Stack>
                                 </TableCell>
                                 {/* Proxy */}
-                                <TableCell align="center" sx={{display: {xs: 'none', xl: 'table-cell'}}}>
+                                <TableCell align="center">
                                     {provider.proxy_url ? (
                                         <Tooltip title={provider.proxy_url} arrow>
                                             <Route
