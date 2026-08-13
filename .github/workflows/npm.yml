@@ -1,7 +1,7 @@
 name: NPX Package Publish from GitHub Release
 
 run-name: >-
-  📦 NPX publish ${{ github.event.release.tag_name || github.ref_name }}
+  📦 NPX publish ${{ github.event.inputs.tag || github.event.release.tag_name }}
   → npm:${{ github.event.inputs.npm_tag || 'auto' }}
   [cli=${{ github.event.inputs.publish_cli || 'true' }},
   gui=${{ github.event.inputs.publish_gui || 'false' }},
@@ -22,6 +22,10 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      tag:
+        description: 'Release tag to publish from (e.g., v1.0.0). Type an EXISTING published release tag — it must already exist on GitHub Releases; the job verifies it before publishing.'
+        required: true
+        type: string
       npm_tag:
         description: 'npm dist-tag for publish (latest/rc). Auto-trigger infers from version: stable→latest, pre-release→rc'
         required: false
@@ -91,9 +95,7 @@ jobs:
               echo "npm_tag=latest" >> $GITHUB_OUTPUT
             fi
           else
-            # workflow_dispatch: no manual tag input — the release tag is the
-            # ref the run was dispatched on (use the "Run workflow" UI to select
-            # the tag; only tag refs are accepted, enforced in the version step).
+            # workflow_dispatch: tag must be provided explicitly
             echo "publish_cli=${{ github.event.inputs.publish_cli }}" >> $GITHUB_OUTPUT
             echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
             echo "build_docker=${{ github.event.inputs.build_docker }}" >> $GITHUB_OUTPUT
@@ -106,16 +108,7 @@ jobs:
           if [ "${{ github.event_name }}" = "release" ]; then
             RELEASE_TAG="${{ github.event.release.tag_name }}"
           else
-            # workflow_dispatch: resolve the tag from the ref the run was
-            # dispatched on. This MUST be a tag ref — direct manual entry of a
-            # free-text tag was removed; selection happens in the dispatch UI.
-            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
-              echo "❌ NPX publish must be dispatched on a tag ref."
-              echo "   In the 'Run workflow' dialog, pick the release tag from the"
-              echo "   'Use workflow from' dropdown — do not run this on a branch."
-              exit 1
-            fi
-            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+            RELEASE_TAG="${{ github.event.inputs.tag }}"
           fi
 
           # Validate tag format
