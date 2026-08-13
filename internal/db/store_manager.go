@@ -39,6 +39,7 @@ type storeSet struct {
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
+	peerStore          *PeerStore
 }
 
 // initialized reports, per health-report name, whether each store is set.
@@ -57,6 +58,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"remoteChats":    s.remoteChatStore != nil,
 		"remoteSessions": s.remoteSessionStore != nil,
 		"botAccess":      s.botAccessStore != nil,
+		"peer":           s.peerStore != nil,
 	}
 }
 
@@ -195,6 +197,8 @@ func (sm *StoreManager) initRemoteStores() error {
 	if err := sm.db.AutoMigrate(
 		&RemoteChatRecord{},
 		&RemoteSessionRecord{},
+		&peerRecord{},
+		&peerUpdateRecord{},
 	); err != nil {
 		return err
 	}
@@ -206,6 +210,7 @@ func (sm *StoreManager) initRemoteStores() error {
 	sm.remoteChatStore = NewRemoteChatStore(sm.db)
 	sm.remoteSessionStore = NewRemoteSessionStore(sm.db, transcript)
 	sm.botAccessStore = NewBotAccessStore(sm.db)
+	sm.peerStore = NewPeerStore(sm.db)
 
 	// Migrating here, rather than from whichever feature happens to construct
 	// a store first, is what makes every entry point — server, standalone CLI
@@ -215,6 +220,14 @@ func (sm *StoreManager) initRemoteStores() error {
 		logrus.WithError(err).Error("Failed to import legacy remote JSON stores; leaving files in place")
 	}
 	return nil
+}
+
+// Peers returns the Peer store (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) Peers() *PeerStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.peerStore
 }
 
 // BotAccess returns the final-state Bot Capability and access-policy store.
