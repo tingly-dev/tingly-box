@@ -15,6 +15,7 @@ import {
     Robot as IconRobot,
     Terminal as IconTerminal,
     Bell as IconBell,
+    Cable as IconCable,
     Bolt as IconBolt,
     Settings as IconSettings,
     Send as IconSend,
@@ -211,6 +212,7 @@ export function useActivityItems(): ActivityItem[] {
                     { type: 'divider' },
                     { path: '/remote-agent', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
+                    { path: '/peers', label: t('layout.peers', { defaultValue: 'Peers' }), icon: <IconCable sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{

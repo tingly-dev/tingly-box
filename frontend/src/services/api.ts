@@ -3,6 +3,7 @@
 import type {components} from '@/client';
 import * as botApi from './botApi';
 import * as modelApi from './modelApi';
+import * as peerApi from './peerApi';
 import {getApiBaseUrl} from '../utils/protocol';
 import {
     controlApi,
@@ -1023,6 +1024,15 @@ export const api = {
             headers,
             params: {path: {uuid}}
         })),
+
+    // Peers — external tools registered on tingly-box (.design/peer.md).
+    // See peerApi.ts. The plaintext tb-peer- token appears exactly once, in
+    // create/rotate responses.
+    listPeers: peerApi.listPeers,
+    createPeer: peerApi.createPeer,
+    updatePeer: peerApi.updatePeer,
+    deletePeer: peerApi.deletePeer,
+    rotatePeerToken: peerApi.rotatePeerToken,
 
     createImBotSetting: async (data: {
         name?: string;

@@ -77,6 +77,7 @@ const QQPage = lazy(() => import('./pages/bots/QQPage'));
 const DiscordPage = lazy(() => import('./pages/bots/DiscordPage'));
 const SlackPage = lazy(() => import('./pages/bots/SlackPage'));
 const BotOverviewPage = lazy(() => import('./pages/bots/BotOverviewPage'));
+const PeersPage = lazy(() => import('./pages/peers/PeersPage'));
 const RemoteAgentPage = lazy(() => import('./pages/remote-agent/RemoteAgentPage'));
 const RemoteAgentEntryRedirect = lazy(() => import('./pages/remote-agent/RemoteAgentPage').then(m => ({ default: m.RemoteAgentEntryRedirect })));
 const NotifyPage = lazy(() => import('./pages/notify/NotifyPage'));
@@ -299,6 +300,7 @@ function AppContent() {
                     <Route path="/bots/qq" element={<QQPage />} />
                     <Route path="/bots/discord" element={<DiscordPage />} />
                     <Route path="/bots/slack" element={<SlackPage />} />
+                    <Route path="/peers" element={<PeersPage />} />
                     {/* IM Notify — the other purpose mounted on a bot's channel. */}
                     <Route path="/notify" element={<NotifyPage />} />
                     {/* Remote Control — the purpose pages. One nav row (see useActivityItems);

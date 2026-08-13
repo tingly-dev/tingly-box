@@ -1612,6 +1612,33 @@ let mockSharingKeys = [
 const svgDataUrl = (svg: string): string =>
     `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 
+// Mutable mock state for the Peers page (.design/peer.md): two peers on the
+// telegram bot, one connected, one queueing offline.
+const mockPeers = [
+    {
+        uuid: 'mock-peer-1',
+        name: 'report',
+        bot_uuid: 'mock-bot-001',
+        chat_id: '123456789',
+        exclusive: false,
+        enabled: true,
+        online: true,
+        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    },
+    {
+        uuid: 'mock-peer-2',
+        name: 'ci-gate',
+        bot_uuid: 'mock-bot-002',
+        chat_id: 'C0123456789',
+        exclusive: true,
+        enabled: true,
+        online: false,
+        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    },
+]
+
 export const handlers = [
     // Remote Agents / Remote Graphs API endpoints
     http.get('/api/remote-agents', () => {
@@ -3056,6 +3083,42 @@ export const handlers = [
                 },
             ],
         })
+    }),
+
+    // Peers — external tools registered on tingly-box (.design/peer.md).
+    // In-memory CRUD so the management page is fully interactive in mock mode.
+    http.get('/api/v1/peers', () => {
+        return HttpResponse.json({ peers: mockPeers })
+    }),
+    http.post('/api/v1/peers', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        const peer = {
+            uuid: `mock-peer-${mockPeers.length + 1}`,
+            name: String(body.name || 'peer'),
+            bot_uuid: String(body.bot_uuid || 'mock-bot-001'),
+            chat_id: String(body.chat_id || ''),
+            exclusive: Boolean(body.exclusive),
+            enabled: body.enabled === undefined ? true : Boolean(body.enabled),
+            online: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }
+        mockPeers.push(peer)
+        return HttpResponse.json({ peer, token: 'tb-peer-mock0123456789abcdef0123456789abcdef01234567' }, { status: 201 })
+    }),
+    http.put('/api/v1/peers/:uuid', async ({ params, request }) => {
+        const peer = mockPeers.find((p) => p.uuid === params.uuid)
+        if (!peer) return HttpResponse.json({ error: 'peer not found' }, { status: 404 })
+        Object.assign(peer, await request.json() as Record<string, unknown>, { updated_at: new Date().toISOString() })
+        return HttpResponse.json({ peer })
+    }),
+    http.delete('/api/v1/peers/:uuid', ({ params }) => {
+        const idx = mockPeers.findIndex((p) => p.uuid === params.uuid)
+        if (idx >= 0) mockPeers.splice(idx, 1)
+        return HttpResponse.json({ ok: true })
+    }),
+    http.post('/api/v1/peers/:uuid/token', () => {
+        return HttpResponse.json({ token: 'tb-peer-mockrotated9876543210fedcba9876543210fedcba98' })
     }),
 
     http.get('/api/v1/imbot-settings', () => {
