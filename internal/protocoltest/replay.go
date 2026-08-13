@@ -76,6 +76,11 @@ func StreamShapeForAgent(at AgentType) Assertion {
 // RequestModel routes to a single service{providerUUID, upstreamModel}.
 // It is the shared core of every AgentTestEnv setup path (virtual scenario,
 // vmodel, real provider, mock agent).
+//
+// Uses add-or-update rather than update-only: some scenarios (e.g. Codex,
+// see internal/server/config/init.go) intentionally have no seeded
+// DefaultRules entry, so their builtin rule UUID won't exist yet on a fresh
+// AgentTestEnv and must be inserted here rather than found.
 func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, upstreamModel string) error {
 	builtinUUID, requestModel, err := BuiltinRuleRef(agentType)
 	if err != nil {
@@ -85,7 +90,7 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 	rule := newHarnessRule(builtinUUID, agentType.Scenario(), requestModel, upstreamModel,
 		harnessService(providerUUID, upstreamModel))
 
-	if err := env.appConfig.GetGlobalConfig().UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
+	if err := env.appConfig.GetGlobalConfig().AddOrUpdateRequestConfigByRequestModel(rule); err != nil {
 		return fmt.Errorf("update rule: %w", err)
 	}
 	return nil
