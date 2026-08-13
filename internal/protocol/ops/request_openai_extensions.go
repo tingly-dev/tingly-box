@@ -26,11 +26,13 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 
 	switch {
 	case strings.Contains(url, "api.deepseek.com"),
-		strings.Contains(url, "api.moonshot.cn"),
-		strings.Contains(url, "api.moonshot.ai"),
-		strings.Contains(url, "api.kimi.com/coding/v1"),
 		strings.Contains(url, "opencode.ai/zen/go") && strings.Contains(modelLower, "deepseek"):
 		return applyDeepSeekTransform(req, providerURL, model, config)
+
+	case strings.Contains(url, "api.moonshot.cn"),
+		strings.Contains(url, "api.moonshot.ai"),
+		strings.Contains(url, "api.kimi.com/coding/v1"):
+		return applyKimiTransform(req, providerURL, model, config)
 
 	case strings.Contains(url, "generativelanguage.googleapis.com") && strings.Contains(modelLower, "gemini"):
 		return applyGeminiTransform(req, providerURL, model, config)

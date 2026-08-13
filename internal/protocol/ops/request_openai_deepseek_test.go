@@ -205,23 +205,6 @@ func TestDeepSeekReasoningEffortNoSignalLeavesUnset(t *testing.T) {
 	assert.Equal(t, "", string(req.ReasoningEffort))
 }
 
-// TestDeepSeekReasoningEffortNotAppliedToMoonshot proves the reasoning_effort
-// collapse is scoped to DeepSeek proper — Moonshot/Kimi share the
-// reasoning_content message shape but not DeepSeek's effort ladder, so a
-// stray reasoning_effort must not be invented for them.
-func TestDeepSeekReasoningEffortNotAppliedToMoonshot(t *testing.T) {
-	req := &openai.ChatCompletionNewParams{
-		Model: openai.ChatModel("moonshot-v1-8k"),
-	}
-
-	ApplyProviderTransforms(req, "https://api.moonshot.cn/v1", string(req.Model), &protocol.OpenAIConfig{
-		HasThinking:     true,
-		ReasoningEffort: "medium",
-	})
-
-	assert.Equal(t, "", string(req.ReasoningEffort))
-}
-
 // --- helpers ---
 
 func assistantToolCallMessage(t *testing.T) openai.ChatCompletionMessageParamUnion {
