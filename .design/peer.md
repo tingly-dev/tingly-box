@@ -290,16 +290,38 @@ hosting user code, an in-tb plugin runtime.
   tingly-box's own platform; not "subscription" (nothing is subscribed
   to), not "bot" (taken by real IM bots). ✓
 
-## 10. Tests
+## 10. Verification
 
-- Domain: name validation (reserved/format/uniqueness), token
-  generate/hash/verify, updates enqueue/poll/offset-confirm/cap/
+Four layers, all reproducible with `go test` (no external services — the
+tingly in-process platform stands in for the real IM):
+
+- **Domain** (`remote/peer`): name validation (reserved/format/uniqueness),
+  token generate/hash/verify, updates enqueue/poll/offset-confirm/cap/
   offline-notice edges, crash-replay (poll without offset re-reads).
-- Consumer: claim-rule truth table (pass rules, mention, sticky, reply-to,
-  exclusive, self-heal on dead sticky target), CurrentAgent round-trip
-  through the real chat store.
-- HTTP: CRUD + token-shown-once + rotate; data-plane auth matrix (peer
-  token on own id / foreign id / disabled peer / user token); send against
-  a fake channel incl. reply threading; updates long-poll + offset cursor.
-- Lifecycle: peer-only bot runs; deleting the last peer stops it on next
-  sync (mirrors notify's mount tests).
+- **Consumer** (`remote/control/peerconsumer`): claim-rule truth table
+  (pass rules, mention, sticky, reply-to, exclusive, self-heal on dead
+  sticky target).
+- **HTTP** (`internal/server/module/peerapi/handler_test.go`): CRUD +
+  token-shown-once + rotate; data-plane auth matrix (peer token on own id /
+  foreign id / disabled peer / user token); send against a fake channel
+  incl. reply threading; updates long-poll + offset cursor.
+  (`internal/db`): SQLite store CRUD/cursor/cap.
+- **End-to-end** (`internal/server/module/peerapi/e2e_test.go`,
+  `TestPeerEndToEnd`): the full production stack with only the ends
+  simulated — a synthetic human on a tingly `InProcessTransport` and a tool
+  speaking real HTTP against `httptest`. Everything between is production
+  code: SQLite stores, `bot.Manager` lifecycle (Sync mounts on the first
+  peer, stops on the last delete), the real dispatch chain (host gates →
+  peer consumer), `channel.Registry` + `imchannel` outbound, the
+  scoped-token middleware, and the two-verb protocol. The script walks the
+  §2 product story: register → bot runs → `@report` handoff → sticky
+  message → tool receives typed update via parked long-poll → threaded
+  answer lands as a chat reply → offset confirm + crash replay → offline
+  notice → `/peers` overview → forged-token 401 → delete → bot stops.
+
+```bash
+go test ./remote/peer/ ./remote/control/peerconsumer/ \
+        ./internal/server/module/peerapi/ ./internal/db/ -race
+# just the end-to-end story, verbose:
+go test ./internal/server/module/peerapi/ -run TestPeerEndToEnd -v
+```
