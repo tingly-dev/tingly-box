@@ -310,6 +310,16 @@ func (m *Manager) mountedConsumers(setting BotSetting) []Consumer {
 			if c.Name() == "remote_agent" {
 				name = access.CapabilityRemoteControl
 			}
+			// Purposes that are not stored capabilities (peer) derive their
+			// mount from their own data, capability rows or not — the generic
+			// rule that lets data-derived purposes coexist with explicit
+			// capability rows (.design/peer.md §7).
+			if !name.Valid() {
+				if c.Mounted(setting) {
+					mounted = append(mounted, c)
+				}
+				continue
+			}
 			capability, found, err := m.capabilityStore.GetCapability(context.Background(), setting.UUID, name)
 			if err == nil && found && capability.Enabled {
 				mounted = append(mounted, c)
