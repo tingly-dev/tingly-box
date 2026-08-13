@@ -2,7 +2,7 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/services/api';
-import type { BotSettings } from '@/types/bot';
+import type { BotChat, BotSettings } from '@/types/bot';
 import type { Peer } from '@/types/peer';
 import { useNotify } from '@/hooks/useNotify';
 import {
@@ -15,6 +15,7 @@ import {
     FiberManualRecord as IconDot,
 } from '@/components/icons';
 import {
+    Autocomplete,
     Box,
     Button,
     Checkbox,
@@ -78,6 +79,32 @@ const PeersPage = () => {
     // Delete confirm.
     const [peerToDelete, setPeerToDelete] = useState<Peer | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    // Chats the selected bot has seen — the picker options for the binding.
+    const [chatOptions, setChatOptions] = useState<BotChat[]>([]);
+    const [chatsLoading, setChatsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!formOpen || !form.bot_uuid) {
+            setChatOptions([]);
+            return;
+        }
+        let cancelled = false;
+        setChatsLoading(true);
+        api.listBotChats(form.bot_uuid)
+            .then((res) => {
+                if (!cancelled) setChatOptions((res.chats || []).filter((c) => c.chat_id && !c.blocked));
+            })
+            .catch(() => {
+                if (!cancelled) setChatOptions([]);
+            })
+            .finally(() => {
+                if (!cancelled) setChatsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [formOpen, form.bot_uuid]);
 
     const botName = useMemo(() => {
         const byUuid = new Map(bots.map((b) => [b.uuid, b.name || b.platform || b.uuid]));
@@ -325,15 +352,41 @@ const PeersPage = () => {
                                 </MenuItem>
                             ))}
                         </TextField>
-                        <TextField
-                            label={t('peers.formChat', { defaultValue: 'Chat ID' })}
-                            fullWidth
-                            value={form.chat_id}
-                            onChange={(e) => setForm({ ...form, chat_id: e.target.value })}
-                            helperText={t('peers.formChatHelp', {
-                                defaultValue:
-                                    'The one chat this peer is bound to — the binding is the authorization; it can never reach any other chat. Find ids on the bot’s Chats panel.',
-                            })}
+                        <Autocomplete
+                            freeSolo
+                            options={chatOptions}
+                            loading={chatsLoading}
+                            getOptionLabel={(option) => (typeof option === 'string' ? option : option.chat_id)}
+                            inputValue={form.chat_id}
+                            onInputChange={(_, value) => setForm({ ...form, chat_id: value })}
+                            renderOption={(props, option) => (
+                                <Box component="li" {...props} key={option.id}>
+                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{option.chat_id}</Typography>
+                                        {option.is_paired && (
+                                            <Chip size="small" variant="outlined" color="success"
+                                                label={t('peers.paired', { defaultValue: 'paired' })} />
+                                        )}
+                                    </Stack>
+                                </Box>
+                            )}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label={t('peers.formChat', { defaultValue: 'Chat' })}
+                                    helperText={
+                                        chatOptions.length > 0
+                                            ? t('peers.formChatHelpPick', {
+                                                defaultValue:
+                                                    'Pick one of the chats this bot has seen. The binding is the authorization — the peer can never reach any other chat.',
+                                            })
+                                            : t('peers.formChatHelpManual', {
+                                                defaultValue:
+                                                    'No chats recorded for this bot yet — message the bot once so the chat appears here, or paste the chat id manually. The binding is the authorization.',
+                                            })
+                                    }
+                                />
+                            )}
                         />
                         <FormControlLabel
                             control={
