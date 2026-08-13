@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
+	peermodule "github.com/tingly-dev/tingly-box/internal/server/module/peerapi"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
@@ -110,6 +111,14 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// channel/interaction registries once the bot middle layer is wired.
 	botAPI := notifymodule.NewBotAPIHandler(nil, nil, nil)
 	notifymodule.RegisterBotRoutes(apiV1, botAPI)
+
+	// Peer API — same doc-only pattern: handlers are referenced, never
+	// invoked, so the nil runtime is fine. At runtime server_control.go
+	// registers these with the shared PeerRuntime and the data plane gets
+	// its own token middleware.
+	peerHandler := peermodule.NewHandler(nil, nil, nil, nil)
+	peermodule.RegisterControlRoutes(apiV1, peerHandler)
+	peermodule.RegisterDataRoutes(apiV1, peerHandler)
 
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(cfg, "")

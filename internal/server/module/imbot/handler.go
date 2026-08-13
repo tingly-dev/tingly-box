@@ -69,6 +69,16 @@ func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channe
 	return h, nil
 }
 
+// PeerRuntime exposes the bot manager's shared peer state so server wiring
+// can hand it to the peer HTTP module. Nil when the peer store is
+// unavailable.
+func (h *Handler) PeerRuntime() *PeerRuntime {
+	if h == nil {
+		return nil
+	}
+	return h.botMgr.PeerRuntime()
+}
+
 // ListSettings returns all ImBot configurations
 func (h *Handler) ListSettings(c *gin.Context) {
 	if h.store == nil {

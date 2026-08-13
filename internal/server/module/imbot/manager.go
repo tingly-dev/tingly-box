@@ -10,7 +10,10 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control"
 	"github.com/tingly-dev/tingly-box/remote/control/adapter"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/control/peerconsumer"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
+	"github.com/tingly-dev/tingly-box/remote/peer"
 
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -31,6 +34,18 @@ type BotManager struct {
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
 	config       *config.Config
+	peerRuntime  *PeerRuntime
+}
+
+// PeerRuntime bundles the peer state shared between the inbound consumer
+// (built here, so it rides every bot's dispatch chain) and the HTTP module
+// (wired in server_control.go). One inbox and one recent-sends tracker per
+// process — outbound sends and inbound claims must see the same state. See
+// .design/peer.md.
+type PeerRuntime struct {
+	Store peer.Store
+	Inbox *peer.Inbox
+	Sends *peer.RecentSends
 }
 
 // BotStatus represents the runtime status of a bot.
@@ -104,8 +119,39 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	settingsStore := adapter.NewSettingsStore(store)
 	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, tbClient, settingsStore)
 
+	// Peer runtime + consumer: the peer purpose claims inbound messages
+	// addressed to a Peer and keeps a bot alive whose only user is an
+	// external tool. It dispatches between notify and the remote_agent
+	// catch-all (see .design/peer.md §6). The inbox's offline notice goes
+	// out through the bot's own channel.
+	var peerRuntime *PeerRuntime
+	consumers := []bot.Consumer{notifyConsumer}
+	if peerStore := sm.Peers(); peerStore != nil {
+		peerRuntime = &PeerRuntime{
+			Store: peerStore,
+			Inbox: peer.NewInbox(peerStore),
+			Sends: peer.NewRecentSends(512),
+		}
+		if channelRegistry != nil {
+			registry := channelRegistry
+			peerRuntime.Inbox.SetOfflineNotifier(func(p peer.Peer, _ peer.Update) {
+				ch, ok := registry.Get(p.BotUUID)
+				if !ok {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = ch.Send(ctx, channel.Target{ChatID: p.ChatID}, interaction.Notification{
+					Body: fmt.Sprintf("📥 @%s is not connected; your message is queued and will be delivered when it next connects.", p.Name),
+				})
+			})
+		}
+		consumers = append(consumers, peerconsumer.New(peerRuntime.Store, peerRuntime.Inbox, peerRuntime.Sends))
+	}
+	consumers = append(consumers, remoteAgentConsumer)
+
 	// Create internal bot manager
-	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)
+	internalMgr := bot.NewManager(settingsStore, consumers...)
 	internalMgr.SetChatStore(chatStore)
 	internalMgr.SetAccessStore(sm.BotAccess())
 	// Wire the channel registry BEFORE periodicBotSync's goroutine gets a
@@ -118,12 +164,24 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		sessionMgr:   sessionMgr,
 		agentService: agentService,
 		config:       cfg,
+		peerRuntime:  peerRuntime,
 	}
 
 	go bm.periodicBotSync(ctx)
 
 	logrus.Info("BotManager initialized successfully")
 	return bm, nil
+}
+
+// PeerRuntime returns the shared peer state (nil when the peer store is
+// unavailable). The peer HTTP module must use exactly this instance so
+// outbound sends and inbound claims share one inbox and one recent-sends
+// tracker.
+func (bm *BotManager) PeerRuntime() *PeerRuntime {
+	if bm == nil {
+		return nil
+	}
+	return bm.peerRuntime
 }
 
 // StartBot starts a single bot by UUID.

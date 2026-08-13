@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
+	peermodule "github.com/tingly-dev/tingly-box/internal/server/module/peerapi"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
@@ -216,6 +217,26 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		}
 		botAPI := notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, chatManager, s.config.StoreManager().BotAccess())
 		notifymodule.RegisterBotRoutes(apiV1, botAPI)
+	}
+
+	// Peer API — tingly-box as a pseudo-IM platform for external tools
+	// (.design/peer.md). Control plane (CRUD + token rotation) rides the
+	// operator apiV1 group; the data plane (send/updates) gets its own
+	// /api/v1 group whose middleware also accepts the peer's scoped tb-peer-
+	// token. The runtime (store + inbox + recent-sends) comes from the bot
+	// manager so the HTTP module and the inbound consumer share one state.
+	if s.channelRegistry != nil && imbotHandler != nil {
+		if peerRuntime := imbotHandler.PeerRuntime(); peerRuntime != nil {
+			peerHandler := peermodule.NewHandler(
+				peerRuntime.Store, peerRuntime.Inbox, peerRuntime.Sends, s.channelRegistry)
+			peermodule.RegisterControlRoutes(apiV1, peerHandler)
+
+			peerDataV1 := manager.NewGroup("api", "v1", "")
+			peerDataV1.Router.Use(peermodule.DataAuthMiddleware(peerRuntime.Store, func(token string) bool {
+				return s.config != nil && s.config.HasUserToken() && token == s.config.GetUserToken()
+			}))
+			peermodule.RegisterDataRoutes(peerDataV1, peerHandler)
+		}
 	}
 
 	// Config apply API routes

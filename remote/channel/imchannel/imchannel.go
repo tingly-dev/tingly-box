@@ -88,8 +88,19 @@ func (c *Channel) Capabilities() channel.Capabilities {
 // platform cannot render degrades to its raw text, so a plain-text body still
 // reads correctly.
 func (c *Channel) Send(ctx context.Context, target channel.Target, msg interaction.Notification) error {
+	_, err := c.SendTracked(ctx, target, msg)
+	return err
+}
+
+// SendTracked delivers like Send and additionally returns the platform
+// message id of the sent message, so callers (the peer module) can correlate
+// later replies to it. Two Meta keys are honored when present: "reply_to"
+// threads the outgoing message to a platform message id, and "context_token"
+// forwards the reply-context token platforms like Weixin / WeCom require
+// (see bot.ForwardReplyContext).
+func (c *Channel) SendTracked(ctx context.Context, target channel.Target, msg interaction.Notification) (string, error) {
 	if c.sender == nil {
-		return fmt.Errorf("imchannel: no sender")
+		return "", fmt.Errorf("imchannel: no sender")
 	}
 	text := msg.Body
 	if msg.Title != "" {
@@ -99,12 +110,33 @@ func (c *Channel) Send(ctx context.Context, target channel.Target, msg interacti
 			text = msg.Title + "\n" + msg.Body
 		}
 	}
-	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{
+	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata:  c.tokenMetadata(target.ChatID),
-	})
-	return err
+		// Default to the persisted per-chat reply-context token (Weixin/WeCom
+		// require one on every send); an update-scoped token in msg.Meta below
+		// overrides it, being fresher than the persisted fallback.
+		Metadata: c.tokenMetadata(target.ChatID),
+	}
+	if msg.Meta != nil {
+		if replyTo, ok := msg.Meta["reply_to"].(string); ok && replyTo != "" {
+			opts.ReplyTo = replyTo
+		}
+		if token, ok := msg.Meta["context_token"].(string); ok && token != "" {
+			if opts.Metadata == nil {
+				opts.Metadata = map[string]interface{}{}
+			}
+			opts.Metadata["context_token"] = token
+		}
+	}
+	res, err := c.sender.SendMessage(ctx, target.ChatID, opts)
+	if err != nil {
+		return "", err
+	}
+	if res == nil {
+		return "", nil
+	}
+	return res.MessageID, nil
 }
 
 // tokenMetadata builds the metadata carrying the persisted reply-context
