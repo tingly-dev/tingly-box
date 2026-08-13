@@ -142,6 +142,86 @@ func TestAnthropicConversionStoresXThinkingOnOfAssistant(t *testing.T) {
 		"x_thinking stored at OfAssistant level must appear in JSON")
 }
 
+// TestDeepSeekReasoningEffortCollapsesOntoThreeTiers proves that the six-level
+// canonical thinking ladder is collapsed onto the three reasoning_effort
+// tiers DeepSeek's V4-Flash/V4-Pro thinking mode accepts (low/high/max),
+// rather than being passed through verbatim (which V4-Flash would reject for
+// minimal/medium/xhigh).
+func TestDeepSeekReasoningEffortCollapsesOntoThreeTiers(t *testing.T) {
+	tests := []struct {
+		ladderEffort string
+		want         string
+	}{
+		{"minimal", "low"},
+		{"low", "low"},
+		{"medium", "high"},
+		{"high", "high"},
+		{"xhigh", "max"},
+		{"max", "max"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ladderEffort, func(t *testing.T) {
+			req := &openai.ChatCompletionNewParams{
+				Model:           openai.ChatModel("deepseek-v4-flash"),
+				ReasoningEffort: openai.ReasoningEffort(tt.ladderEffort),
+			}
+
+			ApplyProviderTransforms(req, "https://api.deepseek.com/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+			assert.Equal(t, tt.want, string(req.ReasoningEffort))
+		})
+	}
+}
+
+// TestDeepSeekReasoningEffortFromConfigDefault proves that when no rule flag
+// forces req.ReasoningEffort directly, the effort derived during the
+// Anthropic→OpenAI conversion (carried on config.ReasoningEffort) still
+// reaches DeepSeek — previously this was silently dropped for every DeepSeek
+// request.
+func TestDeepSeekReasoningEffortFromConfigDefault(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("deepseek-v4-flash"),
+	}
+
+	ApplyProviderTransforms(req, "https://api.deepseek.com/v1", string(req.Model), &protocol.OpenAIConfig{
+		HasThinking:     true,
+		ReasoningEffort: "medium",
+	})
+
+	assert.Equal(t, "high", string(req.ReasoningEffort))
+}
+
+// TestDeepSeekReasoningEffortNoSignalLeavesUnset proves that DeepSeek is not
+// forced into thinking mode when neither the request nor the config carries
+// an actionable thinking signal.
+func TestDeepSeekReasoningEffortNoSignalLeavesUnset(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("deepseek-v4-flash"),
+	}
+
+	ApplyProviderTransforms(req, "https://api.deepseek.com/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+	assert.Equal(t, "", string(req.ReasoningEffort))
+}
+
+// TestDeepSeekReasoningEffortNotAppliedToMoonshot proves the reasoning_effort
+// collapse is scoped to DeepSeek proper — Moonshot/Kimi share the
+// reasoning_content message shape but not DeepSeek's effort ladder, so a
+// stray reasoning_effort must not be invented for them.
+func TestDeepSeekReasoningEffortNotAppliedToMoonshot(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("moonshot-v1-8k"),
+	}
+
+	ApplyProviderTransforms(req, "https://api.moonshot.cn/v1", string(req.Model), &protocol.OpenAIConfig{
+		HasThinking:     true,
+		ReasoningEffort: "medium",
+	})
+
+	assert.Equal(t, "", string(req.ReasoningEffort))
+}
+
 // --- helpers ---
 
 func assistantToolCallMessage(t *testing.T) openai.ChatCompletionMessageParamUnion {
