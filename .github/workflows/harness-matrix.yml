@@ -10,14 +10,23 @@ run-name: >-
 # Runs every hermetic harness mode in parallel to validate each change,
 # including one matrix leg per client driver (http / gosdk / python / node /
 # aisdk) so the gateway is validated against every real client stack.
-# Triggers: CI branch push (ci/**), manual dispatch, and release tag (v*).
+# Triggers: CI branch push (ci/**), PR merge into main, manual dispatch, and
+# reusable workflow_call (consumed by release.yml to gate a release on a
+# passing harness). Release tags run only through release.yml so the full
+# matrix is not scheduled twice for the same tag.
 # See .design/harness-matrix.md and cli/harness/README.md for the modes.
 on:
   push:
     branches:
       - 'ci/**'
-    tags:
-      - 'v*'
+  # Run after every merge to main. We react to PR-close events instead of a
+  # raw `push: main` so direct pushes (e.g. bot bump commits) don't re-trigger
+  # the full matrix — only genuine PR merges do.
+  pull_request:
+    types:
+      - closed
+    branches:
+      - 'main'
   workflow_dispatch:
     inputs:
       focus:
@@ -40,6 +49,10 @@ on:
           - lb
           - duo
           - routing
+  # Reusable entry point. release.yml calls this to gate the GitHub release on
+  # a green harness. Runs the full matrix (focus=all) so a release can never be
+  # cut while any leg is red.
+  workflow_call:
 
 permissions:
   contents: read
@@ -138,6 +151,14 @@ jobs:
       - name: Skip unfocused leg
         id: gate
         run: |
+          # For pull_request:closed, only run when the PR was actually merged
+          # into main — ignore plain closes/dismissals.
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ pull_request closed without merge — skipping ${{ matrix.leg.name }}"
+            exit 0
+          fi
+
           FOCUS="${{ github.event.inputs.focus || 'all' }}"
           LEG_FOCUS="${{ matrix.leg.focus }}"
           if [ "$FOCUS" != "all" ] && [ "$FOCUS" != "$LEG_FOCUS" ]; then
