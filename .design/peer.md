@@ -325,3 +325,12 @@ go test ./remote/peer/ ./remote/control/peerconsumer/ \
 # just the end-to-end story, verbose:
 go test ./internal/server/module/peerapi/ -run TestPeerEndToEnd -v
 ```
+
+A reference tool lives at `remote/peer/examples/echo-tool` — the complete
+protocol in one std-lib-only Go file (announce, getUpdates loop with
+offset confirm, threaded echo replies). It doubles as a manual smoke test
+against a live server:
+
+```bash
+go run ./remote/peer/examples/echo-tool -peer <uuid> -token tb-peer-…
+```
