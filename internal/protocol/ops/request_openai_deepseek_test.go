@@ -205,6 +205,26 @@ func TestDeepSeekReasoningEffortNoSignalLeavesUnset(t *testing.T) {
 	assert.Equal(t, "", string(req.ReasoningEffort))
 }
 
+// TestDeepSeekReasoningEffortExplicitNoneWinsOverConfig proves that an
+// explicit "none" on the request (a forced thinking_effort=off rule flag, or
+// an OpenAI-native client disabling reasoning directly) short-circuits to no
+// signal rather than falling through to a competing config.ReasoningEffort —
+// otherwise a disable request would be silently overridden by whatever
+// effort the Anthropic→OpenAI conversion happened to derive.
+func TestDeepSeekReasoningEffortExplicitNoneWinsOverConfig(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:           openai.ChatModel("deepseek-v4-flash"),
+		ReasoningEffort: "none",
+	}
+
+	ApplyProviderTransforms(req, "https://api.deepseek.com/v1", string(req.Model), &protocol.OpenAIConfig{
+		HasThinking:     true,
+		ReasoningEffort: "high",
+	})
+
+	assert.Equal(t, "", string(req.ReasoningEffort))
+}
+
 // --- helpers ---
 
 func assistantToolCallMessage(t *testing.T) openai.ChatCompletionMessageParamUnion {

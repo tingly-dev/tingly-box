@@ -65,7 +65,10 @@ func applyReasoningEffortTier(req *openai.ChatCompletionNewParams, config *proto
 // "none" (explicit disable) and "" (no signal) both resolve to "" so
 // thinking is left at the vendor's own default rather than forced on.
 func resolveReasoningEffort(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig) string {
-	if effort := string(req.ReasoningEffort); effort != "" && effort != "none" {
+	if effort := string(req.ReasoningEffort); effort != "" {
+		if effort == "none" {
+			return ""
+		}
 		return effort
 	}
 	if config != nil && config.HasThinking && config.ReasoningEffort != "" && config.ReasoningEffort != "none" {
