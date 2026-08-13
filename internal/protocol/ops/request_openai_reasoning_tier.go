@@ -7,22 +7,51 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
-// applyLowHighMaxReasoningEffort forwards the resolved thinking-effort
-// signal as reasoning_effort, collapsed onto the low/high/max tiers shared
-// by DeepSeek's V4-Flash/V4-Pro and Moonshot/Kimi's K3 thinking modes.
-// Earlier models in both families had no effort dial at all (thinking was
-// an on/off switch baked into the model alias), so this value used to be
-// dropped on the floor for every request to either vendor.
+// reasoningEffortTierMap collapses the canonical six-level thinking-effort
+// ladder (internal/protocol/thinking) onto a vendor's own reasoning_effort
+// enum. Each vendor family that needs this keeps its own map (see
+// deepSeekEffortTiers, kimiEffortTiers) even where the values happen to
+// match today — a future vendor, or a future divergence between existing
+// ones (e.g. Kimi's rollout only accepting a subset at first), is then just
+// a different map, not a new hand-rolled transform.
+type reasoningEffortTierMap map[string]string
+
+// lowHighMaxEffortTiers is the low/high/max scheme DeepSeek's
+// V4-Flash/V4-Pro and Moonshot/Kimi's K3 both document today:
+//   - minimal/low  -> "low"  (everyday, non-agentic use)
+//   - medium/high  -> "high" (everyday agent tasks)
+//   - xhigh/max    -> "max"  (harder, more complex tasks)
+func lowHighMaxEffortTiers() reasoningEffortTierMap {
+	return reasoningEffortTierMap{
+		thinking.LevelMinimal: "low",
+		thinking.LevelLow:     "low",
+		thinking.LevelMedium:  "high",
+		thinking.LevelHigh:    "high",
+		thinking.LevelXHigh:   "max",
+		thinking.LevelMax:     "max",
+	}
+}
+
+// applyReasoningEffortTier forwards the resolved thinking-effort signal as
+// reasoning_effort, collapsed through the given tier map. Earlier models in
+// the DeepSeek/Kimi family had no effort dial at all (thinking was an on/off
+// switch baked into the model alias), so this value used to be dropped on
+// the floor for every request to either vendor.
 //
 // No actionable signal leaves reasoning_effort unset — the vendor keeps its
-// own default rather than being forced into thinking mode.
-func applyLowHighMaxReasoningEffort(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig) {
+// own default rather than being forced into thinking mode. A signal with no
+// entry in tiers (an already vendor-native value, or an unrecognized one)
+// passes through unchanged rather than being silently dropped.
+func applyReasoningEffortTier(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig, tiers reasoningEffortTierMap) {
 	effort := resolveReasoningEffort(req, config)
 	if effort == "" {
 		req.ReasoningEffort = ""
 		return
 	}
-	req.ReasoningEffort = shared.ReasoningEffort(lowHighMaxTier(effort))
+	if mapped, ok := tiers[effort]; ok {
+		effort = mapped
+	}
+	req.ReasoningEffort = shared.ReasoningEffort(effort)
 }
 
 // resolveReasoningEffort picks the effort level driving the request,
@@ -43,21 +72,4 @@ func resolveReasoningEffort(req *openai.ChatCompletionNewParams, config *protoco
 		return string(config.ReasoningEffort)
 	}
 	return ""
-}
-
-// lowHighMaxTier collapses the canonical six-level thinking ladder onto the
-// low/high/max reasoning_effort scheme DeepSeek V4 and Moonshot/Kimi K3 both
-// use:
-//   - minimal/low  -> "low"  (everyday, non-agentic use)
-//   - medium/high  -> "high" (everyday agent tasks)
-//   - xhigh/max    -> "max"  (harder, more complex tasks)
-func lowHighMaxTier(effort string) string {
-	switch effort {
-	case thinking.LevelXHigh, thinking.LevelMax:
-		return "max"
-	case thinking.LevelMedium, thinking.LevelHigh:
-		return "high"
-	default: // minimal, low, or an unrecognized value
-		return "low"
-	}
 }

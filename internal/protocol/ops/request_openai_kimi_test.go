@@ -8,6 +8,22 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
+// TestDeepSeekAndKimiEffortTiersAreIndependentMaps proves deepSeekEffortTiers
+// and kimiEffortTiers are distinct map values, not two variables aliasing
+// the same underlying Go map (lowHighMaxEffortTiers() returns a fresh map on
+// each call precisely to guarantee this) — mutating one must never affect
+// the other, since the whole point of splitting them was to let either
+// vendor's tier scheme diverge independently.
+func TestDeepSeekAndKimiEffortTiersAreIndependentMaps(t *testing.T) {
+	original := kimiEffortTiers["max"]
+	kimiEffortTiers["max"] = "high" // simulate Kimi-only divergence
+	defer func() { kimiEffortTiers["max"] = original }()
+
+	assert.Equal(t, "high", kimiEffortTiers["max"])
+	assert.NotEqual(t, "high", deepSeekEffortTiers["max"],
+		"mutating kimiEffortTiers must not affect deepSeekEffortTiers")
+}
+
 // TestKimiTransformReasoningContentConversion proves that Moonshot/Kimi gets
 // the same x_thinking -> reasoning_content message-shape conversion as
 // DeepSeek.

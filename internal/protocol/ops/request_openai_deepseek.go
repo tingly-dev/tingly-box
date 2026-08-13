@@ -5,13 +5,19 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
+// deepSeekEffortTiers is DeepSeek's own reasoning_effort tier map, built
+// fresh so it can diverge from kimiEffortTiers without touching the shared
+// transform (they hold equal but independent maps — not the same map value,
+// which sharing a Go map reference would make them, silently coupling any
+// future edit to one into the other).
+var deepSeekEffortTiers = lowHighMaxEffortTiers()
+
 // applyDeepSeekTransform applies DeepSeek's request shaping: the
 // reasoning_content message conversion shared with Moonshot/Kimi (see
 // convertThinkingToReasoningContent), plus DeepSeek's own reasoning_effort
-// forwarding onto the low/high/max tiers its V4-Flash/V4-Pro thinking mode
-// accepts (see applyLowHighMaxReasoningEffort).
+// forwarding through deepSeekEffortTiers.
 func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
-	applyLowHighMaxReasoningEffort(req, config)
+	applyReasoningEffortTier(req, config, deepSeekEffortTiers)
 	convertThinkingToReasoningContent(req)
 	return req
 }
