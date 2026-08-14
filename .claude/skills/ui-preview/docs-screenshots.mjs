@@ -23,13 +23,20 @@
  *   5-claude-code.png    – Claude Code setup + routing rules
  *   6-routing.png        – OpenAI SDK smart routing
  *   7-remote.png         – Telegram remote control bot
- *   8-guardrails.png     – Guardrails policies
+ *   8-guardrails.png     – Guardrails policies (experimental feature; excluded
+ *                          from output.gif — see create_gif.py invocation)
  *   9-heatmap.png        – Token heatmap (Activity view on the dashboard; the
  *                          old standalone /overview/:range route now redirects
  *                          to /dashboard/7d — the heatmap is a view-mode toggle)
+ *   10-mcp.png            – MCP Tools registered servers (experimental feature;
+ *                          excluded from output.gif, same as guardrails)
  *   theme-preview/light-dashboard.png
  *   theme-preview/dark-dashboard.png
  *   theme-preview/claude-dashboard.png
+ *
+ * output.gif is built from only the core product-story shots (1,2,3,4,5,6,7,9)
+ * — guardrails and mcp are opt-in experimental features (gated behind
+ * /api/v1/scenario/_global/flag/{guardrails,mcp}) and stay out of the GIF.
  */
 // playwright lives in frontend/node_modules; ESM bare-specifier resolution starts
 // from the *file* location, not cwd. createRequire with a cwd-based URL makes it
@@ -152,6 +159,11 @@ await shoot(browser, '/dashboard/90d', '9-heatmap.png', {
         } catch (e) { console.warn('  ⚠ activity heatmap toggle failed:', e.message.slice(0, 80)); }
     },
 });
+
+// ── 10: MCP Tools – registered servers ───────────────────────────────────
+// Experimental feature (gated behind the "mcp" scenario flag, mocked to
+// always-on in mocks/handlers.ts). Not part of output.gif — see header.
+await shoot(browser, '/mcp/sources', '10-mcp.png', { settle: 3000 });
 
 // ── Theme previews ────────────────────────────────────────────────────────
 for (const theme of ['light', 'dark', 'claude']) {

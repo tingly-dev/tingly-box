@@ -2036,6 +2036,19 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: { scenario, ...body } })
     }),
 
+    // Experimental feature flags (guardrails, mcp, skill_user, skill_ide) —
+    // enable them all in mock mode so their gated pages are screenshot-able.
+    http.get('/api/v1/scenario/:scenario/flag/:flag', ({ params }) => {
+        const { scenario, flag } = params as { scenario: string; flag: string }
+        return HttpResponse.json({ success: true, data: { scenario, flag, value: true } })
+    }),
+
+    http.put('/api/v1/scenario/:scenario/flag/:flag', async ({ params, request }) => {
+        const { scenario, flag } = params as { scenario: string; flag: string }
+        const body = await request.json() as { value?: boolean }
+        return HttpResponse.json({ success: true, data: { scenario, flag, value: body.value ?? true } })
+    }),
+
     http.post('/api/v1/rule', async ({ request }) => {
         const body = await request.json() as any
         const scenario = body.scenario?.trim()
@@ -2245,6 +2258,46 @@ export const handlers = [
     }),
 
     http.get('/api/v1/guardrails/credentials', () => {
+        return HttpResponse.json({ success: true, data: [] })
+    }),
+
+    // ============================================
+    // MCP (Model Context Protocol) runtime config
+    // ============================================
+    http.get('/api/v1/mcp/config', () => {
+        return HttpResponse.json({
+            success: true,
+            config: {
+                sources: [
+                    { id: 'webtools', enabled: true, transport: 'advisor', visibility: 'client' },
+                    {
+                        id: 'filesystem', enabled: true, transport: 'stdio', visibility: 'server',
+                        command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/user/projects'],
+                        tools: ['read_file', 'write_file', 'list_directory'],
+                    },
+                    {
+                        id: 'github', enabled: true, transport: 'http', visibility: 'client',
+                        endpoint: 'https://api.githubcopilot.com/mcp',
+                        tools: ['search_repositories', 'create_issue', 'get_pull_request'],
+                    },
+                    {
+                        id: 'postgres', enabled: false, transport: 'stdio', visibility: 'server',
+                        command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'],
+                        tools: ['query'],
+                    },
+                ],
+                request_timeout: 30000,
+                strip_disabled_mcp_tools: true,
+            },
+        })
+    }),
+
+    http.put('/api/v1/mcp/config', async ({ request }) => {
+        const body = await request.json() as any
+        return HttpResponse.json({ success: true, config: body })
+    }),
+
+    http.get('/api/v1/mcp/clients', () => {
         return HttpResponse.json({ success: true, data: [] })
     }),
 
