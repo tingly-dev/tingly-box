@@ -16,7 +16,7 @@
     "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。"
   },
   "version": "2.1.0",
-  "last_updated": "2026-07-20T00:00:00Z",
+  "last_updated": "2026-08-14T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -654,7 +654,22 @@
           "max_output": 65536
         },
         {
+          "id": "gemini-3.1-flash-lite",
+          "context": 1000000,
+          "max_output": 65536
+        },
+        {
           "id": "gemini-3.5-flash",
+          "context": 1000000,
+          "max_output": 65536
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "context": 1000000,
+          "max_output": 65536
+        },
+        {
+          "id": "gemini-3.7-flash",
           "context": 1000000,
           "max_output": 65536
         }
@@ -662,8 +677,9 @@
       "supports_models_endpoint": true,
       "oauth_provider": "gemini",
       "icon": "gemini",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-08-14",
       "sources": [
+        "https://ai.google.dev/gemini-api/docs/models",
         "https://github.com/google-gemini/gemini-cli/discussions/27274",
         "https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/"
       ]
@@ -687,13 +703,16 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gemini-3-pro-high"
+          "id": "gemini-3.7-flash"
         },
         {
-          "id": "gemini-3-pro-low"
+          "id": "gemini-3.6-flash"
         },
         {
-          "id": "gemini-3-flash"
+          "id": "gemini-3.5-flash"
+        },
+        {
+          "id": "gemini-3.1-pro"
         },
         {
           "id": "claude-sonnet-4-6"
@@ -702,12 +721,17 @@
           "id": "claude-opus-4-6-thinking"
         },
         {
-          "id": "gpt-oss-120b-medium"
+          "id": "gpt-oss-120b"
         }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "antigravity",
-      "icon": "google"
+      "icon": "google",
+      "last_updated": "2026-08-14",
+      "sources": [
+        "https://antigravity.google/docs/models",
+        "https://github.com/sanchaymittal/antigravity-cli"
+      ]
     },
     "x-ai": {
       "id": "x-ai",
