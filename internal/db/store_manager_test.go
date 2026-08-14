@@ -111,7 +111,6 @@ func TestStoreManager_Accessors(t *testing.T) {
 		{"Stats", func() interface{} { return sm.Stats() }},
 		{"Usage", func() interface{} { return sm.Usage() }},
 		{"Provider", func() interface{} { return sm.Provider() }},
-		{"ToolConfig", func() interface{} { return sm.ToolConfig() }},
 		{"ImBotSettings", func() interface{} { return sm.ImBotSettings() }},
 		{"Model", func() interface{} { return sm.Model() }},
 		{"APIToken", func() interface{} { return sm.APIToken() }},
@@ -150,9 +149,6 @@ func TestStoreManager_Close(t *testing.T) {
 	}
 	if sm.Provider() != nil {
 		t.Error("Provider() should return nil after Close()")
-	}
-	if sm.ToolConfig() != nil {
-		t.Error("ToolConfig() should return nil after Close()")
 	}
 	if sm.ImBotSettings() != nil {
 		t.Error("ImBotSettings() should return nil after Close()")
@@ -206,8 +202,8 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 
 	expectedStores := []string{
 		"stats", "usage", "provider",
-		"toolConfig", "imbotSettings", "model", "apiToken",
-		"tasks", "remoteChats", "remoteSessions", "botAccess",
+		"imbotSettings", "model", "apiToken",
+		"remoteChats", "remoteSessions", "botAccess",
 	}
 	for _, name := range expectedStores {
 		if status.StoreStatus[name] != HealthStatusOK {
@@ -329,7 +325,6 @@ func TestStoreManager_ConcurrentAccess(t *testing.T) {
 				_ = sm.Stats()
 				_ = sm.Usage()
 				_ = sm.Provider()
-				_ = sm.ToolConfig()
 				_ = sm.ImBotSettings()
 				_ = sm.Model()
 			}

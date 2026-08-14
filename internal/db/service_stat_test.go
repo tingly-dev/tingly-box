@@ -23,14 +23,16 @@ func newTestStatsStore(t *testing.T) *StatsStore {
 func TestStatsStore_ClearService(t *testing.T) {
 	store := newTestStatsStore(t)
 
-	// Seed two services.
+	// Seed two services via the store's only remaining write path.
 	svcA := &loadbalance.Service{Provider: "prov-a", Model: "m"}
 	svcB := &loadbalance.Service{Provider: "prov-b", Model: "m"}
-	if _, err := store.RecordUsage(svcA, 10, 20); err != nil {
-		t.Fatalf("RecordUsage A: %v", err)
+	svcA.RecordUsage(10, 20)
+	svcB.RecordUsage(30, 40)
+	if err := store.UpdateFromService(svcA); err != nil {
+		t.Fatalf("UpdateFromService A: %v", err)
 	}
-	if _, err := store.RecordUsage(svcB, 30, 40); err != nil {
-		t.Fatalf("RecordUsage B: %v", err)
+	if err := store.UpdateFromService(svcB); err != nil {
+		t.Fatalf("UpdateFromService B: %v", err)
 	}
 
 	// Clear only A.

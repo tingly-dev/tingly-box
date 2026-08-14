@@ -93,31 +93,6 @@ func (UsageDailyRecord) TableName() string {
 	return "usage_daily"
 }
 
-// UsageMonthlyRecord is the GORM model for monthly aggregated usage statistics
-type UsageMonthlyRecord struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Year         int    `gorm:"column:year;not null"`
-	Month        int    `gorm:"column:month;not null"`
-	ProviderUUID string `gorm:"column:provider_uuid;not null"`
-	ProviderName string `gorm:"column:provider_name;not null"`
-	Model        string `gorm:"column:model;not null"`
-	RequestCount int64  `gorm:"column:request_count;not null"`
-	TotalTokens  int64  `gorm:"column:total_tokens;not null"`
-	InputTokens  int64  `gorm:"column:input_tokens;not null"`
-	OutputTokens int64  `gorm:"column:output_tokens;not null"`
-	// Cache tokens: reads, then writes (a subset of InputTokens)
-	CacheReadTokens  int64 `gorm:"column:cache_input_tokens;default:0"`
-	CacheWriteTokens int64 `gorm:"column:cache_write_tokens;default:0"`
-	// System tokens
-	SystemTokens int64 `gorm:"column:system_tokens;default:0"`
-	ErrorCount   int64 `gorm:"column:error_count;default:0"`
-}
-
-// TableName specifies the table name for GORM
-func (UsageMonthlyRecord) TableName() string {
-	return "usage_monthly"
-}
-
 // UsageStore persists usage records in SQLite using GORM.
 type UsageStore struct {
 	db     *gorm.DB
@@ -179,72 +154,21 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	if err := migrateUsageTables(db); err != nil {
 		return nil, err
 	}
-	if err := ensureUsageRecordSchema(db); err != nil {
-		return nil, fmt.Errorf("failed to align usage schema: %w", err)
-	}
 	logrus.Debugf("Usage store initialization completed")
 
 	return store, nil
 }
 
-// migrateUsageTables aligns and auto-migrates usage_records, usage_daily, and
-// usage_monthly. Shared by NewUsageStore and StoreManager.initUsageStore so
-// the two initialization paths can't drift apart.
+// migrateUsageTables aligns and auto-migrates usage_records and usage_daily.
+// Shared by NewUsageStore and StoreManager.initUsageStore so the two
+// initialization paths can't drift apart.
 func migrateUsageTables(db *gorm.DB) error {
 	if err := ensureUsageDailySchema(db); err != nil {
 		return fmt.Errorf("failed to align usage daily schema: %w", err)
 	}
-	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
+	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}); err != nil {
 		return fmt.Errorf("failed to migrate usage database: %w", err)
 	}
-	return nil
-}
-
-func ensureUsageRecordSchema(db *gorm.DB) error {
-	// Dev-stage breaking cleanup: remove deprecated department_id dimension.
-	if db.Migrator().HasColumn(&UsageRecord{}, "department_id") {
-		if err := db.Migrator().DropColumn(&UsageRecord{}, "department_id"); err != nil {
-			return err
-		}
-	}
-	// Migrate from separate cache fields to combined cache_input_tokens
-	if db.Migrator().HasColumn(&UsageRecord{}, "cache_creation_input_tokens") {
-		// Add new column if it doesn't exist
-		if !db.Migrator().HasColumn(&UsageRecord{}, "cache_input_tokens") {
-			if err := db.Migrator().AutoMigrate(&UsageRecord{}); err != nil {
-				return err
-			}
-		}
-		// Migrate data: sum of cache_creation + cache_read
-		if err := db.Exec(`
-			UPDATE usage_records
-			SET cache_input_tokens = COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)
-			WHERE cache_input_tokens = 0
-		`).Error; err != nil {
-			return err
-		}
-		// Drop old columns
-		if err := db.Migrator().DropColumn(&UsageRecord{}, "cache_creation_input_tokens"); err != nil {
-			return err
-		}
-		if err := db.Migrator().DropColumn(&UsageRecord{}, "cache_read_input_tokens"); err != nil {
-			return err
-		}
-	}
-
-	// Migrate empty user_id to default admin user
-	// This ensures backward compatibility after multi-tenant support was added
-	// Records created before multi-tenant have empty user_id, which should be
-	// associated with the default admin user
-	if err := db.Exec(`
-		UPDATE usage_records
-		SET user_id = ?
-		WHERE user_id = '' OR user_id IS NULL
-	`, DefaultAdminUserID).Error; err != nil {
-		logrus.WithError(err).Warn("Failed to migrate empty user_id to default admin user")
-		// Don't fail initialization for this migration, it's not critical
-	}
-
 	return nil
 }
 
@@ -759,32 +683,6 @@ func percentileFloat(sorted []float64, p float64) float64 {
 	}
 	fraction := index - float64(lower)
 	return sorted[lower] + fraction*(sorted[upper]-sorted[lower])
-}
-
-// GetRecordsAfterID returns usage records with id greater than lastID.
-// On initial sync, startTime can be used to cap the historical backfill window.
-func (us *UsageStore) GetRecordsAfterID(lastID uint, startTime time.Time, limit int) ([]UsageRecord, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
-	if limit <= 0 {
-		limit = 100
-	}
-
-	db := us.db.Model(&UsageRecord{}).Where("id > ?", lastID)
-	if !startTime.IsZero() {
-		db = db.Where("timestamp >= ?", startTime)
-	}
-
-	var records []UsageRecord
-	if err := db.
-		Order("id ASC").
-		Limit(limit).
-		Find(&records).Error; err != nil {
-		return nil, err
-	}
-
-	return records, nil
 }
 
 // DeleteOlderThan deletes records older than the specified date, together

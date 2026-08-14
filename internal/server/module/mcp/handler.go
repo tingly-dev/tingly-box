@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
@@ -41,7 +40,7 @@ func NewHandler(cfg *config.Config, rt ...*mcpruntime.Runtime) *Handler {
 		sharedRuntime = mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
 			var mcpCfg typ.MCPRuntimeConfig
 			if cfg != nil {
-				cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
+				cfg.GetToolConfig(config.ToolTypeMCPRuntime, &mcpCfg)
 			}
 			return &mcpCfg
 		})
@@ -113,7 +112,7 @@ func (h *Handler) GetMCPRuntimeConfig(c *gin.Context) {
 	}
 
 	var cfg typ.MCPRuntimeConfig
-	found := h.cfg.GetToolConfig(db.ToolTypeMCPRuntime, &cfg)
+	found := h.cfg.GetToolConfig(config.ToolTypeMCPRuntime, &cfg)
 	if !found {
 		// Return empty config (not configured yet)
 		c.JSON(http.StatusOK, MCPRuntimeConfigResponse{
@@ -212,7 +211,7 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 	}
 	typ.ApplyMCPRuntimeDefaults(mcpCfg)
 
-	if err := h.cfg.SetToolConfig(db.ToolTypeMCPRuntime, mcpCfg); err != nil {
+	if err := h.cfg.SetToolConfig(config.ToolTypeMCPRuntime, mcpCfg); err != nil {
 		c.JSON(http.StatusInternalServerError, MCPRuntimeConfigResponse{
 			Success: false,
 			Error:   "Failed to save MCP config: " + err.Error(),

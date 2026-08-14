@@ -6,7 +6,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailsevaluate "github.com/tingly-dev/tingly-box/internal/guardrails/evaluate"
@@ -113,7 +112,7 @@ func (s *Server) mcpMode() typ.MCPMode {
 		return ""
 	}
 	var mcpCfg typ.MCPRuntimeConfig
-	if s.config.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg) {
+	if s.config.GetToolConfig(config.ToolTypeMCPRuntime, &mcpCfg) {
 		if mcpCfg.Mode == "" {
 			return typ.MCPModeClienttool // default mode
 		}

@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -119,6 +118,11 @@ func (c *Config) GetDefaultMaxTokens() int {
 	return c.DefaultMaxTokens
 }
 
+// ToolTypeMCPRuntime is the ToolConfigs key for the MCP runtime tool config.
+// Tool configs live in config.json (GetToolConfig/SetToolConfig); the constant
+// used to live in internal/db next to a store that was never wired up.
+const ToolTypeMCPRuntime = "mcp_runtime"
+
 // GetMCPRuntimeConfig returns the global MCP runtime config.
 func (c *Config) GetMCPRuntimeConfig() *typ.MCPRuntimeConfig {
 	c.mu.RLock()
@@ -126,7 +130,7 @@ func (c *Config) GetMCPRuntimeConfig() *typ.MCPRuntimeConfig {
 
 	var config typ.MCPRuntimeConfig
 	if c.ToolConfigs != nil {
-		if data, ok := c.ToolConfigs[db.ToolTypeMCPRuntime]; ok {
+		if data, ok := c.ToolConfigs[ToolTypeMCPRuntime]; ok {
 			if err := json.Unmarshal(data, &config); err == nil {
 				typ.ApplyMCPRuntimeDefaults(&config)
 				return &config
@@ -177,43 +181,6 @@ func (c *Config) SetToolConfig(toolType string, config interface{}) error {
 
 	c.ToolConfigs[toolType] = data
 	return c.Save()
-}
-
-// GetEffectiveToolConfig returns the effective tool config for a specific provider and tool type
-// This is a generic method that works for any tool type
-// The mergeFunc parameter defines how to merge global and provider-specific configs
-//
-// Usage: load global config with GetToolConfig(), then call this helper to merge
-// provider-specific overrides by tool type.
-func (c *Config) GetEffectiveToolConfig(providerUUID, toolType string, mergeFunc func(global, provider interface{}) interface{}, globalConfig interface{}) (interface{}, bool) {
-	if c.toolConfigStore == nil {
-		return nil, false
-	}
-
-	// Get provider-specific config
-	record, err := c.toolConfigStore.GetByProviderAndType(providerUUID, toolType)
-	if err != nil {
-		logrus.Warnf("Failed to get tool config for provider %s, type %s: %v", providerUUID, toolType, err)
-	}
-
-	// If provider explicitly disabled, return disabled
-	if record != nil && record.Disabled {
-		return nil, false
-	}
-
-	// If provider has config, merge with global
-	if record != nil {
-		var providerConfig interface{}
-		if err := json.Unmarshal([]byte(record.ConfigJSON), &providerConfig); err != nil {
-			logrus.Warnf("Failed to unmarshal provider tool config: %v", err)
-			return globalConfig, true
-		}
-
-		return mergeFunc(globalConfig, providerConfig), true
-	}
-
-	// No provider-specific config, use global
-	return globalConfig, globalConfig != nil
 }
 
 // SetDefaultMaxTokens updates the default max_tokens

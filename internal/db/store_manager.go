@@ -27,11 +27,9 @@ type StoreManager struct {
 	statsStore         *StatsStore
 	usageStore         *UsageStore
 	providerStore      *ProviderStore
-	toolConfigStore    *ToolConfigStore
 	imbotSettingsStore *ImBotSettingsStore
 	modelStore         *ModelStore
 	apiTokenStore      *APITokenStore
-	taskStore          *TaskStore
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
@@ -145,9 +143,6 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initProviderStore(); err != nil {
 		errs = append(errs, fmt.Errorf("provider store: %w", err))
 	}
-	if err := sm.initToolConfigStore(); err != nil {
-		errs = append(errs, fmt.Errorf("tool config store: %w", err))
-	}
 	if err := sm.initImBotSettingsStore(); err != nil {
 		errs = append(errs, fmt.Errorf("imbot settings store: %w", err))
 	}
@@ -159,9 +154,6 @@ func (sm *StoreManager) initStores() error {
 	}
 	if err := sm.initAPITokenStore(); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
-	}
-	if err := sm.initTaskStore(); err != nil {
-		errs = append(errs, fmt.Errorf("task store: %w", err))
 	}
 	if err := sm.initRemoteStores(); err != nil {
 		errs = append(errs, fmt.Errorf("remote stores: %w", err))
@@ -208,18 +200,6 @@ func (sm *StoreManager) initProviderStore() error {
 	return nil
 }
 
-// initToolConfigStore initializes the ToolConfigStore.
-func (sm *StoreManager) initToolConfigStore() error {
-	if err := sm.db.AutoMigrate(&ToolConfigRecord{}); err != nil {
-		return err
-	}
-	sm.toolConfigStore = &ToolConfigStore{
-		db:     sm.db,
-		dbPath: constant.GetDBFile(sm.baseDir),
-	}
-	return nil
-}
-
 // initImBotSettingsStore initializes the ImBotSettingsStore.
 func (sm *StoreManager) initImBotSettingsStore() error {
 	if err := sm.db.AutoMigrate(&ImBotSettingsRecord{}); err != nil {
@@ -258,22 +238,6 @@ func (sm *StoreManager) initAPITokenStore() error {
 		return err
 	}
 	sm.apiTokenStore = store
-	return nil
-}
-
-// initTaskStore initializes the TaskStore.
-func (sm *StoreManager) initTaskStore() error {
-	if err := sm.db.AutoMigrate(&TaskRecord{}); err != nil {
-		return err
-	}
-	// Belt-and-suspenders: ensure composite indices exist regardless of GORM tag behaviour.
-	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_scheduled ON tasks(status, scheduled_at)`)
-	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_key_status ON tasks(serialization_key, status, created_at)`)
-	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_type, owner_id, created_at)`)
-	sm.taskStore = &TaskStore{
-		db:     sm.db,
-		dbPath: constant.GetDBFile(sm.baseDir),
-	}
 	return nil
 }
 
@@ -356,14 +320,6 @@ func (sm *StoreManager) Provider() *ProviderStore {
 	return sm.providerStore
 }
 
-// ToolConfig returns the ToolConfigStore (thread-safe).
-// Returns nil if the store is not initialized or after Close() has been called.
-func (sm *StoreManager) ToolConfig() *ToolConfigStore {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.toolConfigStore
-}
-
 // ImBotSettings returns the ImBotSettingsStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
 func (sm *StoreManager) ImBotSettings() *ImBotSettingsStore {
@@ -386,14 +342,6 @@ func (sm *StoreManager) APIToken() *APITokenStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.apiTokenStore
-}
-
-// Tasks returns the TaskStore (thread-safe).
-// Returns nil if the store is not initialized or after Close() has been called.
-func (sm *StoreManager) Tasks() *TaskStore {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.taskStore
 }
 
 // BaseDir returns the base directory for this StoreManager.
@@ -437,11 +385,9 @@ func (sm *StoreManager) Close() error {
 	sm.statsStore = nil
 	sm.usageStore = nil
 	sm.providerStore = nil
-	sm.toolConfigStore = nil
 	sm.imbotSettingsStore = nil
 	sm.modelStore = nil
 	sm.apiTokenStore = nil
-	sm.taskStore = nil
 	sm.remoteChatStore = nil
 	sm.remoteSessionStore = nil
 	sm.botAccessStore = nil
@@ -463,11 +409,9 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 		"stats":          sm.statsStore,
 		"usage":          sm.usageStore,
 		"provider":       sm.providerStore,
-		"toolConfig":     sm.toolConfigStore,
 		"imbotSettings":  sm.imbotSettingsStore,
 		"model":          sm.modelStore,
 		"apiToken":       sm.apiTokenStore,
-		"tasks":          sm.taskStore,
 		"remoteChats":    sm.remoteChatStore,
 		"remoteSessions": sm.remoteSessionStore,
 		"botAccess":      sm.botAccessStore,

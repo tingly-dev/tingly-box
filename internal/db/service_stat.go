@@ -93,25 +93,6 @@ func (ss *StatsStore) ServiceKey(provider, model string) string {
 	return fmt.Sprintf("%s:%s", provider, model)
 }
 
-// Snapshot returns a copy of all stats keyed by provider:model.
-func (ss *StatsStore) Snapshot() map[string]loadbalance.ServiceStats {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	var records []ServiceStatsRecord
-	if err := ss.db.Find(&records).Error; err != nil {
-		return make(map[string]loadbalance.ServiceStats)
-	}
-
-	snapshot := make(map[string]loadbalance.ServiceStats, len(records))
-	for _, record := range records {
-		key := ss.ServiceKey(record.Provider, record.Model)
-		snapshot[key] = record.toServiceStats()
-	}
-
-	return snapshot
-}
-
 // Get returns stats for a specific provider/model combination.
 func (ss *StatsStore) Get(provider, model string) (loadbalance.ServiceStats, bool) {
 	ss.mu.Lock()
@@ -186,62 +167,6 @@ func buildStatsRecordFromService(service *loadbalance.Service) *ServiceStatsReco
 	}
 
 	return record
-}
-
-// RecordUsage records usage for a service and persists the updated stats.
-func (ss *StatsStore) RecordUsage(service *loadbalance.Service, inputTokens, outputTokens int) (loadbalance.ServiceStats, error) {
-	if service == nil {
-		return loadbalance.ServiceStats{}, nil
-	}
-
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	// Get or create record
-	var record ServiceStatsRecord
-	err := ss.db.Where("provider = ? AND model = ?", service.Provider, service.Model).
-		First(&record).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new record
-		record = ServiceStatsRecord{
-			Provider:  service.Provider,
-			Model:     service.Model,
-			ServiceID: service.ServiceID(),
-			TimeWindow: func() int {
-				if service.TimeWindow > 0 {
-					return service.TimeWindow
-				}
-				return defaultServiceTimeWindow
-			}(),
-			WindowStart: time.Now(),
-		}
-	} else if err != nil {
-		return loadbalance.ServiceStats{}, err
-	}
-
-	// Update stats
-	now := time.Now()
-	if now.Sub(record.WindowStart) >= time.Duration(record.TimeWindow)*time.Second {
-		record.WindowStart = now
-		record.WindowRequestCount = 0
-		record.WindowTokensConsumed = 0
-		record.WindowInputTokens = 0
-		record.WindowOutputTokens = 0
-	}
-
-	record.RequestCount++
-	record.WindowRequestCount++
-	record.WindowInputTokens += int64(inputTokens)
-	record.WindowOutputTokens += int64(outputTokens)
-	record.WindowTokensConsumed += int64(inputTokens + outputTokens)
-	record.LastUsed = now
-
-	if err := ss.db.Save(&record).Error; err != nil {
-		return loadbalance.ServiceStats{}, err
-	}
-
-	return record.toServiceStats(), nil
 }
 
 // HydrateRules injects stored stats into the provided rules and initializes missing entries.
