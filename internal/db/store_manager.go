@@ -19,7 +19,15 @@ type StoreManager struct {
 	baseDir string
 	db      *gorm.DB // Shared DB instance for all stores
 
-	// Individual stores
+	storeSet
+}
+
+// storeSet groups every store StoreManager owns. Keeping them in one struct
+// lets Close reset them all with a single zero-value assignment, so the set
+// is spelled out only here and in initialized() — it used to be
+// hand-enumerated in four places (fields, initStores, Close, HealthCheck)
+// and the copies had already drifted.
+type storeSet struct {
 	statsStore         *StatsStore
 	usageStore         *UsageStore
 	providerStore      *ProviderStore
@@ -29,6 +37,23 @@ type StoreManager struct {
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
+}
+
+// initialized reports, per health-report name, whether each store is set.
+// Returning bools rather than the stores themselves avoids the
+// typed-nil-in-interface trap a map[string]any would reintroduce.
+func (s *storeSet) initialized() map[string]bool {
+	return map[string]bool{
+		"stats":          s.statsStore != nil,
+		"usage":          s.usageStore != nil,
+		"provider":       s.providerStore != nil,
+		"imbotSettings":  s.imbotSettingsStore != nil,
+		"model":          s.modelStore != nil,
+		"apiToken":       s.apiTokenStore != nil,
+		"remoteChats":    s.remoteChatStore != nil,
+		"remoteSessions": s.remoteSessionStore != nil,
+		"botAccess":      s.botAccessStore != nil,
+	}
 }
 
 // StoreManagerConfig holds configuration for StoreManager initialization.
@@ -103,33 +128,36 @@ func NewStoreManagerWithConfig(config StoreManagerConfig) (*StoreManager, error)
 	return sm, nil
 }
 
-// initStores initializes all individual stores.
+// initStores initializes all individual stores over the shared connection.
+// Each newXStore runs that store's schema migration; errors are collected so
+// one failing store doesn't hide the rest.
 func (sm *StoreManager) initStores() error {
+	conn := borrowedConn(sm.db)
 	var errs []error
+	var err error
 
-	// Initialize each store with its schema migration
-	if err := sm.initStatsStore(); err != nil {
+	if sm.statsStore, err = newStatsStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("stats store: %w", err))
 	}
-	if err := sm.initUsageStore(); err != nil {
+	if sm.usageStore, err = newUsageStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("usage store: %w", err))
 	}
-	if err := sm.initProviderStore(); err != nil {
+	if sm.providerStore, err = newProviderStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("provider store: %w", err))
 	}
-	if err := sm.initImBotSettingsStore(); err != nil {
+	if sm.imbotSettingsStore, err = newImBotSettingsStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("imbot settings store: %w", err))
 	}
-	if err := sm.dropDeprecatedModelCapabilities(); err != nil {
+	if err = sm.dropDeprecatedModelCapabilities(); err != nil {
 		errs = append(errs, fmt.Errorf("drop deprecated model_capabilities: %w", err))
 	}
-	if err := sm.initModelStore(); err != nil {
+	if sm.modelStore, err = newModelStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("model store: %w", err))
 	}
-	if err := sm.initAPITokenStore(); err != nil {
+	if sm.apiTokenStore, err = newAPITokenStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
 	}
-	if err := sm.initRemoteStores(); err != nil {
+	if err = sm.initRemoteStores(); err != nil {
 		errs = append(errs, fmt.Errorf("remote stores: %w", err))
 	}
 
@@ -140,71 +168,11 @@ func (sm *StoreManager) initStores() error {
 	return nil
 }
 
-// initStatsStore initializes the store over the shared connection.
-func (sm *StoreManager) initStatsStore() error {
-	store, err := newStatsStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.statsStore = store
-	return nil
-}
-
-// initUsageStore initializes the store over the shared connection.
-func (sm *StoreManager) initUsageStore() error {
-	store, err := newUsageStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.usageStore = store
-	return nil
-}
-
-// initProviderStore initializes the store over the shared connection.
-func (sm *StoreManager) initProviderStore() error {
-	store, err := newProviderStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.providerStore = store
-	return nil
-}
-
-// initImBotSettingsStore initializes the store over the shared connection.
-func (sm *StoreManager) initImBotSettingsStore() error {
-	store, err := newImBotSettingsStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.imbotSettingsStore = store
-	return nil
-}
-
 // dropDeprecatedModelCapabilities removes the model_capabilities table that
 // belonged to the now-removed AdaptiveProbe subsystem. Idempotent: harmless
 // when the table is already absent (new installs or post-migration restarts).
 func (sm *StoreManager) dropDeprecatedModelCapabilities() error {
 	return sm.db.Exec("DROP TABLE IF EXISTS model_capabilities").Error
-}
-
-// initModelStore initializes the store over the shared connection.
-func (sm *StoreManager) initModelStore() error {
-	store, err := newModelStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.modelStore = store
-	return nil
-}
-
-// initAPITokenStore initializes the store over the shared connection.
-func (sm *StoreManager) initAPITokenStore() error {
-	store, err := newAPITokenStore(borrowedConn(sm.db))
-	if err != nil {
-		return err
-	}
-	sm.apiTokenStore = store
-	return nil
 }
 
 // initRemoteStores initializes the remote-control chat and session stores.
@@ -348,15 +316,7 @@ func (sm *StoreManager) Close() error {
 	}
 
 	// Clear all store references
-	sm.statsStore = nil
-	sm.usageStore = nil
-	sm.providerStore = nil
-	sm.imbotSettingsStore = nil
-	sm.modelStore = nil
-	sm.apiTokenStore = nil
-	sm.remoteChatStore = nil
-	sm.remoteSessionStore = nil
-	sm.botAccessStore = nil
+	sm.storeSet = storeSet{}
 	sm.db = nil
 
 	logrus.Info("StoreManager: Closed all stores")
@@ -369,47 +329,33 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
-	// Check each store. Keep in sync with the fields, initStores and Close —
-	// the set of stores is unfortunately spelled out in four places.
-	stores := map[string]interface{}{
-		"stats":          sm.statsStore,
-		"usage":          sm.usageStore,
-		"provider":       sm.providerStore,
-		"imbotSettings":  sm.imbotSettingsStore,
-		"model":          sm.modelStore,
-		"apiToken":       sm.apiTokenStore,
-		"remoteChats":    sm.remoteChatStore,
-		"remoteSessions": sm.remoteSessionStore,
-		"botAccess":      sm.botAccessStore,
-	}
+	stores := sm.initialized()
 
 	status := &HealthStatus{
 		TotalStores: len(stores),
 		StoreStatus: make(map[string]string),
 	}
 
-	for name, store := range stores {
-		if store == nil {
+	// Every store runs on the one shared connection, so ping it once rather
+	// than once per store (this used to issue ten identical pings).
+	dbOK := false
+	if sm.db != nil {
+		if sqlDB, err := sm.db.DB(); err == nil && sqlDB.Ping() == nil {
+			dbOK = true
+		}
+	}
+
+	for name, inited := range stores {
+		switch {
+		case !inited || sm.db == nil:
 			status.StoreStatus[name] = HealthStatusNotInit
 			status.UnhealthyStores++
-		} else {
-			// Try to ping the database
-			if sm.db != nil {
-				sqlDB, err := sm.db.DB()
-				if err != nil {
-					status.StoreStatus[name] = HealthStatusError
-					status.UnhealthyStores++
-				} else if err := sqlDB.Ping(); err != nil {
-					status.StoreStatus[name] = HealthStatusError
-					status.UnhealthyStores++
-				} else {
-					status.StoreStatus[name] = HealthStatusOK
-					status.HealthyStores++
-				}
-			} else {
-				status.StoreStatus[name] = HealthStatusNotInit
-				status.UnhealthyStores++
-			}
+		case !dbOK:
+			status.StoreStatus[name] = HealthStatusError
+			status.UnhealthyStores++
+		default:
+			status.StoreStatus[name] = HealthStatusOK
+			status.HealthyStores++
 		}
 	}
 
