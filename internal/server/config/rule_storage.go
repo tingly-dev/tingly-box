@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Rule storage: rules live in SQLite (db.RuleStore) with Config.Rules as the
@@ -42,12 +43,16 @@ func (c *Config) rulesStore() *db.RuleStore {
 func (c *Config) hydrateRulesFromStore() error {
 	c.rulesHydrated = true
 
+	// Consume the file's rules exactly once, here; the field must never
+	// carry state past hydration (see its doc comment).
+	legacy := c.LegacyRules
+	c.LegacyRules = nil
+
 	store := c.rulesStore()
 	if store == nil {
 		// No store (lightweight test configs): fall back to whatever the JSON
 		// had so behavior degrades to the old in-memory semantics.
-		c.Rules = c.LegacyRules
-		c.LegacyRules = nil
+		c.Rules = legacy
 		return nil
 	}
 
@@ -60,21 +65,26 @@ func (c *Config) hydrateRulesFromStore() error {
 		// Database is authoritative. The file's rules array (Save()'s own
 		// mirror, or a hand edit made while the server was down) is not an
 		// input anymore; the next Save() rewrites it from the live rules.
+		// A divergent mirror means rule changes were made outside this
+		// version's control — most plausibly via an older (pre-database)
+		// binary during a downgrade — and those changes are NOT merged back;
+		// say so loudly instead of discarding them in silence.
+		if len(legacy) > 0 && !rulesEquivalent(legacy, stored) {
+			logrus.Warnf("config.json rules differ from the database (%d in file, %d in database); the database wins and the file copy will be overwritten — rule changes made under an older version or by hand are not merged back", len(legacy), len(stored))
+		}
 		c.Rules = stored
-		c.LegacyRules = nil
 		return nil
 	}
 
-	if len(c.LegacyRules) == 0 {
+	if len(legacy) == 0 {
 		// Fresh install: nothing to migrate.
 		return nil
 	}
 
 	// One-time migration: import legacy JSON rules into the database.
-	logrus.Infof("Migrating %d rule(s) from JSON config to database...", len(c.LegacyRules))
+	logrus.Infof("Migrating %d rule(s) from JSON config to database...", len(legacy))
 
-	c.Rules = c.LegacyRules
-	c.LegacyRules = nil
+	c.Rules = legacy
 
 	// The store keys rules by UUID; repair empty/duplicate UUIDs before the
 	// first sync so no legacy rule is dropped (same policy normalizeRuleBasics
@@ -93,32 +103,53 @@ func (c *Config) hydrateRulesFromStore() error {
 	return nil
 }
 
-// syncRulesToStore writes the in-memory rule list through to the database.
-// Called from Save() so every existing rule-mutation path persists without
-// individual call sites needing to know about the store. No-ops when the
-// rules did not change since the last sync (cheap JSON snapshot compare) or
-// when no store is attached (lightweight test configs, closed stores).
-// ruleSyncMu serializes concurrent Save() calls (not all of them hold c.mu).
-func (c *Config) syncRulesToStore() error {
+// syncRulesToStore writes the in-memory rule list through to the database
+// and returns the JSON snapshot of the rules, which Save() reuses as the
+// file mirror so the rules are marshaled exactly once per Save. Called from
+// Save() so every existing rule-mutation path persists without individual
+// call sites needing to know about the store. The store write is skipped
+// when the rules did not change since the last sync (snapshot compare) or
+// when no store is attached (lightweight test configs, closed stores) — the
+// snapshot is still returned for the mirror. Returns (nil, nil) before
+// hydration. ruleSyncMu serializes concurrent Save() calls (not all of them
+// hold c.mu).
+func (c *Config) syncRulesToStore() ([]byte, error) {
 	c.ruleSyncMu.Lock()
 	defer c.ruleSyncMu.Unlock()
 
-	store := c.rulesStore()
-	if store == nil || !c.rulesHydrated {
-		return nil
+	if !c.rulesHydrated {
+		return nil, nil
 	}
 
 	snapshot, err := json.Marshal(c.Rules)
 	if err != nil {
-		return fmt.Errorf("failed to snapshot rules: %w", err)
+		return nil, fmt.Errorf("failed to snapshot rules: %w", err)
 	}
-	if bytes.Equal(snapshot, c.lastSyncedRules) {
-		return nil
+
+	store := c.rulesStore()
+	if store == nil || bytes.Equal(snapshot, c.lastSyncedRules) {
+		return snapshot, nil
 	}
 
 	if err := store.SyncAll(c.Rules); err != nil {
-		return fmt.Errorf("failed to sync rules to store: %w", err)
+		return nil, fmt.Errorf("failed to sync rules to store: %w", err)
 	}
 	c.lastSyncedRules = snapshot
-	return nil
+	return snapshot, nil
+}
+
+// rulesEquivalent reports whether two rule lists carry the same content,
+// compared through their JSON encoding (both sides are already-decoded
+// domain values, so encoding differences the decoder normalizes cannot
+// produce false negatives here).
+func rulesEquivalent(a, b []typ.Rule) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aj, errA := json.Marshal(a)
+	bj, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return bytes.Equal(aj, bj)
 }

@@ -358,6 +358,40 @@ func TestRuleMutationsKeepFileMirrorFresh(t *testing.T) {
 	}
 }
 
+func TestUUIDlessRuleFromLegacyMutatorSurvivesRestart(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := NewConfigWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewConfigWithDir failed: %v", err)
+	}
+
+	// AddRequestConfig is a legacy mutator that does not assign UUIDs
+	// (used by replay/test tooling). The sync layer must repair the UUID so
+	// the rule reaches the database instead of silently evaporating.
+	rule := legacyTestRule("", "uuidless-live-model")
+	rule.Services = nil // avoid provider validation; not the point here
+	if err := cfg.AddRequestConfig(rule); err != nil {
+		t.Fatalf("AddRequestConfig failed: %v", err)
+	}
+	if err := cfg.CloseStores(); err != nil {
+		t.Fatalf("CloseStores failed: %v", err)
+	}
+
+	cfg2, err := NewConfigWithDir(dir)
+	if err != nil {
+		t.Fatalf("second NewConfigWithDir failed: %v", err)
+	}
+	defer cfg2.CloseStores()
+
+	survived := findRuleByModel(cfg2.Rules, "uuidless-live-model")
+	if survived == nil {
+		t.Fatal("UUID-less rule vanished across restart")
+	}
+	if survived.UUID == "" {
+		t.Error("rule persisted without a UUID")
+	}
+}
+
 func TestRulesUUIDAssignedDuringLegacyMigration(t *testing.T) {
 	dir := t.TempDir()
 	noUUID := legacyTestRule("", "uuidless-model")

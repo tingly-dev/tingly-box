@@ -190,10 +190,14 @@ merge-unknown-keys 逻辑保留的旧值）。触发条件：确认不再需要�
 SyncAll 时 `position = i`，List 时 `ORDER BY position`。
 
 追加、删除、`SetRequestConfigs` 整体重排都自然正确——顺序永远是"上次
-Save() 时内存里的顺序"，与 config.json 时代逐字节等价。
+Save() 时内存里的顺序"。
 
-（`DefaultRequestID` 用 UUID 取代下标是值得做的后续清理，但那是行为语义
-变更，不塞进本次存储迁移。）
+**已知取舍：跨载体写入不原子。** `DefaultRequestID` 在文件、规则列表在
+库，一次 Save 是"先库后文件"两步写。若进程恰好在两步之间崩溃，重启后
+下标可能指向错位/越界的规则——读取侧的边界检查保证不 panic，最坏是默认
+规则暂时选错，UI 一次操作即可修复。config.json 时代两者同文件原子写、
+没有这个窗口；彻底修复是 §8 的「DefaultRequestID → 默认规则 UUID」（届时
+默认规则身份随规则本体一起入库），不塞进本次存储迁移。
 
 ## 7. 不变量与边界情况
 

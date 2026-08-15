@@ -392,7 +392,19 @@ func normalizeRuleBasics(c *Config) bool {
 // loader, so both must survive. This is the single place UUID repair policy
 // lives: normalizeRuleBasics applies it every startup and the one-time legacy
 // import (hydrateRulesFromStore) applies it before first persisting to the
-// store. Returns whether anything changed.
+// store; at runtime the rule mutators assign identity at the entry layer
+// (ensureRuleUUID) so no unkeyed rule ever reaches c.Rules. Returns whether
+// anything changed.
+// ensureRuleUUID assigns a fresh UUID to a caller-supplied rule that lacks
+// one — entry-layer identity assignment, matching the provider precedent
+// (AddProviderByName). The rule store keys rows by UUID, so a rule must
+// carry one before it reaches c.Rules or it could never persist.
+func ensureRuleUUID(rule *typ.Rule) {
+	if rule.UUID == "" {
+		rule.UUID = GenerateUUID()
+	}
+}
+
 func ensureRuleUUIDs(rules []typ.Rule) bool {
 	changed := false
 	seen := make(map[string]bool, len(rules))

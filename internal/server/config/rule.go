@@ -52,6 +52,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	ensureRuleUUID(&rule)
 	applyScenarioCreateDefaults(&rule)
 
 	// A brand-new rule has no grandfathered references — validate everything.
@@ -88,6 +89,11 @@ func (c *Config) AddRule(rule typ.Rule) error {
 func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// A payload without a UUID keeps the identity it is replacing.
+	if rule.UUID == "" {
+		rule.UUID = uid
+	}
 
 	// Incremental validation: references the persisted rule already carries
 	// stay editable even if their provider was disabled/deleted since.
@@ -136,6 +142,8 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	ensureRuleUUID(&reqConfig)
 
 	// Check if rule with same UUID already exists
 	for _, rule := range c.Rules {
@@ -314,6 +322,7 @@ func (c *Config) SetRequestConfigs(requestConfigs []typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	ensureRuleUUIDs(requestConfigs)
 	c.Rules = requestConfigs
 
 	return c.Save()
@@ -328,6 +337,12 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig typ.Rule) error {
 		return fmt.Errorf("index %d is out of bounds for Rules (length %d)", index, len(c.Rules))
 	}
 
+	// A payload without a UUID keeps the identity it is replacing.
+	if reqConfig.UUID == "" {
+		reqConfig.UUID = c.Rules[index].UUID
+	}
+	ensureRuleUUID(&reqConfig)
+
 	c.Rules[index] = reqConfig
 	return c.Save()
 }
@@ -339,6 +354,11 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 
 	for i, rule := range c.Rules {
 		if rule.RequestModel == requestModel {
+			// A payload without a UUID keeps the identity it is replacing.
+			if reqConfig.UUID == "" {
+				reqConfig.UUID = rule.UUID
+			}
+			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
 			return c.Save()
 		}
@@ -354,6 +374,10 @@ func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig typ.Rule) erro
 
 	for i, rule := range c.Rules {
 		if rule.UUID == uuid {
+			// A payload without a UUID keeps the identity it is replacing.
+			if reqConfig.UUID == "" {
+				reqConfig.UUID = uuid
+			}
 			c.Rules[i] = reqConfig
 			return c.Save()
 		}
@@ -369,12 +393,18 @@ func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig typ.Rule) erro
 
 	for i, rule := range c.Rules {
 		if rule.RequestModel == reqConfig.RequestModel {
+			// A payload without a UUID keeps the identity it is replacing.
+			if reqConfig.UUID == "" {
+				reqConfig.UUID = rule.UUID
+			}
+			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
 			return c.Save()
 		}
 	}
 
 	// Rule not found, add new one
+	ensureRuleUUID(&reqConfig)
 	c.Rules = append(c.Rules, reqConfig)
 	return c.Save()
 }
