@@ -76,7 +76,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
     },
     {
         id: 'dsh',
-        labelKey: 'layout.nav.useDsh',
+        labelKey: 'scenarioOverview.titles.dsh',
         descKey: 'scenarioOverview.descriptions.dsh',
         path: '/agent/dsh',
         icon: (size) => <DeepSeek size={size} />,

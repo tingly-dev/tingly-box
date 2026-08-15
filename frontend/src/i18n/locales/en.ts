@@ -1630,6 +1630,10 @@ export default {
     "ruleCountOne": "1 rule",
     "ruleCount": "{{count}} rules",
     "editTooltip": "Manage visible agents",
+    // Full product names for overview cards where the short nav label is ambiguous.
+    "titles": {
+      "dsh": "DeepSeek Harness",
+    },
     "descriptions": {
       "claude_code": "Route Claude Code with custom profiles and per-task models.",
       "claude_desktop": "Use your own providers as Claude Desktop's third-party inference gateway.",
@@ -1638,7 +1642,7 @@ export default {
       "xcode": "Bring your model into Xcode's coding intelligence.",
       "vscode": "Power VS Code Copilot Chat through Tingly Box.",
       "pi": "Route the pi coding agent through your provider.",
-      "dsh": "Route DeepSeek Harness (dsh) through your provider.",
+      "dsh": "Route the dsh coding agent through your provider.",
       "openai": "Drop-in OpenAI-compatible SDK endpoint.",
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
