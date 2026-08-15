@@ -1581,7 +1581,7 @@ export default {
     "imageGenModelRules": "Image Generation Model Rules",
     "tooltip": {
       "claude_code": "AI-powered CLI development agent for implementation, testing, and git operations",
-      "claude_desktop": "Claude Desktop app API proxy for AI assistance in desktop environment",
+      "claude_desktop": "Route Claude Desktop's third-party inference through your configured providers",
       "codex": "OpenAI Codex AI coding assistant with Tingly Box proxy",
       "opencode": "OpenCode AI development environment with BYOK support",
       "xcode": "Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development",
@@ -1632,7 +1632,7 @@ export default {
     "editTooltip": "Manage visible agents",
     "descriptions": {
       "claude_code": "Route Claude Code with custom profiles and per-task models.",
-      "claude_desktop": "Connect Claude Desktop as an MCP client through Tingly Box.",
+      "claude_desktop": "Use your own providers as Claude Desktop's third-party inference gateway.",
       "codex": "Configure Codex CLI through your provider keys.",
       "opencode": "Open-source coding agent powered by your provider.",
       "xcode": "Bring your model into Xcode's coding intelligence.",
