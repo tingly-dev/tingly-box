@@ -13,10 +13,15 @@ import (
 // Rule storage: rules live in SQLite (db.RuleStore) with Config.Rules as the
 // in-memory working set. See .design/rule-storage.md for the full rationale.
 //
-// The lifecycle mirrors migrateProvidersToDB:
-//   - database has rules  -> database is authoritative, stale JSON is cleared
-//   - database empty, JSON has rules -> one-time import, then JSON cleared
+// Lifecycle:
+//   - database has rules  -> database is authoritative; file rules ignored
+//   - database empty, JSON has rules -> one-time import into the database
 //   - both empty -> nothing to do (fresh install; built-ins arrive via AddRule)
+//
+// Transition period: unlike migrateProvidersToDB (which nulls the JSON copy),
+// Save() keeps writing a live "rules" mirror into config.json so downgrading
+// to a pre-database version loses nothing. The mirror is write-only; a later
+// release removes it. See .design/rule-storage.md §5.
 
 // rulesStore resolves the rule store at call time from the StoreManager, so
 // store liveness has a single owner: after StoreManager.Close() the accessor
@@ -52,18 +57,11 @@ func (c *Config) hydrateRulesFromStore() error {
 	}
 
 	if len(stored) > 0 {
-		// Database is authoritative.
+		// Database is authoritative. The file's rules array (Save()'s own
+		// mirror, or a hand edit made while the server was down) is not an
+		// input anymore; the next Save() rewrites it from the live rules.
 		c.Rules = stored
-		if len(c.LegacyRules) > 0 {
-			// Stale JSON backup left over from an earlier version (or a hand
-			// edit while the server was down). The database wins; clear the
-			// file copy so the two cannot diverge silently.
-			logrus.Infof("Clearing stale rule JSON data (%d rule(s)); database is authoritative", len(c.LegacyRules))
-			c.LegacyRules = nil
-			if err := c.Save(); err != nil {
-				return fmt.Errorf("failed to save config after clearing rule JSON: %w", err)
-			}
-		}
+		c.LegacyRules = nil
 		return nil
 	}
 
@@ -83,8 +81,10 @@ func (c *Config) hydrateRulesFromStore() error {
 	// applies on every startup).
 	ensureRuleUUIDs(c.Rules)
 
-	// Save() persists the rules to the store and rewrites config.json with
-	// "rules": null so subsequent startups take the database path.
+	// Save() persists the rules to the store; subsequent startups find the
+	// database populated and take the database-authoritative path. The file
+	// keeps its "rules" array (rewritten as a live mirror) for downgrade
+	// compatibility during the transition period.
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to migrate rules to database: %w", err)
 	}

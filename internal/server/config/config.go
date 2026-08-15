@@ -31,11 +31,12 @@ type Config struct {
 	// authority. The in-memory copy stays because the hot request path matches
 	// rules under RLock and services carry hydrated runtime stats.
 	Rules []typ.Rule `yaml:"rules" json:"-"`
-	// LegacyRules is the pre-database JSON storage for rules. It is only
-	// populated on load for one-time migration to the database and is cleared
-	// by hydrateRulesFromStore. The non-omitempty tag ensures that clearing it
-	// results in a JSON null that overrides any stale value in the existing
-	// file (Save() merges unknown keys from the previous file content).
+	// LegacyRules receives the file's "rules" array on load. It is consumed
+	// exactly once, by hydrateRulesFromStore (one-time import into the
+	// database on upgraded installs); after hydration the field stays nil and
+	// file rules are ignored on reload. The "rules" key itself keeps being
+	// written by Save() as a live mirror of Rules during the transition
+	// period, purely for downgrade compatibility — see Save().
 	LegacyRules        []typ.Rule           `yaml:"-" json:"rules"`
 	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
 	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
@@ -443,11 +444,11 @@ func (c *Config) load() error {
 	// Restore the config file path after unmarshaling
 	c.ConfigFile = configFile
 
-	// After the one-time hydration, rules live in the database; a "rules"
-	// array re-appearing in config.json (hand edit + hot reload) is ignored
-	// so the file cannot silently fork from the database.
-	if c.rulesHydrated && len(c.LegacyRules) > 0 {
-		logrus.Warnf("Ignoring %d rule(s) found in config.json: rules are stored in the database now; use the API/UI to manage them", len(c.LegacyRules))
+	// After the one-time hydration, the database is authoritative for rules.
+	// The "rules" array in config.json is Save()'s own downgrade-compat
+	// mirror (and possibly hand edits) — drop it silently on reload so the
+	// file cannot fork the in-memory/database state.
+	if c.rulesHydrated {
 		c.LegacyRules = nil
 	}
 
@@ -480,20 +481,32 @@ func (c *Config) Save() error {
 			}
 		}
 	}
+	// Transition-period dual write: the database is the authority for rules,
+	// but the file keeps a live "rules" mirror so downgrading to a pre-database
+	// version loses nothing (the old binary reads the array as before). The
+	// mirror is write-only — load() ignores it once hydrated. Scheduled for
+	// removal in a later release; see .design/rule-storage.md §5.
+	// Pre-hydration Saves leave the marshaled LegacyRules value in place so an
+	// unmigrated file's rules can never be overwritten with an empty list.
+	if c.rulesHydrated {
+		rulesJSON, err := json.Marshal(c.Rules)
+		if err != nil {
+			return err
+		}
+		next["rules"] = json.RawMessage(rulesJSON)
+	}
+
 	out, err := json.MarshalIndent(next, "", "    ")
 	if err != nil {
 		return err
 	}
 
-	// Rules persist in the database, not in the file. Syncing here — inside
+	// Rules persist authoritatively in the database. Syncing here — inside
 	// the choke point every rule mutation already goes through — guarantees no
 	// write path can update the in-memory rules without also updating the
-	// store. The store MUST be written before the file: during the one-time
-	// legacy import the file write below replaces the JSON rules array with
-	// null, so a failed store sync must abort while the file still carries the
-	// legacy rules (the next startup then retries the import). The reverse
-	// order would open a window where the file is cleared but the database
-	// never received the rules.
+	// store. The store MUST be written before the file: if the store sync
+	// fails during the one-time legacy import, aborting here leaves the file's
+	// legacy rules untouched so the next startup retries the import.
 	if err := c.syncRulesToStore(); err != nil {
 		return err
 	}

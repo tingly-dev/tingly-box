@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -129,9 +130,15 @@ func TestRulesMigrateFromLegacyJSONToStore(t *testing.T) {
 		t.Errorf("services did not survive migration: %+v", stored.Services)
 	}
 
-	// config.json must no longer carry rule data.
-	if rules, ok := readConfigJSON(t, dir)["rules"]; ok && rules != nil {
-		t.Errorf("config.json still carries rules after migration: %v", rules)
+	// Transition period: config.json keeps a live "rules" mirror for
+	// downgrade compatibility. It must reflect the full working set
+	// (legacy + built-ins), not the pre-migration snapshot.
+	mirror, ok := readConfigJSON(t, dir)["rules"].([]interface{})
+	if !ok {
+		t.Fatalf("config.json rules mirror missing after migration")
+	}
+	if len(mirror) != len(cfg.Rules) {
+		t.Errorf("rules mirror has %d entries, want %d (live mirror of working set)", len(mirror), len(cfg.Rules))
 	}
 }
 
@@ -212,8 +219,15 @@ func TestRulesStoreWinsOverStaleJSON(t *testing.T) {
 	if findRule(cfg2.Rules, "legacy-1") == nil {
 		t.Error("database rule lost when stale JSON was present")
 	}
-	if rules, ok := readConfigJSON(t, dir)["rules"]; ok && rules != nil {
-		t.Errorf("stale JSON rules were not cleared: %v", rules)
+
+	// The startup Save rewrites the file mirror from the database-backed
+	// working set, so the hand edit disappears from the file too.
+	raw2, _ := json.Marshal(readConfigJSON(t, dir)["rules"])
+	if bytes.Contains(raw2, []byte("hand-edited")) {
+		t.Error("hand-edited rule still present in the file mirror after restart")
+	}
+	if !bytes.Contains(raw2, []byte("legacy-1")) {
+		t.Error("file mirror does not reflect the database rules after restart")
 	}
 }
 
@@ -302,6 +316,45 @@ func TestSaveAfterCloseStoresStillWritesFile(t *testing.T) {
 	}
 	if got, _ := readConfigJSON(t, dir)["verbose"].(bool); !got {
 		t.Error("verbose=true did not reach config.json after CloseStores")
+	}
+}
+
+func TestRuleMutationsKeepFileMirrorFresh(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := NewConfigWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewConfigWithDir failed: %v", err)
+	}
+	defer cfg.CloseStores()
+	seedLegacyProvider(t, cfg)
+
+	rule := legacyTestRule("mirror-1", "mirror-model")
+	if err := cfg.AddRule(rule); err != nil {
+		t.Fatalf("AddRule failed: %v", err)
+	}
+
+	// The downgrade-compat mirror must parse as the pre-database format:
+	// a typ.Rule array under "rules", containing the new rule.
+	var onDisk struct {
+		Rules []typ.Rule `json:"rules"`
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatalf("failed to read config.json: %v", err)
+	}
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("file mirror is not old-format parseable: %v", err)
+	}
+	if findRule(onDisk.Rules, "mirror-1") == nil {
+		t.Error("AddRule did not refresh the file mirror")
+	}
+
+	if err := cfg.DeleteRule("mirror-1"); err != nil {
+		t.Fatalf("DeleteRule failed: %v", err)
+	}
+	raw, _ = os.ReadFile(filepath.Join(dir, "config.json"))
+	if bytes.Contains(raw, []byte("mirror-1")) {
+		t.Error("DeleteRule did not remove the rule from the file mirror")
 	}
 }
 

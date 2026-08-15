@@ -135,14 +135,17 @@ func (c *Config) Save() error {
 rule 数量级是几十条，全量 diff-sync 每次毫秒级；换来的是绝对的简单和
 缓存/库不可能漂移。等将来 rule 上万条再谈增量（见 §8）。
 
-## 5. 一次性迁移与权威性规则
+## 5. 一次性迁移、权威性规则与过渡期双写
 
-完全复刻 provider 迁移的模式（`migrateProvidersToDB`）：
+模式承袭 provider 迁移（`migrateProvidersToDB`），但有一个刻意的差异：
+**迁移后 config.json 里保留 `rules` 数组作为实时镜像（双写），后续某个
+版本再移除**——而不是像 provider 那样立即写 null。
 
 ```go
 // Config 结构体
 Rules       []typ.Rule `yaml:"rules" json:"-"`     // 内存工作集
-LegacyRules []typ.Rule `yaml:"-"     json:"rules"` // 只为加载旧文件而存在
+LegacyRules []typ.Rule `yaml:"-"     json:"rules"` // 只为加载旧文件而存在（读入口）
+// Save() 在序列化后把 next["rules"] 覆盖为实时的 c.Rules（写出口/镜像）
 ```
 
 启动序列（`NewConfig`）：
@@ -151,27 +154,34 @@ LegacyRules []typ.Rule `yaml:"-"     json:"rules"` // 只为加载旧文件而�
 StoreManager 初始化（含 rules 表 AutoMigrate）
 load() / CreateDefaultConfig()      -- 旧文件的 rules 进 LegacyRules
 hydrateRulesFromStore():
-    库里有 rule   → Rules = 库；LegacyRules 若非空则视为陈旧备份，清掉
-    库空 + 有遗留 → Rules = LegacyRules；缺 UUID 的补随机 UUID；Save() 落库
+    库里有 rule   → Rules = 库；文件里的数组只是镜像/手改，忽略
+    库空 + 有遗留 → Rules = LegacyRules；ensureRuleUUIDs 修复；Save() 落库
     双空          → 全新安装，内建 rule 稍后由 InsertDefaultRule 走 AddRule 进来
-Migrate(cfg)                        -- 日期迁移在真实规则集上跑，改动经 Save() 落库
+Migrate(cfg)                        -- 迁移步骤在真实规则集上跑，改动经 Save() 落库
 InsertDefaultRule / RefreshStatsFromStore ...
 ```
 
-关键点：
+**双写语义（过渡期）：**
 
-- **hydrate 在 Migrate 之前**。日期迁移（内建 rule 身份归一、smart-routing
-  清理等）必须作用于库里的规则集，其结果又经 Save() 写回库。
-- **hydrate 不受 `WithDisableMigration` 控制**——它是存储管道，不是配置迁移，
-  和 `migrateProvidersToDB` 同一待遇。
-- **`rulesHydrated` 门闩**：hydrate 之前的任何 Save()（如 CreateDefaultConfig）
-  不会同步 rules。这保证了"config.json 被删但库还在"的场景不会用空列表
-  把库清空。
-- `LegacyRules` 的 json tag 故意**不带 omitempty**：清空后 Save() 写出
-  `"rules": null`，压过 Save() 的 merge-unknown-keys 逻辑保留的旧值，
-  旧数组从文件里彻底消失。
-- 热加载（watcher → `load()`）时若文件里又出现 rules 数组：告警并忽略。
-  文件不再是 rule 的输入面，UI/API 才是。
+- **库是唯一权威，文件镜像只写不读。** 每次 Save() 都把实时 `c.Rules`
+  写进文件的 `rules` 键（先写库、成功后才写文件）；hydration 完成后，
+  load()/热加载读到的文件 rules 一律静默丢弃——文件永远无法把内存/库的
+  状态 fork 掉。
+- **为什么是实时镜像而不是迁移时的冻结快照**：镜像的唯一用途是**降级
+  兜底**——回退到库化之前的旧版本时，旧二进制照常从文件读到最新规则，
+  而不是几周前的旧状态。
+- **手改文件不再生效**（与 provider 迁移后一致）：停机时改的 rules
+  数组会在下次启动的 Save 后被镜像覆盖。规则入口是 UI/API/CLI。
+- **`rulesHydrated` 门闩**：hydrate 之前的任何 Save()（如
+  CreateDefaultConfig）既不同步库、也不覆盖文件镜像（保留 LegacyRules
+  原值），保证"config.json 被删但库还在""迁移前提前 Save"都不丢数据。
+- **hydrate 在 Migrate 之前、且不受 `WithDisableMigration` 控制**——
+  它是存储管道，不是配置迁移，和 `migrateProvidersToDB` 同一待遇。
+
+**移除计划**：某个后续版本停止双写，改为一次性写 `"rules": null`
+（届时 LegacyRules 的非 omitempty tag 保证 null 压过 Save() 的
+merge-unknown-keys 逻辑保留的旧值）。触发条件：确认不再需要回退到
+库化之前的版本。
 
 ## 6. 顺序语义（position 与 DefaultRequestID）
 
@@ -202,6 +212,9 @@ Save() 时内存里的顺序"，与 config.json 时代逐字节等价。
 
 ## 8. 未来扩展
 
+- **移除文件镜像（已排期的第一项）**：停止 Save() 双写 `rules` 键，一次性
+  写 `"rules": null`（见 §5 移除计划）。这是纯删代码：去掉 Save() 里的
+  `next["rules"]` 覆盖即可，读路径本来就不消费镜像。
 - **查询下推**：列已备好（scenario、request_model、active），当 rule 数量
   或调用方（企业版多租户）需要时，可加 `ListByScenario` 等谓词查询而不动
   schema。
