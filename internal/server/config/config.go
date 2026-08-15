@@ -25,7 +25,18 @@ import (
 
 // Config represents the global configuration
 type Config struct {
-	Rules              []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
+	// Rules is the in-memory working set of routing rules. It is hydrated from
+	// SQLite (db.RuleStore) at startup and written back through Save(); it is
+	// deliberately NOT serialized to config.json anymore — the database is the
+	// authority. The in-memory copy stays because the hot request path matches
+	// rules under RLock and services carry hydrated runtime stats.
+	Rules []typ.Rule `yaml:"rules" json:"-"`
+	// LegacyRules is the pre-database JSON storage for rules. It is only
+	// populated on load for one-time migration to the database and is cleared
+	// by hydrateRulesFromStore. The non-omitempty tag ensures that clearing it
+	// results in a JSON null that overrides any stale value in the existing
+	// file (Save() merges unknown keys from the previous file content).
+	LegacyRules        []typ.Rule           `yaml:"-" json:"rules"`
 	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
 	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
 	ModelToken         string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
@@ -113,6 +124,18 @@ type Config struct {
 	providerUpdateHooks []ProviderUpdateHook
 	providerDeleteHooks []ProviderDeleteHook
 	hookMu              sync.RWMutex
+
+	// rulesHydrated flips once hydrateRulesFromStore has run; after that,
+	// rules appearing in config.json (e.g. hand edits picked up by the
+	// watcher's hot reload) are ignored — the database is authoritative.
+	rulesHydrated bool
+	// lastSyncedRules caches the JSON snapshot of Rules from the last
+	// successful store sync so Save() calls that didn't touch rules skip the
+	// database write entirely. Guarded by ruleSyncMu, not mu: several Save()
+	// call sites run without holding mu, so the sync bookkeeping needs its
+	// own lock to serialize concurrent Save() calls.
+	lastSyncedRules []byte
+	ruleSyncMu      sync.Mutex
 
 	mu sync.RWMutex
 }
@@ -219,25 +242,27 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			// Run migration on fresh install to set up scenario defaults
-			if !options.enableMigration {
-				logrus.Warnf("migration disabled")
-			} else {
-				Migrate(cfg)
-				cfg.Save()
-			}
 		} else {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
+	}
+
+	// Hydrate rules from the database (or migrate legacy JSON rules into it).
+	// Must run before Migrate so migration steps operate on the real rule set.
+	// Like migrateProvidersToDB, this is storage plumbing rather than a config
+	// migration, so it is not gated by enableMigration.
+	if err := cfg.hydrateRulesFromStore(); err != nil {
+		return nil, fmt.Errorf("failed to hydrate rules from store: %w", err)
+	}
+
+	// Run migration only once at startup (not on every load/reload)
+	// Skip migration if disabled (useful when using as a library)
+	if !options.enableMigration {
+		logrus.Warnf("migration disabled")
 	} else {
-		// Run migration only once at startup (not on every load/reload)
-		// Skip migration if disabled (useful when using as a library)
-		if !options.enableMigration {
-			logrus.Warnf("migration disabled")
-		} else {
-			Migrate(cfg)
-			cfg.Save()
+		Migrate(cfg)
+		if err := cfg.Save(); err != nil {
+			logrus.WithError(err).Warn("Failed to persist config after migration; in-memory state may diverge until the next successful save")
 		}
 	}
 
@@ -418,6 +443,14 @@ func (c *Config) load() error {
 	// Restore the config file path after unmarshaling
 	c.ConfigFile = configFile
 
+	// After the one-time hydration, rules live in the database; a "rules"
+	// array re-appearing in config.json (hand edit + hot reload) is ignored
+	// so the file cannot silently fork from the database.
+	if c.rulesHydrated && len(c.LegacyRules) > 0 {
+		logrus.Warnf("Ignoring %d rule(s) found in config.json: rules are stored in the database now; use the API/UI to manage them", len(c.LegacyRules))
+		c.LegacyRules = nil
+	}
+
 	// Note: Migration is now only run at startup in NewConfigWithDir()
 	// Hot-reload (via watcher) does not trigger migration
 
@@ -451,6 +484,20 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
+
+	// Rules persist in the database, not in the file. Syncing here — inside
+	// the choke point every rule mutation already goes through — guarantees no
+	// write path can update the in-memory rules without also updating the
+	// store. The store MUST be written before the file: during the one-time
+	// legacy import the file write below replaces the JSON rules array with
+	// null, so a failed store sync must abort while the file still carries the
+	// legacy rules (the next startup then retries the import). The reverse
+	// order would open a window where the file is cleared but the database
+	// never received the rules.
+	if err := c.syncRulesToStore(); err != nil {
+		return err
+	}
+
 	return os.WriteFile(c.ConfigFile, out, 0644)
 }
 

@@ -31,6 +31,7 @@ type storeSet struct {
 	statsStore         *StatsStore
 	usageStore         *UsageStore
 	providerStore      *ProviderStore
+	ruleStore          *RuleStore
 	imbotSettingsStore *ImBotSettingsStore
 	modelStore         *ModelStore
 	apiTokenStore      *APITokenStore
@@ -47,6 +48,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"stats":          s.statsStore != nil,
 		"usage":          s.usageStore != nil,
 		"provider":       s.providerStore != nil,
+		"rule":           s.ruleStore != nil,
 		"imbotSettings":  s.imbotSettingsStore != nil,
 		"model":          s.modelStore != nil,
 		"apiToken":       s.apiTokenStore != nil,
@@ -144,6 +146,9 @@ func (sm *StoreManager) initStores() error {
 	}
 	if sm.providerStore, err = newProviderStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("provider store: %w", err))
+	}
+	if sm.ruleStore, err = newRuleStore(conn); err != nil {
+		errs = append(errs, fmt.Errorf("rule store: %w", err))
 	}
 	if sm.imbotSettingsStore, err = newImBotSettingsStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("imbot settings store: %w", err))
@@ -252,6 +257,14 @@ func (sm *StoreManager) Provider() *ProviderStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.providerStore
+}
+
+// Rules returns the RuleStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) Rules() *RuleStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.ruleStore
 }
 
 // ImBotSettings returns the ImBotSettingsStore (thread-safe).
