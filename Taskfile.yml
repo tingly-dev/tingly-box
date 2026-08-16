@@ -71,6 +71,37 @@ tasks:
         # Generate OpenAPI v3 schema directly without starting the server
         go run ./cli/tingly-box swagger
 
+  gen:py:
+    desc: Generate the Python SDK's typed models from openapi.json
+    aliases:
+      - python:sdk
+    cmds:
+      - |
+        # openapi.json -> pydantic v2 models for the tingly Python SDK.
+        #
+        # The output is NOT committed (see .gitignore): it is a pure function of
+        # openapi.json, and 2.7k generated lines would drown every diff that
+        # touches the SDK. CI runs this before pytest and before building the
+        # wheel, so the published package carries the models even though the
+        # repository doesn't.
+        #
+        # Kept separate from `codegen` on purpose: `codegen` regenerates the
+        # spec and the frontend client, which most backend work needs; the
+        # Python SDK is an independent consumer that should not force a
+        # pnpm install on someone who only touched Go.
+        python3 -m pip install --quiet --disable-pip-version-check \
+          'datamodel-code-generator>=0.72'
+        python3 -m datamodel_code_generator \
+          --input openapi.json \
+          --input-file-type openapi \
+          --output-model-type pydantic_v2.BaseModel \
+          --target-python-version 3.10 \
+          --formatters ruff-format \
+          --use-double-quotes \
+          --custom-file-header-path sdk/python/codegen_header.txt \
+          --output sdk/python/tingly/_generated/models.py
+        echo "Generated sdk/python/tingly/_generated/models.py"
+
   codegen:
     cmds:
       - task: swagger
@@ -78,6 +109,7 @@ tasks:
         cd frontend
         pnpm install
         pnpm gen:api
+      - task: gen:py
 
   go:build:
     env:

@@ -1,0 +1,8 @@
+# GENERATED FILE - DO NOT EDIT.
+#
+# Produced from tingly-box's openapi.json by `task gen:py`
+# (datamodel-code-generator, pydantic v2).
+#
+# This file is deliberately not committed. Regenerate it after any backend API
+# change; edits made here are lost on the next run. To change a model, change
+# the Go type it comes from and re-run `task swagger && task gen:py`.

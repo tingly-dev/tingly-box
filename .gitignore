@@ -125,3 +125,8 @@ go.work.sum
 /harness
 /harness-summary.csv
 /harness-output/
+
+# Python SDK generated models — produced from openapi.json by `task gen:py`,
+# rebuilt in CI before tests and before the wheel is built. Not committed:
+# it is a pure function of openapi.json and would drown SDK diffs.
+/sdk/python/tingly/_generated/models.py

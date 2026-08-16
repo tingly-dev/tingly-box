@@ -23,6 +23,12 @@ These live outside the `vmodel-*` namespace but intersect with it:
 
 - [`test-infrastructure.md`](./test-infrastructure.md) — how the test packages consume vmodel primitives.
 - [`stream-usage-tracking.md`](./stream-usage-tracking.md) — usage emission exercised by the stream-test mocks.
+- [`python-sdk.md`](./python-sdk.md) — `tingly.Server`, the **out-of-process
+  counterpart** to a vmodel. Both enter tb as providers; a vmodel is Go
+  compiled in (`AuthType=vmodel`, dispatch short-circuits in-process), a
+  `tingly.Server` is your own Python process reached over HTTP
+  (`region: self-hosted`, like Ollama) that can additionally call *back* into
+  tb. Same concept, two implementations — see that doc's comparison table.
 
 > Adding a new vmodel design doc? Name it `vmodel-<topic>.md`, drop a one-line
 > summary in the table above, and link back here from any code that references it.

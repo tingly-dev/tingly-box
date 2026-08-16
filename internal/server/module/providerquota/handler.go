@@ -42,7 +42,8 @@ type Handler struct {
 	logger  *logrus.Logger
 }
 
-// NewHandler 创建处理器
+// NewHandler 创建处理器. manager may be nil when quota tracking is not
+// configured; every handler checks with available() first.
 func NewHandler(manager Manager, logger *logrus.Logger) *Handler {
 	return &Handler{
 		manager: manager,
@@ -50,17 +51,18 @@ func NewHandler(manager Manager, logger *logrus.Logger) *Handler {
 	}
 }
 
-// RegisterRoutes 注册路由
-func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
-	quota := r.Group("/provider-quota")
-	{
-		quota.GET("", h.ListQuota)
-		quota.POST("/batch", h.BatchGetQuota) // 批量获取指定 providers 的 quota
-		quota.GET("/:uuid", h.GetQuota)
-		quota.POST("/refresh", h.RefreshAll)
-		quota.POST("/:uuid/refresh", h.RefreshProvider)
-		quota.GET("/summary", h.Summary)
+// available reports whether quota tracking is configured, answering 503 when
+// it is not. Routes are registered unconditionally so they appear in
+// openapi.json (and therefore in generated clients) on every build; this is
+// what keeps that safe.
+func (h *Handler) available(c *gin.Context) bool {
+	if h.manager != nil {
+		return true
 	}
+	c.JSON(http.StatusServiceUnavailable, gin.H{
+		"error": "quota tracking is not enabled on this tingly-box",
+	})
+	return false
 }
 
 // ListQuotaResponse 列表响应
@@ -78,6 +80,9 @@ type MetaData struct {
 // ListQuota 获取所有供应商配额
 // GET /api/v1/provider-quota
 func (h *Handler) ListQuota(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	ctx := c.Request.Context()
 
 	usages, err := h.manager.ListQuota(ctx)
@@ -101,6 +106,9 @@ func (h *Handler) ListQuota(c *gin.Context) {
 // GetQuota 获取指定供应商配额
 // GET /api/v1/provider-quota/:uuid
 func (h *Handler) GetQuota(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -134,6 +142,9 @@ func (h *Handler) GetQuota(c *gin.Context) {
 // RefreshAll 刷新所有配额
 // POST /api/v1/provider-quota/refresh
 func (h *Handler) RefreshAll(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	ctx := c.Request.Context()
 
 	usages, err := h.manager.Refresh(ctx)
@@ -157,6 +168,9 @@ func (h *Handler) RefreshAll(c *gin.Context) {
 // RefreshProvider 刷新指定供应商配额
 // POST /api/v1/provider-quota/:uuid/refresh
 func (h *Handler) RefreshProvider(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -188,6 +202,9 @@ func (h *Handler) RefreshProvider(c *gin.Context) {
 // Summary 获取配额汇总
 // GET /api/v1/provider-quota/summary
 func (h *Handler) Summary(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	ctx := c.Request.Context()
 
 	summary, err := h.manager.Summary(ctx)
@@ -217,6 +234,9 @@ type BatchGetQuotaResponse struct {
 // POST /api/v1/provider-quota/batch
 // Body: { "provider_uuids": ["uuid1", "uuid2", "uuid3"] }
 func (h *Handler) BatchGetQuota(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
 	var req BatchGetQuotaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

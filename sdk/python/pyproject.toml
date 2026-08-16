@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tingly"
+version = "0.1.0"
+description = "Python SDK for tingly-box — consume the gateway from Python, or write a model server it consumes as a provider."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MPL-2.0" }
+authors = [{ name = "tingly.dev", email = "ops@tingly.dev" }]
+keywords = ["tingly-box", "llm", "gateway", "openai", "anthropic", "provider"]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2",
+    # Core, not optional: the value of the SDK is fine-grained control via the
+    # real provider SDKs (tb.openai / tb.anthropic expose every param, tool,
+    # streaming and beta header). ask() and Server.tb route through them too.
+    "openai>=1.0",
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "respx>=0.21",
+    # Regenerates tingly/_generated/models.py from tingly-box's openapi.json.
+    # Run `task gen:py` from the repository root; see that task for why the
+    # output is not committed.
+    "datamodel-code-generator>=0.72",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+tingly = "tingly.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tingly-dev/tingly-box"
+Documentation = "https://github.com/tingly-dev/tingly-box/blob/main/.design/python-sdk.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tingly"]
+# tingly/_generated/models.py is gitignored but MUST ship in the wheel — CI
+# runs `task gen:py` before building. force-include overrides the VCS-based
+# file selection hatchling would otherwise apply.
+[tool.hatch.build.targets.wheel.force-include]
+"tingly/_generated/models.py" = "tingly/_generated/models.py"
+
+[tool.pytest.ini_options]
+markers = [
+    "needs_tb: integration tests that require a running tingly-box gateway (opt-in)",
+]
+addopts = "-m 'not needs_tb'"

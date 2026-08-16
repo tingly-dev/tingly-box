@@ -373,6 +373,24 @@ func TestProvider_GetAccessToken(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			name: "API key auth, no key required, empty token -> sentinel",
+			provider: &Provider{
+				AuthType:      AuthTypeAPIKey,
+				NoKeyRequired: true,
+				Token:         "",
+			},
+			want: NoKeySentinelToken,
+		},
+		{
+			name: "API key auth, no key required, but a real token is still preferred",
+			provider: &Provider{
+				AuthType:      AuthTypeAPIKey,
+				NoKeyRequired: true,
+				Token:         "sk-real",
+			},
+			want: "sk-real",
+		},
 	}
 
 	for _, tt := range tests {

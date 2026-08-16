@@ -229,12 +229,13 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	mcpHandler := mcpmodule.NewHandler(s.config, s.mcpRuntime)
 	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
 
-	// Provider quota API routes
-	if s.quotaManager != nil {
-		quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
-		quotaHandler.RegisterRoutes(apiV1.Router)
-		logrus.Info("Provider quota API routes registered")
-	}
+	// Provider quota API routes. Registered unconditionally: the route shape
+	// does not depend on the manager, and gating registration on it meant the
+	// endpoints were missing from openapi.json entirely, since schema
+	// generation runs without one. The handler answers 503 when quota is not
+	// configured, which is also a better runtime answer than a bare 404.
+	quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
+	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)

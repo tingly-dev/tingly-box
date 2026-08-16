@@ -569,3 +569,12 @@ shared test-bench design.
 - `internal/protocol/transform` — Transform chain types used by
   `anthropic.TransformModel` (e.g. compact-round-only).
 - `internal/smart_compact` — Concrete transform implementations.
+- `sdk/python` (`tingly.Server`) — the **out-of-process counterpart**. A vmodel
+  is a provider whose code is compiled into tb (`AuthType=vmodel`, dispatch
+  short-circuits before any outbound HTTP); a `tingly.Server` is a provider
+  whose code is your own Python process, reached over ordinary HTTP and added
+  through Connect AI → Self-hosted like Ollama. Write a vmodel when the
+  behavior should ship in the binary (demos, onboarding, test fixtures); write
+  a Python Server when it is your own logic — and especially when it needs to
+  call *back* into tb, which an in-process vmodel cannot.
+  See [`.design/python-sdk.md`](../.design/python-sdk.md).

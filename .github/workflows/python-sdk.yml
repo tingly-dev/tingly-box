@@ -1,0 +1,80 @@
+name: Python SDK
+
+# The SDK's models are generated from openapi.json and deliberately not
+# committed (see .gitignore / `task gen:py`), so CI is the thing that proves
+# the generate → install → test → package chain actually works. It runs on any
+# change to the SDK *or to the spec it is generated from* — a backend API
+# change that breaks the SDK should fail here, not at someone's `pip install`.
+on:
+  pull_request:
+    paths:
+      - 'sdk/python/**'
+      - 'openapi.json'
+      - '.github/workflows/python-sdk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/python/**'
+      - 'openapi.json'
+      - '.github/workflows/python-sdk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Generate, test, package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor and current. The floor is what pyproject promises; the codegen
+        # emits `X | None` unions, which is why the floor is 3.10 and not 3.9.
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the generator
+        run: python -m pip install --upgrade pip 'datamodel-code-generator>=0.72' 'ruff>=0.6' build
+
+      - name: Generate models from openapi.json
+        run: |
+          python -m datamodel_code_generator \
+            --input openapi.json \
+            --input-file-type openapi \
+            --output-model-type pydantic_v2.BaseModel \
+            --target-python-version 3.10 \
+            --formatters ruff-format \
+            --use-double-quotes \
+            --custom-file-header-path sdk/python/codegen_header.txt \
+            --output sdk/python/tingly/_generated/models.py
+
+      - name: Install the SDK
+        working-directory: sdk/python
+        run: python -m pip install -e '.[dev]'
+
+      - name: Test
+        working-directory: sdk/python
+        run: python -m pytest tests/ -q
+
+      # The one thing that can silently break because the models are not
+      # committed: hatchling selects wheel contents from VCS, so a gitignored
+      # file needs the force-include in pyproject.toml to ship. Without this
+      # check the failure would only surface as a broken `pip install tingly`.
+      - name: Wheel must contain the generated models
+        working-directory: sdk/python
+        run: |
+          python -m build --wheel --outdir dist
+          if ! python -m zipfile -l dist/*.whl | grep -q 'tingly/_generated/models.py'; then
+            echo "::error::tingly/_generated/models.py is missing from the wheel."
+            echo "The models are gitignored, so pyproject's"
+            echo "[tool.hatch.build.targets.wheel.force-include] is what ships them."
+            python -m zipfile -l dist/*.whl
+            exit 1
+          fi
+          echo "OK: generated models are in the wheel"
