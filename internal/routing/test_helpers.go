@@ -1,12 +1,14 @@
 package routing
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -148,6 +150,46 @@ func (m *mockAffinityStore) CountByService(serviceID string) int {
 		}
 	}
 	return count
+}
+
+// mockQuotaProvider implements QuotaProvider for testing service_quota.
+// usage maps providerUUID -> cached usage; a missing entry simulates "no
+// data yet" (GetQuotaNoCache's ErrUsageNotFound path), which the stage
+// treats as unknown and excludes from aggregation.
+type mockQuotaProvider struct {
+	usage map[string]*quota.ProviderUsage
+}
+
+func newMockQuotaProvider() *mockQuotaProvider {
+	return &mockQuotaProvider{usage: make(map[string]*quota.ProviderUsage)}
+}
+
+// setPct registers a single countable, standard-quota (Kind=limit) window at
+// pct% used for providerUUID — mirrors how real fetchers (e.g. Anthropic's
+// 5h/7d) tag their periodic windows so service_quota picks it up.
+func (m *mockQuotaProvider) setPct(providerUUID string, pct float64) {
+	m.usage[providerUUID] = &quota.ProviderUsage{
+		ProviderUUID: providerUUID,
+		Windows:      []*quota.UsageWindow{{Kind: quota.WindowKindLimit, Limit: 100, UsedPercent: pct}},
+	}
+}
+
+// setResourcePct registers a single countable but resource-kind (balance,
+// e.g. OpenRouter's key limit) window — used to prove service_quota ignores
+// it even though ai/quota's general Pct() would happily count it.
+func (m *mockQuotaProvider) setResourcePct(providerUUID string, pct float64) {
+	m.usage[providerUUID] = &quota.ProviderUsage{
+		ProviderUUID: providerUUID,
+		Windows:      []*quota.UsageWindow{{Kind: quota.WindowKindResource, Limit: 100, UsedPercent: pct}},
+	}
+}
+
+func (m *mockQuotaProvider) GetQuotaNoCache(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
+	usage, ok := m.usage[providerUUID]
+	if !ok {
+		return nil, quota.ErrUsageNotFound
+	}
+	return usage, nil
 }
 
 // mockConfig implements ProviderResolver for ServiceSelector tests.

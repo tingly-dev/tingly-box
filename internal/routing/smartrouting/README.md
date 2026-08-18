@@ -92,12 +92,36 @@ An **op** (`SmartOp`) is `Position + Operation + Value`:
 | `token` | estimated token count (chars/4) | `ge`, `gt`, `le`, `lt` |
 | `service_ttft` | rule services' TTFT stats (ms) | `avg_le`, `avg_ge`, `max_le`, `max_ge` |
 | `service_capacity` | rule services' seat utilization (%) | `util_le`, `util_ge`, `util_lt`, `util_gt` |
+| `service_quota` | rule services' cached upstream quota usage (%) | `pct_le`, `pct_ge`, `pct_lt`, `pct_gt` |
 | `agent.claude_code` | detected Claude Code request kind | `equals` (`main` / `subagent` / `compact`) |
 | `proxy_vision` | latest user content type (image?) | `enabled` (toggle — see Op-level processors) |
 
-`service_ttft` and `service_capacity` are seeded per-rule before evaluation
-(`collectRuleStats` / `filterCapacityForRule`); both **pass** when the
-underlying data is empty so cold-start traffic isn't blocked.
+`service_ttft`, `service_capacity`, and `service_quota` are seeded per-rule
+before evaluation (`collectRuleStats` / `filterCapacityForRule` /
+`filterQuotaForRule`); all three **pass** when the underlying data is empty
+so cold-start traffic (or a service whose quota was never fetched) isn't
+blocked.
+
+`service_quota` reads cached provider usage from `ai/quota`
+(`.design/quota-semantics.md`) via the optional `QuotaProvider` wired into
+`SmartRoutingStage` — a local DB read, never a live upstream call. It
+compares the **tightest** (highest-used%) service in the rule against the
+threshold, not the average: a rule models one pool of interchangeable
+services, and one of them running hot should make the pool look hot rather
+than being diluted by the others. Rules that want per-service or
+per-tier thresholds should use separate ops/rules instead of relying on
+this op to average across services.
+
+It only sees **standard, self-healing quota** (`ai/quota`'s
+`Pct(quota.WindowKindLimit)`) — a standing balance/credit (OpenRouter's key
+limit, Kimi Code's booster wallet, KimiK2's credits) needs a manual top-up
+rather than time to recover, so it must not silently drive an "avoid this
+pool" decision meant to be temporary. A window only counts here when its
+fetcher explicitly tags it `Kind: WindowKindLimit`; an untagged window is
+excluded rather than assumed safe. Display consumers (statusline, the
+frontend) call the same `Pct()`/`Tightest()` with no kinds filter, so they
+keep seeing resource windows like a balance — only this op's strict call
+is scoped down.
 
 ### Claude Code request-kind detection
 
@@ -214,6 +238,24 @@ SmartRouting{
     Services: []*loadbalance.Service{spillover},
 }
 ```
+
+### Switch to a cheaper pool once quota runs hot
+
+```go
+SmartRouting{
+    Description: "primary pool ≥85% quota → spill to cheap pool",
+    Ops: []SmartOp{
+        {Position: PositionServiceQuota, Operation: OpServiceQuotaPctGe,
+         Value: "85", Meta: SmartOpMeta{Type: ValueTypeInt}},
+    },
+    Services: []*loadbalance.Service{primaryPoolA, primaryPoolB},
+}
+```
+
+This is the "don't want to use" half of quota-aware routing — proactively
+steering away from a pool before it 429s. It does not overlap with
+`stage_health`'s "can't use" exclusion, which reacts to actual rate-limit
+errors; see `.design/quota-semantics.md` §8.
 
 ### Make a text-only model accept image-bearing requests
 

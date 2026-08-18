@@ -66,11 +66,14 @@ func (r *Router) EvaluateRequestWithIndex(ctx *RequestContext) ([]*loadbalance.S
 func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting, idx int) RuleEvalResult {
 	origStats := ctx.ServiceStats
 	origCap := ctx.ServiceCapacity
+	origQuota := ctx.ServiceQuota
 	ctx.ServiceStats = collectRuleStats(rule.Services)
 	ctx.ServiceCapacity = filterCapacityForRule(ctx.ServiceCapacity, rule.Services)
+	ctx.ServiceQuota = filterQuotaForRule(ctx.ServiceQuota, rule.Services)
 	defer func() {
 		ctx.ServiceStats = origStats
 		ctx.ServiceCapacity = origCap
+		ctx.ServiceQuota = origQuota
 	}()
 
 	res := RuleEvalResult{
@@ -113,6 +116,8 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 		return r.evaluateServiceTTFTOp(ctx, op)
 	case PositionServiceCapacity:
 		return r.evaluateServiceCapacityOp(ctx, op)
+	case PositionServiceQuota:
+		return r.evaluateServiceQuotaOp(ctx, op)
 	case PositionAgentClaudeCode:
 		return r.evaluateAgentClaudeCodeOp(ctx, op)
 	case PositionTime:
@@ -530,6 +535,68 @@ func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) OpE
 	return res
 }
 
+// evaluateServiceQuotaOp compares the tightest (highest-used%) cached
+// *standard* quota across the rule's services' upstream providers
+// (ctx.ServiceQuota, pre-filtered per-rule by evaluateRule) against a
+// threshold. Quota is read from the local ai/quota cache, never fetched
+// live, and restricted to self-healing allowances (Kind == WindowKindLimit)
+// — see Pct's kinds filter (ai/quota/semantic.go) and collectAllQuotaInfo in
+// internal/routing/stage_smart_routing.go; standing balances/credits are
+// deliberately excluded (see ServiceQuotaInfo in context.go).
+//
+// Aggregation is max, not average: mirrors ai/quota/semantic.go's own
+// window aggregation ("take the tightest, because that's the one that runs
+// out first" — .design/quota-semantics.md §3.3), extended across services.
+// A rule is meant to represent one pool of interchangeable services; if any
+// one of them is running hot, the pool itself should be treated as hot
+// rather than diluted by the others. Rules that want independent
+// thresholds per service/tier should split into separate ops/rules rather
+// than relying on this op to average them.
+//
+// Services with unknown quota (never fetched, unreadable, or not countable
+// — see ai/quota/semantic.go) are absent from ctx.ServiceQuota entirely and
+// excluded from the max, rather than counted as 0% used. Returns
+// Matched=true (pass) when no service in the rule has quota data, so
+// quota-blind rules and cold caches never block routing.
+func (r *Router) evaluateServiceQuotaOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	if len(ctx.ServiceQuota) == 0 {
+		res.Matched = true
+		res.Reason = "no quota info; pass"
+		return res
+	}
+	threshold, err := op.Int()
+	if err != nil {
+		log.Printf("[smart_routing] invalid service_quota value '%s': %v", op.Value, err)
+		res.Reason = fmt.Sprintf("invalid int: %v", err)
+		return res
+	}
+	pctValues := make([]float64, 0, len(ctx.ServiceQuota))
+	for _, q := range ctx.ServiceQuota {
+		pctValues = append(pctValues, q.Pct)
+	}
+	tightest := maxFloat(pctValues)
+	thresholdF := float64(threshold)
+	res.Actual = fmt.Sprintf("%.1f%%", tightest)
+	switch op.Operation {
+	case OpServiceQuotaPctLe:
+		res.Matched = tightest <= thresholdF
+		res.Reason = fmt.Sprintf("tightest quota %.1f%% <= %d%%", tightest, threshold)
+	case OpServiceQuotaPctGe:
+		res.Matched = tightest >= thresholdF
+		res.Reason = fmt.Sprintf("tightest quota %.1f%% >= %d%%", tightest, threshold)
+	case OpServiceQuotaPctLt:
+		res.Matched = tightest < thresholdF
+		res.Reason = fmt.Sprintf("tightest quota %.1f%% < %d%%", tightest, threshold)
+	case OpServiceQuotaPctGt:
+		res.Matched = tightest > thresholdF
+		res.Reason = fmt.Sprintf("tightest quota %.1f%% > %d%%", tightest, threshold)
+	default:
+		res.Reason = fmt.Sprintf("unsupported service_quota op %q", op.Operation)
+	}
+	return res
+}
+
 // evaluateAgentClaudeCodeOp evaluates the agent.claude_code position.
 // ctx.ClaudeCodeRequestKind is populated by SmartRoutingStage only when the
 // request scenario is claude_code; for other scenarios it is empty and no
@@ -618,10 +685,38 @@ func filterCapacityForRule(all []ServiceCapacityInfo, services []*loadbalance.Se
 	return result
 }
 
+// filterQuotaForRule filters all quota info down to services belonging to this rule.
+func filterQuotaForRule(all []ServiceQuotaInfo, services []*loadbalance.Service) []ServiceQuotaInfo {
+	if len(all) == 0 {
+		return nil
+	}
+	ids := make(map[string]struct{}, len(services))
+	for _, svc := range services {
+		ids[svc.ServiceID()] = struct{}{}
+	}
+	var result []ServiceQuotaInfo
+	for _, q := range all {
+		if _, ok := ids[q.ServiceID]; ok {
+			result = append(result, q)
+		}
+	}
+	return result
+}
+
 func minFloat(vals []float64) float64 {
 	m := vals[0]
 	for _, v := range vals[1:] {
 		if v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func maxFloat(vals []float64) float64 {
+	m := vals[0]
+	for _, v := range vals[1:] {
+		if v > m {
 			m = v
 		}
 	}

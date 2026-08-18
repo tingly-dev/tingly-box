@@ -461,6 +461,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.WithError(err).Warn("Failed to initialize provider quota manager")
 	} else {
 		server.quotaManager = quotaMgr
+		// Wire cached quota into smart routing's service_quota op. Done here,
+		// after quota manager init, rather than threading it through the
+		// selector constructor above — quota init can fail independently and
+		// the op is optional (passes through with no provider wired).
+		serviceSelector.SetQuotaProvider(quotaMgr)
 	}
 
 	// Construct the WebUI Management API's control handler. This MUST be the

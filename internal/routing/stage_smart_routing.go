@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
@@ -13,10 +14,21 @@ import (
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
+// QuotaProvider gives the smart-routing stage read access to cached quota
+// usage (ai/quota) so the service_quota position can compare against
+// provider usage without a live upstream fetch. *quota.Manager satisfies
+// this. GetQuotaNoCache reads the last-refreshed value straight from the
+// store (no expiry-triggered live fetch), keeping the op a local DB read
+// rather than a per-request network call.
+type QuotaProvider interface {
+	GetQuotaNoCache(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
+}
+
 // SmartRoutingStage evaluates smart routing rules and returns matched services.
 // If multiple services match, applies load balancing within the matched set.
 type SmartRoutingStage struct {
 	affinityStore AffinityStore
+	quotaProvider QuotaProvider       // optional; wires service_quota ops to cached quota usage
 	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
 }
 
@@ -29,6 +41,13 @@ func NewSmartRoutingStage(affinity AffinityStore) *SmartRoutingStage {
 // smart-routing evaluation logs viewable from the frontend system log page.
 func (s *SmartRoutingStage) SetMultiLogger(ml *pkgobs.MultiLogger) {
 	s.multiLogger = ml
+}
+
+// SetQuotaProvider wires cached quota lookups into the stage. Optional —
+// when unset, service_quota ops see no data and pass through (see
+// evaluateServiceQuotaOp in internal/routing/smartrouting/routing.go).
+func (s *SmartRoutingStage) SetQuotaProvider(qp QuotaProvider) {
+	s.quotaProvider = qp
 }
 
 // Name returns the stage identifier
@@ -182,6 +201,10 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// evaluateRule will filter this down to per-rule services when evaluating.
 	reqCtx.ServiceCapacity = s.collectAllCapacityInfo(rule.SmartRouting)
 
+	// Pre-collect cached quota usage the same way. A no-op (nil slice) when
+	// no QuotaProvider is wired, so service_quota ops simply pass through.
+	reqCtx.ServiceQuota = s.collectAllQuotaInfo(selectionLogContext(ctx), rule.SmartRouting)
+
 	// Create router and evaluate
 	router, err := smartrouting.NewRouter(rule.SmartRouting)
 	if err != nil {
@@ -330,6 +353,55 @@ func (s *SmartRoutingStage) collectAllCapacityInfo(rules []smartrouting.SmartRou
 				ServiceID:   id,
 				Capacity:    cap,
 				ActiveCount: active,
+			})
+		}
+	}
+	return result
+}
+
+// collectAllQuotaInfo collects cached quota usage for all services across all
+// smart routing rules, keyed by each service's provider UUID (svc.Provider).
+// Deduplicates by serviceID; evaluateRule filters down to per-rule services.
+// Skipped entirely when no QuotaProvider is wired. A service is omitted
+// (not zeroed) when its provider has no cached usage yet or usage is not
+// countable — unknown must never read as 0%.
+//
+// Uses usage.Pct(quota.WindowKindLimit), not the unfiltered usage.Pct():
+// service_quota is meant to react only to standard, self-healing quota
+// (Kind == WindowKindLimit), not to a standing balance/credit (Kind ==
+// WindowKindResource, e.g. OpenRouter's key balance or Kimi Code's booster
+// wallet) that needs a manual top-up rather than time to recover. A rule
+// that trips on balance depletion would keep avoiding that pool
+// indefinitely with no self-correcting signal — see
+// .design/quota-semantics.md §8.1.
+func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []smartrouting.SmartRouting) []smartrouting.ServiceQuotaInfo {
+	if s.quotaProvider == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var result []smartrouting.ServiceQuotaInfo
+	for _, r := range rules {
+		for _, svc := range r.Services {
+			id := svc.ServiceID()
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+
+			if svc.Provider == "" {
+				continue
+			}
+			usage, err := s.quotaProvider.GetQuotaNoCache(ctx, svc.Provider)
+			if err != nil || usage == nil {
+				continue
+			}
+			pct, ok := usage.Pct(quota.WindowKindLimit)
+			if !ok {
+				continue
+			}
+			result = append(result, smartrouting.ServiceQuotaInfo{
+				ServiceID: id,
+				Pct:       pct,
 			})
 		}
 	}

@@ -33,9 +33,17 @@ export function isCountable(window: CountableFields): boolean {
     return !window.unknown && !window.unlimited && window.limit > 0;
 }
 
-/** Rank, then period length — the same order the backend establishes. */
+/**
+ * Rank, then period length — the same order the backend establishes.
+ *
+ * Rank 0 (self-healing allowances) requires an explicit `kind === 'limit'` —
+ * an untagged window (`kind` undefined) is not assumed to belong there, so
+ * it sorts alongside resources (rank 1) instead of jumping the queue. No
+ * default toward "limit" here, mirroring ai/quota's windowRank in
+ * semantic.go: only a positively-classified window gets the front seat.
+ */
 function windowSortKey(window: QuotaWindow): [number, number] {
-    const rank = !isCountable(window) ? 2 : window.kind === 'resource' ? 1 : 0;
+    const rank = !isCountable(window) ? 2 : window.kind === 'limit' ? 0 : 1;
     const minutes = window.window_minutes && window.window_minutes > 0
         ? window.window_minutes
         : Number.MAX_SAFE_INTEGER;

@@ -267,7 +267,34 @@ MiniMax 打满的视频额度让全账号显得耗尽；OpenRouter 的月度花�
 
 ---
 
-## 8. 范围外决定：quota 怎么参与路由（只记结论，未实现）
+## 8. quota 怎么参与路由
+
+quota 参与路由分两条线，管的是两件不重叠的事：smart op 管**"不想用"**（主动避让），
+`stage_health` 管**"不能用"**（事后摘除）。前者已实现（本节 §8.1），后者仍是范围外决定，
+只记结论未实现（§8.2）。
+
+### 8.1 smart op：`service_quota`（已实现）
+
+新增 `SmartOp` position `service_quota`，操作符 `pct_le` / `pct_ge` / `pct_lt` / `pct_gt`，
+值是 0-100 的百分比阈值。代码见 `internal/smart_routing`（`op.go` / `routing.go`
+/ `context.go`）与 `internal/routing/stage_smart_routing.go`；用法示例见
+`internal/smart_routing/README.md` "Switch to a cheaper pool once quota runs hot"。
+
+- **数据来源**：`ai/quota` 本地缓存（`Manager.GetQuotaNoCache`），按 `Service.Provider`
+  （provider UUID）查 `ProviderUsage.Pct(quota.WindowKindLimit)`（§4）。纯读库，路由
+  热路径不发起线上配额请求；刷新节奏由 `Manager` 后台 refresher 决定（§9.1 未处理）。
+- **只算 `Kind=limit`，不算 `Kind=resource`**：余额耗尽要充钱，不会自己恢复，不该驱动
+  这种本该是临时避让的判定。
+- **聚合方式：跨 service 取最紧（max），不取平均**——一个池子里任何一个 service 吃紧
+  就判定整个池吃紧。分级降级用 `Service.Tier` + `TacticTier` 或多条规则，不用这个 op
+  在多个 service 间取平均；UI 建议每条规则只配一个 service。
+- **未知不计入判定**：查不到配额的 service 从 `ServiceQuota` 里剔除，不当 0%；一条规则
+  所有 service 都没有配额数据时直接放行（`Matched=true`），不阻塞路由。
+- **和 §8.2 的边界**：smart op 是主动的、阈值可配的"不想用"，在真吃到 429 之前就切走；
+  `stage_health` 是被动的、reactive 的"不能用"，两者数据源相同（`ai/quota`）但不是
+  同一个机制，互不替代。
+
+### 8.2 `stage_health` 摘除（范围外决定，未实现）
 
 **quota 只做减法，不做排序**——摘掉事实上不能用的候选，选择交给现有 tactic。
 
@@ -281,9 +308,6 @@ quota 不该发明第三种。
 `health_monitor.go` 的 `RateLimitedUntil = now + 固定超时` 是猜的，`RecoversAt()` 是上游真值——
 quota 是 health 的**前瞻版**：不用先吃 429，恢复时间从猜变准，出口/降级/日志全复用。
 保守方向写死：`Unknown` 或数据过期 → 不摘。
-
-**smart op 不做**：它管"不想用"（超 85% 就切便宜池子），与摘除管的"不能用"不重叠；
-需要的数据 §4 已备齐，等真有人要再加。
 
 ---
 

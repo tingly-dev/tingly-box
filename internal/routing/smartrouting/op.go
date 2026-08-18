@@ -223,6 +223,40 @@ var Operations = []SmartOp{
 			Type:        ValueTypeInt,
 		},
 	},
+
+	// Service quota operations (cached upstream provider usage %)
+	{
+		Position:  PositionServiceQuota,
+		Operation: OpServiceQuotaPctLe,
+		Meta: SmartOpMeta{
+			Description: "Avg quota used across services' providers <= value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceQuota,
+		Operation: OpServiceQuotaPctGe,
+		Meta: SmartOpMeta{
+			Description: "Avg quota used across services' providers >= value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceQuota,
+		Operation: OpServiceQuotaPctLt,
+		Meta: SmartOpMeta{
+			Description: "Avg quota used across services' providers < value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
+	{
+		Position:  PositionServiceQuota,
+		Operation: OpServiceQuotaPctGt,
+		Meta: SmartOpMeta{
+			Description: "Avg quota used across services' providers > value (%)",
+			Type:        ValueTypeInt,
+		},
+	},
 }
 
 const (
@@ -234,6 +268,7 @@ const (
 	PositionToken           SmartOpPosition = "token"             // Token count
 	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
 	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
+	PositionServiceQuota    SmartOpPosition = "service_quota"     // Cached upstream provider quota usage (%)
 	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
 	PositionTime            SmartOpPosition = "time"              // Current time in a configured timezone
 )
@@ -280,6 +315,12 @@ const (
 	OpServiceCapacityUtilGe SmartOpOperation = "util_ge" // Avg seat utilization >= value (%)
 	OpServiceCapacityUtilLt SmartOpOperation = "util_lt" // Avg seat utilization < value (%)
 	OpServiceCapacityUtilGt SmartOpOperation = "util_gt" // Avg seat utilization > value (%)
+
+	// Service quota operations (cached upstream provider usage %, see ai/quota)
+	OpServiceQuotaPctLe SmartOpOperation = "pct_le" // Avg quota used% <= value (%)
+	OpServiceQuotaPctGe SmartOpOperation = "pct_ge" // Avg quota used% >= value (%)
+	OpServiceQuotaPctLt SmartOpOperation = "pct_lt" // Avg quota used% < value (%)
+	OpServiceQuotaPctGt SmartOpOperation = "pct_gt" // Avg quota used% > value (%)
 
 	// Agent (Claude Code) request kind operations
 	OpAgentClaudeCodeEquals SmartOpOperation = "equals" // Claude Code request kind equals the value
