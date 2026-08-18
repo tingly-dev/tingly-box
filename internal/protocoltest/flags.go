@@ -417,6 +417,46 @@ func ruleFlagCases() []flagCase {
 			if _, ok := body["max_tokens"]; ok {
 				t.Error("upstream still carries max_tokens after rewrite")
 			}
+
+			// Same effect from the supply side: a model-level flag on the
+			// provider, with the rule setting nothing. This is the non-header
+			// half of the three-level merge — unlike extra_headers these flags
+			// inject through the transform chain, so they are folded into the
+			// effective rule flags by typ.ApplyProviderFlags at dispatch
+			// (.design/provider-flags.md §3.3).
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-supply-max-completion-tokens"
+			providerModel := "virtual-model-" + s.Name
+
+			provider := &typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL() + "/v1",
+				APIStyle: protocol.APIStyleOpenAI,
+				AuthType: ai.AuthTypeAPIKey,
+				Token:    "virtual-token",
+				Enabled:  true,
+				Timeout:  int64(constant.DefaultRequestTimeout),
+				ModelFlags: map[string]typ.ProviderFlags{
+					providerModel: {UseMaxCompletionTokens: true},
+				},
+			}
+			_ = env.appConfig.AddProvider(provider)
+
+			const supplyModel = "pv-flag-supply-max-completion-tokens"
+			supplyRule := newHarnessRule(supplyModel, typ.ScenarioOpenAI, supplyModel, providerModel,
+				harnessService(providerName, providerModel))
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(supplyRule)
+
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, supplyModel, false, nil, nil)
+			body = env.virtual.LastRequest(EndpointChat).JSON()
+			if _, ok := body["max_completion_tokens"]; !ok {
+				t.Errorf("model-level flag did not rewrite the field; body keys=%v", keysOf(body))
+			}
+			if _, ok := body["max_tokens"]; ok {
+				t.Error("upstream still carries max_tokens after the model-level rewrite")
+			}
 		}},
 
 		// ── use_max_tokens ───────────────────────────────────────────────────

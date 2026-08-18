@@ -265,7 +265,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
 	// (This also applies the custom User-Agent to the request context.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider)
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider, requestModel)
 
 	reqCtx, err := ph.TransformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
@@ -389,7 +389,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
 	// (This also applies the custom User-Agent to the request context.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider, requestModel)
 
 	reqCtx, err := ph.TransformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {

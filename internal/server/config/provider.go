@@ -272,9 +272,14 @@ func (c *Config) notifyProviderDelete(uuid string) {
 // It sits in the AddProvider/UpdateProvider choke points so every write path
 // — HTTP handlers, CLI, and provider import (dataio) — shares one gate.
 //
-// v1 release scope: extra headers are only supported on api_key providers
+// v1 release scope: provider flags are only supported on api_key providers
 // (see .design/provider-flags.md §5.4); the transport additionally applies
 // nothing on non-api_key rows as a runtime defense.
+//
+// Beyond that gate the only per-flag check is the structural one extra_headers
+// needs (a malformed header name cannot be put on the wire at all). The rest
+// are free-form on purpose: a custom upstream is exactly where an unusual
+// value is legitimate, so the operator owns the outcome.
 func ValidateProviderFlags(p *typ.Provider) error {
 	p.ModelFlags = typ.PruneModelFlags(p.ModelFlags)
 
@@ -284,7 +289,7 @@ func ValidateProviderFlags(p *typ.Provider) error {
 	}
 
 	if !p.IsAPIKey() {
-		return errors.New("custom headers (extra_headers) are only supported on api_key providers")
+		return errors.New("provider flags are only supported on api_key providers")
 	}
 	if err := typ.ValidateExtraHeaders(p.Flags.ExtraHeaders); err != nil {
 		return fmt.Errorf("provider flags: %w", err)

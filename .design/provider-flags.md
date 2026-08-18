@@ -77,8 +77,11 @@ UA 的教训（`provider.UserAgent` 移除史，user-agent.md §5）仍然成立
 │  }                                                          │
 │                                                             │
 │  type ProviderFlags struct {                                │
-│      ExtraHeaders map[string]string `json:"extra_headers"`   │
-│      // 后续字段须通过"准入规则"（见下）                        │
+│      ExtraHeaders map[string]string                         │
+│      CustomUserAgent / BlockTools / ThinkingEffort  …        │
+│      UseMaxTokens / UseMaxCompletionTokens / SkipUsage       │
+│      ClaudeCodeCompat / CleanHeader / Cursor* / Context1M    │
+│      // 字段集是 RuleFlags 的供给侧镜像（见下）                  │
 │  }                                                          │
 └──────────────────────────┬──────────────────────────────────┘
                            │ typ.ProviderFlags = ai.ProviderFlags（别名）
@@ -125,11 +128,32 @@ UA 的教训（`provider.UserAgent` 移除史，user-agent.md §5）仍然成立
 extensions wire shape）。
 
 **代价与护栏**：ai 从此认识 flag schema，新增 provider flag 要动公共
-module；真正的风险是先例——一个开放的 `Flags` 结构会招揽产品语义。护栏
-是一条写进 `ai/README.md` 与本文档的准入规则：
+module；真正的风险是先例——一个开放的 `Flags` 结构会招揽产品语义。
 
-> **ai 只接受"描述如何抵达上游"的字段；网关的产品行为（响应改写、客户端
-> 兼容垫片、路由策略……）一律留在 rule flags。**
+护栏最初写成一条准入规则（"ai 只接受描述如何抵达上游的字段"）。实施到
+一半发现它把 provider flags 卡死在了一个 flag 上：按字面执行，
+`use_max_tokens`（老 provider 不认新字段名）、`claude_code_compat`
+（第三方 Anthropic 兼容端拒绝 system role）这类**明明是上游属性、描述
+里自己就写着 "providers" / "model family"** 的 flag 也被挡在门外，用户
+只能在每一条 rule 上重复配置同一个上游的怪癖。于是护栏换成一条更强也更
+好执行的规则：
+
+> **`ProviderFlags` 的字段集是消费者请求侧 flag 集（`typ.RuleFlags`）的
+> 供给侧镜像。同一个 knob 在哪一级都是同一个意思，只有"作用范围"不同；
+> 不为供给侧发明新词汇。**
+
+这条规则同时解决了准入和命名两个问题：能不能加，看请求侧有没有这个
+knob；叫什么，就叫请求侧那个名字。它把"ai 认识产品语义"的风险从"任意
+膨胀"收窄成"跟随一个已存在的、被评审过的集合"。
+
+**没有镜像的三类**（`ProviderFlagRegistry` 的注释里同样列着，
+`TestProviderFlagRegistry_ExcludesRequestOnlyFlags` 钉住）：
+
+| flag | 不镜像的理由 |
+|------|--------------|
+| `session_affinity` / `vision_proxy_service` | 在**选中上游之前**就已消费（负载均衡 / 入站改写），挂在上游身上的值永远读不到 |
+| `openai_endpoint_override` | provider 已有一等字段 `OpenAIEndpointMode` 表达同一件事，再开一个控件就是重复 mode picker（ux-principles） |
+| `claude_org_id` | Claude OAuth 专用，而 provider flags 首版仅 api_key |
 
 Rule 级不受影响：RuleFlags 本来就是服务域内的 typed struct（rule-flags.md
 §3），直接加字段即可。
@@ -182,15 +206,43 @@ flag 是供给侧配置，只应认识 provider 自己的模型词汇，不认�
 model 级是供给侧对默认的细化；rule 级表达"这一类客户端/用途"的显式
 意图，是三者中最具体的，故最后写入。
 
-**没有"三级合并函数"**：供给侧两级在构造期合并一次，rule 级在写 header
-时叠加，`req.Header.Set` 的 canonical 化保证同名（含大小写不同）覆盖。
-详见 §5.1。
+**headers 没有"三级合并函数"**：供给侧两级在构造期合并一次，rule 级在写
+header 时叠加，`req.Header.Set` 的 canonical 化保证同名（含大小写不同）
+覆盖。详见 §5.1。
 
-合并语义是**层级的属性，不是每个 flag 的属性**：model 级覆盖同名的
-provider 级，就这一条。曾经给 FlagSpec 加过 `Scope` / `MergeMode` 两个轴
-（"这个 flag 存在于哪几级 / 两级怎么合"），但唯一的 flag 两级都有、合法
-只有 merge 一种，没有任何生产代码读它们——纯为想象中的第二个 flag 预留，
-已删除。真出现语义不同的 flag 时再加轴，届时有真实约束可依。
+**其余 flag 走一次显式合并**：它们不是 header，注入点在 transform 链和
+SDK 层（rule-flags.md 的 Type 1b-pre / 1b-post / Type 2），没有"写入
+顺序"可借。合并放在 `typ.ApplyProviderFlags(flags, provider, model)`，
+由 `ResolveRuleFlagsWithScenario` 这一个点调用——即 rule/scenario 合并
+之后、`applyRuleFlags` 写进 ctx 之前：
+
+```
+rule.Flags ──┬─ + scenario 继承 ──┬─ + ApplyProviderFlags(provider, model) ──┬─ ctx
+             │  （既有）           │   （供给侧，最低优先级）                    │
+             └────────────────────┴──────────────────────────────────────────┘
+                                        ↓
+                        RulePreBaseTransforms / RulePreVendorTransforms /
+                        outbound clients / response 处理 —— 全部免费拿到
+```
+
+合并语义按**值的种类**统一，不按 flag 声明：
+
+| 种类 | 语义 |
+|------|------|
+| bool | 三级 OR（任一级打开即生效） |
+| 标量（string / enum / int） | 取最窄的非零值：rule → model → provider |
+| map（headers） | 逐 key 合并，窄的一级赢同名 key（走 §5.1 的写入顺序） |
+
+因此 `FlagSpec` 上不需要 `Scope` / `MergeMode` 两个轴（曾经加过又删掉：
+唯一的 flag 两级都有、只有一种合法合并，无任何生产读取方）。bool 用 OR
+而不是"窄级可以关掉宽级"，与既有的 scenario→rule `InheritanceMode: "or"`
+一致；真出现需要"下级关闭上级"的 flag 时再引入三态，届时有真实约束可依。
+
+**为什么合并在 dispatch 侧而不是各注入点**：`ResolveRuleFlagsWithScenario`
+已经是"本次请求的有效 flag"的唯一收敛点（scenario 继承、cursor 自动检测、
+CleanHeader 自动应用与 OAuth 抑制都在这里），供给侧插在同一处，下游没有
+任何一个消费点需要知道 flag 是从哪一级来的。代价是该函数多了一个 `model`
+形参（四个 attempt 入口各自把已解析的 provider 侧 model ID 传进来）。
 
 ---
 
@@ -198,25 +250,28 @@ provider 级，就这一条。曾经给 FlagSpec 加过 `Scope` / `MergeMode` �
 
 ### Provider/Model 级：新增 `internal/typ/provider_flag_registry.go`
 
-```go
-// 直接复用 FlagSpec / FlagValueType / FlagOption（flag_registry.go），
-// 不给 FlagSpec 加任何 provider 专用字段——与 rule spec 完全同形。
+既然字段集是 RuleFlags 的镜像（§2），registry 也不重抄一遍：provider
+registry **由 rule registry 派生**，本文件里只写一张 `key → 供给侧文案`
+的表，其余（Label / Type / Category / Placeholder / Options /
+Suggestions）全部取自同 key 的 rule spec：
 
+```go
+// providerFlagDescriptions：按展示顺序列出可在 provider/model 级配置的
+// flag + 它的供给侧描述；不在表里的 key 就是"没有供给侧语义"（§2 三类）。
 func ProviderFlagRegistry() []FlagSpec {
-    return []FlagSpec{
-        {
-            Key:         "extra_headers",
-            Label:       "Custom Headers",
-            Description: "Append custom HTTP headers to outbound requests ...",
-            Type:        FlagValueHeaders, // 新增的 value type，见下
-            Category:    FlagCategoryRequest,
-        },
-    }
+    // 取同 key 的 rule spec → 换掉 Description → 清掉 scenario 轴
+    // （Shared / InheritanceMode 属于 rule 轴）
 }
 ```
 
-**每个 spec 都是 provider + model 两级可配**（model 级同名覆盖 provider
-级）。不做 per-spec 的 scope 声明：两个 UI 面都渲染整个 registry。
+这样两个面渲染的控件天生一致（同一个 knob 不会一边是下拉一边是文本框），
+新增 rule flag 时若要开到供给侧，只需在表里加一行文案。
+`TestProviderFlagRegistry_SharesRuleControlShape` 钉住"控件同形、文案不同"，
+`TestProviderFlagRegistry_KeysExistInRuleRegistry` 钉住表里不会出现 rule
+registry 没有的 key（否则会被静默丢弃）。
+
+**每个 spec 都是 provider + model 两级可配**（合并语义见 §3.3）。不做
+per-spec 的 scope 声明：两个 UI 面都渲染整个 registry。
 
 ### Rule 级：`RuleFlagRegistry()` 追加一条
 
@@ -519,6 +574,10 @@ switch/case。实现落点：
 |------|--------|------|----------|
 | ai.Provider 扩展容器形态 | `map[string]json.RawMessage` | typed struct / `map[string]any` | ai 是公共 module，必须对内容不知情；RawMessage 无损且物理隔离 schema。typed struct 会把服务语义泄进公共 API |
 | provider flag 的存放位置 | `ai.Provider` 上的 typed 字段 | `Extensions map[string]json.RawMessage` 不透明容器 + 服务侧 well-known key | 容器只有一个消费者，"保护别人 key"的读-改-写保护的是假想消费者（评审意见）。塌缩省 ~135 行；ai 的依赖独立性不变（不引入新 import），语义上 headers 本就属于"如何抵达上游"。代价是 ai 认识 flag schema，用准入规则约束（§2）|
+| provider flag 的字段集 | RuleFlags 的供给侧镜像（12 个），排除三类无供给侧语义的 | 只做 `extra_headers` / 自定义一套供给侧词汇 | 只做 headers 把"上游怪癖"留在了 rule 上重复配置——`use_max_tokens`、`claude_code_compat` 的描述里自己就写着 providers / model family（评审意见：整个 provider flag 系统没实现完）。镜像同时解决准入与命名：能不能加看请求侧有没有，叫什么就叫请求侧的名字 |
+| provider registry 的来源 | 由 `RuleFlagRegistry()` 派生，只覆写 Description | 手写 12 条完整 spec | 同一 knob 两个面必须渲染同一控件；派生让"漂移"在结构上不可能发生，新增一条只写一行文案 |
+| 非 header flag 的合并 | dispatch 侧一次 `ApplyProviderFlags`，在 `ResolveRuleFlagsWithScenario` 内 | 各注入点自行读三级 / 像 headers 一样靠写入顺序 | 它们注入在 transform 链与 SDK 层，没有"写入顺序"可借；而请求的有效 flag 已有唯一收敛点，插在那里下游零改动。代价：该函数多一个 `model` 形参 |
+| bool 的三级语义 | 三级 OR | 三态（`*bool`，窄级可关掉宽级） | 与既有 scenario→rule `InheritanceMode: "or"` 一致，零新概念；三态要给每个 bool 加指针 + UI 加"继承/开/关"三档，为一个尚未出现的需求付全额成本 |
 | 服务侧 schema 位置 | internal/typ + registry | 散落各消费点 | 复刻 rule flags 的"唯一可信源"模式，前端零 switch/case，已被验证 |
 | rule 级是否同步支持 | ✅ 三级统一 | 仅 provider/model | headers 三级各有真实语义（网关固有 / 模型灰度 / 客户端标记）；rule 级复用既有 RuleFlags 机制近乎零成本，一次做齐避免二次开口 |
 | 三级合并顺序 | provider < model < rule | rule < model < provider | 粒度越贴近单次请求越应胜出；rule 是显式的请求侧意图 |
@@ -546,6 +605,11 @@ switch/case。实现落点：
 - ✅ 首版仅释放 api_key auth type；OAuth / 多字段凭证 / vmodel 不释放，
   由 UI + API 校验 + transport 守卫三道闸收口。
 - ✅ builtin provider 沿用"不可 mutate"规则，flags 锁定。
+- ✅ `ProviderFlags` 的字段集是 `RuleFlags` 的供给侧镜像，而非仅
+  `extra_headers`；准入规则从"只接受如何抵达上游"改为"镜像请求侧集合"
+  （§2）。三类无供给侧语义的 flag 显式排除并有测试钉住。
+- ✅ 非 header flag 的三级合并落在 `typ.ApplyProviderFlags`，由
+  `ResolveRuleFlagsWithScenario` 单点调用；bool 三级 OR，标量取最窄非零值。
 
 **遗留**（不阻塞实施）：
 
@@ -553,3 +617,13 @@ switch/case。实现落点：
 2. model key 通配/前缀匹配（依赖真实需求）。
 3. scenario 级 extra_headers（当前无需求；若加，走 FlagSpec.Shared +
    InheritanceMode 的既有 scenario 继承链，与三级纵向合并正交）。
+4. 供给侧 flag 的"生效范围"提示。镜像集合里有几个 flag 只在特定形态的
+   上游上有意义（`context_1m` 只对 Anthropic、`use_max_*` 只对 OpenAI、
+   `cursor_compat*` 取决于入站客户端）。当前**不加门禁**：配在用不上的
+   地方就是静默无效，与 rule 级同一行为，也符合"编排器可任意配置、配错
+   自负"的定调。若后续要提示，registry 已有 `Category`（如
+   `request_openai` / `request_anthropic`）可直接驱动 UI 分组或灰置，
+   不需要新的数据结构。
+5. 前端 Plugins 目录当前只渲染 headers 控件（PR #1591 的范围）；registry
+   现在返回 bool / string / enum 三种 Type，前端需补齐对应控件才能把这
+   一批 flag 露出——后端契约已就位，属纯 UI 工作。

@@ -227,7 +227,7 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	// === Resolve flags with scenario injection ===
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider, actualModel)
 
 	// === Transform via pipeline ===
 	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))

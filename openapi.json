@@ -12306,12 +12306,56 @@
       "ProviderFlags": {
         "type": "object",
         "properties": {
+          "block_tools": {
+            "type": "string",
+            "description": "Field block_tools"
+          },
+          "claude_code_compat": {
+            "type": "boolean",
+            "description": "Field claude_code_compat"
+          },
+          "clean_header": {
+            "type": "boolean",
+            "description": "Field clean_header"
+          },
+          "context_1m": {
+            "type": "boolean",
+            "description": "Field context_1m"
+          },
+          "cursor_compat": {
+            "type": "boolean",
+            "description": "Field cursor_compat"
+          },
+          "cursor_compat_auto": {
+            "type": "boolean",
+            "description": "Field cursor_compat_auto"
+          },
+          "custom_user_agent": {
+            "type": "string",
+            "description": "Field custom_user_agent"
+          },
           "extra_headers": {
             "type": "object",
             "description": "Field extra_headers",
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "skip_usage": {
+            "type": "boolean",
+            "description": "Field skip_usage"
+          },
+          "thinking_effort": {
+            "type": "string",
+            "description": "Field thinking_effort"
+          },
+          "use_max_completion_tokens": {
+            "type": "boolean",
+            "description": "Field use_max_completion_tokens"
+          },
+          "use_max_tokens": {
+            "type": "boolean",
+            "description": "Field use_max_tokens"
           }
         }
       },

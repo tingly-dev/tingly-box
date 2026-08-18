@@ -79,3 +79,64 @@ func TestProviderFlagRegistry_ExtraHeaders(t *testing.T) {
 		t.Errorf("extra_headers type = %q, want %q", found.Type, FlagTypeHeaders)
 	}
 }
+
+// TestProviderFlagRegistry_KeysExistInRuleRegistry guards the shared
+// vocabulary: the provider registry derives every spec but the description
+// from the rule spec of the same key, so a description entry naming a key the
+// rule registry does not have would be silently dropped.
+func TestProviderFlagRegistry_KeysExistInRuleRegistry(t *testing.T) {
+	ruleKeys := map[string]bool{}
+	for _, spec := range RuleFlagRegistry() {
+		ruleKeys[spec.Key] = true
+	}
+	for _, entry := range providerFlagDescriptions {
+		if !ruleKeys[entry.Key] {
+			t.Errorf("provider flag %q has no rule spec to derive its control from", entry.Key)
+		}
+	}
+	if got, want := len(ProviderFlagRegistry()), len(providerFlagDescriptions); got != want {
+		t.Errorf("ProviderFlagRegistry() returned %d specs, want %d", got, want)
+	}
+}
+
+// TestProviderFlagRegistry_SharesRuleControlShape pins that the two surfaces
+// render the same control for the same key — only the wording differs.
+func TestProviderFlagRegistry_SharesRuleControlShape(t *testing.T) {
+	ruleSpecs := map[string]FlagSpec{}
+	for _, spec := range RuleFlagRegistry() {
+		ruleSpecs[spec.Key] = spec
+	}
+	for _, spec := range ProviderFlagRegistry() {
+		rule := ruleSpecs[spec.Key]
+		if spec.Type != rule.Type {
+			t.Errorf("flag %q type = %q, want the rule spec's %q", spec.Key, spec.Type, rule.Type)
+		}
+		if spec.Label != rule.Label {
+			t.Errorf("flag %q label = %q, want the rule spec's %q", spec.Key, spec.Label, rule.Label)
+		}
+		if !reflect.DeepEqual(spec.Options, rule.Options) {
+			t.Errorf("flag %q options = %v, want the rule spec's %v", spec.Key, spec.Options, rule.Options)
+		}
+		if spec.Description == rule.Description {
+			t.Errorf("flag %q reuses the rule wording; provider flags need supply-side wording", spec.Key)
+		}
+	}
+}
+
+// TestProviderFlagRegistry_ExcludesRequestOnlyFlags documents the flags that
+// deliberately have no supply-side level, so re-adding one is a conscious act.
+func TestProviderFlagRegistry_ExcludesRequestOnlyFlags(t *testing.T) {
+	// session_affinity / vision_proxy_service are resolved before an upstream
+	// is picked; openai_endpoint_override duplicates Provider.OpenAIEndpointMode;
+	// claude_org_id is Claude OAuth only while provider flags are api_key only.
+	excluded := []string{"session_affinity", "vision_proxy_service", "openai_endpoint_override", "claude_org_id"}
+	present := map[string]bool{}
+	for _, spec := range ProviderFlagRegistry() {
+		present[spec.Key] = true
+	}
+	for _, key := range excluded {
+		if present[key] {
+			t.Errorf("flag %q is exposed at the provider level but has no supply-side meaning", key)
+		}
+	}
+}

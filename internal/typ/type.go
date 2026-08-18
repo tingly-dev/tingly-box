@@ -277,9 +277,10 @@ type RuleFlags struct {
 
 	// ExtraHeaders are appended to the outbound upstream request for requests
 	// matched by this rule. Applied on api_key providers only (vendor/OAuth
-	// chains keep their handshake headers untouched). Provider- and
-	// model-level extra_headers with a provider < model < rule merge are
-	// planned, not implemented (see .design/provider-flags.md).
+	// chains keep their handshake headers untouched). The provider- and
+	// model-level extra_headers are written first by the same transport, so
+	// a name conflict resolves provider < model < rule (see
+	// .design/provider-flags.md §5.1).
 	ExtraHeaders map[string]string `json:"extra_headers,omitempty" yaml:"extra_headers,omitempty"`
 
 	// ClaudeOrgID controls the anthropic-organization-id header sent upstream
