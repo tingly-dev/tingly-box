@@ -9745,6 +9745,13 @@
             "type": "string",
             "description": "Field label"
           },
+          "levels": {
+            "type": "array",
+            "description": "Field levels",
+            "items": {
+              "type": "string"
+            }
+          },
           "options": {
             "type": "array",
             "description": "Field options",
@@ -9777,7 +9784,8 @@
           "label",
           "description",
           "type",
-          "category"
+          "category",
+          "levels"
         ]
       },
       "GenerateTokenRequest": {

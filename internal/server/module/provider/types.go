@@ -24,10 +24,9 @@ type ProviderResponse struct {
 	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`               // Virtual-model config (only for vmodel auth type)
 	Credential       map[string]string `json:"credential,omitempty"`                  // Multi-field cloud credentials (only for aws_sigv4/azure_key/gcp_sa)
 	Source           string            `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
-	// Flags carries the provider-level flags (extra_headers, …) decoded from
-	// the provider's extension container; ModelFlags the per-model overrides
-	// keyed by provider-side model ID. See GET /provider/flags/registry for
-	// the catalog. api_key providers only.
+	// Flags carries the provider-level flags, ModelFlags the per-model
+	// overrides keyed by provider-side model ID. See
+	// GET /provider/flags/registry for the catalog. api_key providers only.
 	Flags      *typ.ProviderFlags           `json:"flags,omitempty"`
 	ModelFlags map[string]typ.ProviderFlags `json:"model_flags,omitempty"`
 }
@@ -56,7 +55,7 @@ type CreateProviderRequest struct {
 	Credential map[string]string `json:"credential,omitempty" description:"Cloud credential fields (aws_sigv4/azure_key/gcp_sa)"`
 	// Flags / ModelFlags optionally seed the provider-level flags and
 	// per-model overrides (api_key auth only; validated on save).
-	Flags      *typ.ProviderFlags           `json:"flags,omitempty" description:"Provider-level flags (extra_headers, …); api_key auth only"`
+	Flags      *typ.ProviderFlags           `json:"flags,omitempty" description:"Provider-level flags; see GET /provider/flags/registry (api_key auth only)"`
 	ModelFlags map[string]typ.ProviderFlags `json:"model_flags,omitempty" description:"Per-model flag overrides keyed by provider-side model ID; api_key auth only"`
 }
 

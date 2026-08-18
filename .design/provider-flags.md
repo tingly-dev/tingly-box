@@ -95,10 +95,10 @@ UA 的教训（`provider.UserAgent` 移除史，user-agent.md §5）仍然成立
 │      SupplyExtraHeaders(p, model)   // provider ∪ model（§3.3）│
 │      PruneModelFlags(m)             // 清空的 model 不留空对象  │
 │                                                             │
-│  internal/typ/provider_flag_registry.go:                    │
-│      ProviderFlagRegistry() []FlagSpec  // provider/model 级可信源（§4）│
 │  internal/typ/flag_registry.go:                             │
-│      RuleFlagRegistry() 追加 extra_headers 条目（rule 级）      │
+│      RuleFlagRegistry()  // 唯一定义，每条声明 Levels（§4）      │
+│  internal/typ/provider_flag_registry.go:                    │
+│      ProviderFlagRegistry()  // 按 provider 级过滤出的切片      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,7 +146,7 @@ module；真正的风险是先例——一个开放的 `Flags` 结构会招揽�
 knob；叫什么，就叫请求侧那个名字。它把"ai 认识产品语义"的风险从"任意
 膨胀"收窄成"跟随一个已存在的、被评审过的集合"。
 
-**没有镜像的三类**（`ProviderFlagRegistry` 的注释里同样列着，
+**没有镜像的三类**（在 registry 里表现为只声明 `FlagLevelRule`，
 `TestProviderFlagRegistry_ExcludesRequestOnlyFlags` 钉住）：
 
 | flag | 不镜像的理由 |
@@ -163,11 +163,12 @@ Rule 级不受影响：RuleFlags 本来就是服务域内的 typed struct（rule
 ### 3.1 ProviderFlags / RuleFlags.ExtraHeaders
 
 ```go
-// internal/typ —— provider 级与 model 级共用
+// internal/typ —— provider 级与 model 级共用同一个结构
 type ProviderFlags struct {
     // ExtraHeaders 追加到发往该 provider 的出站请求。
     // key = header 名（保存时规范化为 canonical form），value = 字面值。
     ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
+    // 其余字段是 RuleFlags 的镜像（§2），字段名与 json tag 逐一对应。
 }
 
 // internal/typ/type.go —— RuleFlags 追加同名同形态字段
@@ -250,28 +251,48 @@ CleanHeader 自动应用与 OAuth 抑制都在这里），供给侧插在同一�
 
 ### Provider/Model 级：新增 `internal/typ/provider_flag_registry.go`
 
-既然字段集是 RuleFlags 的镜像（§2），registry 也不重抄一遍：provider
-registry **由 rule registry 派生**，本文件里只写一张 `key → 供给侧文案`
-的表，其余（Label / Type / Category / Placeholder / Options /
-Suggestions）全部取自同 key 的 rule spec：
+既然字段集是 RuleFlags 的镜像（§2），registry 就**只定义一次**：
+`FlagSpec` 加一个 `Levels []FlagLevel` 轴，声明这个 flag 能配在哪几级；
+`RuleFlagRegistry()` 是唯一的定义，`ProviderFlagRegistry()` 只是按
+`FlagLevelProvider` 过滤出来的一个切片。
 
 ```go
-// providerFlagDescriptions：按展示顺序列出可在 provider/model 级配置的
-// flag + 它的供给侧描述；不在表里的 key 就是"没有供给侧语义"（§2 三类）。
+type FlagLevel string   // "provider" | "model" | "rule"，由宽到窄
+
+type FlagSpec struct {
+    ...
+    Levels []FlagLevel `json:"levels"`
+}
+
 func ProviderFlagRegistry() []FlagSpec {
-    // 取同 key 的 rule spec → 换掉 Description → 清掉 scenario 轴
-    // （Shared / InheritanceMode 属于 rule 轴）
+    // RuleFlagRegistry() 中 HasLevel(FlagLevelProvider) 的那些，
+    // 清掉 scenario 轴（Shared / InheritanceMode 属于 rule 轴）
 }
 ```
 
-这样两个面渲染的控件天生一致（同一个 knob 不会一边是下拉一边是文本框），
-新增 rule flag 时若要开到供给侧，只需在表里加一行文案。
-`TestProviderFlagRegistry_SharesRuleControlShape` 钉住"控件同形、文案不同"，
-`TestProviderFlagRegistry_KeysExistInRuleRegistry` 钉住表里不会出现 rule
-registry 没有的 key（否则会被静默丢弃）。
+**曾经的做法与为何放弃**：最初 provider registry 是一张独立的
+`key → 供给侧文案` 表 + 从 rule spec 取控件形态。评审意见"我们为何不统一
+定义，而是重启定义"——两处定义即使派生了控件形态，仍有两处要维护、两份
+文案要对齐，而"这个 flag 能配在哪几级"本来就是 flag 自己的属性，写在
+spec 上才是它的家。改成 `Levels` 后表整个消失。
 
-**每个 spec 都是 provider + model 两级可配**（合并语义见 §3.3）。不做
-per-spec 的 scope 声明：两个 UI 面都渲染整个 registry。
+**顺带修掉的一件事**：既然一个 flag 只有一条 Description，文案就必须
+**level-neutral**——用户所在的界面已经说明了在编辑哪一级，不需要文案再
+说一遍"for this rule"。改造时发现 16 条里只有 2 条（`extra_headers`、
+`custom_user_agent`）真的写死了 rule 视角，其余本来就是中性的；这反过来
+说明当初那张文案表大部分是在复制粘贴。
+
+**注意**：这不是被删掉的 `Scope`/`MergeMode` 的复活。那两个轴当时没有任何
+生产读取方（唯一的 flag 两级都有、只有一种合法合并），是纯预留；`Levels`
+有 16 条真实数据（12 条三级、4 条仅 rule）、有唯一读取方
+（`ProviderFlagRegistry()`）、且直接决定前端渲染哪些控件。**合并语义**仍然
+不上 spec（那确实是层级的属性，见 §3.3）——`Levels` 声明的是"在哪配"，不是
+"怎么合"。
+
+`TestProviderFlagRegistry_IsARuleRegistrySlice` 钉住派生关系（除 scenario
+轴外逐字段相等），`TestFlagRegistry_LevelsAreDeclared` 钉住每条都声明了
+levels、rule 级普遍存在、且 provider 与 model 同时出现（两级共用同一个
+`ProviderFlags` 结构，不可能只有其一）。
 
 ### Rule 级：`RuleFlagRegistry()` 追加一条
 
@@ -575,7 +596,8 @@ switch/case。实现落点：
 | ai.Provider 扩展容器形态 | `map[string]json.RawMessage` | typed struct / `map[string]any` | ai 是公共 module，必须对内容不知情；RawMessage 无损且物理隔离 schema。typed struct 会把服务语义泄进公共 API |
 | provider flag 的存放位置 | `ai.Provider` 上的 typed 字段 | `Extensions map[string]json.RawMessage` 不透明容器 + 服务侧 well-known key | 容器只有一个消费者，"保护别人 key"的读-改-写保护的是假想消费者（评审意见）。塌缩省 ~135 行；ai 的依赖独立性不变（不引入新 import），语义上 headers 本就属于"如何抵达上游"。代价是 ai 认识 flag schema，用准入规则约束（§2）|
 | provider flag 的字段集 | RuleFlags 的供给侧镜像（12 个），排除三类无供给侧语义的 | 只做 `extra_headers` / 自定义一套供给侧词汇 | 只做 headers 把"上游怪癖"留在了 rule 上重复配置——`use_max_tokens`、`claude_code_compat` 的描述里自己就写着 providers / model family（评审意见：整个 provider flag 系统没实现完）。镜像同时解决准入与命名：能不能加看请求侧有没有，叫什么就叫请求侧的名字 |
-| provider registry 的来源 | 由 `RuleFlagRegistry()` 派生，只覆写 Description | 手写 12 条完整 spec | 同一 knob 两个面必须渲染同一控件；派生让"漂移"在结构上不可能发生，新增一条只写一行文案 |
+| flag 定义的组织方式 | 单一 registry + `FlagSpec.Levels` 声明可配级别 | 每级一个 registry（provider 侧另立文案表，从 rule spec 派生控件形态） | 评审意见："我们为何不统一定义，而是重启定义"。"能配在哪几级"是 flag 自身的属性，写在 spec 上；两处定义即使派生控件形态也仍有两份文案要对齐。副产品：Description 必须 level-neutral，而 16 条里本就有 14 条是中性的 |
+| `Levels` 与被删掉的 `Scope`/`MergeMode` | 加 `Levels`，仍不加 merge 轴 | 一起加回 / 都不加 | `Scope`/`MergeMode` 当时零生产读取方、零真实数据，是预留；`Levels` 有 16 条真实数据、有唯一读取方、直接决定前端渲染。"怎么合"仍是层级属性（§3.3），不上 spec |
 | 非 header flag 的合并 | dispatch 侧一次 `ApplyProviderFlags`，在 `ResolveRuleFlagsWithScenario` 内 | 各注入点自行读三级 / 像 headers 一样靠写入顺序 | 它们注入在 transform 链与 SDK 层，没有"写入顺序"可借；而请求的有效 flag 已有唯一收敛点，插在那里下游零改动。代价：该函数多一个 `model` 形参 |
 | bool 的三级语义 | 三级 OR | 三态（`*bool`，窄级可关掉宽级） | 与既有 scenario→rule `InheritanceMode: "or"` 一致，零新概念；三态要给每个 bool 加指针 + UI 加"继承/开/关"三档，为一个尚未出现的需求付全额成本 |
 | 服务侧 schema 位置 | internal/typ + registry | 散落各消费点 | 复刻 rule flags 的"唯一可信源"模式，前端零 switch/case，已被验证 |
@@ -610,6 +632,8 @@ switch/case。实现落点：
   （§2）。三类无供给侧语义的 flag 显式排除并有测试钉住。
 - ✅ 非 header flag 的三级合并落在 `typ.ApplyProviderFlags`，由
   `ResolveRuleFlagsWithScenario` 单点调用；bool 三级 OR，标量取最窄非零值。
+- ✅ registry 只定义一次：`FlagSpec.Levels` 声明可配级别，
+  `ProviderFlagRegistry()` 退化为按级别过滤的切片；文案改为 level-neutral。
 
 **遗留**（不阻塞实施）：
 

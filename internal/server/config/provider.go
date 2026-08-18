@@ -276,10 +276,9 @@ func (c *Config) notifyProviderDelete(uuid string) {
 // (see .design/provider-flags.md §5.4); the transport additionally applies
 // nothing on non-api_key rows as a runtime defense.
 //
-// Beyond that gate the only per-flag check is the structural one extra_headers
-// needs (a malformed header name cannot be put on the wire at all). The rest
-// are free-form on purpose: a custom upstream is exactly where an unusual
-// value is legitimate, so the operator owns the outcome.
+// Only extra_headers is checked, and only structurally — a malformed header
+// name cannot go on the wire at all. The rest are free-form on purpose: a
+// custom upstream is where an unusual value is legitimate.
 func ValidateProviderFlags(p *typ.Provider) error {
 	p.ModelFlags = typ.PruneModelFlags(p.ModelFlags)
 

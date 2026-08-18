@@ -418,12 +418,10 @@ func ruleFlagCases() []flagCase {
 				t.Error("upstream still carries max_tokens after rewrite")
 			}
 
-			// Same effect from the supply side: a model-level flag on the
-			// provider, with the rule setting nothing. This is the non-header
-			// half of the three-level merge — unlike extra_headers these flags
-			// inject through the transform chain, so they are folded into the
-			// effective rule flags by typ.ApplyProviderFlags at dispatch
-			// (.design/provider-flags.md §3.3).
+			// Same effect from the supply side: a model-level flag, rule empty.
+			// This is the non-header half of the three-level merge — these
+			// inject through the transform chain, so typ.ApplyProviderFlags
+			// folds them into the effective rule flags at dispatch.
 			s := flagScenario()
 			env.virtual.RegisterScenario(s)
 			const providerName = "flag-supply-max-completion-tokens"

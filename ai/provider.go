@@ -80,73 +80,34 @@ func (c *CredentialBundle) Field(key string) string {
 	return c.Fields[key]
 }
 
-// ProviderFlags carries the supply-side flags for one upstream. It exists at
-// two levels on Provider: provider-wide (Provider.Flags) and per-model
-// (Provider.ModelFlags), and a consumer combines them with its own
-// request-side flags in the order
+// ProviderFlags carries the supply-side flags for one upstream, at two levels
+// on Provider: provider-wide (Flags) and per-model (ModelFlags). A consumer
+// combines them with its own request-side flags, narrowest level winning.
 //
-//	provider  <  model  <  request
-//
-// so the narrower level always wins. The field set deliberately mirrors the
-// consumer's request-side flag set (in tingly-box: typ.RuleFlags) rather than
-// being a separate vocabulary — the same knob means the same thing wherever
-// it is set, and only the level changes. Fields whose effect is decided
-// before an upstream is picked (routing, load balancing) have no supply-side
-// meaning and are absent.
-//
-// Combination semantics, uniform per field kind and therefore not declared
-// per field: bools OR together (any level enabling it activates the flag);
-// scalars take the narrowest non-zero value; maps merge per key with the
-// narrower level winning a key conflict.
-//
+// The field set mirrors the consumer's request-side flag set (in tingly-box:
+// typ.RuleFlags) instead of inventing a supply-side vocabulary — the same knob
+// means the same thing wherever it is set. Flags decided before an upstream is
+// picked (routing, load balancing) have no meaning here and are absent.
 // See .design/provider-flags.md.
 type ProviderFlags struct {
-	// ExtraHeaders are appended to outbound requests, verbatim. Header names
-	// are stored in canonical form. Typical uses are upstreams that gate on
-	// their own headers (OpenRouter's HTTP-Referer / X-Title, gateway tenant
-	// or audit headers).
+	// ExtraHeaders are appended to outbound requests verbatim, names in
+	// canonical form (OpenRouter's HTTP-Referer / X-Title, tenant headers, …).
 	ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
 
-	// CustomUserAgent overrides the User-Agent sent to this upstream. Empty
-	// means do not override.
 	CustomUserAgent string `json:"custom_user_agent,omitempty"`
 
-	// UseMaxCompletionTokens rewrites `max_tokens` → `max_completion_tokens`
-	// for this upstream; UseMaxTokens rewrites it the other way. Which one an
-	// upstream needs is a property of the upstream (or of one model family on
-	// it), which is why both live here as well as request-side.
 	UseMaxCompletionTokens bool `json:"use_max_completion_tokens,omitempty"`
 	UseMaxTokens           bool `json:"use_max_tokens,omitempty"`
 
-	// BlockTools is a comma-separated list of tool names to strip before
-	// forwarding, for upstreams that reject or mishandle specific tools.
-	BlockTools string `json:"block_tools,omitempty"`
-
-	// ThinkingEffort forces extended thinking on/off at a given level for this
-	// upstream. Empty means "leave it to the request side".
+	BlockTools     string `json:"block_tools,omitempty"`
 	ThinkingEffort string `json:"thinking_effort,omitempty"`
+	SkipUsage      bool   `json:"skip_usage,omitempty"`
 
-	// SkipUsage strips the usage block from this upstream's responses, for
-	// upstreams whose usage accounting is absent or wrong.
-	SkipUsage bool `json:"skip_usage,omitempty"`
-
-	// ClaudeCodeCompat folds Claude Code's mid-conversation system-role
-	// messages into neighbouring user turns — required by Anthropic-compatible
-	// upstreams that reject that role.
 	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty"`
-
-	// CleanHeader strips Claude Code's billing header blocks and geolocation
-	// markers from system messages before they reach this upstream.
-	CleanHeader bool `json:"clean_header,omitempty"`
-
-	// CursorCompat / CursorCompatAuto apply the Cursor normalizations for
-	// upstreams that need them, always or on header detection.
+	CleanHeader      bool `json:"clean_header,omitempty"`
 	CursorCompat     bool `json:"cursor_compat,omitempty"`
 	CursorCompatAuto bool `json:"cursor_compat_auto,omitempty"`
-
-	// Context1M requests Anthropic's 1M context window. Support is a property
-	// of the model, which is why this is most useful at the model level.
-	Context1M bool `json:"context_1m,omitempty"`
+	Context1M        bool `json:"context_1m,omitempty"`
 }
 
 // IsZero reports whether the flags carry no configuration at all.

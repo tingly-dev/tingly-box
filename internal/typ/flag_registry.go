@@ -47,20 +47,37 @@ const (
 	FlagCategoryVision FlagCategory = "vision"
 )
 
+// FlagLevel is a level a flag can be set at, ordered widest to narrowest: a
+// whole upstream, one of its models, or the requests a rule matches. When
+// several set the same flag the narrower wins — bools OR, scalars take the
+// narrowest non-zero value (.design/provider-flags.md §3.3).
+type FlagLevel string
+
+const (
+	FlagLevelProvider FlagLevel = "provider"
+	FlagLevelModel    FlagLevel = "model"
+	FlagLevelRule     FlagLevel = "rule"
+)
+
 // FlagOption is one selectable value for a FlagTypeEnum spec.
 type FlagOption struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
 }
 
-// FlagSpec describes a single rule-level flag's metadata for the UI catalog.
-// Keys must match the JSON tag name on RuleFlags.
+// FlagSpec describes a single flag's metadata for the UI catalog. Keys must
+// match the JSON tag name on the struct backing each of the flag's levels
+// (RuleFlags for the rule level, ProviderFlags for provider/model).
 type FlagSpec struct {
 	Key         string        `json:"key"`
 	Label       string        `json:"label"`
 	Description string        `json:"description"`
 	Type        FlagValueType `json:"type"`
 	Category    FlagCategory  `json:"category"`
+	// Levels lists every level this flag can be set at, widest first. Every
+	// flag is settable at the rule level; a flag that also describes a
+	// property of the upstream adds the provider and model levels.
+	Levels []FlagLevel `json:"levels"`
 	// Placeholder is the hint text shown in string-type input fields.
 	Placeholder string `json:"placeholder,omitempty"`
 	// Options enumerates the selectable values for FlagTypeEnum flags.
@@ -83,6 +100,16 @@ type FlagSpec struct {
 	InheritanceMode string `json:"inheritance_mode,omitempty"`
 }
 
+// HasLevel reports whether the flag can be set at the given level.
+func (s FlagSpec) HasLevel(level FlagLevel) bool {
+	for _, l := range s.Levels {
+		if l == level {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultUserAgents returns a curated, non-exhaustive list of recommended
 // User-Agent strings for the custom_user_agent flag (both rule- and
 // scenario-level). The values mirror the vendor-pinned User-Agents the built-in
@@ -101,30 +128,46 @@ func DefaultUserAgents() []FlagOption {
 	}
 }
 
-// RuleFlagRegistry returns the catalog of supported rule flags. The order is
-// the recommended display order in the UI — categories are grouped implicitly
-// by adjacent entries sharing the same Category value.
+// supplyAndRuleLevels / ruleOnlyLevels spell out the two level sets the
+// registry actually uses. Functions rather than shared slices so no caller can
+// mutate every spec's Levels at once.
+func supplyAndRuleLevels() []FlagLevel {
+	return []FlagLevel{FlagLevelProvider, FlagLevelModel, FlagLevelRule}
+}
+
+func ruleOnlyLevels() []FlagLevel { return []FlagLevel{FlagLevelRule} }
+
+// RuleFlagRegistry returns the catalog of every supported flag — the single
+// definition each level's catalog is derived from (ProviderFlagRegistry
+// filters it by FlagLevelProvider). The order is the recommended display order
+// in the UI; categories are grouped implicitly by adjacent entries sharing the
+// same Category value.
+//
+// Descriptions are written level-neutrally: the surface the user is on already
+// says which level they are editing.
 func RuleFlagRegistry() []FlagSpec {
 	return []FlagSpec{
 		// ── Request (protocol-agnostic) ────────────────────────────────────
 		{
 			Key:         "extra_headers",
 			Label:       "Custom Headers",
-			Description: "Append custom HTTP headers to the outbound upstream request for this rule. Merged with the provider- and model-level Custom Headers; on a name conflict the rule value wins (provider < model < rule). Applies to API-key providers only — OAuth/vendor providers (Claude Code, Codex, Kimi, Gemini, Antigravity) keep their handshake headers and ignore this. Headers are sent as configured, including ones the gateway also sets (Authorization, User-Agent, …) — overriding those is your call and your responsibility.",
+			Description: "Append custom HTTP headers to the outbound upstream request. Typical uses are upstreams that gate on their own headers (OpenRouter's HTTP-Referer / X-Title, gateway tenant or audit headers). Headers set at more than one level merge per name, the narrower level winning (provider < model < rule). API-key providers only — OAuth/vendor providers (Claude Code, Codex, Kimi, Gemini, Antigravity) keep their handshake headers and ignore this. Headers are sent as configured, including ones the gateway also sets (Authorization, User-Agent, …) — overriding those is your call and your responsibility.",
 			Type:        FlagTypeHeaders,
 			Category:    FlagCategoryRequest,
+			Levels:      supplyAndRuleLevels(),
 		},
 		// ── Request (OpenAI) ───────────────────────────────────────────────
 		{
 			Key:             "custom_user_agent",
 			Label:           "Custom User-Agent",
-			Description:     "Override the outbound User-Agent header sent to the upstream provider, for generic OpenAI / Anthropic clients. Takes precedence over the inbound client's own User-Agent; vendor-specific clients (Claude Code OAuth, Codex, Kimi, Gemini, Antigravity) keep their dedicated handshake User-Agent and ignore this. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
+			Description:     "Override the outbound User-Agent header sent to the upstream provider, for generic OpenAI / Anthropic clients. Takes precedence over the inbound client's own User-Agent; vendor-specific clients (Claude Code OAuth, Codex, Kimi, Gemini, Antigravity) keep their dedicated handshake User-Agent and ignore this. Also settable scenario-wide; the narrower level wins when more than one sets it. Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
 			Type:            FlagTypeString,
 			Category:        FlagCategoryRequestOpenAI,
 			Placeholder:     "e.g. MyApp/1.0",
 			Suggestions:     DefaultUserAgents(),
 			Shared:          true,
 			InheritanceMode: "override",
+			Levels:          supplyAndRuleLevels(),
 		},
 		{
 			Key:         "openai_endpoint_override",
@@ -137,6 +180,7 @@ func RuleFlagRegistry() []FlagSpec {
 				{Value: "chat", Label: "Force Chat Completions"},
 				{Value: "responses", Label: "Force Responses API"},
 			},
+			Levels: ruleOnlyLevels(),
 		},
 		{
 			Key:         "use_max_completion_tokens",
@@ -144,6 +188,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "OpenAI only. Rewrite `max_tokens` → `max_completion_tokens` in the outgoing request. Required by the o1/o3/gpt-5 model family, which rejects the older field name.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequestOpenAI,
+			Levels:      supplyAndRuleLevels(),
 		},
 		{
 			Key:         "use_max_tokens",
@@ -151,6 +196,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "OpenAI only. Rewrite `max_completion_tokens` → `max_tokens` in the outgoing request. Use for older OpenAI-compatible providers that do not yet accept the newer field name.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequestOpenAI,
+			Levels:      supplyAndRuleLevels(),
 		},
 		{
 			Key:         "block_tools",
@@ -159,6 +205,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeString,
 			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. web_search,run_terminal_cmd",
+			Levels:      supplyAndRuleLevels(),
 		},
 		// ── Response ───────────────────────────────────────────────────────
 		{
@@ -169,6 +216,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:        FlagCategoryResponse,
 			Shared:          true,
 			InheritanceMode: "or",
+			Levels:          supplyAndRuleLevels(),
 		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
@@ -189,6 +237,7 @@ func RuleFlagRegistry() []FlagSpec {
 				{Value: "xhigh", Label: "XHigh (~24K tokens)"},
 				{Value: "max", Label: "Max (~32K tokens)"},
 			},
+			Levels: supplyAndRuleLevels(),
 		},
 		// ── Vision ─────────────────────────────────────────────────────────
 		{
@@ -197,6 +246,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Describe images via a vision-capable model so text-only downstream models can read them. Applies only to requests matched by this rule. Same effect as the scenario-level Vision Proxy but scoped to this rule; when both are configured, this rule-level service takes precedence.",
 			Type:        FlagTypeServiceRef,
 			Category:    FlagCategoryVision,
+			Levels:      ruleOnlyLevels(),
 		},
 		// ── Routing ────────────────────────────────────────────────────────
 		{
@@ -206,6 +256,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeInt,
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",
+			Levels:      ruleOnlyLevels(),
 		},
 		// ── App ────────────────────────────────────────────────────────────
 		{
@@ -214,6 +265,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor clients.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
+			Levels:      supplyAndRuleLevels(),
 		},
 		{
 			Key:         "cursor_compat_auto",
@@ -221,6 +273,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
+			Levels:      supplyAndRuleLevels(),
 		},
 		{
 			Key:             "claude_code_compat",
@@ -230,6 +283,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:        FlagCategoryApp,
 			Shared:          true,
 			InheritanceMode: "or",
+			Levels:          supplyAndRuleLevels(),
 		},
 		{
 			Key:         "clean_header",
@@ -237,6 +291,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Strip x-anthropic-billing-header blocks from system messages and neutralize steganographic markers before forwarding. Claude Code injects billing headers for its own billing; they must not leak to third-party providers. Additionally, Claude Code embeds geolocation markers in the system prompt date string (look-alike apostrophes in \"Today's\" and date separator substitution for China timezone users). This flag normalizes both. On by default for the built-in Claude Code rules, and automatically suppressed when the rule routes to a Claude OAuth provider (whose billing backend consumes the header). Turn off only for native Anthropic fidelity.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
+			Levels:      supplyAndRuleLevels(),
 		},
 		{
 			Key:         "claude_org_id",
@@ -249,6 +304,7 @@ func RuleFlagRegistry() []FlagSpec {
 				// Sentinel preset — see typ.ClaudeOrgIDAuto.
 				{Label: "Login organization (from OAuth)", Value: ClaudeOrgIDAuto},
 			},
+			Levels: ruleOnlyLevels(),
 		},
 		{
 			Key:         "context_1m",
@@ -256,6 +312,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Enable Anthropic's 1M token context window for supported models (Sonnet 4.6+, Opus 4.6+). Injects the context-1m-2025-08-07 beta flag into the upstream anthropic-beta header; the model name sent to the provider is unchanged. Only enable for models that support the 1M context window.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequestAnthropic,
+			Levels:      supplyAndRuleLevels(),
 		},
 	}
 }

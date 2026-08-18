@@ -150,17 +150,10 @@ func ResolveRuleFlagsWithScenario(
 		// migrate20260610), so there is nothing to inject here.
 	}
 
-	// Fold in the supply-side flags of the chosen provider and model. They sit
-	// at the lowest precedence (provider < model < rule), so this runs after
-	// the rule and scenario values are in place and only fills what they left
-	// unset — see typ.ApplyProviderFlags for the per-kind semantics. Doing it
-	// here rather than at each handler means every consumer of the resolved
-	// flags (transform chains, the outbound clients, the response path) picks
-	// supply-side configuration up for free.
-	//
-	// Cursor auto-detection re-runs afterwards: a provider- or model-level
-	// cursor_compat_auto has to fold into cursor_compat the same way a
-	// rule-level one does in ResolveRuleFlags.
+	// Fold in the chosen provider's and model's flags at the lowest precedence,
+	// so every consumer of the resolved set picks them up for free. Cursor
+	// auto-detection re-runs because a supply-level cursor_compat_auto has to
+	// fold into cursor_compat the way ResolveRuleFlags does for a rule-level one.
 	flags = typ.ApplyProviderFlags(flags, provider, model)
 	if flags.CursorCompatAuto && isCursorRequest(c) {
 		flags.CursorCompat = true

@@ -80,45 +80,55 @@ func TestProviderFlagRegistry_ExtraHeaders(t *testing.T) {
 	}
 }
 
-// TestProviderFlagRegistry_KeysExistInRuleRegistry guards the shared
-// vocabulary: the provider registry derives every spec but the description
-// from the rule spec of the same key, so a description entry naming a key the
-// rule registry does not have would be silently dropped.
-func TestProviderFlagRegistry_KeysExistInRuleRegistry(t *testing.T) {
-	ruleKeys := map[string]bool{}
+// TestProviderFlagRegistry_IsARuleRegistrySlice pins that the provider catalog
+// is derived, not re-declared: every spec is the FlagLevelProvider entry of the
+// same key in RuleFlagRegistry, unchanged apart from the cleared scenario axis.
+func TestProviderFlagRegistry_IsARuleRegistrySlice(t *testing.T) {
+	ruleSpecs := map[string]FlagSpec{}
+	want := 0
 	for _, spec := range RuleFlagRegistry() {
-		ruleKeys[spec.Key] = true
-	}
-	for _, entry := range providerFlagDescriptions {
-		if !ruleKeys[entry.Key] {
-			t.Errorf("provider flag %q has no rule spec to derive its control from", entry.Key)
+		ruleSpecs[spec.Key] = spec
+		if spec.HasLevel(FlagLevelProvider) {
+			want++
 		}
 	}
-	if got, want := len(ProviderFlagRegistry()), len(providerFlagDescriptions); got != want {
-		t.Errorf("ProviderFlagRegistry() returned %d specs, want %d", got, want)
+
+	specs := ProviderFlagRegistry()
+	if len(specs) != want {
+		t.Errorf("ProviderFlagRegistry() returned %d specs, want the %d provider-level rule specs", len(specs), want)
+	}
+	for _, spec := range specs {
+		rule, ok := ruleSpecs[spec.Key]
+		if !ok {
+			t.Errorf("flag %q is not in RuleFlagRegistry", spec.Key)
+			continue
+		}
+		// The scenario axis is a rule-side concept and must not leak through.
+		rule.Shared, rule.InheritanceMode = false, ""
+		if !reflect.DeepEqual(spec, rule) {
+			t.Errorf("flag %q diverges from its rule spec:\n got %+v\nwant %+v", spec.Key, spec, rule)
+		}
 	}
 }
 
-// TestProviderFlagRegistry_SharesRuleControlShape pins that the two surfaces
-// render the same control for the same key — only the wording differs.
-func TestProviderFlagRegistry_SharesRuleControlShape(t *testing.T) {
-	ruleSpecs := map[string]FlagSpec{}
+// TestFlagRegistry_LevelsAreDeclared pins that every spec declares its levels
+// and that the rule level is universal — a spec with no levels would vanish
+// from every catalog.
+func TestFlagRegistry_LevelsAreDeclared(t *testing.T) {
+	known := map[FlagLevel]bool{FlagLevelProvider: true, FlagLevelModel: true, FlagLevelRule: true}
 	for _, spec := range RuleFlagRegistry() {
-		ruleSpecs[spec.Key] = spec
-	}
-	for _, spec := range ProviderFlagRegistry() {
-		rule := ruleSpecs[spec.Key]
-		if spec.Type != rule.Type {
-			t.Errorf("flag %q type = %q, want the rule spec's %q", spec.Key, spec.Type, rule.Type)
+		if !spec.HasLevel(FlagLevelRule) {
+			t.Errorf("flag %q does not declare the rule level", spec.Key)
 		}
-		if spec.Label != rule.Label {
-			t.Errorf("flag %q label = %q, want the rule spec's %q", spec.Key, spec.Label, rule.Label)
+		// Provider and model share one storage struct, so a flag settable at
+		// one is settable at the other.
+		if spec.HasLevel(FlagLevelProvider) != spec.HasLevel(FlagLevelModel) {
+			t.Errorf("flag %q declares only one of the two supply levels: %v", spec.Key, spec.Levels)
 		}
-		if !reflect.DeepEqual(spec.Options, rule.Options) {
-			t.Errorf("flag %q options = %v, want the rule spec's %v", spec.Key, spec.Options, rule.Options)
-		}
-		if spec.Description == rule.Description {
-			t.Errorf("flag %q reuses the rule wording; provider flags need supply-side wording", spec.Key)
+		for _, level := range spec.Levels {
+			if !known[level] {
+				t.Errorf("flag %q declares unknown level %q", spec.Key, level)
+			}
 		}
 	}
 }
