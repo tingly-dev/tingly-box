@@ -46,3 +46,56 @@ func TestProviderDispatchMatchesBareHostnameWithoutScheme(t *testing.T) {
 
 	assert.Equal(t, "high", string(req.ReasoningEffort))
 }
+
+// TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor proves the
+// fix for a regression introduced when the ladder was extended to six levels
+// (#1524/#1528): a relay like opencode.ai/zen/go whose model name gives no
+// vendor hint (e.g. a codenamed model that isn't literally "deepseek") falls
+// through to applyDefaultTransform, which used to forward "minimal"/"xhigh"
+// verbatim — values only api.openai.com is confirmed to accept — causing the
+// downstream vendor to 400 on the unrecognized reasoning_effort enum member.
+func TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor(t *testing.T) {
+	tests := []struct {
+		ladderEffort string
+		want         string
+	}{
+		{"minimal", "low"},
+		{"low", "low"},
+		{"medium", "medium"},
+		{"high", "high"},
+		{"xhigh", "high"},
+		{"max", "high"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ladderEffort, func(t *testing.T) {
+			req := &openai.ChatCompletionNewParams{
+				Model: openai.ChatModel("gpt-5.6-luna"),
+			}
+
+			ApplyProviderTransforms(req, "https://opencode.ai/zen/go/v1", string(req.Model), &protocol.OpenAIConfig{
+				HasThinking:     true,
+				ReasoningEffort: openai.ReasoningEffort(tt.ladderEffort),
+			})
+
+			assert.Equal(t, tt.want, string(req.ReasoningEffort))
+		})
+	}
+}
+
+// TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI proves that
+// api.openai.com — the one host confirmed to accept the full six-level
+// ladder — still gets "minimal"/"xhigh" verbatim, unaffected by the
+// unverified-vendor collapse above.
+func TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("gpt-5.6"),
+	}
+
+	ApplyProviderTransforms(req, "https://api.openai.com/v1", string(req.Model), &protocol.OpenAIConfig{
+		HasThinking:     true,
+		ReasoningEffort: "xhigh",
+	})
+
+	assert.Equal(t, "xhigh", string(req.ReasoningEffort))
+}

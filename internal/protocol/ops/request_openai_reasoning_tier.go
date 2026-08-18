@@ -32,6 +32,23 @@ func lowHighMaxEffortTiers() reasoningEffortTierMap {
 	}
 }
 
+// genericEffortTiers is the safe fallback for any OpenAI-compatible vendor
+// not confirmed to accept the full six-level ladder (see
+// supportsExplicitPromptCache — the same allowlist gates both concerns,
+// since both are OpenAI's own gpt-5.6+ extensions). It restores the
+// low/medium/high range every OpenAI-compatible clone has historically
+// documented — the range this gateway sent exclusively before the ladder
+// was extended to six levels (#1524) — rather than forwarding "minimal" or
+// "xhigh" verbatim to a vendor that has never seen those values and may
+// 400 on the unrecognized enum member.
+func genericEffortTiers() reasoningEffortTierMap {
+	return reasoningEffortTierMap{
+		thinking.LevelMinimal: "low",
+		thinking.LevelXHigh:   "high",
+		thinking.LevelMax:     "high",
+	}
+}
+
 // applyReasoningEffortTier forwards the resolved thinking-effort signal as
 // reasoning_effort, collapsed through the given tier map. Earlier models in
 // the DeepSeek/Kimi family had no effort dial at all (thinking was an on/off
