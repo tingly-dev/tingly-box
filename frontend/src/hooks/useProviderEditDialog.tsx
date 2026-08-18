@@ -2,6 +2,7 @@ import OAuthDetailDialog from '@/components/OAuthDetailDialog';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog';
 import { isCloudAuthType } from '@/components/cloud/cloudCredentialSchema';
 import { api } from '@/services/api';
+import { apiToFlags, flagsToApi } from '@/components/rule-card/flagHelpers';
 import type { Provider } from '@/types/provider';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
 
@@ -51,6 +52,10 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
             proxy_url: fd.proxyUrl ?? '',
             api_base_openai: fd.apiBaseOpenAI ?? '',
             api_base_anthropic: fd.apiBaseAnthropic ?? '',
+            // Whole-object replace, mirroring the form's edit surface: the
+            // dialog seeded the stored flags, so an empty object here means
+            // the user cleared them (backend: non-null replaces wholesale).
+            flags: flagsToApi(fd.flags),
         };
     }, [providerFormData]);
 
@@ -95,6 +100,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                     noKeyRequired: provider.no_key_required || false,
                     proxyUrl: provider.proxy_url || '',
                     authType: provider.auth_type || 'api_key',
+                    flags: apiToFlags(provider.flags),
                 } as any);
                 setApiKeyDialogOpen(true);
             }

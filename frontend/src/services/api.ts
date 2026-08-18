@@ -416,6 +416,12 @@ export const api = {
         return controlApi((client, headers) => client.GET('/api/v1/rule/flags/registry', {headers}));
     },
 
+    // Catalog of provider/model-level flags (supply-side counterpart of the
+    // rule flag registry); drives the provider Plugins UI.
+    getProviderFlagRegistry: async (): Promise<any> => {
+        return controlApi((client, headers) => client.GET('/api/v2/provider/flags/registry', {headers}));
+    },
+
     // Imports providers from a base64/JSONL export bundle.
     importProvider: async (data: string, onProviderConflict: string = 'use'): Promise<any> => {
         try {

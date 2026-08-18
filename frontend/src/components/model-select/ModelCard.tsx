@@ -1,4 +1,5 @@
 import { CheckCircle } from '@/components/icons';
+import { useState } from 'react';
 import { Box, Card, CardContent, CircularProgress, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
@@ -8,6 +9,12 @@ import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
 import { ProbeDialog } from '../probe/ProbeDialog';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
+import {
+    canEditModelHeaders,
+    ModelHeadersBadge,
+    ModelHeadersPopover,
+    ModelHeadersTrigger,
+} from './ModelHeaders';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
@@ -35,6 +42,16 @@ export default function ModelCard({
     description,
 }: ModelCardProps) {
     const probe = useModelTestProbe();
+
+    // Per-model Custom Headers override (api_key providers only). Local state
+    // mirrors the last-saved value so the badge updates without a provider
+    // refetch; the save path itself re-reads the provider (see ModelHeaders).
+    const [headerOverride, setHeaderOverride] = useState<Record<string, string> | undefined>(
+        () => provider.model_flags?.[model]?.extra_headers,
+    );
+    const [headersAnchor, setHeadersAnchor] = useState<HTMLElement | null>(null);
+    const headersEditable = canEditModelHeaders(provider);
+    const overrideNames = Object.keys(headerOverride ?? {});
 
     const getCardStyles = () => {
         const baseStyles = {
@@ -182,14 +199,28 @@ export default function ModelCard({
                 )}
                 {!loading && (
                     <ControlBar>
+                        {headersEditable && <ModelHeadersTrigger onOpen={setHeadersAnchor} />}
                         <ModelTestTrigger onOpen={probe.openDialog} />
                     </ControlBar>
+                )}
+                {!loading && overrideNames.length > 0 && (
+                    <ModelHeadersBadge names={overrideNames} onOpen={setHeadersAnchor} />
                 )}
                 {!loading && probe.result && (
                     <ModelTestStatusBadge result={probe.result} onOpen={probe.openDialog} />
                 )}
             </CardContent>
         </Card>
+        {headersAnchor !== null && (
+            <ModelHeadersPopover
+                provider={provider}
+                model={model}
+                anchorEl={headersAnchor}
+                initial={headerOverride}
+                onClose={() => setHeadersAnchor(null)}
+                onSaved={setHeaderOverride}
+            />
+        )}
         <ProbeDialog
             open={probe.dialogOpen}
             onClose={probe.closeDialog}

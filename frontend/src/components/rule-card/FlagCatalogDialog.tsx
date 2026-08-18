@@ -40,6 +40,10 @@ export interface FlagCatalogDialogProps {
     loading?: boolean;
     /** Providers for service_ref flags (e.g. vision_proxy_service model picker). */
     providers?: Provider[];
+    /** Dialog title/subtitle — defaults to the rule-level wording; the provider
+     *  Plugins surface reuses this dialog with its own copy. */
+    title?: string;
+    subtitle?: string;
     onClose: () => void;
     onSave: (next: RuleFlags) => void;
 }
@@ -86,6 +90,8 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     registry,
     loading,
     providers,
+    title,
+    subtitle,
     onClose,
     onSave,
 }) => {
@@ -168,11 +174,11 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ pb: 1 }}>
-                Rule Plugins
+                {title ?? 'Rule Plugins'}
                 <Typography variant="caption" component="div" sx={{
                     color: "text.secondary"
                 }}>
-                    Plugin flags applied at the rule level.
+                    {subtitle ?? 'Plugin flags applied at the rule level.'}
                 </Typography>
             </DialogTitle>
             {/* Active flags strip — empty state stays hidden to save vertical space. */}

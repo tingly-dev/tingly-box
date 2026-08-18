@@ -30,6 +30,8 @@ import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
 import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
 import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
 import ProviderIcon from '@/components/ProviderIcon';
+import ProviderPluginsBlock from '@/components/provider-form-dialog/ProviderPluginsBlock';
+import type {RuleFlags} from '@/components/RoutingGraphTypes';
 import RegionBadge from '@/components/RegionBadge';
 import ProviderExportButton from '@/components/ProviderExportButton';
 
@@ -51,6 +53,8 @@ export interface EnhancedProviderFormData {
     /** If set, prefer this exact provider ID when resolving the template.
      *  Avoids mismatches when multiple providers share the same base URL. */
     selectedProviderId?: string;
+    /** Provider-level flags (camelCase form, see flagHelpers.apiToFlags). */
+    flags?: RuleFlags;
 }
 
 interface PresetProviderFormDialogProps {
@@ -713,10 +717,15 @@ const ProviderFormDialog = ({
                                     {t('providerDialog.advanced.title')}
                                 </Typography>
                             </AccordionSummary>
-                            {/* Empty for now — reserved for future advanced options
-                                (enabled toggle moved to the dialog title). */}
                             <AccordionDetails sx={{px: 0, pb: 1}}>
-                                <Stack spacing={2.5} />
+                                <Stack spacing={2.5}>
+                                    {mode === 'edit' && (
+                                        <ProviderPluginsBlock
+                                            flags={data.flags}
+                                            onChange={(next) => onChange('flags', next)}
+                                        />
+                                    )}
+                                </Stack>
                             </AccordionDetails>
                         </Accordion>
                     </Stack>

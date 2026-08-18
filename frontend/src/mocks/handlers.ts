@@ -2136,11 +2136,19 @@ export const handlers = [
     // ============================================
     // Rule Flag Registry
     // ============================================
+    http.get('/api/v2/provider/flags/registry', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { key: 'extra_headers', label: 'Custom Headers', description: 'Append custom HTTP headers to outbound requests to this provider. Model-level headers win over provider-level on a name conflict; a rule-level Custom Headers flag wins over both. API-key providers only.', type: 'headers', category: 'request' },
+            ],
+        });
+    }),
     http.get('/api/v1/rule/flags/registry', () => {
         return HttpResponse.json({
             success: true,
             data: [
-                { key: 'extra_headers', label: 'Custom Headers', description: 'Append custom HTTP headers to the outbound upstream request for this rule. API-key providers only.', type: 'headers', category: 'request' },
+                { key: 'extra_headers', label: 'Custom Headers', description: 'Append custom HTTP headers to the outbound upstream request for this rule. Merged with the provider- and model-level Custom Headers; the rule value wins on a name conflict. API-key providers only.', type: 'headers', category: 'request' },
                 { key: 'custom_user_agent', label: 'Custom User-Agent', description: 'Override the outbound User-Agent header.', type: 'string', category: 'request_openai', placeholder: 'e.g. MyApp/1.0', suggestions: [{ value: 'claude-cli/2.1.86 (external, cli)', label: 'Claude Code (CLI)' }], shared: true, inheritance_mode: 'override' },
                 { key: 'openai_endpoint_override', label: 'OpenAI endpoint override', description: 'Force Chat or Responses endpoint.', type: 'enum', category: 'request_openai', options: [{ value: 'auto', label: 'Auto' }, { value: 'chat', label: 'Force Chat' }, { value: 'responses', label: 'Force Responses' }] },
                 { key: 'use_max_completion_tokens', label: 'OpenAI: Use max_completion_tokens', description: 'Rewrite max_tokens to max_completion_tokens.', type: 'bool', category: 'request_openai' },
