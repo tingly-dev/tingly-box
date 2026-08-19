@@ -15,6 +15,7 @@ type APITokenRecord struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:id"`
 	TokenID      string     `gorm:"uniqueIndex;column:token_id;not null;size:64"` // Token identifier (jti)
 	UserID       string     `gorm:"index:idx_api_token_user_id;not null;column:user_id;size:64"`
+	TeamID       string     `gorm:"index:idx_api_token_team_id;not null;default:'00000000-0000-0000-0000-000000000001';column:team_id;size:36"`
 	DisplayName  string     `gorm:"column:display_name;size:256"`
 	Enabled      bool       `gorm:"column:enabled;default:true"`
 	ExpiresAt    *time.Time `gorm:"column:expires_at;index"`
@@ -44,8 +45,9 @@ const defaultLastUsedDebounce = 10 * time.Minute
 // api_tokens table by TokenID the same way ProviderStore mirrors providers.
 type APITokenStore struct {
 	storeConn
-	mu    sync.RWMutex
-	cache map[string]*APITokenRecord
+	mu        sync.RWMutex
+	cache     map[string]*APITokenRecord
+	teamStore *TeamStore
 
 	// lastUsedDebounce is the minimum interval between persisted
 	// last_used_at writes for the same token; see UpdateLastUsed.
@@ -59,12 +61,23 @@ func NewAPITokenStore(baseDir string) (*APITokenStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("api token store: %w", err)
 	}
-	return newAPITokenStore(ownedConn(db))
+	conn := ownedConn(db)
+	teamStore, err := newTeamStore(conn)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	store, err := newAPITokenStore(conn, teamStore)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 // newAPITokenStore finishes setting up an APITokenStore (migrate + cache
 // load) over an already-open connection -- see newProviderStore.
-func newAPITokenStore(conn storeConn) (*APITokenStore, error) {
+func newAPITokenStore(conn storeConn, teamStore *TeamStore) (*APITokenStore, error) {
 	if err := conn.db.AutoMigrate(&APITokenRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate API token database: %w", err)
 	}
@@ -77,6 +90,7 @@ func newAPITokenStore(conn storeConn) (*APITokenStore, error) {
 	store := &APITokenStore{
 		storeConn:        conn,
 		cache:            make(map[string]*APITokenRecord),
+		teamStore:        teamStore,
 		lastUsedDebounce: defaultLastUsedDebounce,
 	}
 	if err := store.loadCache(); err != nil {
@@ -128,16 +142,24 @@ func ensureAPITokenSchema(db *gorm.DB) error {
 			db.Exec(`DROP INDEX IF EXISTS idx_api_token_user_uuid`)
 		}
 	}
+	// Existing sharing keys predate teams. They all represented the one legacy
+	// team, so bind empty rows to the stable default team without rotating keys.
+	if err := db.Model(&APITokenRecord{}).
+		Where("team_id IS NULL OR team_id = ''").
+		Update("team_id", DefaultTeamID).Error; err != nil {
+		return fmt.Errorf("failed to backfill API token team IDs: %w", err)
+	}
 	return nil
 }
 
 // createTokenRecord is a private helper that creates a token record with the given parameters.
 // The caller must hold s.mu.Lock() before calling this function.
-func (s *APITokenStore) createTokenRecord(userID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+func (s *APITokenStore) createTokenRecord(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
 	now := time.Now()
 	record := &APITokenRecord{
 		TokenID:     tokenID,
 		UserID:      userID,
+		TeamID:      teamID,
 		DisplayName: displayName,
 		Enabled:     true,
 		ExpiresAt:   expiresAt,
@@ -156,17 +178,35 @@ func (s *APITokenStore) createTokenRecord(userID, tokenID, displayName, createdB
 
 // CreateTokenWithTokenID creates a new API token record with a specific token ID
 func (s *APITokenStore) CreateTokenWithTokenID(userID, tokenID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
+	return s.CreateTokenForTeam(userID, tokenID, DefaultTeamID, displayName, createdBy, expiresAt)
+}
+
+// CreateTokenForTeam creates a sharing key bound to exactly one enabled team.
+func (s *APITokenStore) CreateTokenForTeam(userID, tokenID, teamID, displayName, createdBy string, expiresAt *time.Time) (*APITokenRecord, error) {
 	if userID == "" {
 		return nil, errors.New("user ID cannot be empty")
 	}
 	if tokenID == "" {
 		return nil, errors.New("token ID cannot be empty")
 	}
+	if teamID == "" {
+		return nil, errors.New("team ID cannot be empty")
+	}
+	if s.teamStore == nil {
+		return nil, errors.New("team store is not initialized")
+	}
+	team, err := s.teamStore.Get(teamID)
+	if err != nil {
+		return nil, err
+	}
+	if !team.Enabled {
+		return nil, fmt.Errorf("team '%s' is disabled", teamID)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.createTokenRecord(userID, tokenID, displayName, createdBy, expiresAt)
+	return s.createTokenRecord(userID, tokenID, teamID, displayName, createdBy, expiresAt)
 }
 
 // ValidateToken validates a token ID and returns the associated token record
@@ -182,9 +222,49 @@ func (s *APITokenStore) ValidateToken(tokenID string) (*APITokenRecord, error) {
 	if !ok || !record.Enabled {
 		return nil, fmt.Errorf("token not found or disabled")
 	}
+	if s.teamStore == nil {
+		return nil, errors.New("team store is not initialized")
+	}
+	team, err := s.teamStore.Get(record.TeamID)
+	if err != nil || !team.Enabled {
+		return nil, fmt.Errorf("token team not found or disabled")
+	}
 
 	clone := *record
 	return &clone, nil
+}
+
+// MoveTokenToTeam rebinds a sharing key without changing its raw token. The
+// cache is updated before the method returns, so the next request observes the
+// new authorization scope immediately.
+func (s *APITokenStore) MoveTokenToTeam(tokenID, teamID string) error {
+	if tokenID == "" || teamID == "" {
+		return errors.New("token ID and team ID are required")
+	}
+	if s.teamStore == nil {
+		return errors.New("team store is not initialized")
+	}
+	team, err := s.teamStore.Get(teamID)
+	if err != nil {
+		return err
+	}
+	if !team.Enabled {
+		return fmt.Errorf("team '%s' is disabled", teamID)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := s.db.Model(&APITokenRecord{}).Where("token_id = ?", tokenID).Update("team_id", teamID)
+	if result.Error != nil {
+		return fmt.Errorf("failed to move token: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("token with ID '%s' not found", tokenID)
+	}
+	if record, ok := s.cache[tokenID]; ok {
+		record.TeamID = teamID
+	}
+	return nil
 }
 
 // RevokeToken revokes a token by setting enabled to false

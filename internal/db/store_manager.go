@@ -34,6 +34,7 @@ type storeSet struct {
 	ruleStore          *RuleStore
 	imbotSettingsStore *ImBotSettingsStore
 	modelStore         *ModelStore
+	teamStore          *TeamStore
 	apiTokenStore      *APITokenStore
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
@@ -51,6 +52,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"rule":           s.ruleStore != nil,
 		"imbotSettings":  s.imbotSettingsStore != nil,
 		"model":          s.modelStore != nil,
+		"team":           s.teamStore != nil,
 		"apiToken":       s.apiTokenStore != nil,
 		"remoteChats":    s.remoteChatStore != nil,
 		"remoteSessions": s.remoteSessionStore != nil,
@@ -159,7 +161,10 @@ func (sm *StoreManager) initStores() error {
 	if sm.modelStore, err = newModelStore(conn); err != nil {
 		errs = append(errs, fmt.Errorf("model store: %w", err))
 	}
-	if sm.apiTokenStore, err = newAPITokenStore(conn); err != nil {
+	if sm.teamStore, err = newTeamStore(conn); err != nil {
+		errs = append(errs, fmt.Errorf("team store: %w", err))
+	}
+	if sm.apiTokenStore, err = newAPITokenStore(conn, sm.teamStore); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
 	}
 	if err = sm.initRemoteStores(); err != nil {
@@ -281,6 +286,14 @@ func (sm *StoreManager) Model() *ModelStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.modelStore
+}
+
+// Team returns the TeamStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) Team() *TeamStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.teamStore
 }
 
 // APIToken returns the APITokenStore (thread-safe).

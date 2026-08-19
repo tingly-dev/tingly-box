@@ -113,6 +113,7 @@ func TestStoreManager_Accessors(t *testing.T) {
 		{"Provider", func() interface{} { return sm.Provider() }},
 		{"ImBotSettings", func() interface{} { return sm.ImBotSettings() }},
 		{"Model", func() interface{} { return sm.Model() }},
+		{"Team", func() interface{} { return sm.Team() }},
 		{"APIToken", func() interface{} { return sm.APIToken() }},
 	}
 
@@ -155,6 +156,9 @@ func TestStoreManager_Close(t *testing.T) {
 	}
 	if sm.Model() != nil {
 		t.Error("Model() should return nil after Close()")
+	}
+	if sm.Team() != nil {
+		t.Error("Team() should return nil after Close()")
 	}
 	if sm.APIToken() != nil {
 		t.Error("APIToken() should return nil after Close()")
@@ -202,7 +206,7 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 
 	expectedStores := []string{
 		"stats", "usage", "provider",
-		"imbotSettings", "model", "apiToken",
+		"imbotSettings", "model", "team", "apiToken",
 		"remoteChats", "remoteSessions", "botAccess",
 	}
 	for _, name := range expectedStores {
