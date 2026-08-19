@@ -2375,6 +2375,7 @@ export const handlers = [
         const url = new URL(request.url)
         const groupBy = url.searchParams.get('group_by')
         const userID = url.searchParams.get('user_id')
+        const modelParam = url.searchParams.get('model')
         const userUsage = [
             { key: 'admin', user_id: 'admin', request_count: 2310, total_tokens: 11200000, total_input_tokens: 6180000, total_output_tokens: 4220000, cache_read_tokens: 800000, cache_write_tokens: 96000, error_count: 9, error_rate: 0.0039 },
             { key: 'user-platform', user_id: 'user-platform', request_count: 1884, total_tokens: 8460000, total_input_tokens: 4620000, total_output_tokens: 3140000, cache_read_tokens: 700000, cache_write_tokens: 84000, error_count: 13, error_rate: 0.0069 },
@@ -2383,7 +2384,37 @@ export const handlers = [
             { key: 'user-support', user_id: 'user-support', request_count: 226, total_tokens: 930000, total_input_tokens: 540000, total_output_tokens: 370000, cache_read_tokens: 20000, cache_write_tokens: 2400, error_count: 1, error_rate: 0.0044 },
         ]
         if (groupBy === 'user') {
-            return HttpResponse.json({ success: true, data: userUsage })
+            if (!modelParam) {
+                return HttpResponse.json({ success: true, data: userUsage })
+            }
+            // "Which accounts used this model" — deterministic per (model, user)
+            // weight so different models return different, sortable account
+            // mixes instead of always the same 5 rows scaled uniformly. Accounts
+            // below the weight floor are dropped, so not every model is used by
+            // every account.
+            const hash = (input: string) => {
+                let h = 0
+                for (let i = 0; i < input.length; i++) h = (h * 31 + input.charCodeAt(i)) >>> 0
+                return h
+            }
+            const scaledByModel = userUsage
+                .map((account) => {
+                    const weight = (hash(`${modelParam}:${account.user_id}`) % 100) / 100
+                    const factor = weight > 0.15 ? weight : 0
+                    const scale = (value: number) => Math.round(value * factor)
+                    return {
+                        ...account,
+                        request_count: scale(account.request_count),
+                        total_tokens: scale(account.total_tokens),
+                        total_input_tokens: scale(account.total_input_tokens),
+                        total_output_tokens: scale(account.total_output_tokens),
+                        cache_read_tokens: scale(account.cache_read_tokens),
+                        cache_write_tokens: scale(account.cache_write_tokens),
+                        error_count: scale(account.error_count),
+                    }
+                })
+                .filter((account) => account.request_count > 0)
+            return HttpResponse.json({ success: true, data: scaledByModel })
         }
 
         const userScale = userID
