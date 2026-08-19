@@ -57,11 +57,11 @@ func BenchmarkModelAuthMiddleware_APIToken(b *testing.B) {
 
 	am := NewAuthMiddleware(cfg, nil, nil, store)
 	r := gin.New()
-	r.POST("/v1/chat/completions", am.ModelAuthMiddleware(), func(c *gin.Context) {
+	r.POST("/tingly/:scenario/v1/chat/completions", am.ModelAuthMiddleware(), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req := httptest.NewRequest(http.MethodPost, "/tingly/team/v1/chat/completions", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	b.ReportAllocs()

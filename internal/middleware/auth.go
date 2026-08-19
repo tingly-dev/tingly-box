@@ -327,7 +327,18 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 				// This is an API token, validate it directly from database
 				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
 				if validateErr == nil && tokenRecord != nil {
+					// A sharing key is a team-scoped model credential, not a
+					// second global model token. Authorize the concrete Gin route
+					// template as well as the scenario parameter so new model
+					// surfaces fail closed and a client cannot select a suffix
+					// such as team:<other-scope>.
+					if !sharingKeyCanAccessModelSurface(c) {
+						abortWithError(c, http.StatusForbidden, "Sharing key is restricted to the team model endpoint", "forbidden_error")
+						return
+					}
+
 					// Token is valid and enabled
+					c.Set(constant.CtxKeyAuthKind, constant.AuthKindSharingKey)
 					c.Set(constant.CtxKeyUserID, tokenRecord.UserID)
 
 					// Update last used asynchronously
@@ -357,6 +368,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 		if token == configToken || xApiKey == configToken {
 			// Set UserID to default admin for usage tracking consistency
 			// This matches the migrated user_id values in usage_records
+			c.Set(constant.CtxKeyAuthKind, constant.AuthKindGlobalModelToken)
 			c.Set(constant.CtxKeyUserID, db.DefaultAdminUserID)
 			contextJWT := strings.TrimSpace(c.GetHeader("X-TBE-Context-JWT"))
 			if contextJWT != "" {
@@ -390,4 +402,15 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		abortWithError(c, http.StatusUnauthorized, "Invalid model authorization token.", "invalid_request_error")
 	}
+}
+
+// sharingKeyCanAccessModelSurface is the sharing-principal authorization
+// boundary. Authentication middleware is reused by both /tingly/:scenario and
+// /virtual/* routes, so checking only for a valid token would turn every
+// sharing key into a global model credential. Match the registered route shape
+// (not the raw URL) and require the bare team scenario; both /tingly/team and
+// /tingly/team/v1 endpoints use this template prefix.
+func sharingKeyCanAccessModelSurface(c *gin.Context) bool {
+	return c.Param("scenario") == "team" &&
+		strings.HasPrefix(c.FullPath(), "/tingly/:scenario")
 }
