@@ -208,12 +208,8 @@ func flattenRichContent(parts []interface{}) (string, bool) {
 // providers that accept the Anthropic-style extension.
 //
 // nativeReasoningEffort mirrors supportsExplicitPromptCache: only a
-// confirmed-OpenAI host gets the full six-level ladder verbatim. Every other
-// OpenAI-compatible vendor reached through here — including relays like
-// opencode.ai/zen/go whose model name doesn't hint at a specific
-// vendor-transform case above — gets the effort collapsed through
-// genericEffortTiers instead of "minimal"/"xhigh" sent raw to a vendor that
-// has never seen those enum members.
+// confirmed-OpenAI host gets the six-level ladder verbatim; everything else
+// collapses through genericEffortTiers (see .design/model-data.md).
 func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig, nativeReasoningEffort bool) *openai.ChatCompletionNewParams {
 	if config.HasThinking && config.ReasoningEffort != "" {
 		if nativeReasoningEffort {

@@ -53,6 +53,11 @@
   (adaptive / enabled+budget / output_config.effort)做 vendor 阶段互转与钳制。
 - effort↔budget 的统一阶梯在 `internal/protocol/thinking`(见 `.design/rule-flags.md`
   的 `thinking_effort` 行),catalog 只负责"模型支持哪些方言/档位"。
+- OpenAI 兼容出口没有按模型的 catalog,粒度是按 provider host 白名单
+  (`ops.supportsExplicitPromptCache`)。不在白名单上的 host 一律保守收窄:
+  reasoning_effort 收窄到 low/medium/high(`ops.genericEffortTiers`),
+  prompt-cache 字段整体剥离。与上面 Claude 兜底同一条原则的另一份实现——
+  "未验证的能力,一律折叠回已验证的公共子集",不是两套设计。
 
 ## 注意
 

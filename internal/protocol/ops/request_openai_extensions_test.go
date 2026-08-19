@@ -47,13 +47,9 @@ func TestProviderDispatchMatchesBareHostnameWithoutScheme(t *testing.T) {
 	assert.Equal(t, "high", string(req.ReasoningEffort))
 }
 
-// TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor proves the
-// fix for a regression introduced when the ladder was extended to six levels
-// (#1524/#1528): a relay like opencode.ai/zen/go whose model name gives no
-// vendor hint (e.g. a codenamed model that isn't literally "deepseek") falls
-// through to applyDefaultTransform, which used to forward "minimal"/"xhigh"
-// verbatim — values only api.openai.com is confirmed to accept — causing the
-// downstream vendor to 400 on the unrecognized reasoning_effort enum member.
+// TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor proves an
+// unverified relay (e.g. opencode.ai/zen/go with a codenamed model that
+// doesn't hint "deepseek") never receives "minimal"/"xhigh"/"max" verbatim.
 func TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor(t *testing.T) {
 	tests := []struct {
 		ladderEffort string
@@ -83,10 +79,8 @@ func TestDefaultTransformCollapsesExtendedEffortForUnverifiedVendor(t *testing.T
 	}
 }
 
-// TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI proves that
-// api.openai.com — the one host confirmed to accept the full six-level
-// ladder — still gets "minimal"/"xhigh" verbatim, unaffected by the
-// unverified-vendor collapse above.
+// TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI proves
+// api.openai.com is unaffected by the unverified-vendor collapse above.
 func TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel("gpt-5.6"),

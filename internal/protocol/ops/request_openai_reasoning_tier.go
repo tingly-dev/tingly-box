@@ -33,14 +33,11 @@ func lowHighMaxEffortTiers() reasoningEffortTierMap {
 }
 
 // genericEffortTiers is the safe fallback for any OpenAI-compatible vendor
-// not confirmed to accept the full six-level ladder (see
-// supportsExplicitPromptCache — the same allowlist gates both concerns,
-// since both are OpenAI's own gpt-5.6+ extensions). It restores the
-// low/medium/high range every OpenAI-compatible clone has historically
-// documented — the range this gateway sent exclusively before the ladder
-// was extended to six levels (#1524) — rather than forwarding "minimal" or
-// "xhigh" verbatim to a vendor that has never seen those values and may
-// 400 on the unrecognized enum member.
+// not confirmed (via supportsExplicitPromptCache) to accept the full
+// six-level ladder: collapses onto the low/medium/high range every
+// OpenAI-compatible clone has historically documented, rather than
+// forwarding "minimal"/"xhigh"/"max" verbatim to a vendor that may 400 on
+// the unrecognized enum member. See .design/model-data.md.
 func genericEffortTiers() reasoningEffortTierMap {
 	return reasoningEffortTierMap{
 		thinking.LevelMinimal: "low",
