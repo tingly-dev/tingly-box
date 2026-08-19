@@ -13,6 +13,43 @@ ever added — but Claude Code is the only implemented backend, and the message
 types consumers see are Claude's. AgentBoot does not embed the Python
 `claude-agent-sdk` and does not use Claude Desktop as an execution backend.
 
+## Public API
+
+`process`, `protocol`, `history`, and `claude/session` are execution/storage
+plumbing with no consumer outside this module today — grep the consumer tree
+before assuming otherwise if that ever needs revisiting. That boundary is
+kept by convention and code review, not by the compiler: nothing currently
+needs the stronger guarantee a Go `internal/` package would give, and this
+module is only ever consumed from within the same repo via `go.work`, not
+published externally. Everything below is what tingly-box actually imports;
+treat this as the change-review checklist, not an aspiration.
+
+- **Production entry point** — `AgentService` (`NewService`, `Execute`, `Run`,
+  `ListProjects`, `ListSessions`, `GetSession`, `GetSessionSummary`),
+  `RunRequest`, `ExecutionOptions`, `ExecutionHandle`, the `StreamEvent`
+  variants (`MessageEvent`, `ApprovalRequestEvent`, `AskRequestEvent`,
+  `ErrorEvent`), `ControlResponse` (`ApprovalResponse`, `AskResponse`),
+  `Prompter`, `Result`, `AgentType`, `OutputFormat`, `Config`.
+- **Claude message model** — `claude.Message` and its concrete types
+  (`AssistantMessage`, `SystemMessage`, `UserMessage`, `ToolUseMessage`,
+  `ToolResultMessage`, `StreamEventMessage`, `ResultMessage`), their
+  `SDK*`/`SystemSubtype*`/`ContentBlockType*` constants, `StreamEvent`,
+  `TextDelta`, `InputJSONDelta`, content-block types and
+  `UnmarshalContentBlock`. `MessageEvent.Raw` carries these concrete types by
+  design (§8 of `.design/agentboot-refactor.md`) — this is intentionally not
+  provider-neutral, and consumers are expected to type-switch on it.
+- **Claude production config** — `claude.Config`, `claude.PermissionMode` +
+  its constants, `IsValidPermissionMode`, `claude.NewService`,
+  `claude.WithProjectsDir`, the `claude.ContextKey*` execution-context keys.
+- **Test-harness seam** — `claude.NewAgentWithFactory` + `claude.Driver` /
+  `claude.Transport` (constructor types) + `claude/fixture` (scripted CLI
+  output). This is how external tests substitute a fake Claude CLI process;
+  it is a real, supported extension point, not incidental exposure.
+
+Changing or removing anything in this list is a breaking change for
+tingly-box and should be reviewed as one. Anything reachable only through
+`internal/` can be refactored freely.
+
 ## Features
 
 - **Unified Agent interface** — one `Execute` entry point for every agent type.
@@ -245,10 +282,9 @@ agentboot/
     ├── accumulator.go    # Per-message accumulation
     ├── message.go        # Claude wire message types
     ├── content.go        # Content block decoding
-    ├── tool_renderer.go  # Tool-use rendering
-    ├── formatter.go      # Output formatting helpers
     ├── prompt_builder.go # Prompt assembly
     ├── session/          # Claude-specific session store (~/.claude/projects)
+    ├── fixture/          # Scripted CLI output for the test-harness seam
     └── examples/session/ # Session query example
 ```
 

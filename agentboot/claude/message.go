@@ -64,27 +64,29 @@ func (m *SystemMessage) GetRawData() map[string]interface{} {
 	return marshalToMap(m)
 }
 
-// retryAttempt returns the retry attempt number for an api_retry/rate_limit
+// RetryAttempt returns the retry attempt number for an api_retry/rate_limit
 // notice, checking the typed field first and then Raw under the spellings the
-// CLI has used (snake_case and camelCase).
-func (m *SystemMessage) retryAttempt() int {
+// CLI has used (snake_case and camelCase). Exported for rendering consumers
+// outside this package (e.g. IM presentation) that need the retry notice
+// data without re-implementing the CLI-version-spelling fallback.
+func (m *SystemMessage) RetryAttempt() int {
 	if m.Attempt > 0 {
 		return m.Attempt
 	}
 	return intFromMap(m.Raw, "attempt", "retry", "retries", "retryCount", "retry_count")
 }
 
-// retryDelayMS returns the delay before the next attempt, in milliseconds.
-func (m *SystemMessage) retryDelayMS() int64 {
+// RetryDelayMS returns the delay before the next attempt, in milliseconds.
+func (m *SystemMessage) RetryDelayMS() int64 {
 	if m.DelayMS > 0 {
 		return m.DelayMS
 	}
 	return int64(intFromMap(m.Raw, "delay_ms", "delayMs", "delayMS", "retry_after_ms", "retryAfterMs"))
 }
 
-// retryReason returns a human-readable reason for the retry, if the CLI
+// RetryReason returns a human-readable reason for the retry, if the CLI
 // included one.
-func (m *SystemMessage) retryReason() string {
+func (m *SystemMessage) RetryReason() string {
 	if m.Error != "" {
 		return m.Error
 	}

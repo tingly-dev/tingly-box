@@ -39,9 +39,9 @@ func TestMessageAccumulator_APIRetryPreservesRaw(t *testing.T) {
 	assert.Contains(t, data, "delayMs")
 
 	// Accessors resolve both typed and Raw-only spellings.
-	assert.Equal(t, 2, sm.retryAttempt())
-	assert.Equal(t, int64(1200), sm.retryDelayMS())
-	assert.Equal(t, "Overloaded", sm.retryReason())
+	assert.Equal(t, 2, sm.RetryAttempt())
+	assert.Equal(t, int64(1200), sm.RetryDelayMS())
+	assert.Equal(t, "Overloaded", sm.RetryReason())
 }
 
 // TestMessageAccumulator tests the message accumulator
