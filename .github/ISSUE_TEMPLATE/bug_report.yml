@@ -53,8 +53,8 @@ body:
     id: scenario
     attributes:
       label: Scenario
-      description: Describe the request context when the bug occurred, and what you expected vs. what actually happened. Fill in the keys that apply.
-      placeholder: |
+      description: The request context when the bug occurred. Fill in the keys that apply and delete the rest.
+      value: |
         - Agent / Client: e.g. Claude Code, Codex CLI, opencode, Gemini CLI, other apps
         - Source Protocol: e.g. anthropic / openai / openai_responses / google (if protocol conversion is involved)
         - Provider: e.g. Anthropic, OpenAI, Google AI Studio, OpenRouter, custom endpoint

@@ -53,9 +53,13 @@ body:
     id: scenario
     attributes:
       label: Scenario
-      description: Describe the use case or scenario that motivates this feature request. Include the context (agent/client, provider, model) if it's relevant.
-      placeholder: |
-        When I do X (agent: ..., provider: ..., model: ...), I'd like to be able to Y because...
+      description: Describe the use case that motivates this feature request. Include the context keys below if they're relevant, and delete them if not.
+      value: |
+        - Agent / Client:
+        - Provider:
+        - Model:
+
+        When I ..., I'd like to be able to ... because ...
     validations:
       required: true
 
