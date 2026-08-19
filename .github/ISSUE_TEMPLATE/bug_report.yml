@@ -34,9 +34,17 @@ body:
       label: Category
       description: Which area does this bug affect?
       options:
-        - Protocol
-        - UI
-        - Remote Control
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
         - Other
     validations:
       required: true
@@ -45,9 +53,15 @@ body:
     id: scenario
     attributes:
       label: Scenario
-      description: Describe the scenario in which the bug occurs — what you were doing and what you expected to happen
+      description: Describe the request context when the bug occurred, and what you expected vs. what actually happened. Fill in the keys that apply.
       placeholder: |
-        I was doing X with model Y when...
+        - Agent / Client: e.g. Claude Code, Codex CLI, opencode, Gemini CLI, other apps
+        - Source Protocol: e.g. anthropic / openai / openai_responses / google (if protocol conversion is involved)
+        - Provider: e.g. Anthropic, OpenAI, Google AI Studio, OpenRouter, custom endpoint
+        - Model: e.g. claude-sonnet-4-5, gpt-5, gemini-2.5-pro
+        - Request Specifics: e.g. streaming / non-streaming, tool calls, image input, prompt cache, MCP
+        - Error / Symptom: e.g. upstream returns 400 as soon as a message contains an image
+
         Expected: ...
         Actual: ...
     validations:

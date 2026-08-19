@@ -34,9 +34,17 @@ body:
       label: Category
       description: Which area does this feature relate to?
       options:
-        - Protocol
-        - UI
-        - Remote Control
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
         - Other
     validations:
       required: true
@@ -45,9 +53,9 @@ body:
     id: scenario
     attributes:
       label: Scenario
-      description: Describe the use case or scenario that motivates this feature request
+      description: Describe the use case or scenario that motivates this feature request. Include the context (agent/client, provider, model) if it's relevant.
       placeholder: |
-        When I do X, I'd like to be able to Y because...
+        When I do X (agent: ..., provider: ..., model: ...), I'd like to be able to Y because...
     validations:
       required: true
 

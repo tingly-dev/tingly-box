@@ -27,13 +27,17 @@ body:
       label: Category
       description: Which area does this proposal primarily affect?
       options:
-        - Protocol
-        - UI / UX / I18N
-        - Remote Control
-        - Load Balancing
-        - Smart Routing
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
         - Auth / OAuth
-        - Observability
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
         - Other
     validations:
       required: true
