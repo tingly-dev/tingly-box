@@ -37,10 +37,16 @@ func lowHighMaxEffortTiers() reasoningEffortTierMap {
 // six-level ladder: collapses onto the low/medium/high range every
 // OpenAI-compatible clone has historically documented, rather than
 // forwarding "minimal"/"xhigh"/"max" verbatim to a vendor that may 400 on
-// the unrecognized enum member. See .design/model-data.md.
+// the unrecognized enum member. All six levels are listed explicitly, even
+// where the value is unchanged, so the map doesn't rely on
+// applyReasoningEffortTier's passthrough-on-miss behavior to be complete.
+// See .design/model-data.md.
 func genericEffortTiers() reasoningEffortTierMap {
 	return reasoningEffortTierMap{
 		thinking.LevelMinimal: "low",
+		thinking.LevelLow:     "low",
+		thinking.LevelMedium:  "medium",
+		thinking.LevelHigh:    "high",
 		thinking.LevelXHigh:   "high",
 		thinking.LevelMax:     "high",
 	}
