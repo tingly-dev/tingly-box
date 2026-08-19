@@ -2376,6 +2376,7 @@ export const handlers = [
         const groupBy = url.searchParams.get('group_by')
         const userID = url.searchParams.get('user_id')
         const modelParam = url.searchParams.get('model')
+        const providerParam = url.searchParams.get('provider')
         const userUsage = [
             { key: 'admin', user_id: 'admin', request_count: 2310, total_tokens: 11200000, total_input_tokens: 6180000, total_output_tokens: 4220000, cache_read_tokens: 800000, cache_write_tokens: 96000, error_count: 9, error_rate: 0.0039 },
             { key: 'user-platform', user_id: 'user-platform', request_count: 1884, total_tokens: 8460000, total_input_tokens: 4620000, total_output_tokens: 3140000, cache_read_tokens: 700000, cache_write_tokens: 84000, error_count: 13, error_rate: 0.0069 },
@@ -2384,22 +2385,23 @@ export const handlers = [
             { key: 'user-support', user_id: 'user-support', request_count: 226, total_tokens: 930000, total_input_tokens: 540000, total_output_tokens: 370000, cache_read_tokens: 20000, cache_write_tokens: 2400, error_count: 1, error_rate: 0.0044 },
         ]
         if (groupBy === 'user') {
-            if (!modelParam) {
+            const scopeKey = modelParam ? `model:${modelParam}` : providerParam ? `provider:${providerParam}` : ''
+            if (!scopeKey) {
                 return HttpResponse.json({ success: true, data: userUsage })
             }
-            // "Which accounts used this model" — deterministic per (model, user)
-            // weight so different models return different, sortable account
-            // mixes instead of always the same 5 rows scaled uniformly. Accounts
-            // below the weight floor are dropped, so not every model is used by
-            // every account.
+            // "Which accounts used this model/provider" — deterministic per
+            // (scope, user) weight so different models/providers return
+            // different, sortable account mixes instead of always the same 5
+            // rows scaled uniformly. Accounts below the weight floor are
+            // dropped, so not every model/provider is used by every account.
             const hash = (input: string) => {
                 let h = 0
                 for (let i = 0; i < input.length; i++) h = (h * 31 + input.charCodeAt(i)) >>> 0
                 return h
             }
-            const scaledByModel = userUsage
+            const scaledByScope = userUsage
                 .map((account) => {
-                    const weight = (hash(`${modelParam}:${account.user_id}`) % 100) / 100
+                    const weight = (hash(`${scopeKey}:${account.user_id}`) % 100) / 100
                     const factor = weight > 0.15 ? weight : 0
                     const scale = (value: number) => Math.round(value * factor)
                     return {
@@ -2414,7 +2416,19 @@ export const handlers = [
                     }
                 })
                 .filter((account) => account.request_count > 0)
-            return HttpResponse.json({ success: true, data: scaledByModel })
+            return HttpResponse.json({ success: true, data: scaledByScope })
+        }
+
+        if (groupBy === 'provider') {
+            // Sums of the per-model figures below, grouped by provider.
+            return HttpResponse.json({
+                success: true,
+                data: [
+                    { key: 'mock-provider-anthropic', provider_uuid: 'mock-provider-anthropic', provider_name: 'Anthropic', request_count: 2262, total_tokens: 3060000, total_input_tokens: 1760000, total_output_tokens: 1300000, cache_read_tokens: 31040000, cache_write_tokens: 3724800, error_count: 15, error_rate: 0.0066 },
+                    { key: 'mock-provider-openai', provider_uuid: 'mock-provider-openai', provider_name: 'OpenAI', request_count: 3088, total_tokens: 2210000, total_input_tokens: 1280000, total_output_tokens: 930000, cache_read_tokens: 8820000, cache_write_tokens: 1058400, error_count: 13, error_rate: 0.0042 },
+                    { key: 'mock-provider-openrouter', provider_uuid: 'mock-provider-openrouter', provider_name: 'OpenRouter', request_count: 312, total_tokens: 1170000, total_input_tokens: 1050000, total_output_tokens: 120000, cache_read_tokens: 180000, cache_write_tokens: 21600, error_count: 2, error_rate: 0.0064 },
+                ],
+            })
         }
 
         const userScale = userID

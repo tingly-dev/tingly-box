@@ -33,6 +33,7 @@ import {
     BarChart,
     Block,
     CheckCircle,
+    Cloud,
     ErrorOutline,
     Refresh,
     Server,
@@ -59,7 +60,7 @@ import type { AggregatedStat, UsageMetricKey, UsageMetricLabels } from '@/compon
 import api from '@/services/api';
 
 type TimeRange = 'today' | '7d' | '30d' | '90d';
-type ViewMode = 'account' | 'model';
+type ViewMode = 'account' | 'model' | 'provider';
 type SortField = 'name' | UsageMetricKey;
 type SortDirection = 'asc' | 'desc';
 
@@ -84,8 +85,8 @@ interface UserUsageRow extends APITokenInfo {
     error_rate: number;
 }
 
-// Common shape both UserUsageRow and AggregatedStat satisfy, so summary/sort
-// logic can run once against either the account axis or the model axis.
+// Common shape UserUsageRow and AggregatedStat both satisfy, so summary/sort
+// logic can run once against any of the three roster axes.
 interface MetricRow {
     request_count: number;
     total_input_tokens: number;
@@ -142,8 +143,13 @@ const formatDateTime = (value?: string) => {
 const getModelKey = (stat: Pick<AggregatedStat, 'provider_uuid' | 'model' | 'key'>) =>
     `${stat.provider_uuid || ''}::${stat.model || stat.key}`;
 
+// provider_uuid is already the whole axis, so no collision-avoidance pairing
+// is needed the way model+provider needs one.
+const getProviderKey = (stat: Pick<AggregatedStat, 'provider_uuid' | 'provider_name' | 'key'>) =>
+    stat.provider_uuid || stat.provider_name || stat.key;
+
 // Sum + derive the same aggregates (display total, cache hit rate, error
-// rate) over either axis' row shape.
+// rate) over any axis' row shape.
 const computeUsageSummary = (items: MetricRow[]) => {
     const totals = items.reduce(
         (acc, row) => {
@@ -165,7 +171,7 @@ const computeUsageSummary = (items: MetricRow[]) => {
     };
 };
 
-// Shared filter + sort for both the account roster and the model roster.
+// Shared filter + sort for every roster axis.
 function filterAndSort<T extends MetricRow>(
     items: T[],
     query: string,
@@ -223,6 +229,100 @@ const UserUsageSkeleton = () => (
     </Box>
 );
 
+// Shared shape of the "which accounts used this X" breakdown, used by both
+// the model detail panel and the provider detail panel (only the data
+// source, aria label, and identity column heading differ).
+function AccountsBreakdownTable({
+    accounts,
+    ariaLabel,
+    identityLabel,
+    noUsageLabel,
+    accountDisplayName,
+    usageMetricLabels,
+}: {
+    accounts: AggregatedStat[];
+    ariaLabel: string;
+    identityLabel: string;
+    noUsageLabel: string;
+    accountDisplayName: (userID: string) => string;
+    usageMetricLabels: UsageMetricLabels;
+}) {
+    const showCacheWrite = hasCacheWrites(accounts);
+    if (accounts.length === 0) {
+        return (
+            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1.5 }}>
+                <Typography variant="body1">{noUsageLabel}</Typography>
+            </Box>
+        );
+    }
+    return (
+        <TableContainer
+            sx={{
+                maxHeight: 520,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                overscrollBehavior: 'contain',
+            }}
+            role="region"
+            aria-label={ariaLabel}
+        >
+            <Table stickyHeader sx={{ minWidth: showCacheWrite ? 1060 : 960 }}>
+                <TableHead>
+                    <TableRow
+                        sx={{
+                            '& .MuiTableCell-root': {
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                color: 'text.secondary',
+                                py: 1.25,
+                            },
+                        }}
+                    >
+                        <TableCell>{identityLabel}</TableCell>
+                        <UsageMetricHeaderCells
+                            labels={usageMetricLabels}
+                            showTotal
+                            showCacheWrite={showCacheWrite}
+                        />
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {accounts.map((account) => (
+                        <TableRow
+                            key={account.user_id || account.key}
+                            hover
+                            sx={{
+                                '& .MuiTableCell-root': {
+                                    py: 1.25,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                },
+                            }}
+                        >
+                            <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {accountDisplayName(account.user_id || account.key)}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                                    {account.user_id || account.key}
+                                </Typography>
+                            </TableCell>
+                            <UsageMetricValueCells
+                                usage={account}
+                                showTotal
+                                showCacheWrite={showCacheWrite}
+                            />
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
 export default function UserUsagePage() {
     const { t } = useTranslation();
     const theme = useTheme();
@@ -231,27 +331,36 @@ export default function UserUsagePage() {
     const [tokens, setTokens] = useState<APITokenInfo[]>([]);
     const [userStats, setUserStats] = useState<AggregatedStat[]>([]);
     const [modelRoster, setModelRoster] = useState<AggregatedStat[]>([]);
+    const [providerRoster, setProviderRoster] = useState<AggregatedStat[]>([]);
     const [modelStats, setModelStats] = useState<AggregatedStat[]>([]);
-    const [accountStats, setAccountStats] = useState<AggregatedStat[]>([]);
+    const [accountsByModel, setAccountsByModel] = useState<AggregatedStat[]>([]);
+    const [accountsByProvider, setAccountsByProvider] = useState<AggregatedStat[]>([]);
     const [selectedUserID, setSelectedUserID] = useState('');
     const [selectedModelKey, setSelectedModelKey] = useState('');
+    const [selectedProviderKey, setSelectedProviderKey] = useState('');
     const [accountSearch, setAccountSearch] = useState('');
     const [modelSearch, setModelSearch] = useState('');
+    const [providerSearch, setProviderSearch] = useState('');
     const [accountSortField, setAccountSortField] = useState<SortField>('total');
     const [accountSortDirection, setAccountSortDirection] = useState<SortDirection>('desc');
     const [modelSortField, setModelSortField] = useState<SortField>('total');
     const [modelSortDirection, setModelSortDirection] = useState<SortDirection>('desc');
+    const [providerSortField, setProviderSortField] = useState<SortField>('total');
+    const [providerSortDirection, setProviderSortDirection] = useState<SortDirection>('desc');
     const [accountPage, setAccountPage] = useState(0);
     const [modelPage, setModelPage] = useState(0);
+    const [providerPage, setProviderPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [loading, setLoading] = useState(true);
     const [modelDetailLoading, setModelDetailLoading] = useState(false);
-    const [accountDetailLoading, setAccountDetailLoading] = useState(false);
+    const [accountsByModelLoading, setAccountsByModelLoading] = useState(false);
+    const [accountsByProviderLoading, setAccountsByProviderLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
     const requestSeq = useRef(0);
     const modelDetailSeq = useRef(0);
-    const accountDetailSeq = useRef(0);
+    const accountsByModelSeq = useRef(0);
+    const accountsByProviderSeq = useRef(0);
     const detailPanelRef = useRef<HTMLDivElement>(null);
 
     const loadRosters = useCallback(async (selectedRange: TimeRange, manual = false) => {
@@ -260,7 +369,7 @@ export default function UserUsagePage() {
         setError('');
         try {
             const timeParams = buildTimeParams(selectedRange);
-            const [tokensResult, userStatsResult, modelStatsResult] = await Promise.all([
+            const [tokensResult, userStatsResult, modelStatsResult, providerStatsResult] = await Promise.all([
                 api.listAPITokens({ limit: 500 }),
                 api.getUsageStats({
                     ...timeParams,
@@ -275,6 +384,13 @@ export default function UserUsagePage() {
                     sort_by: 'total_tokens',
                     sort_order: 'desc',
                     limit: 1000,
+                }),
+                api.getUsageStats({
+                    ...timeParams,
+                    group_by: 'provider',
+                    sort_by: 'total_tokens',
+                    sort_order: 'desc',
+                    limit: 200,
                 }),
             ]);
             if (seq !== requestSeq.current) return;
@@ -297,6 +413,7 @@ export default function UserUsagePage() {
             ]);
             setUserStats(userStatsResult?.data || []);
             setModelRoster(modelStatsResult?.data || []);
+            setProviderRoster(providerStatsResult?.data || []);
         } catch (loadError) {
             if (seq === requestSeq.current) {
                 setError(loadError instanceof Error ? loadError.message : 'Unable to load team usage');
@@ -336,13 +453,13 @@ export default function UserUsagePage() {
     // Which accounts used this model — the mirror of loadModelDetail. Scoped
     // by provider + model together, not model name alone, since the same
     // model name can exist under more than one provider.
-    const loadAccountDetail = useCallback(async (model: AggregatedStat | undefined, selectedRange: TimeRange) => {
+    const loadAccountsByModel = useCallback(async (model: AggregatedStat | undefined, selectedRange: TimeRange) => {
         if (!model) {
-            setAccountStats([]);
+            setAccountsByModel([]);
             return;
         }
-        const seq = ++accountDetailSeq.current;
-        setAccountDetailLoading(true);
+        const seq = ++accountsByModelSeq.current;
+        setAccountsByModelLoading(true);
         try {
             const result = await api.getUsageStats({
                 ...buildTimeParams(selectedRange),
@@ -353,11 +470,36 @@ export default function UserUsagePage() {
                 sort_order: 'desc',
                 limit: 500,
             });
-            if (seq === accountDetailSeq.current) setAccountStats(result?.data || []);
+            if (seq === accountsByModelSeq.current) setAccountsByModel(result?.data || []);
         } catch {
-            if (seq === accountDetailSeq.current) setAccountStats([]);
+            if (seq === accountsByModelSeq.current) setAccountsByModel([]);
         } finally {
-            if (seq === accountDetailSeq.current) setAccountDetailLoading(false);
+            if (seq === accountsByModelSeq.current) setAccountsByModelLoading(false);
+        }
+    }, []);
+
+    // Which accounts used this provider (across all its models).
+    const loadAccountsByProvider = useCallback(async (provider: AggregatedStat | undefined, selectedRange: TimeRange) => {
+        if (!provider) {
+            setAccountsByProvider([]);
+            return;
+        }
+        const seq = ++accountsByProviderSeq.current;
+        setAccountsByProviderLoading(true);
+        try {
+            const result = await api.getUsageStats({
+                ...buildTimeParams(selectedRange),
+                provider: provider.provider_uuid,
+                group_by: 'user',
+                sort_by: 'total_tokens',
+                sort_order: 'desc',
+                limit: 500,
+            });
+            if (seq === accountsByProviderSeq.current) setAccountsByProvider(result?.data || []);
+        } catch {
+            if (seq === accountsByProviderSeq.current) setAccountsByProvider([]);
+        } finally {
+            if (seq === accountsByProviderSeq.current) setAccountsByProviderLoading(false);
         }
     }, []);
 
@@ -421,6 +563,15 @@ export default function UserUsagePage() {
         (row) => row.model || row.key,
     ), [modelRoster, modelSearch, modelSortField, modelSortDirection]);
 
+    const visibleProviderRows = useMemo(() => filterAndSort(
+        providerRoster,
+        providerSearch,
+        (row) => [row.provider_name || row.key],
+        providerSortField,
+        providerSortDirection,
+        (row) => row.provider_name || row.key,
+    ), [providerRoster, providerSearch, providerSortField, providerSortDirection]);
+
     const pagedAccountRows = useMemo(
         () => visibleAccountRows.slice(accountPage * rowsPerPage, accountPage * rowsPerPage + rowsPerPage),
         [visibleAccountRows, accountPage, rowsPerPage],
@@ -429,22 +580,59 @@ export default function UserUsagePage() {
         () => visibleModelRows.slice(modelPage * rowsPerPage, modelPage * rowsPerPage + rowsPerPage),
         [visibleModelRows, modelPage, rowsPerPage],
     );
+    const pagedProviderRows = useMemo(
+        () => visibleProviderRows.slice(providerPage * rowsPerPage, providerPage * rowsPerPage + rowsPerPage),
+        [visibleProviderRows, providerPage, rowsPerPage],
+    );
+
+    // Per-axis roster state, looked up by the active view mode so the render
+    // below doesn't need a three-way ternary at every use site.
+    const rosterByMode: Record<ViewMode, {
+        visibleLength: number;
+        page: number;
+        setPage: (page: number) => void;
+        sortField: SortField;
+        sortDirection: SortDirection;
+        setSortField: (field: SortField) => void;
+        setSortDirection: (updater: (direction: SortDirection) => SortDirection) => void;
+    }> = {
+        account: {
+            visibleLength: visibleAccountRows.length,
+            page: accountPage,
+            setPage: setAccountPage,
+            sortField: accountSortField,
+            sortDirection: accountSortDirection,
+            setSortField: setAccountSortField,
+            setSortDirection: setAccountSortDirection,
+        },
+        model: {
+            visibleLength: visibleModelRows.length,
+            page: modelPage,
+            setPage: setModelPage,
+            sortField: modelSortField,
+            sortDirection: modelSortDirection,
+            setSortField: setModelSortField,
+            setSortDirection: setModelSortDirection,
+        },
+        provider: {
+            visibleLength: visibleProviderRows.length,
+            page: providerPage,
+            setPage: setProviderPage,
+            sortField: providerSortField,
+            sortDirection: providerSortDirection,
+            setSortField: setProviderSortField,
+            setSortDirection: setProviderSortDirection,
+        },
+    };
+    const activeRoster = rosterByMode[viewMode];
 
     const handleSort = (field: SortField) => {
-        if (viewMode === 'account') {
-            if (field === accountSortField) {
-                setAccountSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
-            } else {
-                setAccountSortField(field);
-                setAccountSortDirection(field === 'name' ? 'asc' : 'desc');
-            }
+        const { sortField: currentField, setSortField, setSortDirection } = activeRoster;
+        if (field === currentField) {
+            setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
         } else {
-            if (field === modelSortField) {
-                setModelSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
-            } else {
-                setModelSortField(field);
-                setModelSortDirection(field === 'name' ? 'asc' : 'desc');
-            }
+            setSortField(field);
+            setSortDirection(() => (field === 'name' ? 'asc' : 'desc'));
         }
     };
 
@@ -455,6 +643,9 @@ export default function UserUsagePage() {
     useEffect(() => {
         setModelPage(0);
     }, [modelSearch, modelSortField, modelSortDirection, range]);
+    useEffect(() => {
+        setProviderPage(0);
+    }, [providerSearch, providerSortField, providerSortDirection, range]);
 
     useEffect(() => {
         if (visibleAccountRows.length === 0) {
@@ -477,13 +668,28 @@ export default function UserUsagePage() {
     }, [modelRoster, selectedModelKey, visibleModelRows]);
 
     useEffect(() => {
+        if (visibleProviderRows.length === 0) {
+            setSelectedProviderKey('');
+            return;
+        }
+        if (!visibleProviderRows.some((row) => getProviderKey(row) === selectedProviderKey)) {
+            setSelectedProviderKey(getProviderKey(visibleProviderRows[0]));
+        }
+    }, [providerRoster, selectedProviderKey, visibleProviderRows]);
+
+    useEffect(() => {
         loadModelDetail(selectedUserID, range);
     }, [loadModelDetail, range, selectedUserID]);
 
     useEffect(() => {
         const model = modelRoster.find((item) => getModelKey(item) === selectedModelKey);
-        loadAccountDetail(model, range);
-    }, [loadAccountDetail, modelRoster, range, selectedModelKey]);
+        loadAccountsByModel(model, range);
+    }, [loadAccountsByModel, modelRoster, range, selectedModelKey]);
+
+    useEffect(() => {
+        const provider = providerRoster.find((item) => getProviderKey(item) === selectedProviderKey);
+        loadAccountsByProvider(provider, range);
+    }, [loadAccountsByProvider, providerRoster, range, selectedProviderKey]);
 
     const selectedUser = useMemo(
         () => rows.find((row) => row.user_id === selectedUserID),
@@ -493,13 +699,21 @@ export default function UserUsagePage() {
         () => modelRoster.find((row) => getModelKey(row) === selectedModelKey),
         [modelRoster, selectedModelKey],
     );
-    const detailSubject: MetricRow | undefined = viewMode === 'account' ? selectedUser : selectedModel;
+    const selectedProvider = useMemo(
+        () => providerRoster.find((row) => getProviderKey(row) === selectedProviderKey),
+        [providerRoster, selectedProviderKey],
+    );
+    const detailSubject: MetricRow | undefined = viewMode === 'account'
+        ? selectedUser
+        : viewMode === 'model'
+        ? selectedModel
+        : selectedProvider;
 
     // Single pass over the active axis' rows for every summary aggregate.
-    const summary = useMemo(
-        () => computeUsageSummary(viewMode === 'account' ? rows : modelRoster),
-        [rows, modelRoster, viewMode],
-    );
+    const summary = useMemo(() => {
+        const source = viewMode === 'account' ? rows : viewMode === 'model' ? modelRoster : providerRoster;
+        return computeUsageSummary(source);
+    }, [rows, modelRoster, providerRoster, viewMode]);
     const {
         tokens: totalTokens,
         inputTokens: totalInputTokens,
@@ -518,8 +732,8 @@ export default function UserUsagePage() {
     );
     const showAccountCacheWrite = hasCacheWrites(rows);
     const showModelRosterCacheWrite = hasCacheWrites(modelRoster);
+    const showProviderRosterCacheWrite = hasCacheWrites(providerRoster);
     const showModelDetailCacheWrite = hasCacheWrites(modelStats);
-    const showAccountDetailCacheWrite = hasCacheWrites(accountStats);
 
     const primarySummaryItem = viewMode === 'account'
         ? {
@@ -532,7 +746,8 @@ export default function UserUsagePage() {
             icon: <Users />,
             color: 'primary' as const,
         }
-        : {
+        : viewMode === 'model'
+        ? {
             label: t('dashboard.userUsage.modelsUsed', { defaultValue: 'Models used' }),
             value: String(modelRoster.length),
             hint: t('dashboard.userUsage.acrossProviders', {
@@ -540,6 +755,16 @@ export default function UserUsagePage() {
                 defaultValue: `Across ${providerCount} provider${providerCount === 1 ? '' : 's'}`,
             }),
             icon: <Server />,
+            color: 'primary' as const,
+        }
+        : {
+            label: t('dashboard.userUsage.providersUsed', { defaultValue: 'Providers used' }),
+            value: String(providerRoster.length),
+            hint: t('dashboard.userUsage.acrossModels', {
+                count: modelRoster.length,
+                defaultValue: `Across ${modelRoster.length} model${modelRoster.length === 1 ? '' : 's'}`,
+            }),
+            icon: <Cloud />,
             color: 'primary' as const,
         };
     const summaryItems = [
@@ -613,9 +838,12 @@ export default function UserUsagePage() {
         { field: 'name', label: t('dashboard.userUsage.model', { defaultValue: 'Model' }), defaultDir: 'asc' },
         ...metricColumns(showModelRosterCacheWrite),
     ];
-    const primaryColumns = viewMode === 'account' ? accountColumns : modelColumns;
-    const sortField = viewMode === 'account' ? accountSortField : modelSortField;
-    const sortDirection = viewMode === 'account' ? accountSortDirection : modelSortDirection;
+    const providerColumns: PrimaryColumn[] = [
+        { field: 'name', label: t('dashboard.userUsage.provider', { defaultValue: 'Provider' }), defaultDir: 'asc' },
+        ...metricColumns(showProviderRosterCacheWrite),
+    ];
+    const primaryColumns = viewMode === 'account' ? accountColumns : viewMode === 'model' ? modelColumns : providerColumns;
+    const { sortField, sortDirection } = activeRoster;
 
     const scrollDetailIntoView = () => {
         requestAnimationFrame(() => {
@@ -628,6 +856,10 @@ export default function UserUsagePage() {
     };
     const handleSelectModel = (modelKey: string) => {
         setSelectedModelKey(modelKey);
+        scrollDetailIntoView();
+    };
+    const handleSelectProvider = (providerKey: string) => {
+        setSelectedProviderKey(providerKey);
         scrollDetailIntoView();
     };
 
@@ -654,6 +886,9 @@ export default function UserUsagePage() {
                             </ToggleButton>
                             <ToggleButton value="model">
                                 {t('dashboard.userUsage.byModel', { defaultValue: 'By model' })}
+                            </ToggleButton>
+                            <ToggleButton value="provider">
+                                {t('dashboard.userUsage.byProvider', { defaultValue: 'By provider' })}
                             </ToggleButton>
                         </ToggleButtonGroup>
                         <ToggleButtonGroup
@@ -721,22 +956,28 @@ export default function UserUsagePage() {
                                 <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                                     {viewMode === 'account'
                                         ? t('dashboard.userUsage.allUsers', { defaultValue: 'All registered users' })
-                                        : t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
+                                        : viewMode === 'model'
+                                        ? t('dashboard.userUsage.allModels', { defaultValue: 'All models' })
+                                        : t('dashboard.userUsage.allProviders', { defaultValue: 'All providers' })}
                                 </Typography>
                                 <Chip
                                     size="small"
-                                    label={viewMode === 'account' ? visibleAccountRows.length : visibleModelRows.length}
+                                    label={activeRoster.visibleLength}
                                     sx={{ height: 22 }}
                                 />
                             </Stack>
                             <SearchField
-                                value={viewMode === 'account' ? accountSearch : modelSearch}
-                                onChange={(event) => (viewMode === 'account'
-                                    ? setAccountSearch(event.target.value)
-                                    : setModelSearch(event.target.value))}
+                                value={viewMode === 'account' ? accountSearch : viewMode === 'model' ? modelSearch : providerSearch}
+                                onChange={(event) => {
+                                    if (viewMode === 'account') setAccountSearch(event.target.value);
+                                    else if (viewMode === 'model') setModelSearch(event.target.value);
+                                    else setProviderSearch(event.target.value);
+                                }}
                                 placeholder={viewMode === 'account'
                                     ? t('dashboard.userUsage.search', { defaultValue: 'Search users' })
-                                    : t('dashboard.userUsage.searchModels', { defaultValue: 'Search models' })}
+                                    : viewMode === 'model'
+                                    ? t('dashboard.userUsage.searchModels', { defaultValue: 'Search models' })
+                                    : t('dashboard.userUsage.searchProviders', { defaultValue: 'Search providers' })}
                                 sx={{ width: { xs: '100%', sm: 220 } }}
                             />
                         </Box>
@@ -746,9 +987,11 @@ export default function UserUsagePage() {
                                 overscrollBehavior: 'contain',
                             }}
                         >
-                            <Table stickyHeader sx={{ minWidth: viewMode === 'account'
-                                ? (showAccountCacheWrite ? 1080 : 980)
-                                : (showModelRosterCacheWrite ? 1080 : 980) }}
+                            <Table stickyHeader sx={{ minWidth: (
+                                viewMode === 'account' ? showAccountCacheWrite
+                                    : viewMode === 'model' ? showModelRosterCacheWrite
+                                    : showProviderRosterCacheWrite
+                            ) ? 1080 : 980 }}
                             >
                                 <TableHead>
                                     <TableRow
@@ -911,7 +1154,44 @@ export default function UserUsagePage() {
                                             </TableRow>
                                         );
                                     })}
-                                    {(viewMode === 'account' ? visibleAccountRows.length === 0 : visibleModelRows.length === 0) && (
+                                    {viewMode === 'provider' && pagedProviderRows.map((row) => {
+                                        const key = getProviderKey(row);
+                                        const selected = key === selectedProviderKey;
+                                        return (
+                                            <TableRow
+                                                key={key}
+                                                hover
+                                                selected={selected}
+                                                onClick={() => handleSelectProvider(key)}
+                                                sx={{
+                                                    cursor: 'pointer',
+                                                    position: 'relative',
+                                                    transition: 'background-color 0.15s ease',
+                                                    '& .MuiTableCell-root': {
+                                                        py: 1.25,
+                                                        borderBottom: '1px solid',
+                                                        borderColor: 'divider',
+                                                    },
+                                                    '&.Mui-selected': {
+                                                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                                        boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
+                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
+                                                    },
+                                                }}
+                                            >
+                                                <TableCell sx={{ fontWeight: 600 }}>{row.provider_name || row.key}</TableCell>
+                                                <UsageMetricValueCells
+                                                    usage={row}
+                                                    showTotal
+                                                    showCacheWrite={showProviderRosterCacheWrite}
+                                                />
+                                                <TableCell padding="checkbox">
+                                                    <ArrowForward sx={{ fontSize: 18, opacity: selected ? 1 : 0.22 }} color={selected ? 'primary' : 'inherit'} />
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {activeRoster.visibleLength === 0 && (
                                         <TableRow>
                                             <TableCell
                                                 colSpan={primaryColumns.length + (viewMode === 'model' ? 2 : 1)}
@@ -921,7 +1201,9 @@ export default function UserUsagePage() {
                                                 <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                                                     {viewMode === 'account'
                                                         ? t('dashboard.userUsage.noUsers', { defaultValue: 'No users match your search.' })
-                                                        : t('dashboard.userUsage.noModels', { defaultValue: 'No models match your search.' })}
+                                                        : viewMode === 'model'
+                                                        ? t('dashboard.userUsage.noModels', { defaultValue: 'No models match your search.' })
+                                                        : t('dashboard.userUsage.noProviders', { defaultValue: 'No providers match your search.' })}
                                                 </Typography>
                                                 <Typography variant="caption" sx={{ color: 'text.disabled', mt: 0.5, display: 'block' }}>
                                                     {t('dashboard.userUsage.noUsersHint', { defaultValue: 'Try a different search term or time range.' })}
@@ -932,19 +1214,18 @@ export default function UserUsagePage() {
                                 </TableBody>
                             </Table>
                         </TableContainer>
-                        {(viewMode === 'account' ? visibleAccountRows.length : visibleModelRows.length) > 0 && (
+                        {activeRoster.visibleLength > 0 && (
                             <TablePagination
                                 component="div"
-                                count={viewMode === 'account' ? visibleAccountRows.length : visibleModelRows.length}
-                                page={viewMode === 'account' ? accountPage : modelPage}
-                                onPageChange={(_, newPage) => (viewMode === 'account'
-                                    ? setAccountPage(newPage)
-                                    : setModelPage(newPage))}
+                                count={activeRoster.visibleLength}
+                                page={activeRoster.page}
+                                onPageChange={(_, newPage) => activeRoster.setPage(newPage)}
                                 rowsPerPage={rowsPerPage}
                                 onRowsPerPageChange={(event) => {
                                     setRowsPerPage(parseInt(event.target.value, 10));
                                     setAccountPage(0);
                                     setModelPage(0);
+                                    setProviderPage(0);
                                 }}
                                 rowsPerPageOptions={[5, 10, 25, 50]}
                                 sx={{ borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}
@@ -971,11 +1252,17 @@ export default function UserUsagePage() {
                                     <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <Box sx={{ minWidth: 0 }}>
                                             <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
-                                                {viewMode === 'account' ? selectedUser!.display_name : (selectedModel!.model || selectedModel!.key)}
+                                                {viewMode === 'account'
+                                                    ? selectedUser!.display_name
+                                                    : viewMode === 'model'
+                                                    ? (selectedModel!.model || selectedModel!.key)
+                                                    : (selectedProvider!.provider_name || selectedProvider!.key)}
                                             </Typography>
-                                            <Typography variant="body2" sx={{ fontFamily: viewMode === 'account' ? 'monospace' : undefined }}>
-                                                {viewMode === 'account' ? selectedUser!.user_id : (selectedModel!.provider_name || '—')}
-                                            </Typography>
+                                            {viewMode !== 'provider' && (
+                                                <Typography variant="body2" sx={{ fontFamily: viewMode === 'account' ? 'monospace' : undefined }}>
+                                                    {viewMode === 'account' ? selectedUser!.user_id : (selectedModel!.provider_name || '—')}
+                                                </Typography>
+                                            )}
                                         </Box>
                                         {viewMode === 'account' ? (
                                             selectedUser!.account_type === 'primary' ? (
@@ -1002,8 +1289,8 @@ export default function UserUsagePage() {
                                                 color="primary"
                                                 variant="outlined"
                                                 label={t('dashboard.userUsage.accountsUsingModel', {
-                                                    count: accountStats.length,
-                                                    defaultValue: `${accountStats.length} accounts`,
+                                                    count: viewMode === 'model' ? accountsByModel.length : accountsByProvider.length,
+                                                    defaultValue: `${viewMode === 'model' ? accountsByModel.length : accountsByProvider.length} accounts`,
                                                 })}
                                             />
                                         )}
@@ -1114,15 +1401,21 @@ export default function UserUsagePage() {
                                             <Typography variant="subtitle2" sx={{ fontWeight: 650 }}>
                                                 {viewMode === 'account'
                                                     ? t('dashboard.userUsage.allModels', { defaultValue: 'All models' })
-                                                    : t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })}
+                                                    : viewMode === 'model'
+                                                    ? t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })
+                                                    : t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
                                             </Typography>
-                                            <Chip size="small" label={viewMode === 'account' ? modelStats.length : accountStats.length} sx={{ height: 22 }} />
+                                            <Chip
+                                                size="small"
+                                                label={viewMode === 'account' ? modelStats.length : viewMode === 'model' ? accountsByModel.length : accountsByProvider.length}
+                                                sx={{ height: 22 }}
+                                            />
                                         </Stack>
                                         <Typography variant="body2">
                                             {formatNumber(getTotalTokens(detailSubject))} {t('dashboard.userUsage.tokens', { defaultValue: 'tokens' }).toLocaleLowerCase()}
                                         </Typography>
                                     </Stack>
-                                    {(viewMode === 'account' ? modelDetailLoading : accountDetailLoading) ? (
+                                    {(viewMode === 'account' ? modelDetailLoading : viewMode === 'model' ? accountsByModelLoading : accountsByProviderLoading) ? (
                                         <Stack spacing={1.5} sx={{ overflow: 'hidden' }}>
                                             {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} variant="rounded" height={44} />)}
                                         </Stack>
@@ -1197,79 +1490,24 @@ export default function UserUsagePage() {
                                                 </Typography>
                                             </Box>
                                         )
+                                    ) : viewMode === 'model' ? (
+                                        <AccountsBreakdownTable
+                                            accounts={accountsByModel}
+                                            ariaLabel={t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })}
+                                            identityLabel={t('dashboard.userUsage.user', { defaultValue: 'User' })}
+                                            noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
+                                            accountDisplayName={accountDisplayName}
+                                            usageMetricLabels={usageMetricLabels}
+                                        />
                                     ) : (
-                                        accountStats.length > 0 ? (
-                                            <TableContainer
-                                                sx={{
-                                                    maxHeight: 520,
-                                                    border: '1px solid',
-                                                    borderColor: 'divider',
-                                                    borderRadius: 1.5,
-                                                    overscrollBehavior: 'contain',
-                                                }}
-                                                role="region"
-                                                aria-label={t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })}
-                                            >
-                                                <Table stickyHeader sx={{ minWidth: showAccountDetailCacheWrite ? 1060 : 960 }}>
-                                                    <TableHead>
-                                                        <TableRow
-                                                            sx={{
-                                                                '& .MuiTableCell-root': {
-                                                                    fontWeight: 600,
-                                                                    fontSize: '0.75rem',
-                                                                    textTransform: 'uppercase',
-                                                                    letterSpacing: '0.05em',
-                                                                    color: 'text.secondary',
-                                                                    py: 1.25,
-                                                                },
-                                                            }}
-                                                        >
-                                                            <TableCell>{t('dashboard.userUsage.user', { defaultValue: 'User' })}</TableCell>
-                                                            <UsageMetricHeaderCells
-                                                                labels={usageMetricLabels}
-                                                                showTotal
-                                                                showCacheWrite={showAccountDetailCacheWrite}
-                                                            />
-                                                        </TableRow>
-                                                    </TableHead>
-                                                    <TableBody>
-                                                        {accountStats.map((account) => (
-                                                            <TableRow
-                                                                key={account.user_id || account.key}
-                                                                hover
-                                                                sx={{
-                                                                    '& .MuiTableCell-root': {
-                                                                        py: 1.25,
-                                                                        borderBottom: '1px solid',
-                                                                        borderColor: 'divider',
-                                                                    },
-                                                                }}
-                                                            >
-                                                                <TableCell>
-                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                        {accountDisplayName(account.user_id || account.key)}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                                                                        {account.user_id || account.key}
-                                                                    </Typography>
-                                                                </TableCell>
-                                                                <UsageMetricValueCells
-                                                                    usage={account}
-                                                                    showTotal
-                                                                    showCacheWrite={showAccountDetailCacheWrite}
-                                                                />
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
-                                            </TableContainer>
-                                        ) : (
-                                            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                                                <Typography variant="body1">
-                                                    {t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                                                </Typography>
-                                            </Box>
-                                        )
+                                        <AccountsBreakdownTable
+                                            accounts={accountsByProvider}
+                                            ariaLabel={t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
+                                            identityLabel={t('dashboard.userUsage.user', { defaultValue: 'User' })}
+                                            noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
+                                            accountDisplayName={accountDisplayName}
+                                            usageMetricLabels={usageMetricLabels}
+                                        />
                                     )}
                                 </Box>
                             </Stack>
@@ -1278,11 +1516,15 @@ export default function UserUsagePage() {
                                 <Box>
                                     {viewMode === 'account'
                                         ? <Users sx={{ fontSize: 42, color: 'text.disabled', mb: 1 }} />
-                                        : <Server sx={{ fontSize: 42, color: 'text.disabled', mb: 1 }} />}
+                                        : viewMode === 'model'
+                                        ? <Server sx={{ fontSize: 42, color: 'text.disabled', mb: 1 }} />
+                                        : <Cloud sx={{ fontSize: 42, color: 'text.disabled', mb: 1 }} />}
                                     <Typography variant="body1">
                                         {viewMode === 'account'
                                             ? t('dashboard.userUsage.selectUser', { defaultValue: 'Select a user to see details.' })
-                                            : t('dashboard.userUsage.selectModel', { defaultValue: 'Select a model to see details.' })}
+                                            : viewMode === 'model'
+                                            ? t('dashboard.userUsage.selectModel', { defaultValue: 'Select a model to see details.' })
+                                            : t('dashboard.userUsage.selectProvider', { defaultValue: 'Select a provider to see details.' })}
                                     </Typography>
                                 </Box>
                             </Box>
