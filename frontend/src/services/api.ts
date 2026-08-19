@@ -89,6 +89,27 @@ async function botAccessAPI(path: string, options: RequestInit = {}): Promise<an
     return data;
 }
 
+// Temporary raw control-plane call for Team endpoints. The backend routes and
+// Swagger models are authoritative; remove this shim after the generated SDK
+// is refreshed from the new schema.
+async function teamControlAPI(path: string, options: RequestInit = {}): Promise<any> {
+    try {
+        const base = await getApiBaseUrl();
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${base}${path}`, {
+            ...options,
+            headers: {...headers, 'Content-Type': 'application/json', ...(options.headers || {})},
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return {success: false, error: data.error || {message: `request failed (${response.status})`}};
+        }
+        return {success: true, data};
+    } catch (error: any) {
+        return {success: false, error: {message: error.message || 'Team API request failed'}};
+    }
+}
+
 const listBotCapabilities = (botUUID: string) =>
     botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/capabilities`);
 
@@ -2207,14 +2228,15 @@ export const api = {
     // List all API tokens
     listAPITokens: async (params?: {
         user_id?: string;
+        team_id?: string;
         enabled?: boolean;
         limit?: number;
         offset?: number;
     }): Promise<any> => {
         const data = await controlApi((client, headers) => client.GET('/api/v1/tokens', {
-                headers,
-                params: {query: params}
-            }));
+            headers,
+            params: {query: params as any}
+        }));
         if (data?.success === false) {
             return data;
         }
@@ -2236,11 +2258,12 @@ export const api = {
     // Create a new API token
     createAPIToken: async (data: {
         display_name: string;
+        team_id?: string;
     }): Promise<any> => {
         const response = await controlApi((client, headers) => client.POST('/api/v1/tokens', {
-                headers,
-                body: data
-            }));
+            headers,
+            body: data as any
+        }));
         if (response?.success === false) {
             return response;
         }
@@ -2273,6 +2296,31 @@ export const api = {
         }
         return {success: true, data};
     },
+
+    moveAPITokenToTeam: async (tokenId: string, teamId: string): Promise<any> =>
+        teamControlAPI(`/api/v1/tokens/${encodeURIComponent(tokenId)}/team`, {
+            method: 'PUT',
+            body: JSON.stringify({team_id: teamId}),
+        }),
+
+    listTeams: async (): Promise<any> => teamControlAPI('/api/v1/teams'),
+
+    createTeam: async (data: {name: string; slug: string}): Promise<any> =>
+        teamControlAPI('/api/v1/teams', {method: 'POST', body: JSON.stringify(data)}),
+
+    updateTeam: async (teamId: string, data: {name: string; slug: string}): Promise<any> =>
+        teamControlAPI(`/api/v1/teams/${encodeURIComponent(teamId)}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        }),
+
+    setTeamEnabled: async (teamId: string, enabled: boolean): Promise<any> =>
+        teamControlAPI(`/api/v1/teams/${encodeURIComponent(teamId)}/${enabled ? 'enable' : 'disable'}`, {
+            method: 'PUT',
+        }),
+
+    deleteTeam: async (teamId: string): Promise<any> =>
+        teamControlAPI(`/api/v1/teams/${encodeURIComponent(teamId)}`, {method: 'DELETE'}),
 };
 
 export default api;

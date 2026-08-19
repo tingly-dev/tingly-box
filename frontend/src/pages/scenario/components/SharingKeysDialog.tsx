@@ -6,6 +6,7 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -15,13 +16,16 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
+import type { Team } from '@/types/team';
 
 interface SharingKeysDialogProps {
     open: boolean;
     onClose: () => void;
+    team: Team;
+    teams: Team[];
 }
 
-const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) => {
+const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, team, teams }) => {
     const { t } = useTranslation();
     const notify = useNotify();
 
@@ -34,10 +38,13 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [tokenToDelete, setTokenToDelete] = useState<SharingKey | null>(null);
     const [deletingToken, setDeletingToken] = useState(false);
+    const [tokenToMove, setTokenToMove] = useState<SharingKey | null>(null);
+    const [moveTargetTeamID, setMoveTargetTeamID] = useState('');
+    const [movingToken, setMovingToken] = useState(false);
 
     const loadSharingKeys = async () => {
         setKeysLoading(true);
-        const result = await api.listAPITokens();
+        const result = await api.listAPITokens({team_id: team.id});
         if (result.success && result.data) {
             setSharingKeys(result.data.tokens || []);
         }
@@ -48,7 +55,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
         if (open) {
             loadSharingKeys();
         }
-    }, [open]);
+    }, [open, team.id]);
 
     const handleCreateToken = async () => {
         if (!newTokenName.trim()) {
@@ -56,7 +63,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
             return;
         }
         setCreatingToken(true);
-        const result = await api.createAPIToken({ display_name: newTokenName.trim() });
+        const result = await api.createAPIToken({display_name: newTokenName.trim(), team_id: team.id});
         setCreatingToken(false);
         if (result.success) {
             notify.success(t('sharingKeys.createSuccess'));
@@ -65,6 +72,21 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
             loadSharingKeys();
         } else {
             notify.error(result.error?.message || t('sharingKeys.createFailed'));
+        }
+    };
+
+    const handleMoveToken = async () => {
+        if (!tokenToMove || !moveTargetTeamID) return;
+        setMovingToken(true);
+        const result = await api.moveAPITokenToTeam(tokenToMove.token_id, moveTargetTeamID);
+        setMovingToken(false);
+        if (result.success) {
+            notify.success(t('sharingKeys.moveSuccess'));
+            setTokenToMove(null);
+            setMoveTargetTeamID('');
+            loadSharingKeys();
+        } else {
+            notify.error(result.error?.message || t('sharingKeys.moveFailed'));
         }
     };
 
@@ -91,7 +113,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                         alignItems: "center"
                     }}>
                         <IconKey />
-                        <span>{t('sharingKeys.title')}</span>
+                        <span>{t('sharingKeys.titleForTeam', {team: team.name})}</span>
                     </Stack>
                     <Button
                         variant="contained"
@@ -124,10 +146,42 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                             setTokenToDelete(key);
                             setDeleteDialogOpen(true);
                         }}
+                        onMove={(key) => {
+                            setTokenToMove(key);
+                            setMoveTargetTeamID('');
+                        }}
                         showUserColumn={true}
                         showLastUsedColumn={false}
                     />
                 </DialogContent>
+            </Dialog>
+            {/* Move Token Dialog */}
+            <Dialog open={Boolean(tokenToMove)} onClose={() => setTokenToMove(null)} maxWidth="sm" fullWidth>
+                <DialogTitle>{t('sharingKeys.moveToken')}</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        select
+                        fullWidth
+                        sx={{mt: 1}}
+                        label={t('sharingKeys.destinationTeam')}
+                        value={moveTargetTeamID}
+                        onChange={(event) => setMoveTargetTeamID(event.target.value)}
+                        helperText={t('sharingKeys.moveHelper', {name: tokenToMove?.display_name})}
+                    >
+                        {teams.every((candidate) => candidate.id === team.id || !candidate.enabled) && (
+                            <MenuItem disabled value="">{t('sharingKeys.noDestinationTeam')}</MenuItem>
+                        )}
+                        {teams.filter((candidate) => candidate.id !== team.id && candidate.enabled).map((candidate) => (
+                            <MenuItem key={candidate.id} value={candidate.id}>{candidate.name}</MenuItem>
+                        ))}
+                    </TextField>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setTokenToMove(null)} disabled={movingToken}>{t('common.cancel')}</Button>
+                    <Button variant="contained" onClick={handleMoveToken} disabled={movingToken || !moveTargetTeamID}>
+                        {t('sharingKeys.moveToken')}
+                    </Button>
+                </DialogActions>
             </Dialog>
             {/* Create Token Dialog */}
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>

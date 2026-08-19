@@ -1551,6 +1551,16 @@ const mockProfileClaudeConfigData = (profileId: string) => {
 // Counter for alternating probe responses
 let probeRequestCount = 0
 
+const defaultMockTeamID = '00000000-0000-0000-0000-000000000001'
+let mockTeams = [
+    { id: defaultMockTeamID, name: 'Default Team', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 'platform', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
+]
+let mockSharingKeys = [
+    { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
+    { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z' },
+]
+
 export const handlers = [
     // Remote Agents / Remote Graphs API endpoints
     http.get('/api/remote-agents', () => {
@@ -2357,18 +2367,63 @@ export const handlers = [
     // ============================================
     // Usage Stats API (v1)
     // ============================================
-    http.get('/api/v1/tokens', () => {
-        const now = Date.now()
+    http.get('/api/v1/teams', () => HttpResponse.json({teams: mockTeams})),
+
+    http.post('/api/v1/teams', async ({request}) => {
+        const body = await request.json() as any
+        const team = {id: crypto.randomUUID(), name: body.name, slug: body.slug, enabled: true, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
+        mockTeams = [...mockTeams, team]
+        return HttpResponse.json(team, {status: 201})
+    }),
+
+    http.put('/api/v1/teams/:teamId', async ({params, request}) => {
+        const body = await request.json() as any
+        mockTeams = mockTeams.map((team) => team.id === params.teamId ? {...team, ...body, updated_at: new Date().toISOString()} : team)
+        return HttpResponse.json(mockTeams.find((team) => team.id === params.teamId))
+    }),
+
+    http.put('/api/v1/teams/:teamId/:action', ({params}) => {
+        const enabled = params.action === 'enable'
+        mockTeams = mockTeams.map((team) => team.id === params.teamId ? {...team, enabled} : team)
+        return HttpResponse.json(mockTeams.find((team) => team.id === params.teamId))
+    }),
+
+    http.delete('/api/v1/teams/:teamId', ({params}) => {
+        mockTeams = mockTeams.filter((team) => team.id !== params.teamId)
+        return new HttpResponse(null, {status: 204})
+    }),
+
+    http.get('/api/v1/tokens', ({request}) => {
+        const teamID = new URL(request.url).searchParams.get('team_id')
+        const tokens = teamID ? mockSharingKeys.filter((token) => token.team_id === teamID) : mockSharingKeys
         return HttpResponse.json({
-            tokens: [
-                { token_id: 'tok-design', user_id: 'user-design', display_name: 'Design team', enabled: true, last_used_at: new Date(now - 12 * 60 * 1000).toISOString(), created_at: new Date(now - 72 * 86400000).toISOString() },
-                { token_id: 'tok-platform', user_id: 'user-platform', display_name: 'Platform engineering', enabled: true, last_used_at: new Date(now - 46 * 60 * 1000).toISOString(), created_at: new Date(now - 110 * 86400000).toISOString() },
-                { token_id: 'tok-mobile', user_id: 'user-mobile', display_name: 'Mobile app', enabled: true, last_used_at: new Date(now - 5 * 3600000).toISOString(), created_at: new Date(now - 38 * 86400000).toISOString() },
-                { token_id: 'tok-support', user_id: 'user-support', display_name: 'Customer support', enabled: true, last_used_at: new Date(now - 2 * 86400000).toISOString(), created_at: new Date(now - 21 * 86400000).toISOString() },
-                { token_id: 'tok-contractor', user_id: 'user-contractor', display_name: 'External contractor', enabled: false, created_at: new Date(now - 14 * 86400000).toISOString() },
-            ],
-            total: 5,
+            tokens,
+            total: tokens.length,
         })
+    }),
+
+    http.post('/api/v1/tokens', async ({request}) => {
+        const body = await request.json() as any
+        const token = {token_id: `tb-share-${crypto.randomUUID().replaceAll('-', '')}`, user_id: crypto.randomUUID(), team_id: body.team_id || defaultMockTeamID, display_name: body.display_name, enabled: true, created_at: new Date().toISOString()}
+        mockSharingKeys = [token, ...mockSharingKeys]
+        return HttpResponse.json({...token, token: token.token_id}, {status: 201})
+    }),
+
+    http.put('/api/v1/tokens/:tokenId/team', async ({params, request}) => {
+        const body = await request.json() as any
+        mockSharingKeys = mockSharingKeys.map((token) => token.token_id === params.tokenId ? {...token, team_id: body.team_id} : token)
+        return HttpResponse.json(mockSharingKeys.find((token) => token.token_id === params.tokenId))
+    }),
+
+    http.put('/api/v1/tokens/:tokenId/:action', ({params}) => {
+        const enabled = params.action === 'enable'
+        mockSharingKeys = mockSharingKeys.map((token) => token.token_id === params.tokenId ? {...token, enabled} : token)
+        return new HttpResponse(null, {status: 204})
+    }),
+
+    http.delete('/api/v1/tokens/:tokenId', ({params}) => {
+        mockSharingKeys = mockSharingKeys.filter((token) => token.token_id !== params.tokenId)
+        return new HttpResponse(null, {status: 204})
     }),
 
     http.get('/api/v1/usage/stats', ({ request }) => {

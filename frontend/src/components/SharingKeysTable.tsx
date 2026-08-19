@@ -1,4 +1,4 @@
-import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff } from '@/components/icons';
+import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove } from '@/components/icons';
 import {
     Box,
     Stack,
@@ -18,6 +18,7 @@ import {
 export interface SharingKey {
     token_id: string;
     user_id: string;
+    team_id?: string;
     display_name: string;
     enabled: boolean;
     last_used_at?: string;
@@ -44,6 +45,7 @@ interface SharingKeysTableProps {
     onCopy: (tokenId: string) => void;
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
+    onMove?: (token: SharingKey) => void;
     /** Show the user_id column (default: true) */
     showUserColumn?: boolean;
     /** Show the last_used_at column (default: true) */
@@ -60,11 +62,12 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onCopy,
     onToggleEnabled,
     onDelete,
+    onMove,
     showUserColumn = true,
     showLastUsedColumn = true,
     userColumnLabel = 'User',
 }) => {
-    const colSpan = 2 + (showUserColumn ? 1 : 0) + (showLastUsedColumn ? 1 : 0) + 1; // Name + Token + Status + Created + Actions + optional cols
+    const colSpan = 5 + (showUserColumn ? 1 : 0) + (showLastUsedColumn ? 1 : 0);
 
     return (
         <TableContainer>
@@ -256,16 +259,25 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     </TableCell>
                                 )}
                                 <TableCell align="right">
-                                    <Tooltip title="Delete token">
-                                        <IconButton
-                                            size="small"
-                                            color="error"
-                                            onClick={() => onDelete(key)}
-                                            sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
-                                        >
-                                            <IconDeleteOutline sx={{ fontSize: 16 }} />
-                                        </IconButton>
-                                    </Tooltip>
+                                    <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>
+                                        {onMove && (
+                                            <Tooltip title="Move to another team">
+                                                <IconButton size="small" onClick={() => onMove(key)}>
+                                                    <IconMove sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        <Tooltip title="Delete token">
+                                            <IconButton
+                                                size="small"
+                                                color="error"
+                                                onClick={() => onDelete(key)}
+                                                sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
+                                            >
+                                                <IconDeleteOutline sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Stack>
                                 </TableCell>
                             </TableRow>
                         ))
