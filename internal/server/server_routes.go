@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
+	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -103,4 +104,5 @@ func (s *Server) UseTokenManagementEndpoints() {
 	api := manager.NewGroup("api", "v1", "")
 	api.Router.Use(s.getUserAuthMiddleware())
 	sharing.RegisterRoutes(api, sharing.NewHandler(store))
+	team.RegisterRoutes(api, team.NewHandler(sm.Team()))
 }

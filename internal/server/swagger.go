@@ -15,6 +15,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -122,6 +123,7 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// Schema generation only references these handlers, so no live token store
 	// is required here.
 	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
+	team.RegisterRoutes(apiV1, team.NewHandler(nil))
 
 	// Provider quota API routes
 	// Note: skipped for OpenAPI generation as quotaManager is not available

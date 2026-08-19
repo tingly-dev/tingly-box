@@ -304,6 +304,13 @@ func (s *APITokenStore) RevokeToken(tokenID, reason string) error {
 
 // ListTokens returns tokens matching filters
 func (s *APITokenStore) ListTokens(userID string, enabled *bool, limit, offset int) ([]APITokenRecord, int64, error) {
+	return s.ListTokensForTeam(userID, "", enabled, limit, offset)
+}
+
+// ListTokensForTeam returns tokens matching user, team, and enabled filters.
+// An empty team ID preserves the legacy all-teams behavior for callers that
+// have not opted into team-aware management yet.
+func (s *APITokenStore) ListTokensForTeam(userID, teamID string, enabled *bool, limit, offset int) ([]APITokenRecord, int64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -311,6 +318,9 @@ func (s *APITokenStore) ListTokens(userID string, enabled *bool, limit, offset i
 
 	if userID != "" {
 		db = db.Where("user_id = ?", userID)
+	}
+	if teamID != "" {
+		db = db.Where("team_id = ?", teamID)
 	}
 	if enabled != nil {
 		db = db.Where("enabled = ?", *enabled)

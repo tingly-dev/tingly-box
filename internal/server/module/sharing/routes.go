@@ -33,6 +33,12 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 		swagger.WithTags("tokens"),
 		swagger.WithDescription("Disable a shared API token"),
 	)
+	group.PUT("/tokens/:token_id/team", h.MoveToTeam,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Move a shared API token to another team"),
+		swagger.WithRequestModel(TokenMoveRequest{}),
+		swagger.WithResponseModel(APITokenInfo{}),
+	)
 	group.POST("/tokens/:token_id/regenerate", h.Regenerate,
 		swagger.WithTags("tokens"),
 		swagger.WithDescription("Regenerate a shared API token"),

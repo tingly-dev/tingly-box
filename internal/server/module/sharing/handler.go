@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -39,10 +40,25 @@ func sendError(c *gin.Context, status int, err error, errType string) {
 	})
 }
 
+func sendStoreError(c *gin.Context, err error) {
+	status := http.StatusBadRequest
+	errType := "invalid_request_error"
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "not found") {
+		status = http.StatusNotFound
+		errType = "not_found_error"
+	} else if strings.Contains(message, "disabled") {
+		status = http.StatusConflict
+		errType = "conflict_error"
+	}
+	sendError(c, status, err, errType)
+}
+
 func recordToInfo(r *db.APITokenRecord) APITokenInfo {
 	return APITokenInfo{
 		TokenID:     r.TokenID,
 		UserID:      r.UserID,
+		TeamID:      r.TeamID,
 		DisplayName: r.DisplayName,
 		Enabled:     r.Enabled,
 		LastUsedAt:  r.LastUsedAt,
@@ -79,9 +95,13 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 	tokenString := "tb-share-" + randomToken
 
-	record, err := h.store.CreateTokenWithTokenID(userUUID, tokenString, req.DisplayName, "admin", nil)
+	teamID := req.TeamID
+	if teamID == "" {
+		teamID = db.DefaultTeamID
+	}
+	record, err := h.store.CreateTokenForTeam(userUUID, tokenString, teamID, req.DisplayName, "admin", nil)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, errors.New("failed to create token: "+err.Error()), "internal_error")
+		sendStoreError(c, err)
 		return
 	}
 
@@ -89,6 +109,7 @@ func (h *Handler) Create(c *gin.Context) {
 		Token:       tokenString,
 		TokenID:     record.TokenID,
 		UserID:      record.UserID,
+		TeamID:      record.TeamID,
 		DisplayName: record.DisplayName,
 		CreatedAt:   record.CreatedAt,
 	})
@@ -97,6 +118,7 @@ func (h *Handler) Create(c *gin.Context) {
 // List handles GET /tokens — lists tokens with optional filters.
 func (h *Handler) List(c *gin.Context) {
 	userUUID := c.Query("user_id")
+	teamID := c.Query("team_id")
 
 	var enabled *bool
 	if s := c.Query("enabled"); s != "" {
@@ -119,7 +141,7 @@ func (h *Handler) List(c *gin.Context) {
 		}
 	}
 
-	records, total, err := h.store.ListTokens(userUUID, enabled, limit, offset)
+	records, total, err := h.store.ListTokensForTeam(userUUID, teamID, enabled, limit, offset)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, errors.New("failed to list tokens: "+err.Error()), "internal_error")
 		return
@@ -130,6 +152,30 @@ func (h *Handler) List(c *gin.Context) {
 		tokens[i] = recordToInfo(&records[i])
 	}
 	c.JSON(http.StatusOK, TokenListResponse{Tokens: tokens, Total: total})
+}
+
+// MoveToTeam handles PUT /tokens/:token_id/team.
+func (h *Handler) MoveToTeam(c *gin.Context) {
+	tokenID := c.Param("token_id")
+	if tokenID == "" {
+		sendError(c, http.StatusBadRequest, errors.New("token_id is required"), "invalid_request_error")
+		return
+	}
+	var req TokenMoveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	if err := h.store.MoveTokenToTeam(tokenID, req.TeamID); err != nil {
+		sendStoreError(c, err)
+		return
+	}
+	record, err := h.store.GetToken(tokenID)
+	if err != nil {
+		sendError(c, http.StatusNotFound, err, "not_found_error")
+		return
+	}
+	c.JSON(http.StatusOK, recordToInfo(record))
 }
 
 // Get handles GET /tokens/:token_id.
@@ -223,6 +269,7 @@ func (h *Handler) Regenerate(c *gin.Context) {
 		Token:       newTokenString,
 		TokenID:     record.TokenID,
 		UserID:      record.UserID,
+		TeamID:      record.TeamID,
 		DisplayName: record.DisplayName,
 		CreatedAt:   record.CreatedAt,
 	})
