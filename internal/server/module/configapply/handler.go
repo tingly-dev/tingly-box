@@ -346,9 +346,9 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
-	// Models are collected from active rules when available; an empty map
-	// is fine — BuildOpenCodeConfig fills in a sensible default.
-	models := make(map[string]interface{})
+	// Models are collected from active OpenCode-scenario rules; an empty
+	// list is fine — BuildOpenCodeModels fills in a sensible default.
+	models := agent.BuildOpenCodeModels(collectOpenCodeRuleModels(cfg))
 
 	// Generate OpenCode config with collected models
 	payload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
@@ -446,9 +446,9 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
-	// Models are collected from active rules when available; an empty map
-	// is fine — BuildOpenCodeConfig fills in a sensible default.
-	models := make(map[string]interface{})
+	// Models are collected from active OpenCode-scenario rules; an empty
+	// list is fine — BuildOpenCodeModels fills in a sensible default.
+	models := agent.BuildOpenCodeModels(collectOpenCodeRuleModels(cfg))
 
 	// Generate OpenCode config JSON
 	configPayload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
@@ -546,10 +546,22 @@ console.log("OpenCode config written to", configPath);`, modelsJSON, configBaseU
 // collectCodexRuleModels returns the request_models of every active rule in
 // the Codex scenario, deduplicated and in declaration order.
 func collectCodexRuleModels(cfg *config.Config) []string {
+	return collectScenarioRuleModels(cfg, typ.ScenarioCodex)
+}
+
+// collectOpenCodeRuleModels returns the request_models of every active rule
+// in the OpenCode scenario, deduplicated and in declaration order.
+func collectOpenCodeRuleModels(cfg *config.Config) []string {
+	return collectScenarioRuleModels(cfg, typ.ScenarioOpenCode)
+}
+
+// collectScenarioRuleModels returns the request_models of every active rule
+// under the given scenario, deduplicated and in declaration order.
+func collectScenarioRuleModels(cfg *config.Config, scenario typ.RuleScenario) []string {
 	seen := map[string]struct{}{}
 	var out []string
 	for _, rule := range cfg.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+		if rule.GetScenario() != scenario || !rule.Active {
 			continue
 		}
 		model := strings.TrimSpace(rule.RequestModel)

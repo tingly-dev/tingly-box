@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func setupTestRouter(cfg *config.Config) *gin.Engine {
@@ -321,6 +322,54 @@ func TestApplyOpenCodeConfig_SucceedsWithoutRules(t *testing.T) {
 
 	body := w.Body.String()
 	assert.Contains(t, body, `"success":true`)
+}
+
+func TestGetOpenCodeConfigPreview_IncludesRuleModelsAndModalities(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
+	require.NoError(t, err)
+	cfg.Rules = []typ.Rule{
+		{UUID: "oc1", Scenario: typ.ScenarioOpenCode, RequestModel: "tingly-opencode-vision", Active: true},
+		{UUID: "oc2", Scenario: typ.ScenarioOpenCode, RequestModel: "inactive-model", Active: false},
+		{UUID: "cc1", Scenario: typ.ScenarioClaudeCode, RequestModel: "other-scenario-model", Active: true},
+	}
+	handler := NewHandler(cfg, "localhost")
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/preview/opencode", handler.GetOpenCodeConfigPreview)
+
+	req, _ := http.NewRequest("GET", "/preview/opencode", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp OpenCodeConfigPreviewResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(resp.ConfigJSON), &payload))
+
+	providers := payload["provider"].(map[string]interface{})
+	tb := providers["tingly-box"].(map[string]interface{})
+	models := tb["models"].(map[string]interface{})
+
+	// Only the active OpenCode-scenario rule's model should be present.
+	assert.Len(t, models, 1)
+	entry, ok := models["tingly-opencode-vision"].(map[string]interface{})
+	require.True(t, ok, "expected model entry for the active OpenCode rule, got %v", models)
+	assert.NotContains(t, models, "inactive-model")
+	assert.NotContains(t, models, "other-scenario-model")
+
+	// The model must declare attachment/modalities support so opencode
+	// doesn't default image input to unavailable (see openCodeModelEntry).
+	assert.Equal(t, true, entry["attachment"])
+	modalities, ok := entry["modalities"].(map[string]interface{})
+	require.True(t, ok, "expected modalities object, got %v", entry["modalities"])
+	assert.ElementsMatch(t, []interface{}{"text", "image"}, modalities["input"])
+	assert.ElementsMatch(t, []interface{}{"text"}, modalities["output"])
 }
 
 func TestGetOpenCodeConfigPreview_NilConfig(t *testing.T) {

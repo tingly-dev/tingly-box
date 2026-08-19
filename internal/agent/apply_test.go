@@ -83,3 +83,49 @@ func TestBuildOpenCodeConfig_CustomModels(t *testing.T) {
 		t.Error("tingly/cc-haiku not found")
 	}
 }
+
+func TestBuildOpenCodeModels_DeclaresAttachmentAndModalities(t *testing.T) {
+	models := BuildOpenCodeModels([]string{"tingly-opencode-a", "tingly-opencode-b"})
+	if len(models) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(models))
+	}
+
+	for name, raw := range models {
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("model %q entry is not a map: %v", name, raw)
+		}
+		if entry["name"] != name {
+			t.Errorf("model %q: name = %v, want %q", name, entry["name"], name)
+		}
+		if entry["attachment"] != true {
+			t.Errorf("model %q: attachment = %v, want true", name, entry["attachment"])
+		}
+		modalities, ok := entry["modalities"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("model %q: modalities is not a map: %v", name, entry["modalities"])
+		}
+		input, ok := modalities["input"].([]string)
+		if !ok || len(input) != 2 || input[0] != "text" || input[1] != "image" {
+			t.Errorf("model %q: modalities.input = %v, want [text image]", name, modalities["input"])
+		}
+		output, ok := modalities["output"].([]string)
+		if !ok || len(output) != 1 || output[0] != "text" {
+			t.Errorf("model %q: modalities.output = %v, want [text]", name, modalities["output"])
+		}
+	}
+}
+
+func TestBuildOpenCodeModels_EmptyFallsBackToDefault(t *testing.T) {
+	models := BuildOpenCodeModels(nil)
+	if len(models) != 1 {
+		t.Fatalf("expected 1 default model, got %d", len(models))
+	}
+	entry, ok := models["tingly-opencode"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("missing default model 'tingly-opencode': %v", models)
+	}
+	if entry["attachment"] != true {
+		t.Errorf("default model attachment = %v, want true", entry["attachment"])
+	}
+}

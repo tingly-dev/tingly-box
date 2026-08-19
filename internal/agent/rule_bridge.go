@@ -118,7 +118,8 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		}
 		configBaseURL := baseURL + "/tingly/opencode"
 		// Build config object with business logic
-		openCodeConfig := BuildOpenCodeConfig(configBaseURL, apiKey, nil)
+		openCodeModels := BuildOpenCodeModels(aa.collectOpenCodeRuleModels())
+		openCodeConfig := BuildOpenCodeConfig(configBaseURL, apiKey, openCodeModels)
 		fileResult, err = config.Apply(&aiagent.OpenCodeParams{
 			Config: openCodeConfig,
 		})
@@ -216,6 +217,19 @@ func (aa *AgentApply) collectCodexRuleModels() []string {
 	var models []string
 	for _, rule := range aa.config.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+		models = append(models, rule.RequestModel)
+	}
+	return CollectCodexModels(models)
+}
+
+// collectOpenCodeRuleModels returns the request_models of every active rule
+// under the OpenCode scenario, deduplicated and in declaration order.
+func (aa *AgentApply) collectOpenCodeRuleModels() []string {
+	var models []string
+	for _, rule := range aa.config.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioOpenCode || !rule.Active {
 			continue
 		}
 		models = append(models, rule.RequestModel)
