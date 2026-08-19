@@ -1523,6 +1523,10 @@ export default {
   },
   "teams": {
     "accessTitle": "Team Access",
+    "keyScopeTitle": "Team key access scope",
+    "keyScopeOwner": "Keys created here belong only to {{team}} ({{slug}}).",
+    "keyScopeEndpoint": "Allowed endpoints",
+    "keyScopeRestriction": "They cannot access other Teams, other scenario endpoints, or management APIs.",
     "editTeam": "Team settings",
     "name": "Team name",
     "inactive": "Inactive",

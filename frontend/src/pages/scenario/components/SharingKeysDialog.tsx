@@ -17,6 +17,7 @@ import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
 import type { Team } from '@/types/team';
+import TeamKeyScopeAlert from './TeamKeyScopeAlert';
 
 interface SharingKeysDialogProps {
     open: boolean;
@@ -124,35 +125,38 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
                     </Button>
                 </DialogTitle>
                 <DialogContent>
-                    <SharingKeysTable
-                        tokens={sharingKeys}
-                        loading={keysLoading}
-                        visibleTokens={visibleTokens}
-                        onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
-                        onCopy={(tokenId) => {
-                            navigator.clipboard.writeText(tokenId);
-                            notify.success(t('sharingKeys.copiedToClipboard'));
-                        }}
-                        onToggleEnabled={async (key) => {
-                            const result = await api.setAPITokenEnabled(key.token_id, !key.enabled);
-                            if (result.success) {
-                                notify.success(key.enabled ? t('sharingKeys.disabled') : t('sharingKeys.enabled'));
-                                loadSharingKeys();
-                            } else {
-                                notify.error(result.error?.message || t('sharingKeys.updateFailed'));
-                            }
-                        }}
-                        onDelete={(key) => {
-                            setTokenToDelete(key);
-                            setDeleteDialogOpen(true);
-                        }}
-                        onMove={(key) => {
-                            setTokenToMove(key);
-                            setMoveTargetTeamID('');
-                        }}
-                        showUserColumn={true}
-                        showLastUsedColumn={false}
-                    />
+                    <Stack spacing={2}>
+                        <TeamKeyScopeAlert team={team} />
+                        <SharingKeysTable
+                            tokens={sharingKeys}
+                            loading={keysLoading}
+                            visibleTokens={visibleTokens}
+                            onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
+                            onCopy={(tokenId) => {
+                                navigator.clipboard.writeText(tokenId);
+                                notify.success(t('sharingKeys.copiedToClipboard'));
+                            }}
+                            onToggleEnabled={async (key) => {
+                                const result = await api.setAPITokenEnabled(key.token_id, !key.enabled);
+                                if (result.success) {
+                                    notify.success(key.enabled ? t('sharingKeys.disabled') : t('sharingKeys.enabled'));
+                                    loadSharingKeys();
+                                } else {
+                                    notify.error(result.error?.message || t('sharingKeys.updateFailed'));
+                                }
+                            }}
+                            onDelete={(key) => {
+                                setTokenToDelete(key);
+                                setDeleteDialogOpen(true);
+                            }}
+                            onMove={(key) => {
+                                setTokenToMove(key);
+                                setMoveTargetTeamID('');
+                            }}
+                            showUserColumn={true}
+                            showLastUsedColumn={false}
+                        />
+                    </Stack>
                 </DialogContent>
             </Dialog>
             {/* Move Token Dialog */}
@@ -187,7 +191,8 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('sharingKeys.createDialogTitle')}</DialogTitle>
                 <DialogContent>
-                    <Stack spacing={3} sx={{ mt: 1 }}>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TeamKeyScopeAlert team={team} />
                         <TextField
                             label={t('sharingKeys.displayName')}
                             fullWidth

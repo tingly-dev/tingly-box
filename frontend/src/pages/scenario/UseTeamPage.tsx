@@ -18,6 +18,7 @@ import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageCo
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
+import TeamKeyScopeAlert from './components/TeamKeyScopeAlert';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
@@ -123,6 +124,7 @@ const UseTeamPageContent: React.FC = () => {
                     >
                         <Stack spacing={2}>
                             {!currentTeam.enabled && <Alert severity="warning">{t('teams.disabledHint')}</Alert>}
+                            <TeamKeyScopeAlert team={currentTeam} />
                             <ProviderConfigCard title={t('teams.accessTitle')} baseUrlPath="/tingly/team" baseUrl={baseUrl}
                                                 onCopy={copyToClipboard} compact scenario={scenario} />
                         </Stack>

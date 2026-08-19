@@ -1520,6 +1520,10 @@ export default {
   },
   "teams": {
     "accessTitle": "Team 访问",
+    "keyScopeTitle": "Team 密钥访问范围",
+    "keyScopeOwner": "在此创建的密钥仅属于 {{team}}（{{slug}}）。",
+    "keyScopeEndpoint": "允许访问的端点",
+    "keyScopeRestriction": "它不能访问其他 Team、其他场景端点或管理 API。",
     "editTeam": "Team 设置",
     "name": "Team 名称",
     "inactive": "已停用",
