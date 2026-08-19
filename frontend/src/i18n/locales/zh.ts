@@ -61,6 +61,7 @@ export default {
     },
     "sidebar": {
       "newProfile": "新建配置文件",
+      "newTeam": "新建 Team",
       "profileName": "配置文件名称",
       "mode": "模式",
       "modeUnified": "统一：所有模型使用相同配置",
@@ -68,6 +69,7 @@ export default {
       "separate": "分离",
       "unified": "统一",
       "createProfileTooltip": "创建一个新的 Claude Code 配置文件，自定义设置",
+      "createTeamTooltip": "创建一个独立鉴权的 Team 工作区",
       "sloganTooltip": "致，所有独立开发者、开发团队和智能应用。",
       "collapse": "收起侧边栏",
       "expand": "展开侧边栏"
@@ -135,6 +137,7 @@ export default {
     "userRequest": "用户请求",
     "skills": "技能",
     "addProfile": "添加配置文件",
+    "addTeam": "添加 Team",
     "default": "默认",
     "onboarding": "快速添加提供商",
     "onboardingHint": "浏览或粘贴配置",
@@ -1516,14 +1519,9 @@ export default {
     "moveFailed": "移动密钥失败"
   },
   "teams": {
-    "currentTeam": "当前 Team",
-    "newTeam": "新建 Team",
-    "manageTeam": "管理",
-    "createTeam": "创建 Team",
+    "accessTitle": "Team 访问",
     "editTeam": "Team 设置",
     "name": "Team 名称",
-    "slug": "标识",
-    "slugHelper": "仅支持小写字母、数字、连字符和下划线，仅用于识别。",
     "inactive": "已停用",
     "disabledHint": "此 Team 已停用；重新启用前，其共享密钥无法访问模型接口。",
     "enableTeam": "启用 Team",

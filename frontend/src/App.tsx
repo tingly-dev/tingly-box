@@ -15,6 +15,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
 import { useVersion, VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
+import { TeamProvider } from './contexts/TeamContext';
 import Layout from './layout/Layout';
 import createAppTheme from './theme';
 
@@ -237,6 +238,7 @@ function AppContent() {
                         bookmarked path working. */}
                     <Route path="/agent/agent" element={<Navigate to="/agent/custom" replace />} />
                     <Route path="/agent/team" element={<UseTeamPage />} />
+                    <Route path="/agent/team/:teamSlug" element={<UseTeamPage />} />
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
                     <Route path="/agent/pi" element={<UsePiPage />} />
                     <Route path="/agent/dsh" element={<UseDshPage />} />
@@ -334,8 +336,10 @@ function AppWithTheme() {
                             <AuthProvider>
                                 <FeatureFlagsProvider>
                                     <ProfileProvider>
-                                        <AppContent />
-                                        <AppDialogs />
+                                        <TeamProvider>
+                                            <AppContent />
+                                            <AppDialogs />
+                                        </TeamProvider>
                                     </ProfileProvider>
                                 </FeatureFlagsProvider>
                             </AuthProvider>

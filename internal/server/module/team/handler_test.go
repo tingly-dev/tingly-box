@@ -37,7 +37,7 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	router.PUT("/teams/:team_id/disable", h.Disable)
 	router.DELETE("/teams/:team_id", h.Delete)
 
-	created := performRequest(router, http.MethodPost, "/teams", `{"name":"Research","slug":"research"}`)
+	created := performRequest(router, http.MethodPost, "/teams", `{"name":"Research"}`)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create status = %d: %s", created.Code, created.Body.String())
 	}
@@ -45,18 +45,25 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.ID == "" || info.IsDefault || !info.Enabled {
+	if info.ID == "" || info.Slug != "team1" || info.IsDefault || !info.Enabled {
 		t.Fatalf("unexpected created team: %+v", info)
 	}
 
-	duplicate := performRequest(router, http.MethodPost, "/teams", `{"name":"Duplicate","slug":"research"}`)
+	duplicate := performRequest(router, http.MethodPost, "/teams", `{"name":"Research"}`)
 	if duplicate.Code != http.StatusConflict {
 		t.Fatalf("duplicate status = %d: %s", duplicate.Code, duplicate.Body.String())
 	}
 
-	updated := performRequest(router, http.MethodPut, "/teams/"+info.ID, `{"name":"Research Lab","slug":"research-lab"}`)
+	updated := performRequest(router, http.MethodPut, "/teams/"+info.ID, `{"name":"Research Lab"}`)
 	if updated.Code != http.StatusOK {
 		t.Fatalf("update status = %d: %s", updated.Code, updated.Body.String())
+	}
+	var updatedInfo TeamInfo
+	if err := json.Unmarshal(updated.Body.Bytes(), &updatedInfo); err != nil {
+		t.Fatal(err)
+	}
+	if updatedInfo.Name != "Research Lab" || updatedInfo.Slug != "team1" {
+		t.Fatalf("unexpected updated team: %+v", updatedInfo)
 	}
 
 	disabled := performRequest(router, http.MethodPut, "/teams/"+info.ID+"/disable", "")

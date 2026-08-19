@@ -44,10 +44,10 @@ func (h *Handler) Create(c *gin.Context) {
 		sendError(c, http.StatusBadRequest, err, "invalid_request_error")
 		return
 	}
-	record, err := h.store.Create(req.Name, req.Slug)
+	record, err := h.store.Create(req.Name)
 	if err != nil {
 		status := http.StatusBadRequest
-		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(err.Error(), "already exists") {
 			status = http.StatusConflict
 		}
 		sendError(c, status, err, "invalid_request_error")
@@ -67,12 +67,12 @@ func (h *Handler) Update(c *gin.Context) {
 		sendError(c, http.StatusBadRequest, err, "invalid_request_error")
 		return
 	}
-	record, err := h.store.Update(id, req.Name, req.Slug)
+	record, err := h.store.Update(id, req.Name)
 	if err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "not found") {
 			status = http.StatusNotFound
-		} else if strings.Contains(strings.ToLower(err.Error()), "unique") {
+		} else if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(err.Error(), "already exists") {
 			status = http.StatusConflict
 		}
 		sendError(c, status, err, "invalid_request_error")

@@ -2305,10 +2305,10 @@ export const api = {
 
     listTeams: async (): Promise<any> => teamControlAPI('/api/v1/teams'),
 
-    createTeam: async (data: {name: string; slug: string}): Promise<any> =>
+    createTeam: async (data: {name: string}): Promise<any> =>
         teamControlAPI('/api/v1/teams', {method: 'POST', body: JSON.stringify(data)}),
 
-    updateTeam: async (teamId: string, data: {name: string; slug: string}): Promise<any> =>
+    updateTeam: async (teamId: string, data: {name: string}): Promise<any> =>
         teamControlAPI(`/api/v1/teams/${encodeURIComponent(teamId)}`, {
             method: 'PUT',
             body: JSON.stringify(data),

@@ -59,6 +59,7 @@ export default {
     },
     "sidebar": {
       "newProfile": "New Profile",
+      "newTeam": "New Team",
       "profileName": "Profile name",
       "mode": "Mode",
       "modeUnified": "Unified: Single model for all",
@@ -66,6 +67,7 @@ export default {
       "separate": "Separate",
       "unified": "Unified",
       "createProfileTooltip": "Create a new Claude Code profile with custom settings",
+      "createTeamTooltip": "Create an isolated Team workspace",
       "sloganTooltip": "For all Solo Builders, Dev Teams and Agents.",
       "collapse": "Collapse sidebar",
       "expand": "Expand sidebar"
@@ -133,6 +135,7 @@ export default {
     "userRequest": "User Request",
     "skills": "Skills",
     "addProfile": "Add Profile",
+    "addTeam": "Add Team",
     "default": "default",
     "onboarding": "Quick Add Provider",
     "onboardingHint": "Browse or paste config",
@@ -1519,14 +1522,9 @@ export default {
     "moveFailed": "Failed to move key"
   },
   "teams": {
-    "currentTeam": "Current team",
-    "newTeam": "New team",
-    "manageTeam": "Manage",
-    "createTeam": "Create team",
+    "accessTitle": "Team Access",
     "editTeam": "Team settings",
     "name": "Team name",
-    "slug": "Slug",
-    "slugHelper": "Lowercase letters, numbers, hyphens, and underscores. Used only for identification.",
     "inactive": "Inactive",
     "disabledHint": "This team is disabled. Its sharing keys cannot access model endpoints until the team is enabled.",
     "enableTeam": "Enable team",

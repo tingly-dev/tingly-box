@@ -17,9 +17,11 @@ import {
 } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
 import {Trans, useTranslation} from 'react-i18next';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useTeamContext } from '@/contexts/TeamContext';
+import { useNotify } from '@/hooks/useNotify';
 import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, sidebarWidth } from './constants';
 import {
@@ -47,7 +49,10 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLabel, onClose, headerAction }) => {
     const { t } = useTranslation();
     const location = useLocation();
+    const navigate = useNavigate();
+    const notify = useNotify();
     const { refresh } = useProfileContext();
+    const { refresh: refreshTeams } = useTeamContext();
     const { currentVersion } = useVersion();
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
@@ -56,6 +61,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const [isCreating, setIsCreating] = useState(false);
     const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
     const addProfileInputRef = useRef<HTMLInputElement>(null);
+    const [addTeamAnchorEl, setAddTeamAnchorEl] = useState<HTMLElement | null>(null);
+    const [newTeamName, setNewTeamName] = useState('');
+    const addTeamInputRef = useRef<HTMLInputElement>(null);
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -88,6 +96,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
         }
     }, [newProfileName, newProfileUnified, refresh, handleAddProfileClose]);
 
+    const handleAddTeamClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+        setAddTeamAnchorEl(e.currentTarget);
+        setNewTeamName('');
+        setTimeout(() => addTeamInputRef.current?.focus(), 100);
+    }, []);
+
+    const handleAddTeamClose = useCallback(() => {
+        setAddTeamAnchorEl(null);
+        setNewTeamName('');
+    }, []);
+
+    const handleCreateTeam = useCallback(async () => {
+        if (!newTeamName.trim()) return;
+        setIsCreating(true);
+        const result = await api.createTeam({name: newTeamName.trim()});
+        setIsCreating(false);
+        if (!result.success) {
+            notify.error(result.error?.message || t('teams.saveFailed'));
+            return;
+        }
+        handleAddTeamClose();
+        await refreshTeams();
+        navigate(`/agent/team/${result.data.slug}`);
+        onClose();
+    }, [newTeamName, notify, t, handleAddTeamClose, refreshTeams, navigate, onClose]);
+
     return (
         <Box
             sx={{ width: sidebarWidth, ...sidebarContainerSx }}
@@ -107,13 +141,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     }
 
                     const isAddProfile = item.path === '#add-profile';
-                    const active = !isAddProfile && (item.match ? item.match(location.pathname) : isActive(item.path));
+                    const isAddTeam = item.path === '#add-team';
+                    const isAddAction = isAddProfile || isAddTeam;
+                    const active = !isAddAction && (item.match ? item.match(location.pathname) : isActive(item.path));
 
                     const button = (
                         <ListItem disablePadding>
                             <ListItemButton
-                                {...(isAddProfile
-                                    ? { onClick: handleAddProfileClick }
+                                {...(isAddAction
+                                    ? { onClick: isAddProfile ? handleAddProfileClick : handleAddTeamClick }
                                     : { component: RouterLink, to: item.path, onClick: onClose }
                                 )}
                                 sx={{
@@ -168,6 +204,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                         <React.Fragment key={item.path}>
                             {isAddProfile ? (
                                 <Tooltip title={t('layout.sidebar.createProfileTooltip')} arrow placement="right">
+                                    {button}
+                                </Tooltip>
+                            ) : isAddTeam ? (
+                                <Tooltip title={t('layout.sidebar.createTeamTooltip')} arrow placement="right">
                                     {button}
                                 </Tooltip>
                             ) : item.tooltip ? (
@@ -249,6 +289,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                     <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>{t('common.cancel')}</Button>
                     <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>
+                        {t('common.add')}
+                    </Button>
+                </Box>
+            </Popover>
+            {/* Add Team Popover — mirrors profile creation at the layout level. */}
+            <Popover
+                open={Boolean(addTeamAnchorEl)}
+                anchorEl={addTeamAnchorEl}
+                onClose={handleAddTeamClose}
+                anchorOrigin={{vertical: 'top', horizontal: 'right'}}
+                transformOrigin={{vertical: 'top', horizontal: 'left'}}
+                slotProps={{paper: {sx: {p: 2, width: 280, mt: -0.5}}}}
+            >
+                <Typography variant="subtitle2" sx={{mb: 1.5, fontWeight: 600}}>{t('layout.sidebar.newTeam')}</Typography>
+                <Stack spacing={1.5}>
+                    <TextField
+                        inputRef={addTeamInputRef}
+                        fullWidth
+                        size="small"
+                        label={t('teams.name')}
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && void handleCreateTeam()}
+                        disabled={isCreating}
+                    />
+                </Stack>
+                <Box sx={{mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1}}>
+                    <Button size="small" onClick={handleAddTeamClose} disabled={isCreating}>{t('common.cancel')}</Button>
+                    <Button size="small" variant="contained" onClick={handleCreateTeam}
+                            disabled={!newTeamName.trim() || isCreating}>
                         {t('common.add')}
                     </Button>
                 </Box>

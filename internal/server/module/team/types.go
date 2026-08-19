@@ -4,12 +4,10 @@ import "time"
 
 type CreateRequest struct {
 	Name string `json:"name" binding:"required"`
-	Slug string `json:"slug" binding:"required"`
 }
 
 type UpdateRequest struct {
 	Name string `json:"name" binding:"required"`
-	Slug string `json:"slug" binding:"required"`
 }
 
 type TeamInfo struct {

@@ -153,10 +153,10 @@ const DEFAULTS_VERSION_KEY = 'scenario.hiddenDefaultsVersion';
 const VISIBILITY_EVENT = 'scenario-visibility-change';
 // "pi" is hidden by default until its integration details are verified —
 // remove once it's ready to launch.
-const DEFAULT_HIDDEN = ['custom', 'team', 'pi'];
+const DEFAULT_HIDDEN = ['custom', 'pi'];
 // Bump this whenever DEFAULT_HIDDEN gains a genuinely new entry, so existing
 // users pick up the new default without losing their own customisations.
-const DEFAULTS_VERSION = 3;
+const DEFAULTS_VERSION = 4;
 
 // Scenario ids renamed in place (old -> new). A user's existing hidden/shown
 // choice for the old id carries over to the new one below, instead of being
@@ -198,6 +198,11 @@ const readHidden = (): string[] => {
         // carried over above rather than freshly defaulted.
         const storedVersion = Number(localStorage.getItem(DEFAULTS_VERSION_KEY) ?? 0);
         if (storedVersion < DEFAULTS_VERSION) {
+            // Team graduated from an experimental hidden scenario to a
+            // first-class profile group in the Agent layout. Remove the old
+            // default-hidden value once so existing installs see the new
+            // Team / teamN / Add Team structure without manual discovery.
+            if (storedVersion < 4) stored = stored.filter((id) => id !== 'team');
             const renamedTargets = new Set(Object.values(RENAMED_SCENARIO_IDS));
             const genuinelyNewDefaults = DEFAULT_HIDDEN.filter((id) => !renamedTargets.has(id));
             const merged = Array.from(new Set([...stored, ...genuinelyNewDefaults]));

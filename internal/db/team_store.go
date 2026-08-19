@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,19 +86,12 @@ func (s *TeamStore) loadCache() error {
 	return nil
 }
 
-func validateTeamFields(name, slug string) error {
+func validateTeamName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("team name cannot be empty")
 	}
-	if slug == "" || len(slug) > 64 {
-		return errors.New("team slug must be between 1 and 64 characters")
-	}
-	for i := 0; i < len(slug); i++ {
-		ch := slug[i]
-		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
-			continue
-		}
-		return errors.New("team slug may contain only lowercase letters, digits, '-' and '_'")
+	if len(name) > 128 {
+		return errors.New("team name cannot exceed 128 characters")
 	}
 	return nil
 }
@@ -110,15 +104,31 @@ func cloneTeam(record *TeamRecord) *TeamRecord {
 	return &clone
 }
 
-func (s *TeamStore) Create(name, slug string) (*TeamRecord, error) {
+func (s *TeamStore) Create(name string) (*TeamRecord, error) {
 	name = strings.TrimSpace(name)
-	slug = strings.TrimSpace(slug)
-	if err := validateTeamFields(name, slug); err != nil {
+	if err := validateTeamName(name); err != nil {
 		return nil, err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	seenNumbers := make(map[int]bool)
+	for _, existing := range s.cache {
+		if existing.Name == name {
+			return nil, fmt.Errorf("team name '%s' already exists", name)
+		}
+		if strings.HasPrefix(existing.Slug, "team") {
+			numberText := strings.TrimPrefix(existing.Slug, "team")
+			if number, err := strconv.Atoi(numberText); err == nil && number > 0 && existing.Slug == fmt.Sprintf("team%d", number) {
+				seenNumbers[number] = true
+			}
+		}
+	}
+	nextNumber := 1
+	for seenNumbers[nextNumber] {
+		nextNumber++
+	}
+	slug := fmt.Sprintf("team%d", nextNumber)
 	record := &TeamRecord{ID: uuid.NewString(), Name: name, Slug: slug, Enabled: true}
 	if err := s.db.Create(record).Error; err != nil {
 		return nil, fmt.Errorf("failed to create team: %w", err)
@@ -153,10 +163,9 @@ func (s *TeamStore) List() []TeamRecord {
 	return records
 }
 
-func (s *TeamStore) Update(id, name, slug string) (*TeamRecord, error) {
+func (s *TeamStore) Update(id, name string) (*TeamRecord, error) {
 	name = strings.TrimSpace(name)
-	slug = strings.TrimSpace(slug)
-	if err := validateTeamFields(name, slug); err != nil {
+	if err := validateTeamName(name); err != nil {
 		return nil, err
 	}
 
@@ -166,14 +175,17 @@ func (s *TeamStore) Update(id, name, slug string) (*TeamRecord, error) {
 	if !ok {
 		return nil, fmt.Errorf("team '%s' not found", id)
 	}
+	for otherID, existing := range s.cache {
+		if otherID != id && existing.Name == name {
+			return nil, fmt.Errorf("team name '%s' already exists", name)
+		}
+	}
 	if err := s.db.Model(&TeamRecord{}).Where("id = ?", id).Updates(map[string]any{
 		"name": name,
-		"slug": slug,
 	}).Error; err != nil {
 		return nil, fmt.Errorf("failed to update team: %w", err)
 	}
 	record.Name = name
-	record.Slug = slug
 	record.UpdatedAt = time.Now()
 	return cloneTeam(record), nil
 }

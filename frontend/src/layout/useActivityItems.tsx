@@ -34,6 +34,7 @@ import {
 } from '@/components/icons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useTeamContext } from '@/contexts/TeamContext';
 import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
@@ -42,6 +43,7 @@ export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
     const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
     const { profiles } = useProfileContext();
+    const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
 
     const [hiddenScenarios, setHiddenScenarios] = useState<Set<string>>(() => getHiddenScenarios());
@@ -92,6 +94,22 @@ export function useActivityItems(): ActivityItem[] {
             subtitle: `${p.id} - ${p.name}`,
             icon: <Claude size={20} />,
         }));
+        const defaultTeam = teams.find(team => team.is_default);
+        const teamNavItems: NavItem[] = [
+            {
+                path: '/agent/team',
+                label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
+                subtitle: defaultTeam?.name || t('layout.default'),
+                icon: <IconUsers sx={{fontSize: 20}} />,
+            },
+            ...teams.filter(team => !team.is_default).map(team => ({
+                path: `/agent/team/${team.slug}`,
+                label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
+                subtitle: `${team.slug} - ${team.name}`,
+                icon: <IconUsers sx={{fontSize: 20}} />,
+            })),
+            {path: '#add-team', label: t('layout.addTeam'), icon: <IconPlus sx={{fontSize: 20}} />},
+        ];
 
         type HideableScenario = { id: string; nav: NavItem };
         const visible = (group: HideableScenario[]): NavItem[] =>
@@ -117,9 +135,6 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
             { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto sx={{ fontSize: 20 }} /> } },
         ]);
-        const agentTools = visible([
-            { id: 'team', nav: { path: '/agent/team', label: t('layout.nav.useTeam', { defaultValue: 'Team' }), icon: <IconUsers sx={{ fontSize: 20 }} /> } },
-        ]);
 
         const scenarioChildren: NavItem[] = [];
         if (!hiddenScenarios.has('claude_code')) {
@@ -139,9 +154,9 @@ export function useActivityItems(): ActivityItem[] {
             if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
             scenarioChildren.push(...group);
         };
+        if (!hiddenScenarios.has('team')) pushGroup(teamNavItems);
         pushGroup(codingTools);
         pushGroup(sdkTools);
-        pushGroup(agentTools);
 
         const items: ActivityItem[] = [
             {
@@ -258,5 +273,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, teams, botSummary, hiddenScenarios]);
 }

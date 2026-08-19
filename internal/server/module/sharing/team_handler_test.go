@@ -29,11 +29,11 @@ func TestHandler_CreateListAndMoveTeamToken(t *testing.T) {
 	}
 	defer manager.Close()
 
-	teamA, err := manager.Team().Create("Team A", "team-a")
+	teamA, err := manager.Team().Create("Team A")
 	if err != nil {
 		t.Fatal(err)
 	}
-	teamB, err := manager.Team().Create("Team B", "team-b")
+	teamB, err := manager.Team().Create("Team B")
 	if err != nil {
 		t.Fatal(err)
 	}
