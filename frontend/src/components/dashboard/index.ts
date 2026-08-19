@@ -32,3 +32,10 @@ export {
     hasCacheWrites,
     getErrorRateColor,
 } from './chartStyles';
+export {
+    computeUsageSummary,
+    filterAndSort,
+    useRosterAxis,
+    RosterBreakdownTable,
+} from './RosterAxis';
+export type { MetricRow, RosterAxis as RosterAxisState, SortField, SortDirection } from './RosterAxis';

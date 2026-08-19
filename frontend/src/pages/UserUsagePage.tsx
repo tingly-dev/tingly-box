@@ -53,16 +53,16 @@ import {
     hasCacheWrites,
     getErrorRateColor,
     getUsageMetricColumns,
-    UsageMetricHeaderCells,
     UsageMetricValueCells,
+    computeUsageSummary,
+    useRosterAxis,
+    RosterBreakdownTable,
 } from '@/components/dashboard';
-import type { AggregatedStat, UsageMetricKey, UsageMetricLabels } from '@/components/dashboard';
+import type { AggregatedStat, MetricRow, SortField, SortDirection, UsageMetricLabels } from '@/components/dashboard';
 import api from '@/services/api';
 
 type TimeRange = 'today' | '7d' | '30d' | '90d';
 type ViewMode = 'account' | 'model' | 'provider';
-type SortField = 'name' | UsageMetricKey;
-type SortDirection = 'asc' | 'desc';
 
 interface APITokenInfo {
     token_id: string;
@@ -83,18 +83,6 @@ interface UserUsageRow extends APITokenInfo {
     cache_write_tokens: number;
     error_count: number;
     error_rate: number;
-}
-
-// Common shape UserUsageRow and AggregatedStat both satisfy, so summary/sort
-// logic can run once against any of the three roster axes.
-interface MetricRow {
-    request_count: number;
-    total_input_tokens: number;
-    total_output_tokens: number;
-    cache_read_tokens?: number;
-    cache_write_tokens?: number;
-    error_count?: number;
-    error_rate?: number;
 }
 
 const RANGE_DAYS: Record<TimeRange, number> = {
@@ -148,58 +136,59 @@ const getModelKey = (stat: Pick<AggregatedStat, 'provider_uuid' | 'model' | 'key
 const getProviderKey = (stat: Pick<AggregatedStat, 'provider_uuid' | 'provider_name' | 'key'>) =>
     stat.provider_uuid || stat.provider_name || stat.key;
 
-// Sum + derive the same aggregates (display total, cache hit rate, error
-// rate) over any axis' row shape.
-const computeUsageSummary = (items: MetricRow[]) => {
-    const totals = items.reduce(
-        (acc, row) => {
-            acc.tokens += getTotalTokens(row);
-            acc.inputTokens += row.total_input_tokens;
-            acc.outputTokens += row.total_output_tokens;
-            acc.cacheTokens += row.cache_read_tokens || 0;
-            acc.cacheWriteTokens += row.cache_write_tokens || 0;
-            acc.requests += row.request_count;
-            acc.errors += row.error_count || 0;
-            return acc;
-        },
-        { tokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, cacheWriteTokens: 0, requests: 0, errors: 0 },
-    );
-    return {
-        ...totals,
-        cacheHitRate: getCacheHitRate(totals.cacheTokens, totals.inputTokens),
-        errorRate: totals.requests > 0 ? (totals.errors / totals.requests) * 100 : 0,
-    };
-};
+const accountKey = (row: UserUsageRow) => row.user_id;
+const accountName = (row: UserUsageRow) => row.display_name;
+const accountSearchText = (row: UserUsageRow) => [row.display_name, row.user_id];
+const modelName = (row: AggregatedStat) => row.model || row.key;
+const modelSearchText = (row: AggregatedStat) => [row.model || row.key, row.provider_name || ''];
+const providerName = (row: AggregatedStat) => row.provider_name || row.key;
+const providerSearchText = (row: AggregatedStat) => [row.provider_name || row.key];
 
-// Shared filter + sort for every roster axis.
-function filterAndSort<T extends MetricRow>(
-    items: T[],
-    query: string,
-    searchText: (item: T) => string[],
-    sortField: SortField,
-    sortDirection: SortDirection,
-    nameOf: (item: T) => string,
-): T[] {
-    const q = query.trim().toLocaleLowerCase();
-    const direction = sortDirection === 'asc' ? 1 : -1;
-    return items
-        .filter((item) => !q || searchText(item).some((text) => text.toLocaleLowerCase().includes(q)))
-        .sort((a, b) => {
-            if (sortField === 'name') return direction * nameOf(a).localeCompare(nameOf(b));
-            if (sortField === 'requests') return direction * (a.request_count - b.request_count);
-            if (sortField === 'cacheRead') return direction * ((a.cache_read_tokens || 0) - (b.cache_read_tokens || 0));
-            if (sortField === 'cacheWrite') return direction * ((a.cache_write_tokens || 0) - (b.cache_write_tokens || 0));
-            if (sortField === 'cacheHit') {
-                return direction * (
-                    getCacheHitRate(a.cache_read_tokens || 0, a.total_input_tokens)
-                    - getCacheHitRate(b.cache_read_tokens || 0, b.total_input_tokens)
-                );
-            }
-            if (sortField === 'input') return direction * (a.total_input_tokens - b.total_input_tokens);
-            if (sortField === 'output') return direction * (a.total_output_tokens - b.total_output_tokens);
-            if (sortField === 'errorRate') return direction * ((a.error_rate || 0) - (b.error_rate || 0));
-            return direction * (getTotalTokens(a) - getTotalTokens(b));
-        });
+// The three "detail" loaders below are stable module-level functions (not
+// closures), so useRosterAxis's effect dependency on `loadDetail` never
+// changes identity across renders — no useCallback needed at the call site.
+async function fetchModelsForAccount(selected: UserUsageRow | undefined, range: TimeRange): Promise<AggregatedStat[]> {
+    if (!selected) return [];
+    const result = await api.getUsageStats({
+        ...buildTimeParams(range),
+        user_id: selected.user_id,
+        group_by: 'model',
+        sort_by: 'total_tokens',
+        sort_order: 'desc',
+        limit: 1000,
+    });
+    return result?.data || [];
+}
+
+// Which accounts used this model — scoped by provider + model together, not
+// model name alone, since the same model name can exist under more than one
+// provider.
+async function fetchAccountsForModel(selected: AggregatedStat | undefined, range: TimeRange): Promise<AggregatedStat[]> {
+    if (!selected) return [];
+    const result = await api.getUsageStats({
+        ...buildTimeParams(range),
+        model: selected.model,
+        provider: selected.provider_uuid,
+        group_by: 'user',
+        sort_by: 'total_tokens',
+        sort_order: 'desc',
+        limit: 500,
+    });
+    return result?.data || [];
+}
+
+// Which accounts used this provider (across all its models).
+async function fetchAccountsForProvider(selected: AggregatedStat | undefined, range: TimeRange): Promise<AggregatedStat[]> {
+    if (!selected) return [];
+    const result = await api.getUsageStats({
+        ...buildTimeParams(range),
+        provider: selected.provider_uuid,
+        group_by: 'user',
+        sort_by: 'total_tokens',
+        sort_order: 'desc',
+        limit: 500,
+    });
+    return result?.data || [];
 }
 
 const usageTableCardSx = {
@@ -229,97 +218,100 @@ const UserUsageSkeleton = () => (
     </Box>
 );
 
-// Shared shape of the "which accounts used this X" breakdown, used by both
-// the model detail panel and the provider detail panel (only the data
-// source, aria label, and identity column heading differ).
-function AccountsBreakdownTable({
-    accounts,
-    ariaLabel,
-    identityLabel,
-    noUsageLabel,
-    accountDisplayName,
-    usageMetricLabels,
+// Identity title/subtitle/status-chip block for the detail panel. Isolated
+// into its own component because the three axes' identity shapes genuinely
+// differ (account: name + user_id + enabled/primary + last-used/joined;
+// model: name + provider name; provider: name only) — inlining it kept the
+// page body dominated by one large three-way ternary.
+function RosterDetailHeader({
+    viewMode,
+    selectedUser,
+    selectedModel,
+    selectedProvider,
+    accountsCount,
+    t,
 }: {
-    accounts: AggregatedStat[];
-    ariaLabel: string;
-    identityLabel: string;
-    noUsageLabel: string;
-    accountDisplayName: (userID: string) => string;
-    usageMetricLabels: UsageMetricLabels;
+    viewMode: ViewMode;
+    selectedUser?: UserUsageRow;
+    selectedModel?: AggregatedStat;
+    selectedProvider?: AggregatedStat;
+    accountsCount: number;
+    t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-    const showCacheWrite = hasCacheWrites(accounts);
-    if (accounts.length === 0) {
-        return (
-            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                <Typography variant="body1">{noUsageLabel}</Typography>
-            </Box>
-        );
-    }
     return (
-        <TableContainer
-            sx={{
-                maxHeight: 520,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1.5,
-                overscrollBehavior: 'contain',
-            }}
-            role="region"
-            aria-label={ariaLabel}
-        >
-            <Table stickyHeader sx={{ minWidth: showCacheWrite ? 1060 : 960 }}>
-                <TableHead>
-                    <TableRow
-                        sx={{
-                            '& .MuiTableCell-root': {
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                color: 'text.secondary',
-                                py: 1.25,
-                            },
-                        }}
-                    >
-                        <TableCell>{identityLabel}</TableCell>
-                        <UsageMetricHeaderCells
-                            labels={usageMetricLabels}
-                            showTotal
-                            showCacheWrite={showCacheWrite}
+        <Box>
+            <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
+                        {viewMode === 'account'
+                            ? selectedUser!.display_name
+                            : viewMode === 'model'
+                            ? (selectedModel!.model || selectedModel!.key)
+                            : (selectedProvider!.provider_name || selectedProvider!.key)}
+                    </Typography>
+                    {viewMode !== 'provider' && (
+                        <Typography variant="body2" sx={{ fontFamily: viewMode === 'account' ? 'monospace' : undefined }}>
+                            {viewMode === 'account' ? selectedUser!.user_id : (selectedModel!.provider_name || '—')}
+                        </Typography>
+                    )}
+                </Box>
+                {viewMode === 'account' ? (
+                    selectedUser!.account_type === 'primary' ? (
+                        <Chip
+                            size="small"
+                            color="primary"
+                            label={t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' })}
+                            variant="outlined"
                         />
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {accounts.map((account) => (
-                        <TableRow
-                            key={account.user_id || account.key}
-                            hover
-                            sx={{
-                                '& .MuiTableCell-root': {
-                                    py: 1.25,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'divider',
-                                },
-                            }}
-                        >
-                            <TableCell>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {accountDisplayName(account.user_id || account.key)}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                                    {account.user_id || account.key}
-                                </Typography>
-                            </TableCell>
-                            <UsageMetricValueCells
-                                usage={account}
-                                showTotal
-                                showCacheWrite={showCacheWrite}
-                            />
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </TableContainer>
+                    ) : (
+                        <Chip
+                            size="small"
+                            icon={selectedUser!.enabled ? <CheckCircle /> : <Block />}
+                            color={selectedUser!.enabled ? 'success' : 'default'}
+                            label={selectedUser!.enabled
+                                ? t('dashboard.userUsage.enabled', { defaultValue: 'Enabled' })
+                                : t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
+                            variant="outlined"
+                        />
+                    )
+                ) : (
+                    <Chip
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        label={t('dashboard.userUsage.accountsUsingModel', {
+                            count: accountsCount,
+                            defaultValue: `${accountsCount} accounts`,
+                        })}
+                    />
+                )}
+            </Stack>
+            {viewMode === 'account' && (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 2 }} sx={{ mt: 1.25 }}>
+                    <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center' }}>
+                        <AccessTime sx={{ fontSize: 17, color: 'text.secondary' }} />
+                        <Typography variant="body2">
+                            {selectedUser!.account_type === 'primary'
+                                ? t('dashboard.userUsage.globalTokenUsage', { defaultValue: 'Usage through the global model token' })
+                                : selectedUser!.last_used_at
+                                ? t('dashboard.userUsage.lastUsed', {
+                                    value: formatDateTime(selectedUser!.last_used_at),
+                                    defaultValue: `Last used ${formatDateTime(selectedUser!.last_used_at)}`,
+                                })
+                                : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
+                        </Typography>
+                    </Stack>
+                    {selectedUser!.created_at && (
+                        <Typography variant="body2">
+                            {t('dashboard.userUsage.joined', {
+                                value: formatDateTime(selectedUser!.created_at),
+                                defaultValue: `Added ${formatDateTime(selectedUser!.created_at)}`,
+                            })}
+                        </Typography>
+                    )}
+                </Stack>
+            )}
+        </Box>
     );
 }
 
@@ -332,35 +324,11 @@ export default function UserUsagePage() {
     const [userStats, setUserStats] = useState<AggregatedStat[]>([]);
     const [modelRoster, setModelRoster] = useState<AggregatedStat[]>([]);
     const [providerRoster, setProviderRoster] = useState<AggregatedStat[]>([]);
-    const [modelStats, setModelStats] = useState<AggregatedStat[]>([]);
-    const [accountsByModel, setAccountsByModel] = useState<AggregatedStat[]>([]);
-    const [accountsByProvider, setAccountsByProvider] = useState<AggregatedStat[]>([]);
-    const [selectedUserID, setSelectedUserID] = useState('');
-    const [selectedModelKey, setSelectedModelKey] = useState('');
-    const [selectedProviderKey, setSelectedProviderKey] = useState('');
-    const [accountSearch, setAccountSearch] = useState('');
-    const [modelSearch, setModelSearch] = useState('');
-    const [providerSearch, setProviderSearch] = useState('');
-    const [accountSortField, setAccountSortField] = useState<SortField>('total');
-    const [accountSortDirection, setAccountSortDirection] = useState<SortDirection>('desc');
-    const [modelSortField, setModelSortField] = useState<SortField>('total');
-    const [modelSortDirection, setModelSortDirection] = useState<SortDirection>('desc');
-    const [providerSortField, setProviderSortField] = useState<SortField>('total');
-    const [providerSortDirection, setProviderSortDirection] = useState<SortDirection>('desc');
-    const [accountPage, setAccountPage] = useState(0);
-    const [modelPage, setModelPage] = useState(0);
-    const [providerPage, setProviderPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [loading, setLoading] = useState(true);
-    const [modelDetailLoading, setModelDetailLoading] = useState(false);
-    const [accountsByModelLoading, setAccountsByModelLoading] = useState(false);
-    const [accountsByProviderLoading, setAccountsByProviderLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
     const requestSeq = useRef(0);
-    const modelDetailSeq = useRef(0);
-    const accountsByModelSeq = useRef(0);
-    const accountsByProviderSeq = useRef(0);
     const detailPanelRef = useRef<HTMLDivElement>(null);
 
     const loadRosters = useCallback(async (selectedRange: TimeRange, manual = false) => {
@@ -426,83 +394,6 @@ export default function UserUsagePage() {
         }
     }, []);
 
-    const loadModelDetail = useCallback(async (userID: string, selectedRange: TimeRange) => {
-        if (!userID) {
-            setModelStats([]);
-            return;
-        }
-        const seq = ++modelDetailSeq.current;
-        setModelDetailLoading(true);
-        try {
-            const result = await api.getUsageStats({
-                ...buildTimeParams(selectedRange),
-                user_id: userID,
-                group_by: 'model',
-                sort_by: 'total_tokens',
-                sort_order: 'desc',
-                limit: 1000,
-            });
-            if (seq === modelDetailSeq.current) setModelStats(result?.data || []);
-        } catch {
-            if (seq === modelDetailSeq.current) setModelStats([]);
-        } finally {
-            if (seq === modelDetailSeq.current) setModelDetailLoading(false);
-        }
-    }, []);
-
-    // Which accounts used this model — the mirror of loadModelDetail. Scoped
-    // by provider + model together, not model name alone, since the same
-    // model name can exist under more than one provider.
-    const loadAccountsByModel = useCallback(async (model: AggregatedStat | undefined, selectedRange: TimeRange) => {
-        if (!model) {
-            setAccountsByModel([]);
-            return;
-        }
-        const seq = ++accountsByModelSeq.current;
-        setAccountsByModelLoading(true);
-        try {
-            const result = await api.getUsageStats({
-                ...buildTimeParams(selectedRange),
-                model: model.model,
-                provider: model.provider_uuid,
-                group_by: 'user',
-                sort_by: 'total_tokens',
-                sort_order: 'desc',
-                limit: 500,
-            });
-            if (seq === accountsByModelSeq.current) setAccountsByModel(result?.data || []);
-        } catch {
-            if (seq === accountsByModelSeq.current) setAccountsByModel([]);
-        } finally {
-            if (seq === accountsByModelSeq.current) setAccountsByModelLoading(false);
-        }
-    }, []);
-
-    // Which accounts used this provider (across all its models).
-    const loadAccountsByProvider = useCallback(async (provider: AggregatedStat | undefined, selectedRange: TimeRange) => {
-        if (!provider) {
-            setAccountsByProvider([]);
-            return;
-        }
-        const seq = ++accountsByProviderSeq.current;
-        setAccountsByProviderLoading(true);
-        try {
-            const result = await api.getUsageStats({
-                ...buildTimeParams(selectedRange),
-                provider: provider.provider_uuid,
-                group_by: 'user',
-                sort_by: 'total_tokens',
-                sort_order: 'desc',
-                limit: 500,
-            });
-            if (seq === accountsByProviderSeq.current) setAccountsByProvider(result?.data || []);
-        } catch {
-            if (seq === accountsByProviderSeq.current) setAccountsByProvider([]);
-        } finally {
-            if (seq === accountsByProviderSeq.current) setAccountsByProviderLoading(false);
-        }
-    }, []);
-
     useEffect(() => {
         loadRosters(range);
     }, [loadRosters, range]);
@@ -545,164 +436,46 @@ export default function UserUsagePage() {
         return token?.display_name || userID;
     }, [t, tokenByUserID]);
 
-    const visibleAccountRows = useMemo(() => filterAndSort(
-        rows,
-        accountSearch,
-        (row) => [row.display_name, row.user_id],
-        accountSortField,
-        accountSortDirection,
-        (row) => row.display_name,
-    ), [rows, accountSearch, accountSortField, accountSortDirection]);
+    // Each axis owns its own search/sort/pagination/selection/detail-load
+    // lifecycle via the shared hook — see components/dashboard/RosterAxis.tsx.
+    // All three run unconditionally (fixed hook-call count), so all three
+    // rosters' detail queries are ready before the user ever toggles to them.
+    const accountAxis = useRosterAxis<UserUsageRow, AggregatedStat, TimeRange>({
+        roster: rows,
+        getKey: accountKey,
+        nameOf: accountName,
+        searchText: accountSearchText,
+        rowsPerPage,
+        range,
+        loadDetail: fetchModelsForAccount,
+    });
+    const modelAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
+        roster: modelRoster,
+        getKey: getModelKey,
+        nameOf: modelName,
+        searchText: modelSearchText,
+        rowsPerPage,
+        range,
+        loadDetail: fetchAccountsForModel,
+    });
+    const providerAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
+        roster: providerRoster,
+        getKey: getProviderKey,
+        nameOf: providerName,
+        searchText: providerSearchText,
+        rowsPerPage,
+        range,
+        loadDetail: fetchAccountsForProvider,
+    });
+    // Fields common to every axis (search/sort/page/handleSort/detailLoading)
+    // are safe to read off this union without a three-way ternary at every
+    // use site; axis-specific fields (selected/pagedRows/detail) are read
+    // off the specific axis in the branch that renders them.
+    const activeAxis = viewMode === 'account' ? accountAxis : viewMode === 'model' ? modelAxis : providerAxis;
 
-    const visibleModelRows = useMemo(() => filterAndSort(
-        modelRoster,
-        modelSearch,
-        (row) => [row.model || row.key, row.provider_name || ''],
-        modelSortField,
-        modelSortDirection,
-        (row) => row.model || row.key,
-    ), [modelRoster, modelSearch, modelSortField, modelSortDirection]);
-
-    const visibleProviderRows = useMemo(() => filterAndSort(
-        providerRoster,
-        providerSearch,
-        (row) => [row.provider_name || row.key],
-        providerSortField,
-        providerSortDirection,
-        (row) => row.provider_name || row.key,
-    ), [providerRoster, providerSearch, providerSortField, providerSortDirection]);
-
-    const pagedAccountRows = useMemo(
-        () => visibleAccountRows.slice(accountPage * rowsPerPage, accountPage * rowsPerPage + rowsPerPage),
-        [visibleAccountRows, accountPage, rowsPerPage],
-    );
-    const pagedModelRows = useMemo(
-        () => visibleModelRows.slice(modelPage * rowsPerPage, modelPage * rowsPerPage + rowsPerPage),
-        [visibleModelRows, modelPage, rowsPerPage],
-    );
-    const pagedProviderRows = useMemo(
-        () => visibleProviderRows.slice(providerPage * rowsPerPage, providerPage * rowsPerPage + rowsPerPage),
-        [visibleProviderRows, providerPage, rowsPerPage],
-    );
-
-    // Per-axis roster state, looked up by the active view mode so the render
-    // below doesn't need a three-way ternary at every use site.
-    const rosterByMode: Record<ViewMode, {
-        visibleLength: number;
-        page: number;
-        setPage: (page: number) => void;
-        sortField: SortField;
-        sortDirection: SortDirection;
-        setSortField: (field: SortField) => void;
-        setSortDirection: (updater: (direction: SortDirection) => SortDirection) => void;
-    }> = {
-        account: {
-            visibleLength: visibleAccountRows.length,
-            page: accountPage,
-            setPage: setAccountPage,
-            sortField: accountSortField,
-            sortDirection: accountSortDirection,
-            setSortField: setAccountSortField,
-            setSortDirection: setAccountSortDirection,
-        },
-        model: {
-            visibleLength: visibleModelRows.length,
-            page: modelPage,
-            setPage: setModelPage,
-            sortField: modelSortField,
-            sortDirection: modelSortDirection,
-            setSortField: setModelSortField,
-            setSortDirection: setModelSortDirection,
-        },
-        provider: {
-            visibleLength: visibleProviderRows.length,
-            page: providerPage,
-            setPage: setProviderPage,
-            sortField: providerSortField,
-            sortDirection: providerSortDirection,
-            setSortField: setProviderSortField,
-            setSortDirection: setProviderSortDirection,
-        },
-    };
-    const activeRoster = rosterByMode[viewMode];
-
-    const handleSort = (field: SortField) => {
-        const { sortField: currentField, setSortField, setSortDirection } = activeRoster;
-        if (field === currentField) {
-            setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
-        } else {
-            setSortField(field);
-            setSortDirection(() => (field === 'name' ? 'asc' : 'desc'));
-        }
-    };
-
-    // Filtering/sorting can shrink the result set below the current page.
-    useEffect(() => {
-        setAccountPage(0);
-    }, [accountSearch, accountSortField, accountSortDirection, range]);
-    useEffect(() => {
-        setModelPage(0);
-    }, [modelSearch, modelSortField, modelSortDirection, range]);
-    useEffect(() => {
-        setProviderPage(0);
-    }, [providerSearch, providerSortField, providerSortDirection, range]);
-
-    useEffect(() => {
-        if (visibleAccountRows.length === 0) {
-            setSelectedUserID('');
-            return;
-        }
-        if (!visibleAccountRows.some((row) => row.user_id === selectedUserID)) {
-            setSelectedUserID(visibleAccountRows[0].user_id);
-        }
-    }, [rows, selectedUserID, visibleAccountRows]);
-
-    useEffect(() => {
-        if (visibleModelRows.length === 0) {
-            setSelectedModelKey('');
-            return;
-        }
-        if (!visibleModelRows.some((row) => getModelKey(row) === selectedModelKey)) {
-            setSelectedModelKey(getModelKey(visibleModelRows[0]));
-        }
-    }, [modelRoster, selectedModelKey, visibleModelRows]);
-
-    useEffect(() => {
-        if (visibleProviderRows.length === 0) {
-            setSelectedProviderKey('');
-            return;
-        }
-        if (!visibleProviderRows.some((row) => getProviderKey(row) === selectedProviderKey)) {
-            setSelectedProviderKey(getProviderKey(visibleProviderRows[0]));
-        }
-    }, [providerRoster, selectedProviderKey, visibleProviderRows]);
-
-    useEffect(() => {
-        loadModelDetail(selectedUserID, range);
-    }, [loadModelDetail, range, selectedUserID]);
-
-    useEffect(() => {
-        const model = modelRoster.find((item) => getModelKey(item) === selectedModelKey);
-        loadAccountsByModel(model, range);
-    }, [loadAccountsByModel, modelRoster, range, selectedModelKey]);
-
-    useEffect(() => {
-        const provider = providerRoster.find((item) => getProviderKey(item) === selectedProviderKey);
-        loadAccountsByProvider(provider, range);
-    }, [loadAccountsByProvider, providerRoster, range, selectedProviderKey]);
-
-    const selectedUser = useMemo(
-        () => rows.find((row) => row.user_id === selectedUserID),
-        [rows, selectedUserID],
-    );
-    const selectedModel = useMemo(
-        () => modelRoster.find((row) => getModelKey(row) === selectedModelKey),
-        [modelRoster, selectedModelKey],
-    );
-    const selectedProvider = useMemo(
-        () => providerRoster.find((row) => getProviderKey(row) === selectedProviderKey),
-        [providerRoster, selectedProviderKey],
-    );
+    const selectedUser = accountAxis.selected;
+    const selectedModel = modelAxis.selected;
+    const selectedProvider = providerAxis.selected;
     const detailSubject: MetricRow | undefined = viewMode === 'account'
         ? selectedUser
         : viewMode === 'model'
@@ -733,7 +506,6 @@ export default function UserUsagePage() {
     const showAccountCacheWrite = hasCacheWrites(rows);
     const showModelRosterCacheWrite = hasCacheWrites(modelRoster);
     const showProviderRosterCacheWrite = hasCacheWrites(providerRoster);
-    const showModelDetailCacheWrite = hasCacheWrites(modelStats);
 
     const primarySummaryItem = viewMode === 'account'
         ? {
@@ -820,47 +592,60 @@ export default function UserUsagePage() {
         reasoning: t('dashboard.userUsage.reasoning', { defaultValue: 'Reasoning' }),
         errorRate: t('dashboard.userUsage.errorRate', { defaultValue: 'Error rate' }),
     };
-    type PrimaryColumn = { field: SortField; label: string; align?: 'right'; defaultDir: SortDirection };
+    // A column either sorts the roster ('sort') or is a plain, non-sortable
+    // identity header ('label' — e.g. the Provider column on the model
+    // roster, where only Model is sortable). Keeping non-sortable columns in
+    // this same array means the header row and its colSpan never need a
+    // separate special case for "the model axis has one extra column".
+    type PrimaryColumn =
+        | { kind: 'sort'; field: SortField; label: string; align?: 'right'; defaultDir: SortDirection }
+        | { kind: 'label'; label: string };
     const metricColumns = (showCacheWrite: boolean): PrimaryColumn[] => getUsageMetricColumns({
         showTotal: true,
         showCacheWrite,
     }, usageMetricLabels).map((column) => ({
+        kind: 'sort' as const,
         field: column.key as SortField,
         label: column.label,
         align: 'right' as const,
         defaultDir: 'desc' as const,
     }));
     const accountColumns: PrimaryColumn[] = [
-        { field: 'name', label: t('dashboard.userUsage.user', { defaultValue: 'User' }), defaultDir: 'asc' },
+        { kind: 'sort', field: 'name', label: t('dashboard.userUsage.user', { defaultValue: 'User' }), defaultDir: 'asc' },
         ...metricColumns(showAccountCacheWrite),
     ];
     const modelColumns: PrimaryColumn[] = [
-        { field: 'name', label: t('dashboard.userUsage.model', { defaultValue: 'Model' }), defaultDir: 'asc' },
+        { kind: 'label', label: t('dashboard.userUsage.provider', { defaultValue: 'Provider' }) },
+        { kind: 'sort', field: 'name', label: t('dashboard.userUsage.model', { defaultValue: 'Model' }), defaultDir: 'asc' },
         ...metricColumns(showModelRosterCacheWrite),
     ];
     const providerColumns: PrimaryColumn[] = [
-        { field: 'name', label: t('dashboard.userUsage.provider', { defaultValue: 'Provider' }), defaultDir: 'asc' },
+        { kind: 'sort', field: 'name', label: t('dashboard.userUsage.provider', { defaultValue: 'Provider' }), defaultDir: 'asc' },
         ...metricColumns(showProviderRosterCacheWrite),
     ];
     const primaryColumns = viewMode === 'account' ? accountColumns : viewMode === 'model' ? modelColumns : providerColumns;
-    const { sortField, sortDirection } = activeRoster;
+
+    const rosterRowSx = (selected: boolean) => ({
+        cursor: 'pointer',
+        position: 'relative',
+        transition: 'background-color 0.15s ease',
+        '& .MuiTableCell-root': {
+            py: 1.25,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+        },
+        '&.Mui-selected': {
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
+            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
+        },
+    });
+    const selectionArrowSx = (selected: boolean) => ({ fontSize: 18, opacity: selected ? 1 : 0.22 });
 
     const scrollDetailIntoView = () => {
         requestAnimationFrame(() => {
             detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
-    };
-    const handleSelectUser = (userID: string) => {
-        setSelectedUserID(userID);
-        scrollDetailIntoView();
-    };
-    const handleSelectModel = (modelKey: string) => {
-        setSelectedModelKey(modelKey);
-        scrollDetailIntoView();
-    };
-    const handleSelectProvider = (providerKey: string) => {
-        setSelectedProviderKey(providerKey);
-        scrollDetailIntoView();
     };
 
     if (loading) return <UserUsageSkeleton />;
@@ -962,17 +747,13 @@ export default function UserUsagePage() {
                                 </Typography>
                                 <Chip
                                     size="small"
-                                    label={activeRoster.visibleLength}
+                                    label={activeAxis.visibleRows.length}
                                     sx={{ height: 22 }}
                                 />
                             </Stack>
                             <SearchField
-                                value={viewMode === 'account' ? accountSearch : viewMode === 'model' ? modelSearch : providerSearch}
-                                onChange={(event) => {
-                                    if (viewMode === 'account') setAccountSearch(event.target.value);
-                                    else if (viewMode === 'model') setModelSearch(event.target.value);
-                                    else setProviderSearch(event.target.value);
-                                }}
+                                value={activeAxis.search}
+                                onChange={(event) => activeAxis.setSearch(event.target.value)}
                                 placeholder={viewMode === 'account'
                                     ? t('dashboard.userUsage.search', { defaultValue: 'Search users' })
                                     : viewMode === 'model'
@@ -1009,51 +790,36 @@ export default function UserUsagePage() {
                                             },
                                         }}
                                     >
-                                        {viewMode === 'model' && (
-                                            <TableCell>{t('dashboard.userUsage.provider', { defaultValue: 'Provider' })}</TableCell>
-                                        )}
-                                        {primaryColumns.map((col) => (
+                                        {primaryColumns.map((col, index) => (
                                             <TableCell
-                                                key={col.field}
-                                                align={col.align}
-                                                sortDirection={sortField === col.field ? sortDirection : false}
+                                                key={col.kind === 'sort' ? col.field : `label-${index}`}
+                                                align={col.kind === 'sort' ? col.align : undefined}
+                                                sortDirection={col.kind === 'sort' && activeAxis.sortField === col.field ? activeAxis.sortDirection : false}
                                             >
-                                                <TableSortLabel
-                                                    active={sortField === col.field}
-                                                    direction={sortField === col.field ? sortDirection : col.defaultDir}
-                                                    onClick={() => handleSort(col.field)}
-                                                >
-                                                    {col.label}
-                                                </TableSortLabel>
+                                                {col.kind === 'sort' ? (
+                                                    <TableSortLabel
+                                                        active={activeAxis.sortField === col.field}
+                                                        direction={activeAxis.sortField === col.field ? activeAxis.sortDirection : col.defaultDir}
+                                                        onClick={() => activeAxis.handleSort(col.field)}
+                                                    >
+                                                        {col.label}
+                                                    </TableSortLabel>
+                                                ) : col.label}
                                             </TableCell>
                                         ))}
                                         <TableCell padding="checkbox" />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {viewMode === 'account' && pagedAccountRows.map((row) => {
-                                        const selected = row.user_id === selectedUserID;
+                                    {viewMode === 'account' && accountAxis.pagedRows.map((row) => {
+                                        const selected = row.user_id === accountAxis.selectedKey;
                                         return (
                                             <TableRow
                                                 key={row.token_id}
                                                 hover
                                                 selected={selected}
-                                                onClick={() => handleSelectUser(row.user_id)}
-                                                sx={{
-                                                    cursor: 'pointer',
-                                                    position: 'relative',
-                                                    transition: 'background-color 0.15s ease',
-                                                    '& .MuiTableCell-root': {
-                                                        py: 1.25,
-                                                        borderBottom: '1px solid',
-                                                        borderColor: 'divider',
-                                                    },
-                                                    '&.Mui-selected': {
-                                                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                                        boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
-                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
-                                                    },
-                                                }}
+                                                onClick={() => { accountAxis.setSelectedKey(row.user_id); scrollDetailIntoView(); }}
+                                                sx={rosterRowSx(selected)}
                                             >
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
@@ -1105,96 +871,56 @@ export default function UserUsagePage() {
                                                         </Box>
                                                     </Stack>
                                                 </TableCell>
-                                                <UsageMetricValueCells
-                                                    usage={row}
-                                                    showTotal
-                                                    showCacheWrite={showAccountCacheWrite}
-                                                />
+                                                <UsageMetricValueCells usage={row} showTotal showCacheWrite={showAccountCacheWrite} />
                                                 <TableCell padding="checkbox">
-                                                    <ArrowForward sx={{ fontSize: 18, opacity: selected ? 1 : 0.22 }} color={selected ? 'primary' : 'inherit'} />
+                                                    <ArrowForward sx={selectionArrowSx(selected)} color={selected ? 'primary' : 'inherit'} />
                                                 </TableCell>
                                             </TableRow>
                                         );
                                     })}
-                                    {viewMode === 'model' && pagedModelRows.map((row) => {
+                                    {viewMode === 'model' && modelAxis.pagedRows.map((row) => {
                                         const key = getModelKey(row);
-                                        const selected = key === selectedModelKey;
+                                        const selected = key === modelAxis.selectedKey;
                                         return (
                                             <TableRow
                                                 key={key}
                                                 hover
                                                 selected={selected}
-                                                onClick={() => handleSelectModel(key)}
-                                                sx={{
-                                                    cursor: 'pointer',
-                                                    position: 'relative',
-                                                    transition: 'background-color 0.15s ease',
-                                                    '& .MuiTableCell-root': {
-                                                        py: 1.25,
-                                                        borderBottom: '1px solid',
-                                                        borderColor: 'divider',
-                                                    },
-                                                    '&.Mui-selected': {
-                                                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                                        boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
-                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
-                                                    },
-                                                }}
+                                                onClick={() => { modelAxis.setSelectedKey(key); scrollDetailIntoView(); }}
+                                                sx={rosterRowSx(selected)}
                                             >
                                                 <TableCell>{row.provider_name || '—'}</TableCell>
                                                 <TableCell sx={{ fontWeight: 600 }}>{row.model || row.key}</TableCell>
-                                                <UsageMetricValueCells
-                                                    usage={row}
-                                                    showTotal
-                                                    showCacheWrite={showModelRosterCacheWrite}
-                                                />
+                                                <UsageMetricValueCells usage={row} showTotal showCacheWrite={showModelRosterCacheWrite} />
                                                 <TableCell padding="checkbox">
-                                                    <ArrowForward sx={{ fontSize: 18, opacity: selected ? 1 : 0.22 }} color={selected ? 'primary' : 'inherit'} />
+                                                    <ArrowForward sx={selectionArrowSx(selected)} color={selected ? 'primary' : 'inherit'} />
                                                 </TableCell>
                                             </TableRow>
                                         );
                                     })}
-                                    {viewMode === 'provider' && pagedProviderRows.map((row) => {
+                                    {viewMode === 'provider' && providerAxis.pagedRows.map((row) => {
                                         const key = getProviderKey(row);
-                                        const selected = key === selectedProviderKey;
+                                        const selected = key === providerAxis.selectedKey;
                                         return (
                                             <TableRow
                                                 key={key}
                                                 hover
                                                 selected={selected}
-                                                onClick={() => handleSelectProvider(key)}
-                                                sx={{
-                                                    cursor: 'pointer',
-                                                    position: 'relative',
-                                                    transition: 'background-color 0.15s ease',
-                                                    '& .MuiTableCell-root': {
-                                                        py: 1.25,
-                                                        borderBottom: '1px solid',
-                                                        borderColor: 'divider',
-                                                    },
-                                                    '&.Mui-selected': {
-                                                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                                        boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
-                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
-                                                    },
-                                                }}
+                                                onClick={() => { providerAxis.setSelectedKey(key); scrollDetailIntoView(); }}
+                                                sx={rosterRowSx(selected)}
                                             >
                                                 <TableCell sx={{ fontWeight: 600 }}>{row.provider_name || row.key}</TableCell>
-                                                <UsageMetricValueCells
-                                                    usage={row}
-                                                    showTotal
-                                                    showCacheWrite={showProviderRosterCacheWrite}
-                                                />
+                                                <UsageMetricValueCells usage={row} showTotal showCacheWrite={showProviderRosterCacheWrite} />
                                                 <TableCell padding="checkbox">
-                                                    <ArrowForward sx={{ fontSize: 18, opacity: selected ? 1 : 0.22 }} color={selected ? 'primary' : 'inherit'} />
+                                                    <ArrowForward sx={selectionArrowSx(selected)} color={selected ? 'primary' : 'inherit'} />
                                                 </TableCell>
                                             </TableRow>
                                         );
                                     })}
-                                    {activeRoster.visibleLength === 0 && (
+                                    {activeAxis.visibleRows.length === 0 && (
                                         <TableRow>
                                             <TableCell
-                                                colSpan={primaryColumns.length + (viewMode === 'model' ? 2 : 1)}
+                                                colSpan={primaryColumns.length + 1}
                                                 align="center"
                                                 sx={{ py: 8 }}
                                             >
@@ -1214,18 +940,18 @@ export default function UserUsagePage() {
                                 </TableBody>
                             </Table>
                         </TableContainer>
-                        {activeRoster.visibleLength > 0 && (
+                        {activeAxis.visibleRows.length > 0 && (
                             <TablePagination
                                 component="div"
-                                count={activeRoster.visibleLength}
-                                page={activeRoster.page}
-                                onPageChange={(_, newPage) => activeRoster.setPage(newPage)}
+                                count={activeAxis.visibleRows.length}
+                                page={activeAxis.page}
+                                onPageChange={(_, newPage) => activeAxis.setPage(newPage)}
                                 rowsPerPage={rowsPerPage}
                                 onRowsPerPageChange={(event) => {
                                     setRowsPerPage(parseInt(event.target.value, 10));
-                                    setAccountPage(0);
-                                    setModelPage(0);
-                                    setProviderPage(0);
+                                    accountAxis.setPage(0);
+                                    modelAxis.setPage(0);
+                                    providerAxis.setPage(0);
                                 }}
                                 rowsPerPageOptions={[5, 10, 25, 50]}
                                 sx={{ borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}
@@ -1248,79 +974,14 @@ export default function UserUsagePage() {
                         }}>
                         {detailSubject ? (
                             <Stack spacing={2.5}>
-                                <Box>
-                                    <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
-                                                {viewMode === 'account'
-                                                    ? selectedUser!.display_name
-                                                    : viewMode === 'model'
-                                                    ? (selectedModel!.model || selectedModel!.key)
-                                                    : (selectedProvider!.provider_name || selectedProvider!.key)}
-                                            </Typography>
-                                            {viewMode !== 'provider' && (
-                                                <Typography variant="body2" sx={{ fontFamily: viewMode === 'account' ? 'monospace' : undefined }}>
-                                                    {viewMode === 'account' ? selectedUser!.user_id : (selectedModel!.provider_name || '—')}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                        {viewMode === 'account' ? (
-                                            selectedUser!.account_type === 'primary' ? (
-                                                <Chip
-                                                    size="small"
-                                                    color="primary"
-                                                    label={t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' })}
-                                                    variant="outlined"
-                                                />
-                                            ) : (
-                                                <Chip
-                                                    size="small"
-                                                    icon={selectedUser!.enabled ? <CheckCircle /> : <Block />}
-                                                    color={selectedUser!.enabled ? 'success' : 'default'}
-                                                    label={selectedUser!.enabled
-                                                        ? t('dashboard.userUsage.enabled', { defaultValue: 'Enabled' })
-                                                        : t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
-                                                    variant="outlined"
-                                                />
-                                            )
-                                        ) : (
-                                            <Chip
-                                                size="small"
-                                                color="primary"
-                                                variant="outlined"
-                                                label={t('dashboard.userUsage.accountsUsingModel', {
-                                                    count: viewMode === 'model' ? accountsByModel.length : accountsByProvider.length,
-                                                    defaultValue: `${viewMode === 'model' ? accountsByModel.length : accountsByProvider.length} accounts`,
-                                                })}
-                                            />
-                                        )}
-                                    </Stack>
-                                    {viewMode === 'account' && (
-                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 2 }} sx={{ mt: 1.25 }}>
-                                            <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center' }}>
-                                                <AccessTime sx={{ fontSize: 17, color: 'text.secondary' }} />
-                                                <Typography variant="body2">
-                                                    {selectedUser!.account_type === 'primary'
-                                                        ? t('dashboard.userUsage.globalTokenUsage', { defaultValue: 'Usage through the global model token' })
-                                                        : selectedUser!.last_used_at
-                                                        ? t('dashboard.userUsage.lastUsed', {
-                                                            value: formatDateTime(selectedUser!.last_used_at),
-                                                            defaultValue: `Last used ${formatDateTime(selectedUser!.last_used_at)}`,
-                                                        })
-                                                        : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
-                                                </Typography>
-                                            </Stack>
-                                            {selectedUser!.created_at && (
-                                                <Typography variant="body2">
-                                                    {t('dashboard.userUsage.joined', {
-                                                        value: formatDateTime(selectedUser!.created_at),
-                                                        defaultValue: `Added ${formatDateTime(selectedUser!.created_at)}`,
-                                                    })}
-                                                </Typography>
-                                            )}
-                                        </Stack>
-                                    )}
-                                </Box>
+                                <RosterDetailHeader
+                                    viewMode={viewMode}
+                                    selectedUser={selectedUser}
+                                    selectedModel={selectedModel}
+                                    selectedProvider={selectedProvider}
+                                    accountsCount={viewMode === 'model' ? modelAxis.detail.length : providerAxis.detail.length}
+                                    t={t}
+                                />
 
                                 <Grid
                                     container
@@ -1405,107 +1066,63 @@ export default function UserUsagePage() {
                                                     ? t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })
                                                     : t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
                                             </Typography>
-                                            <Chip
-                                                size="small"
-                                                label={viewMode === 'account' ? modelStats.length : viewMode === 'model' ? accountsByModel.length : accountsByProvider.length}
-                                                sx={{ height: 22 }}
-                                            />
+                                            <Chip size="small" label={activeAxis.detail.length} sx={{ height: 22 }} />
                                         </Stack>
                                         <Typography variant="body2">
                                             {formatNumber(getTotalTokens(detailSubject))} {t('dashboard.userUsage.tokens', { defaultValue: 'tokens' }).toLocaleLowerCase()}
                                         </Typography>
                                     </Stack>
-                                    {(viewMode === 'account' ? modelDetailLoading : viewMode === 'model' ? accountsByModelLoading : accountsByProviderLoading) ? (
+                                    {activeAxis.detailLoading ? (
                                         <Stack spacing={1.5} sx={{ overflow: 'hidden' }}>
                                             {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} variant="rounded" height={44} />)}
                                         </Stack>
                                     ) : viewMode === 'account' ? (
-                                        modelStats.length > 0 ? (
-                                            <TableContainer
-                                                sx={{
-                                                    maxHeight: 520,
-                                                    border: '1px solid',
-                                                    borderColor: 'divider',
-                                                    borderRadius: 1.5,
-                                                    overscrollBehavior: 'contain',
-                                                }}
-                                                role="region"
-                                                aria-label={t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
-                                            >
-                                                <Table stickyHeader sx={{ minWidth: showModelDetailCacheWrite ? 1060 : 960 }}>
-                                                    <TableHead>
-                                                        <TableRow
-                                                            sx={{
-                                                                '& .MuiTableCell-root': {
-                                                                    fontWeight: 600,
-                                                                    fontSize: '0.75rem',
-                                                                    textTransform: 'uppercase',
-                                                                    letterSpacing: '0.05em',
-                                                                    color: 'text.secondary',
-                                                                    py: 1.25,
-                                                                },
-                                                            }}
-                                                        >
-                                                            <TableCell>{t('dashboard.userUsage.provider', { defaultValue: 'Provider' })}</TableCell>
-                                                            <TableCell>{t('dashboard.userUsage.model', { defaultValue: 'Model' })}</TableCell>
-                                                            <UsageMetricHeaderCells
-                                                                labels={usageMetricLabels}
-                                                                showTotal
-                                                                showCacheWrite={showModelDetailCacheWrite}
-                                                            />
-                                                        </TableRow>
-                                                    </TableHead>
-                                                    <TableBody>
-                                                        {modelStats.map((model) => (
-                                                            <TableRow
-                                                                key={`${model.provider_uuid}-${model.model || model.key}`}
-                                                                hover
-                                                                sx={{
-                                                                    '& .MuiTableCell-root': {
-                                                                        py: 1.25,
-                                                                        borderBottom: '1px solid',
-                                                                        borderColor: 'divider',
-                                                                    },
-                                                                }}
-                                                            >
-                                                                <TableCell>{model.provider_name || '—'}</TableCell>
-                                                                <TableCell sx={{ fontWeight: 600 }}>{model.model || model.key}</TableCell>
-                                                                <UsageMetricValueCells
-                                                                    usage={model}
-                                                                    showTotal
-                                                                    showCacheWrite={showModelDetailCacheWrite}
-                                                                />
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
-                                            </TableContainer>
-                                        ) : (
-                                            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                                                <Typography variant="body1">
-                                                    {t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                    {t('dashboard.userUsage.noUsageHint', { defaultValue: 'The user remains listed because their access is registered.' })}
-                                                </Typography>
-                                            </Box>
-                                        )
-                                    ) : viewMode === 'model' ? (
-                                        <AccountsBreakdownTable
-                                            accounts={accountsByModel}
-                                            ariaLabel={t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })}
-                                            identityLabel={t('dashboard.userUsage.user', { defaultValue: 'User' })}
+                                        <RosterBreakdownTable
+                                            items={accountAxis.detail}
+                                            rowKey={(model) => `${model.provider_uuid}-${model.model || model.key}`}
+                                            identityColumns={[
+                                                {
+                                                    key: 'provider',
+                                                    label: t('dashboard.userUsage.provider', { defaultValue: 'Provider' }),
+                                                    render: (model) => model.provider_name || '—',
+                                                },
+                                                {
+                                                    key: 'model',
+                                                    label: t('dashboard.userUsage.model', { defaultValue: 'Model' }),
+                                                    render: (model) => (
+                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{model.model || model.key}</Typography>
+                                                    ),
+                                                },
+                                            ]}
+                                            ariaLabel={t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
                                             noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                                            accountDisplayName={accountDisplayName}
+                                            noUsageHint={t('dashboard.userUsage.noUsageHint', { defaultValue: 'The user remains listed because their access is registered.' })}
                                             usageMetricLabels={usageMetricLabels}
                                         />
                                     ) : (
-                                        <AccountsBreakdownTable
-                                            accounts={accountsByProvider}
-                                            ariaLabel={t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
-                                            identityLabel={t('dashboard.userUsage.user', { defaultValue: 'User' })}
+                                        <RosterBreakdownTable
+                                            items={activeAxis.detail}
+                                            rowKey={(account) => account.user_id || account.key}
+                                            identityColumns={[
+                                                {
+                                                    key: 'user',
+                                                    label: t('dashboard.userUsage.user', { defaultValue: 'User' }),
+                                                    render: (account) => (
+                                                        <>
+                                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                {accountDisplayName(account.user_id || account.key)}
+                                                            </Typography>
+                                                            <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                                                                {account.user_id || account.key}
+                                                            </Typography>
+                                                        </>
+                                                    ),
+                                                },
+                                            ]}
+                                            ariaLabel={viewMode === 'model'
+                                                ? t('dashboard.userUsage.accountsUsingModelTitle', { defaultValue: 'Accounts using this model' })
+                                                : t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
                                             noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                                            accountDisplayName={accountDisplayName}
                                             usageMetricLabels={usageMetricLabels}
                                         />
                                     )}
