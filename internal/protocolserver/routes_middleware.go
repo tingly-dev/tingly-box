@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -166,5 +168,38 @@ func (ph *ProtocolHandler) contextMiddleware(c *gin.Context) {
 		}
 	}
 
+	c.Next()
+}
+
+// teamScopeMiddleware converts the public, stable /tingly/team surface into
+// the routing scope authorized by the credential. It runs after model auth,
+// so the client cannot choose this value. The original URL remains unchanged:
+// usage and tracing keep the low-cardinality public scenario "team", while
+// rule lookup consumes the rewritten Gin parameter.
+//
+// The default team intentionally keeps the legacy bare "team" scope so all
+// existing rules remain usable without a destructive migration. Additional
+// teams use the isolated internal form "team:<stable-id>".
+func (ph *ProtocolHandler) teamScopeMiddleware(c *gin.Context) {
+	if c.Param("scenario") != string(typ.ScenarioTeam) {
+		c.Next()
+		return
+	}
+
+	teamID := c.GetString(constant.CtxKeyTeamID)
+	if teamID == "" {
+		// Global model auth has no explicit team claim. Preserve the historic
+		// /tingly/team behavior by treating it as the default team.
+		teamID = db.DefaultTeamID
+		c.Set(constant.CtxKeyTeamID, teamID)
+	}
+	if teamID != db.DefaultTeamID {
+		for i := range c.Params {
+			if c.Params[i].Key == "scenario" {
+				c.Params[i].Value = string(typ.ProfiledScenarioName(typ.ScenarioTeam, teamID))
+				break
+			}
+		}
+	}
 	c.Next()
 }

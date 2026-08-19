@@ -21,6 +21,7 @@ type UsageRecord struct {
 	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
 	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
+	TeamID       string    `gorm:"column:team_id;index:idx_team;not null;default:''"`
 	RequestModel string    `gorm:"column:request_model"`
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
@@ -229,6 +230,7 @@ type UsageStatsQuery struct {
 	Scenario  string
 	RuleUUID  string
 	UserID    string
+	TeamID    string
 	Status    string
 	Limit     int
 	SortBy    string // total_tokens, request_count, avg_latency
@@ -300,6 +302,7 @@ var usageFilterColumns = map[string]struct{}{
 	"scenario":      {},
 	"rule_uuid":     {},
 	"user_id":       {},
+	"team_id":       {},
 	"status":        {},
 	"error_code":    {},
 }
@@ -336,13 +339,14 @@ func withStatsFilters(q UsageStatsQuery) func(*gorm.DB) *gorm.DB {
 
 // filterMap renders the query's set dimension fields as a column filter map.
 func (q UsageStatsQuery) filterMap() map[string]string {
-	filters := make(map[string]string, 6)
+	filters := make(map[string]string, 7)
 	for column, value := range map[string]string{
 		"provider_uuid": q.Provider,
 		"model":         q.Model,
 		"scenario":      q.Scenario,
 		"rule_uuid":     q.RuleUUID,
 		"user_id":       q.UserID,
+		"team_id":       q.TeamID,
 		"status":        q.Status,
 	} {
 		if value != "" {

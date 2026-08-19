@@ -50,28 +50,28 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 // Anthropic surfaces on one group), each gated by modelAuth.
 func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth gin.HandlerFunc) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", modelAuth, ph.HandleOpenAIChatCompletions)
+	group.POST("/chat/completions", modelAuth, ph.teamScopeMiddleware, ph.HandleOpenAIChatCompletions)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", modelAuth, ph.HandleResponsesCreate)
-	group.GET("/responses/:id", modelAuth, ph.HandleResponsesGet)
+	group.POST("/responses", modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesCreate)
+	group.GET("/responses/:id", modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", modelAuth, ph.HandleAnthropicMessages)
+	group.POST("/messages", modelAuth, ph.teamScopeMiddleware, ph.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", modelAuth, ph.AnthropicCountTokens)
+	group.POST("/messages/count_tokens", modelAuth, ph.teamScopeMiddleware, ph.AnthropicCountTokens)
 
 	// Embeddings endpoint (OpenAI compatible)
-	group.POST("/embeddings", modelAuth, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)
+	group.POST("/embeddings", modelAuth, ph.teamScopeMiddleware, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)
 
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
-	group.POST("/images/generations", modelAuth, DeclareOperation("image_generation"), ph.HandleOpenAIImageGeneration)
+	group.POST("/images/generations", modelAuth, ph.teamScopeMiddleware, DeclareOperation("image_generation"), ph.HandleOpenAIImageGeneration)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
-	group.GET("/models", modelAuth, ph.ListModelsByScenario)
+	group.GET("/models", modelAuth, ph.teamScopeMiddleware, ph.ListModelsByScenario)
 }
 
 // SetupOpenAIEndpoints registers the OpenAI-only endpoint set on group.

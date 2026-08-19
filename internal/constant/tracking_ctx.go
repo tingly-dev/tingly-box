@@ -7,6 +7,7 @@ const (
 	// Authentication metadata.
 	CtxKeyAuthKind                  = "auth_kind"                   // string (see AuthKind* constants)
 	CtxKeyUserID                    = "user_id"                     // string
+	CtxKeyTeamID                    = "team_id"                     // string (authorized team identity)
 	CtxKeyEnterpriseUserID          = "enterprise_user_id"          // string
 	CtxKeyEnterpriseDepartmentID    = "enterprise_department_id"    // string
 	CtxKeyEnterpriseKeyPrefix       = "enterprise_key_prefix"       // string

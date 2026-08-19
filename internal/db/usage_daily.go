@@ -163,7 +163,7 @@ func (us *UsageStore) aggregatedStatsFromDaily(q UsageStatsQuery) ([]AggregatedS
 		return nil, false, nil
 	}
 	// Dimensions/filters not present in usage_daily require the raw table.
-	if q.Scenario != "" || q.RuleUUID != "" || q.Status != "" {
+	if q.Scenario != "" || q.RuleUUID != "" || q.TeamID != "" || q.Status != "" {
 		return nil, false, nil
 	}
 	if q.StartTime.IsZero() || q.EndTime.IsZero() {

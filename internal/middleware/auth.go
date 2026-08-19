@@ -327,6 +327,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 				// This is an API token, validate it directly from database
 				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
 				if validateErr == nil && tokenRecord != nil {
+					if tokenRecord.TeamID == "" {
+						abortWithError(c, http.StatusUnauthorized, "Sharing key has no team binding", "invalid_token_error")
+						return
+					}
 					// A sharing key is a team-scoped model credential, not a
 					// second global model token. Authorize the concrete Gin route
 					// template as well as the scenario parameter so new model
@@ -340,6 +344,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 					// Token is valid and enabled
 					c.Set(constant.CtxKeyAuthKind, constant.AuthKindSharingKey)
 					c.Set(constant.CtxKeyUserID, tokenRecord.UserID)
+					c.Set(constant.CtxKeyTeamID, tokenRecord.TeamID)
 
 					// Update last used asynchronously
 					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)

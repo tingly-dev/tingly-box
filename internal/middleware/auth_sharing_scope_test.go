@@ -22,7 +22,7 @@ func (sharingScopeTokenStore) ValidateToken(tokenID string) (*db.APITokenRecord,
 	if tokenID != sharingScopeTestToken {
 		return nil, errors.New("token not found or disabled")
 	}
-	return &db.APITokenRecord{TokenID: tokenID, UserID: "sharing-user", Enabled: true}, nil
+	return &db.APITokenRecord{TokenID: tokenID, UserID: "sharing-user", TeamID: db.DefaultTeamID, Enabled: true}, nil
 }
 
 func (sharingScopeTokenStore) UpdateLastUsed(string) error { return nil }
@@ -38,6 +38,7 @@ func newSharingScopeTestRouter() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{
 			"auth_kind": c.GetString(constant.CtxKeyAuthKind),
 			"user_id":   c.GetString(constant.CtxKeyUserID),
+			"team_id":   c.GetString(constant.CtxKeyTeamID),
 		})
 	}
 	router.POST("/tingly/:scenario/messages", am.ModelAuthMiddleware(), handler)
@@ -75,7 +76,7 @@ func TestModelAuthMiddleware_SharingKeySurfaceAuthorization(t *testing.T) {
 				t.Fatalf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
 			}
 			if tt.wantStatus == http.StatusOK {
-				if body := w.Body.String(); !strings.Contains(body, `"auth_kind":"sharing_key"`) || !strings.Contains(body, `"user_id":"sharing-user"`) {
+				if body := w.Body.String(); !strings.Contains(body, `"auth_kind":"sharing_key"`) || !strings.Contains(body, `"user_id":"sharing-user"`) || !strings.Contains(body, `"team_id":"`+db.DefaultTeamID+`"`) {
 					t.Fatalf("unexpected sharing principal context: %s", body)
 				}
 			} else if !strings.Contains(w.Body.String(), `"type":"forbidden_error"`) {

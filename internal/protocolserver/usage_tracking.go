@@ -362,6 +362,7 @@ func (ph *ProtocolHandler) recordDetailedUsage(c *gin.Context, rule *typ.Rule, p
 		Scenario:     scenario,
 		RequestModel: requestModel,
 		UserID:       GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
+		TeamID:       c.GetString(constant.CtxKeyTeamID),
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
@@ -396,6 +397,7 @@ func (ph *ProtocolHandler) recordDetailedUsageWithTokenUsage(c *gin.Context, rul
 		Scenario:         scenario,
 		RequestModel:     requestModel,
 		UserID:           GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
+		TeamID:           c.GetString(constant.CtxKeyTeamID),
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheReadTokens:  usage.CacheReadTokens,
