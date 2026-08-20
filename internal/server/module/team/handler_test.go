@@ -45,7 +45,7 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.ID == "" || info.Slug != "team1" || info.IsDefault || !info.Enabled {
+	if info.ID == "" || info.Slug != "t1" || info.IsDefault || !info.Enabled {
 		t.Fatalf("unexpected created team: %+v", info)
 	}
 
@@ -62,7 +62,7 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	if err := json.Unmarshal(updated.Body.Bytes(), &updatedInfo); err != nil {
 		t.Fatal(err)
 	}
-	if updatedInfo.Name != "Research Lab" || updatedInfo.Slug != "team1" {
+	if updatedInfo.Name != "Research Lab" || updatedInfo.Slug != "t1" {
 		t.Fatalf("unexpected updated team: %+v", updatedInfo)
 	}
 
@@ -84,7 +84,7 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Teams) != 1 || !listed.Teams[0].IsDefault {
+	if len(listed.Teams) != 1 || !listed.Teams[0].IsDefault || listed.Teams[0].Name != db.DefaultTeamName {
 		t.Fatalf("teams after delete = %+v", listed.Teams)
 	}
 

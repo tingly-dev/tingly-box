@@ -18,8 +18,10 @@ const (
 	// backfilled deterministically before user-created teams exist.
 	DefaultTeamID   = "00000000-0000-0000-0000-000000000001"
 	DefaultTeamSlug = "default"
-	DefaultTeamName = "Default Team"
+	DefaultTeamName = "Default"
 )
+
+var legacyDefaultTeamNames = []string{"Default Team", "default"}
 
 // TeamRecord is an authorization and routing boundary for sharing keys.
 // Human-readable names and slugs may change; ID is the durable identity stored
@@ -64,6 +66,14 @@ func newTeamStore(conn storeConn) (*TeamStore, error) {
 	}
 	if err := conn.db.Where("id = ?", DefaultTeamID).FirstOrCreate(&defaultTeam).Error; err != nil {
 		return nil, fmt.Errorf("failed to ensure default team: %w", err)
+	}
+	// Existing databases created before the canonical name became "Default"
+	// keep their row during FirstOrCreate. Migrate only the legacy generated
+	// name so an administrator's intentional rename is never overwritten.
+	if err := conn.db.Model(&TeamRecord{}).
+		Where("id = ? AND name IN ?", DefaultTeamID, legacyDefaultTeamNames).
+		Update("name", DefaultTeamName).Error; err != nil {
+		return nil, fmt.Errorf("failed to normalize default team name: %w", err)
 	}
 
 	store := &TeamStore{storeConn: conn, cache: make(map[string]*TeamRecord)}
@@ -117,9 +127,9 @@ func (s *TeamStore) Create(name string) (*TeamRecord, error) {
 		if existing.Name == name {
 			return nil, fmt.Errorf("team name '%s' already exists", name)
 		}
-		if strings.HasPrefix(existing.Slug, "team") {
-			numberText := strings.TrimPrefix(existing.Slug, "team")
-			if number, err := strconv.Atoi(numberText); err == nil && number > 0 && existing.Slug == fmt.Sprintf("team%d", number) {
+		if strings.HasPrefix(existing.Slug, "t") {
+			numberText := strings.TrimPrefix(existing.Slug, "t")
+			if number, err := strconv.Atoi(numberText); err == nil && number > 0 && existing.Slug == fmt.Sprintf("t%d", number) {
 				seenNumbers[number] = true
 			}
 		}
@@ -128,7 +138,7 @@ func (s *TeamStore) Create(name string) (*TeamRecord, error) {
 	for seenNumbers[nextNumber] {
 		nextNumber++
 	}
-	slug := fmt.Sprintf("team%d", nextNumber)
+	slug := fmt.Sprintf("t%d", nextNumber)
 	record := &TeamRecord{ID: uuid.NewString(), Name: name, Slug: slug, Enabled: true}
 	if err := s.db.Create(record).Error; err != nil {
 		return nil, fmt.Errorf("failed to create team: %w", err)

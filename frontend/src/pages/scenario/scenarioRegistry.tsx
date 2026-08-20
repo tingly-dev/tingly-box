@@ -201,7 +201,7 @@ const readHidden = (): string[] => {
             // Team graduated from an experimental hidden scenario to a
             // first-class profile group in the Agent layout. Remove the old
             // default-hidden value once so existing installs see the new
-            // Team / teamN / Add Team structure without manual discovery.
+            // Team / tN / Add Team structure without manual discovery.
             if (storedVersion < 4) stored = stored.filter((id) => id !== 'team');
             const renamedTargets = new Set(Object.values(RENAMED_SCENARIO_IDS));
             const genuinelyNewDefaults = DEFAULT_HIDDEN.filter((id) => !renamedTargets.has(id));

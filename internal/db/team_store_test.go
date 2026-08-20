@@ -13,7 +13,7 @@ func TestTeamStore_EnsuresDefaultAndCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get default team: %v", err)
 	}
-	if defaultTeam.Slug != DefaultTeamSlug || !defaultTeam.Enabled {
+	if defaultTeam.Slug != DefaultTeamSlug || defaultTeam.Name != DefaultTeamName || !defaultTeam.Enabled {
 		t.Fatalf("unexpected default team: %#v", defaultTeam)
 	}
 
@@ -24,15 +24,15 @@ func TestTeamStore_EnsuresDefaultAndCRUD(t *testing.T) {
 	if created.ID == "" || created.ID == DefaultTeamID {
 		t.Fatalf("unexpected created ID: %q", created.ID)
 	}
-	if created.Slug != "team1" {
-		t.Fatalf("created slug = %q, want team1", created.Slug)
+	if created.Slug != "t1" {
+		t.Fatalf("created slug = %q, want t1", created.Slug)
 	}
 
 	updated, err := store.Update(created.ID, "Platform")
 	if err != nil {
 		t.Fatalf("update team: %v", err)
 	}
-	if updated.Name != "Platform" || updated.Slug != "team1" {
+	if updated.Name != "Platform" || updated.Slug != "t1" {
 		t.Fatalf("unexpected update: %#v", updated)
 	}
 
@@ -51,6 +51,40 @@ func TestTeamStore_EnsuresDefaultAndCRUD(t *testing.T) {
 	}
 	if err := store.Delete(DefaultTeamID); err == nil {
 		t.Fatal("default team deletion should be rejected")
+	}
+}
+
+func TestTeamStore_MigratesLegacyDefaultTeamName(t *testing.T) {
+	for _, legacyName := range legacyDefaultTeamNames {
+		t.Run(legacyName, func(t *testing.T) {
+			dir := t.TempDir()
+			store, err := NewTeamStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.db.Model(&TeamRecord{}).
+				Where("id = ?", DefaultTeamID).
+				Update("name", legacyName).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			reopened, err := NewTeamStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reopened.Close()
+
+			defaultTeam, err := reopened.Get(DefaultTeamID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if defaultTeam.Name != DefaultTeamName {
+				t.Fatalf("default team name = %q, want %q", defaultTeam.Name, DefaultTeamName)
+			}
+		})
 	}
 }
 
@@ -73,7 +107,7 @@ func TestTeamStore_GeneratesFirstAvailableSlugAndRejectsDuplicateNames(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Slug != "team1" || second.Slug != "team2" || third.Slug != "team3" {
+	if first.Slug != "t1" || second.Slug != "t2" || third.Slug != "t3" {
 		t.Fatalf("generated slugs = %q, %q, %q", first.Slug, second.Slug, third.Slug)
 	}
 	if err := store.Delete(second.ID); err != nil {
@@ -83,8 +117,8 @@ func TestTeamStore_GeneratesFirstAvailableSlugAndRejectsDuplicateNames(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if replacement.Slug != "team2" {
-		t.Fatalf("replacement slug = %q, want team2", replacement.Slug)
+	if replacement.Slug != "t2" {
+		t.Fatalf("replacement slug = %q, want t2", replacement.Slug)
 	}
 	if _, err := store.Create("One"); err == nil {
 		t.Fatal("duplicate team name should be rejected")

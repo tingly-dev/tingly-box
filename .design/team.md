@@ -45,7 +45,7 @@ Team 归属，实际拿到的却是全局模型权限。它还会使 Team 停用
 | **Sharing Key** | 绑定一个 Team 的模型访问凭证，前缀为 `tb-share-` | 通用 model token、管理 API token |
 | **Global model token** | 实例级模型凭证，可访问既有模型表面 | Team Key |
 | **Team ID** | 持久 UUID；用于 token、rules、usage 和鉴权上下文 | 用户可编辑标识 |
-| **Team slug** | 系统生成的可见编号，如 `team1`、`team2` | 授权主键、用户自定义字段 |
+| **Team slug** | 系统生成的可见编号，如 `t1`、`t2` | 授权主键、用户自定义字段 |
 | **Team name** | 用户可编辑的显示名称 | 路由或鉴权标识 |
 
 ## 4. Team identity
@@ -55,14 +55,14 @@ Team 归属，实际拿到的却是全局模型权限。它还会使 Team 停用
 ```text
 ID:   00000000-0000-0000-0000-000000000001
 slug: default
-name: Default Team
+name: Default
 ```
 
-新增 Team 的 slug 复用 Profile 编号模式：系统分配最小可用编号 `team1`、`team2`……；
+新增 Team 的 slug 复用 Profile 编号模式：系统分配最小可用编号 `t1`、`t2`……；
 删除 Team 后编号可以复用。用户只能修改 name，不能创建或修改 slug。
 
-授权、routing 和 usage 永远保存不可复用的 UUID，不保存 slug。因而即使删除旧 `team2`
-后新 Team 再获得 `team2`，旧规则、Key 或审计记录也不会被错误关联到新 Team。
+授权、routing 和 usage 永远保存不可复用的 UUID，不保存 slug。因而即使删除旧 `t2`
+后新 Team 再获得 `t2`，旧规则、Key 或审计记录也不会被错误关联到新 Team。
 
 ## 5. Access matrix
 
@@ -136,7 +136,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 
 ## 9. Product and UX contract
 
-- Team 像 Claude Code Profile 一样直接出现在 Agent layout；额外 Team 显示 `teamN - name`。
+- Team 像 Claude Code Profile 一样直接出现在 Agent layout；额外 Team 显示 `tN - name`。
 - `Add Team` 位于 layout，用户只输入 name，slug 由系统生成。
 - Team 页面、Sharing Key 列表和 Key 创建弹窗必须持续说明权限边界。
 - 提示必须展示真实允许端点 `/tingly/team`、`/tingly/team/v1`，并明确排除其他 Team、
