@@ -99,7 +99,9 @@ export function useActivityItems(): ActivityItem[] {
             {
                 path: '/agent/team',
                 label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
-                subtitle: defaultTeam?.name || t('layout.default'),
+                subtitle: defaultTeam
+                    ? `${defaultTeam.slug} - ${defaultTeam.name}`
+                    : t('layout.default'),
                 icon: <IconUsers sx={{fontSize: 20}} />,
             },
             ...teams.filter(team => !team.is_default).map(team => ({

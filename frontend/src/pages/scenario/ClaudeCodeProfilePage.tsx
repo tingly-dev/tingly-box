@@ -14,7 +14,6 @@ import { Delete as DeleteIcon } from '@/components/icons';
 import { Edit as EditIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
-import Chip from '@mui/material/Chip';
 import Switch from '@mui/material/Switch';
 import {
     Box,
@@ -156,36 +155,40 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                 <UnifiedCard
                     size="full"
                     title={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                            <span>Claude Code</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/${scenario}`}>
-                                <IconButton size="small">
-                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title={t('claudeCode.profile.renameProfile')}>
-                                <IconButton size="small" onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
-                                    <EditIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title={t('claudeCode.profile.deleteProfile')}>
-                                <IconButton size="small" color="error" onClick={() => setDeleteProfileOpen(true)}>
-                                    <DeleteIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
-                    }
-                    rightAction={
-                        <Stack direction="row" spacing={1} sx={{
-                            alignItems: "center"
-                        }}>
-                            <Chip
-                                label={unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}
-                                size="small"
-                                variant="outlined"
-                                color={unifiedMode ? "primary" : "default"}
-                            />
-                            <Chip label={currentProfile ? `${profileId} - ${currentProfile.name}` : profileId} size="small" variant="outlined" />
+                        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box component="span" sx={{ lineHeight: 1.2, minWidth: 0 }}>
+                                    Claude Code
+                                </Box>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/${scenario}`}>
+                                    <IconButton size="small">
+                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('claudeCode.profile.renameProfile')}>
+                                    <IconButton size="small" onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
+                                        <EditIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('claudeCode.profile.deleteProfile')}>
+                                    <IconButton size="small" color="error" onClick={() => setDeleteProfileOpen(true)}>
+                                        <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                            <Typography
+                                component="span"
+                                variant="caption"
+                                sx={{
+                                    color: 'text.secondary',
+                                    fontWeight: 400,
+                                    lineHeight: 1.2,
+                                }}
+                            >
+                                {currentProfile ? `${profileId} - ${currentProfile.name}` : profileId}
+                                {' · '}
+                                {unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}
+                            </Typography>
                         </Stack>
                     }
                 >
