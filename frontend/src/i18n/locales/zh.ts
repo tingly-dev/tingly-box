@@ -1520,10 +1520,8 @@ export default {
   },
   "teams": {
     "accessTitle": "Team 访问",
-    "keyScopeTitle": "Team 密钥访问范围",
-    "keyScopeOwner": "在此创建的密钥仅属于 {{team}}（{{slug}}）。",
-    "keyScopeEndpoint": "允许访问的端点",
-    "keyScopeRestriction": "它不能访问其他 Team、其他场景端点或管理 API。",
+    "keyScopeSummary": "{{team}}（{{slug}}）的共享密钥仅可访问 /tingly/team 与 /tingly/team/v1，不能访问其他 Team、场景端点或管理 API。",
+    "keyScopeInfoLabel": "共享密钥访问范围",
     "editTeam": "Team 设置",
     "name": "Team 名称",
     "inactive": "已停用",

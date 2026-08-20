@@ -1523,10 +1523,8 @@ export default {
   },
   "teams": {
     "accessTitle": "Team Access",
-    "keyScopeTitle": "Team key access scope",
-    "keyScopeOwner": "Keys created here belong only to {{team}} ({{slug}}).",
-    "keyScopeEndpoint": "Allowed endpoints",
-    "keyScopeRestriction": "They cannot access other Teams, other scenario endpoints, or management APIs.",
+    "keyScopeSummary": "Sharing keys for {{team}} ({{slug}}) work only with /tingly/team and /tingly/team/v1. They cannot access other Teams, scenario endpoints, or management APIs.",
+    "keyScopeInfoLabel": "Sharing key access scope",
     "editTeam": "Team settings",
     "name": "Team name",
     "inactive": "Inactive",

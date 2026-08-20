@@ -2,10 +2,11 @@ import CardGrid from '@/components/CardGrid.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
 import {
-    Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
-    DialogContent, DialogTitle, IconButton, Stack, TextField, Tooltip, Typography,
+    Alert, Box, Button, CircularProgress, Dialog, DialogActions,
+    DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
+    TextField, Tooltip, Typography,
 } from '@mui/material';
-import {Delete, Edit, Key as IconKey} from '@/components/icons';
+import {Delete, Edit, Info as IconInfo, Key as IconKey} from '@/components/icons';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -18,7 +19,6 @@ import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageCo
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
-import TeamKeyScopeAlert from './components/TeamKeyScopeAlert';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
@@ -37,6 +37,7 @@ const UseTeamPageContent: React.FC = () => {
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [teamName, setTeamName] = useState('');
     const [saving, setSaving] = useState(false);
+    const [toggling, setToggling] = useState(false);
 
     useEffect(() => {
         if (!teamsLoading && teamSlug && !currentTeam) navigate('/agent/team', {replace: true});
@@ -64,9 +65,9 @@ const UseTeamPageContent: React.FC = () => {
 
     const toggleTeam = async () => {
         if (!currentTeam) return;
-        setSaving(true);
+        setToggling(true);
         const result = await api.setTeamEnabled(currentTeam.id, !currentTeam.enabled);
-        setSaving(false);
+        setToggling(false);
         if (!result.success) {
             notify.error(result.error?.message || t('teams.saveFailed'));
             return;
@@ -99,32 +100,91 @@ const UseTeamPageContent: React.FC = () => {
                     <UnifiedCard
                         titleHeadingLevel={1}
                         title={(
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                                <span>{currentTeam.name}</span>
-                                <Chip size="small" variant="outlined" label={currentTeam.slug} />
-                                <Tooltip title={t('teams.editTeam')}>
-                                    <IconButton size="small" onClick={openEditor}><Edit fontSize="small" /></IconButton>
-                                </Tooltip>
-                                {!currentTeam.is_default && (
-                                    <Tooltip title={t('teams.deleteTeam')}>
-                                        <IconButton size="small" color="error" onClick={() => setDeleteOpen(true)}>
-                                            <Delete fontSize="small" />
+                            <Stack spacing={0.25} sx={{minWidth: 0}}>
+                                <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                                    <Box component="span" sx={{lineHeight: 1.2, minWidth: 0}}>
+                                        {t('layout.nav.useTeam', {defaultValue: 'Team'})} - {currentTeam.name}
+                                    </Box>
+                                    <Tooltip
+                                        title={t('teams.keyScopeSummary', {
+                                            team: currentTeam.name,
+                                            slug: currentTeam.slug,
+                                        })}
+                                        arrow
+                                        placement="bottom"
+                                        slotProps={{tooltip: {sx: {maxWidth: 380}}}}
+                                    >
+                                        <IconButton
+                                            size="small"
+                                            aria-label={t('teams.keyScopeInfoLabel')}
+                                            sx={{color: 'text.secondary'}}
+                                        >
+                                            <IconInfo fontSize="small" />
                                         </IconButton>
                                     </Tooltip>
-                                )}
-                            </Box>
+                                    <Tooltip title={t('teams.editTeam')}>
+                                        <IconButton size="small" onClick={openEditor}><Edit fontSize="small" /></IconButton>
+                                    </Tooltip>
+                                    {!currentTeam.is_default && (
+                                        <Tooltip title={t('teams.deleteTeam')}>
+                                            <IconButton size="small" color="error" onClick={() => setDeleteOpen(true)}>
+                                                <Delete fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
+                                </Box>
+                                <Typography
+                                    component="span"
+                                    variant="caption"
+                                    sx={{
+                                        color: 'text.secondary',
+                                        fontWeight: 400,
+                                        lineHeight: 1.2,
+                                    }}
+                                >
+                                    {currentTeam.slug} - {currentTeam.name}
+                                </Typography>
+                            </Stack>
                         )}
                         size="full"
                         rightAction={(
-                            <Button variant="contained" size="small" startIcon={<IconKey sx={{fontSize: 18}} />}
-                                    onClick={() => setSharingKeysOpen(true)}>
-                                {t('scenarioPage.sharingKeys')}
-                            </Button>
+                            <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
+                                <FormControlLabel
+                                    labelPlacement="start"
+                                    label={t(currentTeam.enabled ? 'common.enabled' : 'common.disabled')}
+                                    control={(
+                                        <Switch
+                                            size="small"
+                                            checked={currentTeam.enabled}
+                                            disabled={toggling}
+                                            onChange={() => void toggleTeam()}
+                                            slotProps={{
+                                                input: {
+                                                    'aria-label': t(currentTeam.enabled
+                                                        ? 'teams.disableTeam'
+                                                        : 'teams.enableTeam'),
+                                                },
+                                            }}
+                                        />
+                                    )}
+                                    sx={{
+                                        m: 0,
+                                        gap: 0.5,
+                                        '& .MuiFormControlLabel-label': {
+                                            color: 'text.secondary',
+                                            fontSize: '0.8125rem',
+                                        },
+                                    }}
+                                />
+                                <Button variant="contained" size="small" startIcon={<IconKey sx={{fontSize: 18}} />}
+                                        onClick={() => setSharingKeysOpen(true)} sx={{height: 32}}>
+                                    {t('scenarioPage.sharingKeys')}
+                                </Button>
+                            </Stack>
                         )}
                     >
                         <Stack spacing={2}>
                             {!currentTeam.enabled && <Alert severity="warning">{t('teams.disabledHint')}</Alert>}
-                            <TeamKeyScopeAlert team={currentTeam} />
                             <ProviderConfigCard title={t('teams.accessTitle')} baseUrlPath="/tingly/team" baseUrl={baseUrl}
                                                 onCopy={copyToClipboard} compact scenario={scenario} />
                         </Stack>
@@ -144,12 +204,6 @@ const UseTeamPageContent: React.FC = () => {
                     <Stack spacing={2.5} sx={{mt: 1}}>
                         <TextField label={t('teams.name')} value={teamName} autoFocus fullWidth
                                    onChange={(event) => setTeamName(event.target.value)} />
-                        <Box>
-                            <Button onClick={toggleTeam} disabled={saving}
-                                    color={currentTeam?.enabled ? 'warning' : 'success'}>
-                                {currentTeam?.enabled ? t('teams.disableTeam') : t('teams.enableTeam')}
-                            </Button>
-                        </Box>
                     </Stack>
                 </DialogContent>
                 <DialogActions>
