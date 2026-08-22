@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/visionproxy"
+	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
 )
 
 // This file is the request-content-shape regression suite, shared by both the

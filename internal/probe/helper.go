@@ -13,7 +13,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
-	"github.com/tingly-dev/tingly-box/internal/visionproxy"
+	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/client"

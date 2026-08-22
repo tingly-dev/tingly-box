@@ -12,7 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
-	"github.com/tingly-dev/tingly-box/internal/visionproxy"
+	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
