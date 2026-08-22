@@ -289,3 +289,106 @@ func TestImportProviders_MissingData(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }
+
+// TestProviderFlags_API drives the flags/model_flags fields through the real
+// HTTP handlers: create with flags, partial-update semantics (nil untouched,
+// non-nil replaces, empty clears), response surfacing, and the api_key gate.
+func TestProviderFlags_API(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg, nil)
+	router.POST("/providers", handler.CreateProvider)
+	router.PUT("/providers/:uuid", handler.UpdateProvider)
+	router.GET("/providers/:uuid", handler.GetProvider)
+
+	do := func(method, path string, payload any) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(payload)
+		require.NoError(t, err)
+		req, _ := http.NewRequest(method, path, bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// Create with provider- and model-level flags.
+	w := do("POST", "/providers", CreateProviderRequest{
+		Name:    "flags-provider",
+		APIBase: "https://api.test.com/v1",
+		Token:   "sk-test",
+		Flags:   &typ.ProviderFlags{ExtraHeaders: map[string]string{"x-title": "tingly"}},
+		ModelFlags: map[string]typ.ProviderFlags{
+			"gpt-x": {ExtraHeaders: map[string]string{"X-Canary": "on"}},
+		},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var created struct {
+		Data typ.Provider `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	uid := created.Data.UUID
+	require.NotEmpty(t, uid)
+
+	// readBack decodes into a fresh struct each time — json.Unmarshal into a
+	// reused struct merges maps instead of replacing them.
+	readBack := func() ProviderResponse {
+		t.Helper()
+		w := do("GET", "/providers/"+uid, nil)
+		require.Equal(t, http.StatusOK, w.Code)
+		var got struct {
+			Data ProviderResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		return got.Data
+	}
+
+	// Read back: names canonicalized, both levels surfaced.
+	resp := readBack()
+	require.NotNil(t, resp.Flags)
+	assert.Equal(t, "tingly", resp.Flags.ExtraHeaders["X-Title"])
+	assert.Equal(t, "on", resp.ModelFlags["gpt-x"].ExtraHeaders["X-Canary"])
+
+	// Partial update with both sections omitted leaves flags untouched.
+	name := "flags-provider-renamed"
+	w = do("PUT", "/providers/"+uid, UpdateProviderRequest{Name: &name})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	resp = readBack()
+	require.NotNil(t, resp.Flags)
+	assert.Equal(t, "tingly", resp.Flags.ExtraHeaders["X-Title"])
+
+	// Non-nil flags replace wholesale; empty model_flags map clears it.
+	emptyMF := map[string]typ.ProviderFlags{}
+	w = do("PUT", "/providers/"+uid, UpdateProviderRequest{
+		Flags:      &typ.ProviderFlags{ExtraHeaders: map[string]string{"X-New": "v"}},
+		ModelFlags: &emptyMF,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	resp = readBack()
+	require.NotNil(t, resp.Flags)
+	assert.Equal(t, "v", resp.Flags.ExtraHeaders["X-New"])
+	assert.NotContains(t, resp.Flags.ExtraHeaders, "X-Title")
+	assert.Empty(t, resp.ModelFlags)
+
+	// Structurally invalid header name rejected with 400 (no denylist —
+	// gateway-adjacent names like Authorization are accepted verbatim).
+	w = do("PUT", "/providers/"+uid, UpdateProviderRequest{
+		Flags: &typ.ProviderFlags{ExtraHeaders: map[string]string{"X Title": "bad name"}},
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	// api_key gate: headers on a non-api_key provider are rejected.
+	w = do("POST", "/providers", CreateProviderRequest{
+		Name:     "sigv4-provider",
+		APIBase:  "https://bedrock.test",
+		AuthType: "aws_sigv4",
+		APIStyle: "anthropic",
+		Credential: map[string]string{
+			"access_key_id": "AKIA", "secret_access_key": "s", "region": "us-east-1",
+		},
+		Flags: &typ.ProviderFlags{ExtraHeaders: map[string]string{"X-Title": "t"}},
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "api_key")
+}

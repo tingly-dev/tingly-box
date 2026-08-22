@@ -62,6 +62,12 @@ type ProviderRecord struct {
 	// no backfill required.
 	Credential *typ.CredentialBundle `gorm:"column:credential;type:text;serializer:json"`
 
+	// Flags / ModelFlags hold the provider-level options and the per-model
+	// overrides. Auth-type independent. Added additively; AutoMigrate creates
+	// the columns with no backfill required.
+	Flags      typ.ProviderFlags            `gorm:"column:flags;type:text;serializer:json"`
+	ModelFlags map[string]typ.ProviderFlags `gorm:"column:model_flags;type:text;serializer:json"`
+
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
@@ -114,6 +120,28 @@ func cloneVModelDetail(d *typ.VModelDetail) *typ.VModelDetail {
 	return &out
 }
 
+// cloneProviderFlags / cloneModelFlags isolate the cached record from
+// callers the same way as the other JSON columns.
+func cloneProviderFlags(f typ.ProviderFlags) typ.ProviderFlags {
+	if len(f.ExtraHeaders) > 0 {
+		f.ExtraHeaders = maps.Clone(f.ExtraHeaders)
+	} else {
+		f.ExtraHeaders = nil
+	}
+	return f
+}
+
+func cloneModelFlags(m map[string]typ.ProviderFlags) map[string]typ.ProviderFlags {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]typ.ProviderFlags, len(m))
+	for model, flags := range m {
+		out[model] = cloneProviderFlags(flags)
+	}
+	return out
+}
+
 func cloneCredential(c *typ.CredentialBundle) *typ.CredentialBundle {
 	if c == nil {
 		return nil
@@ -147,6 +175,8 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 	}
 
 	provider.Tags = cloneStrings(r.Tags)
+	provider.Flags = cloneProviderFlags(r.Flags)
+	provider.ModelFlags = cloneModelFlags(r.ModelFlags)
 
 	// Set credentials based on auth type
 	switch provider.AuthType {
@@ -202,6 +232,8 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 	}
 
 	record.Tags = cloneStrings(p.Tags)
+	record.Flags = cloneProviderFlags(p.Flags)
+	record.ModelFlags = cloneModelFlags(p.ModelFlags)
 
 	// Set credentials based on auth type
 	switch p.AuthType {
@@ -240,6 +272,8 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.UpdatedAt = time.Now()
 
 	record.Tags = cloneStrings(p.Tags)
+	record.Flags = cloneProviderFlags(p.Flags)
+	record.ModelFlags = cloneModelFlags(p.ModelFlags)
 
 	// Set credentials based on auth type
 	switch p.AuthType {

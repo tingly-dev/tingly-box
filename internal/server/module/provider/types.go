@@ -24,6 +24,11 @@ type ProviderResponse struct {
 	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`               // Virtual-model config (only for vmodel auth type)
 	Credential       map[string]string `json:"credential,omitempty"`                  // Multi-field cloud credentials (only for aws_sigv4/azure_key/gcp_sa)
 	Source           string            `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
+	// Flags carries the provider-level flags, ModelFlags the per-model
+	// overrides keyed by provider-side model ID. See
+	// GET /provider/flags/registry for the catalog. api_key providers only.
+	Flags      *typ.ProviderFlags           `json:"flags,omitempty"`
+	ModelFlags map[string]typ.ProviderFlags `json:"model_flags,omitempty"`
 }
 
 // ProvidersResponse represents the response for listing providers.
@@ -48,6 +53,10 @@ type CreateProviderRequest struct {
 	// aws_sigv4 (AWS Bedrock), azure_key (Azure OpenAI), and gcp_sa (GCP Vertex).
 	// Ignored for api_key/oauth/vmodel. See ai.CredentialSchema for the field keys.
 	Credential map[string]string `json:"credential,omitempty" description:"Cloud credential fields (aws_sigv4/azure_key/gcp_sa)"`
+	// Flags / ModelFlags optionally seed the provider-level flags and
+	// per-model overrides (api_key auth only; validated on save).
+	Flags      *typ.ProviderFlags           `json:"flags,omitempty" description:"Provider-level flags; see GET /provider/flags/registry (api_key auth only)"`
+	ModelFlags map[string]typ.ProviderFlags `json:"model_flags,omitempty" description:"Per-model flag overrides keyed by provider-side model ID; api_key auth only"`
 }
 
 // CreateProviderResponse represents the response for adding a provider.
@@ -72,6 +81,13 @@ type UpdateProviderRequest struct {
 	// types (aws_sigv4/azure_key/gcp_sa). Omit (null) to leave it unchanged; the
 	// edit UI resends the complete map since the read path returns it in full.
 	Credential map[string]string `json:"credential,omitempty" description:"Replacement cloud credential fields (aws_sigv4/azure_key/gcp_sa)"`
+	// Flags / ModelFlags follow the same partial semantics as the other
+	// fields: omit (null) to leave the stored value unchanged; a non-null
+	// value replaces the corresponding level wholesale (an empty object /
+	// map clears it). No deep per-key merge — the edit UI saves whole
+	// sections, and deep map patches are ambiguous.
+	Flags      *typ.ProviderFlags            `json:"flags,omitempty" description:"Replacement provider-level flags; empty object clears them (api_key auth only)"`
+	ModelFlags *map[string]typ.ProviderFlags `json:"model_flags,omitempty" description:"Replacement per-model flag overrides; empty map clears them (api_key auth only)"`
 }
 
 // UpdateProviderResponse represents the response for updating a provider.
@@ -94,6 +110,14 @@ type ToggleProviderResponse struct {
 type DeleteProviderResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Provider deleted successfully"`
+}
+
+// FlagRegistryResponse exposes the catalog of supported provider/model-level
+// flags so the frontend can render the provider Plugins UI generically —
+// the supply-side counterpart of the rule module's flag registry endpoint.
+type FlagRegistryResponse struct {
+	Success bool           `json:"success" example:"true"`
+	Data    []typ.FlagSpec `json:"data"`
 }
 
 // ModelCacheSource identifies where the model list was sourced from.

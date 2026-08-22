@@ -135,7 +135,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 // rebuild this chain under its OAuth transport (see vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	return wrapWithLogging(wrapWithRuleFlags(base, provider, true), provider)
+	return wrapWithLogging(wrapWithRuleFlags(base, provider, model, true), provider)
 }
 
 // ProviderType returns the provider type

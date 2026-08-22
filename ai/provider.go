@@ -80,6 +80,52 @@ func (c *CredentialBundle) Field(key string) string {
 	return c.Fields[key]
 }
 
+// ProviderFlags carries the supply-side flags for one upstream, at two levels
+// on Provider: provider-wide (Flags) and per-model (ModelFlags). A consumer
+// combines them with its own request-side flags, narrowest level winning.
+//
+// The field set mirrors the consumer's request-side flag set (in tingly-box:
+// typ.RuleFlags) instead of inventing a supply-side vocabulary — the same knob
+// means the same thing wherever it is set. Flags decided before an upstream is
+// picked (routing, load balancing) have no meaning here and are absent.
+// See .design/provider-flags.md.
+type ProviderFlags struct {
+	// ExtraHeaders are appended to outbound requests verbatim, names in
+	// canonical form (OpenRouter's HTTP-Referer / X-Title, tenant headers, …).
+	ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
+
+	CustomUserAgent string `json:"custom_user_agent,omitempty"`
+
+	UseMaxCompletionTokens bool `json:"use_max_completion_tokens,omitempty"`
+	UseMaxTokens           bool `json:"use_max_tokens,omitempty"`
+
+	BlockTools     string `json:"block_tools,omitempty"`
+	ThinkingEffort string `json:"thinking_effort,omitempty"`
+	SkipUsage      bool   `json:"skip_usage,omitempty"`
+
+	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty"`
+	CleanHeader      bool `json:"clean_header,omitempty"`
+	CursorCompat     bool `json:"cursor_compat,omitempty"`
+	CursorCompatAuto bool `json:"cursor_compat_auto,omitempty"`
+	Context1M        bool `json:"context_1m,omitempty"`
+}
+
+// IsZero reports whether the flags carry no configuration at all.
+func (f ProviderFlags) IsZero() bool {
+	return len(f.ExtraHeaders) == 0 &&
+		f.CustomUserAgent == "" &&
+		!f.UseMaxCompletionTokens &&
+		!f.UseMaxTokens &&
+		f.BlockTools == "" &&
+		f.ThinkingEffort == "" &&
+		!f.SkipUsage &&
+		!f.ClaudeCodeCompat &&
+		!f.CleanHeader &&
+		!f.CursorCompat &&
+		!f.CursorCompatAuto &&
+		!f.Context1M
+}
+
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
 	AccessToken  string                 `json:"access_token"`           // OAuth access token
@@ -218,6 +264,13 @@ type Provider struct {
 	// Codex OAuth completion. Routing reads this; users do not edit it
 	// directly. See the OpenAIEndpointMode constants for semantics.
 	OpenAIEndpointMode OpenAIEndpointMode `json:"openai_endpoint_mode,omitempty"`
+
+	// Flags carries provider-level options, and ModelFlags the per-model
+	// overrides keyed by the provider-side model ID. Both are shared by
+	// shallow clones (ResolveStyle etc.), so readers must treat them as
+	// read-only and writers replace whole values on the save path.
+	Flags      ProviderFlags            `json:"flags,omitempty"`
+	ModelFlags map[string]ProviderFlags `json:"model_flags,omitempty"`
 }
 
 // OpenAIEndpointMode declares this provider's support for the OpenAI Chat

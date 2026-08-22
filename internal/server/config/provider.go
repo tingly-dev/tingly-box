@@ -185,6 +185,9 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 	if provider.APIBase == "" {
 		return errors.New("API base URL cannot be empty")
 	}
+	if err := ValidateProviderFlags(provider); err != nil {
+		return err
+	}
 
 	// Use provider store if available
 	if c.providerStore != nil {
@@ -264,10 +267,53 @@ func (c *Config) notifyProviderDelete(uuid string) {
 	}
 }
 
+// ValidateProviderFlags checks the provider- and model-level flags before a
+// provider is persisted, and canonicalizes accepted header names in place.
+// It sits in the AddProvider/UpdateProvider choke points so every write path
+// — HTTP handlers, CLI, and provider import (dataio) — shares one gate.
+//
+// v1 release scope: provider flags are only supported on api_key providers
+// (see .design/provider-flags.md §5.4); the transport additionally applies
+// nothing on non-api_key rows as a runtime defense.
+//
+// Only extra_headers is checked, and only structurally — a malformed header
+// name cannot go on the wire at all. The rest are free-form on purpose: a
+// custom upstream is where an unusual value is legitimate.
+func ValidateProviderFlags(p *typ.Provider) error {
+	p.ModelFlags = typ.PruneModelFlags(p.ModelFlags)
+
+	configured := !p.Flags.IsZero() || len(p.ModelFlags) > 0
+	if !configured {
+		return nil
+	}
+
+	if !p.IsAPIKey() {
+		return errors.New("provider flags are only supported on api_key providers")
+	}
+	if err := typ.ValidateExtraHeaders(p.Flags.ExtraHeaders); err != nil {
+		return fmt.Errorf("provider flags: %w", err)
+	}
+	for model, mf := range p.ModelFlags {
+		if err := typ.ValidateExtraHeaders(mf.ExtraHeaders); err != nil {
+			return fmt.Errorf("model %q flags: %w", model, err)
+		}
+	}
+
+	p.Flags.ExtraHeaders = typ.CanonicalizeExtraHeaders(p.Flags.ExtraHeaders)
+	for model, mf := range p.ModelFlags {
+		mf.ExtraHeaders = typ.CanonicalizeExtraHeaders(mf.ExtraHeaders)
+		p.ModelFlags[model] = mf
+	}
+	return nil
+}
+
 // UpdateProvider updates an existing provider by UUID
 func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	// Use provider store if available
 	if c.providerStore != nil {
+		if err := ValidateProviderFlags(provider); err != nil {
+			return err
+		}
 		// Preserve the UUID
 		provider.UUID = uuid
 		if err := c.providerStore.Save(provider); err != nil {

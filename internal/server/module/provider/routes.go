@@ -45,6 +45,15 @@ func RegisterRoutes(api *swagger.RouteGroup, h *Handler) {
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
 
+	// GET /provider/flags/registry - Catalog of supported provider/model-level
+	// flags, mirroring GET /rule/flags/registry so the frontend renders the
+	// provider Plugins UI registry-driven.
+	api.GET("/provider/flags/registry", h.GetFlagRegistry,
+		swagger.WithDescription("Get catalog of supported provider/model-level flags"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(FlagRegistryResponse{}),
+	)
+
 	api.GET("/provider-models/:uuid", h.GetProviderModelsByUUID,
 		swagger.WithDescription("Get all provider models"),
 		swagger.WithTags("models"),

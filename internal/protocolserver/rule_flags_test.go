@@ -427,6 +427,7 @@ func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
 				nil,
+				"",
 			)
 
 			if result.ThinkingEffort != tt.wantThinkingEffort {
@@ -483,6 +484,7 @@ func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
 				nil,
+				"",
 			)
 
 			if result.CustomUserAgent != tt.wantUA {
@@ -532,7 +534,7 @@ func TestResolveRuleFlagsWithScenario_AttachesClientUserAgent(t *testing.T) {
 		rule := &typ.Rule{Flags: typ.RuleFlags{}}
 
 		ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioAnthropic, &typ.ScenarioConfig{},
-			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil, "")
 
 		if got := typ.GetClientUserAgent(c.Request.Context()); got != "cherry-studio/1.2" {
 			t.Errorf("client UA in ctx = %q, want %q", got, "cherry-studio/1.2")
@@ -545,7 +547,7 @@ func TestResolveRuleFlagsWithScenario_AttachesClientUserAgent(t *testing.T) {
 		rule := &typ.Rule{Flags: typ.RuleFlags{CustomUserAgent: "Rule/2.0"}}
 
 		ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioAnthropic, &typ.ScenarioConfig{},
-			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil, "")
 
 		ctx := c.Request.Context()
 		if got := typ.GetRuleFlags(ctx).CustomUserAgent; got != "Rule/2.0" {
@@ -572,21 +574,21 @@ func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *tes
 
 	// CleanHeader should be suppressed for Claude OAuth provider.
 	got := ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider, "")
 	if got.CleanHeader {
 		t.Error("CleanHeader should be suppressed for Claude OAuth provider")
 	}
 
 	// CleanHeader should be preserved for any other provider type.
 	got = ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider, "")
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved for non-OAuth provider")
 	}
 
 	// nil provider: no suppression.
 	got = ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil, "")
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved when provider is nil")
 	}
@@ -619,7 +621,7 @@ func TestResolveRuleFlagsWithScenario_ClaudeOrgIDReachesContext(t *testing.T) {
 	c := newGinContext(t)
 	rule := &typ.Rule{Flags: typ.RuleFlags{ClaudeOrgID: "org-uuid"}}
 	got := ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, &typ.ScenarioConfig{},
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil, "")
 	if got.ClaudeOrgID != "org-uuid" {
 		t.Errorf("ClaudeOrgID = %q, want %q", got.ClaudeOrgID, "org-uuid")
 	}
@@ -634,7 +636,7 @@ func TestResolveRuleFlagsWithScenario_ExtraHeaders(t *testing.T) {
 	c := newGinContext(t)
 	rule := &typ.Rule{Flags: typ.RuleFlags{ExtraHeaders: map[string]string{"X-Team-Tag": "research"}}}
 	ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
-		protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, nil)
+		protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, nil, "")
 	got := typ.GetRuleFlags(c.Request.Context()).ExtraHeaders
 	if got["X-Team-Tag"] != "research" {
 		t.Errorf("ctx headers = %v, want rule extra_headers attached", got)
@@ -643,8 +645,80 @@ func TestResolveRuleFlagsWithScenario_ExtraHeaders(t *testing.T) {
 	// Nothing configured → nothing attached.
 	c = newGinContext(t)
 	ResolveRuleFlagsWithScenario(c, &typ.Rule{}, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
-		protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, nil)
+		protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, nil, "")
 	if got := typ.GetRuleFlags(c.Request.Context()).ExtraHeaders; got != nil {
 		t.Errorf("ctx headers = %v, want nil when the rule sets none", got)
 	}
+}
+
+// TestResolveRuleFlagsWithScenario_SupplyFlags pins that the chosen provider's
+// and model's flags reach the effective flag set — and the request context the
+// outbound clients read — at the lowest precedence.
+func TestResolveRuleFlagsWithScenario_SupplyFlags(t *testing.T) {
+	provider := &typ.Provider{
+		AuthType: typ.AuthTypeAPIKey,
+		Flags: typ.ProviderFlags{
+			ClaudeCodeCompat: true,
+			CustomUserAgent:  "provider-ua",
+		},
+		ModelFlags: map[string]typ.ProviderFlags{
+			"gpt-5": {UseMaxCompletionTokens: true, CustomUserAgent: "model-ua"},
+		},
+	}
+
+	t.Run("provider and model flags fold into the resolved set", func(t *testing.T) {
+		c := newGinContext(t)
+		got := ResolveRuleFlagsWithScenario(c, &typ.Rule{}, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
+			protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, provider, "gpt-5")
+
+		if !got.ClaudeCodeCompat {
+			t.Error("provider-level claude_code_compat did not reach the resolved flags")
+		}
+		if !got.UseMaxCompletionTokens {
+			t.Error("model-level use_max_completion_tokens did not reach the resolved flags")
+		}
+		if got.CustomUserAgent != "model-ua" {
+			t.Errorf("CustomUserAgent = %q, want the model level to win over the provider", got.CustomUserAgent)
+		}
+		// The same value is what the outbound clients read off the context.
+		if ctxFlags := typ.GetRuleFlags(c.Request.Context()); !ctxFlags.ClaudeCodeCompat || ctxFlags.CustomUserAgent != "model-ua" {
+			t.Errorf("ctx flags = %+v, want the supply-side values attached", ctxFlags)
+		}
+	})
+
+	t.Run("rule outranks both", func(t *testing.T) {
+		c := newGinContext(t)
+		rule := &typ.Rule{Flags: typ.RuleFlags{CustomUserAgent: "rule-ua"}}
+		got := ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
+			protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, provider, "gpt-5")
+		if got.CustomUserAgent != "rule-ua" {
+			t.Errorf("CustomUserAgent = %q, want the rule value", got.CustomUserAgent)
+		}
+	})
+
+	t.Run("a model-level flag stays on its own model", func(t *testing.T) {
+		c := newGinContext(t)
+		got := ResolveRuleFlagsWithScenario(c, &typ.Rule{}, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
+			protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, provider, "gpt-4")
+		if got.UseMaxCompletionTokens {
+			t.Error("model-level flag leaked to a different model")
+		}
+		if got.CustomUserAgent != "provider-ua" {
+			t.Errorf("CustomUserAgent = %q, want the provider value", got.CustomUserAgent)
+		}
+	})
+
+	t.Run("supply-level cursor auto-detection still folds into cursor_compat", func(t *testing.T) {
+		autoProvider := &typ.Provider{
+			AuthType: typ.AuthTypeAPIKey,
+			Flags:    typ.ProviderFlags{CursorCompatAuto: true},
+		}
+		c := newGinContext(t)
+		c.Request.Header.Set("User-Agent", "Cursor/1.0")
+		got := ResolveRuleFlagsWithScenario(c, &typ.Rule{}, typ.ScenarioOpenAI, &typ.ScenarioConfig{},
+			protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, autoProvider, "gpt-5")
+		if !got.CursorCompat {
+			t.Error("provider-level cursor_compat_auto did not fold into cursor_compat")
+		}
+	})
 }

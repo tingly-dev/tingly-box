@@ -15,7 +15,13 @@ import (
 //
 //   - extra_headers: api_key providers only (release gate, mirroring the API
 //     validation gate). Vendor/OAuth/multi-field-credential chains never see
-//     rule-configured headers.
+//     configured headers. Two sources meet here: the supply-side
+//     provider ∪ model headers, resolved once at wrap time (this transport is
+//     built per client, and clients are keyed by provider + model), and the
+//     rule's own extra_headers off the request context. Supply-side headers
+//     are written first and the rule's second, so the documented precedence
+//     provider < model < rule falls out of the write order — nothing merges
+//     all three levels.
 //   - custom_user_agent + inbound client UA forwarding: only chains mounted
 //     with resolveUA=true (the generic OpenAI and non-OAuth Anthropic
 //     pass-through chains). Vendor-specialized chains (Claude Code OAuth,
@@ -29,6 +35,11 @@ import (
 // construction (claude_client.go).
 type ruleFlagTransport struct {
 	inner http.RoundTripper
+	// supplyHeaders is the provider ∪ model extra_headers for the client this
+	// transport belongs to. Independent of the request context, so paths that
+	// never pass through protocol dispatch (probes, model-list fetch, vision
+	// proxy) still send the upstream's configured headers.
+	supplyHeaders map[string]string
 	// resolveUA marks a generic pass-through chain: resolve the UA precedence
 	// (rule/scenario custom_user_agent > inbound client UA > SDK default) at
 	// this layer. Chains whose UA is owned elsewhere mount with false.
@@ -50,12 +61,20 @@ type ruleFlagTransport struct {
 // Returns inner unchanged when no flag can ever apply on this chain
 // (non-api_key provider and no UA resolution) — same zero-cost no-op the old
 // per-flag wrappers provided.
-func wrapWithRuleFlags(inner http.RoundTripper, provider *typ.Provider, resolveUA bool) http.RoundTripper {
+//
+// model is the provider-side model this client is built for; it selects the
+// model-level supply headers. Empty for clients not bound to one model (the
+// provider level still applies).
+func wrapWithRuleFlags(inner http.RoundTripper, provider *typ.Provider, model string, resolveUA bool) http.RoundTripper {
 	applyExtraHeaders := provider != nil && provider.IsAPIKey()
 	if !resolveUA && !applyExtraHeaders {
 		return inner
 	}
-	return &ruleFlagTransport{inner: inner, resolveUA: resolveUA, applyExtraHeaders: applyExtraHeaders}
+	t := &ruleFlagTransport{inner: inner, resolveUA: resolveUA, applyExtraHeaders: applyExtraHeaders}
+	if applyExtraHeaders {
+		t.supplyHeaders = typ.SupplyExtraHeaders(provider, model)
+	}
+	return t
 }
 
 func (t *ruleFlagTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -69,8 +88,9 @@ func (t *ruleFlagTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 	// extra_headers: api_key providers only. Applied verbatim — user-driven
 	// config, no filtering.
-	var extra map[string]string
+	var supply, extra map[string]string
 	if t.applyExtraHeaders {
+		supply = t.supplyHeaders
 		extra = flags.ExtraHeaders
 	}
 
@@ -84,17 +104,21 @@ func (t *ruleFlagTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		}
 	}
 
-	if len(extra) == 0 && ua == "" {
+	if len(supply) == 0 && len(extra) == 0 && ua == "" {
 		return inner.RoundTrip(req)
 	}
 
 	// Clone before mutating so concurrent retries never race on shared headers.
 	req = req.Clone(ctx)
 
-	// Extra headers first, UA second: on a User-Agent name conflict the UA
-	// resolution wins, same precedence the old two-transport stack produced
-	// (extra headers outermost, UA innermost). Inner chains still write after
-	// this layer and win any remaining conflict by ordering.
+	// Write order is the precedence: supply-side (provider ∪ model) first, the
+	// rule's headers over them, UA last — so on a User-Agent name conflict the
+	// UA resolution wins, the same precedence the old two-transport stack
+	// produced (extra headers outermost, UA innermost). Inner chains still
+	// write after this layer and win any remaining conflict by ordering.
+	for name, value := range supply {
+		req.Header.Set(name, value)
+	}
 	for name, value := range extra {
 		req.Header.Set(name, value)
 	}

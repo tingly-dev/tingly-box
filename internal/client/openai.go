@@ -77,7 +77,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 	// proxy is explicitly configured for the provider.
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	transport = wrapWithRuleFlags(base, provider, true)
+	transport = wrapWithRuleFlags(base, provider, model, true)
 	transport = wrapWithLogging(transport, provider)
 
 	httpClient := &http.Client{
