@@ -25,7 +25,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
-	"github.com/tingly-dev/tingly-box/internal/protocol/vision"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -203,15 +202,28 @@ const (
 	ThinkingHigh   ThinkingLevel = thinking.LevelHigh
 )
 
-// VisionChannel is the probe-facing alias of the canonical vision channel
-// (internal/protocol/vision), following the ThinkingLevel pattern.
-type VisionChannel = vision.Channel
+// VisionChannel identifies where an image rides in a request: the user message or
+// a tool-result turn. These are exactly the two rows of the issue #1606
+// control matrix — user-channel images and tool-channel images fail
+// independently, so a vision check must be able to exercise each.
+type VisionChannel string
 
 const (
-	VisionNone VisionChannel = vision.ChannelNone
-	VisionUser VisionChannel = vision.ChannelUser
-	VisionTool VisionChannel = vision.ChannelTool
+	// VisionNone sends no image (the default; "" normalizes to this).
+	VisionNone VisionChannel = "none"
+	// VisonUser puts the image in the user message content.
+	VisonUser VisionChannel = "user"
+	// VisionTool returns the image from a synthetic tool round
+	// (assistant tool call → tool result carrying the image), the shape
+	// agent frameworks use for screenshots.
+	VisionTool VisionChannel = "tool"
 )
+
+// Enabled reports whether the channel carries an image. "" and "none" both
+// mean "send no image".
+func (c VisionChannel) Enabled() bool {
+	return c == VisonUser || c == VisionTool
+}
 
 // E2ERequest represents a Probe V2 request.
 type E2ERequest struct {
@@ -341,7 +353,7 @@ func ValidateE2ERequest(req *E2ERequest) error {
 	// are rejected later at dispatch (the style is only known after target
 	// resolution).
 	switch req.Vision {
-	case "", VisionNone, VisionUser, VisionTool:
+	case "", VisionNone, VisonUser, VisionTool:
 	default:
 		return &ValidationError{Field: "vision", Message: "vision must be 'none', 'user', or 'tool'"}
 	}

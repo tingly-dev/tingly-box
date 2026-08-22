@@ -14,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/visionproxy"
-	"github.com/tingly-dev/tingly-box/internal/visionproxy/visionproxytest"
 )
 
 // _ keeps the responses import used even if a future refactor removes the
@@ -369,12 +368,12 @@ func mustMarshalResponsesBody(t *testing.T, body map[string]any) []byte {
 	return b
 }
 
-// visionTestPNG re-exports visionproxytest.PNG for tests in this package
+// visionTestPNG re-exports visionproxy.PNG for tests in this package
 // (e.g. openai_responses_vision_test.go) that need a real applyVisionProxy
 // call through *ProtocolHandler rather than visionproxy.Service in isolation.
 // Logic-level coverage for the plugin itself lives in
 // internal/server/module/visionproxy.
-const visionTestPNG = visionproxytest.PNG
+const visionTestPNG = visionproxy.FixturePNGBase64
 
 func newVisionTestGinCtx() *gin.Context {
 	gin.SetMode(gin.TestMode)
@@ -393,11 +392,11 @@ func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *Pr
 					{Scenario: scenario, Extensions: ext},
 				},
 			},
-			VisionProxyService: visionproxy.NewService(visionproxytest.NewProcessor()),
+			VisionProxyService: visionproxy.NewService(visionproxy.NewProcessor()),
 		},
 	}
 }
 
 func scenarioVisionExt(provider, model string) map[string]interface{} {
-	return visionproxytest.ScenarioExt(provider, model)
+	return visionproxy.ScenarioExt(provider, model)
 }

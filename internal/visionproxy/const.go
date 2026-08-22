@@ -6,30 +6,7 @@
 //
 // It mirrors internal/protocol/thinking: a protocol-level capability ladder
 // that probe-facing types alias instead of redefining.
-package vision
-
-// Channel identifies where an image rides in a request: the user message or
-// a tool-result turn. These are exactly the two rows of the issue #1606
-// control matrix — user-channel images and tool-channel images fail
-// independently, so a vision check must be able to exercise each.
-type Channel string
-
-const (
-	// ChannelNone sends no image (the default; "" normalizes to this).
-	ChannelNone Channel = "none"
-	// ChannelUser puts the image in the user message content.
-	ChannelUser Channel = "user"
-	// ChannelTool returns the image from a synthetic tool round
-	// (assistant tool call → tool result carrying the image), the shape
-	// agent frameworks use for screenshots.
-	ChannelTool Channel = "tool"
-)
-
-// Enabled reports whether the channel carries an image. "" and "none" both
-// mean "send no image".
-func (c Channel) Enabled() bool {
-	return c == ChannelUser || c == ChannelTool
-}
+package visionproxy
 
 // Canonical probe image: a 256×256 solid-red PNG (the same dimensions as the
 // issue #1606 reproduction). Large enough to pass providers' minimum-size

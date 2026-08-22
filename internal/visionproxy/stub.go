@@ -2,7 +2,7 @@
 // plugin, reused both by internal/server/module/visionproxy's own tests and
 // by internal/server tests that need a real Service wired through a
 // visionproxy.VisionProxyProcessor (e.g. handler-ordering regression tests).
-package visionproxytest
+package visionproxy
 
 import (
 	"context"
@@ -10,11 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 )
-
-// PNG is a 1x1 transparent PNG used wherever tests need a real image block.
-const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 // StubVisionClient returns a canned description; implements the processor's
 // (unexported) visionClient interface structurally.
@@ -39,8 +35,8 @@ func (StubResolver) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 // NewProcessor builds a visionproxy.VisionProxyProcessor wired to the stub
 // client/resolver above, echoing "<desc> via <model>" for every described image.
-func NewProcessor() *visionproxy.VisionProxyProcessor {
-	return &visionproxy.VisionProxyProcessor{
+func NewProcessor() *VisionProxyProcessor {
+	return &VisionProxyProcessor{
 		Client:   StubVisionClient{Desc: "desc"},
 		Resolver: StubResolver{},
 	}

@@ -6,8 +6,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
-
-	"github.com/tingly-dev/tingly-box/internal/protocol/vision"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 )
 
 // getProbeToolsAnthropic returns predefined tools in Anthropic format for probe
@@ -132,7 +131,7 @@ func getProbeToolChoiceAutoAnthropic() anthropic.ToolChoiceUnionParam {
 
 func getVisionToolOpenAI() openai.ChatCompletionToolUnionParam {
 	return openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
-		Name:        vision.ToolName,
+		Name:        visionproxy.ToolName,
 		Description: param.NewOpt("Capture an image for analysis"),
 		Parameters: shared.FunctionParameters{
 			"type":       "object",
@@ -143,7 +142,7 @@ func getVisionToolOpenAI() openai.ChatCompletionToolUnionParam {
 
 func getVisionToolResponses() responses.ToolUnionParam {
 	return responses.ToolParamOfFunction(
-		vision.ToolName,
+		visionproxy.ToolName,
 		map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
@@ -155,7 +154,7 @@ func getVisionToolResponses() responses.ToolUnionParam {
 func getVisionToolAnthropic() anthropic.ToolUnionParam {
 	return anthropic.ToolUnionParam{
 		OfTool: &anthropic.ToolParam{
-			Name: vision.ToolName,
+			Name: visionproxy.ToolName,
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Type:       "object",
 				Properties: map[string]any{},

@@ -13,13 +13,13 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
-	"github.com/tingly-dev/tingly-box/internal/protocol/vision"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -173,35 +173,35 @@ func buildOpenAIChatParams(p probeParams) openai.ChatCompletionNewParams {
 // would answer with the question instead of the color.
 func buildOpenAIChatVisionMessages(p probeParams) []openai.ChatCompletionMessageParamUnion {
 	switch p.Vision {
-	case VisionUser:
+	case VisonUser:
 		return []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
-				{OfText: &openai.ChatCompletionContentPartTextParam{Text: vision.Prompt}},
+				{OfText: &openai.ChatCompletionContentPartTextParam{Text: visionproxy.Prompt}},
 				{OfImageURL: &openai.ChatCompletionContentPartImageParam{
-					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: vision.FixtureDataURL},
+					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: visionproxy.FixtureDataURL},
 				}},
 			}),
 		}
 	case VisionTool:
 		return []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(vision.ToolUserText),
+			openai.UserMessage(visionproxy.ToolUserText),
 			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
 				ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
 					{OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-						ID: vision.ToolCallID,
+						ID: visionproxy.ToolCallID,
 						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-							Name:      vision.ToolName,
+							Name:      visionproxy.ToolName,
 							Arguments: "{}",
 						},
 					}},
 				},
 			}},
 			openai.ToolMessage([]openai.ChatCompletionContentPartUnionParam{
-				{OfText: &openai.ChatCompletionContentPartTextParam{Text: vision.ToolResultText}},
+				{OfText: &openai.ChatCompletionContentPartTextParam{Text: visionproxy.ToolResultText}},
 				{OfImageURL: &openai.ChatCompletionContentPartImageParam{
-					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: vision.FixtureDataURL},
+					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: visionproxy.FixtureDataURL},
 				}},
-			}, vision.ToolCallID),
+			}, visionproxy.ToolCallID),
 		}
 	default:
 		return []openai.ChatCompletionMessageParamUnion{
@@ -293,13 +293,13 @@ func buildOpenAIResponsesParams(p probeParams) responses.ResponseNewParams {
 // the probe's vision channel.
 func buildOpenAIResponsesVisionInput(p probeParams) []responses.ResponseInputItemUnionParam {
 	switch p.Vision {
-	case VisionUser:
+	case VisonUser:
 		return []responses.ResponseInputItemUnionParam{
 			responses.ResponseInputItemParamOfMessage(
 				responses.ResponseInputMessageContentListParam{
-					responses.ResponseInputContentParamOfInputText(vision.Prompt),
+					responses.ResponseInputContentParamOfInputText(visionproxy.Prompt),
 					{OfInputImage: &responses.ResponseInputImageParam{
-						ImageURL: param.NewOpt(vision.FixtureDataURL),
+						ImageURL: param.NewOpt(visionproxy.FixtureDataURL),
 					}},
 				},
 				responses.EasyInputMessageRoleUser,
@@ -309,22 +309,22 @@ func buildOpenAIResponsesVisionInput(p probeParams) []responses.ResponseInputIte
 		return []responses.ResponseInputItemUnionParam{
 			responses.ResponseInputItemParamOfMessage(
 				responses.ResponseInputMessageContentListParam{
-					responses.ResponseInputContentParamOfInputText(vision.ToolUserText),
+					responses.ResponseInputContentParamOfInputText(visionproxy.ToolUserText),
 				},
 				responses.EasyInputMessageRoleUser,
 			),
 			{OfFunctionCall: &responses.ResponseFunctionToolCallParam{
-				CallID:    vision.ToolCallID,
-				Name:      vision.ToolName,
+				CallID:    visionproxy.ToolCallID,
+				Name:      visionproxy.ToolName,
 				Arguments: "{}",
 			}},
 			{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-				CallID: vision.ToolCallID,
+				CallID: visionproxy.ToolCallID,
 				Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
 					OfResponseFunctionCallOutputItemArray: responses.ResponseFunctionCallOutputItemListParam{
-						{OfInputText: &responses.ResponseInputTextContentParam{Text: vision.ToolResultText}},
+						{OfInputText: &responses.ResponseInputTextContentParam{Text: visionproxy.ToolResultText}},
 						{OfInputImage: &responses.ResponseInputImageContentParam{
-							ImageURL: param.NewOpt(vision.FixtureDataURL),
+							ImageURL: param.NewOpt(visionproxy.FixtureDataURL),
 						}},
 					},
 				},
@@ -425,32 +425,32 @@ func buildAnthropicMessageParams(p probeParams, isClaudeCodeProvider bool) *anth
 // vision channel.
 func buildAnthropicVisionMessages(p probeParams) []anthropic.MessageParam {
 	switch p.Vision {
-	case VisionUser:
+	case VisonUser:
 		return []anthropic.MessageParam{
 			anthropic.NewUserMessage(
-				anthropic.NewTextBlock(vision.Prompt),
-				anthropic.NewImageBlockBase64(vision.FixtureMediaType, vision.FixturePNGBase64),
+				anthropic.NewTextBlock(visionproxy.Prompt),
+				anthropic.NewImageBlockBase64(visionproxy.FixtureMediaType, visionproxy.FixturePNGBase64),
 			),
 		}
 	case VisionTool:
 		return []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(vision.ToolUserText)),
+			anthropic.NewUserMessage(anthropic.NewTextBlock(visionproxy.ToolUserText)),
 			{
 				Role: anthropic.MessageParamRoleAssistant,
 				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewToolUseBlock(vision.ToolCallID, map[string]any{}, vision.ToolName),
+					anthropic.NewToolUseBlock(visionproxy.ToolCallID, map[string]any{}, visionproxy.ToolName),
 				},
 			},
 			anthropic.NewUserMessage(anthropic.ContentBlockParamUnion{
 				OfToolResult: &anthropic.ToolResultBlockParam{
-					ToolUseID: vision.ToolCallID,
+					ToolUseID: visionproxy.ToolCallID,
 					Content: []anthropic.ToolResultBlockParamContentUnion{
-						{OfText: &anthropic.TextBlockParam{Text: vision.ToolResultText}},
+						{OfText: &anthropic.TextBlockParam{Text: visionproxy.ToolResultText}},
 						{OfImage: &anthropic.ImageBlockParam{
 							Source: anthropic.ImageBlockParamSourceUnion{
 								OfBase64: &anthropic.Base64ImageSourceParam{
-									MediaType: vision.FixtureMediaType,
-									Data:      vision.FixturePNGBase64,
+									MediaType: visionproxy.FixtureMediaType,
+									Data:      visionproxy.FixturePNGBase64,
 								},
 							},
 						}},

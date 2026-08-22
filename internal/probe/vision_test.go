@@ -7,8 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/tingly-dev/tingly-box/internal/protocol/vision"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 )
 
 // These tests pin the vision-axis request shapes at the builder level: the
@@ -44,7 +43,7 @@ func findImageURL(t *testing.T, parts []any) string {
 }
 
 func TestBuildOpenAIChatParams_VisionUser(t *testing.T) {
-	m := marshalToMap(t, buildOpenAIChatParams(probeParams{Model: "m", Vision: VisionUser}))
+	m := marshalToMap(t, buildOpenAIChatParams(probeParams{Model: "m", Vision: VisonUser}))
 	msgs := m["messages"].([]any)
 	require.Len(t, msgs, 1, "vision probes replace the echo system message")
 
@@ -52,7 +51,7 @@ func TestBuildOpenAIChatParams_VisionUser(t *testing.T) {
 	assert.Equal(t, "user", user["role"])
 	parts, ok := user["content"].([]any)
 	require.True(t, ok)
-	assert.Equal(t, vision.FixtureDataURL, findImageURL(t, parts))
+	assert.Equal(t, visionproxy.FixtureDataURL, findImageURL(t, parts))
 }
 
 func TestBuildOpenAIChatParams_VisionTool(t *testing.T) {
@@ -64,14 +63,14 @@ func TestBuildOpenAIChatParams_VisionTool(t *testing.T) {
 	calls, _ := assistant["tool_calls"].([]any)
 	require.Len(t, calls, 1)
 	call := calls[0].(map[string]any)
-	assert.Equal(t, vision.ToolCallID, call["id"])
+	assert.Equal(t, visionproxy.ToolCallID, call["id"])
 
 	tool := msgs[2].(map[string]any)
 	assert.Equal(t, "tool", tool["role"])
-	assert.Equal(t, vision.ToolCallID, tool["tool_call_id"])
+	assert.Equal(t, visionproxy.ToolCallID, tool["tool_call_id"])
 	parts, ok := tool["content"].([]any)
 	require.True(t, ok, "tool content must stay a content-part array, got %v", tool["content"])
-	assert.Equal(t, vision.FixtureDataURL, findImageURL(t, parts),
+	assert.Equal(t, visionproxy.FixtureDataURL, findImageURL(t, parts),
 		"issue #1606 regression: image_url payload must survive in tool content")
 
 	tools, _ := m["tools"].([]any)
@@ -79,7 +78,7 @@ func TestBuildOpenAIChatParams_VisionTool(t *testing.T) {
 }
 
 func TestBuildOpenAIResponsesParams_VisionUser(t *testing.T) {
-	m := marshalToMap(t, buildOpenAIResponsesParams(probeParams{Model: "m", Vision: VisionUser}))
+	m := marshalToMap(t, buildOpenAIResponsesParams(probeParams{Model: "m", Vision: VisonUser}))
 	assert.Nil(t, m["instructions"], "echo instruction must be dropped for vision probes")
 
 	input := m["input"].([]any)
@@ -93,7 +92,7 @@ func TestBuildOpenAIResponsesParams_VisionUser(t *testing.T) {
 			url, _ = part["image_url"].(string)
 		}
 	}
-	assert.Equal(t, vision.FixtureDataURL, url)
+	assert.Equal(t, visionproxy.FixtureDataURL, url)
 }
 
 func TestBuildOpenAIResponsesParams_VisionTool(t *testing.T) {
@@ -103,7 +102,7 @@ func TestBuildOpenAIResponsesParams_VisionTool(t *testing.T) {
 
 	fco := input[2].(map[string]any)
 	assert.Equal(t, "function_call_output", fco["type"])
-	assert.Equal(t, vision.ToolCallID, fco["call_id"])
+	assert.Equal(t, visionproxy.ToolCallID, fco["call_id"])
 	items, ok := fco["output"].([]any)
 	require.True(t, ok, "output must be the structured item list, got %v", fco["output"])
 	var url string
@@ -113,14 +112,14 @@ func TestBuildOpenAIResponsesParams_VisionTool(t *testing.T) {
 			url, _ = item["image_url"].(string)
 		}
 	}
-	assert.Equal(t, vision.FixtureDataURL, url)
+	assert.Equal(t, visionproxy.FixtureDataURL, url)
 
 	tools, _ := m["tools"].([]any)
 	require.Len(t, tools, 1)
 }
 
 func TestBuildAnthropicMessageParams_VisionUser(t *testing.T) {
-	m := marshalToMap(t, buildAnthropicMessageParams(probeParams{Model: "m", Vision: VisionUser}, false))
+	m := marshalToMap(t, buildAnthropicMessageParams(probeParams{Model: "m", Vision: VisonUser}, false))
 	assert.Nil(t, m["system"], "echo instruction must be dropped for vision probes")
 
 	msgs := m["messages"].([]any)
@@ -134,7 +133,7 @@ func TestBuildAnthropicMessageParams_VisionUser(t *testing.T) {
 			data, _ = source["data"].(string)
 		}
 	}
-	assert.Equal(t, vision.FixturePNGBase64, data)
+	assert.Equal(t, visionproxy.FixturePNGBase64, data)
 }
 
 func TestBuildAnthropicMessageParams_VisionTool(t *testing.T) {
@@ -146,7 +145,7 @@ func TestBuildAnthropicMessageParams_VisionTool(t *testing.T) {
 	blocks := result["content"].([]any)
 	toolResult := blocks[0].(map[string]any)
 	assert.Equal(t, "tool_result", toolResult["type"])
-	assert.Equal(t, vision.ToolCallID, toolResult["tool_use_id"])
+	assert.Equal(t, visionproxy.ToolCallID, toolResult["tool_use_id"])
 	var data string
 	for _, rawPart := range toolResult["content"].([]any) {
 		part, _ := rawPart.(map[string]any)
@@ -155,21 +154,21 @@ func TestBuildAnthropicMessageParams_VisionTool(t *testing.T) {
 			data, _ = source["data"].(string)
 		}
 	}
-	assert.Equal(t, vision.FixturePNGBase64, data)
+	assert.Equal(t, visionproxy.FixturePNGBase64, data)
 
 	tools, _ := m["tools"].([]any)
 	require.Len(t, tools, 1)
 }
 
 func TestBuildAnthropicMessageParams_VisionKeepsClaudeCodeHeader(t *testing.T) {
-	m := marshalToMap(t, buildAnthropicMessageParams(probeParams{Model: "m", Vision: VisionUser}, true))
+	m := marshalToMap(t, buildAnthropicMessageParams(probeParams{Model: "m", Vision: VisonUser}, true))
 	system, ok := m["system"].([]any)
 	require.True(t, ok, "Claude Code header must survive vision probes")
 	require.Len(t, system, 1, "only the CC header — no echo instruction")
 }
 
 func TestProbeGoogleGenerate_VisionRejected(t *testing.T) {
-	_, err := probeGoogleGenerate(context.Background(), nil, probeParams{Model: "m", Vision: VisionUser})
+	_, err := probeGoogleGenerate(context.Background(), nil, probeParams{Model: "m", Vision: VisonUser})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vision probes are not supported")
 }
@@ -178,7 +177,7 @@ func TestValidateE2ERequest_VisionAxis(t *testing.T) {
 	base := func() *E2ERequest {
 		return &E2ERequest{TargetType: E2ETargetProvider, ProviderUUID: "u", Model: "m"}
 	}
-	for _, v := range []VisionChannel{"", VisionNone, VisionUser, VisionTool} {
+	for _, v := range []VisionChannel{"", VisionNone, VisonUser, VisionTool} {
 		req := base()
 		req.Vision = v
 		assert.NoError(t, ValidateE2ERequest(req), "vision=%q should validate", v)
