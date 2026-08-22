@@ -15,10 +15,10 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // OpenAIClientInterface defines the contract for OpenAI-compatible clients.
