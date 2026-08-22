@@ -3,8 +3,11 @@ import type { Provider } from '@/types/provider';
 
 // ProbeAxes is the panel's orthogonal control state. Every axis is one knob:
 // Shape (stream) × Tool × Thinking × Protocol × Scope (direct) — plus the
-// optional message override. Persisted per target-type so the dialog re-opens
-// in the shape the user last used on that surface.
+// optional message override. Axes are NOT persisted across dialog opens: a
+// probe is a diagnostic whose defaults must be predictable, and hidden
+// (collapsed-panel) state that silently sticks is worse than re-setting a
+// knob. Reopening a stored result restores its axes from the result's
+// request-echo fields instead — the visible state always matches the data.
 export interface ProbeAxes {
     stream: boolean;
     tool: boolean;
@@ -23,36 +26,12 @@ export const DEFAULT_AXES: ProbeAxes = {
     direct: false,
 };
 
-const STORAGE_PREFIX = 'tb.probe.config.';
-
-// loadPersistedAxes restores the last-used axes for a target-type surface.
-// Anything malformed (or from an older shape) is ignored.
-export function loadPersistedAxes(targetType: ProbeTargetType): Partial<ProbeAxes> | null {
-    try {
-        const raw = localStorage.getItem(STORAGE_PREFIX + targetType);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (typeof parsed !== 'object' || parsed === null) return null;
-        return parsed as Partial<ProbeAxes>;
-    } catch {
-        return null;
-    }
-}
-
-export function persistAxes(targetType: ProbeTargetType, axes: ProbeAxes) {
-    try {
-        localStorage.setItem(STORAGE_PREFIX + targetType, JSON.stringify(axes));
-    } catch {
-        // localStorage unavailable (private mode etc.) — persistence is best-effort.
-    }
-}
-
 // resolveInitialAxes applies the open-time association priority:
 //   1. explicit prop overrides (thinkingLevel prop)
 //   2. the pre-computed initialResult — the visible state must match the
-//      result the user is looking at (shape from result.data.stream)
-//   3. last-used axes persisted for this target-type surface
-//   4. defaults (Stream / no tool / no thinking / provider's primary protocol / Through TB)
+//      result the user is looking at; the backend echoes the request axes
+//      (stream/tool/direct/protocol/thinking) so every axis is restorable
+//   3. defaults (Stream / no tool / no thinking / provider's primary protocol / Through TB)
 export function resolveInitialAxes(opts: {
     targetType: ProbeTargetType;
     thinkingLevel?: ProbeThinking;
@@ -61,20 +40,22 @@ export function resolveInitialAxes(opts: {
 }): ProbeAxes {
     const axes: ProbeAxes = { ...DEFAULT_AXES };
 
-    // Priority 3: persisted last-used config.
-    Object.assign(axes, loadPersistedAxes(opts.targetType));
-
     // Priority 2: a pre-loaded result wins — the toggles must describe the
     // request that produced it.
-    if (opts.initialResult?.data && typeof opts.initialResult.data.stream === 'boolean') {
-        axes.stream = opts.initialResult.data.stream;
+    const data = opts.initialResult?.data;
+    if (data) {
+        if (typeof data.stream === 'boolean') axes.stream = data.stream;
+        if (typeof data.tool === 'boolean') axes.tool = data.tool;
+        if (typeof data.direct === 'boolean') axes.direct = data.direct;
+        if (data.protocol) axes.protocol = data.protocol;
+        if (data.thinking) axes.thinking = data.thinking;
     }
 
     // Priority 1: explicit prop (kept for callers that know better).
     if (opts.thinkingLevel) axes.thinking = opts.thinkingLevel;
 
     // Protocol/scope availability clamp (e.g. '' protocol for google targets
-    // is fine, but a persisted anthropic protocol must not stick onto a
+    // is fine, but a result-echoed anthropic protocol must not stick onto a
     // provider that can't speak it).
     const avail = protocolAvailability(opts.provider ?? null);
     if (avail.locked) {

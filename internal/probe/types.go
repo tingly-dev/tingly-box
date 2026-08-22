@@ -39,10 +39,17 @@ type Result struct {
 	LatencyMs    int64  `json:"latency_ms"`
 	ErrorMessage string `json:"error_message,omitempty"`
 
-	// Streaming mode indicator (true for streaming probes; redundant with the
+	// Request-echo axes — the exact stream/tool/direct/protocol/thinking
+	// combination that produced this result. Stream is redundant with the
 	// caller's test_mode but kept explicit so consumers don't have to infer the
-	// response shape from Content).
-	Stream bool `json:"stream,omitempty"`
+	// response shape from Content; the rest let a consumer reopening a stored
+	// result restore the control state that produced it (the frontend probe
+	// dialog does not persist axes, so the echo is the only source).
+	Stream   bool          `json:"stream,omitempty"`
+	Tool     bool          `json:"tool,omitempty"`
+	Direct   bool          `json:"direct,omitempty"`
+	Protocol ProbeProtocol `json:"protocol,omitempty"`
+	Thinking ThinkingLevel `json:"thinking,omitempty"`
 
 	// Usage is the normalized token usage for the probe round-trip, parsed via
 	// internal/protocol/usage from each provider's native usage struct. It uses

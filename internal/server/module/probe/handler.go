@@ -97,6 +97,18 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 		return
 	}
 
+	// Stamp the request axes onto the result (including the cached-hit path,
+	// whose result carries no axes of its own). Consumers reopening a stored
+	// result restore the exact control state that produced it from this echo.
+	stream, tool := req.ResolveAxes()
+	if data != nil {
+		data.Stream = stream
+		data.Tool = tool
+		data.Direct = req.Direct
+		data.Protocol = req.Protocol
+		data.Thinking = req.Thinking
+	}
+
 	// LatencyMs is owned by the SDK probe (pure upstream round-trip time) — do
 	// not overwrite it here.
 	c.JSON(http.StatusOK, E2EResponse{Success: true, Data: data})

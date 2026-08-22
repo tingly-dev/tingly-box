@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -33,7 +33,6 @@ import { runProbe, buildProbeCurl, type ProbeCurlResult } from './runProbe';
 import {
     type ProbeAxes,
     resolveInitialAxes,
-    persistAxes,
     protocolAvailability,
     scopeAvailable,
 } from './probeConfig';
@@ -453,8 +452,9 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     }, [open, provider, targetType, targetId]);
 
     // Reset on open — do NOT auto-run; the user clicks Run Test. State comes
-    // from the association chain (props → initialResult → persisted config →
-    // defaults), so the toggles always describe the result on screen.
+    // from the association chain (props → initialResult → defaults), so the
+    // toggles always describe the result on screen. Axes are deliberately not
+    // persisted across opens — a probe's defaults must be predictable.
     useEffect(() => {
         if (open) {
             setAxes(resolveInitialAxes({ targetType, thinkingLevel, initialResult, provider: providerInfo }));
@@ -469,7 +469,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     }, [open, thinkingLevel, initialResult]);
 
     // Clamp the protocol axis when the provider record arrives (or changes):
-    // a persisted protocol that this target can't speak falls back to the
+    // a result-echoed protocol that this target can't speak falls back to the
     // concrete default.
     const protoAvail = useMemo(() => protocolAvailability(providerInfo), [providerInfo]);
     useEffect(() => {
@@ -487,17 +487,6 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             return prev;
         });
     }, [protoAvail]);
-
-    // Persist any manual change (not the programmatic resets above) so the
-    // dialog re-opens in the shape the user last used on this surface.
-    const axesInitialized = useRef(false);
-    useEffect(() => {
-        if (!axesInitialized.current) {
-            axesInitialized.current = true;
-            return;
-        }
-        if (open) persistAxes(targetType, axes);
-    }, [axes, open, targetType]);
 
     // Protocol axis per target type: providers reduce to what they can speak;
     // rule targets are locked to their scenario's protocol.

@@ -66,6 +66,13 @@ export interface ProbeResultData {
     latency_ms: number;
     request_url?: string;
     stream?: boolean;
+    // Request-echo axes — the exact combination that produced this result.
+    // The probe panel does not persist axes across opens, so reopening a
+    // stored result restores its control state from this echo.
+    tool?: boolean;
+    direct?: boolean;
+    protocol?: ProbeProtocol;
+    thinking?: ProbeThinking;
     // Canonical token usage (same shape as protocol.TokenUsage on the backend):
     // input_tokens / output_tokens / cache_read_tokens / cache_write_tokens /
     // reasoning_tokens. Present for OpenAI Chat/Responses and Anthropic probes
