@@ -23,14 +23,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
+	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
-	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // ProtocolHandlerDeps declares exactly what the AI Model API handlers need from the host

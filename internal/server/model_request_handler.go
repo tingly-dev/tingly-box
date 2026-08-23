@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
 // ModelRequestEvent is a single log line belonging to one model request,

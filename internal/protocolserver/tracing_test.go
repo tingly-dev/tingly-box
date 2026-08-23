@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
 )
 
 // newTestTracerHandler builds a ProtocolHandler whose Tracer records spans

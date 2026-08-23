@@ -96,7 +96,7 @@ preset filter — no special-case UI.
 
 | System | Location | Captures | Surfaced in |
 |---|---|---|---|
-| A. logrus logging (`pkg/obs.MultiLogger`) | `pkg/obs/multi_logger.go` | text/json/memory, bucketed by source | **Logs page** ← this redesign |
+| A. logrus logging (`pkg/obs.MultiLogger`) | `internal/obs/multi_logger.go` | text/json/memory, bucketed by source | **Logs page** ← this redesign |
 | B. request recording (`ProtocolRecorder`) | `internal/server/protocol_recording.go` | original→transformed request/response, stream chunks | Prompt recording page; opt-in per scenario |
 | C. usage tracking (`UsageTracker`) | `internal/server/tracking.go` | tokens, provider, model, latency | Dashboard / DB |
 

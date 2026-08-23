@@ -18,7 +18,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // logCapture is a logrus hook that records every entry fired through it.
@@ -107,7 +106,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
 		c.Request, _ = http.NewRequest("POST", "/v1/chat/completions", nil)
-		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), reqID))
+		c.Request = c.Request.WithContext(internalobs.ContextWithRequestID(c.Request.Context(), reqID))
 		return c
 	}
 

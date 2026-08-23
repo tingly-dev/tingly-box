@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	exporter2 "github.com/tingly-dev/tingly-box/internal/otel/exporter"
+	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -26,9 +28,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
-
-	"github.com/tingly-dev/tingly-box/pkg/otel/exporter"
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // Setup holds the configured providers, the token tracker, and the tracer.
@@ -87,7 +86,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 		}, nil
 	}
 
-	otlpCfg := exporter.OTLPConfig{
+	otlpCfg := exporter2.OTLPConfig{
 		Endpoint: cfg.OTLP.Endpoint,
 		Protocol: cfg.OTLP.Protocol,
 		Insecure: cfg.OTLP.Insecure,
@@ -96,7 +95,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	}
 
 	// Metrics
-	metricExp, err := exporter.NewOTLPExporter(otlpCfg)
+	metricExp, err := exporter2.NewOTLPExporter(otlpCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTLP metric exporter: %w", err)
 	}
@@ -110,7 +109,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	)
 
 	// Traces
-	traceExp, err := exporter.NewOTLPTraceExporter(otlpCfg)
+	traceExp, err := exporter2.NewOTLPTraceExporter(otlpCfg)
 	if err != nil {
 		_ = meterProvider.Shutdown(ctx)
 		return nil, fmt.Errorf("failed to create OTLP trace exporter: %w", err)

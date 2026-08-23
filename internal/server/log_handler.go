@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
 // LogEntry represents a log entry for API response

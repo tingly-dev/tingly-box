@@ -10,7 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // ServerOption defines a functional option for Server configuration
@@ -122,7 +121,7 @@ func WithHTTPTimeouts(t HTTPTimeouts) ServerOption {
 }
 
 // WithMultiLogger sets the multi-mode logger for the server
-func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
+func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
 	return func(s *Server) {
 		s.multiLogger = logger
 	}

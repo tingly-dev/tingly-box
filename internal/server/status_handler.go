@@ -4,8 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
+	pkgobs "github.com/tingly-dev/tingly-box/internal/obs"
 )
 
 // StatusResponse represents the server status API response

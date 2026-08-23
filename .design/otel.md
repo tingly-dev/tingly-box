@@ -4,9 +4,9 @@
 > 每请求的持久化数据（usage 记录、请求录制）在源头写入，永远不从聚合指标反推。
 > 没有出口就不装管道——宁可全局 no-op，也不要"记录了再丢弃"的中间态。
 
-关联代码：`pkg/otel/`（setup.go / config.go / tracer.go / attributes.go / tracker/ / exporter/）。
+关联代码：`internal/otel/`（setup.go / config.go / tracer.go / attributes.go / tracker/ / exporter/）。
 接线点：`internal/server/server.go`（`NewSetup` + `server.otelSetup` / `server.tokenTracker`）。
-包级 API 文档见 `pkg/otel/README.md`；本文记录**为什么长成这样**。
+包级 API 文档见 `internal/otel/README.md`；本文记录**为什么长成这样**。
 
 ---
 
@@ -37,7 +37,7 @@ tingly-box 有三类"请求发生了什么"的数据，各有唯一的权威来�
 
 ## 3. 命名：直接采用 OTel GenAI 语义约定（gen_ai.*）
 
-**时机决定**：做这个决定时 `llm.*` 指标没有任何消费方（SQLite exporter 是空的、sink exporter 已删、OTLP 默认关闭、前端 dashboard 读的是 UsageStore 而非 OTel），迁移成本恰好为零，于是整体切换、不留旧名、不做双写（commit `99c9d93`）。若未来规范漂移，键名集中在 `pkg/otel/attributes.go` 和 `tracker/token_tracker.go` 顶部两处。
+**时机决定**：做这个决定时 `llm.*` 指标没有任何消费方（SQLite exporter 是空的、sink exporter 已删、OTLP 默认关闭、前端 dashboard 读的是 UsageStore 而非 OTel），迁移成本恰好为零，于是整体切换、不留旧名、不做双写（commit `99c9d93`）。若未来规范漂移，键名集中在 `internal/otel/attributes.go` 和 `tracker/token_tracker.go` 顶部两处。
 
 **实现来源**：instrument 名/单位/描述用官方 `semconv/v1.37.0/genaiconv` 构造器，标准属性键用 `semconv` 常量别名——semconv 版本升级即自动跟进规范改名；只有 `tingly.*` 键是我们自己的（单一定义在 tracker 包，attributes.go 为 span 侧别名）。
 
@@ -69,8 +69,8 @@ cumulative 指标的每个不同属性组合都是一条**进程生命周期内�
 
 守护测试（指针级断言，比对 `unsafe.StringData` 确认属性值不与源缓冲区共享存储）：
 - `tracker/token_tracker_test.go`：`TestRecordUsage_NoHighCardinalityAttributes`（latency 不上属性 + error.type 截断）、`TestRecordUsage_DetachesRequestBufferStrings`（clone 解绑）
-- `pkg/otel/oom_regression_test.go`：`TestStartRequestSpan_DetachesModelString`（span 侧解绑）
-- `pkg/obs/memorylog_test.go`：`TestFireDetachesValues`（内存日志 detach，另一条 OOM 战线，见 logging-redesign）
+- `internal/otel/oom_regression_test.go`：`TestStartRequestSpan_DetachesModelString`（span 侧解绑）
+- `internal/obs/memorylog_test.go`：`TestFireDetachesValues`（内存日志 detach，另一条 OOM 战线，见 logging-redesign）
 
 ## 5. Trace 管道的具体接线
 
@@ -79,7 +79,7 @@ cumulative 指标的每个不同属性组合都是一条**进程生命周期内�
 - **传播**：启用 tracing 时安装 W3C `TraceContext` + `Baggage` propagator——trace id 能双向穿过网关（下游 agent → tingly-box → 上游 provider）。这是 LLM 网关做 tracing 的核心价值：把网关这一跳挂进调用方的完整 trace。
 - **operation 轴两侧对齐**：`StartRequestSpan(ctx, operation, provider, model, scenario)` 的 operation 参数与 `UsageOptions.Operation` 同轴同默认（"chat"）——metrics 和 span 对同一请求永远报同一个 operation。
 - **Tracer helper 陷阱**：`EndSpan(span, err)` 已经记录 exception 事件并置 error status，**不要**再对同一个错误调 `RecordError`，会重复两条（e2e 测出并有断言防回归）。
-- **线格式验证**：`pkg/otel/trace_e2e_test.go` 起进程内 OTLP collector，用官方 proto 反序列化断言 payload——resource → scope → spans 层次、traceId/parentSpanId 链接、gen_ai.* 属性、error status。任何改动破坏标准兼容性会在这里挂掉。
+- **线格式验证**：`internal/otel/trace_e2e_test.go` 起进程内 OTLP collector，用官方 proto 反序列化断言 payload——resource → scope → spans 层次、traceId/parentSpanId 链接、gen_ai.* 属性、error status。任何改动破坏标准兼容性会在这里挂掉。
 
 ## 6. 社区背景与跟踪点（2026-07 记录）
 
@@ -192,7 +192,7 @@ root span sampled 且 valid 时，middleware 把 trace id 写入
 有真实消费方（logs 页 UI）。它**不是**被删的 SinkExporter 反模式——那个错在
 从聚合指标反向合成记录且无人消费；方向和消费方都不同。
 
-- `pkg/otel` 的 ring-buffer SpanProcessor **常驻注册**：trace provider 在无 OTLP 时
+- `../internal/otel` 的 ring-buffer SpanProcessor **常驻注册**：trace provider 在无 OTLP 时
   也构建（仅挂内存 processor）；OTLP 配置后二者并存（sdktrace 多 processor）。
   metrics 侧不变（无 OTLP 时 `Tracker()` 仍为 nil）。W3C propagator 随之常装。
 - **硬性有界**（#1255 战线）：按 trace 数 + 估算字节双重封顶，超限逐最旧 trace 整体

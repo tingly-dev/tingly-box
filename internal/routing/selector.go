@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	pkgobs "github.com/tingly-dev/tingly-box/internal/obs"
 
 	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // ProviderResolver resolves providers by UUID and persists config state.

@@ -264,7 +264,7 @@ await api.setScenarioConfig(SCENARIO, config);
 
 ### 6.3 日志写 `source` 字段会破坏聚合
 
-`pkg/obs/multi_logger.go` 的 `WriteEntry` 路由策略:
+`internal/obs/multi_logger.go` 的 `WriteEntry` 路由策略:
 
 1. 若 entry 有显式 `source` → 用该 source(**跳过** request_id 自动注入)
 2. 否则若 ctx 有 request_id → 路由到 `model_request`,自动注入

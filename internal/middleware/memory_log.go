@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	obs2 "github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // MemoryLog is the HTTP access log for the whole request
@@ -27,11 +27,11 @@ import (
 // where they are understood (the handler and the model_request client stage).
 type MemoryLog struct {
 	logger      *logrus.Logger
-	multiLogger *obs.MultiLogger
+	multiLogger *obs2.MultiLogger
 }
 
 // NewMemoryLogMiddleware creates the HTTP access log middleware.
-func NewMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MemoryLog {
+func NewMemoryLogMiddleware(multiLogger *obs2.MultiLogger) *MemoryLog {
 	if multiLogger == nil {
 		// Fallback for test/harness environments where no multi-logger is
 		// configured. Follow the process-global logrus level so embedding
@@ -48,7 +48,7 @@ func NewMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MemoryLog {
 		}
 	}
 	// Get a logger scoped to HTTP source
-	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
+	httpLogger := multiLogger.GetLogrusLogger(obs2.LogSourceHTTP)
 
 	return &MemoryLog{
 		logger:      httpLogger,
@@ -83,7 +83,7 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		// RequestIDFromContext and routes those entries to LogSourceModelRequest,
 		// stamping them with the id for correlation. This is NOT a body copy —
 		// WithContext only swaps the context pointer.
-		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), requestID))
+		c.Request = c.Request.WithContext(obs2.ContextWithRequestID(c.Request.Context(), requestID))
 
 		c.Next()
 
@@ -195,7 +195,7 @@ func (m *MemoryLog) GetEntries() []*logrus.Entry {
 	if m.multiLogger == nil {
 		return []*logrus.Entry{}
 	}
-	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	httpLogger := m.multiLogger.WithSource(obs2.LogSourceHTTP)
 	return httpLogger.GetMemoryEntries()
 }
 
@@ -204,14 +204,14 @@ func (m *MemoryLog) GetLatestEntries(n int) []*logrus.Entry {
 	if m.multiLogger == nil {
 		return []*logrus.Entry{}
 	}
-	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	httpLogger := m.multiLogger.WithSource(obs2.LogSourceHTTP)
 	return httpLogger.GetMemoryLatest(n)
 }
 
 // GetEntriesSince returns log entries from memory after the specified time
 func (m *MemoryLog) GetEntriesSince(since time.Time) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
-	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	memorySink := m.multiLogger.GetMemorySink(obs2.LogSourceHTTP)
 	if memorySink == nil {
 		return []*logrus.Entry{}
 	}
@@ -221,7 +221,7 @@ func (m *MemoryLog) GetEntriesSince(since time.Time) []*logrus.Entry {
 // GetEntriesByLevel returns log entries from memory matching the specified level
 func (m *MemoryLog) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
-	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	memorySink := m.multiLogger.GetMemorySink(obs2.LogSourceHTTP)
 	if memorySink == nil {
 		return []*logrus.Entry{}
 	}
@@ -233,14 +233,14 @@ func (m *MemoryLog) Clear() {
 	if m.multiLogger == nil {
 		return
 	}
-	httpLogger := m.multiLogger.WithSource(obs.LogSourceHTTP)
+	httpLogger := m.multiLogger.WithSource(obs2.LogSourceHTTP)
 	httpLogger.ClearMemory()
 }
 
 // Size returns the current number of stored log entries in memory
 func (m *MemoryLog) Size() int {
 	// Get the HTTP scoped memory sink from MultiLogger and return its size
-	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
+	memorySink := m.multiLogger.GetMemorySink(obs2.LogSourceHTTP)
 	if memorySink == nil {
 		return 0
 	}

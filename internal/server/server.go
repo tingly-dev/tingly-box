@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/otel"
+	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
@@ -39,9 +41,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/tokenrefresh"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
-	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
-	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
@@ -58,7 +57,7 @@ type Server struct {
 	watcher    *config.Watcher
 
 	// multi-mode logger for text + JSON + memory output
-	multiLogger *pkgobs.MultiLogger
+	multiLogger *obs.MultiLogger
 
 	// middleware
 	authMW          *middleware.AuthMiddleware
@@ -139,7 +138,7 @@ type Server struct {
 	visionProxyService *visionproxy.Service
 
 	// OTel meter setup for unified token tracking
-	otelSetup    *pkgotel.Setup
+	otelSetup    *otel.Setup
 	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
@@ -408,9 +407,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize OTel for token metrics and tracing. Telemetry is export-only
 	// (optional OTLP); persistent usage records are written directly by the
 	// usage-tracking layer, so no store references are needed here.
-	otelCfg := pkgotel.DefaultConfig()
+	otelCfg := otel.DefaultConfig()
 	otelCfg.ServiceVersion = server.version
-	otelSetup, err := pkgotel.NewSetup(context.Background(), otelCfg)
+	otelSetup, err := otel.NewSetup(context.Background(), otelCfg)
 	if err != nil {
 		logrus.Warnf("Failed to initialize OTel setup: %v", err)
 	} else if otelSetup != nil {

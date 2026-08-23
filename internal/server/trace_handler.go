@@ -4,8 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
+	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
 )
 
 // Trace API — read side of the in-memory SpanStore (.design/otel.md §7.4).

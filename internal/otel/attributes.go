@@ -1,10 +1,9 @@
 package otel
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
-
-	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
 // OTel GenAI semantic convention attribute keys, aliased from the official

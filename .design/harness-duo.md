@@ -151,7 +151,7 @@ production-faithful `WithMultiLogger` boot, tb2's slope jumped from ~0.5 to
 ~490 KB/request; the per-instance heap-profile diff attributed every
 retained byte to `gjson.ParseBytes` under `BetaMessageNewParams.UnmarshalJSON`.
 Root cause: gjson-parsed strings are substrings of the raw request body, and
-the memory log ring (`pkg/obs/memorylog.go`) stored entries whose field
+the memory log ring (`internal/obs/memorylog.go`) stored entries whose field
 values aliased them — one tiny model-name field pinned the entire multi-MB
 body, ×50 ring entries. Fixed at the sink boundary: `Fire` now stores a
 detached copy (strings cloned, errors rendered, composites re-encoded as

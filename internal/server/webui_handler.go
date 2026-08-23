@@ -12,9 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
-	"github.com/tingly-dev/tingly-box/pkg/obs"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
