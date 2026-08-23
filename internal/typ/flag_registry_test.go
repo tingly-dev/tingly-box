@@ -145,6 +145,29 @@ func TestRuleFlagRegistry_MultiEnumOptions(t *testing.T) {
 	}
 }
 
+// TestRuleFlagRegistry_RecordingOptionsAreValidPoints pins the recording
+// flag's options to the typ.RecordingPoint value domain, so the registry and
+// ParseRecordingMode can never drift apart.
+func TestRuleFlagRegistry_RecordingOptionsAreValidPoints(t *testing.T) {
+	var found *FlagSpec
+	for i, s := range RuleFlagRegistry() {
+		if s.Key == "recording" {
+			found = &RuleFlagRegistry()[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("recording missing from registry")
+	}
+	if found.Type != FlagTypeMultiEnum {
+		t.Fatalf("recording type = %q, want %q", found.Type, FlagTypeMultiEnum)
+	}
+	for _, opt := range found.Options {
+		if !IsValidRecordingMode(opt.Value) {
+			t.Errorf("recording option %q is not a valid RecordingPoint", opt.Value)
+		}
+	}
+}
 
 // TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode verifies that every flag
 // marked Shared declares an InheritanceMode and vice versa.

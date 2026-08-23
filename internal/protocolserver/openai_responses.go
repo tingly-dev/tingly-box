@@ -11,6 +11,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -164,6 +165,18 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 	isStreaming := req.Stream
 	scenarioConfig := ph.deps.Config.GetScenarioConfig(scenarioType)
 	actualModel := string(req.Model)
+
+	// Get or create the recorder (pristine request body), mirroring the
+	// Anthropic entry points. Enablement is the effective capture-point
+	// selection: the rule's recording flag overrides the scenario-level
+	// recording_v2 default.
+	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
+		bs, err := json.Marshal(req.ResponseNewParams)
+		if err != nil {
+			bs = []byte("{}")
+		}
+		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, obs.RecordMode(recMode), bs)
+	}
 
 	// Snapshot a pristine template only when failover is possible. The template
 	// is the typed ResponseNewParams (post-vision-proxy — cloned per attempt so

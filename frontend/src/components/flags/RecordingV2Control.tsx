@@ -1,13 +1,39 @@
 import { Check as IconCheck, KeyboardArrowDown as IconChevronDown, Circle as IconCircleFilled } from '@/components/icons';
-import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
+import { Box, Button, Checkbox, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 
-export const RECORD_V2_MODES = [
-    { value: '', label: 'Off', description: 'Recording disabled' },
-    { value: 'request', label: 'Request Only', description: 'Record the final outbound request only' },
-    { value: 'request_response', label: 'Request + Response', description: 'Record the final outbound request and final response' },
-    { value: 'staged_request_response', label: 'Request + Transform + Response', description: 'Record original request, transformed request, and final response' },
+// Capture points along the gateway pipeline (multi-select). Mirrors the
+// backend value domain (typ.RecordingPoint); upstream_response is not offered
+// yet — nothing captures it until the wire-level recorder lands.
+export const RECORDING_POINTS = [
+    { value: 'client_request', label: 'Client request (inbound)', short: 'In', description: 'The request exactly as the client sent it (before transforms)' },
+    { value: 'upstream_request', label: 'Upstream request (outbound)', short: 'Out', description: 'The final request dispatched to the provider (after all transforms)' },
+    { value: 'client_response', label: 'Client response (final)', short: 'Resp', description: 'The response as returned to the client' },
 ] as const;
+
+// Legacy single-enum values (pre point-set model) mapped onto point sets, so
+// configs written before the multi-select model display correctly.
+const LEGACY_MODES: Record<string, string[]> = {
+    request: ['upstream_request'],
+    request_response: ['upstream_request', 'client_response'],
+    staged_request_response: ['client_request', 'upstream_request', 'client_response'],
+};
+
+// normalizePoints parses a stored recording value (comma-separated points or
+// a legacy enum value) into the selected point list, canonical order.
+export function normalizePoints(value: string): string[] {
+    const seen = new Set<string>();
+    for (const tok of (value || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+        const legacy = LEGACY_MODES[tok];
+        if (legacy) {
+            legacy.forEach((p) => seen.add(p));
+        } else if (RECORDING_POINTS.some((p) => p.value === tok) || tok === 'upstream_response') {
+            seen.add(tok);
+        }
+    }
+    const order = ['client_request', 'upstream_request', 'upstream_response', 'client_response'];
+    return order.filter((p) => seen.has(p));
+}
 
 interface RecordingV2ControlProps {
     value: string;
@@ -18,13 +44,27 @@ interface RecordingV2ControlProps {
 const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled, onChange }) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
-    const currentMode = RECORD_V2_MODES.find(m => m.value === value);
-    const isActive = value !== '';
+    const selected = normalizePoints(value);
+    const isActive = selected.length > 0;
+    const shortLabel = isActive
+        ? RECORDING_POINTS.filter((p) => selected.includes(p.value)).map((p) => p.short).join('+')
+        : 'Off';
+
+    const toggle = (point: string) => {
+        const next = selected.includes(point)
+            ? selected.filter((p) => p !== point)
+            : [...selected, point];
+        // Keep canonical order on the wire.
+        const order = ['client_request', 'upstream_request', 'upstream_response', 'client_response'];
+        onChange(order.filter((p) => next.includes(p)).join(','));
+    };
 
     return (
         <>
             <Tooltip
-                title={`Recording V2: ${currentMode?.description || 'Disabled'}${isActive ? ' (enabled)' : ' (disabled)'}`}
+                title={isActive
+                    ? `Recording: ${RECORDING_POINTS.filter((p) => selected.includes(p.value)).map((p) => p.label).join(', ')}`
+                    : 'Recording disabled — pick the capture points to record'}
                 placement="right"
                 arrow
             >
@@ -48,7 +88,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                     }}
                 >
                     <IconCircleFilled sx={{ fontSize: 14, mr: '4px' }} />
-                    Record: {currentMode?.label || 'Off'}
+                    Record: {shortLabel}
                 </Button>
             </Tooltip>
             <Menu
@@ -58,19 +98,32 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             >
-                {RECORD_V2_MODES.map((mode) => (
-                    <MenuItem
-                        key={mode.value}
-                        selected={mode.value === value}
-                        onClick={() => { onChange(mode.value); setAnchor(null); }}
-                        title={mode.description}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                            <ListItemText primary={mode.label} slotProps={{ primary: { variant: 'body2' } }} />
-                            {mode.value === value && <IconCheck sx={{ fontSize: 16 }} />}
-                        </Box>
-                    </MenuItem>
-                ))}
+                {RECORDING_POINTS.map((point) => {
+                    const checked = selected.includes(point.value);
+                    return (
+                        <MenuItem
+                            key={point.value}
+                            onClick={() => toggle(point.value)}
+                            title={point.description}
+                            dense
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                <Checkbox size="small" checked={checked} sx={{ p: 0 }} />
+                                <ListItemText primary={point.label} slotProps={{ primary: { variant: 'body2' } }} />
+                            </Box>
+                        </MenuItem>
+                    );
+                })}
+                <MenuItem
+                    disabled={!isActive}
+                    onClick={() => { onChange(''); setAnchor(null); }}
+                    dense
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <ListItemText primary="Turn off" slotProps={{ primary: { variant: 'body2' } }} />
+                        {!isActive && <IconCheck sx={{ fontSize: 16 }} />}
+                    </Box>
+                </MenuItem>
             </Menu>
         </>
     );

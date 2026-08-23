@@ -200,6 +200,7 @@ func (ph *ProtocolHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.Be
 
 // nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.
 func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+	recorder := recording.FromGin(c)
 	req := originalReq
 
 	// Forward request to provider
@@ -269,10 +270,15 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 
 	// Return modified response
 	c.JSON(http.StatusOK, responseMap)
+	if recorder != nil {
+		recorder.SetAssembledResponse(responseMap)
+		recorder.RecordResponse(provider, req.Model)
+	}
 }
 
 // streamOpenAIChat handles streaming chat completion requests.
 func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+	recorder := recording.FromGin(c)
 	req := originalReq
 
 	// Estimate input tokens up front and hand the scalar to the stream handler,
@@ -286,7 +292,7 @@ func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provid
 		defer cancel()
 	}
 	if err != nil {
-		ph.handlePreStreamFailure(c, err, nil)
+		ph.handlePreStreamFailure(c, err, recorder)
 		return
 	}
 
@@ -299,6 +305,19 @@ func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provid
 
 	// Track usage from stream handler
 	ph.trackUsageWithTokenUsage(c, usage, err)
+
+	// Emit the record for the passthrough stream. No chunk tap exists on this
+	// path (the SSE bytes are relayed by HandleOpenAIChatStream), so the final
+	// response is synthesized from the writer state; the request-side capture
+	// points are unaffected.
+	if recorder != nil {
+		if err != nil {
+			recorder.RecordError(err)
+		} else {
+			recorder.EnableStreaming()
+			recorder.RecordResponse(provider, req.Model)
+		}
+	}
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)

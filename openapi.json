@@ -14100,6 +14100,10 @@
             "type": "string",
             "description": "Field openai_endpoint_override"
           },
+          "recording": {
+            "type": "string",
+            "description": "Field recording"
+          },
           "session_affinity": {
             "type": "integer",
             "format": "int64",

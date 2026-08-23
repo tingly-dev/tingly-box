@@ -9,13 +9,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RecordMode defines which fields are captured by the Sink.
+// RecordMode carries the recording selection: a comma-separated set of
+// capture points (typ.RecordingPoint), or a legacy enum value. "" means
+// disabled. The obs layer treats it as opaque enabled/disabled — capture-point
+// filtering happens in the recorder (see typ.ParseRecordingMode).
 type RecordMode string
 
 const (
-	RecordModeRequestOnly           RecordMode = "request"                 // Record transformed request only
-	RecordModeRequestResponse       RecordMode = "request_response"        // Record transformed request + final response
-	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // Record original request + transformed request + final response
+	// Legacy enum values from the pre point-set model. Kept because stored
+	// configs and tests still pass them; they normalize to point sets at the
+	// recorder boundary (typ.ParseRecordingMode).
+	RecordModeRequestOnly           RecordMode = "request"                 // → upstream_request
+	RecordModeRequestResponse       RecordMode = "request_response"        // → upstream_request,client_response
+	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // → client_request,upstream_request,client_response
 )
 
 // RecordRequest represents the HTTP request details. Kept for callers that
@@ -82,10 +88,10 @@ func WithExporters(exporters ...RecordExporter) SinkOption {
 // .jsonl.gz files). Pass WithCASExporter() to additionally write
 // content-addressed slim JSONL + blobs.
 func NewSink(baseDir string, mode RecordMode, opts ...SinkOption) *Sink {
-	switch mode {
-	case "":
+	switch {
+	case strings.TrimSpace(string(mode)) == "":
 		return nil
-	case RecordModeRequestOnly, RecordModeRequestResponse, RecordModeStagedRequestResponse:
+	default:
 		cfg := sinkConfig{}
 		for _, opt := range opts {
 			opt(&cfg)
@@ -109,9 +115,6 @@ func NewSink(baseDir string, mode RecordMode, opts ...SinkOption) *Sink {
 			baseDir:   baseDir,
 			processor: NewBatchProcessor(exp, BatchProcessorOptions{}),
 		}
-	default:
-		logrus.Warnf("obs: unknown record mode %q, recording disabled", mode)
-		return nil
 	}
 }
 
