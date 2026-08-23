@@ -3,12 +3,15 @@ import { Box, Button, Checkbox, ListItemText, Menu, MenuItem, Tooltip } from '@m
 import React, { useState } from 'react';
 
 // Capture points along the gateway pipeline (multi-select). Mirrors the
-// backend value domain (typ.RecordingPoint); upstream_response is not offered
-// yet — nothing captures it until the wire-level recorder lands.
+// backend registry options (typ.RuleFlagRegistry "recording"). Response-side
+// points exist in the value domain but are not offered yet — no dead toggles
+// (.design/recording.md §3.5):
+//   - client_response (final): capture quality not good enough; emit paused.
+//     { value: 'client_response', label: 'Client response (final)', short: 'Resp', description: 'The response as returned to the client' },
+//   - upstream_response (provider raw): no capture until the wire recorder lands.
 export const RECORDING_POINTS = [
     { value: 'client_request', label: 'Client request (inbound)', short: 'In', description: 'The request exactly as the client sent it (before transforms)' },
     { value: 'upstream_request', label: 'Upstream request (outbound)', short: 'Out', description: 'The final request dispatched to the provider (after all transforms)' },
-    { value: 'client_response', label: 'Client response (final)', short: 'Resp', description: 'The response as returned to the client' },
 ] as const;
 
 // Legacy single-enum values (pre point-set model) mapped onto point sets, so
@@ -19,6 +22,11 @@ const LEGACY_MODES: Record<string, string[]> = {
     staged_request_response: ['client_request', 'upstream_request', 'client_response'],
 };
 
+// ALL_POINTS is the full backend value domain in canonical (pipeline) order —
+// wider than RECORDING_POINTS so stored response-side selections survive
+// normalization and toggling even while their checkboxes are not offered.
+const ALL_POINTS = ['client_request', 'upstream_request', 'upstream_response', 'client_response'];
+
 // normalizePoints parses a stored recording value (comma-separated points or
 // a legacy enum value) into the selected point list, canonical order.
 export function normalizePoints(value: string): string[] {
@@ -27,12 +35,11 @@ export function normalizePoints(value: string): string[] {
         const legacy = LEGACY_MODES[tok];
         if (legacy) {
             legacy.forEach((p) => seen.add(p));
-        } else if (RECORDING_POINTS.some((p) => p.value === tok) || tok === 'upstream_response') {
+        } else if (ALL_POINTS.includes(tok)) {
             seen.add(tok);
         }
     }
-    const order = ['client_request', 'upstream_request', 'upstream_response', 'client_response'];
-    return order.filter((p) => seen.has(p));
+    return ALL_POINTS.filter((p) => seen.has(p));
 }
 
 interface RecordingV2ControlProps {
@@ -55,8 +62,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
             ? selected.filter((p) => p !== point)
             : [...selected, point];
         // Keep canonical order on the wire.
-        const order = ['client_request', 'upstream_request', 'upstream_response', 'client_response'];
-        onChange(order.filter((p) => next.includes(p)).join(','));
+        onChange(ALL_POINTS.filter((p) => next.includes(p)).join(','));
     };
 
     return (

@@ -722,6 +722,28 @@ func ruleFlagCases() []flagCase {
 			if rec["final_response"] != nil {
 				t.Error("record carries final_response though client_response was not selected")
 			}
+
+			// Response-side recording is paused (emit commented out — see
+			// recorder.go / .design/recording.md §3.5): a stored value that
+			// still selects client_response must record the request points
+			// only, never a final_response.
+			s2 := flagScenario()
+			s2.Name = "flags-resp-paused"
+			model2 := renv.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, s2,
+				typ.RuleFlags{Recording: "client_request,upstream_request,client_response"})
+			res2 := sendFlag(t, renv, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model2, false, nil, nil)
+			if res2.HTTPStatus != 200 {
+				t.Fatalf("request failed: status=%d body=%s", res2.HTTPStatus, truncate(string(res2.RawBody), 300))
+			}
+			renv.FlushRecordSinks(context.Background())
+			records = readRecordedLines(t, dir)
+			rec = records[len(records)-1]
+			if rec["transformed_request"] == nil {
+				t.Error("paused-response record missing transformed_request")
+			}
+			if rec["final_response"] != nil {
+				t.Error("final_response emitted though response-side recording is paused")
+			}
 		}},
 
 		// ── vision_proxy_service ─────────────────────────────────────────────
