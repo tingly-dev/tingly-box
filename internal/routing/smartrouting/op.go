@@ -229,7 +229,7 @@ var Operations = []SmartOp{
 		Position:  PositionServiceQuota,
 		Operation: OpServiceQuotaPctLe,
 		Meta: SmartOpMeta{
-			Description: "Avg quota used across services' providers <= value (%)",
+			Description: "Tightest quota used across services' providers <= value (%)",
 			Type:        ValueTypeInt,
 		},
 	},
@@ -237,7 +237,7 @@ var Operations = []SmartOp{
 		Position:  PositionServiceQuota,
 		Operation: OpServiceQuotaPctGe,
 		Meta: SmartOpMeta{
-			Description: "Avg quota used across services' providers >= value (%)",
+			Description: "Tightest quota used across services' providers >= value (%)",
 			Type:        ValueTypeInt,
 		},
 	},
@@ -245,7 +245,7 @@ var Operations = []SmartOp{
 		Position:  PositionServiceQuota,
 		Operation: OpServiceQuotaPctLt,
 		Meta: SmartOpMeta{
-			Description: "Avg quota used across services' providers < value (%)",
+			Description: "Tightest quota used across services' providers < value (%)",
 			Type:        ValueTypeInt,
 		},
 	},
@@ -253,7 +253,7 @@ var Operations = []SmartOp{
 		Position:  PositionServiceQuota,
 		Operation: OpServiceQuotaPctGt,
 		Meta: SmartOpMeta{
-			Description: "Avg quota used across services' providers > value (%)",
+			Description: "Tightest quota used across services' providers > value (%)",
 			Type:        ValueTypeInt,
 		},
 	},
@@ -268,7 +268,7 @@ const (
 	PositionToken           SmartOpPosition = "token"             // Token count
 	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
 	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
-	PositionServiceQuota    SmartOpPosition = "service_quota"     // Cached upstream provider quota usage (%)
+	PositionServiceQuota    SmartOpPosition = "service_quota"     // Upstream provider quota usage (%)
 	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
 	PositionTime            SmartOpPosition = "time"              // Current time in a configured timezone
 )
@@ -317,10 +317,10 @@ const (
 	OpServiceCapacityUtilGt SmartOpOperation = "util_gt" // Avg seat utilization > value (%)
 
 	// Service quota operations (cached upstream provider usage %, see ai/quota)
-	OpServiceQuotaPctLe SmartOpOperation = "pct_le" // Avg quota used% <= value (%)
-	OpServiceQuotaPctGe SmartOpOperation = "pct_ge" // Avg quota used% >= value (%)
-	OpServiceQuotaPctLt SmartOpOperation = "pct_lt" // Avg quota used% < value (%)
-	OpServiceQuotaPctGt SmartOpOperation = "pct_gt" // Avg quota used% > value (%)
+	OpServiceQuotaPctLe SmartOpOperation = "pct_le" // Tightest quota used% <= value (%)
+	OpServiceQuotaPctGe SmartOpOperation = "pct_ge" // Tightest quota used% >= value (%)
+	OpServiceQuotaPctLt SmartOpOperation = "pct_lt" // Tightest quota used% < value (%)
+	OpServiceQuotaPctGt SmartOpOperation = "pct_gt" // Tightest quota used% > value (%)
 
 	// Agent (Claude Code) request kind operations
 	OpAgentClaudeCodeEquals SmartOpOperation = "equals" // Claude Code request kind equals the value

@@ -83,29 +83,21 @@ func TestEvaluateServiceQuotaOp_InvalidValue(t *testing.T) {
 }
 
 func TestFilterQuotaForRule(t *testing.T) {
+	svc := &loadbalance.Service{Provider: "provider-b", Model: "model-b"}
+	id := svc.ServiceID()
 	all := []ServiceQuotaInfo{
-		{ServiceID: "svc-a", Pct: 10},
-		{ServiceID: "svc-b", Pct: 90},
+		{ServiceID: id, Pct: 90},
+		{ServiceID: "other", Pct: 10},
 	}
-	services := []*loadbalance.Service{
-		{Provider: "provider-b", Model: "model-b"},
-	}
-	// ServiceID() combines provider+model; build a service whose ServiceID matches "svc-b".
-	// Rather than depend on the exact ServiceID() format, filter using the same
-	// service and assert only entries whose ID is present survive.
-	svc := services[0]
 	filtered := filterQuotaForRule(all, []*loadbalance.Service{svc})
-	for _, q := range filtered {
-		require.Equal(t, svc.ServiceID(), q.ServiceID)
-	}
+	require.Equal(t, []ServiceQuotaInfo{{ServiceID: id, Pct: 90}}, filtered)
 
-	require.Nil(t, filterQuotaForRule(nil, services))
+	require.Nil(t, filterQuotaForRule(nil, []*loadbalance.Service{svc}))
 }
 
 // TestSmartRouting_ServiceQuota_RuleLevel exercises the op through a full
 // Router.Evaluate pass, including evaluateRule's per-rule ServiceQuota
-// filtering (a second rule with a different service must not see the first
-// rule's quota data).
+// filter-and-restore around each rule's evaluation.
 func TestSmartRouting_ServiceQuota_RuleLevel(t *testing.T) {
 	hotService := &loadbalance.Service{Provider: "prov-hot", Model: "m", Weight: 1, Active: true}
 	coldService := &loadbalance.Service{Provider: "prov-cold", Model: "m", Weight: 1, Active: true}

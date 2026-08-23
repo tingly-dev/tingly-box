@@ -360,24 +360,23 @@ func (s *SmartRoutingStage) collectAllCapacityInfo(rules []smartrouting.SmartRou
 
 // collectAllQuotaInfo collects quota usage for all services across all
 // smart routing rules, keyed by each service's provider UUID (svc.Provider).
-// Deduplicates by serviceID; evaluateRule filters down to per-rule services.
-// Skipped entirely when no QuotaProvider is wired. A service is omitted
-// (not zeroed) when its provider has no usage data yet or usage is not
-// countable — unknown must never read as 0%.
+// Deduplicates by serviceID and memoizes lookups per provider (services in
+// one pool usually share an account); evaluateRule filters down to per-rule
+// services. Skipped entirely when no QuotaProvider is wired or no rule
+// carries a service_quota op — collection does a store read per provider,
+// so configs that never read the result must not pay for it. A service is
+// omitted (not zeroed) when its provider's standard quota is unknown —
+// unknown must never read as 0%.
 //
 // Uses usage.Pct(quota.WindowKindLimit), not the unfiltered usage.Pct():
-// service_quota is meant to react only to standard, self-healing quota
-// (Kind == WindowKindLimit), not to a standing balance/credit (Kind ==
-// WindowKindResource, e.g. OpenRouter's key balance or Kimi Code's booster
-// wallet) that needs a manual top-up rather than time to recover. A rule
-// that trips on balance depletion would keep avoiding that pool
-// indefinitely with no self-correcting signal — see
-// .design/quota-semantics.md §8.1.
+// the op reacts only to standard, self-healing quota, never a standing
+// balance/credit — see .design/quota-semantics.md §8.1.
 func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []smartrouting.SmartRouting) []smartrouting.ServiceQuotaInfo {
-	if s.quotaProvider == nil {
+	if s.quotaProvider == nil || !hasServiceQuotaOp(rules) {
 		return nil
 	}
 	seen := make(map[string]struct{})
+	pctByProvider := make(map[string]*float64) // nil value = provider quota unknown
 	var result []smartrouting.ServiceQuotaInfo
 	for _, r := range rules {
 		for _, svc := range r.Services {
@@ -390,19 +389,35 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 			if svc.Provider == "" {
 				continue
 			}
-			usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider)
-			if err != nil || usage == nil {
-				continue
+			pctPtr, looked := pctByProvider[svc.Provider]
+			if !looked {
+				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil {
+					if pct, ok := usage.Pct(quota.WindowKindLimit); ok {
+						pctPtr = &pct
+					}
+				}
+				pctByProvider[svc.Provider] = pctPtr
 			}
-			pct, ok := usage.Pct(quota.WindowKindLimit)
-			if !ok {
+			if pctPtr == nil {
 				continue
 			}
 			result = append(result, smartrouting.ServiceQuotaInfo{
 				ServiceID: id,
-				Pct:       pct,
+				Pct:       *pctPtr,
 			})
 		}
 	}
 	return result
+}
+
+// hasServiceQuotaOp reports whether any rule carries a service_quota op.
+func hasServiceQuotaOp(rules []smartrouting.SmartRouting) bool {
+	for _, r := range rules {
+		for _, op := range r.Ops {
+			if op.Position == smartrouting.PositionServiceQuota {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -21,22 +21,12 @@ type ServiceCapacityInfo struct {
 }
 
 // ServiceQuotaInfo holds quota usage for a single service's upstream
-// provider account (see ai/quota, .design/quota-semantics.md). Pct is the
-// provider's tightest countable *standard* quota window (ai/quota's
-// ProviderUsage.Pct(quota.WindowKindLimit), not the unfiltered Pct()) —
-// 0-100, already the "how much is used" answer, no further unit conversion.
-//
-// Filtered by WindowKindLimit, not unfiltered: a standing balance/credit
-// (Kind == WindowKindResource — OpenRouter's key balance, Kimi Code's
-// booster wallet, KimiK2's credits) needs a manual top-up rather than time
-// to recover, so it must not drive an automatic "avoid this pool" decision
-// the same way a self-healing allowance does — see
+// provider account. Pct is the provider's tightest countable *standard*
+// quota window (ai/quota's ProviderUsage.Pct(quota.WindowKindLimit), not
+// the unfiltered Pct()) — 0-100, no further unit conversion. Entries only
+// exist for services whose standard quota is currently known; unknown is
+// omitted rather than represented as 0%. Why Kind=limit only:
 // .design/quota-semantics.md §8.1.
-//
-// Entries only exist for services whose standard quota is currently known:
-// unread (cold cache), unreadable, not-countable (Unknown/Unlimited
-// windows), or resource-only providers are omitted rather than represented
-// as 0%, so they cannot be misread as "quota fully available".
 type ServiceQuotaInfo struct {
 	ServiceID string
 	Pct       float64
