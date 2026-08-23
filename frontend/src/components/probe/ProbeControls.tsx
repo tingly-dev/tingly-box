@@ -138,6 +138,12 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
 
     const set = (patch: Partial<ProbeAxes>) => onAxesChange({ ...axes, ...patch });
 
+    // Protocol options as actually rendered (falls back to a single-item list
+    // while the target is still resolving). Short labels exist to fit three
+    // buttons in the rail; with only one button there's no room pressure, so
+    // show the full protocol name instead of an abbreviation nobody needs.
+    const protocolOptions = protocol.options.length ? protocol.options : [protocol.value];
+
     return (
         <Stack spacing={1.5}>
             {/* Primary axes: what 80% of probes touch. */}
@@ -247,9 +253,9 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
                             <ExclusiveToggle
                                 value={protocol.value}
                                 onChange={(v) => set({ protocol: v as ProbeProtocol })}
-                                options={(protocol.options.length ? protocol.options : [protocol.value]).map((p) => ({
+                                options={protocolOptions.map((p) => ({
                                     value: p,
-                                    label: PROTOCOL_META[p]?.short || p,
+                                    label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
                                 }))}
                                 disabled={protocol.locked || protocol.disabled}
                             />
