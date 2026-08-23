@@ -437,6 +437,7 @@ export default {
     "thinkingLow": "Low",
     "thinkingMedium": "Medium",
     "thinkingHigh": "High",
+    "thinkingMax": "Max",
     "thinkingHint": "Extended-thinking effort. Orthogonal to request shape — composes with both stream and nonstream. Maps to the provider's native thinking knob (Anthropic budget_tokens, OpenAI reasoning_effort, Gemini thinking_budget).",
     "run": "Run Test",
     "running": "Testing…",

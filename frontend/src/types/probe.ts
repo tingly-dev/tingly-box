@@ -9,9 +9,10 @@ export type ProbeTargetType = 'rule' | 'provider' | 'provider_config';
 export type ProbeProtocol = 'openai_chat' | 'openai_responses' | 'anthropic_v1';
 
 // Extended-thinking effort ladder (subset of the backend protocol thinking
-// ladder). Orthogonal to the stream/tool axes — composes with all four
-// combinations. '' (absent) == 'none' == no thinking param sent.
-export type ProbeThinking = 'none' | 'low' | 'medium' | 'high';
+// ladder, mirroring the rule flag's thinking_effort options — see
+// .design/rule-flags.md). Orthogonal to the stream/tool axes — composes with
+// all four combinations. '' (absent) == 'none' == no thinking param sent.
+export type ProbeThinking = 'none' | 'low' | 'medium' | 'high' | 'max';
 
 // Vision channel: attach the canonical probe image (backend
 // internal/protocol/vision — a 256×256 red PNG + "what color?" prompt) in the
@@ -48,8 +49,8 @@ export interface ProbeRequest {
     protocol?: ProbeProtocol;
 
     // Thinking: extended-thinking effort. 'none' (default) sends no thinking
-    // param; 'low'/'medium'/'high' map to the provider's native thinking knob.
-    // Orthogonal to stream/tool.
+    // param; 'low'/'medium'/'high'/'max' map to the provider's native thinking
+    // knob. Orthogonal to stream/tool.
     thinking?: ProbeThinking;
 
     // Vision: attach the canonical probe image in the user message ('user')

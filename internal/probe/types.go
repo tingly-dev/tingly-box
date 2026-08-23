@@ -190,9 +190,11 @@ func (p ProbeProtocol) Family() protocol.APIStyle {
 // knob (Anthropic budget_tokens, OpenAI reasoning_effort, Gemini
 // thinking_budget) via thinking.BudgetMapping / the effort value.
 //
-// Kept narrower than the full ladder (no minimal/xhigh/max) so the UI stays a
-// 4-option control; extensible to the remaining levels later without breaking
-// callers.
+// Mirrors the rule flag's thinking_effort options (.design/rule-flags.md):
+// low/medium/high/max. "minimal"/"xhigh" are deliberately excluded — outside
+// a handful of the newest OpenAI/Anthropic models they collapse onto
+// low/high/max anyway, so probing them wouldn't exercise anything the
+// low/high/max probes don't already cover.
 type ThinkingLevel = thinking.Level
 
 const (
@@ -200,6 +202,7 @@ const (
 	ThinkingLow    ThinkingLevel = thinking.LevelLow
 	ThinkingMedium ThinkingLevel = thinking.LevelMedium
 	ThinkingHigh   ThinkingLevel = thinking.LevelHigh
+	ThinkingMax    ThinkingLevel = thinking.LevelMax
 )
 
 // VisionChannel identifies where an image rides in a request: the user message or
@@ -267,7 +270,7 @@ type E2ERequest struct {
 	// Thinking sets the extended-thinking effort for the probe. Orthogonal to
 	// Stream/Tool — composes with both streaming and non-streaming probes. "none"
 	// (and the empty string, the default) sends no thinking param; "low"/
-	// "medium"/"high" map to each provider's native thinking knob via
+	// "medium"/"high"/"max" map to each provider's native thinking knob via
 	// internal/protocol/thinking. Used to verify a model/provider actually
 	// returns reasoning tokens before trusting it with a rule.
 	Thinking ThinkingLevel `json:"thinking,omitempty" example:"medium"`
@@ -341,12 +344,12 @@ func ValidateE2ERequest(req *E2ERequest) error {
 	}
 
 	// Thinking is optional; empty normalizes to "none". Only the probe-facing
-	// subset of the ladder is accepted (minimal/xhigh/max are intentionally
-	// rejected here to keep the UI a 4-option control).
+	// subset of the ladder is accepted (minimal/xhigh are intentionally
+	// rejected — see the ThinkingLevel doc comment).
 	switch req.Thinking {
-	case "", ThinkingNone, ThinkingLow, ThinkingMedium, ThinkingHigh:
+	case "", ThinkingNone, ThinkingLow, ThinkingMedium, ThinkingHigh, ThinkingMax:
 	default:
-		return &ValidationError{Field: "thinking", Message: "thinking must be 'none', 'low', 'medium', or 'high'"}
+		return &ValidationError{Field: "thinking", Message: "thinking must be 'none', 'low', 'medium', 'high', or 'max'"}
 	}
 
 	// Vision is optional; empty normalizes to "none". Google-style targets

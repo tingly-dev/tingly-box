@@ -14,7 +14,7 @@ import (
 func TestThinkingEnabled(t *testing.T) {
 	assert.False(t, thinkingEnabled(""), `"" must be disabled`)
 	assert.False(t, thinkingEnabled(ThinkingNone), `"none" must be disabled`)
-	for _, lvl := range []ThinkingLevel{ThinkingLow, ThinkingMedium, ThinkingHigh} {
+	for _, lvl := range []ThinkingLevel{ThinkingLow, ThinkingMedium, ThinkingHigh, ThinkingMax} {
 		assert.True(t, thinkingEnabled(lvl), "%q must be enabled", lvl)
 	}
 }
@@ -28,6 +28,7 @@ func TestThinkingBudget(t *testing.T) {
 		ThinkingLow:    thinking.BudgetMapping[thinking.LevelLow],    // 4096
 		ThinkingMedium: thinking.BudgetMapping[thinking.LevelMedium], // 10240
 		ThinkingHigh:   thinking.BudgetMapping[thinking.LevelHigh],   // 20480
+		ThinkingMax:    thinking.BudgetMapping[thinking.LevelMax],    // 31999
 	}
 	for lvl, want := range cases {
 		assert.Equal(t, want, thinkingBudget(lvl), "budget for %q", lvl)
@@ -40,7 +41,7 @@ func TestThinkingBudget(t *testing.T) {
 // If either breaks, Anthropic rejects the probe. Encoded as a test so a future
 // BudgetMapping change can't silently break the probe.
 func TestThinkingBudgetSatisfiesAnthropicInvariant(t *testing.T) {
-	for _, lvl := range []ThinkingLevel{ThinkingLow, ThinkingMedium, ThinkingHigh} {
+	for _, lvl := range []ThinkingLevel{ThinkingLow, ThinkingMedium, ThinkingHigh, ThinkingMax} {
 		budget := thinkingBudget(lvl)
 		maxTokens := budget + 2048
 		assert.GreaterOrEqual(t, budget, int64(1024), "%q: budget must be ≥1024", lvl)

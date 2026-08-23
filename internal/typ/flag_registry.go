@@ -174,19 +174,25 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
-			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (minimal 1K / low 4K / medium 10K / high 20K / xhigh 24K / max 32K).",
+			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (low 4K / medium 10K / high 20K / max 32K).",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryReasoning,
 			Shared:          true,
 			InheritanceMode: "override",
+			// "minimal" and "xhigh" are deliberately not offered here: outside a
+			// handful of the newest OpenAI/Anthropic models they silently
+			// collapse onto "low"/"high"/"max" anyway (see the reasoning-effort
+			// tier maps in internal/protocol/ops and .design/model-data.md), so
+			// exposing them as distinct choices was mostly a false promise of
+			// precision. Both remain valid thinking.Level values — existing
+			// rules already set to "minimal"/"xhigh" keep working, they're just
+			// not offered to new selections.
 			Options: []FlagOption{
 				{Value: "", Label: "By Client"},
 				{Value: "off", Label: "Off"},
-				{Value: "minimal", Label: "Minimal (~1K tokens)"},
 				{Value: "low", Label: "Low (~4K tokens)"},
 				{Value: "medium", Label: "Medium (~10K tokens)"},
 				{Value: "high", Label: "High (~20K tokens)"},
-				{Value: "xhigh", Label: "XHigh (~24K tokens)"},
 				{Value: "max", Label: "Max (~32K tokens)"},
 			},
 		},

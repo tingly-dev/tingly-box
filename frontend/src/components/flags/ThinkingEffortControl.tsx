@@ -2,14 +2,17 @@ import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/comp
 import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 
+// "minimal" and "xhigh" are intentionally left out: outside a handful of the
+// newest OpenAI/Anthropic models they silently collapse onto "low"/"high"/
+// "max" server-side, so offering them as distinct menu choices was mostly a
+// false promise of precision (see .design/rule-flags.md). Rules already
+// persisted with those values keep working — they're just not selectable here.
 export const EFFORT_LEVELS = [
     { value: '', label: 'By Client', description: "Pass the client's thinking config through unchanged" },
     { value: 'off', label: 'Off', description: 'Force extended thinking disabled' },
-    { value: 'minimal', label: 'Minimal', description: '~1K tokens — Fastest' },
     { value: 'low', label: 'Low', description: '~4K tokens — Fast' },
     { value: 'medium', label: 'Medium', description: '~10K tokens — Balanced' },
     { value: 'high', label: 'High', description: '~20K tokens — Deep' },
-    { value: 'xhigh', label: 'XHigh', description: '~24K tokens — Deeper' },
     { value: 'max', label: 'Max', description: '~32K tokens — Max quality' },
 ] as const;
 
@@ -24,10 +27,15 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
 
     const currentLevel = EFFORT_LEVELS.find(l => l.value === value);
     const isActive = value !== '';
+    // A rule can still carry a legacy "minimal"/"xhigh" value that's no longer
+    // in the menu (see EFFORT_LEVELS comment) — show it verbatim rather than
+    // mislabeling an active override as "By Client".
+    const label = currentLevel?.label ?? (isActive ? value : 'By Client');
+    const description = currentLevel?.description ?? (isActive ? `${value} (legacy level, no longer offered)` : 'By Client');
 
     return (
         <>
-            <Tooltip title={`Thinking: ${currentLevel?.description || 'By Client'}`} placement="right" arrow>
+            <Tooltip title={`Thinking: ${description}`} placement="right" arrow>
                 <Button
                     size="small"
                     variant="outlined"
@@ -47,7 +55,7 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
                         '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.selected' },
                     }}
                 >
-                    Thinking: {currentLevel?.label || 'By Client'}
+                    Thinking: {label}
                 </Button>
             </Tooltip>
             <Menu

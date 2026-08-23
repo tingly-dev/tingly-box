@@ -57,8 +57,8 @@ func thinkingBudget(t ThinkingLevel) int64 {
 
 // thinkingEffort returns the effort string for effort-based targets
 // (OpenAI reasoning_effort / Responses reasoning.effort). The probe's ladder
-// values (low/medium/high) are already valid effort strings; this helper keeps
-// the call sites readable.
+// values (low/medium/high/max) are already valid effort strings; this helper
+// keeps the call sites readable.
 func thinkingEffort(t ThinkingLevel) shared.ReasoningEffort {
 	return shared.ReasoningEffort(t)
 }

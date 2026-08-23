@@ -439,6 +439,7 @@ export default {
     "thinkingLow": "Low",
     "thinkingMedium": "Medium",
     "thinkingHigh": "High",
+    "thinkingMax": "Max",
     "thinkingHint": "思考 effort 档位（专用术语，保留原文）。与请求形态正交，可与流式/非流式自由组合，映射到各 provider 的原生思考参数（Anthropic budget_tokens、OpenAI reasoning_effort、Gemini thinking_budget）。",
     "run": "运行测试",
     "running": "测试中…",

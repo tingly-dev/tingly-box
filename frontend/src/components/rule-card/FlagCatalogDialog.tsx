@@ -428,6 +428,15 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                     {opt.label}
                                                                 </MenuItem>
                                                             ))}
+                                                            {/* A rule can carry a value the registry stopped
+                                                                offering (e.g. a legacy thinking_effort level) —
+                                                                surface it verbatim instead of letting Select fall
+                                                                back to a blank, unmatched display. */}
+                                                            {enumValue !== '' && !(spec.options || []).some((opt) => opt.value === enumValue) && (
+                                                                <MenuItem value={enumValue} disabled sx={{ fontStyle: 'italic' }}>
+                                                                    {enumValue} (legacy, no longer offered)
+                                                                </MenuItem>
+                                                            )}
                                                         </Select>
                                                     </FormControl>
                                                 )}
