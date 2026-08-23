@@ -169,7 +169,11 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 | `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + StagePre |
 | `upstream_request` | 出站请求 | 发往 provider 的最终请求(transform 后) | ✅ StagePost |
 | `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现,Phase 3 wire recorder 落地时开放——不上死开关) |
-| `client_response` | 最终返回 | 返回给 client 的响应 | ⚠️ 非流式可靠;流式靠 hooks 组装 / writer 合成兜底 |
+| `client_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
+
+> **当前支持面 = 两个 request 点位。** 响应侧(服务返回 + 最终返回)整体
+> 暂停,待 Phase 3(wire)/ Phase 4(EventTap)分别恢复;暂停以注释形式
+> 保留代码位置,恢复时取消注释即可。
 
 - **旧值兼容**:`request` → 出站;`request_response` → 出站+最终;
   `staged_request_response` → 入站+出站+最终。`typ.ParseRecordingMode`

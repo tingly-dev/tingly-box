@@ -301,17 +301,21 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	// Capture-point filtering: each selected point contributes its slot.
-	// upstream_response (Record.ProviderResponse) has no producer yet — it
-	// lands with the wire-level recorder (.design/recording.md Phase 3).
+	// Response-side points are paused for now — request recording is the
+	// supported surface (.design/recording.md §3.5):
+	//   - upstream_response (Record.ProviderResponse) has no producer until
+	//     the wire-level recorder lands (Phase 3).
+	//   - client_response (Record.FinalResponse) is captured internally
+	//     (SetAssembledResponse / synthesis fallback) but its quality is not
+	//     good enough to emit yet; re-enable when the response path is
+	//     reworked (Phase 4 EventTap):
+	//     if m.Has(typ.RecordClientResponse) { r.FinalResponse = sr.finalResponse }
 	m := typ.RecordingMode(sr.mode)
 	if m.Has(typ.RecordClientRequest) {
 		r.OriginalRequest = sr.originalRequest
 	}
 	if m.Has(typ.RecordUpstreamRequest) {
 		r.TransformedRequest = sr.transformedRequest
-	}
-	if m.Has(typ.RecordClientResponse) {
-		r.FinalResponse = sr.finalResponse
 	}
 
 	sr.sink.Emit(r)
