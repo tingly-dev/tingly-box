@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -175,18 +174,11 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 	// attempt by the failover loop (UpdateTrackingForFailover).
 	SetTrackingContext(c, rule, provider, requestModel, responseModel, isStreaming)
 
-	// Get or create the recorder for dual-stage recording. The body is the
-	// pristine request as received (post-vision-proxy, pre-pre-chain); the
-	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
-	// Enablement is the effective capture-point selection: the rule's recording
-	// flag overrides the scenario-level recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
-		bs, err := req.MarshalJSON()
-		if err != nil {
-			bs = []byte("{}")
-		}
-		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, obs.RecordMode(recMode), bs)
-	}
+	// Single creation point for the per-request recorder (nil when recording
+	// is off). The body snapshot is the pristine request as received
+	// (post-vision-proxy, pre-pre-chain); the winning attempt's
+	// provider/model is re-bound per attempt via SetActiveService.
+	ph.BeginRuleRecording(c, scenarioType, scenarioConfig, rule, provider, requestModel, req)
 
 	// Snapshot a pristine template only when failover is possible; the single
 	// service case reuses the original request with no clone overhead.
@@ -305,16 +297,9 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	// attempt by the failover loop (UpdateTrackingForFailover).
 	SetTrackingContext(c, rule, provider, requestModel, responseModel, isStreaming)
 
-	// Get or create the recorder for dual-stage recording (pristine request
-	// body). Enablement is the effective capture-point selection: the rule's
-	// recording flag overrides the scenario-level recording_v2 default.
-	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
-		bs, err := req.MarshalJSON()
-		if err != nil {
-			bs = []byte("{}")
-		}
-		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, obs.RecordMode(recMode), bs)
-	}
+	// Single creation point for the per-request recorder (nil when recording
+	// is off); pristine request body snapshot.
+	ph.BeginRuleRecording(c, scenarioType, scenarioConfig, rule, provider, requestModel, req)
 
 	// Snapshot a pristine template only when failover is possible.
 	multi := len(rule.GetActiveServices()) > 1

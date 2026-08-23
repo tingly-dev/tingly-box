@@ -28,10 +28,10 @@ import (
 //
 // Shared helpers (recordingtest.MemExporter, recordingtest.NewStreamableRecorder,
 // recordingtest.CtxWithTimeout, recordingtest.NewRecordingTestHandler) live in
-// internal/server/recordingtest — a plain package rather than a _test.go file,
-// since internal/server/recording's own tests (hook_external_test.go) need the
-// exact same helpers and Go test files (even in an external _test package)
-// are never importable from another package.
+// internal/recording/recordingtest — a plain package rather than a _test.go
+// file, since internal/recording's own tests (hook_external_test.go) need
+// the exact same helpers and Go test files (even in an external _test
+// package) are never importable from another package.
 
 // fakeDecoder implements ssestream.Decoder over a static event slice.
 type fakeDecoder struct {

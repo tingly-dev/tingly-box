@@ -362,6 +362,17 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	initialModel string,
 	attempt dispatchAttempt,
 ) {
+	// The recorder emits exactly once per request, and this orchestrator is
+	// the request-level chokepoint every gateway handler funnels through — so
+	// the emit backstop lives here, not in protocol code: attempt-scoped
+	// paths only annotate (RecordError notes, RecordResponse emits on
+	// terminal success), and this defer flushes the record for every path
+	// that never reached a success emit (failed transform, exhausted
+	// failover, aborted stream). Registered before the single-service
+	// early return below, which most rules take.
+	rec, _ := recording.GetRecorderFromContext(c)
+	defer rec.FinalizeIfPending()
+
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
 		attempt(initialProvider, initialModel)
@@ -379,10 +390,6 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	tried := map[string]bool{}
 	provider := initialProvider
 	model := initialModel
-
-	// Keep the recorder's bound service in sync per attempt so the
-	// breaker store gets fed the right serviceID on failure.
-	rec, _ := recording.GetRecorderFromContext(c)
 
 	for i := 0; i < len(activeServices); i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)

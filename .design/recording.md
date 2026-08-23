@@ -204,6 +204,41 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
   测试侧经既有导出面 `GetOrCreateScenarioSink` + `obs.Sink.ForceFlush`
   冲刷,不为测试新增生产 API)。
 
+### 3.6 Recorder 生命周期收敛(request 录制做扎实)
+
+定位修正:recorder 是**高层的、请求级的观察者组件**,不是协议代码临时
+起意创建/发射的东西——协议代码只向它**汇报**,发射一次、发生在高层收口。
+
+原状的问题(与定位相反):
+- 4 个 handler prologue 各自复制同一段创建逻辑(启用判定 + body
+  marshal + Ensure);
+- `RecordError` / `RecordResponse` 散落在协议派发代码 40+ 处,且
+  `RecordError` **当场 emit**:failover 可重试的尝试失败、MCP 循环的
+  continuation 哨兵(`ErrMCPStreamContinue`)都会提前发射——第一条
+  emit 后 `release()` 清空字段,后续 emit 产出空壳垃圾记录。
+
+收敛后的生命周期(`recording.ProtocolRecorder` 文档为准):
+1. **单一创建点**:`ProtocolHandler.BeginRuleRecording`(rule 解析后的
+   prologue,唯一知道 rule 级 flag 的最早时刻),4 个 handler 各一行;
+   禁用时返回 nil,全部下游方法 nil-safe。
+2. **协议代码只汇报**:`RecordError` 改为**只记不发**(暂存 lastErr,
+   40+ 调用点零改动、语义整体修正);Stage 录制、流式 hooks、
+   `SetAssembledResponse` 本就是汇报。
+3. **发射恰好一次**(emit latch):
+   - `RecordResponse`(终态成功)现场 emit,幂等;
+   - `FinalizeIfPending` 在 `DispatchWithPriorityFailover` 顶部 defer
+     ——所有网关请求的唯一高层收口(注意单服务 early-return 也被覆盖),
+     兜底发射失败/中止请求的记录并带上最后暂存的错误。
+   失败尝试 + failover 成功 = 一条干净的成功记录(绑定胜出 provider);
+   全部失败 = 一条带错误的记录;请求侧捕获永不丢失。
+
+生命周期护栏:`recording/lifecycle_external_test.go`(错误只记不发/
+失败后成功不带残留错误/重复成功只发一条/中止请求 finalize 兜底)。
+
+尚未做(记入 Phase 4):`RecordResponse` 调用点(20+)仍在协议派发代码
+里——彻底"阶段化"要等 obs PLANNING 的 `RecordCtx`/EventTap,把成功侧
+汇报也并入管线观察者;本次先把错误侧与发射权收上来。
+
 ## 4. 目标架构(to-be)
 
 ```

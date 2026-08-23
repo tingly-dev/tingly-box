@@ -22,14 +22,22 @@ import (
 // recorder is mode-driven: which fields are emitted to the sink is decided
 // by RecordMode (set at construction).
 //
-// Lifecycle:
-//  1. EnsureProtocolRecorder at handler entry — captures client request,
-//     session, mode.
-//  2. Optional: transform pipeline writes SetOriginalRequest /
-//     SetTransformedRequest via TransformRecorder.
-//  3. For streaming, hooks call EnableStreaming + RecordStreamChunk +
-//     SetAssembledResponse.
-//  4. RecordResponse (success) or RecordError (failure) emits one *obs.Record.
+// Lifecycle — the recorder is a request-scoped observer that protocol code
+// only annotates; it emits exactly once per request:
+//  1. BeginRuleRecording (protocol_handler.go) at handler entry — the single
+//     creation point: captures client request, session, mode; cached on the
+//     gin context.
+//  2. The transform pipeline writes SetOriginalRequest / SetTransformedRequest
+//     via TransformRecorder (chain stages), streaming hooks add
+//     EnableStreaming + RecordStreamChunk + SetAssembledResponse, and error
+//     paths annotate via RecordError — none of these emit.
+//  3. Exactly one *obs.Record is emitted, whichever comes first (the latch
+//     makes later triggers no-ops):
+//     - RecordResponse on a completed response (terminal success), or
+//     - FinalizeIfPending in the dispatch orchestrator
+//     (DispatchWithPriorityFailover's defer) — the request-level backstop
+//     that flushes the record with the last annotated error when no
+//     success emit happened (failed/aborted requests, exhausted failover).
 type ProtocolRecorder struct {
 	sink         *obs.Sink
 	scenario     string
@@ -53,6 +61,14 @@ type ProtocolRecorder struct {
 	providerBase  string // Base URL
 	model         string
 	mode          obs.RecordMode
+
+	// emitted latches after the first emit: a request produces exactly one
+	// record; later RecordResponse/FinalizeIfPending triggers are no-ops.
+	emitted bool
+	// lastErr is the most recent error annotated via RecordError. It reaches
+	// the sink only if FinalizeIfPending performs the emit (no success emit
+	// happened); a terminal RecordResponse emits with no error.
+	lastErr error
 }
 
 func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode, body []byte) (*ProtocolRecorder, error) {
@@ -254,7 +270,9 @@ func (sr *ProtocolRecorder) SetTransformSteps(steps []string) {
 	sr.transformSteps = steps
 }
 
-// RecordResponse finalises provider/model and emits a Record to the sink.
+// RecordResponse finalises provider/model and emits the request's Record
+// (terminal success). Idempotent: the emit latch makes any later trigger a
+// no-op, so a path that reports success twice still produces one record.
 func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil {
 		return
@@ -266,15 +284,37 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 	sr.emit(nil)
 }
 
-// RecordError emits an error record. err may be nil.
+// RecordError annotates the request's pending failure — it does NOT emit.
+// Protocol code calls this from attempt-scoped paths (a failover retry, an
+// MCP continuation round, a transform failure) where the request may still
+// succeed; emitting here used to produce premature/duplicate records. The
+// annotated error reaches the sink only if no success emit happens, via
+// FinalizeIfPending at the dispatch orchestrator.
 func (sr *ProtocolRecorder) RecordError(err error) {
-	if sr == nil {
+	if sr == nil || err == nil {
 		return
 	}
-	sr.emit(err)
+	sr.lastErr = err
+}
+
+// FinalizeIfPending emits the request's Record if nothing has emitted yet,
+// carrying the last annotated error (nil for a request that produced no
+// response and no error). The dispatch orchestrator defers this once per
+// request; after a terminal RecordResponse it is a no-op.
+func (sr *ProtocolRecorder) FinalizeIfPending() {
+	if sr == nil || sr.emitted {
+		return
+	}
+	sr.emit(sr.lastErr)
 }
 
 func (sr *ProtocolRecorder) emit(err error) {
+	if sr.emitted {
+		logrus.Debug("obs: ProtocolRecorder emit after latch — dropped (one record per request)")
+		return
+	}
+	sr.emitted = true
+
 	if sr.sink == nil || sr.mode == "" {
 		// Still drop buffered request/response payloads: without a sink the
 		// recorder would otherwise keep them reachable via the gin context

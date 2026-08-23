@@ -25,14 +25,14 @@ import (
 //
 // This file lives in the external recording_test package (not recording)
 // because recordingtest.NewRecordingTestHandler needs to build a
-// *server.ProtocolHandler, and internal/server imports
-// internal/server/recording in production code — a same-package (internal)
-// test file importing internal/server here would be a real import cycle.
-// The shared test helpers themselves live in internal/server/recordingtest
-// (a plain, non-_test.go package) so that internal/server's own e2e test
-// (anthropic_recording_e2e_test.go) can reuse them too — Go test files,
-// even in an external _test package, are never importable from another
-// package.
+// *protocolserver.ProtocolHandler, and internal/protocolserver imports
+// internal/recording in production code — a same-package (internal)
+// test file importing internal/protocolserver here would be a real import
+// cycle. The shared test helpers themselves live in
+// internal/recording/recordingtest (a plain, non-_test.go package) so that
+// internal/protocolserver's own e2e test (anthropic_recording_e2e_test.go)
+// can reuse them too — Go test files, even in an external _test package,
+// are never importable from another package.
 
 // driveBetaStream runs a v1beta event sequence through hc.ProcessStream with
 // a no-op handleFunc.
@@ -196,11 +196,18 @@ func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
 	)
 	assert.ErrorIs(t, err, streamErr)
 
+	// RecordError only annotates (the stream failure may be retried by
+	// failover); the record reaches the sink via the orchestrator's
+	// FinalizeIfPending. Nothing must be emitted before that.
+	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
+	require.Empty(t, mem.Snapshot(), "RecordError must not emit — the orchestrator finalizes")
+
+	recorder.FinalizeIfPending()
 	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
 	records := mem.Snapshot()
-	require.Len(t, records, 1, "exactly one error record must be emitted")
-	assert.NotEmpty(t, records[0].Err, "record.Err must be populated on stream error")
+	require.Len(t, records, 1, "exactly one error record must be emitted at finalize")
+	assert.NotEmpty(t, records[0].Err, "record.Err must carry the annotated stream error")
 	assert.Nil(t, records[0].FinalResponse, "no FinalResponse on error path")
 }
 

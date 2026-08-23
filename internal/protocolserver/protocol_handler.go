@@ -11,6 +11,7 @@
 package protocolserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -244,6 +245,30 @@ func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario 
 	}
 
 	return nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+}
+
+// BeginRuleRecording is the single creation point for the per-request
+// ProtocolRecorder, called once from each gateway handler's prologue after
+// the rule is resolved (the earliest moment the rule-level recording flag is
+// known). It resolves the effective capture-point selection (rule overrides
+// the scenario default), snapshots the pristine request body, and ensures the
+// recorder (cached on the gin context). Returns nil when recording is
+// disabled — all downstream recorder methods are nil-safe, so handlers
+// thread the result through unconditionally.
+//
+// The recorder's lifecycle from here on is annotate-then-finalize: protocol
+// code only reports into it, and the single emit happens at
+// DispatchWithPriorityFailover (see the ProtocolRecorder doc).
+func (ph *ProtocolHandler) BeginRuleRecording(c *gin.Context, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, rule *typ.Rule, provider *typ.Provider, model string, body any) *recording.ProtocolRecorder {
+	recMode := typ.EffectiveRecording(rule, scenarioConfig)
+	if !recMode.Enabled() {
+		return nil
+	}
+	bs, err := json.Marshal(body)
+	if err != nil {
+		bs = []byte("{}")
+	}
+	return ph.EnsureProtocolRecorder(c, string(scenarioType), provider, model, obs.RecordMode(recMode), bs)
 }
 
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
