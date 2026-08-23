@@ -30,9 +30,6 @@ func (f *fakeManager) GetQuota(_ context.Context, providerUUID string) (*quota.P
 	}
 	return nil, quota.ErrUsageNotFound
 }
-func (f *fakeManager) GetQuotaNoCache(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error) {
-	return f.GetQuota(ctx, providerUUID)
-}
 func (f *fakeManager) ListQuota(context.Context) ([]*quota.ProviderUsage, error) { return nil, nil }
 func (f *fakeManager) Refresh(context.Context) ([]*quota.ProviderUsage, error)   { return nil, nil }
 func (f *fakeManager) RefreshProvider(context.Context, string) (*quota.ProviderUsage, error) {

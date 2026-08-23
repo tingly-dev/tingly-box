@@ -282,8 +282,9 @@ quota 参与路由分两条线，管的是两件不重叠的事：smart op 管**
 
 - **数据来源**：`ai/quota`（`Manager.GetQuota`），按 `Service.Provider`（provider UUID）
   查 `ProviderUsage.Pct(quota.WindowKindLimit)`（§4）。路由侧只声明"要这个 provider 的
-  用量"，怎么给由 `Manager` 决定：正常由后台 refresher 保持新鲜、纯读库；数据过期时
-  `Manager` 自行触发一次刷新（§9.1 未处理）。
+  用量"，怎么给由 `Manager` 决定：读路径纯读库、永不触发上游拉取——否则过期条目会把
+  每个并发读放大成一次上游调用（压力与失败风险都进热路径）；新鲜度由后台 refresher
+  的刷新节奏保证（`RefreshInterval` 默认 5m < `CacheTTL` 20m）。
 - **只算 `Kind=limit`，不算 `Kind=resource`**：余额耗尽要充钱，不会自己恢复，不该驱动
   这种本该是临时避让的判定。
 - **聚合方式：跨 service 取最紧（max），不取平均**——一个池子里任何一个 service 吃紧

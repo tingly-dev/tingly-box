@@ -135,7 +135,14 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 	return m.fetchProviderQuota(ctx, provider)
 }
 
-// GetQuota returns cached quota data and refreshes it when expired.
+// GetQuota returns the latest quota data stored in the database. It never
+// fetches from the upstream provider: reads must not add upstream pressure
+// or couple caller latency (the routing hot path among them) to a provider
+// API — with sync fetch-on-expiry, an expired entry would turn every
+// concurrent read into its own upstream call. Freshness is the background
+// refresher's job (StartAutoRefresh); RefreshInterval < CacheTTL keeps
+// stored data live in steady state, and explicit refresh paths
+// (Refresh/RefreshProvider) cover the rest.
 //
 // Both ErrUsageNotFound and ErrProviderUnsupported mean "there is nothing to
 // show for this provider" and reach the caller unwrapped, so handlers can skip
@@ -147,23 +154,6 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 // here (as this used to do, via fmt.Errorf) silently broke that comparison
 // and turned every "no quota data" provider into a hard error upstream.
 func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
-	usage, err := m.store.Get(ctx, providerUUID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Refresh expired quota data.
-	if usage.IsExpired() {
-		m.logger.WithField("provider_uuid", providerUUID).Debug("quota expired, fetching fresh data")
-		return m.RefreshProvider(ctx, providerUUID)
-	}
-
-	return usage, nil
-}
-
-// GetQuotaNoCache returns the latest quota data stored in the database.
-// See GetQuota above for why ErrUsageNotFound must reach the caller unwrapped.
-func (m *Manager) GetQuotaNoCache(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
 	return m.store.Get(ctx, providerUUID)
 }
 

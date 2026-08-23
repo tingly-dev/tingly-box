@@ -105,8 +105,8 @@ blocked.
 `service_quota` reads provider usage from `ai/quota`
 (`.design/quota-semantics.md`) via the optional `QuotaProvider` wired into
 `SmartRoutingStage`. The stage only declares what it needs; freshness is
-`ai/quota`'s concern (a background refresher keeps stored usage current,
-and `Manager.GetQuota` refreshes expired data itself). It
+`ai/quota`'s concern — its background refresher keeps stored usage
+current, and reads never trigger an upstream fetch. It
 compares the **tightest** (highest-used%) service in the rule against the
 threshold, not the average: a rule models one pool of interchangeable
 services, and one of them running hot should make the pool look hot rather

@@ -261,8 +261,8 @@ type ProviderUsageConfig struct {
 type Config struct {
 	// Global settings
 	Enabled         bool                           `json:"enabled"`          // whether quota tracking is enabled
-	RefreshInterval time.Duration                  `json:"refresh_interval"` // refresh interval (default 5 minutes)
-	CacheTTL        time.Duration                  `json:"cache_ttl"`        // cache validity period (default 10 minutes)
+	RefreshInterval time.Duration                  `json:"refresh_interval"` // background refresh interval (default 5 minutes)
+	CacheTTL        time.Duration                  `json:"cache_ttl"`        // stored-data validity period (default 20 minutes; keep > RefreshInterval so data survives missed ticks)
 	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
 	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
 	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
@@ -272,7 +272,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:         true,
-		RefreshInterval: 15 * time.Minute,
+		RefreshInterval: 5 * time.Minute,
 		CacheTTL:        20 * time.Minute,
 		RetryOnFailure:  true,
 		MaxRetries:      3,

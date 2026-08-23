@@ -57,8 +57,8 @@ func (f *concurrencyTestFetcher) Fetch(_ context.Context, provider *typ.Provider
 	return &ProviderUsage{ProviderUUID: provider.UUID}, nil
 }
 
-// TestGetQuota_NotFoundIsUnwrapped locks in that GetQuota (and
-// GetQuotaNoCache) return ErrUsageNotFound identically to what the store
+// TestGetQuota_NotFoundIsUnwrapped locks in that GetQuota
+// returns ErrUsageNotFound identically to what the store
 // returned — not a re-wrapped error. Callers such as the provider-quota
 // batch handler compare with == against this sentinel to skip providers
 // with no quota data instead of failing the whole request; a wrapped error
@@ -70,9 +70,6 @@ func TestGetQuota_NotFoundIsUnwrapped(t *testing.T) {
 
 	if _, err := manager.GetQuota(context.Background(), "missing"); err != ErrUsageNotFound {
 		t.Fatalf("GetQuota() error = %v, want ErrUsageNotFound (identity, via ==)", err)
-	}
-	if _, err := manager.GetQuotaNoCache(context.Background(), "missing"); err != ErrUsageNotFound {
-		t.Fatalf("GetQuotaNoCache() error = %v, want ErrUsageNotFound (identity, via ==)", err)
 	}
 }
 

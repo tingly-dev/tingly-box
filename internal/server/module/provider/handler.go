@@ -562,7 +562,7 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	// otherwise to avoid surfacing a misleading error.
 	if h.quotaManager != nil && h.quotaManager.IsProviderSupported(uid) {
 		ctx := context.Background()
-		if quotaData, err := h.quotaManager.GetQuotaNoCache(ctx, uid); err == nil && quotaData != nil {
+		if quotaData, err := h.quotaManager.GetQuota(ctx, uid); err == nil && quotaData != nil {
 			providerModels.Quota = quotaData
 		}
 	}

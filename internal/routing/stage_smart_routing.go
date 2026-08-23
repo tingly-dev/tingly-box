@@ -17,8 +17,9 @@ import (
 // QuotaProvider gives the smart-routing stage read access to quota usage
 // (ai/quota) so the service_quota position can compare against provider
 // usage. The stage only declares what it needs — usage for a provider —
-// and leaves freshness policy (serve stored data, refresh on expiry) to
-// the implementation. *quota.Manager satisfies this.
+// and leaves freshness policy to the implementation (quota.Manager serves
+// stored data kept fresh by its background refresher). *quota.Manager
+// satisfies this.
 type QuotaProvider interface {
 	GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 }
