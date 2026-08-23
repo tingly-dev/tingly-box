@@ -80,8 +80,24 @@ func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 		sessionShort:    short,
 		sessionSrc:      src,
 		originalRequest: req,
-		mode:            mode,
+		mode:            normalizeMode(mode),
 	}, nil
+}
+
+// normalizeMode canonicalizes a mode value (legacy enum values expand to
+// point sets, tokens dedupe into pipeline order) so Wants/emit only ever see
+// normalized point sets.
+func normalizeMode(mode obs.RecordMode) obs.RecordMode {
+	return obs.RecordMode(typ.ParseRecordingMode(string(mode)))
+}
+
+// Wants reports whether this recorder's mode selects the given capture
+// point. Nil-safe: a nil recorder wants nothing.
+func (sr *ProtocolRecorder) Wants(p typ.RecordingPoint) bool {
+	if sr == nil {
+		return false
+	}
+	return typ.RecordingMode(sr.mode).Has(p)
 }
 
 // SetActiveService re-binds the recorder to a new provider/model. The
@@ -140,7 +156,7 @@ func (sr *ProtocolRecorder) BindProvider(provider *typ.Provider, model string, m
 		sr.model = model
 	}
 	if mode != "" {
-		sr.mode = mode
+		sr.mode = normalizeMode(mode)
 	}
 }
 
@@ -284,15 +300,17 @@ func (sr *ProtocolRecorder) emit(err error) {
 		r.Err = err.Error()
 	}
 
-	switch sr.mode {
-	case obs.RecordModeStagedRequestResponse:
+	// Capture-point filtering: each selected point contributes its slot.
+	// upstream_response (Record.ProviderResponse) has no producer yet — it
+	// lands with the wire-level recorder (.design/recording.md Phase 3).
+	m := typ.RecordingMode(sr.mode)
+	if m.Has(typ.RecordClientRequest) {
 		r.OriginalRequest = sr.originalRequest
+	}
+	if m.Has(typ.RecordUpstreamRequest) {
 		r.TransformedRequest = sr.transformedRequest
-		r.FinalResponse = sr.finalResponse
-	case obs.RecordModeRequestOnly:
-		r.TransformedRequest = sr.transformedRequest
-	case obs.RecordModeRequestResponse:
-		r.TransformedRequest = sr.transformedRequest
+	}
+	if m.Has(typ.RecordClientResponse) {
 		r.FinalResponse = sr.finalResponse
 	}
 

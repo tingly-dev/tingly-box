@@ -51,6 +51,9 @@ const (
 	FlagCategoryRouting FlagCategory = "routing"
 	// FlagCategoryVision — image/vision handling (vision proxy describer).
 	FlagCategoryVision FlagCategory = "vision"
+	// FlagCategoryObservability — recording / diagnostics that observe traffic
+	// without changing it.
+	FlagCategoryObservability FlagCategory = "observability"
 )
 
 // FlagOption is one selectable value for a FlagTypeEnum spec.
@@ -209,6 +212,25 @@ func RuleFlagRegistry() []FlagSpec {
 			Description: "Describe images via a vision-capable model so text-only downstream models can read them. Applies only to requests matched by this rule. Same effect as the scenario-level Vision Proxy but scoped to this rule; when both are configured, this rule-level service takes precedence.",
 			Type:        FlagTypeServiceRef,
 			Category:    FlagCategoryVision,
+		},
+		// ── Observability ──────────────────────────────────────────────────
+		{
+			Key:             "recording",
+			Label:           "Recording",
+			Description:     "Record this rule's traffic at the selected capture points, for debugging and replay. Multi-select: \"Client request\" is the inbound request exactly as the client sent it; \"Upstream request\" is the final request dispatched to the provider (after all transforms); \"Client response\" is the response as returned to the client. Can also be set scenario-wide (Recording in the scenario's plugin panel) — a rule-level selection overrides the scenario default. Records are written under the config directory's record/ folder, grouped by scenario.",
+			Type:            FlagTypeMultiEnum,
+			Category:        FlagCategoryObservability,
+			Shared:          true,
+			InheritanceMode: "override",
+			Options: []FlagOption{
+				{Value: string(RecordClientRequest), Label: "Client request (inbound)"},
+				{Value: string(RecordUpstreamRequest), Label: "Upstream request (outbound)"},
+				{Value: string(RecordClientResponse), Label: "Client response (final)"},
+				// upstream_response (provider raw response) is part of the value
+				// domain (typ.RecordingPoint) but intentionally NOT offered yet:
+				// nothing captures it until the wire-level recorder lands
+				// (.design/recording.md Phase 3). No dead toggles.
+			},
 		},
 		// ── Routing ────────────────────────────────────────────────────────
 		{

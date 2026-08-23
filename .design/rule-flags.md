@@ -142,6 +142,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `thinking_effort` | enum，UI 可选 `""`/`off`/`low`/`medium`/`high`/`max`（内部 `thinking.Level` 仍含 `minimal`/`xhigh`，见下方 UX 取舍）| reasoning | **yes** | override | 统一控制 extended thinking。effort 是主轴：OpenAI 侧原样下发 reasoning_effort（SDK 六级全部原生支持），Anthropic 侧下发 output_config.effort（Claude 4.5+ 原生）并附 budget_tokens 兜底（low 4K / medium 10K / high 20K / max 32K；内部值 minimal 1K / xhigh 24K 仍参与该映射），vendor 阶段按模型能力对 adaptive/budget/effort 三种方言互转（见 `request_anthropic_model.go`）；Gemini 目标同样吃这张表：Gemini 3 统一映射为 thinking_level（minimal/low/medium/high，xhigh/max 收敛到 high），Gemini 2.5 映射为 thinking_budget（flash 系列钳到 24576，见 `request_openai_gemini.go`）。空 = "By Client"（透传客户端参数）。| `ThinkingModeTransform`（Type 1b，server-domain Transform）|
 | `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
+| `recording` | multi_enum（采集点多选） | observability | **yes** | override | 按选中的采集点录制该 rule 的流量：`client_request`（入站请求）/ `upstream_request`（出站请求）/ `client_response`（最终返回）；`upstream_response`（服务返回）在值域内但暂不提供选项（无采集实现，见 `.design/recording.md` §3.5）。逗号分隔存储；旧三档枚举值解析层兼容。rule 值覆盖 scenario 级 `recording_v2` 默认。| handler prologue 读 `typ.EffectiveRecording(rule, scenario)` 建 recorder；chain 的 StagePre/StagePost 按点位挂载；emit 按 `Has(point)` 过滤（详见 `.design/recording.md`）|
 | `session_affinity` | int (seconds) | routing | — | — | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。**rule-only**（已从 scenario plugin 移除——无 scenario 级继承）。**built-in CC / Desktop / Codex rule 默认 1800s**（`init.go` 种子 + `migrate20260610` 存量），其余 rule 不设即禁用，可在 Plugins 卡片按 rule 调整。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5，仅读 `rule.Flags.SessionAffinity`）|
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
 | `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
@@ -549,6 +550,7 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 |------|--------|------------|----------|
 | `skip_usage` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `SkipUsage`（rule 未禁用即生效）|
 | `thinking_effort` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > By Client（空字符串）|
+| `recording` / `recording_v2` | ✅ | ✅ | Rule 的采集点集合（非空）> Scenario 级 `recording_v2` 默认 > 关闭。两级 json key 不同（rule `recording`，scenario 保留 `recording_v2`），值统一为点位集合，旧枚举值解析兼容 |
 | `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `ClaudeCodeCompat` |
 | `custom_user_agent` | ✅ | ✅ | Rule 显式设置（非空）> Scenario 默认 > 不覆盖（空）。注入点 `applyRuleFlags`（Type 2，随 RuleFlags 整包写入 c.Request.Context()）|
 
@@ -557,7 +559,7 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 | Flag | 作用 |
 |------|------|
 | `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/server/transform.ThinkingCompactTransform`） |
-| `recording_v2` | 控制请求/响应录制模式（off / request / request_response / staged） |
+| ~~`recording_v2`~~ | 已升级为 shared flag `recording` 的 scenario 侧（见上方共享表与 `.design/recording.md` §3.5），值为采集点多选集合 |
 | `unified` / `separate` / `smart` | 路由模式开关 |
 
 **Rule-only flags（曾是 scenario 级、已下放为纯 rule 级）**：

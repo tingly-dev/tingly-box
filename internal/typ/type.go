@@ -145,34 +145,17 @@ const (
 	ThinkingModeForce    ThinkingMode = "force"    // Deprecated alias for ThinkingModeEnable
 )
 
-// RecordingMode represents the recording mode for scenario recording
-type RecordingMode string
-
-const (
-	RecordingModeDisabled              RecordingMode = ""                        // Recording disabled (default)
-	RecordingModeRequestOnly           RecordingMode = "request"                 // Record transformed request only
-	RecordingModeRequestResponse       RecordingMode = "request_response"        // Record transformed request + final response
-	RecordingModeStagedRequestResponse RecordingMode = "staged_request_response" // Record original request + transformed request + final response
-)
-
-// IsValidRecordingMode checks if the given string is a valid recording mode
-func IsValidRecordingMode(mode string) bool {
-	switch RecordingMode(mode) {
-	case RecordingModeDisabled, RecordingModeRequestOnly, RecordingModeRequestResponse, RecordingModeStagedRequestResponse:
-		return true
-	default:
-		return false
-	}
-}
-
 // ScenarioFlags represents configuration flags for a scenario
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
 	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
-	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`   // Enable scenario recording V2 (request/request_response/staged_request_response)
+	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
+	// RecordingV2 is the scenario-wide recording default: a comma-separated
+	// set of capture points (see RecordingPoint; legacy enum values still
+	// accepted). Individual rules override it via RuleFlags.Recording.
+	RecordingV2 RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`
 	// SkipUsage strips usage fields from streaming chunks and responses.
 	// Use for clients that cannot handle usage data (e.g. Xcode). Equivalent
 	// to the rule-level skip_usage flag but applied as a scenario-wide default.
@@ -292,6 +275,14 @@ type RuleFlags struct {
 	// entitlements (e.g. Cyber Verification) rely on. Any other value sends
 	// that organization id verbatim.
 	ClaudeOrgID string `json:"claude_org_id,omitempty" yaml:"claude_org_id,omitempty"`
+
+	// Recording selects which capture points along the pipeline are recorded
+	// for requests matched by this rule: a comma-separated set of
+	// RecordingPoint values (client_request / upstream_request /
+	// upstream_response / client_response). Empty inherits the scenario-level
+	// recording_v2 default; a non-empty rule value overrides it (see
+	// EffectiveRecording).
+	Recording string `json:"recording,omitempty" yaml:"recording,omitempty"`
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being
@@ -353,7 +344,7 @@ func (sc *ScenarioConfig) IsRecordingEnable() bool {
 	if sc == nil {
 		return false
 	}
-	return sc.Flags.RecordingV2 != RecordingModeDisabled
+	return sc.Flags.RecordingV2.Enabled()
 }
 
 // AuthType represents the authentication type for a provider
