@@ -153,8 +153,8 @@ func (m *mockAffinityStore) CountByService(serviceID string) int {
 }
 
 // mockQuotaProvider implements QuotaProvider for testing service_quota.
-// usage maps providerUUID -> cached usage; a missing entry simulates "no
-// data yet" (GetQuotaNoCache's ErrUsageNotFound path), which the stage
+// usage maps providerUUID -> stored usage; a missing entry simulates "no
+// data yet" (GetQuota's ErrUsageNotFound path), which the stage
 // treats as unknown and excludes from aggregation.
 type mockQuotaProvider struct {
 	usage map[string]*quota.ProviderUsage
@@ -184,7 +184,7 @@ func (m *mockQuotaProvider) setResourcePct(providerUUID string, pct float64) {
 	}
 }
 
-func (m *mockQuotaProvider) GetQuotaNoCache(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
+func (m *mockQuotaProvider) GetQuota(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
 	usage, ok := m.usage[providerUUID]
 	if !ok {
 		return nil, quota.ErrUsageNotFound

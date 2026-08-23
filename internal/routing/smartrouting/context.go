@@ -20,7 +20,7 @@ type ServiceCapacityInfo struct {
 	ActiveCount int // active affinity sessions
 }
 
-// ServiceQuotaInfo holds cached quota usage for a single service's upstream
+// ServiceQuotaInfo holds quota usage for a single service's upstream
 // provider account (see ai/quota, .design/quota-semantics.md). Pct is the
 // provider's tightest countable *standard* quota window (ai/quota's
 // ProviderUsage.Pct(quota.WindowKindLimit), not the unfiltered Pct()) —

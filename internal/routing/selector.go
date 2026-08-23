@@ -173,7 +173,7 @@ func NewServiceSelectorWithLogger(
 	return s
 }
 
-// SetQuotaProvider wires cached quota lookups into the pipeline's smart
+// SetQuotaProvider wires quota lookups into the pipeline's smart
 // routing stage so service_quota ops can compare against provider usage.
 // Optional — call it after construction once a quota manager is available;
 // unset leaves service_quota ops passing through (see QuotaProvider).

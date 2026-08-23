@@ -276,13 +276,14 @@ quota 参与路由分两条线，管的是两件不重叠的事：smart op 管**
 ### 8.1 smart op：`service_quota`（已实现）
 
 新增 `SmartOp` position `service_quota`，操作符 `pct_le` / `pct_ge` / `pct_lt` / `pct_gt`，
-值是 0-100 的百分比阈值。代码见 `internal/smart_routing`（`op.go` / `routing.go`
+值是 0-100 的百分比阈值。代码见 `internal/routing/smartrouting`（`op.go` / `routing.go`
 / `context.go`）与 `internal/routing/stage_smart_routing.go`；用法示例见
-`internal/smart_routing/README.md` "Switch to a cheaper pool once quota runs hot"。
+`internal/routing/smartrouting/README.md` "Switch to a cheaper pool once quota runs hot"。
 
-- **数据来源**：`ai/quota` 本地缓存（`Manager.GetQuotaNoCache`），按 `Service.Provider`
-  （provider UUID）查 `ProviderUsage.Pct(quota.WindowKindLimit)`（§4）。纯读库，路由
-  热路径不发起线上配额请求；刷新节奏由 `Manager` 后台 refresher 决定（§9.1 未处理）。
+- **数据来源**：`ai/quota`（`Manager.GetQuota`），按 `Service.Provider`（provider UUID）
+  查 `ProviderUsage.Pct(quota.WindowKindLimit)`（§4）。路由侧只声明"要这个 provider 的
+  用量"，怎么给由 `Manager` 决定：正常由后台 refresher 保持新鲜、纯读库；数据过期时
+  `Manager` 自行触发一次刷新（§9.1 未处理）。
 - **只算 `Kind=limit`，不算 `Kind=resource`**：余额耗尽要充钱，不会自己恢复，不该驱动
   这种本该是临时避让的判定。
 - **聚合方式：跨 service 取最紧（max），不取平均**——一个池子里任何一个 service 吃紧

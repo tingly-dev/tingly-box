@@ -535,11 +535,11 @@ func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) OpE
 	return res
 }
 
-// evaluateServiceQuotaOp compares the tightest (highest-used%) cached
+// evaluateServiceQuotaOp compares the tightest (highest-used%)
 // *standard* quota across the rule's services' upstream providers
 // (ctx.ServiceQuota, pre-filtered per-rule by evaluateRule) against a
-// threshold. Quota is read from the local ai/quota cache, never fetched
-// live, and restricted to self-healing allowances (Kind == WindowKindLimit)
+// threshold. Quota comes from ai/quota (freshness is the Manager's
+// concern), restricted to self-healing allowances (Kind == WindowKindLimit)
 // — see Pct's kinds filter (ai/quota/semantic.go) and collectAllQuotaInfo in
 // internal/routing/stage_smart_routing.go; standing balances/credits are
 // deliberately excluded (see ServiceQuotaInfo in context.go).
@@ -557,7 +557,7 @@ func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) OpE
 // — see ai/quota/semantic.go) are absent from ctx.ServiceQuota entirely and
 // excluded from the max, rather than counted as 0% used. Returns
 // Matched=true (pass) when no service in the rule has quota data, so
-// quota-blind rules and cold caches never block routing.
+// quota-blind rules and cold data never block routing.
 func (r *Router) evaluateServiceQuotaOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 	res := newOpResult(op)
 	if len(ctx.ServiceQuota) == 0 {

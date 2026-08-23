@@ -57,7 +57,7 @@ const POSITION_OPTIONS: PositionMeta[] = [
     { value: 'token', label: 'Token Count', description: 'Token count', category: 'request' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)', category: 'service' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)', category: 'service' },
-    { value: 'service_quota', label: 'Service Quota', description: 'Tightest cached upstream quota usage across services (%)', category: 'service' },
+    { value: 'service_quota', label: 'Service Quota', description: 'Tightest upstream quota usage across services (%)', category: 'service' },
 ];
 
 const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | undefined> = {
@@ -106,10 +106,10 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         { value: 'util_gt', label: 'Util >', description: 'Avg seat utilization across services > value (%)', valueType: 'int' },
     ],
     service_quota: [
-        { value: 'pct_le', label: 'Quota ≤', description: 'Tightest cached quota usage across services <= value (%)', valueType: 'int' },
-        { value: 'pct_ge', label: 'Quota ≥', description: 'Tightest cached quota usage across services >= value (%)', valueType: 'int' },
-        { value: 'pct_lt', label: 'Quota <', description: 'Tightest cached quota usage across services < value (%)', valueType: 'int' },
-        { value: 'pct_gt', label: 'Quota >', description: 'Tightest cached quota usage across services > value (%)', valueType: 'int' },
+        { value: 'pct_le', label: 'Quota ≤', description: 'Tightest quota usage across services <= value (%)', valueType: 'int' },
+        { value: 'pct_ge', label: 'Quota ≥', description: 'Tightest quota usage across services >= value (%)', valueType: 'int' },
+        { value: 'pct_lt', label: 'Quota <', description: 'Tightest quota usage across services < value (%)', valueType: 'int' },
+        { value: 'pct_gt', label: 'Quota >', description: 'Tightest quota usage across services > value (%)', valueType: 'int' },
     ],
     'agent.claude_code': [
         { value: 'equals', label: 'Equals', description: 'Claude Code request kind equals the value', valueType: 'string' },

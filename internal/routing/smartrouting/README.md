@@ -92,7 +92,7 @@ An **op** (`SmartOp`) is `Position + Operation + Value`:
 | `token` | estimated token count (chars/4) | `ge`, `gt`, `le`, `lt` |
 | `service_ttft` | rule services' TTFT stats (ms) | `avg_le`, `avg_ge`, `max_le`, `max_ge` |
 | `service_capacity` | rule services' seat utilization (%) | `util_le`, `util_ge`, `util_lt`, `util_gt` |
-| `service_quota` | rule services' cached upstream quota usage (%) | `pct_le`, `pct_ge`, `pct_lt`, `pct_gt` |
+| `service_quota` | rule services' upstream quota usage (%) | `pct_le`, `pct_ge`, `pct_lt`, `pct_gt` |
 | `agent.claude_code` | detected Claude Code request kind | `equals` (`main` / `subagent` / `compact`) |
 | `proxy_vision` | latest user content type (image?) | `enabled` (toggle — see Op-level processors) |
 
@@ -102,9 +102,11 @@ before evaluation (`collectRuleStats` / `filterCapacityForRule` /
 so cold-start traffic (or a service whose quota was never fetched) isn't
 blocked.
 
-`service_quota` reads cached provider usage from `ai/quota`
+`service_quota` reads provider usage from `ai/quota`
 (`.design/quota-semantics.md`) via the optional `QuotaProvider` wired into
-`SmartRoutingStage` — a local DB read, never a live upstream call. It
+`SmartRoutingStage`. The stage only declares what it needs; freshness is
+`ai/quota`'s concern (a background refresher keeps stored usage current,
+and `Manager.GetQuota` refreshes expired data itself). It
 compares the **tightest** (highest-used%) service in the rule against the
 threshold, not the average: a rule models one pool of interchangeable
 services, and one of them running hot should make the pool look hot rather
