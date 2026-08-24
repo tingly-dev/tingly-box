@@ -196,12 +196,16 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 //	Consistency    (cross-provider normalization, param clamping)
 //	preVendor slot : preVendor rule transforms (act on the converted, upstream-bound shape)
 //	Vendor         (provider-specific finalize)
-//	StagePost-record (if enabled)
 //
-// Invariant: nothing runs after Vendor except recording. Vendor directly faces
-// the provider and must be the last mutation, so the preVendor transforms are
-// inserted after Consistency but BEFORE Vendor — this also means the StagePost
-// recording captures the truly-final, dispatched request.
+// Invariant: nothing runs after Vendor except the actual dispatch. Vendor
+// directly faces the provider and must be the last mutation, so the
+// preVendor transforms are inserted after Consistency but BEFORE Vendor.
+//
+// upstream_request recording does NOT happen in this chain — see
+// client.wireRecorderTransport (.design/recording.md): the chain only ever
+// saw the pre-wire SDK struct (no real headers, wrong URL), so capture moved
+// to the innermost client transport layer, which observes the request
+// exactly as sent.
 func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
 	recorder := recording.FromGin(c)
 
@@ -215,7 +219,7 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 	// 1. Pre-transform recording — snapshots the inbound (client) request.
 	// Gated on the recorder's own capture-point selection (nil-safe).
 	if recorder.Wants(typ.RecordClientRequest) {
-		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePre))
+		transforms = append(transforms, NewTransformRecorder(c, recorder))
 	}
 
 	// 2. Base transform (protocol conversion)
@@ -232,12 +236,6 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 	transforms = append(transforms, preVendor...)
 
 	transforms = append(transforms, vendorTransformShared)
-
-	// 4. Post-transform recording — snapshots the outbound (upstream) request.
-	// Runs last so it captures the truly-final request dispatched to the provider.
-	if recorder.Wants(typ.RecordUpstreamRequest) {
-		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePost))
-	}
 
 	return transform.NewTransformChain(transforms), nil
 }

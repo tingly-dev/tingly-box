@@ -29,6 +29,11 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, provider *typ.Provid
 	// advisor depth header: if this provider loops back into tingly-box, the
 	// inbound side must skip MCP tool injection (recursion guard).
 	ctx = client.WithAdvisorLoopback(ctx)
+	// ctx derives (via context.WithoutCancel, in the caller) from the main
+	// request's ctx, which may carry a WireRecorder for the main request's
+	// own upstream capture. Shadow it so the advisor's LLM call — a separate
+	// outbound request — never overwrites that capture.
+	ctx = client.WithoutWireRecorder(ctx)
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(advisorSystemPrompt),
 	}
@@ -106,6 +111,8 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, provider *typ.Pro
 	// Same recursion guard as callOpenAI: stamp the advisor depth header on
 	// loopback requests via the generic transport chain.
 	ctx = client.WithAdvisorLoopback(ctx)
+	// Same wire-recorder shadow as callOpenAI — see its comment.
+	ctx = client.WithoutWireRecorder(ctx)
 
 	var messages []anthropic.MessageParam
 	var systemParts []string

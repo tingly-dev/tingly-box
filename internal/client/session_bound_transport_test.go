@@ -482,6 +482,17 @@ func TestSessionBoundTransport_OAuthProviderTypes(t *testing.T) {
 
 // TestCreateSessionBoundTransport tests the helper function that creates
 // layered transport chains (SessionBoundTransport + provider-specific wrappers).
+// unwrapWireRecorder strips the wire-level recording layer that
+// createSessionBoundTransport now mounts at the source (wrapWithWireRecorder
+// in http.go), so these tests can keep asserting the underlying transport
+// shape the way they always have.
+func unwrapWireRecorder(rt http.RoundTripper) http.RoundTripper {
+	if w, ok := rt.(*wireRecorderTransport); ok {
+		return w.inner
+	}
+	return rt
+}
+
 func TestCreateSessionBoundTransport(t *testing.T) {
 	provider := &typ.Provider{
 		UUID:     "test-provider-create",
@@ -498,7 +509,7 @@ func TestCreateSessionBoundTransport(t *testing.T) {
 
 	// This tests the createSessionBoundTransport helper
 	// It should return a transport chain with provider-specific wrapper
-	transport := createSessionBoundTransport(provider, sessionID)
+	transport := unwrapWireRecorder(createSessionBoundTransport(provider, sessionID))
 
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
@@ -538,7 +549,7 @@ func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	}
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "antigravity-test"}
 
-	transport := createSessionBoundTransport(provider, sessionID)
+	transport := unwrapWireRecorder(createSessionBoundTransport(provider, sessionID))
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
@@ -564,7 +575,7 @@ func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
 	}
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "gemini-test"}
 
-	transport := createSessionBoundTransport(provider, sessionID)
+	transport := unwrapWireRecorder(createSessionBoundTransport(provider, sessionID))
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
@@ -589,7 +600,7 @@ func TestCreateSessionBoundTransport_Codex(t *testing.T) {
 	}
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "codex-test"}
 
-	transport := createSessionBoundTransport(provider, sessionID)
+	transport := unwrapWireRecorder(createSessionBoundTransport(provider, sessionID))
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
@@ -611,7 +622,7 @@ func TestCreateSessionBoundTransport_NonOAuth(t *testing.T) {
 	}
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "apikey-test"}
 
-	transport := createSessionBoundTransport(provider, sessionID)
+	transport := unwrapWireRecorder(createSessionBoundTransport(provider, sessionID))
 
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")

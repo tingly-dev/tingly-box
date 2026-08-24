@@ -268,7 +268,16 @@ func (ph *ProtocolHandler) BeginRuleRecording(c *gin.Context, scenarioType typ.R
 	if err != nil {
 		bs = []byte("{}")
 	}
-	return ph.EnsureProtocolRecorder(c, string(scenarioType), provider, model, obs.RecordMode(recMode), bs)
+	rec := ph.EnsureProtocolRecorder(c, string(scenarioType), provider, model, obs.RecordMode(recMode), bs)
+	// Propagate the recorder onto the request context so the client layer's
+	// innermost transport (client.wireRecorderTransport) can reach it at the
+	// moment the request actually hits the wire — the corrected capture
+	// point for upstream_request (see .design/recording.md). Same ctx-value
+	// pattern as typ.WithRuleFlags.
+	if rec != nil {
+		c.Request = c.Request.WithContext(client.WithWireRecorder(c.Request.Context(), rec))
+	}
+	return rec
 }
 
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,

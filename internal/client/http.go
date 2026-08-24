@@ -261,11 +261,17 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
-	return &SessionBoundTransport{
+	// wrapWithWireRecorder mounted here, at the source, covers every caller
+	// (NewAnthropicClient's OAuth branch, NewGoogleClient's OAuth branch,
+	// Codex/Kimi/Gemini/Antigravity) with one edit — it sits innermost,
+	// before any vendor round-tripper wraps it from outside, so it still
+	// observes the request after those vendor layers' header mutations
+	// (they mutate req, then call this transport's RoundTrip).
+	return wrapWithWireRecorder(&SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
-	}
+	})
 }

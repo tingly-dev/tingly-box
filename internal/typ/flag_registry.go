@@ -233,8 +233,10 @@ func RuleFlagRegistry() []FlagSpec {
 				//     assembly/synthesis fallbacks); its emit is paused until
 				//     the response path is reworked (Phase 4 EventTap).
 				//     {Value: string(RecordFinalResponse), Label: "Final response"},
-				//   - upstream_response (provider raw response): nothing
-				//     captures it until the wire-level recorder lands (Phase 3).
+				//   - upstream_response (provider raw response): the wire-level
+				//     transport (internal/client/wire_recorder.go) only
+				//     captures the request side so far; response capture is
+				//     separate follow-up work (Phase 4).
 				//     {Value: string(RecordUpstreamResponse), Label: "Upstream response (provider)"},
 			},
 		},

@@ -116,6 +116,36 @@ func (sr *ProtocolRecorder) Wants(p typ.RecordingPoint) bool {
 	return typ.RecordingMode(sr.mode).Has(p)
 }
 
+// WantsUpstreamRequest and RecordWireRequest together satisfy
+// client.WireRecorder (structurally — internal/client cannot import this
+// package, see .design/recording.md). This is the corrected capture point
+// for upstream_request: internal/client's wireRecorderTransport calls these
+// from the innermost transport layer, right before the request hits the
+// wire, so — unlike the old chain-level snapshot — headers and the real
+// upstream URL are captured as actually sent.
+func (sr *ProtocolRecorder) WantsUpstreamRequest() bool {
+	return sr.Wants(typ.RecordUpstreamRequest)
+}
+
+// RecordWireRequest stores the final outbound request. body is best-effort
+// JSON-decoded into RecordRequest.Body; a non-JSON body leaves Body nil
+// (method/URL/headers are still captured).
+func (sr *ProtocolRecorder) RecordWireRequest(method, url string, headers map[string]string, body []byte) {
+	if sr == nil {
+		return
+	}
+	var bodyMap map[string]interface{}
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &bodyMap)
+	}
+	sr.SetTransformedRequest(&obs.RecordRequest{
+		Method:  method,
+		URL:     url,
+		Headers: headers,
+		Body:    bodyMap,
+	})
+}
+
 // SetActiveService re-binds the recorder to a new provider/model. The
 // failover orchestrator calls this between attempts so records reflect the
 // service currently being attempted. Breaker accounting is owned by the

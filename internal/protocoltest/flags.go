@@ -699,8 +699,13 @@ func ruleFlagCases() []flagCase {
 
 			// Select the two request points only — the emitted record must
 			// carry OriginalRequest + TransformedRequest and no FinalResponse.
+			// extra_headers carries a secret-looking header so the same
+			// request also pins the wire recorder's default redaction.
 			model := renv.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(),
-				typ.RuleFlags{Recording: "client_request,upstream_request"})
+				typ.RuleFlags{
+					Recording:    "client_request,upstream_request",
+					ExtraHeaders: map[string]string{"X-Custom-Api-Token": "sk-should-not-land-on-disk"},
+				})
 			res := sendFlag(t, renv, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			if res.HTTPStatus != 200 {
 				t.Fatalf("request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
@@ -716,11 +721,38 @@ func ruleFlagCases() []flagCase {
 			if rec["original_request"] == nil {
 				t.Error("record missing original_request (client_request point selected)")
 			}
-			if rec["transformed_request"] == nil {
-				t.Error("record missing transformed_request (upstream_request point selected)")
+			transformed, _ := rec["transformed_request"].(map[string]any)
+			if transformed == nil {
+				t.Fatal("record missing transformed_request (upstream_request point selected)")
 			}
 			if rec["final_response"] != nil {
 				t.Error("record carries final_response though final_response was not selected")
+			}
+
+			// upstream_request capture moved to the client's innermost wire
+			// transport (.design/recording.md §3.5/wire_recorder.go) — the
+			// chain-level snapshot it replaces never had real headers and used
+			// the inbound gateway path instead of the real upstream URL. Pin
+			// both corrections here.
+			upstreamURL, _ := transformed["url"].(string)
+			if !strings.Contains(upstreamURL, renv.virtual.URL()) {
+				t.Errorf("transformed_request.url = %q, want the real upstream URL (%s), not the inbound gateway path", upstreamURL, renv.virtual.URL())
+			}
+			headers, _ := transformed["headers"].(map[string]any)
+			if len(headers) == 0 {
+				t.Error("transformed_request.headers is empty — wire-level headers were not captured")
+			} else if ct, ok := headers["Content-Type"].(string); !ok || !strings.Contains(ct, "json") {
+				t.Errorf("transformed_request.headers[Content-Type] = %v, want a json content type", headers["Content-Type"])
+			}
+			// Sensitive headers must never reach disk: the Authorization the
+			// SDK sets, and the rule's own extra_headers secret, both redacted
+			// by name pattern (internal/client/wire_recorder.go).
+			for _, name := range []string{"Authorization", "X-Custom-Api-Token"} {
+				if v, ok := headers[name].(string); !ok || v == "" {
+					t.Errorf("expected header %q to be present (redacted), got %v", name, headers[name])
+				} else if strings.Contains(v, "sk-") {
+					t.Errorf("header %q leaked a secret value onto disk: %v", name, v)
+				}
 			}
 
 			// Response-side recording is paused (emit commented out — see

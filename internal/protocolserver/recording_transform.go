@@ -10,64 +10,41 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/recording"
 )
 
-// TransformStage selects which side of the transform pipeline the recorder
-// captures from.
-type TransformStage int
-
-const (
-	// StagePre captures ctx.OriginalRequest before any transformation is
-	// applied.
-	StagePre TransformStage = iota
-	// StagePost captures ctx.Request after base transformation.
-	StagePost
-)
-
-// TransformRecorder is a transform.Transform that snapshots the request body
-// at a given stage and stores it on a ProtocolRecorder.
+// TransformRecorder is a transform.Transform that snapshots ctx.OriginalRequest
+// (the client_request capture point — the inbound request before any
+// transformation) onto a ProtocolRecorder. It runs as the first step in the
+// preBase slot, before any protocol conversion.
+//
+// This is deliberately the only capture point left at the chain level: the
+// upstream_request point moved to client.wireRecorderTransport, the
+// innermost client transport layer, because the chain only ever saw a
+// pre-wire SDK struct with no real headers and the wrong URL (see
+// .design/recording.md).
 type TransformRecorder struct {
 	recorder *recording.ProtocolRecorder
 	c        *gin.Context
-	stage    TransformStage
 }
 
-// NewTransformRecorder builds a recorder transform for the given stage.
-func NewTransformRecorder(c *gin.Context, recorder *recording.ProtocolRecorder, stage TransformStage) *TransformRecorder {
+// NewTransformRecorder builds the client_request capture transform.
+func NewTransformRecorder(c *gin.Context, recorder *recording.ProtocolRecorder) *TransformRecorder {
 	return &TransformRecorder{
 		recorder: recorder,
 		c:        c,
-		stage:    stage,
 	}
 }
 
-func (t *TransformRecorder) Name() string {
-	if t.stage == StagePre {
-		return "record_pre_transform"
-	}
-	return "record_post_transform"
-}
+func (t *TransformRecorder) Name() string { return "record_client_request" }
 
 func (t *TransformRecorder) Apply(ctx *transform.TransformContext) error {
 	if t == nil || t.recorder == nil {
 		return nil
 	}
 
-	var src interface{}
-	if t.stage == StagePre {
-		src = ctx.OriginalRequest
-	} else {
-		src = ctx.Request
-	}
-
-	rec, err := t.toRecordRequest(src)
+	rec, err := t.toRecordRequest(ctx.OriginalRequest)
 	if err != nil {
 		return fmt.Errorf("failed to record %s request: %w", t.Name(), err)
 	}
-
-	if t.stage == StagePre {
-		t.recorder.SetOriginalRequest(rec)
-	} else {
-		t.recorder.SetTransformedRequest(rec)
-	}
+	t.recorder.SetOriginalRequest(rec)
 	return nil
 }
 
