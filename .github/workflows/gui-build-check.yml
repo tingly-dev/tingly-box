@@ -1,0 +1,55 @@
+name: GUI Build Check
+
+run-name: >-
+  🖥️ GUI build check ${{ github.event.pull_request.title || github.ref_name }}
+
+# Lightweight PR-stage guard for the Wails GUI: compiles and vets gui/wails3
+# (cgo + GTK4/WebKitGTK 6.0) without the frontend/bindings/packaging chain,
+# so GUI compile regressions are caught before merge in a few minutes. The
+# committed PLACEHOLDER under internal/web_wails3/dist satisfies the
+# go:embed, so no frontend build is needed here. The full from-source GUI
+# build (codegen, bindings, frontend, version ldflags) runs in
+# verify-build.yml at release time.
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'go.work*'
+      - 'gui/**'
+      - 'libs/**'
+      - 'internal/web_wails3/**'
+      - '.github/workflows/gui-build-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-gui:
+    name: Compile gui/wails3 (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      # The wails3 Linux backend links against GTK4 + WebKitGTK 6.0 via cgo.
+      - name: Install webview build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Build GUI package
+        run: go build ./gui/wails3/...
+
+      - name: Vet GUI package
+        run: go vet ./gui/wails3/...
