@@ -196,9 +196,10 @@ method/URL/body(header 本次刻意不采集,见 §3.7)。
   与 `thinking_effort` 同模式;解析点 `typ.EffectiveRecording(rule, scenario)`
   (handler prologue)与 `resolveRuleFlagsWithScenario`(ctx 传播)。
 - **过滤位置**:recorder 构造时归一化 mode,`emit()` 按 `Has(point)` 挑
-  字段;chain 的 StagePre/StagePost 分别按 `client_request` /
-  `upstream_request` 挂载(`recorder.Wants`,nil-safe)。obs 层不再校验
-  三档枚举,sink 只认"非空即启用"——mode 语义完全归 typ。
+  字段;`client_request` 挂链路层 StagePre,`upstream_request` 挂 client
+  层最内层 wire transport(Phase 3 迁移,见 §3.7;两者都靠 `recorder.Wants`
+  nil-safe 判定是否采集)。obs 层不再校验三档枚举,sink 只认"非空即
+  启用"——mode 语义完全归 typ。
 - **sink 归属**:仍按 scenario 建目录/缓存(`GetOrCreateScenarioSink`
   改为接收请求的 effective mode,rule 开、scenario 关也能建 sink);
   录多深由 recorder 按请求过滤,sink 自身 mode 仅剩创建信息。
@@ -221,6 +222,15 @@ method/URL/body(header 本次刻意不采集,见 §3.7)。
   emit 后 `release()` 清空字段,后续 emit 产出空壳垃圾记录。
 
 收敛后的生命周期(`recording.ProtocolRecorder` 文档为准):
+0. **统一从 ctx 取,不走签名**(前置重构,独立 PR):recorder 不作为
+   显式参数在协议派发链里层层透传(原 40+ 处签名已全部去参)。gin 域
+   内的函数一律 `recording.FromGin(c)` 按需自取(创建点已存 gin ctx,
+   nil-safe)——与 rule flags 走 ctx 而非参数列表同构。仅三类例外保留
+   显式参数:`RunGeneric*NonStream`(只有 `context.Context`、无 gin ctx
+   的叶子 helper,由 gin 域调用方取好传入);recording 包自己的构造 API
+   (`NewStreamRecorder` / `AttachRecorderHooks` / `NewTransformRecorder`
+   / `newServerOpsAdapter`);`handlePreStreamFailure` 的窄接口参数
+   (两种 recorder 实现共用)。
 1. **单一创建点**:`ProtocolHandler.BeginRuleRecording`(rule 解析后的
    prologue,唯一知道 rule 级 flag 的最早时刻),4 个 handler 各一行;
    禁用时返回 nil,全部下游方法 nil-safe。
@@ -343,7 +353,7 @@ header 的钉子测试/body 复原/loopback 遮蔽/nil 安全);`protocoltest` �
 
 5. **Mode 语义收敛(response 部分待续)**:request 侧(client_request +
    upstream_request)已完整落地;response 侧(`upstream_response` /
-   `client_response`)仍暂停,待 Phase 4 EventTap 把响应侧汇报也并入
+   `final_response`)仍暂停,待 Phase 4 EventTap 把响应侧汇报也并入
    管线观察者后再开放,裁剪逻辑(`recorder.Wants`)已经是统一模型,
    届时只需补 producer,不用再改选点/继承那一层。
 
@@ -384,9 +394,10 @@ header 的钉子测试/body 复原/loopback 遮蔽/nil 安全);`protocoltest` �
 | **Phase 0 ✅** | 本梳理文档 | `.design/recording.md` | 无 |
 | **Phase 1 清障 ✅(收窄范围)** | 已做:删 `RecordRoundTripper` 死代码与全部 `SetRecordSink` 机制;`ScenarioContextKey` 迁出(P7);删 `ClientPool.recordSink` / `server.recordSink` / `server.recordMode` / `WithRecordMode` / `WithRecording`;去除 CLI `--record-mode` / `--record-dir`(目录固定默认)。**刻意未动**:advisor/MCP 侧接线(`WithAdvisorRecordSink`、`HookDeps.GetScenarioSink`)与 P4 header 修复——单独小步处理 | `internal/client`、`internal/server`、`internal/command`、`gui/wails3`、`vmodel` | 低(删死代码,行为不变) |
 | **Phase 1.5 advisor 小步 ✅** | 修 P4(advisor ctx 标记 + 通用链只读 header transport,附单测);清 `WithAdvisorRecordSink` / `GetScenarioSink` 死数据注入 | `internal/client`、`mcp/runtime`、`servertool` | 低 |
-| **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;前端 multi_enum 控件 + `RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
+| **Phase 1.8 前置重构 ✅(两个独立 PR)** | (a) recorder ctx 统一:协议签名去参,`recording.FromGin` 唯一取用入口(§3.6 第 0 条,#1649);(b) `recording` 包提升为 `internal/recording`(高层组件,不寄居协议包下,纯 mv);(c) flag 基建先行:`multi_enum` 类型 + registry 约束 + 前端 registry 驱动复选控件(通用能力,不含 recording 语义)——先调 flag 体系本身,recording 的语义变更单独渐进 | `protocolserver`、`internal/recording`、`typ`、frontend | 低(纯重构/纯新增能力) |
+| **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;`RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
 | **Phase 3 wire 录制 ✅(收窄为仅 request)** | `wireRecorderTransport` 挂 client 层最内层 wire transport(含 vendor 链,Claude Code OAuth 除外——见 §3.7 已知缺口);recorder 经 request ctx 传播(`WithWireRecorder`);链路层 StagePost 移除,`upstream_request` 全部由 wire 层产出(修 P6);advisor loopback 显式遮蔽(`WithoutWireRecorder`);header 不采集(免脱敏策略) | `internal/client`、`protocolserver` | 中 |
-| **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);response 侧两个点位(`upstream_response` 新增、`client_response` 恢复)在此阶段一并做;scenario 前端控件 registry 化;Claude Code OAuth 的 transport 覆盖单独评估 | `obs`、`transform`、`internal/client`、frontend | 按其自身计划 |
+| **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);response 侧两个点位(`upstream_response` 新增、`final_response` 恢复)在此阶段一并做;scenario 前端控件 registry 化;Claude Code OAuth 的 transport 覆盖单独评估 | `obs`、`transform`、`internal/client`、frontend | 按其自身计划 |
 
 Phase 1 与 Phase 2 互不依赖,可并行;Phase 3 依赖 Phase 2(recorder 的
 启用判定先统一)。每阶段独立 vet / test 绿。
@@ -395,8 +406,9 @@ Phase 1 与 Phase 2 互不依赖,可并行;Phase 3 依赖 Phase 2(recorder 的
 
 ## 7. 与现有文档的关系
 
-- `.design/rule-flags.md`:§12 的 scenario-only 表里 `recording_v2` 在
-  Phase 2 后升级为 shared flag,需同步更新该表与 §4 主表。
+- `.design/rule-flags.md`:`recording_v2` 已同步标注为升级到 shared flag
+  `recording`(共享表 + scenario-only 表),Phase 3 的挂载位置变更(链路层
+  StagePost → client 层 wire transport)也已同步进该文档的链路骨架描述。
 - `internal/obs/PLANNING.md`:record 采集/导出侧的权威规划;本文的
   Phase 4 即与其合流点。两文档口径一致:record 实体总是构建,裁剪在
   出口。

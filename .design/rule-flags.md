@@ -83,12 +83,14 @@
 两个动态插入位置本质都是"在某步之前"：**preBase**（Base 之前，看见入站形态）
 与 **preVendor**（Vendor 之前，看见目标形态）。
 
-**不变式：除录制外，没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
+**不变式：没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
 provider、做最终且不可逆的改写（model alias、metadata、billing header、
 DeepSeek thinking patch 等），必须是最后一个 mutation；因此 rule 的 preVendor
-transforms 装在 `Consistency` 之后、`Vendor` **之前**。这同时修掉了一个隐患：
-StagePost 录制现在落在 `Vendor` 之后，抓到的是真正发出的请求（此前这些 transform
-跑在录制之后，录到的"最终请求"与实际出站不一致）。
+transforms 装在 `Consistency` 之后、`Vendor` **之前**。出站请求的录制
+（`upstream_request` 点位）不再挂在链路的 `Vendor` 之后——那样只能拿到
+SDK 参数快照，抓不到真正发出的字节；现已迁到 client 层最内层 wire
+transport，在 `Vendor` 完全走完、请求即将上线之后再读（见
+`.design/recording.md` §3.7）。
 
 ---
 
@@ -142,7 +144,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `thinking_effort` | enum，UI 可选 `""`/`off`/`low`/`medium`/`high`/`max`（内部 `thinking.Level` 仍含 `minimal`/`xhigh`，见下方 UX 取舍）| reasoning | **yes** | override | 统一控制 extended thinking。effort 是主轴：OpenAI 侧原样下发 reasoning_effort（SDK 六级全部原生支持），Anthropic 侧下发 output_config.effort（Claude 4.5+ 原生）并附 budget_tokens 兜底（low 4K / medium 10K / high 20K / max 32K；内部值 minimal 1K / xhigh 24K 仍参与该映射），vendor 阶段按模型能力对 adaptive/budget/effort 三种方言互转（见 `request_anthropic_model.go`）；Gemini 目标同样吃这张表：Gemini 3 统一映射为 thinking_level（minimal/low/medium/high，xhigh/max 收敛到 high），Gemini 2.5 映射为 thinking_budget（flash 系列钳到 24576，见 `request_openai_gemini.go`）。空 = "By Client"（透传客户端参数）。| `ThinkingModeTransform`（Type 1b，server-domain Transform）|
 | `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
-| `recording` | multi_enum（采集点多选） | observability | **yes** | override | 按选中的采集点录制该 rule 的流量：`client_request`（入站请求）/ `upstream_request`（出站请求）。响应侧点位（`upstream_response` 服务返回、`final_response` 最终返回）在值域内但**暂停**——无采集实现 / 质量不达标，选项与 emit 已注释（见 `.design/recording.md` §3.5）。逗号分隔存储；旧三档枚举值解析层兼容。rule 值覆盖 scenario 级 `recording_v2` 默认。| handler prologue 读 `typ.EffectiveRecording(rule, scenario)` 建 recorder；chain 的 StagePre/StagePost 按点位挂载；emit 按 `Has(point)` 过滤（详见 `.design/recording.md`）|
+| `recording` | multi_enum（采集点多选） | observability | **yes** | override | 按选中的采集点录制该 rule 的流量：`client_request`（入站请求）/ `upstream_request`（出站请求）。响应侧点位（`upstream_response` 服务返回、`final_response` 最终返回）在值域内但**暂停**——无采集实现 / 质量不达标，选项与 emit 已注释（见 `.design/recording.md` §3.5）。逗号分隔存储；旧三档枚举值解析层兼容。rule 值覆盖 scenario 级 `recording_v2` 默认。| handler prologue 读 `typ.EffectiveRecording(rule, scenario)` 建 recorder；`client_request` 由链路层 `TransformRecorder`（StagePre）采集,`upstream_request` 由 client 层最内层 wire transport（`wireRecorderTransport`,只读、不采集 header）采集；emit 按 `Has(point)` 过滤（详见 `.design/recording.md`）|
 | `session_affinity` | int (seconds) | routing | — | — | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。**rule-only**（已从 scenario plugin 移除——无 scenario 级继承）。**built-in CC / Desktop / Codex rule 默认 1800s**（`init.go` 种子 + `migrate20260610` 存量），其余 rule 不设即禁用，可在 Plugins 卡片按 rule 调整。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5，仅读 `rule.Flags.SessionAffinity`）|
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
 | `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
@@ -202,9 +204,10 @@ Type 5   Routing behavior (service selection)
 （BaseTransform 之前，看见 inbound 形态），post 装在 preVendor slot
 （Consistency 之后、Vendor 之前，看见目标形态）。聚合点
 `rulePreBaseTransforms` / `rulePreVendorTransforms` 决定 flag 装哪边。两个 slot
-之外，chain 的骨架（StagePre 录制 → Base → MCP → Consistency → Vendor →
-StagePost 录制）由 `BuildTransformChain` 固定，**Vendor + 录制是不可逾越的
-尾段**。
+之外，chain 的骨架（StagePre 录制 client_request → Base → MCP →
+Consistency → Vendor)由 `BuildTransformChain` 固定,**`Vendor` 是不可逾越的
+尾段**;`upstream_request` 的录制不在这条链里,由 client 层最内层 wire
+transport 承担(见 `.design/recording.md` §3.7)。
 
 ---
 
@@ -529,7 +532,7 @@ Plugins Card 操作。
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
 | UA 链 vendor pin 是否不可覆盖 | **是,vendor pin 决定性** | 保留 `provider.UserAgent` 调试 override | provider 是静态配置,不该耦合进请求链路去改写 vendor 握手/指纹 UA(footgun)。`provider.UserAgent` 字段已彻底移除;UA 只保留请求侧来源(client 入站 / rule custom_user_agent)与 vendor pin 两个正交轴。详见 `.design/user-agent.md` §5 |
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
-| preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
+| preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"。出站请求录制同理不挂在链路 Vendor 之后——链路层永远看不到真实出站字节，故 `upstream_request` 已迁到 client 层最内层 wire transport（见 `.design/recording.md` §3.7）|
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
 | Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/server/`。避免反向依赖 |
 | `BuildTransformChain` 是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `preVendor` 两个 slot 入参并保证插入位置（preBase / preVendor slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 preVendor transforms 误落在 Vendor 之后 |
