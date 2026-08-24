@@ -18,6 +18,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
+// Wails discovers lifecycle hooks through optional interfaces, so a signature
+// drift compiles but silently stops the hook from being called. These
+// assertions turn that into a build error.
+var (
+	_ application.ServiceStartup  = (*TinglyService)(nil)
+	_ application.ServiceShutdown = (*TinglyService)(nil)
+	_ http.Handler                = (*TinglyService)(nil)
+)
+
 // TinglyService manages the web UI and HTTP server functionality
 type TinglyService struct {
 	appManager    *command.AppManager
@@ -82,8 +91,11 @@ func (s *TinglyService) ServiceStartup(ctx context.Context, options application.
 	return nil
 }
 
-// ServiceShutdown is called when the service shuts down
-func (s *TinglyService) ServiceShutdown(ctx context.Context) error {
+// ServiceShutdown is called when the service shuts down. The signature must
+// stay parameterless: wails discovers this hook via the optional
+// application.ServiceShutdown interface (ServiceShutdown() error), and a
+// mismatched signature compiles fine but is silently never called.
+func (s *TinglyService) ServiceShutdown() error {
 	// Clean up resources if needed
 	return nil
 }

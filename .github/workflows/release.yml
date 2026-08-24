@@ -380,7 +380,8 @@ jobs:
         run: go install github.com/go-task/task/v3/cmd/task@latest
 
       - name: Install wails3
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        # Keep in lockstep with the library version in gui/wails3/go.mod
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
 
       - name: Install pnpm
         run: corepack enable
@@ -402,7 +403,7 @@ jobs:
       - name: Build Go binary (macOS)
         if: matrix.platform == 'macos'
         run: |
-          task darwin:package
+          task darwin:package VERSION="${RELEASE_TAG}"
 
           mkdir -p dist
 
@@ -418,7 +419,7 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          task windows:build PRODUCTION=true
+          task windows:build PRODUCTION=true VERSION="$env:RELEASE_TAG"
 
           New-Item -ItemType Directory -Force -Path dist
 
