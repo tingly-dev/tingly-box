@@ -1,7 +1,7 @@
-name: GUI Build Check
+name: Verify GUI Compile
 
 run-name: >-
-  🖥️ GUI build check ${{ github.event.pull_request.title || github.ref_name }}
+  🖥️ Verify GUI compile ${{ github.event.pull_request.title || github.ref_name }}
 
 # Lightweight PR-stage guard for the Wails GUI: compiles and vets gui/wails3
 # (cgo + GTK4/WebKitGTK 6.0) without the frontend/bindings/packaging chain,
@@ -20,14 +20,14 @@ on:
       - 'gui/**'
       - 'libs/**'
       - 'internal/web_wails3/**'
-      - '.github/workflows/gui-build-check.yml'
+      - '.github/workflows/verify-gui-compile.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-gui:
+  verify-gui-compile:
     name: Compile gui/wails3 (Linux)
     runs-on: ubuntu-latest
     steps:
