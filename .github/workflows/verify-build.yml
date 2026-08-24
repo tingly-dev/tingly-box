@@ -3,7 +3,12 @@ name: Verify Build
 run-name: >-
   🔍 Verify build ${{ inputs.tag || github.event.release.tag_name }}
 
-# Standalone verification of already-built release assets — no rebuild.
+# Standalone release verification. Two independent jobs:
+#   - verify-release-assets: checks the already-built release assets
+#     (zip integrity, checksums, binary formats) — no rebuild.
+#   - verify-gui-build: builds the Wails GUI from source on Linux, so GUI
+#     regressions (bindings, frontend, cgo/webview) surface here even when a
+#     release was cut without GUI artifacts (build_gui=false).
 # Runs automatically when a release is published (non-blocking, in parallel
 # with the NPX publish workflow), can be triggered manually against any tag,
 # and is reusable from other workflows via workflow_call.
@@ -85,4 +90,107 @@ jobs:
             echo ""
             echo "Checked release assets: zip integrity, sha256 checksums, and"
             echo "binary format/architecture per platform."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-gui-build:
+    name: Verify GUI Build (Linux)
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: '1.26'
+      NODE_VERSION: '24'
+    steps:
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "Error: no release tag provided"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building GUI from source at: $TAG"
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          submodules: true
+
+      # The wails3 Linux backend links against GTK4 + WebKitGTK 6.0 via cgo.
+      - name: Install webview build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-gui-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-gui-
+            ${{ runner.os }}-go-
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            frontend/node_modules
+          key: ${{ runner.os }}-pnpm-gui-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-gui-
+
+      - name: Install go-task
+        run: go install github.com/go-task/task/v3/cmd/task@latest
+
+      - name: Install wails3
+        # Keep in lockstep with the library version in gui/wails3/go.mod
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+
+      - name: Install pnpm
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        run: |
+          pnpm approve-builds --all
+          pnpm install --frozen-lockfile
+        working-directory: ./frontend
+
+      - name: Run codegen
+        run: task codegen
+
+      - name: Build GUI (production)
+        run: task linux:build PRODUCTION=true VERSION="${{ steps.tag.outputs.tag }}"
+
+      - name: Verify GUI binary
+        run: |
+          file bin/tingly-box
+          file bin/tingly-box | grep -q 'ELF 64-bit.*x86-64'
+          ./bin/tingly-box --help >/dev/null
+
+      - name: Write summary
+        if: always()
+        run: |
+          {
+            echo "## 🖥️ Verify GUI Build — ${{ steps.tag.outputs.tag }}"
+            echo ""
+            echo "Built the Wails GUI from source on Linux (bindings, frontend,"
+            echo "cgo/webview) with version ldflags, and smoke-tested the binary."
           } >> "$GITHUB_STEP_SUMMARY"
