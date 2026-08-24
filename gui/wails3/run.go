@@ -117,6 +117,14 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	SystemTray.SetIcon(slimIcon)
 }
 
+// showSlimWindow shows, maximises, and focuses the tray-mode window.
+// Maximise is called each time because macOS ignores it on hidden windows.
+func showSlimWindow() {
+	WindowSlim.Show()
+	WindowSlim.Maximise()
+	WindowSlim.Focus()
+}
+
 func useWebSystray(app *application.App, tinglyService *services.TinglyService) {
 	// Create the SystemTray menu
 	menu := app.Menu.New()
@@ -125,8 +133,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	_ = menu.
 		Add("Dashboard").
 		OnClick(func(ctx *application.Context) {
-			WindowSlim.Show()
-			WindowSlim.Focus()
+			showSlimWindow()
 			WindowSlim.EmitEvent("systray-navigate", "/")
 		})
 
@@ -136,8 +143,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	_ = menu.
 		Add("OpenAI").
 		OnClick(func(ctx *application.Context) {
-			WindowSlim.Show()
-			WindowSlim.Focus()
+			showSlimWindow()
 			WindowSlim.EmitEvent("systray-navigate", "/agent/openai")
 		})
 
@@ -145,8 +151,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	_ = menu.
 		Add("Anthropic").
 		OnClick(func(ctx *application.Context) {
-			WindowSlim.Show()
-			WindowSlim.Focus()
+			showSlimWindow()
 			WindowSlim.EmitEvent("systray-navigate", "/agent/anthropic")
 		})
 
@@ -154,8 +159,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	_ = menu.
 		Add("Claude Code").
 		OnClick(func(ctx *application.Context) {
-			WindowSlim.Show()
-			WindowSlim.Focus()
+			showSlimWindow()
 			WindowSlim.EmitEvent("systray-navigate", "/agent/claude-code")
 		})
 
@@ -192,11 +196,8 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              fmt.Sprintf("/login/%s", tinglyService.GetUserAuthToken()),
-		Hidden:           true, // Start hidden
+		Hidden:           true, // Start hidden; maximised on first show via showSlimWindow()
 	})
-
-	// Maximize window to avoid UI confusion
-	WindowSlim.Maximise()
 
 	// Prevent window from being destroyed on close - just hide it
 	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
