@@ -97,6 +97,13 @@ tasks:
       - task: codegen
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  wails:debug:
+    summary: Runs the application in dev mode without codegen (fast restart)
+    deps:
+      - task: wails:check
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
   wails:binding:
     deps:
       - task: wails:check
