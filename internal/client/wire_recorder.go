@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"strings"
 )
 
 // WireRecorder is the minimal interface the wire-level recording transport
@@ -16,11 +15,12 @@ import (
 // to cross this same boundary.
 type WireRecorder interface {
 	// WantsUpstreamRequest reports whether the current request should capture
-	// the final wire request (method/URL/headers/body).
+	// the final wire request (method/URL/body).
 	WantsUpstreamRequest() bool
 	// RecordWireRequest stores the request exactly as it is about to go out
-	// on the wire.
-	RecordWireRequest(method, url string, headers map[string]string, body []byte)
+	// on the wire. Headers are deliberately not captured for now — see
+	// wireRecorderTransport's doc comment.
+	RecordWireRequest(method, url string, body []byte)
 }
 
 type wireRecorderKey struct{}
@@ -31,16 +31,16 @@ type wireRecorderKey struct{}
 // NOT shadow the parent's value).
 type noopWireRecorder struct{}
 
-func (noopWireRecorder) WantsUpstreamRequest() bool                                    { return false }
-func (noopWireRecorder) RecordWireRequest(string, string, map[string]string, []byte) {}
+func (noopWireRecorder) WantsUpstreamRequest() bool               { return false }
+func (noopWireRecorder) RecordWireRequest(string, string, []byte) {}
 
 // WithWireRecorder attaches rec so wrapWithWireRecorder — mounted as the
 // innermost transport layer, closest to the actual wire send — can capture
-// the truly final outbound request: method, URL, and every header exactly as
-// every outer layer (rule flags, vendor round trippers, session binding) has
-// already mutated them. This is the corrected design point for
-// upstream_request capture: the chain layer used to snapshot a pre-wire SDK
-// struct with no real headers and the wrong URL (see .design/recording.md).
+// the truly final outbound request: method and URL exactly as every outer
+// layer (rule flags, vendor round trippers, session binding) has already
+// mutated them. This is the corrected design point for upstream_request
+// capture: the chain layer used to snapshot a pre-wire SDK struct with the
+// wrong URL (see .design/recording.md).
 //
 // rec==nil is a no-op (recording disabled for this request).
 func WithWireRecorder(ctx context.Context, rec WireRecorder) context.Context {
@@ -65,31 +65,15 @@ func wireRecorderFromContext(ctx context.Context) WireRecorder {
 	return rec
 }
 
-// sensitiveHeaderFragments are matched case-insensitively as substrings of
-// the header name. Deliberately name-pattern-based rather than an exact
-// denylist: extra_headers is user-configured free text (a rule can name any
-// header), so a fixed list of known credential headers would miss a custom
-// one. Mirrors the existing redaction precedent in logging_roundtripper.go's
-// redactProxy, applied here because records land in files on disk.
-var sensitiveHeaderFragments = []string{
-	"authorization", "api-key", "apikey", "token", "secret", "cookie", "credential",
-}
-
-const redactedHeaderValue = "***redacted***"
-
-func redactHeaderValue(name, value string) string {
-	lower := strings.ToLower(name)
-	for _, frag := range sensitiveHeaderFragments {
-		if strings.Contains(lower, frag) {
-			return redactedHeaderValue
-		}
-	}
-	return value
-}
-
 // wireRecorderTransport is a read-only observer: it never mutates the
 // request, so — unlike ruleFlagTransport — it is safe to mount on vendor
 // chains too (it cannot corrupt a vendor handshake).
+//
+// Headers are deliberately not captured: request headers routinely carry
+// credentials (Authorization, x-api-key, and whatever a rule's free-form
+// extra_headers names), and records land in files on disk. Capturing only
+// method/URL/body keeps this safe by construction instead of relying on a
+// redaction policy — revisit if header capture becomes a real need.
 type wireRecorderTransport struct {
 	inner http.RoundTripper
 }
@@ -114,14 +98,6 @@ func (t *wireRecorderTransport) RoundTrip(req *http.Request) (*http.Response, er
 		return inner.RoundTrip(req)
 	}
 
-	headers := make(map[string]string, len(req.Header))
-	for name, values := range req.Header {
-		if len(values) == 0 {
-			continue
-		}
-		headers[name] = redactHeaderValue(name, values[0])
-	}
-
 	var bodyBytes []byte
 	if req.Body != nil && req.Body != http.NoBody {
 		b, err := io.ReadAll(req.Body)
@@ -135,6 +111,6 @@ func (t *wireRecorderTransport) RoundTrip(req *http.Request) (*http.Response, er
 		}
 	}
 
-	rec.RecordWireRequest(req.Method, req.URL.String(), headers, bodyBytes)
+	rec.RecordWireRequest(req.Method, req.URL.String(), bodyBytes)
 	return inner.RoundTrip(req)
 }

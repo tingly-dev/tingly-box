@@ -121,16 +121,18 @@ func (sr *ProtocolRecorder) Wants(p typ.RecordingPoint) bool {
 // package, see .design/recording.md). This is the corrected capture point
 // for upstream_request: internal/client's wireRecorderTransport calls these
 // from the innermost transport layer, right before the request hits the
-// wire, so — unlike the old chain-level snapshot — headers and the real
-// upstream URL are captured as actually sent.
+// wire, so — unlike the old chain-level snapshot — the real upstream URL is
+// captured as actually sent. Headers are deliberately not captured (see
+// wireRecorderTransport's doc comment); Headers on the resulting
+// RecordRequest is always empty.
 func (sr *ProtocolRecorder) WantsUpstreamRequest() bool {
 	return sr.Wants(typ.RecordUpstreamRequest)
 }
 
 // RecordWireRequest stores the final outbound request. body is best-effort
 // JSON-decoded into RecordRequest.Body; a non-JSON body leaves Body nil
-// (method/URL/headers are still captured).
-func (sr *ProtocolRecorder) RecordWireRequest(method, url string, headers map[string]string, body []byte) {
+// (method/URL are still captured).
+func (sr *ProtocolRecorder) RecordWireRequest(method, url string, body []byte) {
 	if sr == nil {
 		return
 	}
@@ -139,10 +141,9 @@ func (sr *ProtocolRecorder) RecordWireRequest(method, url string, headers map[st
 		_ = json.Unmarshal(body, &bodyMap)
 	}
 	sr.SetTransformedRequest(&obs.RecordRequest{
-		Method:  method,
-		URL:     url,
-		Headers: headers,
-		Body:    bodyMap,
+		Method: method,
+		URL:    url,
+		Body:   bodyMap,
 	})
 }
 

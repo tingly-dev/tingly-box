@@ -133,7 +133,7 @@ header 跳过 MCP tool 注入 / 标记 loopback(`protocol_transform.go`、
 修复方式:advisor 调用侧(`mcp/runtime/advisor_call.go`)在 SDK 调用前
 `client.WithAdvisorLoopback(ctx)` 标记 ctx;通用 pass-through 链挂载只读
 的 `advisorLoopbackTransport`(`internal/client/advisor_loopback.go`,
-挂载点:`NewOpenAIClient` 与 `anthropicTransport`)按标记盖 header。
+挂载点:`NewOpenAIClient` 与 `anthropicTransport`)按标记盖这一个 header。
 vendor 链不挂——它们固定指向真实 vendor 端点,不可能 loopback。
 同批清理了从未生效的 advisor sink 注入:`WithAdvisorRecordSink` /
 `GetAdvisorRecordSink`(tool/context.go)、`HookDeps.GetScenarioSink`
@@ -151,10 +151,10 @@ handler 接上 recorder(prologue 按 effective mode 创建、存 gin ctx,
 request)。** `RecordRoundTripper` 挂在**最外层**(§2.3),看到的是
 `ruleFlagTransport` / vendor round-tripper 改写 header **之前**的请求;
 chain 级 StagePost 录的是 SDK 参数形态,`Headers` 硬编码空 map、`URL`
-用的是入站 gin 请求路径(不是真实 upstream URL)——这两个字段从建立时
+用的是入站 gin 请求路径(不是真实 upstream URL)——`URL` 字段从建立时
 就没被正确录过。修复方式见 §3.7:`upstream_request` 的采集点从链路层
 迁到 client 层最内层 wire transport,不再是 SDK 参数快照,而是真实
-method/URL/header(已脱敏)/body。
+method/URL/body(header 本次刻意不采集,见 §3.7)。
 
 **P7 — `ScenarioContextKey` 定义在死文件里。✅ 已解决(Phase 1):**
 迁至 `internal/client/context.go`,引用方
@@ -170,7 +170,7 @@ method/URL/header(已脱敏)/body。
 | 点位 | 中文 | 采集内容 | 现状 |
 |------|------|----------|------|
 | `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + 链路层 `TransformRecorder`(仅此一个点位留在链路层) |
-| `upstream_request` | 出站请求 | 发往 provider 的最终请求,真实 method/URL/header(已脱敏)/body | ✅ **Phase 3**:client 层最内层 wire transport(`internal/client/wire_recorder.go`),不再是链路层 SDK 参数快照 |
+| `upstream_request` | 出站请求 | 发往 provider 的最终请求,真实 method/URL/body(header 不采集,见 §3.7) | ✅ **Phase 3**:client 层最内层 wire transport(`internal/client/wire_recorder.go`),不再是链路层 SDK 参数快照 |
 | `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现——本次只做 request,不做 response,见 §3.7) |
 | `final_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
 
@@ -252,7 +252,7 @@ method/URL/header(已脱敏)/body。
 **机制**(`internal/client/wire_recorder.go`):
 
 - `WireRecorder` 接口(`WantsUpstreamRequest() bool` +
-  `RecordWireRequest(method, url string, headers map[string]string, body []byte)`)
+  `RecordWireRequest(method, url string, body []byte)`)
   定义在 `internal/client` 里,不反向依赖 `protocolserver/recording`——
   `*recording.ProtocolRecorder` 通过新增的同名方法结构性满足这个接口
   (与 `typ.GetRuleFlags` 跨界同一手法,鸭子类型免掉包依赖)。
@@ -272,13 +272,13 @@ method/URL/header(已脱敏)/body。
     (outer 层先执行自己的 mutation 再调用 inner.RoundTrip),挂在这个
     位置时,extra_headers、custom UA、vendor 握手 header 等所有外层的
     改写都已经体现在 `req` 上——捕获到的就是即将发出的真实字节。
-- **脱敏默认**:按 header 名片段(`authorization`/`api-key`/`apikey`/
-  `token`/`secret`/`cookie`/`credential`,大小写不敏感)遮蔽值,而非固定
-  denylist——因为 `extra_headers` 是用户自由文本,固定名单会漏掉自定义的
-  密钥型 header。参考现有 `logging_roundtripper.go::redactProxy` 的先例,
-  这次落在磁盘文件上,风险更高,同一哲学。**这是本次按合理默认直接做的
-  决定,不是等待确认的开放问题**——如需不同策略,调整
-  `sensitiveHeaderFragments` 即可。
+- **不采集 header**:请求头常年带凭证(`Authorization`/`x-api-key`,以及
+  `extra_headers` 里任意自定义的密钥型字段),而记录会落到磁盘文件上。
+  与其维护一份名称片段/denylist 式的脱敏策略(参考
+  `logging_roundtripper.go::redactProxy` 的先例),不如干脆不采集 header——
+  `RecordWireRequest` 签名里没有 headers 参数,structurally 就不会录到。
+  只采 method/URL/body,安全性由构造保证而非依赖脱敏规则;如未来确有
+  需要,再评估加回来。
 - **advisor loopback 隔离**:advisor 自己的出站 LLM 调用与主请求共享同一
   条派生 ctx(`context.WithoutCancel`,值不受影响),若不处理会把主请求的
   `upstream_request` 覆盖成 advisor 内部调用的数据。`advisor_call.go` 在
@@ -298,11 +298,11 @@ method/URL/header(已脱敏)/body。
 的风险,本次不顺手做)。意味着 Claude Code 场景下 `upstream_request`
 暂时仍录不到——留给未来单独评估。
 
-**测试**:`internal/client/wire_recorder_test.go`(捕获/放行/脱敏/
-body 复原/loopback 遮蔽/nil 安全);`protocoltest` 的 `recording` flag
-用例升级为端到端断言(真实 upstream URL、非空真实 header、`extra_headers`
-里的密钥值确认脱敏)——跑在真实 `net/http.Transport` 打到 httptest
-mock provider 的全链路上,不是单元级 mock。
+**测试**:`internal/client/wire_recorder_test.go`(捕获/放行/不采集
+header 的钉子测试/body 复原/loopback 遮蔽/nil 安全);`protocoltest` 的
+`recording` flag 用例升级为端到端断言(真实 upstream URL、
+`transformed_request.headers` 恒为空)——跑在真实 `net/http.Transport`
+打到 httptest mock provider 的全链路上,不是单元级 mock。
 
 ## 4. 目标架构(to-be)
 
@@ -318,7 +318,7 @@ mock provider 的全链路上,不是单元级 mock。
    链路层: StagePre 录 client_request(原始入站请求)          ← 现状
                      ▼
    client 层: 最内层 wire transport 录 upstream_request      ← ✅ Phase 3
-     (真实 method/URL/header已脱敏/body,ctx 里有 recorder 才录)
+     (真实 method/URL/body,header 不采集,ctx 里有 recorder 才录)
                      ▼
               sink(per-scenario)裁剪按 recorder.Wants 逐点位   ← 现状
 ```
@@ -360,9 +360,8 @@ mock provider 的全链路上,不是单元级 mock。
   统一为点位集合(旧枚举解析层兼容)。
 - ~~`upstream_request` 挂载位置~~ **已拍板并落地(Phase 3)**:client 层
   最内层 wire transport,只读,详见 §3.7。
-- **Header 脱敏策略**(已按合理默认实现,非阻塞性开放项):按名称片段
-  匹配而非固定 denylist,见 §3.7。如需白名单式或其他策略,调整
-  `internal/client/wire_recorder.go::sensitiveHeaderFragments` 即可。
+- ~~Header 脱敏策略~~ **已拍板(不采集)**:干脆不采集 header,避免维护
+  脱敏策略,见 §3.7。
 - **响应流录制在 client 层还是 chain 层**(仍开放,待 response 恢复时
   拍板):chain 级已有流式 hooks,client 层再录 wire 响应会重复;倾向
   client 层只录 wire **请求**(已完成),`upstream_response`
@@ -386,7 +385,7 @@ mock provider 的全链路上,不是单元级 mock。
 | **Phase 1 清障 ✅(收窄范围)** | 已做:删 `RecordRoundTripper` 死代码与全部 `SetRecordSink` 机制;`ScenarioContextKey` 迁出(P7);删 `ClientPool.recordSink` / `server.recordSink` / `server.recordMode` / `WithRecordMode` / `WithRecording`;去除 CLI `--record-mode` / `--record-dir`(目录固定默认)。**刻意未动**:advisor/MCP 侧接线(`WithAdvisorRecordSink`、`HookDeps.GetScenarioSink`)与 P4 header 修复——单独小步处理 | `internal/client`、`internal/server`、`internal/command`、`gui/wails3`、`vmodel` | 低(删死代码,行为不变) |
 | **Phase 1.5 advisor 小步 ✅** | 修 P4(advisor ctx 标记 + 通用链只读 header transport,附单测);清 `WithAdvisorRecordSink` / `GetScenarioSink` 死数据注入 | `internal/client`、`mcp/runtime`、`servertool` | 低 |
 | **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;前端 multi_enum 控件 + `RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
-| **Phase 3 wire 录制 ✅(收窄为仅 request)** | `wireRecorderTransport` 挂 client 层最内层 wire transport(含 vendor 链,Claude Code OAuth 除外——见 §3.7 已知缺口);recorder 经 request ctx 传播(`WithWireRecorder`);链路层 StagePost 移除,`upstream_request` 全部由 wire 层产出(修 P6);advisor loopback 显式遮蔽(`WithoutWireRecorder`);header 按名称片段脱敏 | `internal/client`、`protocolserver` | 中 |
+| **Phase 3 wire 录制 ✅(收窄为仅 request)** | `wireRecorderTransport` 挂 client 层最内层 wire transport(含 vendor 链,Claude Code OAuth 除外——见 §3.7 已知缺口);recorder 经 request ctx 传播(`WithWireRecorder`);链路层 StagePost 移除,`upstream_request` 全部由 wire 层产出(修 P6);advisor loopback 显式遮蔽(`WithoutWireRecorder`);header 不采集(免脱敏策略) | `internal/client`、`protocolserver` | 中 |
 | **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);response 侧两个点位(`upstream_response` 新增、`client_response` 恢复)在此阶段一并做;scenario 前端控件 registry 化;Claude Code OAuth 的 transport 覆盖单独评估 | `obs`、`transform`、`internal/client`、frontend | 按其自身计划 |
 
 Phase 1 与 Phase 2 互不依赖,可并行;Phase 3 依赖 Phase 2(recorder 的
