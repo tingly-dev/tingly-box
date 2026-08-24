@@ -42,31 +42,64 @@ vars:
   VERSION_LDFLAGS: '-X main.version={{.VERSION}} -X main.gitCommit={{.GIT_COMMIT}} -X main.buildTime={{.BUILD_TIME}}'
 
 tasks:
+  wails:check:
+    summary: Verify wails3 CLI is installed and matches the pinned SDK version
+    internal: true
+    run: once
+    silent: true
+    vars:
+      WAILS_REQUIRED_VERSION: v3.0.0-beta.12
+    cmds:
+      - |
+        if ! command -v wails3 >/dev/null 2>&1; then
+          echo "ERROR: wails3 CLI not found. Install the pinned version:"
+          echo "  go install github.com/wailsapp/wails/v3/cmd/wails3@{{.WAILS_REQUIRED_VERSION}}"
+          exit 1
+        fi
+        INSTALLED=$(wails3 version 2>&1)
+        if [ "$INSTALLED" != "{{.WAILS_REQUIRED_VERSION}}" ]; then
+          echo "ERROR: wails3 CLI version mismatch."
+          echo "  Installed: $INSTALLED"
+          echo "  Required:  {{.WAILS_REQUIRED_VERSION}}"
+          echo "  Fix:       go install github.com/wailsapp/wails/v3/cmd/wails3@{{.WAILS_REQUIRED_VERSION}}"
+          exit 1
+        fi
+
   wails:build:
     summary: Builds the application
+    deps:
+      - task: wails:check
     cmds:
       - task: codegen
       - task: "{{.GOOS}}:build"
 
   wails:package:
     summary: Packages a production build of the application
+    deps:
+      - task: wails:check
     cmds:
       - task: codegen
       - task: "{{.GOOS}}:package"
 
   wails:run:
     summary: Runs the application
+    deps:
+      - task: wails:check
     cmds:
       - task: codegen
       - task: "{{.GOOS}}:run"
 
   wails:dev:
     summary: Runs the application in development mode
+    deps:
+      - task: wails:check
     cmds:
       - task: codegen
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   wails:binding:
+    deps:
+      - task: wails:check
     cmds:
       - |
         cd ./gui/wails3
