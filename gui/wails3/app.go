@@ -22,8 +22,10 @@ const (
 var App *application.App
 var tinglyService *services.TinglyService
 
-// newAppWithServerManager creates a new full GUI app with a pre-configured ServerManager
-func newAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool) *application.App {
+// newAppWithServerManager creates a new GUI app with a pre-configured ServerManager.
+// macActivationPolicy controls dock visibility: use ActivationPolicyRegular for full GUI
+// (dock icon visible) or ActivationPolicyAccessory for tray-only (no dock icon).
+func newAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool, macActivationPolicy application.ActivationPolicy) *application.App {
 	// Create UI service with existing serverManager
 	tinglyService = services.NewTinglyServiceWithServerManager(appManager, serverManager)
 
@@ -70,6 +72,7 @@ func newAppWithServerManager(appManager *command.AppManager, serverManager *comm
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
+			ActivationPolicy: macActivationPolicy,
 		},
 		Windows: application.WindowsOptions{},
 	})

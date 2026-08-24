@@ -169,8 +169,12 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		})
 
 	// Create SystemTray
+	// Both left-click and right-click open the menu (macOS convention for tray-only apps)
 	SystemTray = app.SystemTray.New().
 		SetMenu(menu).
+		OnClick(func() {
+			SystemTray.OpenMenu()
+		}).
 		OnRightClick(func() {
 			SystemTray.OpenMenu()
 		})
@@ -178,7 +182,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// Use custom icon
 	SystemTray.SetIcon(slimIcon)
 
-	// Create a window similar to GUI mode but hidden by default
+	// Create a regular window (not attached to tray) - hidden by default, shown via menu items
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:  "menu-window",
 		Title: AppName,
@@ -199,8 +203,6 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		event.Cancel()
 		WindowSlim.Hide()
 	})
-
-	SystemTray.AttachWindow(WindowSlim)
 }
 
 // appLauncher implements the AppLauncher interface
@@ -241,8 +243,8 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 		server.WithRecordDir(opts.RecordDir),
 	)
 
-	// Create Wails app with ServerManager embedded
-	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug)
+	// Create Wails app with ServerManager embedded (full GUI: show dock icon)
+	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug, application.ActivationPolicyRegular)
 
 	// IMPORTANT: Set up windows and systray after creating the app
 	useWindows(app)
@@ -281,8 +283,8 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 		server.WithRecordDir(opts.RecordDir),
 	)
 
-	// Create slim Wails app with ServerManager embedded
-	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug)
+	// Create Wails app with ServerManager embedded (tray mode: keep dock icon like most apps)
+	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug, application.ActivationPolicyRegular)
 
 	// IMPORTANT: Set up systray after creating the app
 	useWebSystray(app, tinglyService)
