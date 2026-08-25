@@ -209,8 +209,13 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 			TitleBar: application.MacTitleBarDefault,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
-		URL:              fmt.Sprintf("/login/%s", tinglyService.GetUserAuthToken()),
-		Hidden:           true,
+		// The Login page does a hard `window.location.href` reload after
+		// auth (see Login.tsx) — a plain "/login/:token" URL would lose the
+		// EmitEvent("systray-navigate", "/hub") call below on first launch,
+		// since that reload remounts the whole app past the point where the
+		// event was received. ?next=/hub tells Login where to land instead.
+		URL:    fmt.Sprintf("/login/%s?next=/hub", tinglyService.GetUserAuthToken()),
+		Hidden: true,
 	})
 
 	// The frontend emits these when route navigation crosses the /hub
