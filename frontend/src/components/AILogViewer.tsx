@@ -267,7 +267,10 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                 ref={tableContainerRef}
                 sx={{ flex: 1, overflow: 'auto', minHeight: 0, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}
             >
-                <TableContainer sx={{ maxHeight: 'none' }}>
+                {/* Log rows are timestamps, model ids, URLs and stack traces —
+                    machine text, so the table stays LTR under an RTL locale
+                    (see index.css). */}
+                <TableContainer data-ltr sx={{ maxHeight: 'none' }}>
                     <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>

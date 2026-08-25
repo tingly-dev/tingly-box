@@ -60,8 +60,8 @@ export type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
 export type Kind = 'model' | 'int' | 'text' | 'bool';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
-// Adding a new env: append a row here AND add entries in FIELDS_TEXT_ZH /
-// FIELDS_TEXT_EN / FIELDS_TEXT_RU below (TS will flag the missing keys).
+// Adding a new env: append a row here AND add an entry in every FIELDS_TEXT_*
+// bundle below (TS will flag the missing keys).
 
 export interface FieldStruct {
     envName: PrefsKey;
@@ -80,6 +80,8 @@ export const CLAUDE_CONFIG_ROW_COLUMNS = {
 } as const;
 
 export const CLAUDE_CONFIG_KEY_SX = {
+    // Env var names are machine text — never mirrored (see index.css).
+    direction: 'ltr',
     display: 'inline-flex',
     maxWidth: '100%',
     px: 0.75,
@@ -548,6 +550,278 @@ const FIELDS_TEXT_RU: FieldTextMap = {
     },
 };
 
+const FIELDS_TEXT_FA: FieldTextMap = {
+    ANTHROPIC_MODEL: {
+        label: 'مدل پیش‌فرض',
+        purpose: 'مدل جایگزین وقتی هیچ اسلات ویژه‌ای مناسب نباشد',
+        tooltip: 'وقتی مسیریابی تخصصی تطبیق نکند، Claude Code سراغ این مدل می‌رود. tb معمولاً آن را به tingly/cc یا tingly/cc-default نگاشت می‌کند.',
+        placeholder: 'tingly/cc',
+    },
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: {
+        label: 'اسلات Haiku',
+        purpose: 'کارهای سبک مانند پیام کامیت و خلاصه‌سازی',
+        tooltip: 'Claude Code فراخوانی‌های کمکی ارزان را به اسلات haiku می‌فرستد. tb آن را به tingly/cc-haiku وصل می‌کند.',
+        placeholder: 'tingly/cc-haiku',
+    },
+    ANTHROPIC_DEFAULT_SONNET_MODEL: {
+        label: 'اسلات Sonnet',
+        purpose: 'اسلات اصلی — بیشتر گفت‌وگو و تولید کد اینجا انجام می‌شود',
+        tooltip: 'پیش‌فرض Claude Code. تا وقتی مدل دیگری را صریحاً انتخاب نکنید، نشست‌های عادی از اسلات sonnet استفاده می‌کنند.',
+        placeholder: 'tingly/cc-sonnet',
+    },
+    ANTHROPIC_DEFAULT_OPUS_MODEL: {
+        label: 'اسلات Opus',
+        purpose: 'استدلال سنگین‌تر (حالت برنامه‌ریزی، تحلیل عمیق)',
+        tooltip: 'مدلی گران‌تر اما قوی‌تر. Claude Code وقتی opus صریحاً خواسته شود از آن استفاده می‌کند.',
+        placeholder: 'tingly/cc-opus',
+    },
+    CLAUDE_CODE_SUBAGENT_MODEL: {
+        label: 'مدل زیرایجنت',
+        purpose: 'مدل زیرایجنت‌هایی که با ابزار Task ساخته می‌شوند',
+        tooltip: 'زیرایجنت‌ها پژوهش موازی و زیروظیفه‌های مستقل را انجام می‌دهند. می‌توانید مدلی ارزان‌تر یا قوی‌تر به آن‌ها بدهید.',
+        placeholder: 'tingly/cc-subagent',
+    },
+    API_TIMEOUT_MS: {
+        label: 'مهلت درخواست API',
+        purpose: 'بیشترین زمان انتظار برای یک پاسخ API',
+        tooltip: 'پیش‌فرض Anthropic ‏۱۲۰۰۰۰ (۲ دقیقه) است. برای کارهای طولانی پراکسی‌شده در tb معمولاً آن را تا ۳۰۰۰۰۰۰ (۵۰ دقیقه) بالا می‌برند.',
+        placeholder: '3000000',
+    },
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: {
+        label: 'بیشینهٔ توکن خروجی',
+        purpose: 'سقف تعداد توکن در یک پاسخ',
+        tooltip: 'خیلی کم باعث بریدن پاسخ می‌شود و خیلی زیاد سهمیه را هدر می‌دهد. tb مقدار ۳۲۰۰۰ را پیشنهاد می‌کند.',
+        placeholder: '32000',
+    },
+    MAX_THINKING_TOKENS: {
+        label: 'بودجهٔ توکن استدلال',
+        purpose: 'بودجهٔ توکن برای استدلال گسترده',
+        tooltip: 'برای استفاده از مقدار پیش‌فرض مدل خالی بگذارید. تنها برای مدل‌های دارای قابلیت استدلال معنا دارد.',
+        placeholder: '(خالی = پیش‌فرض مدل)',
+    },
+    BASH_DEFAULT_TIMEOUT_MS: {
+        label: 'مهلت پیش‌فرض Bash',
+        purpose: 'مهلت پیش‌فرض یک فراخوانی ابزار Bash',
+        tooltip: 'پیش‌فرض Anthropic ‏۱۲۰۰۰۰ است. اگر اسکریپت‌های طولانی (مثلاً npm install) به مهلت می‌خورند آن را بالا ببرید.',
+        placeholder: '120000',
+    },
+    BASH_MAX_TIMEOUT_MS: {
+        label: 'بیشینهٔ مهلت Bash',
+        purpose: 'سقف هر مهلتی که Claude برای Bash درخواست می‌کند',
+        tooltip: 'حد بالا وقتی Claude خودش مهلت یک فراخوانی Bash را تعیین می‌کند.',
+        placeholder: '600000',
+    },
+    MCP_TIMEOUT: {
+        label: 'مهلت اتصال MCP',
+        purpose: 'مهلت راه‌اندازی و پاسخ سرور MCP',
+        tooltip: 'پیش‌فرض Anthropic ‏۳۰۰۰۰ است. برای سرورهای MCP کندراه‌انداز آن را بالا ببرید.',
+        placeholder: '30000',
+    },
+    MCP_TOOL_TIMEOUT: {
+        label: 'مهلت ابزار MCP',
+        purpose: 'مهلت یک فراخوانی ابزار MCP',
+        tooltip: 'پیش‌فرض Anthropic ‏۱۰۰۰۰ است.',
+        placeholder: '10000',
+    },
+    MAX_MCP_OUTPUT_TOKENS: {
+        label: 'سقف خروجی MCP',
+        purpose: 'بیشترین توکن بازگشتی از یک فراخوانی ابزار MCP',
+        tooltip: 'پیش‌فرض Anthropic ‏۸۱۹۲ است. هر چه بیشتر از آن باشد بریده می‌شود.',
+        placeholder: '8192',
+    },
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
+        label: 'پنجرهٔ فشرده‌سازی خودکار',
+        purpose: 'اندازهٔ هدف پنجره هنگام فشرده‌سازی خودکار زمینه',
+        tooltip: 'پیش‌فرض tb ‏۲۰۰۰۰۰ است (برای مدل‌های ۱M خودکار به ۱۰۰۰۰۰۰ می‌رسد). هنگام فشرده‌سازی خودکار، N توکن آخر نگه داشته می‌شود. مقدار بیشتر یعنی زمینهٔ بیشتر ولی مصرف سهمیهٔ بالاتر.',
+        placeholder: '200000',
+    },
+    CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
+        label: 'آستانهٔ فشرده‌سازی خودکار',
+        purpose: 'درصد پرشدن زمینه که فشرده‌سازی خودکار را فعال می‌کند',
+        tooltip: 'پیش‌فرض tb ‏۸۰ است. وقتی میزان استفاده از زمینه به این درصد برسد فشرده‌سازی خودکار انجام می‌شود. عدد کمتر یعنی زودتر و عدد بیشتر یعنی دیرتر. ‏۰ آن را غیرفعال می‌کند.',
+        placeholder: '80',
+    },
+    DISABLE_TELEMETRY: {
+        label: 'غیرفعال کردن تله‌متری',
+        purpose: 'خاموش کردن ارسال تله‌متری به Anthropic',
+        tooltip: 'tb این گزینه را به‌طور پیش‌فرض روشن می‌کند تا استقرارهای داخلی و خصوصی چیزی بیرون نفرستند.',
+    },
+    DISABLE_ERROR_REPORTING: {
+        label: 'غیرفعال کردن گزارش خطا',
+        purpose: 'خاموش کردن ارسال خودکار گزارش خرابی به Anthropic',
+        tooltip: 'tb این گزینه را به‌طور پیش‌فرض روشن می‌کند.',
+    },
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: {
+        label: 'قطع ترافیک غیرضروری',
+        purpose: 'خاموش کردن بررسی به‌روزرسانی، نظرسنجی و دیگر درخواست‌های جانبی',
+        tooltip: 'تمیزترین حالت — تنها فراخوانی خود مدل‌ها بیرون می‌رود. tb این گزینه را به‌طور پیش‌فرض روشن می‌کند.',
+    },
+    DISABLE_AUTOUPDATER: {
+        label: 'بدون به‌روزرسانی خودکار',
+        purpose: 'جلوگیری از بررسی نسخه‌های تازه توسط Claude Code',
+        tooltip: 'انتخاب رایج برای استقرارهایی که نسخه در آن‌ها ثابت است.',
+    },
+    USE_BUILTIN_RIPGREP: {
+        label: 'ripgrep درون‌ساخت',
+        purpose: 'ترجیح ripgrep همراه Claude Code به‌جای PATH سیستم',
+        tooltip: 'به‌طور پیش‌فرض روشن است. تنها وقتی خاموش کنید که به ripgrep سفارشی سیستم نیاز دارید.',
+    },
+    HTTP_PROXY: {
+        label: 'پراکسی HTTP',
+        purpose: 'پراکسی درخواست‌های خروجی HTTP از Claude Code',
+        tooltip: 'قالب: ‏http://host:port. برای ارث‌بری از تنظیمات پراکسی سیستم خالی بگذارید. توجه: پراکسی سیستم به‌طور خودکار localhost را کنار نمی‌گذارد و همین می‌تواند باعث خطای ۵۰۲ در درخواست به دروازهٔ محلی tb شود.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    HTTPS_PROXY: {
+        label: 'پراکسی HTTPS',
+        purpose: 'پراکسی درخواست‌های خروجی HTTPS از Claude Code',
+        tooltip: 'قالب: ‏http://host:port یا https://host:port. برای ارث‌بری از تنظیمات پراکسی سیستم خالی بگذارید.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    NO_PROXY: {
+        label: 'فهرست بدون پراکسی',
+        purpose: 'میزبان‌هایی که با کاما جدا شده‌اند و از پراکسی عبور نمی‌کنند',
+        tooltip: 'مثلاً «localhost,127.0.0.1,::1». ‏tb هنگام اجرا خودش localhost/127.0.0.1/::1 را اضافه می‌کند، حتی اگر این فیلد خالی باشد. بهتر است خالی بماند تا tb خودش مدیریت کند و تنها وقتی پرش کنید که میزبان داخلی دیگری را باید کنار بگذارید.',
+        placeholder: 'localhost,127.0.0.1,::1',
+    },
+};
+
+const FIELDS_TEXT_AR: FieldTextMap = {
+    ANTHROPIC_MODEL: {
+        label: 'النموذج الافتراضي',
+        purpose: 'النموذج البديل حين لا ينطبق أي مَشغَل مخصص',
+        tooltip: 'إليه يلجأ Claude Code حين لا يطابق أي توجيه متخصص. ويناظره tb عادةً بـ tingly/cc أو tingly/cc-default.',
+        placeholder: 'tingly/cc',
+    },
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: {
+        label: 'مَشغَل Haiku',
+        purpose: 'المهام الخفيفة مثل رسائل الالتزام والملخصات',
+        tooltip: 'يوجِّه Claude Code الاستدعاءات المساعِدة الرخيصة إلى مَشغَل haiku. ويوجِّهه tb إلى tingly/cc-haiku.',
+        placeholder: 'tingly/cc-haiku',
+    },
+    ANTHROPIC_DEFAULT_SONNET_MODEL: {
+        label: 'مَشغَل Sonnet',
+        purpose: 'المَشغَل الأساسي — إليه يذهب معظم الحوار وتوليد الشفرة',
+        tooltip: 'الافتراضي في Claude Code. وما لم تختر نموذجًا آخر صراحةً، تستخدم الجلسات العادية مَشغَل sonnet.',
+        placeholder: 'tingly/cc-sonnet',
+    },
+    ANTHROPIC_DEFAULT_OPUS_MODEL: {
+        label: 'مَشغَل Opus',
+        purpose: 'الاستدلال الأثقل (وضع التخطيط والتحليل العميق)',
+        tooltip: 'نموذج أغلى لكنه أقوى. ويستخدمه Claude Code حين يُطلب opus صراحةً.',
+        placeholder: 'tingly/cc-opus',
+    },
+    CLAUDE_CODE_SUBAGENT_MODEL: {
+        label: 'نموذج الوكيل الفرعي',
+        purpose: 'النموذج الذي تستخدمه الوكلاء الفرعية المُنشأة عبر أداة Task',
+        tooltip: 'تتولى الوكلاء الفرعية البحث المتوازي والمهام الفرعية المستقلة. ويمكنك منحها نموذجًا أرخص أو أقوى.',
+        placeholder: 'tingly/cc-subagent',
+    },
+    API_TIMEOUT_MS: {
+        label: 'مهلة طلب API',
+        purpose: 'أقصى مدة انتظار لاستجابة API واحدة',
+        tooltip: 'الافتراضي لدى Anthropic ‏١٢٠٠٠٠ (دقيقتان). وللمهام الطويلة المُمرَّرة عبر tb يُرفَع عادةً إلى ٣٠٠٠٠٠٠ (٥٠ دقيقة).',
+        placeholder: '3000000',
+    },
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: {
+        label: 'أقصى رموز الإخراج',
+        purpose: 'الحد الأعلى لعدد الرموز في الرد الواحد',
+        tooltip: 'القليل جدًا يبتر الرد، والكثير جدًا يهدر الحصة. ويوصي tb بالقيمة ٣٢٠٠٠.',
+        placeholder: '32000',
+    },
+    MAX_THINKING_TOKENS: {
+        label: 'ميزانية رموز الاستدلال',
+        purpose: 'ميزانية الرموز للاستدلال الموسَّع',
+        tooltip: 'اتركه فارغًا لاستخدام القيمة الافتراضية للنموذج. ولا معنى له إلا مع النماذج القادرة على الاستدلال.',
+        placeholder: '(فارغ = افتراضي النموذج)',
+    },
+    BASH_DEFAULT_TIMEOUT_MS: {
+        label: 'مهلة Bash الافتراضية',
+        purpose: 'المهلة الافتراضية لاستدعاء واحد لأداة Bash',
+        tooltip: 'الافتراضي لدى Anthropic ‏١٢٠٠٠٠. ارفعه إذا كانت السكربتات الطويلة (مثل npm install) تتجاوز المهلة.',
+        placeholder: '120000',
+    },
+    BASH_MAX_TIMEOUT_MS: {
+        label: 'أقصى مهلة Bash',
+        purpose: 'السقف لأي مهلة يطلبها Claude لـ Bash',
+        tooltip: 'الحد الأعلى حين يضبط Claude بنفسه مهلة استدعاء Bash.',
+        placeholder: '600000',
+    },
+    MCP_TIMEOUT: {
+        label: 'مهلة اتصال MCP',
+        purpose: 'مهلة إقلاع خادم MCP واستجابته',
+        tooltip: 'الافتراضي لدى Anthropic ‏٣٠٠٠٠. ارفعه لخوادم MCP بطيئة الإقلاع.',
+        placeholder: '30000',
+    },
+    MCP_TOOL_TIMEOUT: {
+        label: 'مهلة أداة MCP',
+        purpose: 'مهلة استدعاء واحد لأداة MCP',
+        tooltip: 'الافتراضي لدى Anthropic ‏١٠٠٠٠.',
+        placeholder: '10000',
+    },
+    MAX_MCP_OUTPUT_TOKENS: {
+        label: 'سقف إخراج MCP',
+        purpose: 'أقصى عدد رموز يعيدها استدعاء واحد لأداة MCP',
+        tooltip: 'الافتراضي لدى Anthropic ‏٨١٩٢. وما زاد عن ذلك يُبتر.',
+        placeholder: '8192',
+    },
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
+        label: 'نافذة الضغط التلقائي',
+        purpose: 'الحجم المستهدف للنافذة عند الضغط التلقائي للسياق',
+        tooltip: 'الافتراضي في tb هو ٢٠٠٠٠٠ (ويُرفَع تلقائيًا إلى ١٠٠٠٠٠٠ لنماذج 1M). وعند تفعُّل الضغط التلقائي يُحتفظ بآخر N من الرموز. والقيم الأعلى تحفظ سياقًا أكثر لكنها تستهلك حصة أكبر.',
+        placeholder: '200000',
+    },
+    CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
+        label: 'عتبة الضغط التلقائي',
+        purpose: 'نسبة امتلاء السياق التي تُفعِّل الضغط التلقائي',
+        tooltip: 'الافتراضي في tb هو ٨٠. ويُفعَّل الضغط التلقائي حين يبلغ استهلاك السياق هذه النسبة. والقيمة الأقل تعني ضغطًا أبكر والأعلى أمتأخِّر. والقيمة ٠ تعطِّله.',
+        placeholder: '80',
+    },
+    DISABLE_TELEMETRY: {
+        label: 'تعطيل القياس عن بُعد',
+        purpose: 'إيقاف إرسال بيانات القياس إلى Anthropic',
+        tooltip: 'يفعِّله tb افتراضيًا كي لا ترسل عمليات النشر الداخلية والخاصة شيئًا للخارج.',
+    },
+    DISABLE_ERROR_REPORTING: {
+        label: 'تعطيل تقارير الأخطاء',
+        purpose: 'إيقاف الرفع التلقائي لتقارير الأعطال إلى Anthropic',
+        tooltip: 'يفعِّله tb افتراضيًا.',
+    },
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: {
+        label: 'إيقاف الحركة غير الضرورية',
+        purpose: 'كتم فحوص التحديث والاستبيانات وسائر الاستدعاءات الجانبية',
+        tooltip: 'أنظف وضع — فلا يخرج سوى استدعاءات النماذج نفسها. ويفعِّله tb افتراضيًا.',
+    },
+    DISABLE_AUTOUPDATER: {
+        label: 'تعطيل التحديث التلقائي',
+        purpose: 'منع Claude Code من البحث عن إصدارات جديدة',
+        tooltip: 'خيار معتاد لعمليات النشر ذات الإصدار المثبَّت.',
+    },
+    USE_BUILTIN_RIPGREP: {
+        label: 'ripgrep المدمج',
+        purpose: 'تفضيل ripgrep المرفق مع Claude Code على مسار النظام',
+        tooltip: 'مُفعَّل افتراضيًا. لا تعطِّله إلا إذا كنت تحتاج إلى ripgrep مخصص من النظام.',
+    },
+    HTTP_PROXY: {
+        label: 'وكيل HTTP',
+        purpose: 'الوكيل المستخدَم لطلبات HTTP الصادرة من Claude Code',
+        tooltip: 'الصيغة: ‏http://host:port. اتركه فارغًا لوراثة إعدادات وكيل النظام. ملاحظة: لا تستثني وكلاء النظام العنوان localhost تلقائيًا، وقد يسبِّب ذلك أخطاء ٥٠٢ عند الطلبات الموجَّهة إلى بوابة tb المحلية.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    HTTPS_PROXY: {
+        label: 'وكيل HTTPS',
+        purpose: 'الوكيل المستخدَم لطلبات HTTPS الصادرة من Claude Code',
+        tooltip: 'الصيغة: ‏http://host:port أو https://host:port. اتركه فارغًا لوراثة إعدادات وكيل النظام.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    NO_PROXY: {
+        label: 'قائمة تجاوز الوكيل',
+        purpose: 'مضيفون مفصولون بفواصل يتجاوزون الوكيل',
+        tooltip: 'مثل «localhost,127.0.0.1,::1». ويضيف tb تلقائيًا عند الإقلاع localhost/127.0.0.1/::1 حتى لو تُرك الحقل فارغًا. والأفضل تركه فارغًا ليديره tb، ولا تملأه إلا إذا احتجت إلى تجاوز مضيفين داخليين إضافيين.',
+        placeholder: 'localhost,127.0.0.1,::1',
+    },
+};
+
 interface SectionText { title: string; hint: string }
 type SectionTextMap = Record<Group, SectionText>;
 
@@ -594,10 +868,34 @@ const DEFAULT_MODE_TEXT_RU: Record<ClaudeCodeDefaultMode, DefaultModeOptionText>
     bypassPermissions: { label: 'Обходить проверку прав', description: 'Пропускать проверки прав; только в полностью доверенном окружении.' },
 };
 
+const DEFAULT_MODE_TEXT_FA: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
+    acceptEdits: { label: 'پذیرش ویرایش‌ها (پیشنهادی)', description: 'ویرایش فایل‌ها خودکار پذیرفته می‌شود و کارهای پرخطرتر به قواعد Claude Code سپرده می‌شود.' },
+    default: { label: 'پیش‌فرض', description: 'رفتار پیش‌فرض درون‌ساخت Claude Code برای دسترسی‌ها.' },
+    manual: { label: 'تأیید دستی', description: 'هر درخواست دسترسی ابزار به تأیید تعاملی نیاز دارد.' },
+    plan: { label: 'حالت برنامه‌ریزی', description: 'به‌طور پیش‌فرض پیش از پیاده‌سازی، در حالت برنامه‌ریزی شروع می‌شود.' },
+    auto: { label: 'قواعد خودکار', description: 'دسته‌بند قواعد Claude Code خودش فراخوانی ابزارها را مجاز، نرم یا سخت رد می‌کند.' },
+    delegate: { label: 'واگذاری', description: 'تصمیم‌های دسترسی به فرایند بیرونی پشتیبانی‌شدهٔ Claude Code واگذار می‌شود.' },
+    dontAsk: { label: 'بدون پرسش', description: 'از پرسش‌های تعاملی پرهیز می‌کند؛ مناسب اجرای بدون نظارت.' },
+    bypassPermissions: { label: 'دور زدن دسترسی‌ها', description: 'بررسی دسترسی‌ها انجام نمی‌شود؛ تنها در محیط کاملاً مورد اعتماد.' },
+};
+
+const DEFAULT_MODE_TEXT_AR: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
+    acceptEdits: { label: 'قبول التعديلات (موصى به)', description: 'تُقبل تعديلات الملفات تلقائيًا، وتُترك الإجراءات الأخطر لقواعد Claude Code.' },
+    default: { label: 'افتراضي', description: 'سلوك الأذونات الافتراضي المدمج في Claude Code.' },
+    manual: { label: 'موافقة يدوية', description: 'كل طلب إذن لأداة يتطلب موافقة تفاعلية.' },
+    plan: { label: 'وضع التخطيط', description: 'يبدأ في وضع التخطيط افتراضيًا قبل التنفيذ.' },
+    auto: { label: 'قواعد تلقائية', description: 'يتولى مصنِّف القواعد في Claude Code السماح أو الرفض الليّن أو الرفض القاطع لاستدعاءات الأدوات.' },
+    delegate: { label: 'تفويض', description: 'تُفوَّض قرارات الأذونات إلى الإجراء الخارجي الذي يدعمه Claude Code.' },
+    dontAsk: { label: 'بلا استئذان', description: 'يتجنَّب المطالبات التفاعلية؛ مفيد للتشغيل دون إشراف.' },
+    bypassPermissions: { label: 'تجاوز الأذونات', description: 'يتخطى فحوص الأذونات؛ استخدمه في البيئات الموثوقة تمامًا فقط.' },
+};
+
 export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<AppLanguage, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
     zh: DEFAULT_MODE_TEXT_ZH,
     en: DEFAULT_MODE_TEXT_EN,
     ru: DEFAULT_MODE_TEXT_RU,
+    fa: DEFAULT_MODE_TEXT_FA,
+    ar: DEFAULT_MODE_TEXT_AR,
 };
 
 const DEFAULT_MODE_SECTION_TEXT: Record<AppLanguage, SectionText> = {
@@ -612,6 +910,14 @@ const DEFAULT_MODE_SECTION_TEXT: Record<AppLanguage, SectionText> = {
     ru: {
         title: 'Режим прав по умолчанию',
         hint: 'Записывает defaultMode в settings.json; tb рекомендует acceptEdits.',
+    },
+    fa: {
+        title: 'حالت دسترسی پیش‌فرض',
+        hint: 'مقدار defaultMode را در settings.json می‌نویسد؛ tb گزینهٔ acceptEdits را پیشنهاد می‌کند.',
+    },
+    ar: {
+        title: 'وضع الأذونات الافتراضي',
+        hint: 'يكتب defaultMode في settings.json؛ ويوصي tb بـ acceptEdits.',
     },
 };
 
@@ -640,6 +946,18 @@ const SHOW_THINKING_SUMMARIES_TEXT: Record<AppLanguage, ToggleSettingText> = {
         hint: 'Записывает showThinkingSummaries на верхнем уровне settings.json; это не переменная окружения.',
         label: 'Показывать сводки',
         tooltip: 'Когда включено, Claude Code показывает сводку рассуждений модели перед ответом. Выключение лишь скрывает сводку — на то, рассуждает ли модель, это не влияет.',
+    },
+    fa: {
+        title: 'خلاصهٔ استدلال',
+        hint: 'مقدار showThinkingSummaries را در سطح بالای settings.json می‌نویسد؛ این یک متغیر محیطی نیست.',
+        label: 'نمایش خلاصه',
+        tooltip: 'وقتی روشن باشد، Claude Code پیش از پاسخ، خلاصهٔ استدلال مدل را نشان می‌دهد. خاموش کردن آن تنها خلاصه را پنهان می‌کند و بر استدلال کردن مدل اثری ندارد.',
+    },
+    ar: {
+        title: 'ملخصات الاستدلال',
+        hint: 'يكتب showThinkingSummaries في المستوى الأعلى من settings.json؛ وليس متغير بيئة.',
+        label: 'إظهار الملخصات',
+        tooltip: 'عند التفعيل يعرض Claude Code ملخص استدلال النموذج قبل ردِّه. وإيقافه يخفي الملخص فقط ولا يؤثر في كون النموذج يستدل أم لا.',
     },
 };
 
@@ -703,6 +1021,46 @@ const SECTION_TEXT_RU: SectionTextMap = {
     },
 };
 
+const SECTION_TEXT_FA: SectionTextMap = {
+    behavior: DEFAULT_MODE_SECTION_TEXT.fa,
+    model: {
+        title: 'مسیریابی مدل‌ها',
+        hint: 'هر اسلات به یکی از کاربردهای درونی Claude Code مربوط است. برای استفاده از یک مدل، هر ۵ اسلات را با همان مقدار پر کنید.',
+    },
+    limits: {
+        title: 'کارایی و محدودیت‌ها',
+        hint: 'خالی یعنی این متغیر نوشته نمی‌شود و Claude Code از مقدار پیش‌فرض خودش استفاده می‌کند.',
+    },
+    switches: {
+        title: 'حریم خصوصی و رفتار',
+        hint: 'روشن یعنی مقدار «1» نوشته می‌شود؛ خاموش یعنی نوشته نمی‌شود.',
+    },
+    network: {
+        title: 'پراکسی شبکه',
+        hint: 'خالی یعنی نوشته نمی‌شود. ‏tb همیشه خودش localhost/127.0.0.1/::1 را به NO_PROXY اضافه می‌کند و نیازی به وارد کردن دستی نیست.',
+    },
+};
+
+const SECTION_TEXT_AR: SectionTextMap = {
+    behavior: DEFAULT_MODE_SECTION_TEXT.ar,
+    model: {
+        title: 'توجيه النماذج',
+        hint: 'يقابل كل مَشغَل أحد الاستخدامات الداخلية في Claude Code. ولاستخدام نموذج واحد، املأ المَشاغِل الخمسة بالقيمة نفسها.',
+    },
+    limits: {
+        title: 'الأداء والحدود',
+        hint: 'الفراغ يعني عدم كتابة المتغير، فيستخدم Claude Code قيمته الافتراضية.',
+    },
+    switches: {
+        title: 'الخصوصية والسلوك',
+        hint: 'التشغيل يعني كتابة «1»؛ والإيقاف يعني عدم الكتابة.',
+    },
+    network: {
+        title: 'وكيل الشبكة',
+        hint: 'الفراغ يعني عدم الكتابة. ويضيف tb دائمًا localhost/127.0.0.1/::1 إلى NO_PROXY تلقائيًا، فلا حاجة إلى إدخالها يدويًا.',
+    },
+};
+
 interface UIText {
     oneMTooltip: string;
 }
@@ -719,9 +1077,17 @@ const UI_TEXT_RU: UIText = {
     oneMTooltip: 'Включить контекстное окно 1M (к ID модели добавляется [1m]; целевая модель маршрута должна это поддерживать).',
 };
 
-export const CLAUDE_CODE_FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN, ru: FIELDS_TEXT_RU };
-const SECTION_TEXT: Record<AppLanguage, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN, ru: SECTION_TEXT_RU };
-const UI_TEXT: Record<AppLanguage, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN, ru: UI_TEXT_RU };
+const UI_TEXT_FA: UIText = {
+    oneMTooltip: 'فعال کردن پنجرهٔ زمینهٔ ۱M (پسوند [1m] به شناسهٔ مدل افزوده می‌شود؛ مدل مقصد مسیر باید از آن پشتیبانی کند).',
+};
+
+const UI_TEXT_AR: UIText = {
+    oneMTooltip: 'تفعيل نافذة السياق 1M (تُضاف اللاحقة [1m] إلى معرِّف النموذج؛ ويجب أن يدعمها النموذج الهدف في المسار).',
+};
+
+export const CLAUDE_CODE_FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN, ru: FIELDS_TEXT_RU, fa: FIELDS_TEXT_FA, ar: FIELDS_TEXT_AR };
+const SECTION_TEXT: Record<AppLanguage, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN, ru: SECTION_TEXT_RU, fa: SECTION_TEXT_FA, ar: SECTION_TEXT_AR };
+const UI_TEXT: Record<AppLanguage, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN, ru: UI_TEXT_RU, fa: UI_TEXT_FA, ar: UI_TEXT_AR };
 
 const useLang = (): AppLanguage => {
     const { i18n } = useTranslation();

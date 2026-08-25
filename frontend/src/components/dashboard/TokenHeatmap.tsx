@@ -9,6 +9,10 @@ const HEATMAP_LOCALES: Record<AppLanguage, string> = {
     en: 'en-US',
     zh: 'zh-CN',
     ru: 'ru-RU',
+    // Latin digits and the Gregorian calendar, so the heatmap's day labels line
+    // up with the numbers everywhere else in the dashboard.
+    fa: 'fa-IR-u-ca-gregory-nu-latn',
+    ar: 'ar-EG-u-nu-latn',
 };
 
 // Green color scale for GitHub-style heatmap (like GitHub's contribution graph).

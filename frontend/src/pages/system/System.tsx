@@ -14,7 +14,7 @@ import { useThemeMode } from '@/contexts/ThemeContext.tsx';
 import { useNotify } from '@/hooks/useNotify.ts';
 import { api } from '@/services/api.ts';
 import { getThemeOptions } from '@/theme/options.ts';
-import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
+import { SUPPORTED_LANGUAGES, resolveLanguage, setAppLanguage, type AppLanguage } from '@/i18n';
 
 // Label column width shared by every settings row — keeps the value column
 // (the actual visual anchor) vertically aligned across cards.
@@ -98,10 +98,8 @@ const System = () => {
         }, 500);
     };
 
-    const changeLanguage = (lng: string) => {
-        i18n.changeLanguage(lng);
-        // Save language preference to localStorage
-        localStorage.setItem('i18nextLng', lng);
+    const changeLanguage = async (lng: AppLanguage) => {
+        await setAppLanguage(lng);
         notify.success(t('system.language.saveSuccess'));
     };
 
@@ -308,7 +306,7 @@ const System = () => {
                                 <Chip
                                     key={code}
                                     label={t(labelKey)}
-                                    onClick={() => changeLanguage(code)}
+                                    onClick={() => void changeLanguage(code)}
                                     size="small"
                                     sx={chipSx(resolveLanguage(i18n.language) === code)}
                                 />

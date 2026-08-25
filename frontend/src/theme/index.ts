@@ -1,7 +1,7 @@
 import { createTheme } from '@mui/material/styles';
-import { enUS, ruRU, zhCN } from '@mui/material/locale';
+import { arEG, enUS, faIR, ruRU, zhCN } from '@mui/material/locale';
 import type { ResolvedThemeMode } from './types';
-import { DEFAULT_LANGUAGE, type AppLanguage } from '@/i18n';
+import { DEFAULT_LANGUAGE, directionOf, type AppLanguage } from '@/i18n';
 import { baseTypography, baseShape, baseComponents } from './base';
 import { lightPalette } from './palettes/light';
 import { darkPalette } from './palettes/dark';
@@ -19,7 +19,7 @@ const THEME_REGISTRY = {
   claude: { palette: claudePalette, components: claudeComponents },
 } as const;
 
-const MUI_LOCALES = { en: enUS, zh: zhCN, ru: ruRU } as const;
+const MUI_LOCALES = { en: enUS, zh: zhCN, ru: ruRU, fa: faIR, ar: arEG } as const;
 
 const createAppTheme = (mode: ResolvedThemeMode, language: AppLanguage = DEFAULT_LANGUAGE) => {
   const { palette, components } = THEME_REGISTRY[mode];
@@ -27,6 +27,10 @@ const createAppTheme = (mode: ResolvedThemeMode, language: AppLanguage = DEFAULT
 
   return createTheme(
     {
+      // Drives MUI's own RTL handling (Drawer anchors, Menu/Popper placement,
+      // Slider direction, …) via RtlProvider. The app's own physical CSS is
+      // mirrored separately by the emotion RTL cache in App.tsx.
+      direction: directionOf(language),
       palette: palette as any,
       typography: baseTypography(textColors.primary, textColors.secondary, textColors.disabled),
       shape: baseShape,

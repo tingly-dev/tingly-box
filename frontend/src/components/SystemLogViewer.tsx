@@ -304,7 +304,10 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     borderColor: 'divider',
                 }}
             >
-                <TableContainer sx={{ maxHeight: 'none' }}>
+                {/* Log rows are timestamps, model ids, URLs and stack traces —
+                    machine text, so the table stays LTR under an RTL locale
+                    (see index.css). */}
+                <TableContainer data-ltr sx={{ maxHeight: 'none' }}>
                     <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>

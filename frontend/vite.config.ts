@@ -31,6 +31,13 @@ export default defineConfig(({ mode }) => {
             'import.meta.env.VITE_USE_MOCK': JSON.stringify(useMock ? 'true' : 'false'),
         },
         resolve: {
+            // stylis must resolve to a single instance. @emotion/cache imports it
+            // internally and the RTL cache (see i18n/DirectionProvider.tsx) imports
+            // its `prefixer`; if the dev dep-optimizer pre-bundles those into two
+            // separate chunks, emotion's serializer hands elements built by one
+            // copy to middleware from the other and every page throws
+            // "Cannot read properties of undefined (reading 'push')".
+            dedupe: ['stylis', '@emotion/react', '@emotion/cache'],
             alias: {
                 // Web mode: always use mock bindings
                 '@/bindings': '/src/bindings-web',
@@ -62,6 +69,12 @@ export default defineConfig(({ mode }) => {
                 'react',
                 'react-dom',
                 '@mui/material',
+                // Optimized together so they share one pre-bundled stylis chunk
+                // — see the resolve.dedupe comment above.
+                '@emotion/react',
+                '@emotion/cache',
+                'stylis',
+                'stylis-plugin-rtl',
             ],
         },
         build: {

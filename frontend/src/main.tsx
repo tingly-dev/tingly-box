@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import './i18n' // Initialize i18n
+import { i18nReady } from './i18n' // Initialize i18n
 
 async function enableMocking() {
   if (import.meta.env.VITE_USE_MOCK !== 'true') {
@@ -21,7 +21,9 @@ async function enableMocking() {
   }
 }
 
-enableMocking().then(() => {
+// Wait for the detected locale's bundle before the first paint — otherwise a
+// non-English user sees English render and then swap (see i18n/index.ts).
+Promise.all([enableMocking(), i18nReady]).then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

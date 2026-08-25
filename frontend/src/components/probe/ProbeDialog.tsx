@@ -223,6 +223,9 @@ const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text: strin
     return (
         <Box sx={{ position: 'relative' }}>
             <Box
+                // cURL commands, response bodies and raw JSON are machine text:
+                // never mirrored, even under an RTL locale (see index.css).
+                data-ltr
                 sx={{
                     p: 1.5,
                     pr: 5,

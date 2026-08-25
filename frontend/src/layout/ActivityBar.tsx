@@ -23,7 +23,7 @@ import { useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem } from './types';
 import type { ThemeMode } from '@/theme';
 import { getThemeOptions } from '@/theme/options';
-import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
+import { SUPPORTED_LANGUAGES, resolveLanguage, setAppLanguage, type AppLanguage } from '@/i18n';
 
 interface ActivityBarProps {
     activityItems: ActivityItem[];
@@ -64,9 +64,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
         setLanguageMenuAnchorEl(null);
     };
 
-    const handleLanguageChange = (lng: string) => {
-        i18n.changeLanguage(lng);
-        localStorage.setItem('i18nextLng', lng);
+    const handleLanguageChange = (lng: AppLanguage) => {
+        void setAppLanguage(lng);
         handleLanguageMenuClose();
     };
 

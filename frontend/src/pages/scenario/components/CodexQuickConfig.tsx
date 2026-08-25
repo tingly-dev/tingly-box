@@ -64,8 +64,8 @@ type Kind = 'enum' | 'bool';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
 // Keep in sync with codexPrefSpec in internal/server/config/apply_config.go.
-// Adding a key: append here AND add entries in FIELDS_TEXT_ZH / FIELDS_TEXT_EN /
-// FIELDS_TEXT_RU.
+// Adding a key: append here AND add an entry in every FIELDS_TEXT_* bundle
+// below (TS will flag the missing keys).
 
 interface FieldStruct {
     key: PrefsKey;
@@ -162,7 +162,53 @@ const FIELDS_TEXT_RU: FieldTextMap = {
     },
 };
 
-const FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN, ru: FIELDS_TEXT_RU };
+const FIELDS_TEXT_FA: FieldTextMap = {
+    model_reasoning_effort: {
+        label: 'شدت استدلال',
+        purpose: 'مدل تا چه اندازه عمیق فکر کند',
+        tooltip: '‏none/minimal سریع‌ترند؛ high/xhigh بیشتر استدلال می‌کنند اما کندتر و گران‌ترند. خالی یعنی پیش‌فرض Codex (medium).',
+    },
+    model_reasoning_summary: {
+        label: 'خلاصهٔ استدلال',
+        purpose: 'آیا و چگونه روند فکر کردن نمایش داده شود',
+        tooltip: '‏auto تصمیم را به Codex می‌سپارد؛ concise/detailed میزان جزئیات را تعیین می‌کنند؛ none آن را پنهان می‌کند. پیش‌فرض tb روی auto است.',
+    },
+    model_verbosity: {
+        label: 'میزان توضیح',
+        purpose: 'پاسخ چقدر پرگو باشد',
+        tooltip: '‏low برای دستیار برنامه‌نویسی کوتاه‌گو مناسب است؛ high توضیح بیشتری می‌دهد. خالی یعنی پیش‌فرض Codex (medium).',
+    },
+    model_supports_reasoning_summaries: {
+        label: 'اجبار خلاصهٔ استدلال',
+        purpose: 'فعال کردن اجباری خلاصهٔ استدلال روی مدل‌های غیر OpenAI',
+        tooltip: 'مدل‌هایی که از راه tingly-box پراکسی می‌شوند برای برگرداندن خلاصهٔ استدلال به این گزینه نیاز دارند. tb آن را به‌طور پیش‌فرض روشن می‌کند.',
+    },
+};
+
+const FIELDS_TEXT_AR: FieldTextMap = {
+    model_reasoning_effort: {
+        label: 'عمق الاستدلال',
+        purpose: 'إلى أي مدى يفكِّر النموذج بعمق',
+        tooltip: '‏none/minimal الأسرع؛ وhigh/xhigh يستدلان أعمق لكن أبطأ وأغلى. والفراغ يعني القيمة الافتراضية لـ Codex ‏(medium).',
+    },
+    model_reasoning_summary: {
+        label: 'ملخص الاستدلال',
+        purpose: 'هل يُعرَض سير التفكير وبأي قدر من التفصيل',
+        tooltip: '‏auto يترك القرار لـ Codex؛ وconcise/detailed يحدِّدان التفصيل؛ وnone يُخفيه. والافتراضي في tb هو auto.',
+    },
+    model_verbosity: {
+        label: 'إسهاب الرد',
+        purpose: 'مدى إسهاب الرد',
+        tooltip: '‏low يناسب مساعد برمجة موجزًا؛ وhigh يقدِّم شرحًا أوفى. والفراغ يعني القيمة الافتراضية لـ Codex ‏(medium).',
+    },
+    model_supports_reasoning_summaries: {
+        label: 'إلزام ملخصات الاستدلال',
+        purpose: 'إلزام ملخصات الاستدلال في النماذج غير التابعة لـ OpenAI',
+        tooltip: 'تحتاج النماذج المُمرَّرة عبر tingly-box إلى تفعيل هذا الخيار لإعادة ملخصات الاستدلال. ويفعِّله tb افتراضيًا.',
+    },
+};
+
+const FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN, ru: FIELDS_TEXT_RU, fa: FIELDS_TEXT_FA, ar: FIELDS_TEXT_AR };
 
 const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; sectionHint: string; unsetLabel: string }> = {
     zh: {
@@ -182,6 +228,18 @@ const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; 
         sectionTitle: 'Модель и рассуждения',
         sectionHint: 'Пусто — встроенное значение Codex по умолчанию',
         unsetLabel: '(по умолчанию)',
+    },
+    fa: {
+        panelHeader: 'این مقادیر در سطح بالای ~/.codex/config.toml و در هر پروفایل tingly نوشته می‌شوند',
+        sectionTitle: 'مدل و استدلال',
+        sectionHint: 'خالی یعنی مقدار پیش‌فرض درون‌ساخت Codex',
+        unsetLabel: '(پیش‌فرض)',
+    },
+    ar: {
+        panelHeader: 'تُكتب هذه القيم في المستوى الأعلى من ~/.codex/config.toml وفي كل ملف tingly',
+        sectionTitle: 'النموذج والاستدلال',
+        sectionHint: 'الفراغ يعني القيمة الافتراضية المدمجة في Codex',
+        unsetLabel: '(افتراضي)',
     },
 };
 
@@ -292,6 +350,18 @@ const CATALOG_TEXT: Record<AppLanguage, { sectionTitle: string; label: string; p
         label: 'Каталог моделей',
         purpose: 'Чтобы в выборе /model в Codex появились модели, обслуживаемые tingly',
         tooltip: 'Записывает ~/.codex/tingly-model-catalog.json. Codex читает этот файл при запуске и добавляет модели tingly в выбор /model. Если выключено, model_catalog_json не пишется в config.toml, и Codex использует встроенный список моделей.',
+    },
+    fa: {
+        sectionTitle: 'فایل‌ها',
+        label: 'فهرست مدل‌ها',
+        purpose: 'تا انتخابگر /model در Codex مدل‌های ارائه‌شده توسط tingly را نشان دهد',
+        tooltip: 'فایل ~/.codex/tingly-model-catalog.json را می‌نویسد. ‏Codex این فایل را هنگام اجرا می‌خواند و مدل‌های tingly را به انتخابگر /model اضافه می‌کند. اگر خاموش باشد، model_catalog_json در config.toml نوشته نمی‌شود و Codex از فهرست مدل‌های درون‌ساخت خود استفاده می‌کند.',
+    },
+    ar: {
+        sectionTitle: 'الملفات',
+        label: 'فهرس النماذج',
+        purpose: 'ليُظهِر مُحدِّد /model في Codex النماذج التي يقدِّمها tingly',
+        tooltip: 'يكتب الملف ~/.codex/tingly-model-catalog.json. ويقرؤه Codex عند الإقلاع فيضيف نماذج tingly إلى مُحدِّد /model. وعند الإيقاف لا يُكتب model_catalog_json في config.toml ويستخدم Codex قائمة نماذجه المدمجة.',
     },
 };
 

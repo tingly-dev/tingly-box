@@ -17,3 +17,19 @@ code {
 #root {
   min-height: 100vh;
 }
+
+/*
+ * Code, machine identifiers and terminal output stay left-to-right even when
+ * the UI is mirrored for Persian / Arabic. Bidi would otherwise reorder the
+ * neutral characters at the edges of a Latin run — "http://host:3000/" renders
+ * as "/http://host:3000" inside an RTL paragraph — and right-align log output.
+ * Add `data-ltr` to any element whose content is machine text rather than prose.
+ */
+[dir="rtl"] code,
+[dir="rtl"] pre,
+[dir="rtl"] samp,
+[dir="rtl"] kbd,
+[dir="rtl"] [data-ltr] {
+  direction: ltr;
+  text-align: left;
+}

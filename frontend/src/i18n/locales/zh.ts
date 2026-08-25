@@ -840,6 +840,8 @@ export default {
       "en": "English",
       "zh": "中文",
       "ru": "Русский",
+      "fa": "فارسی",
+      "ar": "العربية",
       "current": "当前语言",
       "saveSuccess": "语言设置已更新",
       "saveFailed": "语言设置更新失败"

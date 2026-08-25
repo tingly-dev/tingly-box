@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@ant-design/x-markdown": "^2.8.0",
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
     "@lobehub/icons-static-svg": "^1.94.0",
     "@mui/material": "^9.2.0",
     "@mui/x-date-pickers": "^9.10.0",
@@ -42,6 +44,8 @@
     "react-router-dom": "^7.18.1",
     "react-transition-group": "^4.4.5",
     "recharts": "^3.10.0",
+    "stylis": "^4.2.0",
+    "stylis-plugin-rtl": "^2.1.1",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
@@ -52,6 +56,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/react-transition-group": "^4.4.12",
+    "@types/stylis": "^4.2.7",
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
