@@ -19,6 +19,7 @@ import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import Layout from './layout/Layout';
 import createAppTheme from './theme';
+import { useHubWindowMode } from './hooks/useHubWindowMode';
 
 // Login is the only pre-auth screen — it's reachable before ProtectedRoute
 // can even evaluate, so it stays eager. HelpPage (the onboarding front door
@@ -83,6 +84,7 @@ const NotifyPage = lazy(() => import('./pages/notify/NotifyPage'));
 const MCPLocalMode = lazy(() => import('./pages/mcp/MCPLocalMode'));
 const MCPRegisteredServers = lazy(() => import('./pages/mcp/MCPRegisteredServers'));
 const ServerToolPage = lazy(() => import('./pages/servertool/ServerToolPage'));
+const HubPage = lazy(() => import('./pages/HubPage'));
 
 // Route-switch fallback: Layout/nav chrome is already on screen (it renders
 // outside this Suspense boundary), so this only covers the content area
@@ -201,6 +203,10 @@ const LegacyRemoteCoderRedirect = () => {
 function AppContent() {
     const navigate = useNavigate();
 
+    // Notifies the Go side when the tray window enters/leaves the compact
+    // hub route so it can resize/maximise (gui/wails3/run.go).
+    useHubWindowMode();
+
     // Listen for systray navigation events
     useEffect(() => {
         const off = Events.On('systray-navigate', (event: any) => {
@@ -233,6 +239,8 @@ function AppContent() {
                     {/* Back-compat: the old standalone Onboarding page was folded into
                         Help as ProvidersCard — keep old bookmarks/links working. */}
                     <Route path="/onboarding" element={<Navigate to="/help" replace />} />
+                    {/* Tray hub: compact landing page shown by the tray-mode window */}
+                    <Route path="/hub" element={<HubPage />} />
                     {/* Function panel routes */}
                     <Route path="/agent" element={<AgentOverviewPage />} />
                     <Route path="/agent/openai" element={<UseOpenAIPage />} />

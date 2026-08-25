@@ -43,6 +43,11 @@ const LayoutInner = ({ children }: LayoutProps) => {
     const activityItems = useActivityItems();
     const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
 
+    // The tray hub is a compact, chrome-free landing page — it renders inside
+    // Layout for auth/context, but the VS Code-like nav would overwhelm its
+    // small window and duplicate the hub's own status row.
+    const isHubPage = location.pathname === '/hub';
+
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>
         children?.some(item => item.type !== 'divider' && (item.match ? item.match(location.pathname) : isActive(item.path))) ?? false;
@@ -161,32 +166,36 @@ const LayoutInner = ({ children }: LayoutProps) => {
 
     return (
         <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
-            <FloatingStatusIndicators />
+            {!isHubPage && <FloatingStatusIndicators />}
 
-            {/* Desktop nav */}
-            <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%', position: 'relative', zIndex: Z_INDEX.drawer + 1 }}>
-                {navigationContent}
-            </Box>
+            {!isHubPage && (
+                <>
+                    {/* Desktop nav */}
+                    <Box component="nav" sx={{ display: { xs: 'none', md: 'flex' }, height: '100%', position: 'relative', zIndex: Z_INDEX.drawer + 1 }}>
+                        {navigationContent}
+                    </Box>
 
-            {/* Mobile Drawer */}
-            <Drawer
-                variant="temporary"
-                open={mobileOpen}
-                onClose={() => setMobileOpen(false)}
-                ModalProps={{ keepMounted: true }}
-                sx={{
-                    display: { xs: 'block', md: 'none' },
-                    '& .MuiDrawer-paper': {
-                        boxSizing: 'border-box',
-                        width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
-                        zIndex: Z_INDEX.drawer,
-                    },
-                }}
-            >
-                {navigationContent}
-            </Drawer>
+                    {/* Mobile Drawer */}
+                    <Drawer
+                        variant="temporary"
+                        open={mobileOpen}
+                        onClose={() => setMobileOpen(false)}
+                        ModalProps={{ keepMounted: true }}
+                        sx={{
+                            display: { xs: 'block', md: 'none' },
+                            '& .MuiDrawer-paper': {
+                                boxSizing: 'border-box',
+                                width: sidebarItems.length > 0 ? activityBarWidth + sidebarWidth : activityBarWidth,
+                                zIndex: Z_INDEX.drawer,
+                            },
+                        }}
+                    >
+                        {navigationContent}
+                    </Drawer>
 
-            <MobileNavigationBar onMenuClick={() => setMobileOpen(!mobileOpen)} />
+                    <MobileNavigationBar onMenuClick={() => setMobileOpen(!mobileOpen)} />
+                </>
+            )}
 
             {/* Main content */}
             <Box
@@ -197,6 +206,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
                     {children ?? <Outlet />}
                 </Box>
             </Box>
+
 
             {/* Easter Egg Popover */}
             <Popover

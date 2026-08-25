@@ -117,50 +117,35 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	SystemTray.SetIcon(slimIcon)
 }
 
-// showSlimWindow shows, maximises, and focuses the tray-mode window.
-// Maximise is called each time because macOS ignores it on hidden windows.
-func showSlimWindow() {
+// hubWindowWidth/Height size the tray's compact "hub" landing page (see
+// frontend/src/pages/HubPage.tsx) — small enough to read as a tray popover
+// rather than the full app.
+const (
+	hubWindowWidth  = 480
+	hubWindowHeight = 640
+)
+
+// showHubWindow shows the tray window at the compact hub size and navigates
+// it to /hub. Any other navigation (Home, Dashboard, ...) maximises the
+// window instead - see the "hub-left"/"hub-entered" event handlers below,
+// which the frontend's useHubWindowMode hook drives on route change.
+func showHubWindow() {
 	WindowSlim.Show()
-	WindowSlim.Maximise()
+	WindowSlim.SetSize(hubWindowWidth, hubWindowHeight)
+	WindowSlim.Center()
 	WindowSlim.Focus()
+	WindowSlim.EmitEvent("systray-navigate", "/hub")
 }
 
 func useWebSystray(app *application.App, tinglyService *services.TinglyService) {
-	// Create the SystemTray menu
+	// Create the SystemTray menu - kept minimal since the hub page itself
+	// is the primary navigation surface now (see frontend HubPage.tsx).
 	menu := app.Menu.New()
 
-	// Dashboard menu item - show window and navigate to dashboard
 	_ = menu.
-		Add("Dashboard").
+		Add("Show Hub").
 		OnClick(func(ctx *application.Context) {
-			showSlimWindow()
-			WindowSlim.EmitEvent("systray-navigate", "/")
-		})
-
-	menu.AddSeparator()
-
-	// OpenAI menu item - show window and navigate to OpenAI page
-	_ = menu.
-		Add("OpenAI").
-		OnClick(func(ctx *application.Context) {
-			showSlimWindow()
-			WindowSlim.EmitEvent("systray-navigate", "/agent/openai")
-		})
-
-	// Anthropic menu item - show window and navigate to Anthropic page
-	_ = menu.
-		Add("Anthropic").
-		OnClick(func(ctx *application.Context) {
-			showSlimWindow()
-			WindowSlim.EmitEvent("systray-navigate", "/agent/anthropic")
-		})
-
-	// Claude Code menu item - show window and navigate to Claude Code page
-	_ = menu.
-		Add("Claude Code").
-		OnClick(func(ctx *application.Context) {
-			showSlimWindow()
-			WindowSlim.EmitEvent("systray-navigate", "/agent/claude-code")
+			showHubWindow()
 		})
 
 	menu.AddSeparator()
@@ -173,11 +158,11 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		})
 
 	// Create SystemTray
-	// Both left-click and right-click open the menu (macOS convention for tray-only apps)
+	// Left-click opens the hub directly; right-click shows the (small) menu.
 	SystemTray = app.SystemTray.New().
 		SetMenu(menu).
 		OnClick(func() {
-			SystemTray.OpenMenu()
+			showHubWindow()
 		}).
 		OnRightClick(func() {
 			SystemTray.OpenMenu()
@@ -186,17 +171,31 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// Use custom icon
 	SystemTray.SetIcon(slimIcon)
 
-	// Create a regular window (not attached to tray) - hidden by default, shown via menu items
+	// Create a regular window (not attached to tray) - hidden by default,
+	// starts at the compact hub size; shown via tray click.
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:  "menu-window",
-		Title: AppName,
+		Name:   "menu-window",
+		Title:  AppName,
+		Width:  hubWindowWidth,
+		Height: hubWindowHeight,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 			TitleBar: application.MacTitleBarDefault,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              fmt.Sprintf("/login/%s", tinglyService.GetUserAuthToken()),
-		Hidden:           true, // Start hidden; maximised on first show via showSlimWindow()
+		Hidden:           true,
+	})
+
+	// The frontend emits these when route navigation crosses the /hub
+	// boundary (useHubWindowMode), so the window follows: compact for the
+	// hub, full-size for every other page.
+	app.Event.On("hub-left", func(event *application.CustomEvent) {
+		WindowSlim.Maximise()
+	})
+	app.Event.On("hub-entered", func(event *application.CustomEvent) {
+		WindowSlim.SetSize(hubWindowWidth, hubWindowHeight)
+		WindowSlim.Center()
 	})
 
 	// Prevent window from being destroyed on close - just hide it

@@ -1485,6 +1485,22 @@ export default {
       "noDataHint": "换个时间范围或稍后再试"
     }
   },
+  "hub": {
+    "title": "Tingly Box",
+    "status": {
+      "healthy": "运行中",
+      "unhealthy": "连接已断开",
+      "updateAvailable": "有可用更新"
+    },
+    "quota": {
+      "title": "服务商额度",
+      "empty": "暂无额度数据"
+    },
+    "actions": {
+      "home": "主页",
+      "dashboard": "仪表盘"
+    }
+  },
   "mcp": {
     "pageTitle": "MCP 工具",
     "info": "配置 MCP（模型上下文协议）工具以启用网页搜索和网页获取功能。MCP 服务器作为本地 stdio 子进程运行或连接到远程 HTTP 端点。",
