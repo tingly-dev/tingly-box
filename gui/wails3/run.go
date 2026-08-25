@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/pkg/lock"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -19,6 +20,31 @@ import (
 
 //go:embed icons.icns
 var slimIcon []byte
+
+// acquireSingleInstanceLock ensures at most one tingly-box server instance
+// (GUI, tray, slim, or CLI) touches this config dir's server at a time.
+//
+// This exists alongside the port probe-and-release check in Start*: that
+// check only proves *some* process is reachable on the port, not that it's
+// *this* config dir's server — a stale CLI/npx instance holding the port
+// still lets a dial-based probe succeed, so a GUI launch can slip past the
+// port check, render its window (which never touches the network — see
+// app.go's in-process middleware), and only fail silently later when its own
+// ListenAndServe loses the race. FileLock is the same PID/flock primitive
+// the CLI already uses in server.go to detect a running instance, and unlike
+// a TCP probe it can't be fooled by an unrelated listener answering on the
+// same port.
+func acquireSingleInstanceLock(appManager *command.AppManager) (*lock.FileLock, error) {
+	fileLock := lock.NewFileLock(appManager.AppConfig().ConfigDir())
+	if fileLock.IsLocked() {
+		pid, _ := fileLock.GetPID()
+		return nil, fmt.Errorf("Tingly Box is already running (pid %d).\n\nUse the running instance, or stop it first (e.g. `tingly-box stop`).", pid)
+	}
+	if err := fileLock.TryLock(); err != nil {
+		return nil, fmt.Errorf("failed to acquire single-instance lock: %w", err)
+	}
+	return fileLock, nil
+}
 
 // openBrowser opens the default browser to the given URL
 func openBrowser(url string) error {
@@ -217,6 +243,14 @@ func NewAppLauncher() commandgui.AppLauncher {
 func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting full GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
+	// Single-instance check FIRST: catches a running tingly-box (CLI/npx/GUI)
+	// that the port probe below can't reliably tell apart from an unrelated
+	// process on the same port. See acquireSingleInstanceLock's doc comment.
+	if _, err := acquireSingleInstanceLock(appManager); err != nil {
+		runErrorApp(err.Error())
+		return err
+	}
+
 	// Check if port is available before starting the app
 	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
 	log.Printf("[Port Check] Port %d: available=%v, info=%s", opts.Port, available, info)
@@ -258,6 +292,12 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting tray GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
+	// Single-instance check FIRST: see acquireSingleInstanceLock's doc comment.
+	if _, err := acquireSingleInstanceLock(appManager); err != nil {
+		runErrorApp(err.Error())
+		return err
+	}
+
 	// Check if port is available before starting the app
 	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
 	log.Printf("[Port Check] Port %d: available=%v, info=%s", opts.Port, available, info)
@@ -296,6 +336,12 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 // StartSlim launches the slim GUI application (systray only)
 func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting slim GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
+
+	// Single-instance check FIRST: see acquireSingleInstanceLock's doc comment.
+	if _, err := acquireSingleInstanceLock(appManager); err != nil {
+		runErrorApp(err.Error())
+		return err
+	}
 
 	// Check if port is available before starting the app
 	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
