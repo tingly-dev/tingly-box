@@ -28,7 +28,13 @@ export default {
     "off": "Off",
     "direct": "Direct",
     "theme": "Theme",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "and": "and",
+    "clear": "Clear selection",
+    "dismiss": "Dismiss",
+    "moveDown": "Move down",
+    "moveUp": "Move up",
+    "saved": "Saved"
   },
   "layout": {
     "appTitle": "Tingly Box",
@@ -139,7 +145,9 @@ export default {
     "default": "default",
     "onboarding": "Quick Add Provider",
     "onboardingHint": "Browse or paste config",
-    "onboardingShort": "Onboard"
+    "onboardingShort": "Onboard",
+    "tools": "Tools",
+    "servertool": "Servertool"
   },
   "health": {
     "connected": "Connected",
@@ -301,7 +309,8 @@ export default {
       "placeholder": "e.g., OpenAI",
       "default": "Default Provider",
       "helper": "Leave blank to use the auto-generated name. You can rename later.",
-      "editAction": "Edit name"
+      "editAction": "Edit name",
+      "fallback": "Custom Provider"
     },
     "providerOrUrl": {
       "label": "Provider or Custom Base URL",
@@ -353,6 +362,13 @@ export default {
       "confirmNote": "Please verify that your Base URL and API Key are correct before adding. You can still add this provider, but it may not work properly if the configuration is incorrect.",
       "cancel": "Go Back",
       "confirm": "Confirm to Add"
+    },
+    "provider": {
+      "placeholder": "Base URL"
+    },
+    "v1Hint": {
+      "apply": "Append /v1",
+      "message": "Most OpenAI-compatible APIs need a /v1 suffix."
     }
   },
   "providerTable": {
@@ -1052,7 +1068,8 @@ export default {
       "mode": "Mode",
       "unified": "Unified",
       "separate": "Separate"
-    }
+    },
+    "defaultModeLabel": "Default Mode"
   },
   "prompt": {
     "menu": "Prompt",
@@ -1307,7 +1324,8 @@ export default {
       "topModels": "Top models",
       "topProviders": "Top providers",
       "others": "Others",
-      "noUsageHintShort": "Try a longer time range."
+      "noUsageHintShort": "Try a longer time range.",
+      "noUsersHint": "Try a different search term or time range."
     },
     "agentNav": {
       "title": "Quick Start",
@@ -1514,7 +1532,14 @@ export default {
     },
     "quickLinks": "Quick Links",
     "goToDashboard": "Dashboard",
-    "goToHelp": "Help & Docs"
+    "goToHelp": "Help & Docs",
+    "dialog": {
+      "goToAgents": "Go to Agents",
+      "message": "Your AI provider has been added successfully. Would you like to go to the agents page to start using it?",
+      "stay": "Stay Here",
+      "title": "Provider Added"
+    },
+    "success": "Provider added successfully! You can now create scenarios."
   },
   "imageGenQuickStart": {
     "title": "Image Generation Quick Start",
@@ -1750,6 +1775,402 @@ export default {
       "imagegen": "Route image generation through Tingly Box.",
       "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
       "team": "Shared central model deployment for your whole team. Hidden by default."
+    }
+  },
+  "bots": {
+    "activeCount": "active {{active}} / {{total}}",
+    "card": {
+      "notifyChip": "Notify",
+      "remoteAgentChip": "Remote"
+    },
+    "overview": {
+      "allConnections": "All connections",
+      "allPlatforms": "All",
+      "connectBot": "Connect a bot",
+      "emptyDescription": "Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).",
+      "emptyTitle": "No bots connected yet",
+      "pageSubtitle": "Connect and maintain the messaging accounts used by Remote Control and IM Notify.",
+      "platformTitle": "{{platform}} Bots",
+      "subtitle_one": "{{count}} bot connected",
+      "subtitle_other": "{{count}} bots connected",
+      "title": "Bots"
+    },
+    "table": {
+      "access": "Access",
+      "actions": "Actions",
+      "botId": "Bot UUID",
+      "capabilities": "Capabilities",
+      "chatIdCopied": "Chat ID copied",
+      "chatIdCopyFailed": "Copy failed — check clipboard permissions",
+      "chatsTitle": "Reachable chats — copy the Chat ID for notify/interact",
+      "copyChatId": "Copy Chat ID",
+      "copyUuid": "Copy Bot UUID",
+      "itsPlatform": "its platform",
+      "name": "Name",
+      "noChats": "No chats yet. Send any message to this bot on {{platform}} and its Chat ID will appear here.",
+      "noChatsPairFirst": "No chats yet. Pair this bot (see Pairing), then send it a message on {{platform}} — its Chat ID appears here.",
+      "notRunning": "This bot isn’t running. Start it, then send it a message on {{platform}} — its Chat ID appears here.",
+      "paired": "paired",
+      "platform": "Platform",
+      "showChats": "Show reachable chats (copy Chat ID)",
+      "status": "Status",
+      "uuidCopied": "Bot UUID copied",
+      "uuidCopyFailed": "Copy failed — check clipboard permissions"
+    },
+    "toggle": {
+      "disabled": "Bot disabled",
+      "enabled": "Bot enabled",
+      "failed": "Failed to toggle bot: {{error}}",
+      "failedGeneric": "Failed to toggle bot"
+    }
+  },
+  "nodes": {
+    "imBotUUID": "Bot UUID",
+    "platformBotUUID": "Bot UUID",
+    "platformHint": "the IM platform this chain runs on"
+  },
+  "notify": {
+    "chat": {
+      "copied": "Target UUID copied",
+      "copyFailed": "Copy failed — check clipboard permissions",
+      "deleted": "Chat deleted"
+    },
+    "emptyDescription": "Connect a bot on the Bots page first, then come back here to send it notifications.",
+    "emptyPlatformDescription": "Pick another platform above, or add one on the Bots page.",
+    "emptyPlatformTitle": "No {{platform}} bots",
+    "emptyTitle": "No bots connected yet",
+    "group": {
+      "allowAndTest": "Allow Notify & Test",
+      "copyChatId": "Copy internal target UUID",
+      "custom": "Custom",
+      "customHint": "Compose a custom message (free-form)",
+      "deleteChat": "Delete this Direct Chat record",
+      "deleteChatBody": "Its pairing, whitelist, and project binding are removed. If it messages the bot again it re-registers as a brand-new chat (re-pairing required when pairing is enforced). Session history is untouched. To block it instead, use Disable.",
+      "deleteChatTitle": "Delete this chat?",
+      "disableChat": "Disable — silently drop its messages",
+      "disableHint": "Disable Notify for this bot",
+      "disabledBody": "Bot is off — enable it to see and send to its reachable chats.",
+      "disabledChat": "disabled",
+      "empty": "No chats yet. Send any message to this bot on {{platform}} and its Chat ID appears here.",
+      "emptyPairFirst": "No chats yet. Pair this bot, then send it a message on {{platform}} — its Chat ID appears here.",
+      "enableChat": "Enable — accept its messages again",
+      "enableHint": "Enable Notify. The bot starts automatically if needed.",
+      "hideDisabled": "Hide disabled",
+      "noTargets": "No observed targets",
+      "paired": "paired",
+      "refresh": "Refresh reachable chats",
+      "showDisabled": "Show disabled ({{count}})",
+      "targetCount": "{{direct}} direct · {{groups}} groups"
+    },
+    "guide": {
+      "action": "API guide",
+      "auth": {
+        "body": "Any integration can drive a bot’s chat. Auth reuses your existing operator user token (the same one this web UI uses) as a Bearer header — no new credential to mint. Interactive prompts (/interact) and one-way notifications (/notify) are separate URLs, so the request shape is the mode.",
+        "title": "1. Authenticate with your user token"
+      },
+      "chatid": {
+        "body": "Each Chat node on this page shows the real platform Chat ID for recognition; its tooltip also shows the stable internal Target UUID required by the API. Use the copy action beside the node, or send a test directly from the probe bench.",
+        "title": "3. Copy the target UUID from Delivery targets"
+      },
+      "description": "Authentication, request examples, and target IDs",
+      "send": {
+        "body": "POST to /api/v1/bots/{bot}/notify with the bot UUID in the path. A 200 means delivered.",
+        "json": "Request body:",
+        "title": "2. Send a one-way notification"
+      },
+      "title": "IM Notify API Guide"
+    },
+    "loadFailed": "Failed to load Notify targets",
+    "probe": {
+      "showRaw": "Show raw payload"
+    },
+    "subtitle": "Authorize a target, send through the production path, and see whether delivery worked.",
+    "target": {
+      "blocked": "Target blocked",
+      "direct": "Direct",
+      "group": "Group",
+      "unblocked": "Target unblocked"
+    },
+    "targetsSubtitle": "Direct Chats and Groups observed by your connected bots.",
+    "targetsTitle": "Delivery targets",
+    "test": {
+      "bodyField": "Body (markdown)",
+      "level": "Level",
+      "paired": "paired",
+      "pickKnownChat": "Select a discovered chat first",
+      "resetMarkdown": "Reset to markdown sample",
+      "send": "Send",
+      "sendFailed": "Send failed: {{error}}",
+      "sent": "Notification sent",
+      "target": "Target",
+      "targetPlaceholder": "No authorized targets yet",
+      "title": "Send a test notification",
+      "titleField": "Title (optional)"
+    },
+    "title": "IM Notify",
+    "toggleFailed": "Failed to update Notify"
+  },
+  "remoteAgent": {
+    "ccProfile": {
+      "chip": "Profile",
+      "default": "Default",
+      "defaultSecondary": "Main claude_code scenario",
+      "defaultTooltip": "Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.",
+      "dialogSubtitle": "Remote @cc sessions route through the selected profile — its rules, model mapping, and settings overrides.",
+      "dialogTitle": "Claude Code Profile for @cc",
+      "empty": "No Claude Code profiles yet. Create one on the Claude Code scenario page first.",
+      "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
+      "profileTooltip": "Claude Code profile",
+      "scenario": "Scenario",
+      "separate": "separate",
+      "unified": "unified"
+    },
+    "emptyDescription": "Remote Control runs on top of a bot. Create a {{platform}} bot connection first, then mount it here.",
+    "emptyTitle": "No {{platform}} Bots Yet",
+    "notify": {
+      "ccProfileUpdateFailed": "Failed to update Claude Code profile",
+      "ccProfileUpdated": "Claude Code profile updated"
+    },
+    "pageSubtitle": "Choose who can control each bot and where chat commands route.",
+    "pageTitle": "Remote Control",
+    "routesSubtitle": "Access → Bot → Agent. Click a node to change that part of the route.",
+    "routesTitle": "{{platform}} routes"
+  },
+  "remoteControl": {
+    "authForm": {
+      "botId": "Bot ID:",
+      "manualOption": "Enter manually",
+      "noFieldsDefined": "No auth fields defined for this platform.",
+      "oauthIntro": "Enter your App credentials from the developer console.",
+      "rebindAccount": "Re-bind Account",
+      "scanQrOption": "One-click (scan QR)",
+      "storedSecurely": "This will be stored securely",
+      "userId": "User ID:",
+      "weixinAccountBound": "Weixin account bound",
+      "weixinBindingTitle": "Weixin QR Code Binding"
+    },
+    "bots": {
+      "addBot": "Connect a bot",
+      "addPlatformBot": "Add {{platform}} Bot",
+      "configuredCount_one": "{{count}} bot configured",
+      "configuredCount_other": "{{count}} bots configured",
+      "emptyDescription": "Configure {{platform}} bots to enable remote-control chat integration.",
+      "emptyTitle": "No {{platform}} Bots Configured"
+    },
+    "card": {
+      "delete": "Delete",
+      "deleteConfirm": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "deleteTitle": "Delete Bot Configuration",
+      "disableBot": "Disable Bot",
+      "edit": "Edit",
+      "enableBot": "Enable Bot",
+      "enableToRestart": "Enable bot to restart",
+      "noModelConfigured": "No model configured - click to select a model",
+      "remoteAgentOff": "Turn off Remote Control. The bot remains available to other capabilities.",
+      "remoteAgentOn": "Turn on Remote Control. The bot starts automatically if needed.",
+      "restartBot": "Restart Bot"
+    },
+    "dialog": {
+      "addSubtitle": "Choose a messaging platform and provide the credentials needed to connect it.",
+      "addTitle": "Connect a bot",
+      "advancedAgentPolicy": "Advanced agent policy",
+      "advancedAgentPolicyHelper": "Limits what an authorized controller may execute; it does not grant access.",
+      "alias": "Alias",
+      "aliasHelper": "Optional: a friendly name for this bot configuration.",
+      "bashAllowlist": "Bash Allowlist",
+      "bashAllowlistHelper": "Allowlisted /bash subcommands. Default: cd, ls, pwd.",
+      "cancel": "Cancel",
+      "connect": "Connect bot",
+      "editSubtitle": "Update this connection. Capabilities and people are managed from Access.",
+      "editTitle": "Edit bot",
+      "platform": "Platform",
+      "proxyUrl": "Proxy URL",
+      "proxyUrlHelper": "Optional HTTP/HTTPS proxy for bot API requests.",
+      "save": "Save changes",
+      "saving": "Saving..."
+    },
+    "feishuQr": {
+      "createdBody": "Credentials were saved automatically. Your bot is ready.",
+      "createdTitle": "{{label}} app created!",
+      "deniedWarning": "Authorization was declined in {{label}}.",
+      "errorFallback": "An error occurred during {{label}} registration",
+      "expiredWarning": "The QR code expired. Please get a new one.",
+      "getNewQr": "Get New QR Code",
+      "headerLabel": "{{label}} One-Click App Creation",
+      "preparing": "Preparing one-click {{label}} registration...",
+      "refreshQr": "Refresh QR Code",
+      "registrationFailed": "Registration failed",
+      "retry": "Retry",
+      "scanTitle": "Scan to create your {{label}} app",
+      "startFailed": "Failed to start one-click registration",
+      "statusFailed": "Failed to check registration status",
+      "step1": "1. Open {{label}} on your phone and scan the QR code",
+      "step2": "2. Confirm authorization — the app, permissions and events are created for you",
+      "tryAgain": "Try Again",
+      "uuidRequired": "Bot UUID is required"
+    },
+    "guide": {
+      "action": "Setup guide",
+      "collapsedHint": "Connection steps, credentials, and examples",
+      "drawerHint": "Connection steps, credentials, and examples",
+      "showLess": "Show Less",
+      "showMore": "Show More",
+      "title": "{{platform}} Setup Guide"
+    },
+    "guides": {
+      "comingSoon": "{{platform}} bot integration is currently under development. Stay tuned for updates!",
+      "dingtalk": {
+        "description": "Enterprise communication and collaboration",
+        "step1Config": "Configuration:",
+        "step1CreateApp": "Create a new app - Add Robot capability",
+        "step1GetKeys": "Get AppKey (Client ID) and AppSecret (Client Secret) from \"Credentials\"",
+        "step1LinkLabel": "DingTalk Open Platform",
+        "step1Permissions": "Permissions: Add necessary permissions for sending messages",
+        "step1Publish": "Publish the app",
+        "step1StreamMode": "Toggle",
+        "step1Title": "1. Create a DingTalk bot",
+        "step1Visit": "Visit",
+        "step2Text": "Select \"Connect a bot\" and enter the App Key and App Secret to create your bot.",
+        "tip": "Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed."
+      },
+      "discord": {
+        "description": "Voice, video, and text communication"
+      },
+      "feishu": {
+        "description": "Enterprise collaboration platform",
+        "step1TextAfter": ", and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.",
+        "step2LinkLabel": "Feishu one-click app creation",
+        "step2Open": "Open",
+        "tip": "Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed."
+      },
+      "feishuFamily": {
+        "oneClickOption": "One-click (scan QR)",
+        "step1TextBefore": "Select \"Connect a bot\", then choose",
+        "step1Title": "1. Scan to create (recommended)",
+        "step2Configure": "Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you",
+        "step2CopyAfterBefore": ", then enter them via \"Add Bot\" →",
+        "step2CopyBefore": "Copy the generated",
+        "step2LogIn": "and log in",
+        "step2Title": "2. Or create manually"
+      },
+      "lark": {
+        "description": "Global version of Feishu",
+        "step1TextAfter": ", and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.",
+        "step2LinkLabel": "Lark one-click app creation",
+        "tip": "Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed."
+      },
+      "qq": {
+        "description": "Tencent instant messaging platform"
+      },
+      "slack": {
+        "description": "Business communication platform"
+      },
+      "telegram": {
+        "description": "Popular cloud-based instant messaging service",
+        "step1Open": "Open Telegram, search",
+        "step1Send": "Send",
+        "step1SendTail": ", follow the prompts, and copy the token",
+        "step1Title": "1. Create a bot",
+        "step2Text": "Select \"Connect a bot\" and paste the token to create your bot.",
+        "step2Title": "2. Add bot",
+        "tip": "Tip: Configure traffic proxy as needed for network access."
+      },
+      "wecom": {
+        "createBot": "Create Bot",
+        "createManually": "Create Manually",
+        "description": "Enterprise Weixin communication platform",
+        "step1AndClick": "and click",
+        "step1GoTo": "Go to",
+        "step1LinkLabel": "WeCom Admin → AI Assistant",
+        "step1Title": "1. Open WeCom Admin Console",
+        "step2LinkLabel": "Create via API Mode",
+        "step2TextBefore": "Scroll to the bottom of the page and click",
+        "step2Title": "2. Create via API mode",
+        "step3ApiConfig": "API Config:",
+        "step3ApiConfigTextBefore": "Under Connection Method, select",
+        "step3ClickToRetrieve": "Click to Retrieve",
+        "step3LongConnection": "Long Connection",
+        "step3Permissions": "Permissions:",
+        "step3PermissionsTextBefore": "Configure as needed, then click",
+        "step3Save": "Save",
+        "step3SecretAfter": "— save the",
+        "step3SecretBefore": "In the Secret section, click",
+        "step3Title": "3. Configure the bot",
+        "step3VisibleScope": "Visible Scope:",
+        "step3VisibleScopeText": "Set who can use the bot",
+        "step4Text": "Select \"Connect a bot\" and enter the Bot ID and Secret to connect.",
+        "step4Title": "4. Add bot",
+        "tip": "Tip: WeCom AI Bot uses WebSocket long connection — no public IP required."
+      },
+      "weixin": {
+        "betaLabel": "Beta:",
+        "betaText": "Weixin integration is in beta. Please provide feedback for any issues.",
+        "description": "China\\",
+        "step1TextAfter": "installed on your device.",
+        "step1TextBefore": "Make sure you have the latest version of",
+        "step1Title": "1. Install latest Weixin",
+        "step2Text": "Select \"Connect a bot\" and scan the QR code with Weixin to bind your account."
+      }
+    },
+    "modelDialog": {
+      "title": "Configure SmartGuide Model"
+    },
+    "notify": {
+      "botCreated": "Bot created successfully.",
+      "botDeleted": "Bot deleted successfully",
+      "botRestarted": "Bot restarted",
+      "botUpdated": "Bot updated successfully.",
+      "deleteFailed": "Failed to delete bot: {{error}}",
+      "deleteFailedGeneric": "Failed to delete bot",
+      "loadFailed": "Failed to load bot settings",
+      "missingFields": "Missing required fields: {{fields}}",
+      "modelUpdateFailed": "Failed to update bot configuration",
+      "modelUpdated": "Bot model configuration updated",
+      "qrBindRequired": "Please complete WeChat QR binding before saving",
+      "remoteAgentOff": "Remote Control disabled",
+      "remoteAgentOn": "Remote Control enabled",
+      "restartFailed": "Failed to restart bot: {{error}}",
+      "restartFailedGeneric": "Failed to restart bot",
+      "saveFailed": "Failed to save bot settings",
+      "toggleFailedGeneric": "Failed to toggle bot",
+      "unboundReuse": "Found an unbound bot, reusing it for QR binding",
+      "unknownPlatform": "Unknown platform: {{platform}}"
+    },
+    "pairing": {
+      "copied": "Pairing command copied",
+      "copy": "Copy",
+      "copyFailed": "Copy failed — check clipboard permissions",
+      "expired": "expired",
+      "expiresIn": "expires in {{time}}",
+      "fetchFailed": "Failed to fetch pairing code",
+      "hide": "Hide",
+      "noActiveCode": "No active code — bot may be stopped, or the code was already consumed. Click Rotate to mint a new one.",
+      "reveal": "Reveal",
+      "rotateFailed": "Rotate failed",
+      "rotateTooltip": "Rotate (invalidates current code)",
+      "rotated": "Pairing code rotated"
+    },
+    "platformSelector": {
+      "empty": "No platforms available. Make sure the remote-control service is running.",
+      "loading": "Loading platforms..."
+    },
+    "weixinQr": {
+      "errorFallback": "An error occurred during Weixin binding",
+      "expiredWarning": "QR code expired. Please refresh to get a new one.",
+      "getNewQr": "Get New QR Code",
+      "headerLabel": "Weixin QR Code Binding",
+      "initializing": "Initializing Weixin QR binding...",
+      "refreshQr": "Refresh QR Code",
+      "retry": "Retry",
+      "scanTitle": "Scan QR Code to Bind",
+      "scannedWaiting": "QR code scanned! Please confirm on your Weixin...",
+      "startFailed": "Failed to start QR login",
+      "statusFailed": "Failed to check QR status",
+      "step1": "1. Open Weixin on your phone and scan the QR code",
+      "step2": "2. Confirm to complete binding",
+      "successBody": "Your bot is now connected to Weixin.",
+      "successTitle": "Weixin Binding Successful!",
+      "uuidRequired": "Bot UUID is required"
     }
   }
 };

@@ -227,11 +227,11 @@ export function useActivityItems(): ActivityItem[] {
             ...(enableMCP ? [{
                 key: 'tools' as const,
                 icon: <IconTools sx={{ fontSize: 22 }} />,
-                label: 'Tools',
+                label: t('layout.tools', { defaultValue: 'Tools' }),
                 defaultPath: '/mcp/sources',
                 children: [
                     { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/tools/servertool', label: 'Servertool', icon: <IconServer sx={{ fontSize: 20 }} /> },
+                    { path: '/tools/servertool', label: t('layout.servertool', { defaultValue: 'Servertool' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             {

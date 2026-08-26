@@ -29,7 +29,12 @@ export default {
     "direct": "Direct",
     "theme": "主题",
     "prompt": "提示词",
-    "and": "和"
+    "and": "和",
+    "clear": "清除选择",
+    "dismiss": "忽略",
+    "moveDown": "下移",
+    "moveUp": "上移",
+    "saved": "已保存"
   },
   "layout": {
     "appTitle": "Tingly Box",
@@ -141,7 +146,9 @@ export default {
     "default": "默认",
     "onboarding": "快速添加提供商",
     "onboardingHint": "浏览或粘贴配置",
-    "onboardingShort": "入门"
+    "onboardingShort": "入门",
+    "tools": "工具",
+    "servertool": "服务端工具"
   },
   "health": {
     "connected": "已连接",
@@ -303,7 +310,8 @@ export default {
       "placeholder": "例如：OpenAI",
       "default": "默认供应商",
       "helper": "留空将使用上方自动生成的名称，创建后可随时重命名。",
-      "editAction": "编辑名称"
+      "editAction": "编辑名称",
+      "fallback": "自定义服务商"
     },
     "providerOrUrl": {
       "label": "提供商或自定义基础 URL",
@@ -355,6 +363,13 @@ export default {
       "confirmNote": "添加前请验证您的基础 URL 和 API 密钥是否正确。您仍可以添加此提供商，但如果配置不正确，可能无法正常工作。",
       "cancel": "返回",
       "confirm": "确认添加"
+    },
+    "provider": {
+      "placeholder": "Base URL"
+    },
+    "v1Hint": {
+      "message": "大多数 OpenAI 兼容 API 需要 /v1 后缀。",
+      "apply": "追加 /v1"
     }
   },
   "providerTable": {
@@ -1054,7 +1069,8 @@ export default {
       "mode": "模式",
       "unified": "统一",
       "separate": "分离"
-    }
+    },
+    "defaultModeLabel": "默认权限模式"
   },
   "prompt": {
     "menu": "提示词",
@@ -1304,7 +1320,8 @@ export default {
       "topModels": "用量最高的模型",
       "topProviders": "用量最高的服务商",
       "others": "其他",
-      "noUsageHintShort": "试试更长的时间范围。"
+      "noUsageHintShort": "试试更长的时间范围。",
+      "noUsersHint": "换一个搜索词或时间范围试试。"
     },
     "agentNav": {
       "title": "快速开始",
@@ -1511,7 +1528,14 @@ export default {
     },
     "quickLinks": "快速链接",
     "goToDashboard": "控制台",
-    "goToHelp": "帮助与文档"
+    "goToHelp": "帮助与文档",
+    "success": "服务商添加成功！现在可以创建场景了。",
+    "dialog": {
+      "title": "服务商已添加",
+      "message": "你的 AI 服务商已成功添加。要前往智能应用页面开始使用吗？",
+      "goToAgents": "前往智能应用",
+      "stay": "留在本页"
+    }
   },
   "imageGenQuickStart": {
     "title": "图像生成快速开始",
@@ -1742,7 +1766,27 @@ export default {
       "saveAgentSettings": "保存 Agent 设置"
     },
     "notify": {
-      "agentSettingsSaved": "Agent 设置已保存"
+      "agentSettingsSaved": "Agent 设置已保存",
+      "ccProfileUpdated": "Claude Code Profile 已更新",
+      "ccProfileUpdateFailed": "更新 Claude Code Profile 失败"
+    },
+    "pageTitle": "远程控制",
+    "pageSubtitle": "设置谁可以控制每个 Bot，以及聊天指令的路由去向。",
+    "routesTitle": "{{platform}} 路由",
+    "routesSubtitle": "访问权限 → Bot → Agent。点击节点可修改该环节。",
+    "ccProfile": {
+      "chip": "Profile",
+      "default": "默认",
+      "defaultSecondary": "主 claude_code 场景",
+      "defaultTooltip": "使用主 claude_code 场景。点击可让 @cc 走某个 Claude Code Profile。",
+      "dialogTitle": "@cc 使用的 Claude Code Profile",
+      "dialogSubtitle": "远程 @cc 会话会走所选 Profile —— 包括它的规则、模型映射与设置覆盖。",
+      "empty": "还没有 Claude Code Profile。请先在 Claude Code 场景页创建一个。",
+      "missingTooltip": "Profile「{{id}}」已不存在 —— @cc 回退到默认 claude_code 场景。点击可另选一个。",
+      "profileTooltip": "Claude Code Profile",
+      "scenario": "场景",
+      "separate": "分离",
+      "unified": "统一"
     }
   },
   "bots": {
@@ -1760,7 +1804,37 @@ export default {
       "subtitle": "已连接 {{count}} 个机器人",
       "connectBot": "连接机器人",
       "emptyTitle": "尚未连接机器人",
-      "emptyDescription": "连接一个机器人，即可从聊天中遥控 Claude Code（远程）或接收通知（通知）。"
+      "emptyDescription": "连接一个机器人，即可从聊天中遥控 Claude Code（远程）或接收通知（通知）。",
+      "allConnections": "全部连接",
+      "pageSubtitle": "连接并维护远程控制与 IM 通知所使用的消息账号。"
+    },
+    "table": {
+      "access": "访问权限",
+      "actions": "操作",
+      "botId": "Bot UUID",
+      "capabilities": "能力",
+      "chatIdCopied": "Chat ID 已复制",
+      "chatIdCopyFailed": "复制失败 —— 请检查剪贴板权限",
+      "chatsTitle": "可达会话 —— 复制 Chat ID 用于通知/交互",
+      "copyChatId": "复制 Chat ID",
+      "copyUuid": "复制 Bot UUID",
+      "itsPlatform": "所在平台",
+      "name": "名称",
+      "noChats": "暂无会话。在 {{platform}} 上给这个 Bot 发送任意消息，其 Chat ID 就会出现在这里。",
+      "noChatsPairFirst": "暂无会话。请先配对这个 Bot（见「配对码」），然后在 {{platform}} 上给它发消息 —— 其 Chat ID 会出现在这里。",
+      "notRunning": "这个 Bot 未在运行。启动它，然后在 {{platform}} 上给它发消息 —— 其 Chat ID 会出现在这里。",
+      "paired": "已配对",
+      "platform": "平台",
+      "showChats": "查看可达会话（复制 Chat ID）",
+      "status": "状态",
+      "uuidCopied": "Bot UUID 已复制",
+      "uuidCopyFailed": "复制失败 —— 请检查剪贴板权限"
+    },
+    "toggle": {
+      "disabled": "Bot 已停用",
+      "enabled": "Bot 已启用",
+      "failed": "切换 Bot 状态失败：{{error}}",
+      "failedGeneric": "切换 Bot 状态失败"
     }
   },
   "notify": {
@@ -1771,7 +1845,82 @@ export default {
     "mounted": "通知中",
     "notMounted": "无路由",
     "attachComingSoon": "+ 添加路由（即将支持）",
-    "attachComingSoonHint": "暂不支持从这里添加路由 —— 路由目前按场景单独配置。"
+    "attachComingSoonHint": "暂不支持从这里添加路由 —— 路由目前按场景单独配置。",
+    "loadFailed": "加载通知目标失败",
+    "toggleFailed": "更新通知设置失败",
+    "emptyPlatformTitle": "没有 {{platform}} Bot",
+    "emptyPlatformDescription": "在上方换一个平台，或到机器人页面添加一个。",
+    "targetsTitle": "投递目标",
+    "targetsSubtitle": "已连接 Bot 观察到的私聊与群组。",
+    "chat": {
+      "copied": "目标 UUID 已复制",
+      "copyFailed": "复制失败 —— 请检查剪贴板权限",
+      "deleted": "会话已删除"
+    },
+    "target": {
+      "direct": "私聊",
+      "group": "群组",
+      "blocked": "目标已屏蔽",
+      "unblocked": "目标已解除屏蔽"
+    },
+    "probe": {
+      "showRaw": "查看原始载荷"
+    },
+    "group": {
+      "allowAndTest": "允许通知并测试",
+      "copyChatId": "复制内部目标 UUID",
+      "custom": "自定义",
+      "customHint": "编写自定义消息（自由格式）",
+      "deleteChat": "删除这条私聊记录",
+      "deleteChatTitle": "删除这个会话？",
+      "deleteChatBody": "其配对、白名单和项目绑定都会被移除。如果它再次给 Bot 发消息，会作为全新会话重新注册（在强制配对时需要重新配对）。会话历史不受影响。若只想拦截，请改用「停用」。",
+      "disableChat": "停用 —— 静默丢弃其消息",
+      "disabledBody": "Bot 已关闭 —— 启用后才能查看并发送到其可达会话。",
+      "disabledChat": "已停用",
+      "disableHint": "停用此 Bot 的通知",
+      "empty": "暂无会话。在 {{platform}} 上给这个 Bot 发送任意消息，其 Chat ID 就会出现在这里。",
+      "emptyPairFirst": "暂无会话。请先配对这个 Bot，然后在 {{platform}} 上给它发消息 —— 其 Chat ID 会出现在这里。",
+      "enableChat": "启用 —— 重新接收其消息",
+      "enableHint": "启用通知。需要时 Bot 会自动启动。",
+      "hideDisabled": "隐藏已停用",
+      "noTargets": "没有观察到目标",
+      "paired": "已配对",
+      "refresh": "刷新可达会话",
+      "showDisabled": "显示已停用（{{count}}）",
+      "targetCount": "{{direct}} 个私聊 · {{groups}} 个群组"
+    },
+    "guide": {
+      "title": "IM 通知 API 指南",
+      "action": "API 指南",
+      "description": "认证方式、请求示例与目标 ID",
+      "auth": {
+        "title": "1. 使用你的用户 Token 认证",
+        "body": "任何集成都可以驱动 Bot 的会话。认证复用你现有的操作员用户 Token（与本 Web 界面所用相同），作为 Bearer 头传入 —— 无需另外申请凭据。交互式提示（/interact）与单向通知（/notify）是不同的 URL，因此请求形态本身就决定了模式。"
+      },
+      "send": {
+        "title": "2. 发送一条单向通知",
+        "body": "向 /api/v1/bots/{bot}/notify 发起 POST，路径中带上 Bot UUID。返回 200 即表示已投递。",
+        "json": "请求体："
+      },
+      "chatid": {
+        "title": "3. 从「投递目标」复制目标 UUID",
+        "body": "本页每个会话节点都会显示便于识别的真实平台 Chat ID；其提示浮层还会显示 API 所需的稳定内部目标 UUID。使用节点旁的复制操作，或直接从测试台发送一条测试。"
+      }
+    },
+    "test": {
+      "title": "发送测试通知",
+      "target": "目标",
+      "targetPlaceholder": "尚无已授权的目标",
+      "pickKnownChat": "请先选择一个已发现的会话",
+      "level": "级别",
+      "titleField": "标题（可选）",
+      "bodyField": "正文（markdown）",
+      "resetMarkdown": "重置为 markdown 示例",
+      "send": "发送",
+      "sent": "通知已发送",
+      "sendFailed": "发送失败：{{error}}",
+      "paired": "已配对"
+    }
   },
   "remoteControl": {
     "bots": {
@@ -1796,7 +1945,12 @@ export default {
       "bashAllowlistHelper": "允许执行的 /bash 子命令。默认：cd、ls、pwd。",
       "cancel": "取消",
       "save": "保存配置",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "addSubtitle": "选择一个消息平台，并填写连接所需的凭据。",
+      "editSubtitle": "更新此连接。能力与人员在「访问权限」中管理。",
+      "connect": "连接 Bot",
+      "advancedAgentPolicy": "高级 Agent 策略",
+      "advancedAgentPolicyHelper": "限制已授权控制者可以执行的操作；它本身不授予访问权限。"
     },
     "card": {
       "disableBot": "停用 Bot",
@@ -1810,7 +1964,9 @@ export default {
       "proxyLabel": "代理：",
       "allowlistLabel": "白名单：",
       "deleteTitle": "删除 Bot 配置",
-      "deleteConfirm": "确定要删除「{{name}}」吗？此操作无法撤销。"
+      "deleteConfirm": "确定要删除「{{name}}」吗？此操作无法撤销。",
+      "remoteAgentOff": "关闭远程控制。该 Bot 仍可用于其他能力。",
+      "remoteAgentOn": "开启远程控制。需要时 Bot 会自动启动。"
     },
     "notify": {
       "loadFailed": "加载 Bot 配置失败",
@@ -1833,14 +1989,17 @@ export default {
       "deleteFailedGeneric": "删除 Bot 失败",
       "cwdUpdateFailed": "更新工作目录失败",
       "modelUpdated": "Bot 模型配置已更新",
-      "modelUpdateFailed": "更新 Bot 配置失败"
+      "modelUpdateFailed": "更新 Bot 配置失败",
+      "remoteAgentOff": "远程控制已停用",
+      "remoteAgentOn": "远程控制已启用"
     },
     "guide": {
       "title": "{{platform}} 配置指南",
       "action": "配置指南",
       "drawerHint": "连接步骤、凭据与示例",
       "showMore": "展开",
-      "showLess": "收起"
+      "showLess": "收起",
+      "collapsedHint": "连接步骤、凭据与示例"
     },
     "platformSelector": {
       "loading": "正在加载平台列表...",
@@ -1917,7 +2076,8 @@ export default {
       "deniedWarning": "已在{{label}}中拒绝授权。",
       "tryAgain": "重试",
       "errorFallback": "{{label}}注册过程中发生错误",
-      "headerLabel": "{{label}} 一键创建应用"
+      "headerLabel": "{{label}} 一键创建应用",
+      "retry": "重试"
     },
     "guides": {
       "comingSoon": "{{platform}} Bot 集成功能正在开发中，敬请期待！",
@@ -2014,5 +2174,10 @@ export default {
         "description": "企业沟通协作平台"
       }
     }
+  },
+  "nodes": {
+    "imBotUUID": "Bot UUID",
+    "platformBotUUID": "Bot UUID",
+    "platformHint": "此链路所在的 IM 平台"
   }
 };

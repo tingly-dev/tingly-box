@@ -70,7 +70,9 @@ const ChatNode: React.FC<ChatNodeProps> = ({chatID, kind = 'direct_chat', name, 
             {/* Bottom layer — status chips. */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
                 <Chip
-                    label={kind === 'group' ? 'Group' : 'Direct'}
+                    label={kind === 'group'
+                        ? t('notify.target.group', {defaultValue: 'Group'})
+                        : t('notify.target.direct', {defaultValue: 'Direct'})}
                     size="small"
                     color={active && !blocked ? 'info' : 'default'}
                     sx={{height: 24, fontSize: '0.7rem', fontWeight: 500}}

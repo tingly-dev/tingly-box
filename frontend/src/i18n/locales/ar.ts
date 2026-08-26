@@ -29,7 +29,12 @@ export default {
     "direct": "مباشر",
     "theme": "المظهر",
     "prompt": "الموجّه",
-    "and": "و"
+    "and": "و",
+    "clear": "مسح التحديد",
+    "dismiss": "تجاهل",
+    "moveDown": "تحريك لأسفل",
+    "moveUp": "تحريك لأعلى",
+    "saved": "تم الحفظ"
   },
   "layout": {
     "appTitle": "Tingly Box",
@@ -140,7 +145,9 @@ export default {
     "default": "افتراضي",
     "onboarding": "إضافة مزوِّد بسرعة",
     "onboardingHint": "تصفَّح القائمة أو الصق الإعدادات",
-    "onboardingShort": "البدء"
+    "onboardingShort": "البدء",
+    "tools": "الأدوات",
+    "servertool": "أدوات الخادم"
   },
   "health": {
     "connected": "متصل",
@@ -302,7 +309,8 @@ export default {
       "placeholder": "مثال: OpenAI",
       "default": "المزوِّد الافتراضي",
       "helper": "اتركه فارغًا لاستخدام الاسم المُولَّد تلقائيًا. يمكنك تغييره لاحقًا.",
-      "editAction": "تعديل الاسم"
+      "editAction": "تعديل الاسم",
+      "fallback": "مزوِّد مخصص"
     },
     "providerOrUrl": {
       "label": "المزوِّد أو Base URL مخصص",
@@ -354,6 +362,13 @@ export default {
       "confirmNote": "تأكَّد قبل الإضافة من صحة Base URL ومفتاح API. يمكنك إضافة هذا المزوِّد، لكنه قد لا يعمل بشكل صحيح إذا كانت الإعدادات خاطئة.",
       "cancel": "رجوع",
       "confirm": "تأكيد الإضافة"
+    },
+    "provider": {
+      "placeholder": "Base URL"
+    },
+    "v1Hint": {
+      "message": "تحتاج معظم واجهات API المتوافقة مع OpenAI إلى اللاحقة /v1.",
+      "apply": "إضافة ‎/v1"
     }
   },
   "providerTable": {
@@ -1053,7 +1068,8 @@ export default {
       "mode": "الوضع",
       "unified": "موحَّد",
       "separate": "منفصل"
-    }
+    },
+    "defaultModeLabel": "الوضع الافتراضي"
   },
   "prompt": {
     "menu": "الموجّه",
@@ -1328,7 +1344,8 @@ export default {
       "topModels": "أبرز النماذج",
       "topProviders": "أبرز المزوِّدين",
       "others": "أخرى",
-      "noUsageHintShort": "جرِّب مدة زمنية أطول."
+      "noUsageHintShort": "جرِّب مدة زمنية أطول.",
+      "noUsersHint": "جرِّب كلمة بحث أخرى أو مدة زمنية مختلفة."
     },
     "agentNav": {
       "title": "بداية سريعة",
@@ -1535,7 +1552,14 @@ export default {
     },
     "quickLinks": "روابط سريعة",
     "goToDashboard": "لوحة المعلومات",
-    "goToHelp": "المساعدة والتوثيق"
+    "goToHelp": "المساعدة والتوثيق",
+    "success": "تمت إضافة المزوِّد! يمكنك الآن إنشاء السيناريوهات.",
+    "dialog": {
+      "title": "تمت إضافة المزوِّد",
+      "message": "أُضيف مزوِّد الذكاء الاصطناعي بنجاح. هل تريد الانتقال إلى صفحة الوكلاء لتبدأ استخدامه؟",
+      "goToAgents": "الانتقال إلى الوكلاء",
+      "stay": "البقاء هنا"
+    }
   },
   "imageGenQuickStart": {
     "title": "بداية سريعة لتوليد الصور",
@@ -1784,7 +1808,27 @@ export default {
       "saveAgentSettings": "حفظ إعدادات الوكيل"
     },
     "notify": {
-      "agentSettingsSaved": "حُفظت إعدادات الوكيل"
+      "agentSettingsSaved": "حُفظت إعدادات الوكيل",
+      "ccProfileUpdated": "حُدِّث ملف Claude Code",
+      "ccProfileUpdateFailed": "تعذَّر تحديث ملف Claude Code"
+    },
+    "pageTitle": "التحكم عن بُعد",
+    "pageSubtitle": "حدِّد من يستطيع التحكم بكل بوت وإلى أين تُوجَّه أوامر المحادثة.",
+    "routesTitle": "مسارات {{platform}}",
+    "routesSubtitle": "الوصول ← البوت ← الوكيل. انقر عقدة لتغيير ذلك الجزء من المسار.",
+    "ccProfile": {
+      "chip": "الملف",
+      "default": "افتراضي",
+      "defaultSecondary": "سيناريو claude_code الرئيسي",
+      "defaultTooltip": "يستخدم سيناريو claude_code الرئيسي. انقر لتوجيه ‎@cc عبر ملف تعريف Claude Code.",
+      "dialogTitle": "ملف Claude Code الخاص بـ ‎@cc",
+      "dialogSubtitle": "تمرُّ جلسات ‎@cc البعيدة عبر الملف المحدَّد — بقواعده ومناظرة نماذجه وتجاوزات إعداداته.",
+      "empty": "لا توجد ملفات Claude Code بعد. أنشئ واحدًا أولًا من صفحة سيناريو Claude Code.",
+      "missingTooltip": "الملف «{{id}}» لم يعد موجودًا — ويعود ‎@cc إلى سيناريو claude_code الافتراضي. انقر لاختيار ملف آخر.",
+      "profileTooltip": "ملف Claude Code",
+      "scenario": "السيناريو",
+      "separate": "منفصل",
+      "unified": "موحَّد"
     }
   },
   "bots": {
@@ -1802,7 +1846,37 @@ export default {
       "subtitle": "{{count}} من البوتات المتصلة",
       "connectBot": "ربط بوت",
       "emptyTitle": "لم تُربَط أي بوتات بعد",
-      "emptyDescription": "اربط بوتًا لتشغيل Claude Code من المحادثة (عن بُعد) أو لتلقي الإشعارات."
+      "emptyDescription": "اربط بوتًا لتشغيل Claude Code من المحادثة (عن بُعد) أو لتلقي الإشعارات.",
+      "allConnections": "كل الاتصالات",
+      "pageSubtitle": "اربط حسابات المراسلة التي يستخدمها التحكم عن بُعد وإشعارات المراسلة، وتولَّ صيانتها."
+    },
+    "table": {
+      "access": "الوصول",
+      "actions": "إجراءات",
+      "botId": "Bot UUID",
+      "capabilities": "القدرات",
+      "chatIdCopied": "تم نسخ Chat ID",
+      "chatIdCopyFailed": "تعذَّر النسخ — تحقَّق من أذونات الحافظة",
+      "chatsTitle": "المحادثات المتاحة — انسخ Chat ID للإشعار أو التفاعل",
+      "copyChatId": "نسخ Chat ID",
+      "copyUuid": "نسخ Bot UUID",
+      "itsPlatform": "منصته",
+      "name": "الاسم",
+      "noChats": "لا محادثات بعد. أرسِل أي رسالة إلى هذا البوت على {{platform}} وسيظهر Chat ID الخاص به هنا.",
+      "noChatsPairFirst": "لا محادثات بعد. اقرن هذا البوت أولًا (راجع «رمز الاقتران»)، ثم أرسِل له رسالة على {{platform}} — وسيظهر Chat ID الخاص به هنا.",
+      "notRunning": "هذا البوت ليس قيد التشغيل. شغِّله ثم أرسِل له رسالة على {{platform}} — وسيظهر Chat ID الخاص به هنا.",
+      "paired": "مقترن",
+      "platform": "المنصة",
+      "showChats": "عرض المحادثات المتاحة (نسخ Chat ID)",
+      "status": "الحالة",
+      "uuidCopied": "تم نسخ Bot UUID",
+      "uuidCopyFailed": "تعذَّر النسخ — تحقَّق من أذونات الحافظة"
+    },
+    "toggle": {
+      "disabled": "عُطِّل البوت",
+      "enabled": "فُعِّل البوت",
+      "failed": "تعذَّر تبديل حالة البوت: {{error}}",
+      "failedGeneric": "تعذَّر تبديل حالة البوت"
     }
   },
   "notify": {
@@ -1813,7 +1887,82 @@ export default {
     "mounted": "يُرسِل إشعارات",
     "notMounted": "بلا مسارات",
     "attachComingSoon": "+ إضافة مسار (قريبًا)",
-    "attachComingSoonHint": "لا يمكن إضافة المسارات من هنا بعد — فهي تُهيَّأ حاليًا في كل سيناريو على حدة."
+    "attachComingSoonHint": "لا يمكن إضافة المسارات من هنا بعد — فهي تُهيَّأ حاليًا في كل سيناريو على حدة.",
+    "loadFailed": "تعذَّر تحميل وجهات الإشعار",
+    "toggleFailed": "تعذَّر تحديث إعدادات الإشعار",
+    "emptyPlatformTitle": "لا توجد بوتات {{platform}}",
+    "emptyPlatformDescription": "اختر منصة أخرى بالأعلى، أو أضِف واحدة من صفحة «البوتات».",
+    "targetsTitle": "وجهات التسليم",
+    "targetsSubtitle": "المحادثات الفردية والمجموعات التي رصدتها بوتاتك المتصلة.",
+    "chat": {
+      "copied": "تم نسخ UUID الوجهة",
+      "copyFailed": "تعذَّر النسخ — تحقَّق من أذونات الحافظة",
+      "deleted": "حُذفت المحادثة"
+    },
+    "target": {
+      "direct": "فردية",
+      "group": "مجموعة",
+      "blocked": "حُظرت الوجهة",
+      "unblocked": "رُفع الحظر عن الوجهة"
+    },
+    "probe": {
+      "showRaw": "عرض الحمولة الخام"
+    },
+    "group": {
+      "allowAndTest": "السماح بالإشعار والاختبار",
+      "copyChatId": "نسخ UUID الوجهة الداخلي",
+      "custom": "مخصصة",
+      "customHint": "اكتب رسالة مخصصة (نص حر)",
+      "deleteChat": "حذف سجل هذه المحادثة الفردية",
+      "deleteChatTitle": "هل تريد حذف هذه المحادثة؟",
+      "deleteChatBody": "سيُحذف اقترانها وقائمتها المسموحة وربطها بالمشروع. وإذا راسلت البوت مرة أخرى فستُسجَّل كمحادثة جديدة تمامًا (ويلزم الاقتران من جديد عند فرضه). ولا يتأثر سجل الجلسة. وإذا أردت حظرها فقط فاستخدم «تعطيل».",
+      "disableChat": "تعطيل — إسقاط رسائلها بصمت",
+      "disabledBody": "البوت متوقف — فعِّله لعرض محادثاته المتاحة والإرسال إليها.",
+      "disabledChat": "معطَّلة",
+      "disableHint": "تعطيل الإشعار لهذا البوت",
+      "empty": "لا محادثات بعد. أرسِل أي رسالة إلى هذا البوت على {{platform}} وسيظهر Chat ID الخاص به هنا.",
+      "emptyPairFirst": "لا محادثات بعد. اقرن هذا البوت أولًا، ثم أرسِل له رسالة على {{platform}} — وسيظهر Chat ID الخاص به هنا.",
+      "enableChat": "تفعيل — قبول رسائلها من جديد",
+      "enableHint": "تفعيل الإشعار. ويبدأ البوت تلقائيًا عند الحاجة.",
+      "hideDisabled": "إخفاء المعطَّلة",
+      "noTargets": "لم تُرصَد أي وجهات",
+      "paired": "مقترنة",
+      "refresh": "تحديث المحادثات المتاحة",
+      "showDisabled": "عرض المعطَّلة ({{count}})",
+      "targetCount": "{{direct}} فردية · {{groups}} مجموعات"
+    },
+    "guide": {
+      "title": "دليل واجهة إشعارات المراسلة",
+      "action": "دليل API",
+      "description": "المصادقة وأمثلة الطلبات ومعرِّفات الوجهات",
+      "auth": {
+        "title": "١. المصادقة برمز المستخدم الخاص بك",
+        "body": "يمكن لأي تكامل أن يقود محادثة بوت. وتستخدم المصادقة رمز المستخدم المشغِّل الموجود لديك أصلًا (نفس الرمز الذي تستخدمه هذه الواجهة) في ترويسة Bearer — دون الحاجة إلى إنشاء بيانات اعتماد جديدة. والمطالبات التفاعلية ‏(/interact) والإشعارات أحادية الاتجاه ‏(/notify) عنوانان منفصلان، فشكل الطلب نفسه هو ما يحدِّد الوضع."
+      },
+      "send": {
+        "title": "٢. إرسال إشعار أحادي الاتجاه",
+        "body": "أرسِل POST إلى /api/v1/bots/{bot}/notify مع وضع UUID البوت في المسار. والرد 200 يعني أن الإشعار سُلِّم.",
+        "json": "جسم الطلب:"
+      },
+      "chatid": {
+        "title": "٣. انسخ UUID الوجهة من «وجهات التسليم»",
+        "body": "تعرض كل عقدة محادثة في هذه الصفحة Chat ID الحقيقي للمنصة للتعرُّف عليها؛ كما تُظهِر تلميحتها UUID الوجهة الداخلي الثابت الذي تطلبه الواجهة. استخدم إجراء النسخ بجوار العقدة، أو أرسِل اختبارًا مباشرةً من منصة الفحص."
+      }
+    },
+    "test": {
+      "title": "إرسال إشعار تجريبي",
+      "target": "الوجهة",
+      "targetPlaceholder": "لا توجد وجهات مصرَّح بها بعد",
+      "pickKnownChat": "اختر محادثة مكتشَفة أولًا",
+      "level": "المستوى",
+      "titleField": "العنوان (اختياري)",
+      "bodyField": "النص (markdown)",
+      "resetMarkdown": "إعادة إلى نموذج markdown",
+      "send": "إرسال",
+      "sent": "أُرسل الإشعار",
+      "sendFailed": "فشل الإرسال: {{error}}",
+      "paired": "مقترنة"
+    }
   },
   "remoteControl": {
     "bots": {
@@ -1838,7 +1987,12 @@ export default {
       "bashAllowlistHelper": "الأوامر الفرعية المسموحة لـ /bash. الافتراضي: cd وls وpwd.",
       "cancel": "إلغاء",
       "save": "حفظ التهيئة",
-      "saving": "جارٍ الحفظ..."
+      "saving": "جارٍ الحفظ...",
+      "addSubtitle": "اختر منصة مراسلة وأدخِل بيانات الاعتماد اللازمة لربطها.",
+      "editSubtitle": "حدِّث هذا الاتصال. أما القدرات والأشخاص فتُدار من «الوصول».",
+      "connect": "ربط البوت",
+      "advancedAgentPolicy": "سياسة الوكيل المتقدمة",
+      "advancedAgentPolicyHelper": "تحدُّ مما يستطيع المتحكِّم المصرَّح له تنفيذه؛ وهي لا تمنح الوصول بذاتها."
     },
     "card": {
       "disableBot": "تعطيل البوت",
@@ -1852,7 +2006,9 @@ export default {
       "proxyLabel": "الوكيل:",
       "allowlistLabel": "القائمة المسموحة:",
       "deleteTitle": "حذف تهيئة البوت",
-      "deleteConfirm": "هل تريد حذف «{{name}}»؟ لا يمكن التراجع عن هذا الإجراء."
+      "deleteConfirm": "هل تريد حذف «{{name}}»؟ لا يمكن التراجع عن هذا الإجراء.",
+      "remoteAgentOff": "إيقاف التحكم عن بُعد. ويظل البوت متاحًا للقدرات الأخرى.",
+      "remoteAgentOn": "تشغيل التحكم عن بُعد. ويبدأ البوت تلقائيًا عند الحاجة."
     },
     "notify": {
       "loadFailed": "تعذَّر تحميل إعدادات البوت",
@@ -1875,14 +2031,17 @@ export default {
       "deleteFailedGeneric": "تعذَّر حذف البوت",
       "cwdUpdateFailed": "تعذَّر تحديث مجلد العمل",
       "modelUpdated": "حُدِّثت تهيئة نموذج البوت",
-      "modelUpdateFailed": "تعذَّر تحديث تهيئة البوت"
+      "modelUpdateFailed": "تعذَّر تحديث تهيئة البوت",
+      "remoteAgentOff": "عُطِّل التحكم عن بُعد",
+      "remoteAgentOn": "فُعِّل التحكم عن بُعد"
     },
     "guide": {
       "title": "دليل تهيئة {{platform}}",
       "action": "دليل التهيئة",
       "drawerHint": "خطوات الاتصال وبيانات الاعتماد والأمثلة",
       "showMore": "عرض المزيد",
-      "showLess": "عرض أقل"
+      "showLess": "عرض أقل",
+      "collapsedHint": "خطوات الاتصال وبيانات الاعتماد والأمثلة"
     },
     "platformSelector": {
       "loading": "جارٍ تحميل قائمة المنصات...",
@@ -1959,7 +2118,8 @@ export default {
       "deniedWarning": "رُفض التفويض في {{label}}.",
       "tryAgain": "إعادة المحاولة",
       "errorFallback": "حدث خطأ أثناء التسجيل في {{label}}",
-      "headerLabel": "إنشاء تطبيق {{label}} بنقرة واحدة"
+      "headerLabel": "إنشاء تطبيق {{label}} بنقرة واحدة",
+      "retry": "إعادة المحاولة"
     },
     "guides": {
       "comingSoon": "تكامل بوتات {{platform}} قيد التطوير. ترقَّب التحديثات!",
@@ -2056,5 +2216,10 @@ export default {
         "description": "منصة تواصل مؤسسي"
       }
     }
+  },
+  "nodes": {
+    "imBotUUID": "Bot UUID",
+    "platformBotUUID": "Bot UUID",
+    "platformHint": "منصة المراسلة التي تعمل عليها هذه السلسلة"
   }
 };

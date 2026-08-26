@@ -1431,6 +1431,10 @@ const DefaultModeSection: React.FC<{
     defaultMode: ClaudeCodeDefaultMode;
     setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
 }> = ({ lang, defaultMode, setDefaultMode }) => {
+    // The row's own label comes from the locale files rather than the inline
+    // bundles above: it names a Claude Code concept the rest of claudeCode.*
+    // already covers, not one of this panel's dev-facing env descriptions.
+    const { t } = useTranslation();
     const meta = DEFAULT_MODE_SECTION_TEXT[lang];
     const text = CLAUDE_CODE_DEFAULT_MODE_TEXT[lang];
     const selectedText = text[defaultMode];
@@ -1439,7 +1443,7 @@ const DefaultModeSection: React.FC<{
         <SettingsRowSection
             title={meta.title}
             hint={meta.hint}
-            label="Default Mode"
+            label={t('claudeCode.defaultModeLabel')}
             tooltip={`${selectedText.label}: ${selectedText.description}`}
             settingsKey="defaultMode"
             control={
