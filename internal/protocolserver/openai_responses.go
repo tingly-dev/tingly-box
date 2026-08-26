@@ -224,7 +224,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
-	reqCtx, err := ph.TransformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ph.TransformOpenAIResponses(c, req, target, provider, isStreaming, scenarioType, maxAllowed, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
@@ -237,7 +237,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	reqCtx.RequestModel = actualModel
-	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

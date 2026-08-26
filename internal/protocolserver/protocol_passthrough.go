@@ -27,8 +27,8 @@ func (ph *ProtocolHandler) NonstreamAnthropicV1(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	actualModel := reqCtx.RequestModel
 
@@ -109,8 +109,8 @@ func (ph *ProtocolHandler) StreamAnthropicV1(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel
@@ -180,7 +180,8 @@ func (ph *ProtocolHandler) StreamAnthropicV1(
 // StreamAnthropicBeta processes the Anthropic beta streaming
 // response. The resolved model is passed in as actualModel rather than read from
 // the request, so the handler no longer depends on req.Model.
-func (ph *ProtocolHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider) {
+	recorder := recording.FromGin(c)
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if recorder is available
@@ -206,7 +207,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
-		ph.failForward(c, nil, err)
+		ph.failForward(c, err)
 		return
 	}
 
@@ -301,7 +302,8 @@ func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provid
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
-func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
+	recorder := recording.FromGin(c)
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
@@ -311,7 +313,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *tran
 		defer cancel()
 	}
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to forward request")
+		ph.failRequest(c, err, "Failed to forward request")
 		return
 	}
 
@@ -326,7 +328,8 @@ func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *tran
 
 // streamOpenAIResponses handles Responses API passthrough (streaming)
 // Moved from openai_responses.go:421-456
-func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
+	recorder := recording.FromGin(c)
 	responseModel := reqCtx.ResponseModel
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 

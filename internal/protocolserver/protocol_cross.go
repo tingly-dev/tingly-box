@@ -56,7 +56,7 @@ func (ph *ProtocolHandler) forwardResponsesNonstream(
 		defer cancel()
 	}
 	if err != nil {
-		ph.failForward(c, recorder, err)
+		ph.failForward(c, err)
 		return
 	}
 
@@ -193,14 +193,14 @@ func (ph *ProtocolHandler) assembleResponsesToAnthropicBeta(c *gin.Context, prox
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
-func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to forward request")
+		ph.failRequest(c, err, "Failed to forward request")
 		return
 	}
 
@@ -210,7 +210,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
-func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
@@ -221,7 +221,7 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 		defer cancel()
 	}
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to create streaming request")
+		ph.failRequest(c, err, "Failed to create streaming request")
 		return
 	}
 	hc := protocol.NewHandleContext(c, responseModel)
@@ -232,7 +232,7 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 // nonstreamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (non-streaming).
-func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
@@ -243,7 +243,7 @@ func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, req
 		defer cancel()
 	}
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to forward request")
+		ph.failRequest(c, err, "Failed to forward request")
 		return
 	}
 
@@ -255,7 +255,7 @@ func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, req
 // streamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (streaming).
-func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
@@ -268,7 +268,7 @@ func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx
 		defer cancel()
 	}
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to create streaming request")
+		ph.failRequest(c, err, "Failed to create streaming request")
 		return
 	}
 
@@ -277,7 +277,8 @@ func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx
 	ph.trackUsageWithTokenUsage(c, usage, err)
 }
 
-func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
+	recorder := recording.FromGin(c)
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
@@ -307,7 +308,8 @@ func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transfo
 	}
 }
 
-func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
+	recorder := recording.FromGin(c)
 	actualModel := reqCtx.RequestModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
@@ -319,7 +321,7 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 		defer cancel()
 	}
 	if err != nil {
-		ph.failRequest(c, recorder, err, "Failed to forward request")
+		ph.failRequest(c, err, "Failed to forward request")
 		return
 	}
 

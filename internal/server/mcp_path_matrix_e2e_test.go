@@ -289,7 +289,7 @@ func runDispatch(
 	c.Request = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("{}"))
 	protocolserver.SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, streaming)
 
-	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, streaming, nil)
+	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, streaming)
 	return w.Code, w.Header(), w.Body.String()
 }
 

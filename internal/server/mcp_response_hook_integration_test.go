@@ -704,7 +704,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	rule := &typ.Rule{}
 	protocolserver.SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, true)
 
-	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, true, nil)
+	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, true)
 
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)

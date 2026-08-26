@@ -64,8 +64,9 @@ func ShouldUseGenericMCPForProvider(cfg *config.Config, provider *typ.Provider) 
 func (ph *ProtocolHandler) DispatchChainResult(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
+	recorder := recording.FromGin(c)
 	defer func() {
 		reqCtx.Release()
 	}()
@@ -79,19 +80,19 @@ func (ph *ProtocolHandler) DispatchChainResult(
 
 	switch reqCtx.TargetAPI {
 	case protocol.TypeOpenAIChat:
-		ph.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeAnthropicV1:
 		if isStreaming {
-			ph.StreamAnthropicV1(c, reqCtx, rule, provider, recorder)
+			ph.StreamAnthropicV1(c, reqCtx, rule, provider)
 		} else {
-			ph.NonstreamAnthropicV1(c, reqCtx, rule, provider, recorder)
+			ph.NonstreamAnthropicV1(c, reqCtx, rule, provider)
 		}
 	case protocol.TypeAnthropicBeta:
-		ph.dispatchAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.dispatchAnthropicBeta(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeOpenAIResponses:
-		ph.dispatchOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.dispatchOpenAIResponses(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeGoogle:
-		ph.dispatchGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.dispatchGoogle(c, reqCtx, rule, provider, isStreaming)
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 		if recorder != nil {
@@ -106,19 +107,19 @@ func (ph *ProtocolHandler) DispatchChainResult(
 func (ph *ProtocolHandler) dispatchAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
 	switch reqCtx.SourceAPI {
 	case protocol.TypeOpenAIChat:
-		ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeOpenAIResponses:
 		if isStreaming {
-			ph.streamAnthropicBetaToResponses(c, reqCtx, provider, recorder)
+			ph.streamAnthropicBetaToResponses(c, reqCtx, provider)
 		} else {
-			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, provider, recorder)
+			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, provider)
 		}
 	default:
-		ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
+		ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming)
 	}
 }
 
@@ -133,7 +134,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 func (ph *ProtocolHandler) dispatchOpenAIResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
@@ -161,16 +162,16 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 		// Client sent Responses API, but provider needs Chat format
 		// Forward as Chat, then convert response back to Responses format
 		if isStreaming {
-			ph.streamResponsesToChat(c, reqCtx, provider, recorder)
+			ph.streamResponsesToChat(c, reqCtx, provider)
 		} else {
-			ph.nonstreamResponsesToChat(c, reqCtx, provider, recorder)
+			ph.nonstreamResponsesToChat(c, reqCtx, provider)
 		}
 	case protocol.TypeOpenAIResponses:
 		// Responses API passthrough
 		if isStreaming {
-			ph.streamOpenAIResponses(c, reqCtx, provider, recorder)
+			ph.streamOpenAIResponses(c, reqCtx, provider)
 		} else {
-			ph.nonstreamOpenAIResponses(c, reqCtx, provider, recorder)
+			ph.nonstreamOpenAIResponses(c, reqCtx, provider)
 		}
 	}
 }
@@ -283,8 +284,9 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
+	recorder := recording.FromGin(c)
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
@@ -300,7 +302,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 		}
 
 		if HasDeclaredMCPAnthropicBetaTools(req) && ph.mcpEnabled() {
-			ph.StreamAnthropicBetaToOpenAIChatWithMCP(c, provider, req, actualModel, responseModel, disableStreamUsage, recorder)
+			ph.StreamAnthropicBetaToOpenAIChatWithMCP(c, provider, req, actualModel, responseModel, disableStreamUsage)
 			return
 		}
 
@@ -309,7 +311,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			defer cancel()
 		}
 		if err != nil {
-			ph.failRequest(c, recorder, err, "Failed to create streaming request")
+			ph.failRequest(c, err, "Failed to create streaming request")
 			return
 		}
 
@@ -343,7 +345,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			var genericUsage *mcp.TokenUsage
 			anthropicResp, genericUsage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				ph.respondMCPError(c, recorder, err, "Failed to handle MCP tool calls")
+				ph.respondMCPError(c, err, "Failed to handle MCP tool calls")
 				return
 			}
 			if genericUsage != nil {
@@ -356,7 +358,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 				defer cancel()
 			}
 			if err != nil {
-				ph.failRequest(c, recorder, err, "Failed to forward Anthropic request")
+				ph.failRequest(c, err, "Failed to forward Anthropic request")
 				return
 			}
 			usage = usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage)
@@ -388,16 +390,17 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 func (ph *ProtocolHandler) passthroughAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
+	recorder := recording.FromGin(c)
 	useGeneric := ph.mcpEnabled() && ph.shouldUseGenericMCPForProvider(provider)
 
 	if useGeneric {
 		if !isStreaming {
-			ph.DispatchGenericAnthropicBetaNonStream(c, reqCtx, rule, provider, recorder)
+			ph.DispatchGenericAnthropicBetaNonStream(c, reqCtx, rule, provider)
 			return
 		}
-		ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
+		ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider)
 		return
 	}
 
@@ -410,7 +413,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 		if ph.mcpEnabled() {
 			declaredMCP := HasDeclaredMCPAnthropicBetaTools(req)
 			if declaredMCP {
-				ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
+				ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider)
 				return
 			}
 		}
@@ -426,7 +429,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 			return
 		}
 
-		ph.StreamAnthropicBeta(c, req, streamResp, actualModel, responseModel, provider, recorder)
+		ph.StreamAnthropicBeta(c, req, streamResp, actualModel, responseModel, provider)
 		return
 
 	} else {
@@ -440,7 +443,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 			var usage *mcp.TokenUsage
 			anthropicResp, usage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				ph.failForward(c, recorder, err)
+				ph.failForward(c, err)
 				return
 			}
 			if usage != nil {
@@ -456,7 +459,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 				defer cancel()
 			}
 			if err != nil {
-				ph.failForward(c, recorder, err)
+				ph.failForward(c, err)
 				return
 			}
 
@@ -482,8 +485,9 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 func (ph *ProtocolHandler) dispatchGoogle(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
+	recorder := recording.FromGin(c)
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	googleReq := reqCtx.Request.(*protocol.GoogleRequest)
 	model, req, cfg := actualModel, googleReq.Contents, googleReq.Config
@@ -574,8 +578,9 @@ func (ph *ProtocolHandler) dispatchGoogle(
 func (ph *ProtocolHandler) dispatchOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *recording.ProtocolRecorder,
+	isStreaming bool,
 ) {
+	recorder := recording.FromGin(c)
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
@@ -590,9 +595,9 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 	if isStreaming {
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
-			ph.StreamOpenAIChatToAnthropicV1WithMCP(c, provider, req, actualModel, responseModel, recorder)
+			ph.StreamOpenAIChatToAnthropicV1WithMCP(c, provider, req, actualModel, responseModel)
 		case protocol.TypeAnthropicBeta:
-			ph.StreamOpenAIChatToAnthropicBetaWithMCP(c, provider, req, actualModel, responseModel, recorder)
+			ph.StreamOpenAIChatToAnthropicBetaWithMCP(c, provider, req, actualModel, responseModel)
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: source and target are both OpenAI Chat format
 			disableStreamUsage := ShouldStripUsage(reqCtx.Extra)
@@ -601,13 +606,13 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			}
 
 			if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
-				ph.DispatchGenericOpenAIChatStream(c, reqCtx, rule, provider, recorder)
+				ph.DispatchGenericOpenAIChatStream(c, reqCtx, rule, provider)
 				return
 			}
 
 			ph.streamOpenAIChat(c, provider, req, responseModel, disableStreamUsage)
 		case protocol.TypeOpenAIResponses:
-			ph.streamOpenAIChatToResponses(c, reqCtx, provider, recorder)
+			ph.streamOpenAIChatToResponses(c, reqCtx, provider)
 		}
 	} else {
 		switch reqCtx.SourceAPI {
@@ -616,14 +621,14 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			stripUsage := ShouldStripUsage(reqCtx.Extra)
 
 			if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
-				ph.DispatchGenericOpenAIChatNonStream(c, reqCtx, rule, provider, recorder)
+				ph.DispatchGenericOpenAIChatNonStream(c, reqCtx, rule, provider)
 				return
 			}
 
 			ph.nonstreamOpenAIChat(c, provider, req, responseModel, stripUsage)
 			return
 		case protocol.TypeOpenAIResponses:
-			ph.nonstreamOpenAIChatToResponses(c, reqCtx, provider, recorder)
+			ph.nonstreamOpenAIChatToResponses(c, reqCtx, provider)
 			return
 		default:
 			// Forward request to provider for format conversion

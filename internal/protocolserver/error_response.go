@@ -35,7 +35,8 @@ const ProbeSyntheticRuleUUID = "probe-synthetic"
 // given description (propagating the upstream status), and recorder capture.
 // It consolidates the track/send/record triplet repeated across the protocol
 // dispatch paths.
-func (ph *ProtocolHandler) failRequest(c *gin.Context, recorder *recording.ProtocolRecorder, err error, desc string) {
+func (ph *ProtocolHandler) failRequest(c *gin.Context, err error, desc string) {
+	recorder := recording.FromGin(c)
 	ph.trackUsageFromContext(c, 0, 0, err)
 	SendErrorResponse(c, err, desc)
 	if recorder != nil {
@@ -45,7 +46,8 @@ func (ph *ProtocolHandler) failRequest(c *gin.Context, recorder *recording.Proto
 
 // failForward is failRequest with the canonical forwarding-error body
 // (stream.SendForwardingError) instead of a per-site description.
-func (ph *ProtocolHandler) failForward(c *gin.Context, recorder *recording.ProtocolRecorder, err error) {
+func (ph *ProtocolHandler) failForward(c *gin.Context, err error) {
+	recorder := recording.FromGin(c)
 	ph.trackUsageFromContext(c, 0, 0, err)
 	stream.SendForwardingError(c, err)
 	if recorder != nil {
@@ -56,7 +58,8 @@ func (ph *ProtocolHandler) failForward(c *gin.Context, recorder *recording.Proto
 // respondMCPError is the MCP-tool-call variant of failRequest: a fixed 500
 // "api_error" body (MCP loop failures are gateway-internal, so no upstream
 // status to propagate) with the message ordered as "desc: err".
-func (ph *ProtocolHandler) respondMCPError(c *gin.Context, recorder *recording.ProtocolRecorder, err error, msg string) {
+func (ph *ProtocolHandler) respondMCPError(c *gin.Context, err error, msg string) {
+	recorder := recording.FromGin(c)
 	ph.trackUsageFromContext(c, 0, 0, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{

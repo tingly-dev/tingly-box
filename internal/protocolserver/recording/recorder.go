@@ -112,6 +112,20 @@ func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
 	return rec, ok
 }
 
+// FromGin is the canonical way protocol code reaches the per-request
+// recorder: nil when recording is off, and every recorder method is
+// nil-safe, so callers use the result unconditionally. The recorder rides
+// the gin context (stashed once by EnsureProtocolRecorder) instead of being
+// threaded through protocol call signatures — mirroring how rule flags ride
+// the request context rather than parameter lists.
+func FromGin(c *gin.Context) *ProtocolRecorder {
+	if c == nil {
+		return nil
+	}
+	rec, _ := getRecorderFromContext(c)
+	return rec
+}
+
 func (sr *ProtocolRecorder) BindProvider(provider *typ.Provider, model string, mode obs.RecordMode) {
 	if sr == nil {
 		return

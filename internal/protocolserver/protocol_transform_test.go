@@ -18,7 +18,7 @@ import (
 func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
 	h := &ProtocolHandler{}
-	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, typ.ScenarioGlobal, nil, preBase, preVendor)
+	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, typ.ScenarioGlobal, preBase, preVendor)
 	require.NoError(t, err)
 
 	var names []string

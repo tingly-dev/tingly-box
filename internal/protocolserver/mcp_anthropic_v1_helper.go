@@ -265,8 +265,8 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	response, usage, err := ph.RunGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
@@ -293,8 +293,8 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel
@@ -349,8 +349,8 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaNonStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
 
@@ -384,8 +384,8 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel

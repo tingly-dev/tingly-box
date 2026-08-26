@@ -24,8 +24,8 @@ func (ph *ProtocolHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 	actualModel string,
 	responseModel string,
 	disableStreamUsage bool,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	for round := 0; round < 3; round++ {
 		wrapper := ph.deps.ClientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)

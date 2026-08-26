@@ -20,8 +20,8 @@ func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 	req *openai.ChatCompletionNewParams,
 	actualModel string,
 	responseModel string,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	for round := 0; round < 3; round++ {
 		wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
@@ -71,8 +71,8 @@ func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 	req *openai.ChatCompletionNewParams,
 	actualModel string,
 	responseModel string,
-	recorder *recording.ProtocolRecorder,
 ) {
+	recorder := recording.FromGin(c)
 	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)

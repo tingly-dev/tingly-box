@@ -230,7 +230,7 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
 
 	// === Transform via pipeline ===
-	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
@@ -243,5 +243,5 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
-	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
 }
