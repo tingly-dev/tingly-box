@@ -6,6 +6,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveLanguage } from '@/i18n';
+import { DirectionProvider } from '@/i18n/DirectionProvider';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import ExperimentalFeatureGate from './components/ExperimentalFeatureGate';
@@ -328,27 +329,29 @@ function AppWithTheme() {
     const theme = useMemo(() => createAppTheme(effectiveMode, language), [effectiveMode, language]);
 
     return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <NotificationProvider>
-                <BrowserRouter>
-                    <HealthProvider>
-                        <VersionProvider>
-                            <AuthProvider>
-                                <FeatureFlagsProvider>
-                                    <ProfileProvider>
-                                        <TeamProvider>
-                                            <AppContent />
-                                            <AppDialogs />
-                                        </TeamProvider>
-                                    </ProfileProvider>
-                                </FeatureFlagsProvider>
-                            </AuthProvider>
-                        </VersionProvider>
-                    </HealthProvider>
-                </BrowserRouter>
-            </NotificationProvider>
-        </ThemeProvider>
+        <DirectionProvider language={language}>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <NotificationProvider>
+                    <BrowserRouter>
+                        <HealthProvider>
+                            <VersionProvider>
+                                <AuthProvider>
+                                    <FeatureFlagsProvider>
+                                        <ProfileProvider>
+                                            <TeamProvider>
+                                                <AppContent />
+                                                <AppDialogs />
+                                            </TeamProvider>
+                                        </ProfileProvider>
+                                    </FeatureFlagsProvider>
+                                </AuthProvider>
+                            </VersionProvider>
+                        </HealthProvider>
+                    </BrowserRouter>
+                </NotificationProvider>
+            </ThemeProvider>
+        </DirectionProvider>
     );
 }
 

@@ -78,6 +78,30 @@ const MODAL_TEXT = {
         updatedLabel: 'Обновлено',
         backupLabel: 'Резервная копия сохранена в',
     },
+    fa: {
+        tabQuick: 'پیکربندی خودکار',
+        tabManual: 'دستی',
+        previewButton: 'پیش‌نمایش متغیرهای ساخته‌شده',
+        resetTooltip: 'بازگرداندن به مقادیر پیشنهادی tb',
+        previewTitle: 'پیش‌نمایش — بخش env که در ~/.claude/settings.json نوشته می‌شود',
+        applySuccess: 'پیکربندی اعمال شد',
+        applyFailure: 'اعمال ناموفق بود',
+        createdLabel: 'ساخته شد',
+        updatedLabel: 'به‌روزرسانی شد',
+        backupLabel: 'نسخهٔ پشتیبان ذخیره شد در',
+    },
+    ar: {
+        tabQuick: 'تهيئة تلقائية',
+        tabManual: 'يدويًا',
+        previewButton: 'معاينة المتغيرات المُولَّدة',
+        resetTooltip: 'إعادة إلى القيم التي يوصي بها tb',
+        previewTitle: 'معاينة — كتلة env التي ستُكتب في ~/.claude/settings.json',
+        applySuccess: 'طُبِّقت التهيئة',
+        applyFailure: 'فشل التطبيق',
+        createdLabel: 'أُنشئ',
+        updatedLabel: 'حُدِّث',
+        backupLabel: 'حُفظت نسخة احتياطية في',
+    },
 } as const;
 
 // Helper to generate common Node.js script for writing config files

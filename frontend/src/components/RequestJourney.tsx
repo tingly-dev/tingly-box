@@ -270,6 +270,10 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
 
     return (
         <Box
+            // The journey is span names, URLs, status codes and routing traces —
+            // machine text throughout, so it stays LTR under an RTL locale
+            // (see index.css).
+            data-ltr
             sx={{
                 display: 'grid',
                 // kind · name · detail · result · duration — one grid for the

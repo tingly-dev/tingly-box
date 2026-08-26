@@ -854,6 +854,8 @@ export default {
       "en": "English",
       "zh": "中文",
       "ru": "Русский",
+      "fa": "فارسی",
+      "ar": "العربية",
       "current": "Current",
       "saveSuccess": "Language settings updated",
       "saveFailed": "Failed to update language settings"

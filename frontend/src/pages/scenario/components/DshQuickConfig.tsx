@@ -81,12 +81,24 @@ const FIELD_TEXT: Record<AppLanguage, FieldText> = {
         purpose: 'Принимают ли модели этого провайдера изображения по умолчанию',
         tooltip: 'text — только текст; text_image допускает и изображения. Пусто — defaultInput не записывается, и dsh считает модели текстовыми.',
     },
+    fa: {
+        label: 'حالت‌های ورودی پشتیبانی‌شده',
+        purpose: 'آیا مدل‌های این ارائه‌دهنده به‌طور پیش‌فرض تصویر می‌پذیرند',
+        tooltip: '‏text فقط متن است؛ text_image تصویر را هم می‌پذیرد. خالی یعنی defaultInput نوشته نمی‌شود و dsh مدل‌ها را متنی در نظر می‌گیرد.',
+    },
+    ar: {
+        label: 'أنماط الإدخال المدعومة',
+        purpose: 'هل تقبل نماذج هذا المزوِّد الصور افتراضيًا',
+        tooltip: '‏text نص فقط؛ وtext_image يقبل الصور أيضًا. والفراغ يعني عدم كتابة defaultInput، فيعامل dsh النماذج كنصية.',
+    },
 };
 
 const VALUE_LABEL: Record<AppLanguage, Record<string, string>> = {
     zh: { text: 'text（仅文本）', text_image: 'text_image（文本 + 图片）' },
     en: { text: 'text (text-only)', text_image: 'text_image (text + image)' },
     ru: { text: 'text (только текст)', text_image: 'text_image (текст + изображения)' },
+    fa: { text: 'text (فقط متن)', text_image: 'text_image (متن + تصویر)' },
+    ar: { text: 'text (نص فقط)', text_image: 'text_image (نص + صور)' },
 };
 
 const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; sectionHint: string; unsetLabel: string }> = {
@@ -107,6 +119,18 @@ const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; 
         sectionTitle: 'Возможности моделей',
         sectionHint: 'Пусто — значение dsh по умолчанию (только текст)',
         unsetLabel: '(по умолчанию, только текст)',
+    },
+    fa: {
+        panelHeader: 'این مقادیر در ورودی ارائه‌دهندهٔ tingly-box در $DSH_HOME/settings.yaml نوشته می‌شوند',
+        sectionTitle: 'قابلیت‌های مدل',
+        sectionHint: 'خالی یعنی مقدار پیش‌فرض dsh (فقط متن)',
+        unsetLabel: '(پیش‌فرض، فقط متن)',
+    },
+    ar: {
+        panelHeader: 'تُكتب هذه القيم في مدخل مزوِّد tingly-box داخل $DSH_HOME/settings.yaml',
+        sectionTitle: 'قدرات النماذج',
+        sectionHint: 'الفراغ يعني القيمة الافتراضية لـ dsh (نص فقط)',
+        unsetLabel: '(افتراضي، نص فقط)',
     },
 };
 
@@ -132,6 +156,18 @@ const PROTOCOL_TEXT: Record<AppLanguage, { sectionTitle: string; label: string; 
         purpose: 'В каком формате tingly-box передаёт запросы в dsh',
         tooltip: 'OpenAI Chat — самый совместимый формат; OpenAI Responses — для моделей, работающих через Responses API; Anthropic Messages — для моделей, использующих формат сообщений Claude. Неверный выбор сломает модели этого провайдера.',
     },
+    fa: {
+        sectionTitle: 'اتصال',
+        label: 'پروتکل اصلی',
+        purpose: 'قالبی که tingly-box با آن درخواست‌ها را به dsh می‌فرستد',
+        tooltip: '‏OpenAI Chat سازگارترین قالب است؛ OpenAI Responses برای مدل‌هایی است که از Responses API استفاده می‌کنند؛ Anthropic Messages برای مدل‌هایی است که قالب پیام Claude را می‌فهمند. انتخاب نادرست، مدل‌های این ارائه‌دهنده را از کار می‌اندازد.',
+    },
+    ar: {
+        sectionTitle: 'الاتصال',
+        label: 'البروتوكول الأساسي',
+        purpose: 'الصيغة التي يمرِّر بها tingly-box الطلبات إلى dsh',
+        tooltip: '‏OpenAI Chat هو الأوسع توافقًا؛ وOpenAI Responses للنماذج التي تستخدم Responses API؛ وAnthropic Messages للنماذج التي تتحدث صيغة رسائل Claude. والاختيار الخاطئ يُعطِّل نماذج هذا المزوِّد.',
+    },
 };
 
 const PROTOCOL_VALUE_LABEL: Record<AppLanguage, Record<string, string>> = {
@@ -146,6 +182,16 @@ const PROTOCOL_VALUE_LABEL: Record<AppLanguage, Record<string, string>> = {
         'anthropic-messages': 'Anthropic Messages',
     },
     ru: {
+        'openai-completions': 'OpenAI Chat (Completions)',
+        'openai-responses': 'OpenAI Responses',
+        'anthropic-messages': 'Anthropic Messages',
+    },
+    fa: {
+        'openai-completions': 'OpenAI Chat (Completions)',
+        'openai-responses': 'OpenAI Responses',
+        'anthropic-messages': 'Anthropic Messages',
+    },
+    ar: {
         'openai-completions': 'OpenAI Chat (Completions)',
         'openai-responses': 'OpenAI Responses',
         'anthropic-messages': 'Anthropic Messages',

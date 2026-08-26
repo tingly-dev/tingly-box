@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import ar from './ar';
 import en from './en';
+import fa from './fa';
 import ru from './ru';
 import zh from './zh';
 
@@ -9,6 +11,8 @@ const BUNDLES: Array<[string, Bundle]> = [
     ['en', en as unknown as Bundle],
     ['zh', zh as unknown as Bundle],
     ['ru', ru as unknown as Bundle],
+    ['fa', fa as unknown as Bundle],
+    ['ar', ar as unknown as Bundle],
 ];
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
