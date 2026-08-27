@@ -16,6 +16,14 @@ for managing the AI model proxy server. Supports both full GUI mode
 (window + systray) and slim mode (systray only).`,
 	}
 
+	// --config-dir is resolved before cobra parses (main.go's
+	// resolveConfigDir, needed to build AppManager up front). Registered here
+	// only so cobra recognizes the flag instead of erroring on it; the value
+	// cobra parses is unused. Lets a second instance run against an isolated
+	// config dir for debugging, e.g. `tingly-box-gui gui --config-dir
+	// ./.tingly-box-debug --port 12333`.
+	rootCmd.PersistentFlags().String("config-dir", "", "Configuration directory (resolved before startup; see main.go)")
+
 	rootCmd.AddCommand(GUICommand(appManager, launcher))
 	rootCmd.AddCommand(SlimCommand(appManager, launcher))
 	rootCmd.AddCommand(TrayCommand(appManager, launcher))
