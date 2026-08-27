@@ -155,16 +155,6 @@ const (
 	hubWindowHeight = 560
 )
 
-// showHubWindow shows the dedicated hub panel at its compact size and
-// (re)focuses it. The panel's URL already points at /hub (baked in at
-// creation via ?next=/hub - see useWebSystray), so no navigation is needed.
-func showHubWindow() {
-	WindowSlim.Show()
-	WindowSlim.SetSize(hubWindowWidth, hubWindowHeight)
-	WindowSlim.Center()
-	WindowSlim.Focus()
-}
-
 // customEventString extracts a single string argument from a frontend
 // Events.Emit(name, data) call. Handles both the plain-value and
 // single-element-array shapes the JS runtime may produce.
@@ -189,8 +179,8 @@ func customEventString(event *application.CustomEvent) string {
 // relied on to land where its initial URL's ?next= points - that's why
 // this window is created lazily with path baked in, rather than eagerly
 // with a fixed default and relying on EmitEvent to redirect it (the same
-// race showHubWindow avoids). Once created, the window is reused warm and
-// EmitEvent-based navigation works normally.
+// race the hub panel avoids via its own ?next=/hub). Once created, the
+// window is reused warm and EmitEvent-based navigation works normally.
 func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
 	if path == "" {
 		path = "/agent"
@@ -229,7 +219,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	_ = menu.
 		Add("Show Hub").
 		OnClick(func(ctx *application.Context) {
-			showHubWindow()
+			SystemTray.ShowWindow()
 		})
 
 	_ = menu.
@@ -247,32 +237,29 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 			app.Quit()
 		})
 
-	// Create SystemTray
-	// Left-click opens the hub panel directly; right-click shows the (small) menu.
-	SystemTray = app.SystemTray.New().
-		SetMenu(menu).
-		OnClick(func() {
-			showHubWindow()
-		}).
-		OnRightClick(func() {
-			SystemTray.OpenMenu()
-		})
-
-	// Use custom icon
-	SystemTray.SetIcon(slimIcon)
-
 	// Create the hub panel - a small, dedicated window that only ever shows
 	// /hub (never navigated elsewhere; "Home"/"Dashboard" on the hub page
 	// open the separate main window instead - see the "open-main-window"
 	// handler below).
+	//
+	// Frameless + DisableResize are required for AttachWindow below: Wails
+	// anchors the panel under the tray icon by reading the window's *current*
+	// frame size at click time (see systemtray_darwin.m's positionWindow) -
+	// resizing it after creation (our earlier Show+SetSize+Center approach)
+	// made that anchor drift on every subsequent show. HideOnFocusLost/
+	// HideOnEscape give it the click-away-to-dismiss feel of a real popover.
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "hub-panel",
-		Title:  AppName,
-		Width:  hubWindowWidth,
-		Height: hubWindowHeight,
+		Name:            "hub-panel",
+		Title:           AppName,
+		Width:           hubWindowWidth,
+		Height:          hubWindowHeight,
+		Frameless:       true,
+		DisableResize:   true,
+		AlwaysOnTop:     true,
+		HideOnFocusLost: true,
+		HideOnEscape:    true,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
-			TitleBar: application.MacTitleBarDefault,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		// The Login page does a hard `window.location.href` reload after
@@ -281,6 +268,18 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		URL:    fmt.Sprintf("/login/%s?next=/hub", tinglyService.GetUserAuthToken()),
 		Hidden: true,
 	})
+
+	// Create SystemTray and attach the hub panel: with a menu set and a
+	// window attached but no explicit OnClick/OnRightClick, Wails' smart
+	// defaults wire left-click to toggle+anchor the panel under the icon
+	// (SystemTray.ToggleWindow) and right-click to open the menu.
+	SystemTray = app.SystemTray.New().
+		SetMenu(menu).
+		AttachWindow(WindowSlim).
+		WindowOffset(6)
+
+	// Use custom icon
+	SystemTray.SetIcon(slimIcon)
 
 	// The hub page's Home/Dashboard actions emit this to open the main app
 	// window at a given path, rather than navigating the panel itself.
