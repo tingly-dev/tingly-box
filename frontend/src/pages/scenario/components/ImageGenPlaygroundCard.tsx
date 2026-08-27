@@ -19,12 +19,14 @@ import {
     TextField,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Brush, Close, Edit, FileUpload, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Brush, Close, ContentCopy, Edit, FileUpload, Photo, ZoomIn } from '@/components/icons';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { getOpenAIClient } from '@/services/openaiClient';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -84,6 +86,10 @@ interface SelectedImage {
     size: string;
     quality: Quality;
     index: number;
+    // Distinguishes the run's original reference image(s) from its generated
+    // output(s) — same lightbox, different framing ("Original" badge + an
+    // edit affordance for source images that otherwise have no interaction).
+    kind: 'output' | 'source';
 }
 
 // Keep playground output while navigating between pages in the current app session.
@@ -122,6 +128,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const historyTrackRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
     const pendingCount = runs.filter((run) => run.status === 'pending').length;
+    const { copied: promptCopied, copy: copyPrompt } = useCopyFeedback();
 
     const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
         const nextRuns = updater(imageGenSessionRuns);
@@ -155,6 +162,24 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleRemoveReferenceImage = useCallback((index: number) => {
         setReferenceImages((current) => current.filter((_, i) => i !== index));
     }, []);
+
+    // Pasting an image anywhere on the panel is itself the mode signal — the
+    // user doesn't have to switch to Edit mode first and then find the
+    // dropzone. A paste with no image (e.g. plain text into the prompt field)
+    // is left alone. Scoped to this card's own DOM subtree via the React
+    // synthetic paste event, not a window-level listener.
+    const handlePaste = useCallback((event: React.ClipboardEvent) => {
+        const items = event.clipboardData?.items;
+        if (!items) return;
+        const imageFiles = Array.from(items)
+            .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => file !== null);
+        if (imageFiles.length === 0) return;
+        event.preventDefault();
+        setMode('edit');
+        void handleAddReferenceImages(imageFiles);
+    }, [handleAddReferenceImages]);
 
     // Hands a completed output straight back in as the next edit's source —
     // the artifact for the next action, not just a notification that one
@@ -239,6 +264,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
             >
                 <Box
+                    onPaste={handlePaste}
                     sx={{
                         display: 'grid',
                         gridTemplateColumns: { xs: '1fr', lg: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
@@ -315,7 +341,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         <Stack direction="row" spacing={1} sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', py: 0.5 }}>
                                             <FileUpload sx={{ fontSize: 20 }} />
                                             <Typography variant="body2">
-                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop images here or click to browse' })}
+                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop images here, click to browse, or paste' })}
                                             </Typography>
                                         </Stack>
                                     ) : (
@@ -705,21 +731,39 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     {run.mode === 'edit' && run.sourceImages && run.sourceImages.length > 0 && (
                                                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, overflowX: 'auto' }}>
                                                             {run.sourceImages.map((src, i) => (
-                                                                <Box
+                                                                <ButtonBase
                                                                     key={i}
-                                                                    component="img"
-                                                                    src={src}
-                                                                    alt=""
+                                                                    onClick={() => setSelectedImage({
+                                                                        src,
+                                                                        prompt: run.prompt,
+                                                                        model: run.model,
+                                                                        size: run.size,
+                                                                        quality: run.quality,
+                                                                        index: i,
+                                                                        kind: 'source',
+                                                                    })}
+                                                                    aria-label={t('playground.viewSourceImage', {
+                                                                        defaultValue: 'View original image {{number}}',
+                                                                        number: i + 1,
+                                                                    })}
                                                                     sx={{
+                                                                        display: 'block',
                                                                         width: 28,
                                                                         height: 28,
                                                                         borderRadius: 0.5,
-                                                                        objectFit: 'cover',
+                                                                        overflow: 'hidden',
                                                                         flexShrink: 0,
                                                                         border: '1px solid',
                                                                         borderColor: 'divider',
                                                                     }}
-                                                                />
+                                                                >
+                                                                    <Box
+                                                                        component="img"
+                                                                        src={src}
+                                                                        alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
+                                                                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                                    />
+                                                                </ButtonBase>
                                                             ))}
                                                         </Stack>
                                                     )}
@@ -752,6 +796,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                         size: run.size,
                                                                         quality: run.quality,
                                                                         index,
+                                                                        kind: 'output',
                                                                     })}
                                                                     aria-label={t('playground.openResult', {
                                                                         defaultValue: 'Open generated image {{number}}',
@@ -888,13 +933,31 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     }}
                 >
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography
-                            component="span"
-                            variant="subtitle1"
-                            sx={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        >
-                            {selectedImage?.prompt}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+                            {selectedImage?.kind === 'source' && (
+                                <Typography
+                                    component="span"
+                                    variant="caption"
+                                    sx={{
+                                        flexShrink: 0,
+                                        px: 0.75,
+                                        borderRadius: 1,
+                                        bgcolor: 'rgba(255, 255, 255, 0.14)',
+                                        color: 'grey.200',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {t('playground.originalBadge', { defaultValue: 'Original' })}
+                                </Typography>
+                            )}
+                            <Typography
+                                component="span"
+                                variant="subtitle1"
+                                sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                                {selectedImage?.prompt}
+                            </Typography>
+                        </Box>
                         <Typography
                             component="span"
                             variant="caption"
@@ -909,18 +972,55 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
                         </Typography>
                     </Box>
-                    <IconButton
-                        onClick={() => setSelectedImage(null)}
-                        aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
-                        sx={{
-                            flexShrink: 0,
-                            color: 'common.white',
-                            bgcolor: 'rgba(255, 255, 255, 0.08)',
-                            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
-                        }}
-                    >
-                        <Close />
-                    </IconButton>
+                    <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                        <Tooltip
+                            title={promptCopied
+                                ? t('playground.promptCopied', { defaultValue: 'Copied' })
+                                : t('playground.copyPrompt', { defaultValue: 'Copy prompt' })}
+                            open={promptCopied || undefined}
+                            disableHoverListener={promptCopied}
+                        >
+                            <IconButton
+                                onClick={() => { if (selectedImage) copyPrompt(selectedImage.prompt); }}
+                                aria-label={t('playground.copyPrompt', { defaultValue: 'Copy prompt' })}
+                                sx={{
+                                    color: 'common.white',
+                                    bgcolor: 'rgba(255, 255, 255, 0.08)',
+                                    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+                                }}
+                            >
+                                <ContentCopy fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Edit this image' })}>
+                            <IconButton
+                                onClick={() => {
+                                    if (!selectedImage) return;
+                                    void handleUseAsReference(selectedImage.src);
+                                    setSelectedImage(null);
+                                }}
+                                aria-label={t('playground.useAsReference', { defaultValue: 'Edit this image' })}
+                                sx={{
+                                    color: 'common.white',
+                                    bgcolor: 'rgba(255, 255, 255, 0.08)',
+                                    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+                                }}
+                            >
+                                <Edit fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <IconButton
+                            onClick={() => setSelectedImage(null)}
+                            aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
+                            sx={{
+                                color: 'common.white',
+                                bgcolor: 'rgba(255, 255, 255, 0.08)',
+                                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+                            }}
+                        >
+                            <Close />
+                        </IconButton>
+                    </Stack>
                 </DialogTitle>
                 <DialogContent
                     sx={{
@@ -936,10 +1036,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         <Box
                             component="img"
                             src={selectedImage.src}
-                            alt={t('playground.resultAlt', {
-                                defaultValue: 'Generated image {{number}}',
-                                number: selectedImage.index + 1,
-                            })}
+                            alt={selectedImage.kind === 'source'
+                                ? t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 })
+                                : t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })}
                             sx={{
                                 display: 'block',
                                 maxWidth: '100%',
