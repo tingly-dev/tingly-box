@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording"
 )
 
 // TransformStage selects which side of the transform pipeline the recorder

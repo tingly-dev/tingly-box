@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
-	"github.com/tingly-dev/tingly-box/internal/server/recordingtest"
+	"github.com/tingly-dev/tingly-box/internal/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording/recordingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
