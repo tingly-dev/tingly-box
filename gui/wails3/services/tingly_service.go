@@ -32,6 +32,13 @@ type TinglyService struct {
 	appManager    *command.AppManager
 	serverManager *command.ServerManager
 	app           *application.App
+
+	// openMainWindowFn is set by main (see run.go's useWebSystray) so the
+	// frontend's tray hub panel can open the main app window via a direct
+	// bound method call (OpenMainWindow) instead of a fire-and-forget
+	// Events.Emit round trip. TinglyService lives in this package and can't
+	// import main (main already imports this package), hence the callback.
+	openMainWindowFn func(path string)
 }
 
 // NewTinglyServiceWithServerManager creates a new UI service instance with a pre-configured ServerManager
@@ -114,6 +121,23 @@ func (s *TinglyService) GetPort() int {
 	port := s.appManager.GetGlobalConfig().GetServerPort()
 	logrus.Debugf("Getting port %d\n", port)
 	return port
+}
+
+// SetOpenMainWindowHandler wires the tray hub panel's "open the main app
+// window" action to main's window management. Called once from
+// useWebSystray after both the service and the windows exist.
+func (s *TinglyService) SetOpenMainWindowHandler(fn func(path string)) {
+	s.openMainWindowFn = fn
+}
+
+// OpenMainWindow shows/maximises the main app window at path, creating it on
+// first use. Exposed as a bound method (rather than an Events.Emit) so the
+// tray hub panel gets a direct, awaitable call instead of a fire-and-forget
+// event - simpler to reason about and to debug than a pub/sub round trip.
+func (s *TinglyService) OpenMainWindow(path string) {
+	if s.openMainWindowFn != nil {
+		s.openMainWindowFn(path)
+	}
 }
 
 // ChoosePath opens a native file dialog and returns a selected file or directory path.

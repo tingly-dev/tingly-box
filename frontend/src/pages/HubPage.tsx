@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Chip, CircularProgress, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Events } from '@/bindings';
+import TinglyService from '@/bindings';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
@@ -51,9 +51,10 @@ export default function HubPage() {
         .map((p) => ({ provider: p, windows: quotaToWindows(quotaData[p.uuid]) }))
         .filter((row) => row.windows.length > 0);
 
-    // Opens the separate main app window at the given path (see run.go's
-    // "open-main-window" handler) — the hub panel itself never navigates.
-    const openMainWindow = (path: string) => Events.Emit('open-main-window', path);
+    // Opens the separate main app window at the given path — a direct bound
+    // method call (TinglyService.OpenMainWindow), same as the tray's
+    // right-click "Open App" menu item, rather than a pub/sub event.
+    const openMainWindow = (path: string) => TinglyService.OpenMainWindow(path);
 
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 1.5, gap: 1.5 }}>

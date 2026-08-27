@@ -155,23 +155,6 @@ const (
 	hubWindowHeight = 560
 )
 
-// customEventString extracts a single string argument from a frontend
-// Events.Emit(name, data) call. Handles both the plain-value and
-// single-element-array shapes the JS runtime may produce.
-func customEventString(event *application.CustomEvent) string {
-	switch v := event.Data.(type) {
-	case string:
-		return v
-	case []interface{}:
-		if len(v) > 0 {
-			if s, ok := v[0].(string); ok {
-				return s
-			}
-		}
-	}
-	return ""
-}
-
 // showMainWindow shows the main app window (the real app, as opposed to the
 // hub panel), creating it on first use. path is where it should land.
 //
@@ -292,15 +275,16 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// Use custom icon
 	SystemTray.SetIcon(slimIcon)
 
-	// The hub page's Home/Dashboard actions emit this to open the main app
-	// window at a given path, rather than navigating the panel itself.
-	app.Event.On("open-main-window", func(event *application.CustomEvent) {
-		log.Printf("[hub] open-main-window event received: data=%#v", event.Data)
+	// Wire the hub panel's Home/Dashboard actions to open the main app
+	// window: a direct bound method (TinglyService.OpenMainWindow) rather
+	// than a fire-and-forget Events.Emit, so it's a single traceable call
+	// instead of a pub/sub round trip.
+	tinglyService.SetOpenMainWindowHandler(func(path string) {
 		// Hide the panel first: it's AlwaysOnTop (needed to float above the
-		// tray icon), so left showing it would sit visually on top of the
+		// tray icon), so leaving it shown would sit visually on top of the
 		// freshly-maximised main window, making the click look like a no-op.
 		WindowSlim.Hide()
-		showMainWindow(app, tinglyService, customEventString(event))
+		showMainWindow(app, tinglyService, path)
 	})
 
 	// Prevent window from being destroyed on close - just hide it

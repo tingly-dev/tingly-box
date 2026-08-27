@@ -20,6 +20,9 @@ export const TinglyService = {
     },
     Stop: async () => {
         console.warn('[Mock] TinglyService.Stop called - no-op');
+    },
+    OpenMainWindow: async (path: string) => {
+        console.warn(`[Mock] TinglyService.OpenMainWindow called with path: ${path} - no-op in web mode`);
     }
 };
 
