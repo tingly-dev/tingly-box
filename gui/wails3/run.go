@@ -260,6 +260,12 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		HideOnEscape:    true,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
+			// CanJoinAllSpaces + FullScreenAuxiliary lets the panel float
+			// above a fullscreen app too, like Bartender/1Password's
+			// menu-bar dropdown - without this, showing it while another
+			// app owns the fullscreen Space would silently do nothing.
+			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+				application.MacWindowCollectionBehaviorFullScreenAuxiliary,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		// The Login page does a hard `window.location.href` reload after
