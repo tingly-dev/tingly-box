@@ -21,9 +21,9 @@ replace github.com/tingly-dev/tingly-box/swagger => ../../swagger
 replace github.com/tingly-dev/tingly-box/afk => ../../afk
 
 require (
+	github.com/alecthomas/kong v1.15.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/sirupsen/logrus v1.9.4
-	github.com/spf13/cobra v1.10.2
 	github.com/tingly-dev/tingly-box v0.260423.0
 )
 
@@ -156,6 +156,7 @@ require (
 	github.com/sergeymakinen/go-ico v1.0.0 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect

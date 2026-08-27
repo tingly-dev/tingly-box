@@ -1,28 +1,19 @@
 package command
 
 import (
-	"github.com/spf13/cobra"
-
 	"github.com/tingly-dev/tingly-box/internal/command"
-	"github.com/tingly-dev/tingly-box/internal/command/options"
 )
 
-// TrayCommand returns the cobra command for starting tray GUI mode
-func TrayCommand(appManager *command.AppManager, launcher AppLauncher) *cobra.Command {
-	var flags options.StartFlags
+// TrayCmdKong starts Tingly Box in tray GUI mode (systray only, with a
+// compact webview hub — see gui/wails3/run.go's useWebSystray). This is the
+// default subcommand (tagged where it's embedded in main.go's CLI struct),
+// matching the pre-Kong cobra behavior of launching bare
+// `tingly-box-gui`/`tingly-box-gui --config-dir X --port Y` straight into
+// tray mode.
+type TrayCmdKong struct {
+	StartFlagsKong
+}
 
-	cmd := &cobra.Command{
-		Use:   "tray",
-		Short: "Start Tingly Box in tray GUI mode (systray only)",
-		Long: `Start the Tingly Box desktop application in tray mode with
-only the system tray icon (no main window). The web UI is accessible
-via browser. All server options are supported.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := options.ResolveStartOptions(cmd, flags, appManager.AppConfig())
-			return launcher.StartTray(appManager, opts)
-		},
-	}
-
-	options.AddStartFlags(cmd, &flags)
-	return cmd
+func (t *TrayCmdKong) Run(appManager *command.AppManager, launcher AppLauncher) error {
+	return launcher.StartTray(appManager, t.resolve(appManager.AppConfig()))
 }
