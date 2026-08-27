@@ -68,7 +68,7 @@ func newReq(t *testing.T, ctx context.Context, ua string) *http.Request {
 
 func TestRuleFlagTransport_NoContextValue_PassesThrough(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	// Simulate the SDK having already stamped its default UA on the request.
 	req := newReq(t, context.Background(), "sdk-default/1.0")
 
@@ -82,7 +82,7 @@ func TestRuleFlagTransport_NoContextValue_PassesThrough(t *testing.T) {
 
 func TestRuleFlagTransport_RuleOverride(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{CustomUserAgent: "RuleUA/1.0"})
 	req := newReq(t, ctx, "sdk-default/1.0")
 
@@ -96,7 +96,7 @@ func TestRuleFlagTransport_RuleOverride(t *testing.T) {
 
 func TestRuleFlagTransport_ForwardsInboundClientUA(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	// Client sent "cherry-studio/1.2"; SDK stamped its own default. With no rule
 	// override, the inbound client UA must be forwarded so upstream sees the real
 	// caller instead of the generic SDK UA.
@@ -113,7 +113,7 @@ func TestRuleFlagTransport_ForwardsInboundClientUA(t *testing.T) {
 
 func TestRuleFlagTransport_RuleWinsOverClient(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	// Both present: the rule/scenario override wins over the inbound client UA.
 	ctx := typ.WithClientUserAgent(context.Background(), "cherry-studio/1.2")
 	ctx = typ.WithRuleFlags(ctx, typ.RuleFlags{CustomUserAgent: "RuleUA/1.0"})
@@ -129,7 +129,7 @@ func TestRuleFlagTransport_RuleWinsOverClient(t *testing.T) {
 
 func TestRuleFlagTransport_NoneSentinelStripsEvenWithClientUA(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	// The `none` sentinel is a rule/scenario value; it must strip the UA entirely
 	// and still win over a present inbound client UA.
 	ctx := typ.WithClientUserAgent(context.Background(), "cherry-studio/1.2")
@@ -155,7 +155,7 @@ func TestRuleFlagTransport_NoneSentinelStripsEvenWithClientUA(t *testing.T) {
 
 func TestRuleFlagTransport_DoesNotMutateOriginalRequest(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{CustomUserAgent: "RuleUA/1.0"})
 	req := newReq(t, ctx, "sdk-default/1.0")
 
@@ -171,7 +171,7 @@ func TestRuleFlagTransport_DoesNotMutateOriginalRequest(t *testing.T) {
 
 func TestRuleFlagTransport_EmptyFlagsAreNoOp(t *testing.T) {
 	cap := &captureTransport{}
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", true)
 	// Zero-value flags attached (the merge point attaches unconditionally), so
 	// an existing SDK UA header is left untouched.
 	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{})
@@ -190,7 +190,7 @@ func TestRuleFlagTransport_NoResolveUA_IgnoresUAFlags(t *testing.T) {
 	cap := &captureTransport{}
 	// resolveUA=false (e.g. the generic Google chain): UA flags must not apply
 	// even when present in ctx.
-	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), false)
+	wrapped := wrapWithRuleFlags(cap, apiKeyProvider(), "", false)
 	ctx := typ.WithClientUserAgent(context.Background(), "cherry-studio/1.2")
 	ctx = typ.WithRuleFlags(ctx, typ.RuleFlags{CustomUserAgent: "RuleUA/1.0"})
 	req := newReq(t, ctx, "sdk-default/1.0")
@@ -211,7 +211,7 @@ func TestRuleFlagTransport_NilInnerFallsBackToDefault(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	wrapped := wrapWithRuleFlags(nil, apiKeyProvider(), true)
+	wrapped := wrapWithRuleFlags(nil, apiKeyProvider(), "", true)
 	req, _ := http.NewRequest("GET", srv.URL, nil)
 	resp, err := wrapped.RoundTrip(req)
 	if err != nil {
@@ -232,7 +232,7 @@ func newHeadersReq(t *testing.T, headers map[string]string) *http.Request {
 
 func TestRuleFlagTransport_AppliesExtraHeaders(t *testing.T) {
 	capture := &captureTransport{}
-	rt := wrapWithRuleFlags(capture, apiKeyProvider(), true)
+	rt := wrapWithRuleFlags(capture, apiKeyProvider(), "", true)
 
 	if _, err := rt.RoundTrip(newHeadersReq(t, map[string]string{"X-Title": "tingly"})); err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestRuleFlagTransport_AppliesExtraHeaders(t *testing.T) {
 func TestRuleFlagTransport_ExtraHeadersNonAPIKeyIsNoOp(t *testing.T) {
 	capture := &captureTransport{}
 	oauth := &typ.Provider{UUID: "p2", AuthType: ai.AuthTypeOAuth}
-	rt := wrapWithRuleFlags(capture, oauth, false)
+	rt := wrapWithRuleFlags(capture, oauth, "", false)
 	if rt != http.RoundTripper(capture) {
 		t.Fatal("a chain where no flag can apply must get the inner transport unchanged")
 	}
@@ -267,7 +267,7 @@ func TestRuleFlagTransport_ExtraHeadersNonAPIKeyIsNoOp(t *testing.T) {
 func TestRuleFlagTransport_VendorPinWins(t *testing.T) {
 	capture := &captureTransport{}
 	vendor := &pinTransport{inner: capture, name: "X-Vendor-Pin", value: "pinned"}
-	rt := wrapWithRuleFlags(vendor, apiKeyProvider(), true)
+	rt := wrapWithRuleFlags(vendor, apiKeyProvider(), "", true)
 
 	if _, err := rt.RoundTrip(newHeadersReq(t, map[string]string{
 		"X-Vendor-Pin": "user-tries-to-override",
@@ -288,7 +288,7 @@ func TestRuleFlagTransport_VendorPinWins(t *testing.T) {
 // Authorization. The user asked for it; the user owns it.
 func TestRuleFlagTransport_AppliesExtraHeadersVerbatim(t *testing.T) {
 	capture := &captureTransport{}
-	rt := wrapWithRuleFlags(capture, apiKeyProvider(), true)
+	rt := wrapWithRuleFlags(capture, apiKeyProvider(), "", true)
 
 	req := newHeadersReq(t, map[string]string{
 		"Authorization": "Bearer custom",
@@ -308,7 +308,7 @@ func TestRuleFlagTransport_AppliesExtraHeadersVerbatim(t *testing.T) {
 
 func TestRuleFlagTransport_ExtraHeadersDoNotMutateCallerRequest(t *testing.T) {
 	capture := &captureTransport{}
-	rt := wrapWithRuleFlags(capture, apiKeyProvider(), true)
+	rt := wrapWithRuleFlags(capture, apiKeyProvider(), "", true)
 
 	orig := newHeadersReq(t, map[string]string{"X-Title": "tingly"})
 	if _, err := rt.RoundTrip(orig); err != nil {
@@ -326,7 +326,7 @@ func TestRuleFlagTransport_ExtraHeadersDoNotMutateCallerRequest(t *testing.T) {
 // the old two-transport stack (extra headers outermost, UA innermost).
 func TestRuleFlagTransport_UAWinsOverExtraHeaderUA(t *testing.T) {
 	capture := &captureTransport{}
-	rt := wrapWithRuleFlags(capture, apiKeyProvider(), true)
+	rt := wrapWithRuleFlags(capture, apiKeyProvider(), "", true)
 
 	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{
 		CustomUserAgent: "RuleUA/1.0",
@@ -352,5 +352,103 @@ func TestWrapWithLogging_IsLoggingOnly(t *testing.T) {
 	}
 	if got := capture.lastReq.Header.Get("X-Title"); got != "" {
 		t.Errorf("X-Title = %q, want unset (logging layer must not apply flags)", got)
+	}
+}
+
+// ── Supply-side headers (provider ∪ model) ──────────────────────────────────
+
+func providerWithHeaders(t *testing.T, provider, model map[string]string) *typ.Provider {
+	t.Helper()
+	p := apiKeyProvider()
+	if provider != nil {
+		p.Flags = typ.ProviderFlags{ExtraHeaders: provider}
+	}
+	if model != nil {
+		p.ModelFlags = map[string]typ.ProviderFlags{"m1": {ExtraHeaders: model}}
+	}
+	return p
+}
+
+// Supply-side headers ride the client, not the request context, so paths that
+// never pass through protocol dispatch (probes, model-list fetch) send them.
+func TestRuleFlagTransport_SupplyHeadersWithoutCtx(t *testing.T) {
+	capture := &captureTransport{}
+	rt := wrapWithRuleFlags(capture, providerWithHeaders(t, map[string]string{"X-Title": "tingly"}, nil), "", true)
+
+	if _, err := rt.RoundTrip(newReq(t, context.Background(), "")); err != nil {
+		t.Fatal(err)
+	}
+	if got := capture.lastReq.Header.Get("X-Title"); got != "tingly" {
+		t.Errorf("X-Title = %q, want tingly", got)
+	}
+}
+
+// The full precedence provider < model < rule, produced by write order alone.
+func TestRuleFlagTransport_ThreeLevelPrecedence(t *testing.T) {
+	capture := &captureTransport{}
+	provider := providerWithHeaders(t,
+		map[string]string{"X-Shared": "provider", "X-Provider": "p"},
+		map[string]string{"X-Shared": "model", "X-Model": "m"},
+	)
+	rt := wrapWithRuleFlags(capture, provider, "m1", true)
+
+	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{ExtraHeaders: map[string]string{
+		"X-Shared": "rule",
+		"X-Rule":   "r",
+	}})
+	if _, err := rt.RoundTrip(newReq(t, ctx, "")); err != nil {
+		t.Fatal(err)
+	}
+	for header, want := range map[string]string{
+		"X-Shared":   "rule", // provider < model < rule
+		"X-Provider": "p",
+		"X-Model":    "m",
+		"X-Rule":     "r",
+	} {
+		if got := capture.lastReq.Header.Get(header); got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+}
+
+// A client built for another model gets only the provider level.
+func TestRuleFlagTransport_ModelHeadersAreModelScoped(t *testing.T) {
+	capture := &captureTransport{}
+	provider := providerWithHeaders(t,
+		map[string]string{"X-Provider": "p"},
+		map[string]string{"X-Model": "m"},
+	)
+	rt := wrapWithRuleFlags(capture, provider, "other-model", true)
+
+	if _, err := rt.RoundTrip(newReq(t, context.Background(), "")); err != nil {
+		t.Fatal(err)
+	}
+	if got := capture.lastReq.Header.Get("X-Provider"); got != "p" {
+		t.Errorf("X-Provider = %q, want p", got)
+	}
+	if got := capture.lastReq.Header.Get("X-Model"); got != "" {
+		t.Errorf("X-Model = %q, want unset for a different model", got)
+	}
+}
+
+// The api_key gate covers supply-side headers too: a non-api_key provider
+// gets no transport at all, so nothing configured on it can reach the wire.
+func TestRuleFlagTransport_SupplyHeadersRespectAPIKeyGate(t *testing.T) {
+	capture := &captureTransport{}
+	oauth := &typ.Provider{
+		UUID:     "p2",
+		AuthType: ai.AuthTypeOAuth,
+		Flags:    typ.ProviderFlags{ExtraHeaders: map[string]string{"X-Title": "cfg"}},
+	}
+
+	rt := wrapWithRuleFlags(capture, oauth, "m1", false)
+	if rt != http.RoundTripper(capture) {
+		t.Fatal("non-api_key provider with no UA resolution must get the inner transport unchanged")
+	}
+	if _, err := rt.RoundTrip(newReq(t, context.Background(), "")); err != nil {
+		t.Fatal(err)
+	}
+	if got := capture.lastReq.Header.Get("X-Title"); got != "" {
+		t.Errorf("X-Title = %q, want unset on a non-api_key provider", got)
 	}
 }

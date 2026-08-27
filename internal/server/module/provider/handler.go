@@ -43,6 +43,25 @@ func badRequest(c *gin.Context, format string, args ...any) {
 	c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf(format, args...)})
 }
 
+// applyProviderFlagsRequest writes the request's optional flag sections onto
+// the provider and validates the result. nil sections leave the stored level
+// untouched; a non-nil section replaces that level wholesale (empty clears
+// it). Validation runs post-merge via the same gate the config layer uses on
+// every write path, so a partial update can't smuggle headers onto a
+// non-api_key provider.
+func applyProviderFlagsRequest(p *typ.Provider, flags *typ.ProviderFlags, modelFlags *map[string]typ.ProviderFlags) error {
+	if flags == nil && modelFlags == nil {
+		return nil
+	}
+	if flags != nil {
+		p.Flags = *flags
+	}
+	if modelFlags != nil {
+		p.ModelFlags = *modelFlags
+	}
+	return config.ValidateProviderFlags(p)
+}
+
 // maskForResponse masks sensitive data and returns a safe ProviderResponse.
 func maskForResponse(p *typ.Provider) ProviderResponse {
 	resp := ProviderResponse{
@@ -63,6 +82,13 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 	if p.IsVirtual() {
 		resp.VModelDetail = p.VModelDetail
 	}
+
+	// Empty levels stay omitted so an untouched provider carries neither key.
+	if !p.Flags.IsZero() {
+		flags := p.Flags
+		resp.Flags = &flags
+	}
+	resp.ModelFlags = p.ModelFlags
 
 	switch {
 	case p.IsOAuth():
@@ -231,6 +257,13 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		p.Token = ""
 	}
 
+	// Optional provider/model flags. applyProviderFlagsRequest fails fast with
+	// a 400-worthy error; AddProvider revalidates as the shared backstop.
+	if err := applyProviderFlagsRequest(p, req.Flags, &req.ModelFlags); err != nil {
+		badRequest(c, "%s", err)
+		return
+	}
+
 	if err = h.config.AddProvider(p); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"action":   obs.ActionAddProvider,
@@ -256,6 +289,15 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		Success: true,
 		Message: "Provider added successfully",
 		Data:    p,
+	})
+}
+
+// GetFlagRegistry returns the catalog of supported provider/model-level
+// flags — the supply-side counterpart of the rule module's flag registry.
+func (h *Handler) GetFlagRegistry(c *gin.Context) {
+	c.JSON(http.StatusOK, FlagRegistryResponse{
+		Success: true,
+		Data:    typ.ProviderFlagRegistry(),
 	})
 }
 
@@ -370,6 +412,12 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	}
 	if req.ProxyURL != nil {
 		p.ProxyURL = *req.ProxyURL
+	}
+	// Flags / ModelFlags: nil leaves the stored level untouched, non-nil
+	// replaces it wholesale (empty clears). Validated post-merge below.
+	if err := applyProviderFlagsRequest(p, req.Flags, req.ModelFlags); err != nil {
+		badRequest(c, "%s", err)
+		return
 	}
 
 	// Dual-mode constraints: validate post-merge so we catch combinations

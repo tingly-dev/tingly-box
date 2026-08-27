@@ -169,6 +169,26 @@ concepts are separate — a future builtin could carry a real API key.
 
 ---
 
+## `Flags` / `ModelFlags`
+
+`ProviderFlags` carries options that describe **how to reach this upstream**,
+at two levels: `Provider.Flags` applies to every request to the provider, and
+`Provider.ModelFlags[model]` overrides it for one provider-side model.
+
+| Field | Meaning |
+|---|---|
+| `extra_headers` | Extra HTTP headers appended to outbound requests, verbatim. For upstreams that gate on their own headers (OpenRouter's `HTTP-Referer` / `X-Title`, gateway tenant or audit headers). |
+
+**Admission rule for new fields.** This struct is deliberately narrow: only
+things a caller must know *to talk to the upstream* belong here — the same
+job the rest of `Provider` does (base URLs, auth, protocol metadata). Product
+behaviour of a gateway sitting in front of the upstream (response rewriting,
+client compatibility shims, routing policy, …) does **not** belong here; in
+tingly-box that is what rule flags are for. Without this line the struct
+becomes a dumping ground and this package stops being reusable on its own.
+
+---
+
 ## Model ordering in the UI
 
 When the model-select dialog lists providers, `auth_type` determines sort

@@ -347,6 +347,62 @@ func ruleFlagCases() []flagCase {
 			} else if got := up.Headers.Get("X-Team-Tag"); got != "research" {
 				t.Errorf("anthropic chain: upstream X-Team-Tag = %q, want research", got)
 			}
+
+			// Three-level precedence (provider < model < rule): the supply-side
+			// levels ride the client (typ.SupplyExtraHeaders at wrap time), the
+			// rule level rides the request context, and the transport's write
+			// order is what resolves conflicts.
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-extra-headers-levels"
+			providerModel := "virtual-model-" + s.Name
+
+			provider := &typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL() + "/v1",
+				APIStyle: protocol.APIStyleOpenAI,
+				AuthType: ai.AuthTypeAPIKey,
+				Token:    "virtual-token",
+				Enabled:  true,
+				Timeout:  int64(constant.DefaultRequestTimeout),
+			}
+			provider.Flags = typ.ProviderFlags{ExtraHeaders: map[string]string{
+				"X-Level":         "provider",
+				"X-Provider-Only": "p",
+			}}
+			provider.ModelFlags = map[string]typ.ProviderFlags{
+				providerModel: {ExtraHeaders: map[string]string{
+					"X-Level":      "model",
+					"X-Model-Only": "m",
+				}},
+			}
+			_ = env.appConfig.AddProvider(provider)
+
+			const levelsModel = "pv-flag-extra-headers-levels"
+			levelsRule := newHarnessRule(levelsModel, typ.ScenarioOpenAI, levelsModel, providerModel,
+				harnessService(providerName, providerModel))
+			levelsRule.Flags = typ.RuleFlags{ExtraHeaders: map[string]string{
+				"X-Level":     "rule",
+				"X-Rule-Only": "r",
+			}}
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(levelsRule)
+
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, levelsModel, false, nil, nil)
+			up = env.virtual.LastRequest(EndpointChat)
+			if up == nil {
+				t.Fatal("no upstream request captured for the three-level route")
+			}
+			for header, want := range map[string]string{
+				"X-Level":         "rule", // provider < model < rule
+				"X-Provider-Only": "p",
+				"X-Model-Only":    "m",
+				"X-Rule-Only":     "r",
+			} {
+				if got := up.Headers.Get(header); got != want {
+					t.Errorf("three-level: upstream %s = %q, want %q", header, got, want)
+				}
+			}
 		}},
 
 		// ── use_max_completion_tokens ────────────────────────────────────────
@@ -360,6 +416,44 @@ func ruleFlagCases() []flagCase {
 			}
 			if _, ok := body["max_tokens"]; ok {
 				t.Error("upstream still carries max_tokens after rewrite")
+			}
+
+			// Same effect from the supply side: a model-level flag, rule empty.
+			// This is the non-header half of the three-level merge — these
+			// inject through the transform chain, so typ.ApplyProviderFlags
+			// folds them into the effective rule flags at dispatch.
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-supply-max-completion-tokens"
+			providerModel := "virtual-model-" + s.Name
+
+			provider := &typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL() + "/v1",
+				APIStyle: protocol.APIStyleOpenAI,
+				AuthType: ai.AuthTypeAPIKey,
+				Token:    "virtual-token",
+				Enabled:  true,
+				Timeout:  int64(constant.DefaultRequestTimeout),
+				ModelFlags: map[string]typ.ProviderFlags{
+					providerModel: {UseMaxCompletionTokens: true},
+				},
+			}
+			_ = env.appConfig.AddProvider(provider)
+
+			const supplyModel = "pv-flag-supply-max-completion-tokens"
+			supplyRule := newHarnessRule(supplyModel, typ.ScenarioOpenAI, supplyModel, providerModel,
+				harnessService(providerName, providerModel))
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(supplyRule)
+
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, supplyModel, false, nil, nil)
+			body = env.virtual.LastRequest(EndpointChat).JSON()
+			if _, ok := body["max_completion_tokens"]; !ok {
+				t.Errorf("model-level flag did not rewrite the field; body keys=%v", keysOf(body))
+			}
+			if _, ok := body["max_tokens"]; ok {
+				t.Error("upstream still carries max_tokens after the model-level rewrite")
 			}
 		}},
 

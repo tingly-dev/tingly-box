@@ -103,9 +103,14 @@ func ResolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 // This is the main entry point that merges:
 //  1. Rule-level flags (from the rule definition)
 //  2. Scenario flags (from the scenario configuration)
-//  3. Auto-applied flags (like CleanHeader for protocol transformation)
-//  4. Provider-driven suppressions (CleanHeader is cleared for Claude OAuth providers;
+//  3. Supply-side flags of the chosen (provider, model) pair, folded in at the
+//     lowest precedence — provider < model < rule (typ.ApplyProviderFlags)
+//  4. Auto-applied flags (like CleanHeader for protocol transformation)
+//  5. Provider-driven suppressions (CleanHeader is cleared for Claude OAuth providers;
 //     the billing header must reach Anthropic's billing backend unchanged).
+//
+// model is the provider-side model ID this attempt targets, used to pick the
+// per-model supply flags.
 //
 // Side effect: it attaches the whole resolved flag set to the request context
 // (applyRuleFlags) plus the inbound client UA fallback (applyClientUserAgent),
@@ -117,6 +122,7 @@ func ResolveRuleFlagsWithScenario(
 	scenarioConfig *typ.ScenarioConfig,
 	sourceAPI, targetAPI protocol.APIType,
 	provider *typ.Provider,
+	model string,
 ) typ.RuleFlags {
 	flags := ResolveRuleFlags(c, rule)
 
@@ -142,6 +148,15 @@ func ResolveRuleFlagsWithScenario(
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
 		// migrate20260610), so there is nothing to inject here.
+	}
+
+	// Fold in the chosen provider's and model's flags at the lowest precedence,
+	// so every consumer of the resolved set picks them up for free. Cursor
+	// auto-detection re-runs because a supply-level cursor_compat_auto has to
+	// fold into cursor_compat the way ResolveRuleFlags does for a rule-level one.
+	flags = typ.ApplyProviderFlags(flags, provider, model)
+	if flags.CursorCompatAuto && isCursorRequest(c) {
+		flags.CursorCompat = true
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios

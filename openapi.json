@@ -6815,6 +6815,28 @@
         }
       }
     },
+    "/api/v2/provider/flags/registry": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get catalog of supported provider/model-level flags",
+        "description": "Get catalog of supported provider/model-level flags",
+        "operationId": "apiV2ProviderFlagsRegistryGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagRegistryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/providers": {
       "get": {
         "tags": [
@@ -8644,6 +8666,16 @@
             "description": "Whether provider is enabled",
             "example": true
           },
+          "flags": {
+            "$ref": "#/components/schemas/ProviderFlags"
+          },
+          "model_flags": {
+            "type": "object",
+            "description": "Per-model flag overrides keyed by provider-side model ID; api_key auth only",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderFlags"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Provider name",
@@ -9831,6 +9863,13 @@
             "type": "string",
             "description": "Field label"
           },
+          "levels": {
+            "type": "array",
+            "description": "Field levels",
+            "items": {
+              "type": "string"
+            }
+          },
           "options": {
             "type": "array",
             "description": "Field options",
@@ -9863,7 +9902,8 @@
           "label",
           "description",
           "type",
-          "category"
+          "category",
+          "levels"
         ]
       },
       "GenerateTokenRequest": {
@@ -12376,6 +12416,62 @@
           }
         }
       },
+      "ProviderFlags": {
+        "type": "object",
+        "properties": {
+          "block_tools": {
+            "type": "string",
+            "description": "Field block_tools"
+          },
+          "claude_code_compat": {
+            "type": "boolean",
+            "description": "Field claude_code_compat"
+          },
+          "clean_header": {
+            "type": "boolean",
+            "description": "Field clean_header"
+          },
+          "context_1m": {
+            "type": "boolean",
+            "description": "Field context_1m"
+          },
+          "cursor_compat": {
+            "type": "boolean",
+            "description": "Field cursor_compat"
+          },
+          "cursor_compat_auto": {
+            "type": "boolean",
+            "description": "Field cursor_compat_auto"
+          },
+          "custom_user_agent": {
+            "type": "string",
+            "description": "Field custom_user_agent"
+          },
+          "extra_headers": {
+            "type": "object",
+            "description": "Field extra_headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "skip_usage": {
+            "type": "boolean",
+            "description": "Field skip_usage"
+          },
+          "thinking_effort": {
+            "type": "string",
+            "description": "Field thinking_effort"
+          },
+          "use_max_completion_tokens": {
+            "type": "boolean",
+            "description": "Field use_max_completion_tokens"
+          },
+          "use_max_tokens": {
+            "type": "boolean",
+            "description": "Field use_max_tokens"
+          }
+        }
+      },
       "ProviderImportInfo": {
         "type": "object",
         "properties": {
@@ -12535,6 +12631,16 @@
             "type": "boolean",
             "description": "Field enabled",
             "example": true
+          },
+          "flags": {
+            "$ref": "#/components/schemas/ProviderFlags"
+          },
+          "model_flags": {
+            "type": "object",
+            "description": "Field model_flags",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderFlags"
+            }
           },
           "name": {
             "type": "string",
@@ -14962,6 +15068,16 @@
           "enabled": {
             "type": "boolean",
             "description": "New enabled status"
+          },
+          "flags": {
+            "$ref": "#/components/schemas/ProviderFlags"
+          },
+          "model_flags": {
+            "type": "object",
+            "description": "Replacement per-model flag overrides; empty map clears them (api_key auth only)",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderFlags"
+            }
           },
           "name": {
             "type": "string",

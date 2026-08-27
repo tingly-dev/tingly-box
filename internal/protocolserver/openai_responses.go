@@ -223,7 +223,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider, actualModel)
 	reqCtx, err := ph.TransformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))

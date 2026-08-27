@@ -797,3 +797,75 @@ func TestProviderStore_FailedWriteDoesNotCorruptCache(t *testing.T) {
 		}
 	})
 }
+
+// TestProviderFlagsRoundTrip verifies the flags / model_flags columns:
+// values survive save/reload, updates rewrite them, and clearing empties them.
+func TestProviderFlagsRoundTrip(t *testing.T) {
+	store, _ := setupTestProviderStore(t)
+	defer store.Close()
+
+	provider := &typ.Provider{
+		UUID:     "flags-uuid-1",
+		Name:     "flags-provider",
+		APIBase:  "https://api.example.com/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-flags",
+		Enabled:  true,
+		Flags:    typ.ProviderFlags{ExtraHeaders: map[string]string{"X-Title": "tingly"}},
+		ModelFlags: map[string]typ.ProviderFlags{
+			"gpt-x": {ExtraHeaders: map[string]string{"X-Canary": "on"}},
+		},
+	}
+	if err := store.Save(provider); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := store.GetByUUID("flags-uuid-1")
+	if err != nil {
+		t.Fatalf("GetByUUID: %v", err)
+	}
+	if loaded.Flags.ExtraHeaders["X-Title"] != "tingly" {
+		t.Errorf("provider flags lost on reload: %+v", loaded.Flags)
+	}
+	if loaded.ModelFlags["gpt-x"].ExtraHeaders["X-Canary"] != "on" {
+		t.Errorf("model flags lost on reload: %+v", loaded.ModelFlags)
+	}
+
+	// The cached record must not alias what callers hold.
+	loaded.Flags.ExtraHeaders["X-Title"] = "mutated-by-caller"
+	again, err := store.GetByUUID("flags-uuid-1")
+	if err != nil {
+		t.Fatalf("GetByUUID(again): %v", err)
+	}
+	if again.Flags.ExtraHeaders["X-Title"] != "tingly" {
+		t.Errorf("caller mutation leaked into the store: %+v", again.Flags)
+	}
+
+	// Update path (existing record) rewrites the columns.
+	again.Flags = typ.ProviderFlags{ExtraHeaders: map[string]string{"X-Title": "updated"}}
+	if err := store.Save(again); err != nil {
+		t.Fatalf("Save(update): %v", err)
+	}
+	reloaded, err := store.GetByUUID("flags-uuid-1")
+	if err != nil {
+		t.Fatalf("GetByUUID(update): %v", err)
+	}
+	if reloaded.Flags.ExtraHeaders["X-Title"] != "updated" {
+		t.Errorf("updated flags not persisted: %+v", reloaded.Flags)
+	}
+
+	// Clearing both levels empties the columns.
+	reloaded.Flags = typ.ProviderFlags{}
+	reloaded.ModelFlags = nil
+	if err := store.Save(reloaded); err != nil {
+		t.Fatalf("Save(clear): %v", err)
+	}
+	cleared, err := store.GetByUUID("flags-uuid-1")
+	if err != nil {
+		t.Fatalf("GetByUUID(clear): %v", err)
+	}
+	if !cleared.Flags.IsZero() || cleared.ModelFlags != nil {
+		t.Errorf("cleared flags came back: %+v / %+v", cleared.Flags, cleared.ModelFlags)
+	}
+}
