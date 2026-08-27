@@ -143,28 +143,86 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	SystemTray.SetIcon(slimIcon)
 }
 
-// hubWindowWidth/Height size the tray's compact "hub" landing page (see
+// hubWindowWidth/Height size the tray's compact "hub" panel (see
 // frontend/src/pages/HubPage.tsx) — small enough to read as a tray popover
-// rather than the full app.
+// rather than the full app. The hub panel and the main app window
+// (WindowMain, shared with full GUI mode - see window.go) are two distinct
+// windows: the panel only ever renders /hub, the main window is the real
+// app, opened on demand from the panel's Home/Dashboard actions or the
+// tray's right-click menu.
 const (
 	hubWindowWidth  = 480
 	hubWindowHeight = 640
 )
 
-// showHubWindow shows the tray window at the compact hub size and navigates
-// it to /hub. Any other navigation (Home, Dashboard, ...) maximises the
-// window instead - see the "hub-left"/"hub-entered" event handlers below,
-// which the frontend's useHubWindowMode hook drives on route change.
+// showHubWindow shows the dedicated hub panel at its compact size and
+// (re)focuses it. The panel's URL already points at /hub (baked in at
+// creation via ?next=/hub - see useWebSystray), so no navigation is needed.
 func showHubWindow() {
 	WindowSlim.Show()
 	WindowSlim.SetSize(hubWindowWidth, hubWindowHeight)
 	WindowSlim.Center()
 	WindowSlim.Focus()
-	WindowSlim.EmitEvent("systray-navigate", "/hub")
+}
+
+// customEventString extracts a single string argument from a frontend
+// Events.Emit(name, data) call. Handles both the plain-value and
+// single-element-array shapes the JS runtime may produce.
+func customEventString(event *application.CustomEvent) string {
+	switch v := event.Data.(type) {
+	case string:
+		return v
+	case []interface{}:
+		if len(v) > 0 {
+			if s, ok := v[0].(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// showMainWindow shows the main app window (the real app, as opposed to the
+// hub panel), creating it on first use. path is where it should land.
+//
+// Login.tsx does a hard reload after auth, so a *new* window can only be
+// relied on to land where its initial URL's ?next= points - that's why
+// this window is created lazily with path baked in, rather than eagerly
+// with a fixed default and relying on EmitEvent to redirect it (the same
+// race showHubWindow avoids). Once created, the window is reused warm and
+// EmitEvent-based navigation works normally.
+func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
+	if path == "" {
+		path = "/agent"
+	}
+
+	if WindowMain == nil {
+		WindowMain = app.Window.NewWithOptions(application.WebviewWindowOptions{
+			Name:  WindowMainName,
+			Title: AppName,
+			Mac: application.MacWindow{
+				Backdrop: application.MacBackdropTranslucent,
+				TitleBar: application.MacTitleBarDefault,
+			},
+			BackgroundColour: application.NewRGB(27, 38, 54),
+			URL:              fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path),
+			Hidden:           true,
+		})
+		WindowMain.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+			event.Cancel()
+			WindowMain.Hide()
+		})
+	} else {
+		WindowMain.EmitEvent("systray-navigate", path)
+	}
+
+	WindowMain.Show()
+	WindowMain.Maximise()
+	WindowMain.Focus()
 }
 
 func useWebSystray(app *application.App, tinglyService *services.TinglyService) {
-	// Create the SystemTray menu - kept minimal since the hub page itself
+	// Create the SystemTray menu - kept minimal since the hub panel itself
 	// is the primary navigation surface now (see frontend HubPage.tsx).
 	menu := app.Menu.New()
 
@@ -172,6 +230,12 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		Add("Show Hub").
 		OnClick(func(ctx *application.Context) {
 			showHubWindow()
+		})
+
+	_ = menu.
+		Add("Open App").
+		OnClick(func(ctx *application.Context) {
+			showMainWindow(app, tinglyService, "")
 		})
 
 	menu.AddSeparator()
@@ -184,7 +248,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		})
 
 	// Create SystemTray
-	// Left-click opens the hub directly; right-click shows the (small) menu.
+	// Left-click opens the hub panel directly; right-click shows the (small) menu.
 	SystemTray = app.SystemTray.New().
 		SetMenu(menu).
 		OnClick(func() {
@@ -197,10 +261,12 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// Use custom icon
 	SystemTray.SetIcon(slimIcon)
 
-	// Create a regular window (not attached to tray) - hidden by default,
-	// starts at the compact hub size; shown via tray click.
+	// Create the hub panel - a small, dedicated window that only ever shows
+	// /hub (never navigated elsewhere; "Home"/"Dashboard" on the hub page
+	// open the separate main window instead - see the "open-main-window"
+	// handler below).
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "menu-window",
+		Name:   "hub-panel",
 		Title:  AppName,
 		Width:  hubWindowWidth,
 		Height: hubWindowHeight,
@@ -210,23 +276,16 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		// The Login page does a hard `window.location.href` reload after
-		// auth (see Login.tsx) — a plain "/login/:token" URL would lose the
-		// EmitEvent("systray-navigate", "/hub") call below on first launch,
-		// since that reload remounts the whole app past the point where the
-		// event was received. ?next=/hub tells Login where to land instead.
+		// auth (see Login.tsx). ?next=/hub tells it where to land so the
+		// panel always ends up showing the hub, regardless of load timing.
 		URL:    fmt.Sprintf("/login/%s?next=/hub", tinglyService.GetUserAuthToken()),
 		Hidden: true,
 	})
 
-	// The frontend emits these when route navigation crosses the /hub
-	// boundary (useHubWindowMode), so the window follows: compact for the
-	// hub, full-size for every other page.
-	app.Event.On("hub-left", func(event *application.CustomEvent) {
-		WindowSlim.Maximise()
-	})
-	app.Event.On("hub-entered", func(event *application.CustomEvent) {
-		WindowSlim.SetSize(hubWindowWidth, hubWindowHeight)
-		WindowSlim.Center()
+	// The hub page's Home/Dashboard actions emit this to open the main app
+	// window at a given path, rather than navigating the panel itself.
+	app.Event.On("open-main-window", func(event *application.CustomEvent) {
+		showMainWindow(app, tinglyService, customEventString(event))
 	})
 
 	// Prevent window from being destroyed on close - just hide it

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Chip, CircularProgress, Stack, Tooltip, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Events } from '@/bindings';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
@@ -14,14 +14,14 @@ interface HubProvider {
     name?: string;
 }
 
-// HubPage is the tray's compact landing surface — shown in a small, fixed-size
-// window (see gui/wails3/run.go's showHubWindow). It intentionally does not
-// duplicate what's one click away in the full app (agent list, usage charts);
-// it surfaces only what's time-sensitive to check before opening anything:
-// server health, update availability, and provider quota.
+// HubPage is the tray's compact panel — a dedicated small window (see
+// gui/wails3/run.go's showHubWindow) separate from the main app window. It
+// never navigates itself; "Home"/"Dashboard" below open the main window
+// instead (open-main-window event), so this page only ever renders /hub.
+// Content is scoped to what's not already obvious the moment you open the
+// full app: server health, update availability, and provider quota.
 export default function HubPage() {
     const { t } = useTranslation();
-    const navigate = useNavigate();
     const { isHealthy } = useHealth();
     const { currentVersion, hasUpdate } = useVersion();
     const [providers, setProviders] = useState<HubProvider[]>([]);
@@ -50,6 +50,10 @@ export default function HubPage() {
     const quotaRows = providers
         .map((p) => ({ provider: p, windows: quotaToWindows(quotaData[p.uuid]) }))
         .filter((row) => row.windows.length > 0);
+
+    // Opens the separate main app window at the given path (see run.go's
+    // "open-main-window" handler) — the hub panel itself never navigates.
+    const openMainWindow = (path: string) => Events.Emit('open-main-window', path);
 
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2, gap: 2 }}>
@@ -118,10 +122,10 @@ export default function HubPage() {
 
             {/* Quick actions */}
             <Stack direction="row" spacing={1}>
-                <Button fullWidth variant="outlined" onClick={() => navigate('/agent')}>
+                <Button fullWidth variant="outlined" onClick={() => openMainWindow('/agent')}>
                     {t('hub.actions.home')}
                 </Button>
-                <Button fullWidth variant="contained" onClick={() => navigate('/dashboard')}>
+                <Button fullWidth variant="contained" onClick={() => openMainWindow('/dashboard/7d')}>
                     {t('hub.actions.dashboard')}
                 </Button>
             </Stack>

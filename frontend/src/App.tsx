@@ -19,7 +19,6 @@ import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import Layout from './layout/Layout';
 import createAppTheme from './theme';
-import { useHubWindowMode } from './hooks/useHubWindowMode';
 
 // Login is the only pre-auth screen — it's reachable before ProtectedRoute
 // can even evaluate, so it stays eager. HelpPage (the onboarding front door
@@ -202,10 +201,6 @@ const LegacyRemoteCoderRedirect = () => {
 
 function AppContent() {
     const navigate = useNavigate();
-
-    // Notifies the Go side when the tray window enters/leaves the compact
-    // hub route so it can resize/maximise (gui/wails3/run.go).
-    useHubWindowMode();
 
     // Listen for systray navigation events
     useEffect(() => {
