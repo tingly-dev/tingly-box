@@ -143,16 +143,16 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	SystemTray.SetIcon(slimIcon)
 }
 
-// hubWindowWidth/Height size the tray's compact "hub" panel (see
-// frontend/src/pages/HubPage.tsx) — small enough to read as a tray popover
-// rather than the full app. The hub panel and the main app window
+// hubWindowWidth/Height size the tray's hub panel (see
+// frontend/src/pages/HubPage.tsx) — a narrow strip like a menu-bar dropdown
+// rather than a small app window. The hub panel and the main app window
 // (WindowMain, shared with full GUI mode - see window.go) are two distinct
 // windows: the panel only ever renders /hub, the main window is the real
 // app, opened on demand from the panel's Home/Dashboard actions or the
 // tray's right-click menu.
 const (
-	hubWindowWidth  = 480
-	hubWindowHeight = 640
+	hubWindowWidth  = 320
+	hubWindowHeight = 560
 )
 
 // showHubWindow shows the dedicated hub panel at its compact size and

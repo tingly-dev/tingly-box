@@ -56,7 +56,7 @@ export default function HubPage() {
     const openMainWindow = (path: string) => Events.Emit('open-main-window', path);
 
     return (
-        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2, gap: 2 }}>
+        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 1.5, gap: 1.5 }}>
             {/* Status bar */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box
@@ -68,7 +68,7 @@ export default function HubPage() {
                         flexShrink: 0,
                     }}
                 />
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }} noWrap>
                     {t('hub.title')}
                 </Typography>
                 <Tooltip title={isHealthy ? t('hub.status.healthy') : t('hub.status.unhealthy')} arrow>
@@ -79,12 +79,14 @@ export default function HubPage() {
                         variant="outlined"
                     />
                 </Tooltip>
-                {hasUpdate && (
-                    <Chip size="small" label={t('hub.status.updateAvailable')} color="info" />
-                )}
             </Stack>
+            {hasUpdate && (
+                <Chip size="small" label={t('hub.status.updateAvailable')} color="info" sx={{ alignSelf: 'flex-start' }} />
+            )}
 
-            {/* Provider quota */}
+            {/* Provider quota — a narrow strip has no room for side-by-side
+                bars, so each provider stacks its name above its quota bars,
+                wrapping onto a second line if there's more than one. */}
             <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                     {t('hub.quota.title')}
@@ -98,30 +100,28 @@ export default function HubPage() {
                         {t('hub.quota.empty')}
                     </Typography>
                 ) : (
-                    <Stack spacing={1.25}>
+                    <Stack spacing={1.5}>
                         {quotaRows.map(({ provider, windows }) => (
-                            <Stack key={provider.uuid} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                <Typography
-                                    variant="body2"
-                                    sx={{ minWidth: 96, flexShrink: 0, color: 'text.secondary', fontSize: '0.8rem' }}
-                                    noWrap
-                                >
-                                    {provider.name || provider.uuid}
-                                </Typography>
-                                <Stack direction="row" spacing={1.5} sx={{ overflowX: 'auto', flex: 1 }}>
+                            <Box key={provider.uuid}>
+                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 0.25 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }} noWrap>
+                                        {provider.name || provider.uuid}
+                                    </Typography>
+                                    {refreshing.has(provider.uuid) && <CircularProgress size={10} />}
+                                </Stack>
+                                <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
                                     {windows.slice(0, 2).map(({ key, window }) => (
                                         <QuotaBarItem key={key} window={window} />
                                     ))}
                                 </Stack>
-                                {refreshing.has(provider.uuid) && <CircularProgress size={12} />}
-                            </Stack>
+                            </Box>
                         ))}
                     </Stack>
                 )}
             </Box>
 
-            {/* Quick actions */}
-            <Stack direction="row" spacing={1}>
+            {/* Quick actions — stacked, matching the strip's menu-list feel */}
+            <Stack spacing={1}>
                 <Button fullWidth variant="outlined" onClick={() => openMainWindow('/agent')}>
                     {t('hub.actions.home')}
                 </Button>
