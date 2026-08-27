@@ -94,7 +94,7 @@ export interface RuleFlagsApi {
     extra_headers?: Record<string, string>;
 }
 
-export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref' | 'headers';
+export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref' | 'headers' | 'multi_enum';
 
 export interface FlagOption {
     value: string;
