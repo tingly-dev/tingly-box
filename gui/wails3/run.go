@@ -185,6 +185,7 @@ func showMainWindow(app *application.App, tinglyService *services.TinglyService,
 	if path == "" {
 		path = "/agent"
 	}
+	log.Printf("[hub] showMainWindow: path=%q windowMainExists=%v", path, WindowMain != nil)
 
 	if WindowMain == nil {
 		WindowMain = app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -246,18 +247,22 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// anchors the panel under the tray icon by reading the window's *current*
 	// frame size at click time (see systemtray_darwin.m's positionWindow) -
 	// resizing it after creation (our earlier Show+SetSize+Center approach)
-	// made that anchor drift on every subsequent show. HideOnFocusLost/
-	// HideOnEscape give it the click-away-to-dismiss feel of a real popover.
+	// made that anchor drift on every subsequent show.
+	//
+	// HideOnFocusLost is deliberately NOT set: it hides the window on
+	// WindowLostFocus, and a borderless AlwaysOnTop panel can spuriously
+	// fire that the moment it becomes key, which looked exactly like clicks
+	// on its own buttons (e.g. Home/Dashboard) silently doing nothing -
+	// the click landed on a window already mid-hide.
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:            "hub-panel",
-		Title:           AppName,
-		Width:           hubWindowWidth,
-		Height:          hubWindowHeight,
-		Frameless:       true,
-		DisableResize:   true,
-		AlwaysOnTop:     true,
-		HideOnFocusLost: true,
-		HideOnEscape:    true,
+		Name:          "hub-panel",
+		Title:         AppName,
+		Width:         hubWindowWidth,
+		Height:        hubWindowHeight,
+		Frameless:     true,
+		DisableResize: true,
+		AlwaysOnTop:   true,
+		HideOnEscape:  true,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 			// CanJoinAllSpaces + FullScreenAuxiliary lets the panel float
@@ -290,6 +295,7 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// The hub page's Home/Dashboard actions emit this to open the main app
 	// window at a given path, rather than navigating the panel itself.
 	app.Event.On("open-main-window", func(event *application.CustomEvent) {
+		log.Printf("[hub] open-main-window event received: data=%#v", event.Data)
 		// Hide the panel first: it's AlwaysOnTop (needed to float above the
 		// tray icon), so left showing it would sit visually on top of the
 		// freshly-maximised main window, making the click look like a no-op.
