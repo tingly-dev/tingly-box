@@ -29,6 +29,7 @@ export function flagDefault(spec: FlagSpec): unknown {
         case 'enum': return spec.options?.[0]?.value ?? '';
         case 'service_ref': return undefined;
         case 'headers': return undefined;
+        case 'multi_enum': return '';
     }
 }
 
@@ -54,6 +55,7 @@ export function isFlagActive(spec: FlagSpec, flags: RuleFlags): boolean {
             const map = value as Record<string, string> | undefined;
             return !!map && Object.keys(map).length > 0;
         }
+        case 'multi_enum': return typeof value === 'string' && value !== '';
         default: return false;
     }
 }
@@ -85,4 +87,22 @@ export function flagsToApi(flags: RuleFlags | undefined): RuleFlagsApi {
 // headersValue reads a headers-type flag as a name→value map (empty when unset).
 export function headersValue(flags: RuleFlags | undefined, key: string): Record<string, string> {
     return (getFlagValue(flags, key) as Record<string, string> | undefined) ?? {};
+}
+
+// multiEnumValues reads a multi_enum flag as the array of selected option
+// values (comma-separated string on the wire; empty array when unset).
+export function multiEnumValues(flags: RuleFlags | undefined, key: string): string[] {
+    const raw = getFlagValue(flags, key);
+    if (typeof raw !== 'string' || raw === '') return [];
+    return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+// toggleMultiEnumValue flips one option inside a multi_enum selection and
+// returns the new comma-separated storage value ('' when nothing selected).
+export function toggleMultiEnumValue(current: string | undefined, option: string): string {
+    const values = (current ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const idx = values.indexOf(option);
+    if (idx >= 0) values.splice(idx, 1);
+    else values.push(option);
+    return values.join(',');
 }
