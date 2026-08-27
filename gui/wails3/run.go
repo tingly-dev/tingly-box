@@ -284,6 +284,10 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// The hub page's Home/Dashboard actions emit this to open the main app
 	// window at a given path, rather than navigating the panel itself.
 	app.Event.On("open-main-window", func(event *application.CustomEvent) {
+		// Hide the panel first: it's AlwaysOnTop (needed to float above the
+		// tray icon), so left showing it would sit visually on top of the
+		// freshly-maximised main window, making the click look like a no-op.
+		WindowSlim.Hide()
 		showMainWindow(app, tinglyService, customEventString(event))
 	})
 

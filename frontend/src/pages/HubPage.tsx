@@ -84,6 +84,17 @@ export default function HubPage() {
                 <Chip size="small" label={t('hub.status.updateAvailable')} color="info" sx={{ alignSelf: 'flex-start' }} />
             )}
 
+            {/* Quick actions — up top, always visible without scrolling past
+                the quota list below */}
+            <Stack spacing={1}>
+                <Button fullWidth variant="outlined" onClick={() => openMainWindow('/agent')}>
+                    {t('hub.actions.home')}
+                </Button>
+                <Button fullWidth variant="contained" onClick={() => openMainWindow('/dashboard/7d')}>
+                    {t('hub.actions.dashboard')}
+                </Button>
+            </Stack>
+
             {/* Provider quota — a narrow strip has no room for side-by-side
                 bars, so each provider stacks its name above its quota bars,
                 wrapping onto a second line if there's more than one. */}
@@ -119,16 +130,6 @@ export default function HubPage() {
                     </Stack>
                 )}
             </Box>
-
-            {/* Quick actions — stacked, matching the strip's menu-list feel */}
-            <Stack spacing={1}>
-                <Button fullWidth variant="outlined" onClick={() => openMainWindow('/agent')}>
-                    {t('hub.actions.home')}
-                </Button>
-                <Button fullWidth variant="contained" onClick={() => openMainWindow('/dashboard/7d')}>
-                    {t('hub.actions.dashboard')}
-                </Button>
-            </Stack>
         </Box>
     );
 }
