@@ -7,7 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording"
 
 	mcp "github.com/tingly-dev/tingly-box/internal/mcpserver"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
