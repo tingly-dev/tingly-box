@@ -42,11 +42,13 @@ vars:
   VERSION_LDFLAGS: '-X main.version={{.VERSION}} -X main.gitCommit={{.GIT_COMMIT}} -X main.buildTime={{.BUILD_TIME}}'
   # Config dir / port for a second, isolated debug instance (see
   # gui/wails3/main.go's --config-dir and the per-dir file lock in
-  # gui/wails3/run.go). Empty by default — the app falls back to
-  # ~/.tingly-box and its configured/default port. Set via env, not
-  # `task wails:debug FOO=bar`: wails3 dev spawns `wails3 task wails:run` as
-  # a separate process, and only env vars survive that boundary.
-  #   GUI_CONFIG_DIR=./.tingly-box-debug GUI_PORT=12333 task wails:debug
+  # gui/wails3/run.go). Used as-is by wails:run/wails:build (empty by
+  # default — normal single-instance behavior); wails:dev/wails:debug set
+  # their own non-empty defaults below so dev mode is dual-instance-safe
+  # out of the box. Override via env, not `task wails:debug FOO=bar`:
+  # wails3 dev spawns `wails3 task wails:run` as a separate process, and
+  # only env vars survive that boundary.
+  #   GUI_CONFIG_DIR=./.tingly-box-debug GUI_PORT=12333 task wails:run
   GUI_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default ""}}'
   GUI_PORT: '{{.GUI_PORT | default ""}}'
   RUN_ARGS: '{{if .GUI_CONFIG_DIR}}--config-dir {{.GUI_CONFIG_DIR}} {{end}}{{if .GUI_PORT}}--port {{.GUI_PORT}}{{end}}'
@@ -106,16 +108,33 @@ tasks:
     summary: Runs the application in development mode
     deps:
       - task: wails:check
+    vars:
+      # Default to an isolated config dir/port so `task wails:dev` can run
+      # side-by-side with a normal instance (CLI/npx on ~/.tingly-box:12580)
+      # without tripping its file lock (gui/wails3/run.go) — dual dev/prod
+      # by default, not opt-in. Still overridable via env, same as wails:run:
+      #   GUI_CONFIG_DIR=/other/dir GUI_PORT=12345 task wails:dev
+      DEV_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default "./.tingly-box"}}'
+      DEV_PORT: '{{.GUI_PORT | default "12333"}}'
     cmds:
       - task: codegen
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+      - cmd: wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+        env:
+          GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
+          GUI_PORT: '{{.DEV_PORT}}'
 
   wails:debug:
     summary: Runs the application in dev mode without codegen (fast restart)
     deps:
       - task: wails:check
+    vars:
+      DEV_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default "./.tingly-box"}}'
+      DEV_PORT: '{{.GUI_PORT | default "12333"}}'
     cmds:
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+      - cmd: wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+        env:
+          GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
+          GUI_PORT: '{{.DEV_PORT}}'
 
   wails:binding:
     deps:
