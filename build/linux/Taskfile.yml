@@ -176,8 +176,10 @@ tasks:
       CATEGORIES: 'Development;'
 
   run:
+    vars:
+      RUN_ARGS: '{{.RUN_ARGS | default ""}}'
     cmds:
-      - '{{.BIN_DIR}}/{{.BIN_NAME}}'
+      - '{{.BIN_DIR}}/{{.BIN_NAME}} {{.RUN_ARGS}}'
 
   sign:deb:
     summary: Signs the DEB package

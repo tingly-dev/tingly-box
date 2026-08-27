@@ -115,8 +115,10 @@ tasks:
       - wails3 tool msix-install-tools
 
   run:
+    vars:
+      RUN_ARGS: '{{.RUN_ARGS | default ""}}'
     cmds:
-      - '{{.BIN_DIR}}/{{.BIN_NAME}}.exe'
+      - '{{.BIN_DIR}}/{{.BIN_NAME}}.exe {{.RUN_ARGS}}'
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)

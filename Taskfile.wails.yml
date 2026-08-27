@@ -40,6 +40,16 @@ vars:
   BUILD_TIME:
     sh: date -u +%Y-%m-%dT%H:%M:%SZ
   VERSION_LDFLAGS: '-X main.version={{.VERSION}} -X main.gitCommit={{.GIT_COMMIT}} -X main.buildTime={{.BUILD_TIME}}'
+  # Config dir / port for a second, isolated debug instance (see
+  # gui/wails3/main.go's --config-dir and the per-dir file lock in
+  # gui/wails3/run.go). Empty by default — the app falls back to
+  # ~/.tingly-box and its configured/default port. Set via env, not
+  # `task wails:debug FOO=bar`: wails3 dev spawns `wails3 task wails:run` as
+  # a separate process, and only env vars survive that boundary.
+  #   GUI_CONFIG_DIR=./.tingly-box-debug GUI_PORT=12333 task wails:debug
+  GUI_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default ""}}'
+  GUI_PORT: '{{.GUI_PORT | default ""}}'
+  RUN_ARGS: '{{if .GUI_CONFIG_DIR}}--config-dir {{.GUI_CONFIG_DIR}} {{end}}{{if .GUI_PORT}}--port {{.GUI_PORT}}{{end}}'
 
 tasks:
   wails:check:
@@ -88,6 +98,9 @@ tasks:
     cmds:
       - task: codegen
       - task: "{{.GOOS}}:run"
+        vars:
+          RUN_ARGS:
+            ref: .RUN_ARGS
 
   wails:dev:
     summary: Runs the application in development mode

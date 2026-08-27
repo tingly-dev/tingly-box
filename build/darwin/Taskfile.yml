@@ -151,6 +151,10 @@ tasks:
       - 'echo "Skipping codesign (not available on {{OS}}). Sign the .app on macOS before distribution."'
 
   run:
+    vars:
+      # Passed by Taskfile.wails.yml's wails:run (e.g. --config-dir/--port
+      # for a second debug instance); empty when run directly.
+      RUN_ARGS: '{{.RUN_ARGS | default ""}}'
     cmds:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
@@ -159,7 +163,7 @@ tasks:
       - chmod +x "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS/{{.BIN_NAME}}"
       - cp "build/darwin/Info.dev.plist" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Info.plist"
       - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
-      - '"{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS/{{.BIN_NAME}}"'
+      - '"{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS/{{.BIN_NAME}}" {{.RUN_ARGS}}'
 
   sign:
     summary: Signs the application bundle with Developer ID
