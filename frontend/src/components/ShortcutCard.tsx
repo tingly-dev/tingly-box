@@ -9,7 +9,8 @@ import { isGuiMode } from '@/utils/protocol.ts';
 import { fontMono } from '@/theme/fonts';
 
 interface ShortcutCardProps {
-    maxWidth?: number | string;
+    /** Cap the card content's width; the card itself stays full-width. */
+    contentMaxWidth?: number | string;
 }
 
 /**
@@ -21,7 +22,7 @@ interface ShortcutCardProps {
  * recover a deleted shortcut, or to re-point it after an upgrade or a
  * different launch method.
  */
-export const ShortcutCard = ({ maxWidth }: ShortcutCardProps) => {
+export const ShortcutCard = ({ contentMaxWidth }: ShortcutCardProps) => {
     const { t } = useTranslation();
     const notify = useNotify();
     const [shortcutStatus, setShortcutStatus] = useState<{ exists: boolean; created: string[]; scriptPath: string } | null>(null);
@@ -76,7 +77,7 @@ export const ShortcutCard = ({ maxWidth }: ShortcutCardProps) => {
     if (!show) return null;
 
     return (
-        <UnifiedCard title={t('help.shortcut.title')} size="full" maxWidth={maxWidth}>
+        <UnifiedCard title={t('help.shortcut.title')} size="full" contentMaxWidth={contentMaxWidth}>
             <Stack spacing={1.5}>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {t('help.shortcut.description')}

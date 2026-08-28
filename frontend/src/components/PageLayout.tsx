@@ -127,7 +127,12 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
       sx={{
         position: "relative",
         width: '100%',
-        height: '100%',
+        // minHeight (not height): with a fixed 100% height, pages taller than
+        // the viewport overflow *out of* this box, and the scroll container's
+        // bottom padding lands mid-content — so the last row sits flush with
+        // the viewport edge when scrolled to the bottom. Letting the box grow
+        // keeps content in-flow, so the layout's bottom padding stays below it.
+        minHeight: '100%',
         display: 'flex',
         flexDirection: 'column'
       }}>

@@ -4,9 +4,10 @@ import { ShortcutCard } from '@/components/ShortcutCard.tsx';
 import { ProvidersCard } from '@/components/ProvidersCard.tsx';
 import { useTranslation } from 'react-i18next';
 
-// Cap the Shortcut card's width on wide viewports, matching System settings
-// cards. ProvidersCard is left uncapped — its provider grid wants the room.
-const SHORTCUT_CARD_MAX_WIDTH = 720;
+// The Shortcut card spans full width like every other card; only its content
+// is capped, matching System settings cards. ProvidersCard is left uncapped —
+// its provider grid wants the room.
+const SHORTCUT_CONTENT_MAX_WIDTH = 720;
 
 /**
  * HelpPage — the lightbulb entry in the activity bar, replacing the old
@@ -24,7 +25,7 @@ const HelpPage = () => {
     return (
         <PageLayout loading={false} title={t('help.title')} subtitle={t('help.description')}>
             <CardGrid>
-                <ShortcutCard maxWidth={SHORTCUT_CARD_MAX_WIDTH} />
+                <ShortcutCard contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH} />
                 <ProvidersCard />
             </CardGrid>
         </PageLayout>

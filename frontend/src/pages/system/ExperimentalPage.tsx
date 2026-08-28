@@ -7,7 +7,9 @@ import { Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
-const CARD_MAX_WIDTH = 720;
+// Card spans full width; only the content inside is capped so the feature
+// list doesn't stretch uncomfortably wide on big screens.
+const CONTENT_MAX_WIDTH = 720;
 
 const ExperimentalPage = () => {
     const { t } = useTranslation();
@@ -19,7 +21,7 @@ const ExperimentalPage = () => {
         <PageLayout loading={false}>
             <CardGrid>
                 <UnifiedCard
-                    maxWidth={CARD_MAX_WIDTH}
+                    contentMaxWidth={CONTENT_MAX_WIDTH}
                     title={t('system.experimentalFeatures.title')}
                     titleHeadingLevel={1}
                     size="full"

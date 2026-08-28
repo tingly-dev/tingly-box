@@ -36,7 +36,9 @@ interface TokenInfo {
     is_default: boolean;
 }
 
-const CARD_MAX_WIDTH = 720;
+// Cards span full width; only the content inside is capped so token rows and
+// descriptions don't stretch uncomfortably wide on big screens.
+const CONTENT_MAX_WIDTH = 720;
 
 // Shared shape for both the User Token and Model Token rows: masked value,
 // show/hide toggle, copy button. Behavior (what's shown, what copy does)
@@ -283,7 +285,7 @@ const AccessControl = () => {
                     User Token row's description almost verbatim and the
                     subtitle/intro paragraph above it were pure preamble, so
                     they're dropped rather than repeated a second time. */}
-                <UnifiedCard maxWidth={CARD_MAX_WIDTH} size="full">
+                <UnifiedCard contentMaxWidth={CONTENT_MAX_WIDTH} size="full">
                     <Stack spacing={2}>
                         <Box>
                             <Typography component="h1" variant="h5" sx={{
@@ -367,7 +369,7 @@ const AccessControl = () => {
                     kind of thing (a bearer credential you can view/copy/reset),
                     just scoped to different audiences (control panel vs API
                     clients), so they share one card instead of two. */}
-                <UnifiedCard maxWidth={CARD_MAX_WIDTH} size="full">
+                <UnifiedCard contentMaxWidth={CONTENT_MAX_WIDTH} size="full">
                     <Stack spacing={3}>
                         <Box>
                             <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1.5 }}>
