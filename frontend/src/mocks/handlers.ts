@@ -907,18 +907,29 @@ const inThirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOStr
 // that must not answer for the account, and a quota we cannot read at all.
 const mockQuotas: Record<string, any> = {
     // Nothing readable: the reason is recorded and no windows are invented.
-    // The credential row still renders — the reason inline, refresh still
-    // reachable — since a provider that cannot be read is exactly the one a
-    // user needs to see and retry.
+    // The credential row still renders — quota area empty, refresh still
+    // reachable — and the reason stays available via Details (raw_response).
+    // This mirrors the "upstream answered, but the answer is a refusal" case
+    // (e.g. user has no coding plan): the fetcher keeps the payload.
     'mock-provider-anthropic': {
         provider_uuid: 'mock-provider-anthropic',
         provider_name: 'Anthropic',
         provider_type: 'anthropic',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
-        last_error: 'validation failed: usage requires OAuth authentication',
+        last_error: 'user does not have an active coding plan',
         last_error_at: now.toISOString(),
+        raw_response: {
+            type: 'error',
+            error: {
+                type: 'permission_error',
+                message: 'user does not have an active coding plan',
+            },
+        },
     },
+
+    // Fetch failed outright: no payload came back, so no raw_response either —
+    // the row renders with an empty quota area and no Details button.
 
     'mock-provider-openai': {
         provider_uuid: 'mock-provider-openai',

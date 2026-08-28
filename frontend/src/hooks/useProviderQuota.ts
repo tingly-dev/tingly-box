@@ -150,14 +150,10 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
       await fetchUIAPI(`/provider-quota/${providerUuid}/refresh`, {
         method: 'POST',
       });
-      const quota = await fetchQuota(providerUuid);
-      // The refresh endpoint answers 200 even when the upstream refused: an
-      // unreadable provider comes back as a usage record carrying last_error.
-      // Reporting only transport failures made that case look like a success
-      // that quietly rendered nothing.
-      if (quota?.last_error) {
-        notify.warning(`${providerName(providerUuid)}: ${quota.last_error}`);
-      }
+      // A refused upstream still answers 200: an unreadable provider comes
+      // back as a usage record carrying last_error. The error is not toasted —
+      // it's visible via Details on the quota row — so the refresh stays quiet.
+      await fetchQuota(providerUuid);
     } catch (error) {
       if (isMissingQuota(error)) {
         return;
