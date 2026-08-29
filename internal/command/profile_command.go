@@ -174,8 +174,9 @@ func profileShowInteractive(appManager *AppManager) error {
 	return profileShow(appManager, selected)
 }
 
-// profileUse launches Claude Code with the specified profile.
-// Equivalent to `tingly-box cc --profile <name>` but without passthrough args.
+// profileUse launches Claude Code with the specified profile via runCC —
+// the same underlying call `tingly-box cc --profile <name>` makes; this is
+// now the preferred, documented form (see CCmdKong's deprecation note).
 // If port > 0, it overrides the configured server port.
 // Additional args are passed to Claude Code.
 func profileUse(appManager *AppManager, nameOrID string, port int, extraArgs []string) error {

@@ -40,7 +40,9 @@ one profile.
    `TBClient.GetClaudeCodeSettingsPathForProfile(ctx, profileID)`, which
    ensures the profile's settings.json via
    `agent.MaterializeCCProfileSettings(...)` — the same on-disk artifact and
-   resolution `tingly-box cc --profile <id>` produces — and returns its path.
+   resolution `tingly-box profile <id>` produces (both resolve through the
+   shared `runCC`; `tingly-box cc --profile <id>` is a deprecated alias for
+   the same call) — and returns its path.
    The builder renders the complete document in memory, serializes publishers
    per target path, and atomically replaces the artifact only when its content
    changed. Concurrent launches therefore see either the previous complete

@@ -19,8 +19,12 @@ import (
 // CCmdKong launches Claude Code with tingly-box-specific flags.
 // Put tingly-box flags before Claude Code args; unknown flags are passed through
 // to Claude Code so users do not need to insert a literal '--'.
+//
+// --profile duplicates `tingly-box profile <id>` (both resolve through
+// runCC below) and is kept only for existing scripts/muscle memory; prefer
+// `profile` for anything profile-related; see profile_command.go.
 type CCmdKong struct {
-	Profile string   `kong:"flag,name='profile',help='Claude Code profile to use'"`
+	Profile string   `kong:"flag,name='profile',help='Claude Code profile to use (deprecated: prefer \"tingly-box profile <id>\")'"`
 	Port    int      `kong:"flag,name='port',help='Tingly-Box server port (default: detected from running server, else config or 12580)'"`
 	Args    []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
@@ -30,6 +34,9 @@ func (c *CCmdKong) Run(appManager *AppManager) error {
 	// This is handled by passing --help to Claude, not by showing tingly-box help
 	// Use --port if provided, otherwise 0 (will fallback to config)
 	port := c.Port
+	if c.Profile != "" {
+		fmt.Fprintln(os.Stderr, "Note: 'tingly-box cc --profile' is deprecated; use 'tingly-box profile "+c.Profile+"' instead.")
+	}
 	return runCC(appManager, c.Profile, port, c.Args)
 }
 
