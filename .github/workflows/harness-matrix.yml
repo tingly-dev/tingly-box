@@ -3,21 +3,36 @@ name: Harness Matrix
 run-name: >-
   🧪 Harness ${{ github.event_name == 'workflow_dispatch'
     && format('(focus={0})', github.event.inputs.focus)
-    || (startsWith(github.ref, 'refs/tags/') && format('(tag {0})', github.ref_name))
     || format('(branch {0})', github.ref_name) }}
   by @${{ github.actor }}
 
-# Runs every hermetic harness mode in parallel to validate each change,
-# including one matrix leg per client driver (http / gosdk / python / node /
-# aisdk) so the gateway is validated against every real client stack.
-# Triggers: CI branch push (ci/**), manual dispatch, and release tag (v*).
+# Trigger wrapper for the harness. This workflow owns ONLY when the harness
+# runs; the matrix itself lives in harness-template.yml (the single shared
+# definition), which this calls and which release.yml also calls directly.
+#
+# Triggers:
+#   - push ci/**             : validate every CI branch change.
+#   - pull_request merged to main : validate after every PR merge (not on
+#     plain closes; see the gate job).
+#   - workflow_dispatch      : manual run, optionally focused on one axis.
+#
+# Release tags are deliberately NOT triggered here — they run the harness
+# only through release.yml's workflow_call, so the matrix is never scheduled
+# twice for the same tag.
+#
 # See .design/harness-matrix.md and cli/harness/README.md for the modes.
 on:
   push:
     branches:
       - 'ci/**'
-    tags:
-      - 'v*'
+  # Run after every merge to main. We react to PR-close events instead of a
+  # raw `push: main` so direct pushes (e.g. bot bump commits) don't re-trigger
+  # the full matrix — only genuine PR merges do.
+  pull_request:
+    types:
+      - closed
+    branches:
+      - 'main'
   workflow_dispatch:
     inputs:
       focus:
@@ -44,198 +59,38 @@ on:
 permissions:
   contents: read
 
-env:
-  GO_VERSION: '1.26'
-
-# Cancel superseded runs on the same branch, but never cancel release-tag runs.
+# Cancel superseded runs on the same branch.
 concurrency:
   group: harness-matrix-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: true
 
 jobs:
+  # Decide whether this trigger should actually run the harness. The only
+  # case we drop is a pull_request:closed that was NOT a merge into main.
+  # (push ci/** and workflow_dispatch always run.)
+  gate:
+    name: Trigger gate
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check trigger
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" != "true" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ pull_request closed without merge — not running harness."
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Delegate to the shared template. Forward the manual focus (defaults to
+  # 'all' for non-dispatch events). The template carries the full matrix and
+  # the pass/fail result aggregation.
   harness:
-    name: ${{ matrix.leg.name }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        leg:
-          - name: matrix-single
-            tier: matrix
-            focus: single
-            cmd: matrix --mode=single --json
-          - name: matrix-transitive
-            tier: matrix
-            focus: transitive
-            cmd: matrix --mode=transitive --json
-          - name: matrix-idempotent
-            tier: matrix
-            focus: idempotent
-            cmd: matrix --mode=idempotent --json
-          - name: matrix-flags
-            tier: matrix
-            focus: flags
-            cmd: matrix --mode=flags --json
-          - name: matrix-content-shapes
-            tier: matrix
-            focus: content_shapes
-            cmd: matrix --mode=content_shapes --json
-          # One matrix leg per client driver: the same matrix driven through
-          # real client stacks instead of raw HTTP. gosdk uses the official Go
-          # SDKs in-process; python/node/aisdk run the real foreign SDKs via
-          # the subprocess drivers under tests/clients/ (setup picks the
-          # toolchain). See .design/harness-matrix.md "Client drivers".
-          - name: matrix-single-gosdk
-            tier: matrix
-            focus: gosdk
-            cmd: matrix --mode=single --client=gosdk --json
-          - name: matrix-idempotent-gosdk
-            tier: matrix
-            focus: gosdk
-            cmd: matrix --mode=idempotent --client=gosdk --json
-          - name: matrix-single-python
-            tier: matrix
-            focus: python
-            setup: python
-            cmd: matrix --mode=single --client=python --json
-          - name: matrix-single-node
-            tier: matrix
-            focus: node
-            setup: node
-            cmd: matrix --mode=single --client=node --json
-          - name: matrix-single-aisdk
-            tier: matrix
-            focus: aisdk
-            setup: aisdk
-            cmd: matrix --mode=single --client=aisdk --json
-          - name: replay-virtual
-            tier: replay
-            focus: replay
-            cmd: replay batch --upstream=virtual
-          - name: replay-vmodel
-            tier: replay
-            focus: replay
-            cmd: replay batch --upstream=vmodel
-          - name: lb
-            tier: lb
-            focus: lb
-            cmd: lb --all
-          # Duo-topology legs: two full server child processes over real TCP.
-          # The functional phase (protocol correctness per conversion route)
-          # and the smart-routing scenarios are deterministic and CI-safe;
-          # the memory phase (retention slopes) stays out of shared-runner CI
-          # — noisy neighbors make slope thresholds flaky — and is guarded by
-          # TestDuoMemoryRegression in the Go suite instead.
-          - name: duo-functional
-            tier: duo
-            focus: duo
-            cmd: duo --skip-memory
-          - name: routing
-            tier: routing
-            focus: routing
-            cmd: routing
-    steps:
-      - name: Skip unfocused leg
-        id: gate
-        run: |
-          FOCUS="${{ github.event.inputs.focus || 'all' }}"
-          LEG_FOCUS="${{ matrix.leg.focus }}"
-          if [ "$FOCUS" != "all" ] && [ "$FOCUS" != "$LEG_FOCUS" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️ focus=$FOCUS — skipping ${{ matrix.leg.name }}"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout code
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v6
-        with:
-          submodules: true
-
-      - name: Setup Go
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      # Per-client driver toolchains (only for legs that declare setup).
-      - name: Setup Python
-        if: steps.gate.outputs.run == 'true' && matrix.leg.setup == 'python'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: tests/clients/python/requirements.txt
-
-      - name: Install Python SDKs
-        if: steps.gate.outputs.run == 'true' && matrix.leg.setup == 'python'
-        run: pip install -r tests/clients/python/requirements.txt
-
-      - name: Setup Node
-        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-
-      - name: Install Node driver dependencies
-        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
-        run: npm install --prefix tests/clients/${{ matrix.leg.setup }}
-
-      - name: Run harness — ${{ matrix.leg.name }}
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          set -o pipefail
-          echo "▶️ go run ./cli/harness ${{ matrix.leg.cmd }}"
-          go run ./cli/harness ${{ matrix.leg.cmd }} | tee "harness-${{ matrix.leg.name }}.log"
-
-      # matrix legs emit JSON — keep it for inspection and surface a summary.
-      - name: Upload matrix JSON
-        if: steps.gate.outputs.run == 'true' && matrix.leg.tier == 'matrix' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.leg.name }}-json
-          path: harness-${{ matrix.leg.name }}.log
-          if-no-files-found: ignore
-
-      - name: Write step summary
-        if: steps.gate.outputs.run == 'true' && always()
-        run: |
-          STATUS="${{ job.status }}"
-          {
-            echo "### ${{ matrix.leg.name }} — \`$STATUS\`"
-            echo ""
-            echo '```'
-            echo "go run ./cli/harness ${{ matrix.leg.cmd }}"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # Single required status check that gates ci/** merges and release tags.
-  result:
-    name: Harness result
-    runs-on: ubuntu-latest
-    needs: harness
-    if: always()
-    steps:
-      - name: Evaluate harness outcome
-        run: |
-          RESULT="${{ needs.harness.result }}"
-          echo "Harness matrix result: $RESULT"
-          # 'success' when every leg passed or was skipped; otherwise fail.
-          if [ "$RESULT" = "success" ] || [ "$RESULT" = "skipped" ]; then
-            echo "✅ All harness legs passed."
-          else
-            echo "❌ One or more harness legs failed (result=$RESULT)."
-            exit 1
-          fi
+    name: Run harness
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    uses: ./.github/workflows/harness-template.yml
+    with:
+      focus: ${{ github.event.inputs.focus || 'all' }}

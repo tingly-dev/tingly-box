@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to publish from (e.g., v1.0.0)'
+        description: 'Release tag to publish from (e.g., v1.0.0). Type an EXISTING published release tag — it must already exist on GitHub Releases; the job verifies it before publishing.'
         required: true
         type: string
       npm_tag:
@@ -127,7 +127,11 @@ jobs:
           echo "Checking if release $RELEASE_TAG exists..."
 
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Error: Release $RELEASE_TAG does not exist!"
+            echo "❌ Error: Release $RELEASE_TAG does not exist!"
+            echo ""
+            echo "The 'tag' input must match a published GitHub Release."
+            echo "👉 Open https://github.com/${{ github.repository }}/releases to"
+            echo "   find the exact tag, then re-run with that value."
             exit 1
           fi
 
