@@ -44,7 +44,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 			APIStyle: protocol.APIStyleAnthropic,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,
-			Enabled:  true,
+			Enabled:  false,
 			VModelDetail: &typ.VModelDetail{
 				Models: anthropicModels,
 			},
@@ -56,7 +56,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 			APIStyle: protocol.APIStyleOpenAI,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,
-			Enabled:  true,
+			Enabled:  false,
 			VModelDetail: &typ.VModelDetail{
 				Models: openaiModels,
 			},
@@ -75,10 +75,11 @@ type ProviderSaver interface {
 // EnsureBuiltinProviders inserts or refreshes the builtin virtual-model
 // providers in the given store. It is idempotent and safe to call on every
 // startup:
-//   - If a builtin provider is missing it is created (Enabled=true).
+//   - If a builtin provider is missing it is created (Enabled=false — virtual
+//     models are opt-in; users enable them from the provider page).
 //   - If a builtin provider already exists its Enabled flag is preserved
-//     (users may have disabled it) while the model list is refreshed to match
-//     what is currently registered.
+//     (users may have enabled or disabled it) while the model list is
+//     refreshed to match what is currently registered.
 func (s *Service) EnsureBuiltinProviders(store ProviderSaver) error {
 	for _, p := range s.BuildBuiltinProviders() {
 		existing, err := store.GetByUUID(p.UUID)
