@@ -50,12 +50,13 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	req.Force = a.Force
 	req.Preview = a.Preview
 
-	reader := bufio.NewReader(os.Stdin)
-
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
+		if !isStdinTTY() {
+			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent apply claude-code' (cc, oc, cx)")
+		}
 		// No agent type specified, prompt for selection
-		agentType, err := promptForAgentTypeChoice(reader)
+		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
 		if err != nil {
 			return err
 		}
@@ -87,7 +88,10 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 
 	// Confirm if not forced
 	if !req.Force {
-		if err := confirmApply(reader, &req); err != nil {
+		if !isStdinTTY() {
+			return fmt.Errorf("no TTY to confirm; re-run with --force to apply without prompting")
+		}
+		if err := confirmApply(bufio.NewReader(os.Stdin), &req); err != nil {
 			return err
 		}
 	}

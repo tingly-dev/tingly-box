@@ -45,3 +45,44 @@ func TestAgentShowFlagCmdKong_NoTTYWithoutAgentType_ClearError(t *testing.T) {
 		t.Errorf("error = %q, want a usage example", err.Error())
 	}
 }
+
+// TestAgentApplyFlagCmdKong_NoTTYWithoutAgentType_ClearError is the same
+// regression guard as the show/token-view fix, for `agent apply`'s own
+// agent-type prompt.
+func TestAgentApplyFlagCmdKong_NoTTYWithoutAgentType_ClearError(t *testing.T) {
+	withNonTTYStdin(t)
+
+	err := (&AgentApplyFlagCmdKong{}).Run(nil)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no TTY") {
+		t.Errorf("error = %q, want it to mention the missing TTY", err.Error())
+	}
+	if !strings.Contains(err.Error(), "agent apply claude-code") {
+		t.Errorf("error = %q, want a usage example", err.Error())
+	}
+}
+
+// TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError: `apply` is meant
+// to be a one-shot "configure and go" command (unlike show/restore, it's
+// the one CLI verb genuinely worth running non-interactively often), so a
+// missing confirmation TTY must fail with a hint to pass --force rather
+// than block on a bufio read that can never succeed. Needs a real
+// AppManager: with an agent type given, Run reaches routing-rule
+// resolution (which needs a config) before the force/TTY check.
+func TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError(t *testing.T) {
+	withNonTTYStdin(t)
+	am := newTestAppManager(t)
+
+	var err error
+	withSilencedStdout(t, func() {
+		err = (&AgentApplyFlagCmdKong{AgentType: "claude-code"}).Run(am)
+	})
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no TTY") || !strings.Contains(err.Error(), "--force") {
+		t.Errorf("error = %q, want it to mention the missing TTY and --force", err.Error())
+	}
+}
