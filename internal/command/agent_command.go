@@ -102,12 +102,13 @@ type AgentShowFlagCmdKong struct {
 }
 
 func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
-	reader := bufio.NewReader(os.Stdin)
-
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
+		if !isStdinTTY() {
+			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, cx)")
+		}
 		// No agent type specified, prompt for selection
-		agentType, err := promptForAgentTypeChoice(reader)
+		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
 		if err != nil {
 			return err
 		}

@@ -86,6 +86,10 @@ func resolveTokenKind(arg string) (TokenKind, error) {
 		return "", fmt.Errorf("unknown token kind %q (expected 'auth' or 'model')", arg)
 	}
 
+	if !isStdinTTY() {
+		return "", fmt.Errorf("no kind specified and no TTY to prompt; pass 'auth' or 'model' explicitly, e.g. 'tingly-box token view auth'")
+	}
+
 	fmt.Println("Which tingly-box token?")
 	fmt.Println("  [1] auth   — control panel & control API (UserToken)")
 	fmt.Println("  [2] model  — model API for AI clients (ModelToken)")
