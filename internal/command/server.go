@@ -518,7 +518,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 
 		versionNote := " (version unknown)"
 		if runningVersion != "" {
-			versionNote = fmt.Sprintf(" (v%s)", runningVersion)
+			versionNote = fmt.Sprintf(" (v%s)", strings.TrimPrefix(runningVersion, "v"))
 		}
 		fmt.Printf("Server is already running on port %d%s\n", runningPort, versionNote)
 		printBanner(BannerConfig{

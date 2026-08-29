@@ -245,7 +245,7 @@ func (c *Config) logProxyEnvironment() {
 	if c.HTTPTransport.RespectEnvProxy != nil {
 		respectEnvProxy = *c.HTTPTransport.RespectEnvProxy
 	}
-	logrus.Infof("proxy env: HTTP_PROXY=%q HTTPS_PROXY=%q NO_PROXY=%q http_proxy=%q https_proxy=%q no_proxy=%q respect_env_proxy=%v",
+	logrus.Debugf("proxy env: HTTP_PROXY=%q HTTPS_PROXY=%q NO_PROXY=%q http_proxy=%q https_proxy=%q no_proxy=%q respect_env_proxy=%v",
 		os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"), os.Getenv("NO_PROXY"),
 		os.Getenv("http_proxy"), os.Getenv("https_proxy"), os.Getenv("no_proxy"),
 		respectEnvProxy)

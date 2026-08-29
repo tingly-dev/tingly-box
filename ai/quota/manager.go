@@ -60,7 +60,7 @@ func (m *Manager) RegisterFetcher(fetcher Fetcher) error {
 	if err := m.registry.Register(fetcher); err != nil {
 		return fmt.Errorf("failed to register fetcher: %w", err)
 	}
-	m.logger.Infof("registered quota fetcher: %s for provider type: %s", fetcher.Name(), fetcher.ProviderType())
+	m.logger.Debugf("registered quota fetcher: %s for provider type: %s", fetcher.Name(), fetcher.ProviderType())
 	return nil
 }
 
