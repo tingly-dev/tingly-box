@@ -258,7 +258,31 @@ above). tb then dispatches each inbound request to whichever URL matches
 the *client's own* protocol — exactly the mechanism dual-provider was built
 for, just with a Python process instead of Vertex/Bedrock behind it.
 
-## Auto-registration (proposed — design only, not yet built)
+## Auto-registration (parked — recorded for later, not being built now)
+
+Today, wiring a running `Server` into tb is a manual step: open Connect AI,
+pick Self-hosted → Dual endpoint, type the name and both URLs, save. The
+question that started this section was whether `Server` should do that
+step itself. Revisiting it: **it shouldn't, not yet.** A user who picks a
+fixed port once already has everything they need — register that port in
+Connect AI a single time, and every later run of the same script reuses the
+same port and needs nothing further; only *changing* the port means
+touching Connect AI again, which is exactly as much friction as changing
+any other provider setting. Auto-registration's entire value is saving that
+one manual step, at the cost of everything below it (identity, the local
+record, the refuse-on-collision rule, the no-delete rule) — real design
+weight for a save that a fixed port already makes rare. That's not what a
+prototype needs a mechanism for.
+
+The design is kept below, not deleted, because the underlying idea isn't
+wrong — a future need (many short-lived `Server` instances, ports that
+must be dynamic, onboarding someone who won't want Connect AI's picker)
+could revive it. Until then: **not implemented, not default-on, not shown
+in `examples/`.** A user who wants this today picks a port, registers it by
+hand once, same as any other self-hosted provider.
+
+<details>
+<summary>Design, as discussed (parked)</summary>
 
 Today, wiring a running `Server` into tb is a manual step: open Connect AI,
 pick Self-hosted → Dual endpoint, type the name and both URLs, save. Every
@@ -277,10 +301,10 @@ already in `openapi.json` (`internal/server/module/provider/{types,routes}.go`):
 | `GET /api/v1/providers` | find an existing row by name |
 | `POST /api/v1/providers` | create |
 | `PUT /api/v1/providers/:uuid` | update (port changed since last run) |
-| `DELETE /api/v1/providers/:uuid` | best-effort cleanup on shutdown |
 
-All four already require `UserToken` — the same `admin_token` `Client`'s
-quota methods added.
+All three already require `UserToken` — the same `admin_token` `Client`'s
+quota methods added. `DELETE /api/v1/providers/:uuid` exists too, but
+auto-registration never calls it — see "no delete, ever" below.
 
 ### Identity: name, guarded by a local record of what we created
 
@@ -288,7 +312,7 @@ Matching by `name` alone is the simplest possible identity, and needs no
 new tb-side concept — but on its own it means two `Server`s (or one
 `Server` and one manually-created provider) sharing a name collide: the
 second one to start would silently overwrite the first's URLs on its next
-`PUT`, and its shutdown would silently delete a row it didn't create.
+`PUT`.
 
 Resolved: **name decides identity only on a `Server` that has never
 registered before; every later run trusts a small local record instead.**
@@ -298,7 +322,8 @@ adding one was considered and set aside; the record below gets the same
 result without touching the generic Provider API's shape). Concretely, a
 small JSON file next to wherever `Server` runs (path configurable, default
 derived from `srv.name`) stores `{"uuid": "...", "name": "..."}` after the
-first successful registration:
+first successful registration, and is kept **permanently** — nothing ever
+deletes it (see "no delete, ever" below):
 
 1. Bind the HTTP server first (`port=0` is the point — the OS picks a free
    one; auto-registration is what removes the reason to ever hardcode a
@@ -320,14 +345,29 @@ first successful registration:
      `api_base_anthropic` = the bare URL when `@srv.messages` is
      registered — only the URL(s) for protocols the `Server` actually
      serves. Write the returned UUID to the local record.
-4. Clean shutdown (`KeyboardInterrupt` / normal return from `run()`) → if a
-   local record exists, best-effort `DELETE /api/v1/providers/{uuid}`, then
-   remove the local record itself — the next run starts genuinely fresh
-   (step 3's path), not stuck believing a now-deleted row still exists.
+
+That's the whole lifecycle — there is no step 4. `run()` only ever creates
+or updates; nothing in `Server` calls `DELETE`, on shutdown or otherwise.
 
 `advertise_host` defaults to `127.0.0.1` regardless of what host the HTTP
 server itself binds to — this stays a same-box prototype (tb and the
 plugin on one machine); reaching a plugin across machines is out of scope.
+
+### No delete, ever
+
+An earlier draft of this design had a clean shutdown delete the provider
+row (and its local record) so a stopped `Server` left nothing behind. Wrong:
+a provider is not a leaf node. Rules reference it by UUID; deleting it out
+from under a rule the user built on top of this provider breaks that rule
+or silently orphans it — a cascading, destructive side effect for
+`srv.run()` to trigger on nothing more than the process exiting normally.
+`Server` **only ever registers** — creates once, updates on every later
+run, never deletes. A provider (and the local record pointing at it) that
+outlives its `Server` process is the same as any other stale provider a
+human forgot to remove: the user's call to clean up in Connect AI, not a
+risk this SDK takes on their behalf. This is also simpler, not just safer:
+no "did the delete succeed," no "should the local record survive a failed
+delete" — the local record is just permanent.
 
 The rejected alternative — a backend-accepted, caller-pinned UUID
 (`Server(uuid="...")`, no lookup, no collision handling, "wrong or reused
@@ -344,10 +384,11 @@ Mirrors the four discarded iterations the prior branch's own design notes
 already worked through (see "Prior attempt" above) — restating them here so
 this proposal doesn't quietly re-invent any of them:
 
-- **No heartbeat, lease, or TTL.** A crash without a clean shutdown leaves a
-  stale provider row — the same failure mode as any other misconfigured or
-  offline provider today. tb's existing provider-error surfacing is what a
-  user checks; this does not add a liveness system on top of it.
+- **No heartbeat, lease, or TTL.** A stopped `Server` — crashed or cleanly
+  exited, no distinction now that there's no delete step — leaves a stale
+  provider row, the same failure mode as any other misconfigured or offline
+  provider today. tb's existing provider-error surfacing is what a user
+  checks; this does not add a liveness system on top of it.
 - **No new "plugin" concept, DB column, or dedicated registration
   endpoint.** Auto-registration is entirely the generic Provider CRUD API
   that already exists — the row it creates is indistinguishable from one a
@@ -357,6 +398,8 @@ this proposal doesn't quietly re-invent any of them:
   explicitly, and only runs when `srv.tb.admin_token` is actually set — a
   `Server` with no admin token behaves exactly as it does today: unregistered,
   wire it up by hand.
+
+</details>
 
 ## Quota — the one place this SDK generates types
 
@@ -430,13 +473,14 @@ Deliberately deferred, not forgotten:
   providers/rules, etc.) — quota is the one surface with a concrete need
   today; everything else stays a plain `httpx`/`requests` call against tb's
   already-public API if a handler ever needs it.
-- Auto-registration — proposed above, pending the open question there; not
-  built. Registering the provider is a one-time manual step via Connect AI
-  until it is.
+- Auto-registration — parked (see above): a fixed port registered once by
+  hand in Connect AI already covers the common case cheaply enough that
+  the mechanism isn't worth building yet. Registering the provider stays a
+  one-time manual step.
 - Discovery via a dedicated tb-side endpoint (`POST /sdk/session` or
-  similar) — the auto-registration proposal above builds on the generic
-  Provider CRUD API instead, so this stays out of scope regardless of how
-  that proposal resolves.
+  similar) — the parked auto-registration design builds on the generic
+  Provider CRUD API instead of one of these, so this stays out of scope
+  regardless of whether that design is ever revived.
 - A CLI, packaging/publishing to PyPI.
 
 ## Key files
@@ -457,4 +501,4 @@ Deliberately deferred, not forgotten:
 | `internal/server/module/providerquota/routes.go` | Swagger declarations for provider-quota — ported from the prior branch, the one piece of its backend work worth keeping |
 | `internal/server/swagger.go`, `internal/server/server_control.go` | Register provider-quota routes unconditionally (nil-manager-safe) so they always reach `openapi.json` |
 | `internal/middleware/auth.go` | `UserAuthMiddleware` vs `ModelAuthMiddleware` — why quota needs `admin_token` and `.chat()` doesn't |
-| `internal/server/module/provider/{types,routes}.go` | Provider CRUD API — what the auto-registration proposal would call; no backend change needed for it |
+| `internal/server/module/provider/{types,routes}.go` | Provider CRUD API — what the parked auto-registration design would have called; no backend change needed for it |
