@@ -27,8 +27,8 @@ func TestParseAgentType(t *testing.T) {
 		{"open-code with dash", "open-code", AgentTypeOpenCode, false},
 		{"OC uppercase", "OC", AgentTypeOpenCode, false},
 
-		// Valid Codex aliases
-		{"cx alias", "cx", AgentTypeCodex, false},
+		// Codex: no shorthand, unlike cc/oc
+		{"cx is not a valid alias", "cx", "", true},
 		{"codex full", "codex", AgentTypeCodex, false},
 		{"CODEX uppercase", "CODEX", AgentTypeCodex, false},
 

@@ -10,7 +10,8 @@ import (
 // Supported aliases:
 //   - "cc", "claude", "claude-code" -> AgentTypeClaudeCode
 //   - "oc", "opencode" -> AgentTypeOpenCode
-//   - "cx", "codex" -> AgentTypeCodex
+//   - "codex" -> AgentTypeCodex (no shorthand — unlike @cc/@oc, there's no
+//     established "@codex"-style abbreviation for it)
 //   - "dsh" -> AgentTypeDsh
 func ParseAgentType(input string) (AgentType, error) {
 	if input == "" {
@@ -24,11 +25,11 @@ func ParseAgentType(input string) (AgentType, error) {
 		return AgentTypeClaudeCode, nil
 	case "oc", "opencode", "open-code":
 		return AgentTypeOpenCode, nil
-	case "cx", "codex":
+	case "codex":
 		return AgentTypeCodex, nil
 	case "dsh":
 		return AgentTypeDsh, nil
 	default:
-		return "", fmt.Errorf("unknown agent type: %s (supported: cc/claude-code, oc/opencode, cx/codex, dsh)", input)
+		return "", fmt.Errorf("unknown agent type: %s (supported: cc/claude-code, oc/opencode, codex, dsh)", input)
 	}
 }

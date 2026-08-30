@@ -73,12 +73,12 @@ func TestParseAgentType(t *testing.T) {
 			want:    AgentTypeOpenCode,
 			wantErr: false,
 		},
-		// Codex aliases
+		// Codex: no shorthand, unlike cc/oc
 		{
-			name:    "cx alias",
+			name:    "cx is not a valid alias",
 			input:   "cx",
-			want:    AgentTypeCodex,
-			wantErr: false,
+			want:    "",
+			wantErr: true,
 		},
 		{
 			name:    "codex full",

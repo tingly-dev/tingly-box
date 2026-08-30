@@ -32,7 +32,7 @@ func (a *AgentListFlagCmdKong) Run(appManager *AppManager) error {
 
 // AgentApplyFlagCmdKong applies agent configuration via flags
 type AgentApplyFlagCmdKong struct {
-	AgentType  string `kong:"arg,optional,help='Agent type (cc/claude-code, oc/opencode, cx/codex)'"`
+	AgentType  string `kong:"arg,optional,help='Agent type (cc/claude-code, oc/opencode, codex)'"`
 	Provider   string `kong:"flag,name='provider',help='Provider UUID (optional, uses routing rule if not specified)'"`
 	Model      string `kong:"flag,name='model',help='Model name (optional, uses routing rule if not specified)'"`
 	Unified    bool   `kong:"flag,name='unified',default='true',help='Unified mode (claude-code only)'"`
@@ -52,15 +52,15 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	// never prompts to choose an agent type. Picking interactively is a
 	// TUI job (`tingly-box tui`).
 	if a.AgentType == "" {
-		return fmt.Errorf("agent type required: cc (claude-code), oc (opencode), or cx (codex), e.g. 'tingly-box agent apply claude-code'; run 'tingly-box tui' to pick interactively")
+		return fmt.Errorf("agent type required: cc (claude-code), oc (opencode), or codex, e.g. 'tingly-box agent apply claude-code'; run 'tingly-box tui' to pick interactively")
 	}
 	// Parse agent type with alias support (cc, claude-code, etc.)
 	parsedType, err := agent.ParseAgentType(a.AgentType)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Available agent types:")
 		fmt.Fprintln(os.Stderr, "  cc, claude-code - Claude Code CLI agent (@cc)")
-		fmt.Fprintln(os.Stderr, "  oc, opencode   - OpenCode editor agent (@oc)")
-		fmt.Fprintln(os.Stderr, "  cx, codex      - OpenAI Codex CLI (@codex)")
+		fmt.Fprintln(os.Stderr, "  oc, opencode    - OpenCode editor agent (@oc)")
+		fmt.Fprintln(os.Stderr, "  codex           - OpenAI Codex CLI")
 		return err
 	}
 	req.AgentType = parsedType

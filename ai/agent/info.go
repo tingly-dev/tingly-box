@@ -43,7 +43,7 @@ func ListAgentInfo() []AgentInfo {
 		{
 			Type:        AgentTypeCodex,
 			Name:        "Codex",
-			Description: "OpenAI Codex CLI (@codex)",
+			Description: "OpenAI Codex CLI",
 			ConfigFiles: []string{
 				"~/.codex/config.toml",
 				"~/.codex/auth.json",
