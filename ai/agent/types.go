@@ -47,8 +47,8 @@ type ApplyAgentRequest struct {
 	// Only applicable for AgentTypeClaudeCode
 	Unified bool
 
-	// Force skips confirmation prompts
-	Force bool
+	// Yes skips the confirmation prompt (CLI's -y/--yes)
+	Yes bool
 
 	// Preview shows what would be applied without actually applying
 	Preview bool
@@ -101,8 +101,8 @@ type RestoreAgentRequest struct {
 	// AgentType is the type of agent to restore (required)
 	AgentType AgentType
 
-	// Force skips confirmation prompts (CLI use)
-	Force bool
+	// Yes skips the confirmation prompt (CLI's -y/--yes)
+	Yes bool
 }
 
 // RestoreAgentResult represents the result of restoring agent configuration.

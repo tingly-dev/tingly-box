@@ -110,3 +110,37 @@ func TestAgentApplyFlagCmdKong_NoRoutingRule_NeverPromptsForProvider(t *testing.
 		t.Errorf("output = %q, want the config-files-only preview note", output)
 	}
 }
+
+// TestAgentRestoreFlagCmdKong_NoTTYWithoutAgentType_ClearError: `agent
+// restore` had the identical unguarded promptForAgentTypeChoice fallback
+// that show/apply were fixed for, just never covered — same bug, same
+// fix, via the shared requireTTY helper. appManager is nil: Run doesn't
+// touch it before this check.
+func TestAgentRestoreFlagCmdKong_NoTTYWithoutAgentType_ClearError(t *testing.T) {
+	withNonTTYStdin(t)
+
+	err := (&AgentRestoreFlagCmdKong{}).Run(nil)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no TTY") {
+		t.Errorf("error = %q, want it to mention the missing TTY", err.Error())
+	}
+	if !strings.Contains(err.Error(), "agent restore claude-code") {
+		t.Errorf("error = %q, want a usage example", err.Error())
+	}
+}
+
+// TestAgentRestoreFlagCmdKong_NoTTYWithoutYes_ClearError: same gap as
+// above, for restore's "Proceed? [y/N]" confirmation.
+func TestAgentRestoreFlagCmdKong_NoTTYWithoutYes_ClearError(t *testing.T) {
+	withNonTTYStdin(t)
+
+	err := (&AgentRestoreFlagCmdKong{AgentType: "claude-code"}).Run(nil)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no TTY") || !strings.Contains(err.Error(), "-y/--yes") {
+		t.Errorf("error = %q, want it to mention the missing TTY and -y/--yes", err.Error())
+	}
+}

@@ -287,7 +287,7 @@ provisioning flow fits in three lines, no TTY required:
 tingly-box config provider add openai https://api.openai.com $TOKEN openai
 tingly-box config rule add --scenario openai \
   --request-model gpt-4o --provider openai --model gpt-4o
-tingly-box agent apply claude-code --provider openai --model gpt-4o --force
+tingly-box agent apply claude-code --provider openai --model gpt-4o -y
 ```
 
 Three rules for CLI commands that overlap with TUI functionality:

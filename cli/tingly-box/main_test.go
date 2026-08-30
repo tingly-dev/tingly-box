@@ -247,11 +247,11 @@ func TestAgentApplyUnifiedDefaultIsTrue(t *testing.T) {
 // TestAgentRestoreCommandExists ensures agent restore subcommand is available.
 func TestAgentRestoreCommandExists(t *testing.T) {
 	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"agent", "restore", "claude-code", "--force"}); err != nil {
+	if _, err := parser.Parse([]string{"agent", "restore", "claude-code", "-y"}); err != nil {
 		t.Fatalf("agent restore should parse: %v", err)
 	}
-	if !cli.Agent.Restore.Force {
-		t.Error("Restore.Force should be true")
+	if !cli.Agent.Restore.Yes {
+		t.Error("Restore.Yes should be true")
 	}
 }
 

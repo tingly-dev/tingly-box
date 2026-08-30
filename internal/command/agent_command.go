@@ -45,7 +45,7 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.ApplyAgentRequest
 	req.Unified = a.Unified
 	req.InstallStatusLine = a.StatusLine
-	req.Force = a.Yes
+	req.Yes = a.Yes
 	req.Preview = a.Preview
 
 	// apply is a one-shot "apply the defaults" command, not a wizard — it
@@ -78,9 +78,9 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	}
 
 	// Confirm unless -y/--yes was passed
-	if !req.Force {
-		if !isStdinTTY() {
-			return fmt.Errorf("no TTY to confirm; re-run with -y/--yes to apply without prompting")
+	if !req.Yes {
+		if err := requireTTY("re-run with -y/--yes to apply without prompting"); err != nil {
+			return err
 		}
 		if err := confirmApply(bufio.NewReader(os.Stdin), &req); err != nil {
 			return err
@@ -99,8 +99,8 @@ type AgentShowFlagCmdKong struct {
 func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
-		if !isStdinTTY() {
-			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, codex)")
+		if err := requireTTY("pass the agent type explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, codex)"); err != nil {
+			return err
 		}
 		// No agent type specified, prompt for selection
 		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
@@ -127,14 +127,15 @@ type AgentRestoreFlagCmdKong struct {
 
 func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.RestoreAgentRequest
-	req.Force = a.Yes
-
-	reader := bufio.NewReader(os.Stdin)
+	req.Yes = a.Yes
 
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
+		if err := requireTTY("pass the agent type explicitly, e.g. 'tingly-box agent restore claude-code' (cc, oc, codex)"); err != nil {
+			return err
+		}
 		// No agent type specified, prompt for selection
-		agentType, err := promptForAgentTypeChoice(reader)
+		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
 		if err != nil {
 			return err
 		}
@@ -153,13 +154,16 @@ func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 		return fmt.Errorf("no info registered for agent type: %s", req.AgentType)
 	}
 
-	if !req.Force {
+	if !req.Yes {
+		if err := requireTTY("re-run with -y/--yes to restore without prompting"); err != nil {
+			return err
+		}
 		fmt.Println("\nFiles that will be restored from their most recent backup:")
 		for _, f := range info.ConfigFiles {
 			fmt.Printf("  - %s\n", f)
 		}
 		fmt.Print("\nProceed? [y/N]: ")
-		input, err := reader.ReadString('\n')
+		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		if err != nil {
 			return err
 		}
@@ -269,16 +273,6 @@ func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRe
 	fmt.Fprintln(os.Stderr,
 		"Config files will still be applied. Run 'tingly-box tui' / 'tb tui' to set up routing rules.")
 	return nil
-}
-
-// isStdinTTY reports whether stdin is connected to a terminal. It is used to
-// decide whether interactive prompts are appropriate.
-func isStdinTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
 // confirmApply prompts user to confirm the configuration

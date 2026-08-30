@@ -133,7 +133,7 @@ func agentApply(cfg *serverconfig.Config, info agent.AgentInfo) error {
 	req := &agent.ApplyAgentRequest{
 		AgentType: info.Type,
 		Unified:   true,
-		Force:     true,
+		Yes:       true,
 	}
 
 	wireRule, err := Confirm("Also wire a routing rule (pick provider + model)?", ConfirmOptions{
@@ -236,7 +236,7 @@ func agentRestore(cfg *serverconfig.Config, info agent.AgentInfo) error {
 	}
 	res, err := usecase.NewAgentUseCase(cfg, "localhost").Restore(&agent.RestoreAgentRequest{
 		AgentType: info.Type,
-		Force:     true,
+		Yes:       true,
 	})
 	if err != nil {
 		return err

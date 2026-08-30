@@ -398,7 +398,7 @@ func (h *Handler) restoreAgent(c *gin.Context, agentType agent.AgentType) {
 
 	result, err := apply.RestoreAgent(&agent.RestoreAgentRequest{
 		AgentType: agentType,
-		Force:     true,
+		Yes:       true,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, RestoreConfigResponse{

@@ -728,7 +728,7 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 			Model:             s.model,
 			Unified:           s.ccUnified,
 			InstallStatusLine: s.ccInstallStatusLine,
-			Force:             true,
+			Yes:               true,
 		}
 		label := string(t)
 		if info, ok := agent.GetAgentInfo(t); ok {
