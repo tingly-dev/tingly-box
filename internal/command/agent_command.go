@@ -4,12 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
@@ -50,29 +48,22 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	req.Force = a.Force
 	req.Preview = a.Preview
 
-	// Handle agent type: empty vs invalid vs valid (with alias support)
+	// apply is a one-shot "apply the defaults" command, not a wizard — it
+	// never prompts to choose an agent type. Picking interactively is a
+	// TUI job (`tingly-box tui`).
 	if a.AgentType == "" {
-		if !isStdinTTY() {
-			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent apply claude-code' (cc, oc, cx)")
-		}
-		// No agent type specified, prompt for selection
-		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
-		if err != nil {
-			return err
-		}
-		req.AgentType = agentType
-	} else {
-		// Parse agent type with alias support (cc, claude-code, etc.)
-		parsedType, err := agent.ParseAgentType(a.AgentType)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Available agent types:")
-			fmt.Fprintln(os.Stderr, "  cc, claude-code - Claude Code CLI agent (@cc)")
-			fmt.Fprintln(os.Stderr, "  oc, opencode   - OpenCode editor agent (@oc)")
-			fmt.Fprintln(os.Stderr, "  cx, codex      - OpenAI Codex CLI (@codex)")
-			return err
-		}
-		req.AgentType = parsedType
+		return fmt.Errorf("agent type required: cc (claude-code), oc (opencode), or cx (codex), e.g. 'tingly-box agent apply claude-code'; run 'tingly-box tui' to pick interactively")
 	}
+	// Parse agent type with alias support (cc, claude-code, etc.)
+	parsedType, err := agent.ParseAgentType(a.AgentType)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Available agent types:")
+		fmt.Fprintln(os.Stderr, "  cc, claude-code - Claude Code CLI agent (@cc)")
+		fmt.Fprintln(os.Stderr, "  oc, opencode   - OpenCode editor agent (@oc)")
+		fmt.Fprintln(os.Stderr, "  cx, codex      - OpenAI Codex CLI (@codex)")
+		return err
+	}
+	req.AgentType = parsedType
 
 	// Resolve provider and model from routing rules if not explicitly specified
 	if req.Provider == "" || req.Model == "" {
@@ -241,48 +232,11 @@ func promptForAgentTypeChoice(reader *bufio.Reader) (agent.AgentType, error) {
 	}
 }
 
-// promptForAgentConfig prompts user for provider and model selection
-func promptForAgentConfig(reader *bufio.Reader, appManager *AppManager, req *agent.ApplyAgentRequest) error {
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
-	if len(providers) == 0 {
-		return fmt.Errorf("no providers configured. Please add a provider first using 'tingly-box config provider add' / 'tb config provider add'")
-	}
-
-	// Prompt for provider if not specified
-	if req.Provider == "" {
-		provider, err := promptForAgentProviderChoice(reader, providers)
-		if err != nil {
-			return fmt.Errorf("failed to select provider: %w", err)
-		}
-		req.Provider = provider.UUID
-	}
-
-	// Fetch models for the provider. ResolveProviderModels walks the full
-	// fallback chain, so providers whose /models endpoint is unsupported
-	// (e.g. Codex) still yield their embedded template catalog.
-	globalConfig := appManager.GetGlobalConfig()
-	resolved, err := globalConfig.ResolveProviderModels(true, false, req.Provider)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to fetch models from provider: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Using cached model list...")
-	}
-	models := resolved.Models
-
-	// Prompt for model if not specified
-	if req.Model == "" {
-		model, err := promptForAgentModelChoice(reader, "Select model for "+string(req.AgentType), models)
-		if err != nil {
-			return fmt.Errorf("failed to select model: %w", err)
-		}
-		req.Model = model
-	}
-
-	return nil
-}
-
-// resolveAgentConfigFromRules resolves provider and model from existing routing rules.
-// This is the preferred way for "agent apply" - use what was configured by quickstart.
-// Falls back to prompting if no rules are configured.
+// resolveAgentConfigFromRules resolves provider and model from the existing
+// routing rule for req.AgentType's scenario — the smart default apply is
+// built around: whatever's already configured (via quickstart or the TUI),
+// applied as-is, no picker. Choosing a provider/model is TUI/Web UI work;
+// apply is a one-shot "apply the defaults" command, not a wizard.
 func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 	globalConfig := appManager.GetGlobalConfig()
 	agentUC := usecase.NewAgentUseCase(globalConfig, "localhost")
@@ -305,34 +259,15 @@ func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRe
 		return nil
 	}
 
-	// No rule or no usable service is configured yet. This is not fatal:
-	// `agent apply` can still write the agent's config files so the agent
-	// CLI points at tingly-box. Routing rules can be configured later via
-	// `tingly-box tui`. Only fall back to the interactive prompt when there
-	// are providers available AND we're on a TTY; otherwise just warn.
+	// No rule or no usable service is configured yet. Not fatal: apply
+	// still writes the agent's config files so the CLI points at
+	// tingly-box, just without a routing rule. Set one up via
+	// `tingly-box tui` (or the Web UI) when ready.
 	fmt.Fprintf(os.Stderr,
 		"Warning: no routing service configured for '%s' (scenario '%s').\n",
 		routing.RequestModel, routing.Scenario)
 	fmt.Fprintln(os.Stderr,
-		"Config files will still be applied. Run 'tingly-box tui' / 'tb tui' to set up routing rules later.")
-
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
-	if len(providers) == 0 || !isStdinTTY() {
-		// Nothing to prompt for, or stdin is non-interactive — proceed
-		// without provider/model. applyClaudeCode/applyOpenCode handles
-		// the empty case by skipping rule sync.
-		return nil
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprintln(os.Stderr, "You may optionally select a provider/model now to also create routing rules:")
-	if err := promptForAgentConfig(reader, appManager, req); err != nil {
-		// Prompt failed (e.g. user aborted) — degrade to "config files only"
-		// rather than blocking the whole apply.
-		fmt.Fprintf(os.Stderr, "Warning: skipping routing rule setup: %v\n", err)
-		req.Provider = ""
-		req.Model = ""
-	}
+		"Config files will still be applied. Run 'tingly-box tui' / 'tb tui' to set up routing rules.")
 	return nil
 }
 
@@ -344,101 +279,6 @@ func isStdinTTY() bool {
 		return false
 	}
 	return (fi.Mode() & os.ModeCharDevice) != 0
-}
-
-// promptForAgentProviderChoice prompts user to select a provider
-func promptForAgentProviderChoice(reader *bufio.Reader, providers []*typ.Provider) (*typ.Provider, error) {
-	if len(providers) == 1 {
-		return providers[0], nil
-	}
-
-	fmt.Println("\nAvailable providers:")
-	sort.Slice(providers, func(i, j int) bool {
-		return strings.ToLower(providers[i].Name) < strings.ToLower(providers[j].Name)
-	})
-	for i, p := range providers {
-		fmt.Printf("%d. %s\n", i+1, p.Name)
-	}
-
-	for {
-		fmt.Print("\nSelect provider (enter number or name): ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, fmt.Errorf("failed to read input: %w", err)
-		}
-		input = strings.TrimSpace(input)
-
-		// Try as number
-		if choice, err := strconv.Atoi(input); err == nil {
-			if choice >= 1 && choice <= len(providers) {
-				return providers[choice-1], nil
-			}
-		}
-
-		// Try as name
-		for _, p := range providers {
-			if strings.EqualFold(p.Name, input) {
-				return p, nil
-			}
-		}
-
-		fmt.Println("Invalid selection. Please try again.")
-	}
-}
-
-// promptForAgentModelChoice prompts user to select a model
-func promptForAgentModelChoice(reader *bufio.Reader, label string, models []string) (string, error) {
-	if len(models) == 0 {
-		return promptForAgentModelInput(reader, "Enter model name: ")
-	}
-
-	fmt.Printf("\n%s:\n", label)
-	for i, model := range models {
-		fmt.Printf("%d. %s\n", i+1, model)
-	}
-	fmt.Printf("0. Enter custom model\n")
-
-	for {
-		input, err := promptForAgentModelInput(reader, "Select model (number or name): ")
-		if err != nil {
-			return "", err
-		}
-
-		if input == "0" {
-			return promptForAgentModelInput(reader, "Enter custom model name: ")
-		}
-
-		// Try as number
-		if choice, err := strconv.Atoi(input); err == nil {
-			if choice >= 1 && choice <= len(models) {
-				return models[choice-1], nil
-			}
-		}
-
-		// Check if input matches a model name
-		for _, model := range models {
-			if strings.EqualFold(model, input) {
-				return model, nil
-			}
-		}
-
-		// Use the input as custom model
-		return input, nil
-	}
-}
-
-// promptForAgentModelInput reads a single line of input
-func promptForAgentModelInput(reader *bufio.Reader, prompt string) (string, error) {
-	fmt.Print(prompt)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return "", fmt.Errorf("input is required")
-	}
-	return input, nil
 }
 
 // confirmApply prompts user to confirm the configuration
