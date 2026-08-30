@@ -71,13 +71,17 @@ a `transports/` package binding the real `openai`/`anthropic` SDKs, a
 examples, a dedicated CI workflow. That's a product, not a v1.
 
 **v1 ships a framework, not a product.** Two classes — `Server`, `Client` —
-enough to stand up the loop above end to end. `Server` does speak both
-protocols tb supports (see below) — that one was worth doing now, since tb's
-own **dual provider** mechanism already exists to carry it and the
-alternative (pick one protocol, tell every caller to switch) pushes the
-limitation onto users of the provider instead of absorbing it in the SDK.
-Everything else (codegen, discovery, streaming, helpers) stays a deliberate
-non-goal until someone has a concrete need for it.
+enough to stand up the loop above end to end. `Server` does answer both
+protocols tb supports (see below), since tb's own **dual provider**
+mechanism already exists to carry it — but it does so as two independent,
+unbridged handlers, not a shared abstraction that normalizes across wire
+protocols. Building that normalization layer is exactly the kind of
+forward-looking design a prototype doesn't need yet: a handler that cares
+about Anthropic's shape (content blocks, `system`, tool defs) gets the raw
+Anthropic body and deals with it directly, the same way a `@srv.chat`
+handler deals with the raw OpenAI shape. Everything else (codegen,
+discovery, streaming, helpers) stays a deliberate non-goal until someone has
+a concrete need for it.
 
 ## Shape
 
@@ -133,51 +137,69 @@ OpenAI-style calls on any scenario no matter what the original caller used.
 ## `Server` — be a provider
 
 ```python
-from tingly import Server
+from tingly import Server, text_of
 
 srv = Server("my-sdk", tb_base_url="http://localhost:12580", tb_token=os.environ["TINGLY_TOKEN"])
 
 @srv.chat
-def handle(req):
-    return srv.tb.chat(model="claude-opus-4-8", messages=req.as_openai_messages(),
+def handle_chat(req):
+    return srv.tb.chat(model="claude-opus-4-8", messages=req.raw["messages"],
                         scenario="custom")
+
+@srv.messages
+def handle_messages(body):
+    # body is the raw Anthropic request body — untouched. This handler is
+    # responsible for its own translation if it needs one; .tb still only
+    # speaks OpenAI to tb.
+    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=body["messages"],
+                                scenario="custom"))
 
 srv.run(port=8765)
 ```
 
 `run()` starts a stdlib `ThreadingHTTPServer` exposing:
 
-- `GET /v1/models` — a one-entry model list (`srv.name`), so tb's
-  "supports_models_endpoint" refresh can discover it, exactly like Ollama.
-- `POST /v1/chat/completions` (OpenAI) and `POST /v1/messages` (Anthropic) —
-  **both** parse the body into the same `ChatRequest` shape (`model`,
-  `messages`, plus `raw` for anything the two typed fields don't cover;
-  Anthropic's `system` field is folded in as a leading system message) and
-  call the **same** registered handler — a handler never branches on which
-  wire protocol the caller used. The result is then wrapped for whichever
-  endpoint was hit:
-  - on `/v1/chat/completions`: a `dict` is passed through as-is (the common
-    case — it's already an OpenAI ChatCompletion, e.g. straight from
-    `srv.tb.chat(...)`); a `str` is wrapped into a minimal one-choice
-    ChatCompletion envelope;
-  - on `/v1/messages`: a `dict` is reduced back to text (via the same
-    extraction `Client`'s `text_of()` does — it's assumed OpenAI-shaped,
-    since that's the only shape `.tb` ever hands back) and a `str` is used
-    directly; either way the result is wrapped into a minimal Anthropic
-    message envelope.
+- `GET /v1/models` (and `/models`) — a one-entry model list (`srv.name`), so
+  tb's "supports_models_endpoint" refresh can discover it, exactly like
+  Ollama.
+- `POST /v1/chat/completions` (and `/chat/completions`) — OpenAI. Parses the
+  body into `ChatRequest` (`model`, `messages`, plus `raw` for anything the
+  two typed fields don't cover) and calls `@srv.chat`'s handler. A `dict`
+  result is passed through as-is (the common case — it's already an OpenAI
+  ChatCompletion, e.g. straight from `srv.tb.chat(...)`); a `str` is wrapped
+  into a minimal one-choice ChatCompletion envelope.
+- `POST /v1/messages` (and `/messages`) — Anthropic. Hands `@srv.messages`'s
+  handler **the raw parsed request body, unmodified** — content blocks,
+  `system`, tool defs and all. A `dict` result is passed through as-is
+  (assumed already Anthropic-shaped); a `str` is wrapped into a minimal
+  Anthropic message envelope. Always treated as beta-shaped
+  unconditionally — no `?beta=true` / `anthropic-version` branching, the
+  same simplification tb's own `vmodel` virtual server already makes at its
+  HTTP boundary ("accepts both and canonicalizes to the beta superset").
 
-Every `/v1/messages` request is treated as beta-shaped unconditionally —
-no `?beta=true` / `anthropic-version` branching. This mirrors what tb's own
-`vmodel` virtual server already does at its HTTP boundary ("accepts both and
-canonicalizes to the beta superset"): a real caller can't tell the
-difference in the response shape, so there is no second code path to
-maintain for v1.
+**The two handlers are completely independent — there is no bridge between
+them.** `ChatRequest` only exists for `@srv.chat`; it does not attempt to
+also model Anthropic's shape (content blocks, `system`, tool defs), and
+nothing converts a reply from one protocol's shape into the other's. A
+provider that wants to serve both protocols registers both decorators and
+writes native-enough code for each — the framework's job stops at routing
+the request to the right handler and applying a purely-local (never
+cross-protocol) string-to-envelope wrap when a handler returns text. This
+was tried the other way first (one shared `ChatRequest`, folding Anthropic's
+`system` into a message, flattening content blocks to text, converting an
+OpenAI dict reply into an Anthropic envelope via `text_of()`) and rolled
+back: it is exactly the "planning and converting on the handler's behalf"
+that a prototype doesn't need to have opinions about yet. Register only
+`@srv.chat` (or only `@srv.messages`) to serve one protocol; the other
+endpoint then answers 404.
 
-No streaming (still a deliberate cut — SSE framing and partial-JSON handler
-contracts don't matter until a handler exists that needs them), and no
-content blocks / tool calls in a handler's *response* — v1 handlers work
-with text on both wire protocols, matching the framework's larger "reduce
-to a relay/merge, not full protocol fidelity" scope.
+Path leniency is the one deliberate bit of cleverness `Server` does apply,
+regardless of protocol: every route also answers without the `/v1` prefix,
+since which shape a caller's configured base URL expects isn't worth
+troubleshooting by hand.
+
+No streaming — still a deliberate cut, since SSE framing and partial-JSON
+handler contracts don't matter until a handler exists that needs them.
 
 ### The no-key + Anthropic-style footgun (and why it isn't a backend fix)
 
@@ -212,8 +234,11 @@ for, just with a Python process instead of Vertex/Bedrock behind it.
 Deliberately deferred, not forgotten:
 
 - Streaming (`Server` responses, `Client.chat` as a stream).
-- Content blocks / tool calls in a handler's response (text only, both
-  protocols).
+- Any bridging between `@srv.chat` and `@srv.messages` — a shared request
+  shape, content-block flattening, `system`-folding, or converting one
+  protocol's reply into the other's. Tried, rolled back (see above); revisit
+  only once a concrete handler needs to serve both protocols from one piece
+  of logic, not preemptively.
 - `Client` speaking Anthropic wire to tb (`.tb` is OpenAI-only; tb accepts
   that on any scenario regardless of the original caller's protocol, so
   there's no loss in staying single-shape outbound).
@@ -229,10 +254,10 @@ Deliberately deferred, not forgotten:
 | File | Role |
 |---|---|
 | `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model |
-| `sdk/python/tingly/server.py` | `Server` — `@srv.chat`, `.tb`, `.run()`, both wire protocols |
-| `sdk/python/tingly/types.py` | `Message`, `ChatRequest`, `as_openai_messages()` |
-| `sdk/python/examples/relay.py` | Minimal pure-forwarder provider |
-| `sdk/python/examples/fanout.py` | Multi-model ask + merge |
+| `sdk/python/tingly/server.py` | `Server` — `@srv.chat` / `@srv.messages`, `.tb`, `.run()`, path leniency |
+| `sdk/python/tingly/types.py` | `Message`, `ChatRequest` — OpenAI-only, no Anthropic counterpart |
+| `sdk/python/examples/relay.py` | Pure forwarder, both protocols, independently |
+| `sdk/python/examples/fanout.py` | Multi-model ask + merge (OpenAI only) |
 | `internal/data/providers.json` | Self-hosted provider templates (Ollama et al.) — the mechanism this SDK plugs into, unchanged |
 | `.design/dual-provider.md` | The tb-side mechanism `Server`'s dual registration plugs into |
 | `frontend/src/components/ProviderFormDialog.tsx` | `optionalEditableToken` — why the no-key footgun has a UI-level workaround, not a backend one |

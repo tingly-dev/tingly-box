@@ -3,26 +3,38 @@
 Two classes, zero dependencies. See [`.design/python-sdk.md`](../../.design/python-sdk.md)
 for the design rationale and scope cuts.
 
-- `tingly.Server` — be a tb provider. Register one handler, run a
-  dual-protocol HTTP server (OpenAI `/v1/chat/completions` **and**
-  Anthropic `/v1/messages`, both funneling into the same handler), plug it
-  into tb like Ollama.
+- `tingly.Server` — be a tb provider. Register a handler per protocol you
+  want to serve — `@srv.chat` for OpenAI (`/v1/chat/completions`),
+  `@srv.messages` for Anthropic (`/v1/messages`) — and plug it into tb like
+  Ollama. **The two are independent; nothing bridges them.** `@srv.chat`
+  gets a small OpenAI-shaped `ChatRequest`; `@srv.messages` gets the raw
+  Anthropic request body exactly as the caller sent it — content blocks,
+  `system`, tool defs and all. This is a prototype: it hands you each
+  protocol as it actually is on the wire rather than inventing a unified
+  shape to hide the differences behind.
 - `tingly.Client` — call tb from Python. Point it at a running tb and a
   gateway token, ask it to run any scenario/model.
 
 ## Quick start
 
 ```python
-from tingly import Server
+from tingly import Server, text_of
 
 srv = Server("relay", tb_base_url="http://localhost:12580", tb_token="...")
 
 @srv.chat
-def handle(req):
+def handle_chat(req):
     # req.model, req.messages, req.raw are available; here we just relay
-    # everything to a different tb model and hand the answer straight back —
-    # regardless of whether the caller hit us over OpenAI or Anthropic wire.
-    return srv.tb.chat(model="claude-opus-4-8", messages=req.as_openai_messages())
+    # everything to a different tb model and hand the answer straight back.
+    return srv.tb.chat(model="claude-opus-4-8", messages=req.raw["messages"])
+
+@srv.messages
+def handle_messages(body):
+    # body is the raw Anthropic request, untouched. .tb still only speaks
+    # OpenAI, so this handler is responsible for whatever translation it
+    # needs — plain-string content forwards fine as-is; content blocks or
+    # tool defs would need explicit handling here.
+    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=body["messages"]))
 
 srv.run(port=8765)
 ```
@@ -30,13 +42,18 @@ srv.run(port=8765)
 Register it with tb as a **dual** provider (same as a service that natively
 speaks both protocols, e.g. Vertex): **Connect AI -> Self-hosted -> Dual
 endpoint**, OpenAI URL `http://localhost:8765/v1`, Anthropic URL
-`http://localhost:8765` (no `/v1` — the Anthropic SDK strips it if present
-anyway), no key required. From then on tb calls it like any other provider,
-picking whichever URL matches the inbound client's own protocol.
+`http://localhost:8765`, no key required — either URL works with or without
+a trailing `/v1`, since `Server` answers both (see below). From then on tb
+calls it like any other provider, picking whichever URL matches the inbound
+client's own protocol. Register just one decorator if you only want to
+serve one protocol — the other endpoint then answers 404.
 
 `/v1/messages` requests are always handled as if beta — there is no
 `?beta=true` / `anthropic-version` branching, matching the simplification
-tb's own vmodel virtual server already makes at its HTTP boundary.
+tb's own vmodel virtual server already makes at its HTTP boundary. The one
+deliberate bit of path leniency: both endpoints also answer without the
+`/v1` prefix (`/chat/completions`, `/messages`), since which shape a
+caller's configured base URL expects isn't worth troubleshooting by hand.
 
 > **No-key + Anthropic-style provider:** the vendored `anthropic-sdk-go`
 > treats a genuinely empty API key as "go discover ambient credentials" and

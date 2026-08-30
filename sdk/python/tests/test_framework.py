@@ -3,7 +3,7 @@
     test client --(A)--> tingly.Server --(B, via .tb)--> stub tb --(back)-->
 
 (A) exercises the Server half (receive, dispatch to the registered
-handler). (B) exercises the Client half (call out, parse an OpenAI-shaped
+handler(s)). (B) exercises the Client half (call out, parse an OpenAI-shaped
 response). A passing run proves the loop the design doc describes actually
 closes, without needing a real tingly-box instance.
 """
@@ -76,8 +76,14 @@ class FrameworkTest(unittest.TestCase):
         )
 
         @cls.srv.chat
-        def handle(req):
-            return cls.srv.tb.chat(model="downstream-model", messages=req.as_openai_messages())
+        def handle_chat(req):
+            return cls.srv.tb.chat(model="downstream-model", messages=req.raw["messages"])
+
+        @cls.srv.messages
+        def handle_messages(body):
+            # Raw passthrough, no normalization: body["messages"] is exactly
+            # what the caller sent on the wire.
+            return text_of(cls.srv.tb.chat(model="downstream-model", messages=body["messages"]))
 
         threading.Thread(target=cls.srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
         _wait_until_serving(cls.srv)
@@ -88,58 +94,68 @@ class FrameworkTest(unittest.TestCase):
         cls.srv._httpd.shutdown()
         cls.stub.shutdown()
 
+    def _post(self, path: str, body: dict) -> dict:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.srv_port}{path}",
+            data=json.dumps(body).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request) as resp:
+            return json.loads(resp.read())
+
     def test_models_endpoint_advertises_the_server_name(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.srv_port}/v1/models") as resp:
             body = json.loads(resp.read())
         self.assertEqual(body["data"][0]["id"], "relay-test")
 
-    def test_relay_closes_the_loop_through_the_stub_gateway(self):
-        request = urllib.request.Request(
-            f"http://127.0.0.1:{self.srv_port}/v1/chat/completions",
-            data=json.dumps({
-                "model": "relay-test",
-                "messages": [{"role": "user", "content": "hello"}],
-            }).encode(),
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request) as resp:
+    def test_models_endpoint_also_answers_without_the_v1_prefix(self):
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.srv_port}/models") as resp:
             body = json.loads(resp.read())
+        self.assertEqual(body["data"][0]["id"], "relay-test")
 
+    def test_chat_completions_closes_the_loop_through_the_stub_gateway(self):
+        body = self._post("/v1/chat/completions", {
+            "model": "relay-test",
+            "messages": [{"role": "user", "content": "hello"}],
+        })
         self.assertEqual(text_of(body), "echo: hello")
         self.assertEqual(StubTB.calls[-1]["model"], "downstream-model")
 
-    def test_anthropic_endpoint_shares_the_same_handler_and_wraps_the_reply(self):
-        """The same registered handler serves /v1/messages: an Anthropic
-        request (system field + content-block message) is folded into the
-        same ChatRequest shape, and the handler's OpenAI-shaped tb reply is
-        reduced back to text and re-wrapped as an Anthropic message —
-        unconditionally, with no v1/beta branching."""
-        request = urllib.request.Request(
-            f"http://127.0.0.1:{self.srv_port}/v1/messages",
-            data=json.dumps({
-                "model": "relay-test",
-                "max_tokens": 1024,
-                "system": "be terse",
-                "messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}],
-            }).encode(),
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request) as resp:
-            body = json.loads(resp.read())
+    def test_chat_completions_also_answers_without_the_v1_prefix(self):
+        body = self._post("/chat/completions", {
+            "model": "relay-test",
+            "messages": [{"role": "user", "content": "hi again"}],
+        })
+        self.assertEqual(text_of(body), "echo: hi again")
+
+    def test_messages_endpoint_gets_the_raw_body_with_no_normalization(self):
+        """@srv.messages sees exactly the wire body — including a content
+        block, which nothing here flattens — and the reply comes back as a
+        plain Anthropic Messages envelope, unconditionally (no v1/beta
+        branching)."""
+        body = self._post("/v1/messages", {
+            "model": "relay-test",
+            "max_tokens": 1024,
+            "system": "be terse",
+            "messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}],
+        })
 
         self.assertEqual(body["type"], "message")
         self.assertEqual(body["role"], "assistant")
-        self.assertEqual(body["content"], [{"type": "text", "text": "echo: hello"}])
-        # The handler forwarded req.as_openai_messages() — the system field
-        # and the content-block message were both flattened to plain OpenAI
-        # message dicts before being sent on to the stub gateway.
-        self.assertEqual(StubTB.calls[-1]["model"], "downstream-model")
-        self.assertEqual(StubTB.calls[-1]["messages"], [
-            {"role": "system", "content": "be terse"},
-            {"role": "user", "content": "hello"},
-        ])
+        # The handler received body["messages"] untouched (content blocks
+        # and all) and forwarded that straight to the stub gateway, which
+        # only reads the raw content of the last message.
+        forwarded = StubTB.calls[-1]["messages"][-1]["content"]
+        self.assertEqual(forwarded, [{"type": "text", "text": "hello"}])
+
+    def test_messages_endpoint_also_answers_without_the_v1_prefix(self):
+        body = self._post("/messages", {
+            "model": "relay-test",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        self.assertEqual(body["content"], [{"type": "text", "text": "echo: hi"}])
 
     def test_client_wraps_a_non_2xx_response_as_tingly_error(self):
         class AlwaysBadRequest(BaseHTTPRequestHandler):
