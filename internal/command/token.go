@@ -38,14 +38,18 @@ func (t *TokenListCmdKong) Run(appManager *AppManager) error {
 	return runBoxTokenList(appManager)
 }
 
-// TokenViewCmdKong shows a single tingly-box token. When kind is omitted,
-// the user is prompted interactively.
+// TokenViewCmdKong shows a tingly-box token. When kind is omitted, both
+// tokens are shown directly — viewing either is harmless, so there is
+// nothing worth picking one over the other for.
 type TokenViewCmdKong struct {
-	Kind string `kong:"arg,optional,help='Which token to view: auth or model'"`
+	Kind string `kong:"arg,optional,help='Which token to view: auth or model (both, if omitted)'"`
 	Reveal bool   `kong:"flag,name='reveal',short='r',help='Print the full token instead of a masked preview'"`
 }
 
 func (t *TokenViewCmdKong) Run(appManager *AppManager) error {
+	if strings.TrimSpace(t.Kind) == "" {
+		return runBoxTokenViewAll(appManager, t.Reveal)
+	}
 	kind, err := resolveTokenKind(t.Kind)
 	if err != nil {
 		return err
@@ -164,6 +168,27 @@ func runBoxTokenView(appManager *AppManager, kind TokenKind, reveal bool) error 
 		fmt.Println("Note: token printed in full above — handle with care.")
 	}
 	return nil
+}
+
+// runBoxTokenViewAll prints both tingly-box tokens directly, one after the
+// other. Used when `token view` is given no kind: unlike refresh, viewing
+// either token is harmless, so there's nothing worth prompting to choose.
+// Both are attempted even if one errors (e.g. not yet generated), so a
+// missing token doesn't hide the other's details.
+func runBoxTokenViewAll(appManager *AppManager, reveal bool) error {
+	authErr := runBoxTokenView(appManager, tokenKindAuth, reveal)
+	if authErr != nil {
+		fmt.Println(authErr)
+	}
+	fmt.Println()
+	modelErr := runBoxTokenView(appManager, tokenKindModel, reveal)
+	if modelErr != nil {
+		fmt.Println(modelErr)
+	}
+	if authErr != nil {
+		return authErr
+	}
+	return modelErr
 }
 
 // runBoxTokenRefresh rotates the chosen token, persists the change, and
