@@ -82,6 +82,40 @@ tasks:
         pnpm install
         pnpm gen:api
 
+  gen:py:quota:
+    desc: Generate typed pydantic models for the Python SDK's quota client
+    aliases:
+      - python:sdk:quota
+    cmds:
+      - task: swagger
+      - |
+        # openapi.json's provider-quota paths + their schema closure only
+        # (see sdk/python/scripts/extract_quota_schema.py) -> pydantic v2
+        # models for tingly.Client's quota methods.
+        #
+        # Deliberately NOT the whole spec: the Python SDK is a prototype
+        # that generates only what it actually consumes (see
+        # .design/python-sdk.md) rather than the ~280-schema mega-file an
+        # earlier, abandoned iteration produced.
+        #
+        # Output is not committed (see .gitignore): it is a pure function of
+        # openapi.json. Run this before using Client.list_quota() /
+        # .get_quota() / .quota_summary(), and before running the SDK's tests.
+        python3 sdk/python/scripts/extract_quota_schema.py openapi.json /tmp/tingly_quota_openapi.json
+        python3 -m pip install --quiet --disable-pip-version-check \
+          'datamodel-code-generator>=0.72'
+        python3 -m datamodel_code_generator \
+          --input /tmp/tingly_quota_openapi.json \
+          --input-file-type openapi \
+          --output-model-type pydantic_v2.BaseModel \
+          --target-python-version 3.10 \
+          --formatters ruff-format \
+          --use-double-quotes \
+          --custom-file-header-path sdk/python/codegen_header.txt \
+          --output sdk/python/tingly/_generated_quota.py
+        rm -f /tmp/tingly_quota_openapi.json
+        echo "Generated sdk/python/tingly/_generated_quota.py"
+
   go:build:
     env:
       ARCH:

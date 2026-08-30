@@ -5,6 +5,12 @@ description = "Framework for writing a tingly-box provider in Python, and callin
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+# Only Client.list_quota()/.get_quota()/.quota_summary() need this — the
+# generated models (task gen:py:quota) are pydantic v2. Server and Client.chat
+# stay dependency-free; see tingly/client.py's _quota_models().
+quota = ["pydantic>=2"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

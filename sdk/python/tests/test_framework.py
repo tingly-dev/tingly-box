@@ -181,5 +181,93 @@ class FrameworkTest(unittest.TestCase):
             server.shutdown()
 
 
+class StubAdmin(BaseHTTPRequestHandler):
+    """Stands in for tb's admin plane (`/api/v1/*`): serves fixed
+    provider-quota responses and records the bearer token it was called
+    with, so the test can confirm `admin_token` (not the gateway `token`) is
+    what reaches these endpoints."""
+
+    calls = []
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def do_GET(self):
+        StubAdmin.calls.append((self.path, self.headers.get("Authorization")))
+        if self.path == "/api/v1/provider-quota":
+            body = {
+                "meta": {"total": 1, "updated_at": "2026-08-30T00:00:00Z"},
+                "data": [{
+                    "provider_uuid": "p1", "provider_name": "Anthropic", "provider_type": "anthropic",
+                    "fetched_at": "2026-08-30T00:00:00Z", "expires_at": "2026-08-30T01:00:00Z",
+                }],
+            }
+        elif self.path == "/api/v1/provider-quota/p1":
+            body = {
+                "provider_uuid": "p1", "provider_name": "Anthropic", "provider_type": "anthropic",
+                "fetched_at": "2026-08-30T00:00:00Z", "expires_at": "2026-08-30T01:00:00Z",
+            }
+        elif self.path == "/api/v1/provider-quota/summary":
+            body = {
+                "total_providers": 3, "ok_providers": 2, "warning_providers": 1, "error_providers": 0,
+                "by_status": {"ok": 2, "warning": 1}, "by_type": {"anthropic": 2, "openai": 1},
+            }
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+        payload = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+class QuotaTest(unittest.TestCase):
+    """Client.list_quota()/.get_quota()/.quota_summary() against tb's admin
+    plane — a different endpoint family and a different credential
+    (admin_token) from Client.chat()'s gateway calls."""
+
+    @classmethod
+    def setUpClass(cls):
+        StubAdmin.calls = []
+        cls.admin = HTTPServer(("127.0.0.1", 0), StubAdmin)
+        cls.admin_port = cls.admin.server_address[1]
+        threading.Thread(target=cls.admin.serve_forever, daemon=True).start()
+        cls.client = Client(
+            base_url=f"http://127.0.0.1:{cls.admin_port}",
+            token="gateway-token",
+            admin_token="admin-token",
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.admin.shutdown()
+
+    def test_list_quota_returns_the_generated_model_and_uses_admin_token(self):
+        result = self.client.list_quota()
+        self.assertEqual(result.data[0].provider_uuid, "p1")
+        self.assertEqual(result.meta.total, 1)
+        path, auth = StubAdmin.calls[-1]
+        self.assertEqual(path, "/api/v1/provider-quota")
+        self.assertEqual(auth, "Bearer admin-token")
+
+    def test_get_quota_returns_the_generated_model(self):
+        result = self.client.get_quota("p1")
+        self.assertEqual(result.provider_name, "Anthropic")
+
+    def test_quota_summary_returns_the_generated_model(self):
+        result = self.client.quota_summary()
+        self.assertEqual(result.total_providers, 3)
+        self.assertEqual(result.by_status["ok"], 2)
+
+    def test_admin_token_defaults_to_the_gateway_token_when_not_given(self):
+        client = Client(base_url=f"http://127.0.0.1:{self.admin_port}", token="shared-token")
+        client.quota_summary()
+        _, auth = StubAdmin.calls[-1]
+        self.assertEqual(auth, "Bearer shared-token")
+
+
 if __name__ == "__main__":
     unittest.main()

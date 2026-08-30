@@ -70,6 +70,15 @@ a `transports/` package binding the real `openai`/`anthropic` SDKs, a
 `helpers/` package (usage, guardrails, quota views), a CLI, 7 test files, 6
 examples, a dedicated CI workflow. That's a product, not a v1.
 
+One piece of that branch's *backend* work was correct and narrow enough to
+port outright: `internal/server/module/providerquota` mounted its six
+routes straight on the gin router with no swagger annotations, so
+`provider-quota` never appeared in `openapi.json` — reachable from the UI,
+unreachable from any generated client. That branch's fix (routes.go with
+`swagger.WithTags`/`WithResponseModel`, an `available()` guard so routes
+register even with a nil quota manager during schema generation) is ported
+here unchanged; see `internal/server/module/providerquota/routes.go`.
+
 **v1 ships a framework, not a product.** Two classes — `Server`, `Client` —
 enough to stand up the loop above end to end. `Server` does answer both
 protocols tb supports (see below), since tb's own **dual provider**
@@ -87,11 +96,15 @@ concrete need for it.
 ```
 sdk/python/
   README.md
-  pyproject.toml         # stdlib only, no runtime deps
+  pyproject.toml            # no required deps; `quota` extra pulls in pydantic
+  codegen_header.txt         # "GENERATED FILE" banner for the one generated file
+  scripts/
+    extract_quota_schema.py  # openapi.json -> just the provider-quota schema closure
   tingly/
-    __init__.py           # exports Server, Client
-    client.py             # Client — call tb from Python
-    server.py             # Server — be a provider from Python
+    __init__.py               # exports Server, Client
+    client.py                 # Client — call tb from Python; quota methods
+    server.py                 # Server — be a provider from Python
+    _generated_quota.py       # pydantic v2, from `task gen:py:quota` — NOT committed
   examples/
     relay.py              # pure forwarder, both protocols, independently
     fanout.py             # ask N tb models, merge the replies
@@ -99,11 +112,19 @@ sdk/python/
     test_framework.py     # Server + Client against a stub HTTP server
 ```
 
-No `_generated/`, no CLI, no transports/helpers packages, and — after an
-earlier draft added one and rolled it back — no request/response type
-module either. If a handler needs the real `anthropic`/`openai` SDK client,
-it constructs one itself, pointed at the URL and token `Client` already
+No CLI, no transports/helpers packages, and — after an earlier draft added
+one and rolled it back — no hand-written request/response type module
+either. If a handler needs the real `anthropic`/`openai` SDK client, it
+constructs one itself, pointed at the URL and token `Client` already
 resolved — nothing to wrap yet.
+
+`_generated_quota.py` is the one exception to "no `_generated/`", and it is
+deliberately not the same thing as the rolled-back `_generated/` package:
+that one modeled the *entire* 195-operation spec speculatively; this one is
+scoped, on every regeneration, to exactly the schema closure the
+provider-quota endpoints use (10 schemas — see
+`scripts/extract_quota_schema.py`) — proportional to what `Client` actually
+calls, not the whole backend surface.
 
 ## `Client` — call tb
 
@@ -127,12 +148,17 @@ pointed at tb, obtained from tb's own settings/token management UI. Colloquially
 "the admin API key", but nothing here is `/api/v1`-management-scoped; it is
 the model-auth credential the `/tingly/*` gateway already accepts.
 
-Only `chat()` ships in v1 — OpenAI wire only. No streaming, no admin-plane
-calls (list providers, create rule, …) — a plain `httpx`/`requests` call
-against tb's already-public API covers those if a handler ever needs them.
-`.tb` always speaks OpenAI to tb regardless of which protocol a `Server`
-request arrived on (below) — one outbound shape is enough; tb accepts
-OpenAI-style calls on any scenario no matter what the original caller used.
+`chat()` is OpenAI wire only, no streaming. `.tb` always speaks OpenAI to tb
+regardless of which protocol a `Server` request arrived on (below) — one
+outbound shape is enough; tb accepts OpenAI-style calls on any scenario no
+matter what the original caller used.
+
+`Client` also exposes a small, deliberately narrow slice of tb's admin
+plane — quota — covered in its own section below. Every other admin-plane
+call (list providers, create rule, …) stays out of scope: a plain
+`httpx`/`requests` call against tb's already-public API covers those if a
+handler ever needs them, and there is still no generated control-plane
+wrapper for the *rest* of the API surface (see Non-goals).
 
 ## `Server` — be a provider
 
@@ -232,6 +258,57 @@ above). tb then dispatches each inbound request to whichever URL matches
 the *client's own* protocol — exactly the mechanism dual-provider was built
 for, just with a Python process instead of Vertex/Bedrock behind it.
 
+## Quota — the one place this SDK generates types
+
+`Client.list_quota()` / `.get_quota(uuid)` / `.quota_summary()` call tb's
+`provider-quota` admin API and return real generated pydantic models
+(`task gen:py:quota`), not dicts:
+
+```python
+tb = Client(base_url="http://localhost:12580", token="...", admin_token="...")
+
+summary = tb.quota_summary()                       # Summary
+usages = tb.list_quota()                            # ListQuotaResponse
+one = tb.get_quota(usages.data[0].provider_uuid)     # ProviderUsage
+```
+
+This is a deliberate exception to `Server`'s "hand over the raw wire body,
+invent nothing" rule, and the two aren't in tension: that rule is about a
+protocol the SDK doesn't own (OpenAI's or Anthropic's own wire format, where
+any shape this SDK invented would be a guess). Quota is the opposite case —
+tb's *own* API, already precisely specified in its own `openapi.json`, with
+a generator that produces the exact types for free. Hand-rolling a dict
+parse here would be inventing a *worse*, hand-guessed version of a shape
+that already exists correctly. "Use what's already generated instead of
+guessing" and "don't invent a shape for a protocol you don't own" are the
+same principle pointed at two different situations.
+
+### Generation is scoped to what's used, not the whole spec
+
+`task gen:py:quota` (`Taskfile.yml`) runs `scripts/extract_quota_schema.py`
+first: it walks `openapi.json`'s `provider-quota` paths and the transitive
+`$ref` closure of schemas they use (10, as of this writing —
+`MetaData`, `UsageWindow`, `UsageCost`, `UsageAccount`, `UsageBreakdown`,
+`Summary`, `BatchGetQuotaRequest`, `ProviderUsage`, `BatchGetQuotaResponse`,
+`ListQuotaResponse`) into a minimal spec, then hands *that* to
+`datamodel-code-generator` (pydantic v2, mirroring the prior branch's
+`gen:py` invocation) — not the full ~280-schema spec. The output
+(`tingly/_generated_quota.py`, 105 lines) is not committed (pure function of
+`openapi.json`, see `.gitignore`); regenerate it after any provider-quota
+API change, and before running the SDK's tests.
+
+### Two credentials, not one
+
+`.chat()` calls `/tingly/*` with the gateway token (tb's `ModelToken`, or a
+scoped multi-tenant API token). Quota calls `/api/v1/*`, which
+`getUserAuthMiddleware()` checks against tb's `UserToken` — a genuinely
+different credential. `Client.admin_token` defaults to `token` (the two are
+usually the same secret on a single-operator box) but can be set separately
+when they aren't. This is the first place in the SDK where "the admin API
+key" (as the earliest draft of this doc's motivating conversation put it)
+means something concrete — everything before this only ever touched
+`ModelToken`.
+
 ## Non-goals (v1)
 
 Deliberately deferred, not forgotten:
@@ -245,9 +322,14 @@ Deliberately deferred, not forgotten:
 - `Client` speaking Anthropic wire to tb (`.tb` is OpenAI-only; tb accepts
   that on any scenario regardless of the original caller's protocol, so
   there's no loss in staying single-shape outbound).
-- A generated control-plane client (`_api.py`-style) — only needed once a
-  handler wants to *manage* tb (create providers/rules), not just call
-  models through it.
+- Quota *mutation* (`refresh`, `batch`) — `Client` only exposes the three
+  read calls; the two POST endpoints stay unused (their types are generated
+  as part of the same schema closure regardless, so adding the methods
+  later is a `client.py` change, not a codegen change).
+- A generated control-plane client for the rest of the admin API (create
+  providers/rules, etc.) — quota is the one surface with a concrete need
+  today; everything else stays a plain `httpx`/`requests` call against tb's
+  already-public API if a handler ever needs it.
 - Discovery / auto-registration (`POST /sdk/session`) — registering the
   provider is a one-time manual step via Connect AI today.
 - A CLI, packaging/publishing to PyPI.
@@ -256,11 +338,17 @@ Deliberately deferred, not forgotten:
 
 | File | Role |
 |---|---|
-| `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model |
+| `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model; quota methods |
 | `sdk/python/tingly/server.py` | `Server` — `@srv.chat` / `@srv.messages`, `.tb`, `.run()`, path leniency, both raw-body |
+| `sdk/python/tingly/_generated_quota.py` | Generated (`task gen:py:quota`), not committed |
+| `sdk/python/scripts/extract_quota_schema.py` | `openapi.json` → provider-quota schema closure, for the generator |
+| `Taskfile.yml` (`gen:py:quota`) | The generation task itself |
 | `sdk/python/examples/relay.py` | Pure forwarder, both protocols, independently |
 | `sdk/python/examples/fanout.py` | Multi-model ask + merge (OpenAI only) |
 | `internal/data/providers.json` | Self-hosted provider templates (Ollama et al.) — the mechanism this SDK plugs into, unchanged |
 | `.design/dual-provider.md` | The tb-side mechanism `Server`'s dual registration plugs into |
 | `frontend/src/components/ProviderFormDialog.tsx` | `optionalEditableToken` — why the no-key footgun has a UI-level workaround, not a backend one |
 | `internal/server/module/provider/handler.go` | `CreateProvider`'s `!req.NoKeyRequired && req.Token == ""` check — confirms a placeholder token is accepted |
+| `internal/server/module/providerquota/routes.go` | Swagger declarations for provider-quota — ported from the prior branch, the one piece of its backend work worth keeping |
+| `internal/server/swagger.go`, `internal/server/server_control.go` | Register provider-quota routes unconditionally (nil-manager-safe) so they always reach `openapi.json` |
+| `internal/middleware/auth.go` | `UserAuthMiddleware` vs `ModelAuthMiddleware` — why quota needs `admin_token` and `.chat()` doesn't |

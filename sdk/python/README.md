@@ -82,9 +82,35 @@ resp = tb.chat(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
 print(text_of(resp))
 ```
 
+## Quota
+
+`Client` also exposes tb's provider-quota admin API — unlike `.chat()`, its
+response shapes are already precisely specified in tb's own `openapi.json`,
+so this uses the real generated types instead of hand-rolled dicts:
+
+```bash
+task gen:py:quota   # generates tingly/_generated_quota.py; needs pydantic
+```
+
+```python
+tb = Client(base_url="http://localhost:12580", token="...", admin_token="...")
+
+summary = tb.quota_summary()        # Summary
+usages = tb.list_quota()            # ListQuotaResponse
+one = tb.get_quota(usages.data[0].provider_uuid)  # ProviderUsage
+```
+
+`admin_token` is tb's `UserToken` (the `/api/v1/*` credential), distinct
+from the gateway `token` (`.chat()`'s `/tingly/*` credential) — it defaults
+to `token` since the two are usually the same secret on a single-operator
+box. Install the `quota` extra (`pip install -e '.[quota]'`) to get
+`pydantic`, or just `pip install pydantic` — either satisfies the generated
+file's only dependency.
+
 ## Tests
 
 ```bash
 cd sdk/python
+task gen:py:quota   # from repo root, once — the quota tests need it
 python -m unittest discover tests
 ```
