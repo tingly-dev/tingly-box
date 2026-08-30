@@ -64,14 +64,14 @@ func TestAgentApplyFlagCmdKong_WithoutAgentType_ClearError(t *testing.T) {
 	}
 }
 
-// TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError: `apply` is meant
+// TestAgentApplyFlagCmdKong_NoTTYWithoutYes_ClearError: `apply` is meant
 // to be a one-shot "configure and go" command (unlike show/restore, it's
 // the one CLI verb genuinely worth running non-interactively often), so a
-// missing confirmation TTY must fail with a hint to pass --force rather
+// missing confirmation TTY must fail with a hint to pass -y/--yes rather
 // than block on a bufio read that can never succeed. Needs a real
 // AppManager: with an agent type given, Run reaches routing-rule
-// resolution (which needs a config) before the force/TTY check.
-func TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError(t *testing.T) {
+// resolution (which needs a config) before the yes/TTY check.
+func TestAgentApplyFlagCmdKong_NoTTYWithoutYes_ClearError(t *testing.T) {
 	withNonTTYStdin(t)
 	am := newTestAppManager(t)
 
@@ -82,8 +82,8 @@ func TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
-	if !strings.Contains(err.Error(), "no TTY") || !strings.Contains(err.Error(), "--force") {
-		t.Errorf("error = %q, want it to mention the missing TTY and --force", err.Error())
+	if !strings.Contains(err.Error(), "no TTY") || !strings.Contains(err.Error(), "-y/--yes") {
+		t.Errorf("error = %q, want it to mention the missing TTY and -y/--yes", err.Error())
 	}
 }
 
@@ -94,7 +94,7 @@ func TestAgentApplyFlagCmdKong_NoTTYWithoutForce_ClearError(t *testing.T) {
 // provider/model picker (the old promptForAgentConfig path, now removed
 // entirely). Preview mode returns before the confirm step, so this also
 // proves the picker isn't reachable earlier in Run, without needing
-// --force or touching real Claude Code config files.
+// -y/--yes or touching real Claude Code config files.
 func TestAgentApplyFlagCmdKong_NoRoutingRule_NeverPromptsForProvider(t *testing.T) {
 	withNonTTYStdin(t) // a fallback to the old picker would block reading this
 	am := newTestAppManager(t)

@@ -37,7 +37,7 @@ type AgentApplyFlagCmdKong struct {
 	Model      string `kong:"flag,name='model',help='Model name (optional, uses routing rule if not specified)'"`
 	Unified    bool   `kong:"flag,name='unified',default='true',help='Unified mode (claude-code only)'"`
 	StatusLine bool   `kong:"flag,name='status-line',help='Install status line integration (claude-code only)'"`
-	Force      bool   `kong:"flag,name='force',help='Skip confirmation'"`
+	Yes        bool   `kong:"flag,name='yes',short='y',help='Skip the confirmation prompt'"`
 	Preview    bool   `kong:"flag,name='preview',help='Preview without applying'"`
 }
 
@@ -45,7 +45,7 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.ApplyAgentRequest
 	req.Unified = a.Unified
 	req.InstallStatusLine = a.StatusLine
-	req.Force = a.Force
+	req.Force = a.Yes
 	req.Preview = a.Preview
 
 	// apply is a one-shot "apply the defaults" command, not a wizard — it
@@ -77,10 +77,10 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 		return showPreview(appManager, &req)
 	}
 
-	// Confirm if not forced
+	// Confirm unless -y/--yes was passed
 	if !req.Force {
 		if !isStdinTTY() {
-			return fmt.Errorf("no TTY to confirm; re-run with --force to apply without prompting")
+			return fmt.Errorf("no TTY to confirm; re-run with -y/--yes to apply without prompting")
 		}
 		if err := confirmApply(bufio.NewReader(os.Stdin), &req); err != nil {
 			return err
@@ -100,7 +100,7 @@ func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
 		if !isStdinTTY() {
-			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, cx)")
+			return fmt.Errorf("no agent type specified and no TTY to prompt; pass one explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, codex)")
 		}
 		// No agent type specified, prompt for selection
 		agentType, err := promptForAgentTypeChoice(bufio.NewReader(os.Stdin))
@@ -122,12 +122,12 @@ func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 // AgentRestoreFlagCmdKong restores agent configuration from backup
 type AgentRestoreFlagCmdKong struct {
 	AgentType string `kong:"arg,optional,help='Agent type to restore'"`
-	Force     bool   `kong:"flag,name='force',help='Skip confirmation prompt'"`
+	Yes       bool   `kong:"flag,name='yes',short='y',help='Skip the confirmation prompt'"`
 }
 
 func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.RestoreAgentRequest
-	req.Force = a.Force
+	req.Force = a.Yes
 
 	reader := bufio.NewReader(os.Stdin)
 
