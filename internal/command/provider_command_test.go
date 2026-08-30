@@ -123,20 +123,21 @@ func TestRunProviderListDisplaysUUID(t *testing.T) {
 	}
 }
 
-// TestRunAddAllowsDuplicateNames is the regression for the (now-reverted)
-// duplicate-name rejection. Two providers with the same display name must
-// both be acceptable because the system disambiguates them by UUID.
-func TestRunAddAllowsDuplicateNames(t *testing.T) {
+// TestProviderAdd_AllowsDuplicateNames is the regression for the
+// (now-reverted) duplicate-name rejection. Two providers with the same
+// display name must both be acceptable because the system disambiguates
+// them by UUID.
+func TestProviderAdd_AllowsDuplicateNames(t *testing.T) {
 	am := newTestAppManager(t)
 
-	args := []string{"dup", "https://api.example.com", "tok", "openai"}
+	cmd := ProviderAddCmdKong{Name: "dup", BaseURL: "https://api.example.com", Token: "tok", APIStyle: "openai"}
 
 	withSilencedStdout(t, func() {
-		if err := runAdd(am, args); err != nil {
-			t.Fatalf("first runAdd failed: %v", err)
+		if err := cmd.Run(am); err != nil {
+			t.Fatalf("first add failed: %v", err)
 		}
-		if err := runAdd(am, args); err != nil {
-			t.Fatalf("second runAdd with the same name should succeed, got: %v", err)
+		if err := cmd.Run(am); err != nil {
+			t.Fatalf("second add with the same name should succeed, got: %v", err)
 		}
 	})
 
@@ -151,15 +152,15 @@ func TestRunAddAllowsDuplicateNames(t *testing.T) {
 	}
 }
 
-// TestRunAddRejectsInvalidAPIStyle locks down the only validation runAdd
-// performs on positional input — anything other than openai/anthropic must
-// fail loud rather than silently defaulting.
-func TestRunAddRejectsInvalidAPIStyle(t *testing.T) {
+// TestProviderAdd_RejectsInvalidAPIStyle locks down the only validation Run
+// performs beyond "all four given" — anything other than openai/anthropic
+// must fail loud rather than silently defaulting.
+func TestProviderAdd_RejectsInvalidAPIStyle(t *testing.T) {
 	am := newTestAppManager(t)
 
 	var err error
 	withSilencedStdout(t, func() {
-		err = runAdd(am, []string{"p", "https://api.example.com", "tok", "bogus-style"})
+		err = (&ProviderAddCmdKong{Name: "p", BaseURL: "https://api.example.com", Token: "tok", APIStyle: "bogus-style"}).Run(am)
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid API style, got nil")

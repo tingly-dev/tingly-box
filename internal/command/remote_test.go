@@ -6,14 +6,11 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
-// The (agent type → request model, scenario) routing-key mapping that
-// apply / show / restore all use to look up routing rules now lives in
-// internal/usecase.AgentUseCase.RoutingKey — see
-// internal/usecase/agent_test.go:TestAgentUseCase_RoutingKey for its
-// coverage. Moved here previously to lock down drift between this
-// package's agentRoutingKey and tui/agent_mode.go's agentRequestModel;
-// both call sites now call the single usecase-owned function instead.
-
+// TestStandaloneBotSettingPreservesClaudeProfileSelection covers
+// standaloneBotSetting (remote.go): a bot's DefaultAgent/Scenarios carry the
+// specific profile the operator selected (e.g. "claude_code:p1"), and
+// standaloneBotSetting must not collapse that back down to the bare agent
+// type when building the settings passed to runStandaloneBot.
 func TestStandaloneBotSettingPreservesClaudeProfileSelection(t *testing.T) {
 	got := standaloneBotSetting(db.Settings{
 		UUID:         "bot-1",

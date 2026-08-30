@@ -185,7 +185,7 @@ func (c *RuleExportCmdKong) Run(appManager *AppManager) error {
 	if err != nil {
 		return err
 	}
-	return runExport(appManager, result.Rule.RequestModel, string(result.Rule.Scenario), c.Format, c.Output)
+	return runExport(appManager, &result.Rule, c.Format, c.Output)
 }
 
 // RuleImportCmdKong imports a rule (with its providers) from a bundle.
@@ -195,11 +195,7 @@ type RuleImportCmdKong struct {
 }
 
 func (c *RuleImportCmdKong) Run(appManager *AppManager) error {
-	var args []string
-	if c.File != "" {
-		args = []string{c.File}
-	}
-	return runImport(appManager, c.Format, args)
+	return runImport(appManager, c.Format, c.File)
 }
 
 // ============== Rule operations ==============
@@ -253,7 +249,7 @@ func formatPrimaryService(appManager *AppManager, r *typ.Rule) string {
 // The rule is only used to select which providers to include — dataio
 // export/import is provider-only, so the rule itself does not travel in
 // the exported payload.
-func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, outputFile string) error {
+func runExport(appManager *AppManager, rule *typ.Rule, formatStr, outputFile string) error {
 	var format dataio.Format
 	switch strings.ToLower(formatStr) {
 	case "jsonl":
@@ -264,14 +260,7 @@ func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, out
 		return fmt.Errorf("invalid format '%s': supported formats are jsonl and base64", formatStr)
 	}
 
-	// Get the rule
 	globalConfig := appManager.AppConfig().GetGlobalConfig()
-	rule := globalConfig.GetRuleByRequestModelAndScenario(requestModel, typ.RuleScenario(scenarioStr))
-	if rule == nil {
-		return fmt.Errorf("rule not found for request-model '%s' and scenario '%s'", requestModel, scenarioStr)
-	}
-
-	// Collect providers from the rule
 	providers := collectProvidersFromRule(globalConfig, rule)
 
 	// Export the providers referenced by the rule
@@ -294,13 +283,12 @@ func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, out
 	return nil
 }
 
-// runImport imports providers from a file or stdin.
-func runImport(appManager *AppManager, formatStr string, args []string) error {
+// runImport imports providers from a file, or from stdin if file is empty.
+func runImport(appManager *AppManager, formatStr string, file string) error {
 	var data string
 
-	if len(args) > 0 {
-		// Read from file
-		content, err := os.ReadFile(args[0])
+	if file != "" {
+		content, err := os.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("failed to open file: %w", err)
 		}

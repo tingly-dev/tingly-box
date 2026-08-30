@@ -33,21 +33,24 @@ type ProviderAddCmdKong struct {
 	APIStyle string `kong:"arg,optional,help='API style (openai, anthropic)'"`
 }
 
+// Run is a pure CI command with no interactive fallback of any kind: all
+// four fields are required, or it fails with a clear error naming what to
+// pass instead — picking values interactively is `tingly-box tui` or Web UI
+// work.
 func (c *ProviderAddCmdKong) Run(appManager *AppManager) error {
-	args := []string{}
-	if c.Name != "" {
-		args = append(args, c.Name)
+	if c.Name == "" || c.BaseURL == "" || c.Token == "" || c.APIStyle == "" {
+		return fmt.Errorf("all four positional args are required: name, base-url, token, api-style; for interactive setup use 'tingly-box tui' or the Web UI")
 	}
-	if c.BaseURL != "" {
-		args = append(args, c.BaseURL)
+	var apiStyle APIStyle
+	switch strings.ToLower(c.APIStyle) {
+	case "openai":
+		apiStyle = protocol.APIStyleOpenAI
+	case "anthropic":
+		apiStyle = protocol.APIStyleAnthropic
+	default:
+		return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", c.APIStyle)
 	}
-	if c.Token != "" {
-		args = append(args, c.Token)
-	}
-	if c.APIStyle != "" {
-		args = append(args, c.APIStyle)
-	}
-	return runAdd(appManager, args)
+	return addProviderCI(appManager, c.Name, c.BaseURL, c.Token, apiStyle)
 }
 
 // ProviderListCmdKong lists all providers.
@@ -155,26 +158,6 @@ func (c *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
 }
 
 // ============== Provider operations ==============
-
-// runAdd handles `provider add`. All four positional args are required —
-// this is a pure CI command with no interactive fallback of any kind
-// (unlike an earlier revision, this isn't gated on TTY presence either):
-// picking values interactively is `tingly-box tui` or Web UI work.
-func runAdd(appManager *AppManager, args []string) error {
-	if len(args) != 4 {
-		return fmt.Errorf("all four positional args are required: name, base-url, token, api-style; for interactive setup use 'tingly-box tui' or the Web UI")
-	}
-	var apiStyle APIStyle
-	switch strings.ToLower(args[3]) {
-	case "openai":
-		apiStyle = protocol.APIStyleOpenAI
-	case "anthropic":
-		apiStyle = protocol.APIStyleAnthropic
-	default:
-		return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
-	}
-	return addProviderCI(appManager, args[0], args[1], args[2], apiStyle)
-}
 
 // addProviderCI adds a provider without prompting. Used when every required
 // field is provided on the command line — typical for scripts and CI.

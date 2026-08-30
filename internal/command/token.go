@@ -42,7 +42,7 @@ func (t *TokenListCmdKong) Run(appManager *AppManager) error {
 // tokens are shown directly — viewing either is harmless, so there is
 // nothing worth picking one over the other for.
 type TokenViewCmdKong struct {
-	Kind string `kong:"arg,optional,help='Which token to view: auth or model (both, if omitted)'"`
+	Kind   string `kong:"arg,optional,help='Which token to view: auth or model (both, if omitted)'"`
 	Reveal bool   `kong:"flag,name='reveal',short='r',help='Print the full token instead of a masked preview'"`
 }
 
@@ -61,7 +61,7 @@ func (t *TokenViewCmdKong) Run(appManager *AppManager) error {
 // persists the new value. Existing clients using the old token will need
 // to be updated.
 type TokenRefreshCmdKong struct {
-	Kind string `kong:"arg,optional,help='Which token to refresh: auth or model'"`
+	Kind   string `kong:"arg,optional,help='Which token to refresh: auth or model'"`
 	Reveal bool   `kong:"flag,name='reveal',short='r',help='Print the full rotated token after success'"`
 	Yes    bool   `kong:"flag,name='yes',short='y',help='Skip the rotation confirmation prompt'"`
 }
