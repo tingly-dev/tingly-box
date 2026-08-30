@@ -20,9 +20,9 @@ srv = Server("fanout")
 
 
 @srv.chat
-def handle(req):
+def handle(body):
     replies = [
-        text_of(srv.tb.chat(model=model, messages=req.raw["messages"]))
+        text_of(srv.tb.chat(model=model, messages=body["messages"]))
         for model in MODELS
     ]
     merged = "\n\n".join(f"[{model}]\n{reply}" for model, reply in zip(MODELS, replies))

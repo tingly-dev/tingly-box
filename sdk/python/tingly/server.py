@@ -9,14 +9,14 @@ prototype bothers with, since which shape a caller's configured base URL
 expects is exactly the kind of detail not worth troubleshooting by hand.
 
 This is a prototype, not a protocol-translation layer: the two decorators
-are independent, and there is **no bridging between them**. `@srv.chat`
-gets an OpenAI-shaped `ChatRequest`; `@srv.messages` gets the raw parsed
-Anthropic request body, unmodified — content blocks, `system`, tool defs
-and all — because building a shared abstraction that normalizes across
-wire protocols is exactly the kind of forward-looking design this v1
-explicitly isn't attempting yet. A handler that wants to serve both
-protocols registers both decorators and writes native code for each; the
-framework does not do it on the handler's behalf. Every `/v1/messages`
+are independent, and there is **no bridging between them**, and **no typed
+wrapper around the request either** — a handler gets exactly the raw
+parsed JSON body the caller sent, on both endpoints. `@srv.chat` sees the
+real OpenAI chat-completion request; `@srv.messages` sees the real
+Anthropic messages request — content blocks, `system`, tool defs and all.
+A handler that wants to serve both protocols registers both decorators and
+writes native code for each against the real shape; the framework does not
+invent an in-between shape to hide either one behind. Every `/v1/messages`
 (or `/messages`) request is handled as if beta unconditionally — no
 `?beta=true` / `anthropic-version` branching — the same simplification
 tb's own vmodel virtual server already makes at its HTTP boundary.
@@ -38,10 +38,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
 
 from .client import Client, DEFAULT_SCENARIO
-from .types import ChatRequest
 
-ChatHandler = Callable[[ChatRequest], "str | dict"]
-MessagesHandler = Callable[[dict], "str | dict"]
+Handler = Callable[[dict], "str | dict"]
 
 
 class Server:
@@ -64,25 +62,27 @@ class Server:
         tb_scenario: str = DEFAULT_SCENARIO,
     ):
         self.name = name
-        self._chat_handler: ChatHandler | None = None
-        self._messages_handler: MessagesHandler | None = None
+        self._chat_handler: Handler | None = None
+        self._messages_handler: Handler | None = None
         self._httpd: ThreadingHTTPServer | None = None
 
         base_url = tb_base_url or os.environ.get("TINGLY_BASE_URL")
         token = tb_token or os.environ.get("TINGLY_TOKEN")
         self.tb = Client(base_url, token, scenario=tb_scenario) if base_url else None
 
-    def chat(self, fn: ChatHandler) -> ChatHandler:
+    def chat(self, fn: Handler) -> Handler:
         """Decorator registering the OpenAI-protocol handler
-        (`POST /v1/chat/completions`)."""
+        (`POST /v1/chat/completions`). `fn` receives the raw parsed request
+        body — the real OpenAI chat-completion request, unmodified."""
         self._chat_handler = fn
         return fn
 
-    def messages(self, fn: MessagesHandler) -> MessagesHandler:
+    def messages(self, fn: Handler) -> Handler:
         """Decorator registering the Anthropic-protocol handler
-        (`POST /v1/messages`). Receives the raw parsed request body as-is —
-        no normalization — and returns either a dict already in Anthropic
-        Messages shape, or a plain string to wrap minimally."""
+        (`POST /v1/messages`). `fn` receives the raw parsed request body —
+        the real Anthropic messages request, unmodified — and returns
+        either a dict already in Anthropic Messages shape, or a plain
+        string to wrap minimally."""
         self._messages_handler = fn
         return fn
 
@@ -130,34 +130,22 @@ def _make_request_handler(srv: Server):
             body = json.loads(self.rfile.read(length) or b"{}")
 
             if path == "/chat/completions":
-                self._handle_chat(body)
+                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered", _wrap_text_openai)
             elif path == "/messages":
-                self._handle_messages(body)
+                self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered", _wrap_text_anthropic)
             else:
                 self._json(404, {"error": "not found"})
 
-        def _handle_chat(self, body: dict):
-            if srv._chat_handler is None:
-                self._json(404, {"error": "no @srv.chat handler registered"})
+        def _dispatch(self, handler, body: dict, missing_msg: str, wrap_text):
+            if handler is None:
+                self._json(404, {"error": missing_msg})
                 return
-            req = ChatRequest.from_body(body)
             try:
-                result = srv._chat_handler(req)
+                result = handler(body)
             except Exception as exc:  # surfaced to the caller, not a 500 traceback
                 self._json(500, {"error": str(exc)})
                 return
-            self._json(200, result if isinstance(result, dict) else _wrap_text_openai(req.model, result))
-
-        def _handle_messages(self, body: dict):
-            if srv._messages_handler is None:
-                self._json(404, {"error": "no @srv.messages handler registered"})
-                return
-            try:
-                result = srv._messages_handler(body)
-            except Exception as exc:
-                self._json(500, {"error": str(exc)})
-                return
-            self._json(200, result if isinstance(result, dict) else _wrap_text_anthropic(body.get("model", ""), result))
+            self._json(200, result if isinstance(result, dict) else wrap_text(body.get("model", ""), result))
 
         def _json(self, status: int, payload: dict):
             data = json.dumps(payload).encode("utf-8")

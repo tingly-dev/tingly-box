@@ -6,9 +6,9 @@ http://localhost:8765/v1, Anthropic URL http://localhost:8765, no key),
 then route any scenario/rule at it.
 
 Two independent handlers, one per protocol — no shared abstraction between
-them (see tingly/server.py). Each just forwards the native request it
-received to tb over `.tb.chat()` (which always speaks OpenAI) and hands the
-result back in its own protocol's shape.
+them (see tingly/server.py). Each gets the raw request body exactly as the
+caller sent it and forwards it to tb over `.tb.chat()` (which always speaks
+OpenAI), then hands the result back in its own protocol's shape.
 
 Run:
     TINGLY_BASE_URL=http://localhost:12580 TINGLY_TOKEN=... python relay.py
@@ -27,8 +27,8 @@ srv = Server("relay-to-" + TARGET_MODEL)
 
 
 @srv.chat
-def handle_chat(req):
-    return srv.tb.chat(model=TARGET_MODEL, messages=req.raw["messages"])
+def handle_chat(body):
+    return srv.tb.chat(model=TARGET_MODEL, messages=body["messages"])
 
 
 @srv.messages

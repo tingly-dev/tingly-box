@@ -76,8 +76,8 @@ class FrameworkTest(unittest.TestCase):
         )
 
         @cls.srv.chat
-        def handle_chat(req):
-            return cls.srv.tb.chat(model="downstream-model", messages=req.raw["messages"])
+        def handle_chat(body):
+            return cls.srv.tb.chat(model="downstream-model", messages=body["messages"])
 
         @cls.srv.messages
         def handle_messages(body):

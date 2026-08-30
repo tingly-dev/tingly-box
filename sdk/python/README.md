@@ -6,12 +6,13 @@ for the design rationale and scope cuts.
 - `tingly.Server` — be a tb provider. Register a handler per protocol you
   want to serve — `@srv.chat` for OpenAI (`/v1/chat/completions`),
   `@srv.messages` for Anthropic (`/v1/messages`) — and plug it into tb like
-  Ollama. **The two are independent; nothing bridges them.** `@srv.chat`
-  gets a small OpenAI-shaped `ChatRequest`; `@srv.messages` gets the raw
-  Anthropic request body exactly as the caller sent it — content blocks,
-  `system`, tool defs and all. This is a prototype: it hands you each
-  protocol as it actually is on the wire rather than inventing a unified
-  shape to hide the differences behind.
+  Ollama. **The two are independent; nothing bridges them, and neither gets
+  a typed wrapper.** Both get exactly the raw parsed request body the caller
+  sent — the real OpenAI chat-completion request for `@srv.chat`, the real
+  Anthropic messages request (content blocks, `system`, tool defs and all)
+  for `@srv.messages`. This is a prototype: it hands you each protocol as it
+  actually is on the wire, full stop — no in-between shape, no fields
+  picked out on your behalf.
 - `tingly.Client` — call tb from Python. Point it at a running tb and a
   gateway token, ask it to run any scenario/model.
 
@@ -23,10 +24,10 @@ from tingly import Server, text_of
 srv = Server("relay", tb_base_url="http://localhost:12580", tb_token="...")
 
 @srv.chat
-def handle_chat(req):
-    # req.model, req.messages, req.raw are available; here we just relay
+def handle_chat(body):
+    # body is the raw OpenAI chat-completion request; here we just relay
     # everything to a different tb model and hand the answer straight back.
-    return srv.tb.chat(model="claude-opus-4-8", messages=req.raw["messages"])
+    return srv.tb.chat(model="claude-opus-4-8", messages=body["messages"])
 
 @srv.messages
 def handle_messages(body):
