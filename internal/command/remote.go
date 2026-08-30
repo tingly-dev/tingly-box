@@ -76,6 +76,10 @@ func (r *RemoteConfigCmdKong) Run(appManager *AppManager) error {
 type RemoteAddCmdKong struct{}
 
 func (r *RemoteAddCmdKong) Run(appManager *AppManager) error {
+	// No flag form exists — it's always interactive.
+	if err := requireTTY("add a bot via the Web UI's Remote page instead"); err != nil {
+		return err
+	}
 	return runRemoteAdd(appManager)
 }
 

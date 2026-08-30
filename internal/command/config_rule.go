@@ -56,6 +56,9 @@ func (c *ConfigRuleAddCmdKong) Run(appManager *AppManager) error {
 	if c.Scenario != "" || c.RequestModel != "" || c.Provider != "" || c.Model != "" {
 		return fmt.Errorf("partial flags supplied; for CI mode pass all of --scenario, --request-model, --provider, --model. For interactive use, run with no flags or use `tingly-box tui rule`")
 	}
+	if err := requireTTY("pass all of --scenario, --request-model, --provider, --model, or use 'tingly-box tui rule' for interactive setup"); err != nil {
+		return err
+	}
 	return runRuleAddInteractive(appManager, bufio.NewReader(os.Stdin))
 }
 
@@ -135,6 +138,12 @@ type ConfigRuleUpdateCmdKong struct {
 }
 
 func (c *ConfigRuleUpdateCmdKong) Run(appManager *AppManager) error {
+	// runRuleUpdateService always re-prompts for the new service (no flag
+	// carries provider/model), so this is unconditional — even a UUID
+	// argument doesn't make the rest of the command non-interactive.
+	if err := requireTTY("no flag form exists yet for the new service; use 'tingly-box tui rule' or the Web UI instead"); err != nil {
+		return err
+	}
 	reader := bufio.NewReader(os.Stdin)
 	uid := c.UUID
 	if uid == "" {
@@ -156,6 +165,12 @@ type ConfigRuleDeleteCmdKong struct {
 }
 
 func (c *ConfigRuleDeleteCmdKong) Run(appManager *AppManager) error {
+	// runRuleDelete always confirms with a [y/N] prompt (no -y/--yes flag
+	// exists on this command yet), so this is unconditional — a UUID
+	// argument alone doesn't make the rest of the command non-interactive.
+	if err := requireTTY("no flag skips the delete confirmation yet; use 'tingly-box tui rule' or the Web UI instead"); err != nil {
+		return err
+	}
 	reader := bufio.NewReader(os.Stdin)
 	uid := c.UUID
 	if uid == "" {
@@ -183,6 +198,9 @@ type ConfigRuleExportCmdKong struct {
 func (c *ConfigRuleExportCmdKong) Run(appManager *AppManager) error {
 	uid := c.UUID
 	if uid == "" {
+		if err := requireTTY("pass the rule UUID explicitly, e.g. 'tingly-box config rule export <uuid>'; list them with 'tingly-box config rule list'"); err != nil {
+			return err
+		}
 		picked, err := selectRuleInteractive(appManager, bufio.NewReader(os.Stdin), "export")
 		if err != nil {
 			return err

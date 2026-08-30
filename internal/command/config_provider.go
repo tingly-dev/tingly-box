@@ -63,6 +63,11 @@ func (c *ConfigProviderListCmdKong) Run(appManager *AppManager) error {
 type ConfigProviderDeleteCmdKong struct{}
 
 func (c *ConfigProviderDeleteCmdKong) Run(appManager *AppManager) error {
+	// No flag form exists (no UUID arg on this command) — it's always
+	// interactive, so the check is unconditional, not just an empty-arg case.
+	if err := requireTTY("select and delete a provider via 'tingly-box tui' or the Web UI instead"); err != nil {
+		return err
+	}
 	return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
 }
 
@@ -70,6 +75,10 @@ func (c *ConfigProviderDeleteCmdKong) Run(appManager *AppManager) error {
 type ConfigProviderUpdateCmdKong struct{}
 
 func (c *ConfigProviderUpdateCmdKong) Run(appManager *AppManager) error {
+	// Same as delete: no flag form, always interactive.
+	if err := requireTTY("select and update a provider via 'tingly-box tui' or the Web UI instead"); err != nil {
+		return err
+	}
 	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
 }
 
@@ -82,6 +91,9 @@ type ConfigProviderGetCmdKong struct {
 
 func (c *ConfigProviderGetCmdKong) Run(appManager *AppManager) error {
 	if c.UUID == "" {
+		if err := requireTTY("pass the UUID explicitly, e.g. 'tingly-box config provider get <uuid>'; list them with 'tingly-box config provider list'"); err != nil {
+			return err
+		}
 		return runProviderGetInteractive(appManager, bufio.NewReader(os.Stdin))
 	}
 	return runProviderGet(appManager, c.UUID)
