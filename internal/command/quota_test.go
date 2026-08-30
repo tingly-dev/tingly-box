@@ -3,6 +3,7 @@ package command
 import (
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -35,5 +36,30 @@ func TestFilterQuotaRelevant_ExcludesVirtualModels(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Errorf("filterQuotaRelevant() returned %d providers, want 3", len(got))
+	}
+}
+
+// TestRunQuotaShowProvider_NoData_NoError is the regression for the
+// `quota <name>` vs `quota --all` inconsistency: a provider with no quota
+// data yet made `quota <name>` hard-error ("failed to get quota: usage not
+// found") while `quota --all` rendered the exact same condition as a
+// friendly "no data — run 'quota' to fetch" line. Both must behave the
+// same way for the same underlying state.
+func TestRunQuotaShowProvider_NoData_NoError(t *testing.T) {
+	am := newTestAppManager(t)
+	uuid, err := addProviderForTest(am, "openai", "https://api.openai.com", "tok", protocol.APIStyleOpenAI)
+	if err != nil {
+		t.Fatalf("addProviderForTest: %v", err)
+	}
+
+	var runErr error
+	withSilencedStdout(t, func() {
+		// refresh=false: no quota data has ever been fetched or stored for
+		// this brand-new provider, and we don't want this test making a
+		// real network call.
+		runErr = runQuotaShowProvider(am, uuid, false)
+	})
+	if runErr != nil {
+		t.Fatalf("runQuotaShowProvider with no quota data yet should not error, got: %v", runErr)
 	}
 }
