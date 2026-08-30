@@ -66,13 +66,33 @@ func runQuotaShowAll(appManager *AppManager, refresh bool) error {
 		return fmt.Errorf("failed to get quota data: %w", err)
 	}
 
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
+	providers := quotaRelevantProviders(appManager)
 	if len(providers) == 0 {
 		fmt.Println("No providers configured.")
 		return nil
 	}
 
 	return displayQuotaForProviders(providers, usages)
+}
+
+// quotaRelevantProviders lists providers that can meaningfully have a quota.
+func quotaRelevantProviders(appManager *AppManager) []*typ.Provider {
+	all := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
+	return filterQuotaRelevant(all)
+}
+
+// filterQuotaRelevant drops virtual/local model providers (auth type
+// vmodel): they never make an outbound call, so they can never report
+// usage — showing them here was a permanent "Error: no data" row for
+// something that structurally can't have data.
+func filterQuotaRelevant(all []*typ.Provider) []*typ.Provider {
+	providers := make([]*typ.Provider, 0, len(all))
+	for _, p := range all {
+		if !p.IsVirtual() {
+			providers = append(providers, p)
+		}
+	}
+	return providers
 }
 
 // runQuotaShowProvider shows a specific provider with optional refresh
@@ -112,7 +132,7 @@ func runQuotaShowProvider(appManager *AppManager, providerName string, refresh b
 
 // runQuotaInteractive runs interactive mode for provider selection
 func runQuotaInteractive(appManager *AppManager, refresh bool) error {
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
+	providers := quotaRelevantProviders(appManager)
 
 	if len(providers) == 0 {
 		fmt.Println("❌ No providers configured.")
