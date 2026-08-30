@@ -45,6 +45,13 @@ func runAdd(appManager *AppManager, args []string) error {
 	if len(args) >= 4 {
 		return addProviderCI(appManager, name, apiBase, token, apiStyle)
 	}
+	// Anything short of all four falls into a confirm-or-prompt path below;
+	// unlike `config rule add`, this one mixes given args with prompts for
+	// the rest rather than erroring on partial input, so the TTY check has
+	// to cover every args count from 0 to 3, not just the empty case.
+	if err := requireTTY("pass all four positional args for non-interactive mode: name, base-url, token, api-style"); err != nil {
+		return err
+	}
 	// 3 args (no style): still show the summary + confirm so the user can
 	// review the auto-inferred default before persisting.
 	if len(args) >= 3 {

@@ -139,6 +139,45 @@ func TestConfigRuleExport_NoTTYWithUUID_StillWorks(t *testing.T) {
 	}
 }
 
+func TestConfigProviderAdd_NoTTYPartialArgs_ClearError(t *testing.T) {
+	// Unlike config rule add, this one mixes given args with prompts for
+	// the rest instead of erroring on partial input — so the guard must
+	// cover every args count short of all four, not just zero.
+	withNonTTYStdin(t)
+
+	cases := []ConfigProviderAddCmdKong{
+		{},
+		{Name: "openai"},
+		{Name: "openai", BaseURL: "https://api.openai.com"},
+		{Name: "openai", BaseURL: "https://api.openai.com", Token: "tok"},
+	}
+	for _, cmd := range cases {
+		err := cmd.Run(nil)
+		if err == nil {
+			t.Fatalf("%+v: expected an error, got nil", cmd)
+		}
+		if !strings.Contains(err.Error(), "no TTY") {
+			t.Errorf("%+v: error = %q, want it to mention the missing TTY", cmd, err.Error())
+		}
+	}
+}
+
+func TestConfigProviderAdd_AllFourArgs_StillWorksWithoutTTY(t *testing.T) {
+	// All four args is the CI path — must not require a TTY.
+	withNonTTYStdin(t)
+	am := newTestAppManager(t)
+
+	var err error
+	withSilencedStdout(t, func() {
+		err = (&ConfigProviderAddCmdKong{
+			Name: "openai", BaseURL: "https://api.openai.com", Token: "tok", APIStyle: "openai",
+		}).Run(am)
+	})
+	if err != nil {
+		t.Errorf("expected success with all four args given, got: %v", err)
+	}
+}
+
 func TestRemoteAdd_NoTTY_ClearError(t *testing.T) {
 	withNonTTYStdin(t)
 
