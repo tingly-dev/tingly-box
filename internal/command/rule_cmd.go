@@ -1,10 +1,13 @@
 package command
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
@@ -242,4 +245,107 @@ func formatPrimaryService(appManager *AppManager, r *typ.Rule) string {
 		extra = fmt.Sprintf(" (+%d more)", len(r.Services)-1)
 	}
 	return fmt.Sprintf("%s:%s%s", providerLabel, svc.Model, extra)
+}
+
+// ============== Rule export/import ==============
+
+// runExport exports the providers referenced by a rule to file or stdout.
+// The rule is only used to select which providers to include — dataio
+// export/import is provider-only, so the rule itself does not travel in
+// the exported payload.
+func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, outputFile string) error {
+	var format dataio.Format
+	switch strings.ToLower(formatStr) {
+	case "jsonl":
+		format = dataio.FormatJSONL
+	case "base64":
+		format = dataio.FormatBase64
+	default:
+		return fmt.Errorf("invalid format '%s': supported formats are jsonl and base64", formatStr)
+	}
+
+	// Get the rule
+	globalConfig := appManager.AppConfig().GetGlobalConfig()
+	rule := globalConfig.GetRuleByRequestModelAndScenario(requestModel, typ.RuleScenario(scenarioStr))
+	if rule == nil {
+		return fmt.Errorf("rule not found for request-model '%s' and scenario '%s'", requestModel, scenarioStr)
+	}
+
+	// Collect providers from the rule
+	providers := collectProvidersFromRule(globalConfig, rule)
+
+	// Export the providers referenced by the rule
+	content, err := exportProviders(providers, format)
+	if err != nil {
+		return fmt.Errorf("failed to export providers: %w", err)
+	}
+
+	// Write to file or stdout
+	if outputFile != "" {
+		err := os.WriteFile(outputFile, []byte(content), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write to file: %w", err)
+		}
+		fmt.Printf("✓ Providers exported to %s\n", outputFile)
+	} else {
+		fmt.Print(content)
+	}
+
+	return nil
+}
+
+// runImport imports providers from a file or stdin.
+func runImport(appManager *AppManager, formatStr string, args []string) error {
+	var data string
+
+	if len(args) > 0 {
+		// Read from file
+		content, err := os.ReadFile(args[0])
+		if err != nil {
+			return fmt.Errorf("failed to open file: %w", err)
+		}
+		data = string(content)
+	} else {
+		// Read from stdin
+		scanner := bufio.NewScanner(os.Stdin)
+		var builder strings.Builder
+		for scanner.Scan() {
+			builder.WriteString(scanner.Text())
+			builder.WriteString("\n")
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("error reading input: %w", err)
+		}
+		data = builder.String()
+	}
+
+	// Parse format
+	var format dataio.Format
+	switch strings.ToLower(formatStr) {
+	case "auto":
+		format = dataio.FormatAuto
+	case "jsonl":
+		format = dataio.FormatJSONL
+	case "base64":
+		format = dataio.FormatBase64
+	default:
+		return fmt.Errorf("invalid format '%s': supported formats are auto, jsonl, and base64", formatStr)
+	}
+
+	result, err := ImportProviders(appManager.GetGlobalConfig(), data, format, ImportOptions{
+		Quiet: false,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("\nImport completed!\n")
+	if result.ProvidersCreated > 0 {
+		fmt.Printf("✓ Providers created: %d\n", result.ProvidersCreated)
+	} else {
+		fmt.Println("ℹ No providers were imported")
+	}
+
+	return nil
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
+// APIStyle is re-exported from internal/protocol for the CLI prompts.
+type APIStyle = protocol.APIStyle
+
 // ProviderCmdKong is the top-level `provider` command: a pure CI surface for
 // managing providers by UUID/flags, one operation per invocation, never
 // interactive. Browsing and picking a provider to edit/delete is TUI/Web UI
@@ -148,5 +151,101 @@ func (c *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
 		return fmt.Errorf("failed to delete provider: %w", err)
 	}
 	fmt.Printf("✓ Provider '%s' deleted\n", result.Provider.Name)
+	return nil
+}
+
+// ============== Provider operations ==============
+
+// runAdd handles `provider add`. All four positional args are required —
+// this is a pure CI command with no interactive fallback of any kind
+// (unlike an earlier revision, this isn't gated on TTY presence either):
+// picking values interactively is `tingly-box tui` or Web UI work.
+func runAdd(appManager *AppManager, args []string) error {
+	if len(args) != 4 {
+		return fmt.Errorf("all four positional args are required: name, base-url, token, api-style; for interactive setup use 'tingly-box tui' or the Web UI")
+	}
+	var apiStyle APIStyle
+	switch strings.ToLower(args[3]) {
+	case "openai":
+		apiStyle = protocol.APIStyleOpenAI
+	case "anthropic":
+		apiStyle = protocol.APIStyleAnthropic
+	default:
+		return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
+	}
+	return addProviderCI(appManager, args[0], args[1], args[2], apiStyle)
+}
+
+// addProviderCI adds a provider without prompting. Used when every required
+// field is provided on the command line — typical for scripts and CI.
+func addProviderCI(appManager *AppManager, name, apiBase, token string, apiStyle APIStyle) error {
+	res, err := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).Add(usecase.CreateProviderRequest{
+		Name: name, APIBase: apiBase, Token: token, APIStyle: apiStyle,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add provider: %w", err)
+	}
+	fmt.Printf("✓ Provider '%s' added (uuid: %s, style: %s)\n", name, res.Provider.UUID, apiStyle)
+	return nil
+}
+
+// runProviderList lists all providers
+func runProviderList(appManager *AppManager) error {
+	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
+
+	if len(providers) == 0 {
+		fmt.Println("No providers configured. Use 'provider add' to add a provider.")
+		return nil
+	}
+
+	fmt.Println("\nAll Configured Providers")
+	fmt.Println(strings.Repeat("-", 80))
+
+	for i, provider := range providers {
+		status := "❌ Disabled"
+		if provider.Enabled {
+			status = "✅ Enabled"
+		}
+		fmt.Printf("%d. %s\n", i+1, provider.Name)
+		fmt.Printf("   UUID: %s\n", provider.UUID)
+		fmt.Printf("   URL: %s\n", provider.APIBase)
+		fmt.Printf("   Style: %s\n", provider.APIStyle)
+		fmt.Printf("   Status: %s\n", status)
+		fmt.Println(strings.Repeat("-", 80))
+	}
+
+	return nil
+}
+
+// runProviderGet displays provider details for the given UUID. Providers are
+// keyed by UUID; names are not unique and must not be used as lookup keys.
+func runProviderGet(appManager *AppManager, uuid string) error {
+	result, err := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).Get(usecase.GetProviderRequest{UUID: uuid})
+	if err != nil {
+		return err
+	}
+	provider := result.Provider
+
+	fmt.Println("\n🔍 Provider Details")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Printf("Name:      %s\n", provider.Name)
+	fmt.Printf("UUID:      %s\n", provider.UUID)
+	fmt.Printf("API Base:  %s\n", provider.APIBase)
+	fmt.Printf("API Style: %s\n", provider.APIStyle)
+	fmt.Printf("Enabled:   %v\n", provider.Enabled)
+	fmt.Printf("Proxy URL: %s\n", provider.ProxyURL)
+	fmt.Printf("Timeout:   %d seconds\n", provider.Timeout)
+
+	if provider.Tags != nil && len(provider.Tags) > 0 {
+		fmt.Printf("Tags:      %v\n", provider.Tags)
+	}
+
+	status := "❌ Disabled"
+	if provider.Enabled {
+		status = "✅ Enabled"
+	}
+	fmt.Printf("Status:    %s\n", status)
+	fmt.Println(strings.Repeat("=", 60))
+
 	return nil
 }
