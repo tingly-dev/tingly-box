@@ -258,6 +258,96 @@ above). tb then dispatches each inbound request to whichever URL matches
 the *client's own* protocol — exactly the mechanism dual-provider was built
 for, just with a Python process instead of Vertex/Bedrock behind it.
 
+## Auto-registration (proposed — design only, not yet built)
+
+Today, wiring a running `Server` into tb is a manual step: open Connect AI,
+pick Self-hosted → Dual endpoint, type the name and both URLs, save. Every
+restart on a different port means redoing it. The proposal: given
+`srv.tb` (an admin-capable `Client`), `Server` registers itself with tb on
+`run()` — so the port can be `0` (OS-assigned, no longer something a human
+ever has to pick or type) and the plugin is usable the moment it starts.
+
+### What already exists to build this from
+
+No new tb backend work — the provider CRUD API is already complete and
+already in `openapi.json` (`internal/server/module/provider/{types,routes}.go`):
+
+| Call | Use |
+|---|---|
+| `GET /api/v1/providers` | find an existing row by name |
+| `POST /api/v1/providers` | create |
+| `PUT /api/v1/providers/:uuid` | update (port changed since last run) |
+| `DELETE /api/v1/providers/:uuid` | best-effort cleanup on shutdown |
+
+All four already require `UserToken` — the same `admin_token` `Client`'s
+quota methods added.
+
+### Mechanism
+
+On `srv.run()`, when `auto_register=True` and `srv.tb` has an `admin_token`:
+
+1. Bind the HTTP server first (`port=0` is the point — the OS picks a free
+   one; auto-registration is what removes the reason to ever hardcode a
+   port).
+2. `GET /api/v1/providers`, look for a row named `srv.name`.
+3. Not found → `POST /api/v1/providers`: `name=srv.name`, `auth_type="api_key"`,
+   `no_key_required=True`, `token=<placeholder>` (sidesteps the
+   anthropic-sdk-go empty-key footgun above), `api_style="openai"`,
+   `api_base`/`api_base_openai` = `http://{advertise_host}:{port}/v1` when
+   `@srv.chat` is registered, `api_base_anthropic` = the bare URL when
+   `@srv.messages` is registered — only the URL(s) for protocols the
+   `Server` actually serves.
+4. Found → `PUT /api/v1/providers/:uuid` with the same fields.
+5. Clean shutdown (`KeyboardInterrupt` / normal return from `run()`) →
+   best-effort `DELETE /api/v1/providers/:uuid`.
+
+`advertise_host` defaults to `127.0.0.1` regardless of what host the HTTP
+server itself binds to — this stays a same-box prototype (tb and the
+plugin on one machine); reaching a plugin across machines is out of scope.
+
+### What this deliberately does not do
+
+Mirrors the four discarded iterations the prior branch's own design notes
+already worked through (see "Prior attempt" above) — restating them here so
+this proposal doesn't quietly re-invent any of them:
+
+- **No heartbeat, lease, or TTL.** A crash without a clean shutdown leaves a
+  stale provider row — the same failure mode as any other misconfigured or
+  offline provider today. tb's existing provider-error surfacing is what a
+  user checks; this does not add a liveness system on top of it.
+- **No new "plugin" concept, DB column, or dedicated registration
+  endpoint.** Auto-registration is entirely the generic Provider CRUD API
+  that already exists — the row it creates is indistinguishable from one a
+  human made by hand through Connect AI.
+- **No sub-process supervision, no reverse-proxy mounting.**
+- **Opt-in, not automatic-automatic.** Requires `auto_register=True`
+  explicitly, and only runs when `srv.tb.admin_token` is actually set — a
+  `Server` with no admin token behaves exactly as it does today: unregistered,
+  wire it up by hand.
+
+### Open question — genuinely undecided, not a detail
+
+Matching by `name` is the simplest possible identity, and cheap because it
+needs no new tb-side concept — but it means two `Server`s (or one `Server`
+and one manually-created provider) sharing a name collide: the second one
+to start silently overwrites the first's URLs on its next `PUT`, and its
+shutdown silently deletes a row it didn't create. Two ways to resolve it,
+each with a real cost:
+
+1. **Match-by-name, document the caveat.** Simplest; the caveat is "give
+   each auto-registering `Server` a unique name," same discipline Connect AI
+   already expects of a human adding two providers by hand.
+2. **Only touch what it's sure it created.** Needs *some* marker persisted
+   across restarts (a file next to the script? an env var the caller sets?)
+   recording "the UUID I created last time" — the smallest version of state
+   this SDK has needed so far, and the same kind of bookkeeping the
+   discarded heartbeat/lease iteration eventually turned into.
+
+This isn't resolved here on purpose — it is not obviously covered by "keep
+it simple," and picking wrong either reintroduces exactly the machinery the
+prior branch cut, or ships a footgun a prototype can get away with but a
+second user of it may not forgive.
+
 ## Quota — the one place this SDK generates types
 
 `Client.list_quota()` / `.get_quota(uuid)` / `.quota_summary()` call tb's
@@ -330,8 +420,13 @@ Deliberately deferred, not forgotten:
   providers/rules, etc.) — quota is the one surface with a concrete need
   today; everything else stays a plain `httpx`/`requests` call against tb's
   already-public API if a handler ever needs it.
-- Discovery / auto-registration (`POST /sdk/session`) — registering the
-  provider is a one-time manual step via Connect AI today.
+- Auto-registration — proposed above, pending the open question there; not
+  built. Registering the provider is a one-time manual step via Connect AI
+  until it is.
+- Discovery via a dedicated tb-side endpoint (`POST /sdk/session` or
+  similar) — the auto-registration proposal above builds on the generic
+  Provider CRUD API instead, so this stays out of scope regardless of how
+  that proposal resolves.
 - A CLI, packaging/publishing to PyPI.
 
 ## Key files
@@ -352,3 +447,4 @@ Deliberately deferred, not forgotten:
 | `internal/server/module/providerquota/routes.go` | Swagger declarations for provider-quota — ported from the prior branch, the one piece of its backend work worth keeping |
 | `internal/server/swagger.go`, `internal/server/server_control.go` | Register provider-quota routes unconditionally (nil-manager-safe) so they always reach `openapi.json` |
 | `internal/middleware/auth.go` | `UserAuthMiddleware` vs `ModelAuthMiddleware` — why quota needs `admin_token` and `.chat()` doesn't |
+| `internal/server/module/provider/{types,routes}.go` | Provider CRUD API — what the auto-registration proposal would call; no backend change needed for it |
