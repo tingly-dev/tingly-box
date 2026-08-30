@@ -39,6 +39,9 @@ type OAuthCmdKong struct {
 func (o *OAuthCmdKong) Run(appManager *AppManager) error {
 	appConfig := appManager.AppConfig()
 	if o.Provider == "" {
+		if err := requireTTY("pass the provider explicitly, e.g. 'tingly-box oauth claude_code'"); err != nil {
+			return err
+		}
 		return runInteractiveMode(appConfig, o.Name, o.Port, o.ProxyURL)
 	}
 	return runOAuthFlow(appConfig, o.Provider, o.Name, o.Port, o.ProxyURL)
