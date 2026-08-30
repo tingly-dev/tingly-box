@@ -22,8 +22,8 @@ type ConfigRuleCmdKong struct {
 
 	Add    ConfigRuleAddCmdKong    `kong:"cmd,help='Add a rule (CI: pass all four flags for non-interactive mode)'"`
 	List   ConfigRuleListCmdKong   `kong:"cmd,help='List all rules'"`
-	Update ConfigRuleUpdateCmdKong `kong:"cmd,help='Update the service on an existing rule'"`
-	Delete ConfigRuleDeleteCmdKong `kong:"cmd,help='Delete a rule'"`
+	Update ConfigRuleUpdateCmdKong `kong:"cmd,help='Update the service on an existing rule (opens the TUI)'"`
+	Delete ConfigRuleDeleteCmdKong `kong:"cmd,help='Delete a rule (opens the TUI)'"`
 	Export ConfigRuleExportCmdKong `kong:"cmd,help='Export a rule with its providers'"`
 	Import ConfigRuleImportCmdKong `kong:"cmd,help='Import a rule with its providers'"`
 }
@@ -59,7 +59,7 @@ func (c *ConfigRuleAddCmdKong) Run(appManager *AppManager) error {
 	if err := requireTTY("pass all of --scenario, --request-model, --provider, --model, or use 'tingly-box tui rule' for interactive setup"); err != nil {
 		return err
 	}
-	return runRuleAddInteractive(appManager, bufio.NewReader(os.Stdin))
+	return tui.RunRuleMode(appManager.GetGlobalConfig())
 }
 
 // runRuleAddCI creates a rule from fully-specified flags. Provider may be
@@ -130,60 +130,28 @@ func (c *ConfigRuleListCmdKong) Run(appManager *AppManager) error {
 	return runRuleList(appManager)
 }
 
-// ConfigRuleUpdateCmdKong updates a rule's service. Without UUID it drops into
-// interactive selection. Only the service is re-picked; request-model and
-// scenario remain unchanged.
-type ConfigRuleUpdateCmdKong struct {
-	UUID string `kong:"arg,optional,help='Rule UUID'"`
-}
+// ConfigRuleUpdateCmdKong updates a rule's service. No flag form exists for
+// the new provider/model, so this always opens the TUI's Rule mode (Edit)
+// rather than reimplementing the same picker-then-prompt flow in bufio.
+type ConfigRuleUpdateCmdKong struct{}
 
 func (c *ConfigRuleUpdateCmdKong) Run(appManager *AppManager) error {
-	// runRuleUpdateService always re-prompts for the new service (no flag
-	// carries provider/model), so this is unconditional — even a UUID
-	// argument doesn't make the rest of the command non-interactive.
 	if err := requireTTY("no flag form exists yet for the new service; use 'tingly-box tui rule' or the Web UI instead"); err != nil {
 		return err
 	}
-	reader := bufio.NewReader(os.Stdin)
-	uid := c.UUID
-	if uid == "" {
-		picked, err := selectRuleInteractive(appManager, reader, "update")
-		if err != nil {
-			return err
-		}
-		if picked == "" {
-			return nil
-		}
-		uid = picked
-	}
-	return runRuleUpdateService(appManager, reader, uid)
+	return tui.RunRuleMode(appManager.GetGlobalConfig())
 }
 
-// ConfigRuleDeleteCmdKong deletes a rule by UUID, with interactive fallback.
-type ConfigRuleDeleteCmdKong struct {
-	UUID string `kong:"arg,optional,help='Rule UUID'"`
-}
+// ConfigRuleDeleteCmdKong deletes a rule. No flag skips the confirmation, so
+// this always opens the TUI's Rule mode (Delete) rather than a bespoke
+// bufio confirm flow.
+type ConfigRuleDeleteCmdKong struct{}
 
 func (c *ConfigRuleDeleteCmdKong) Run(appManager *AppManager) error {
-	// runRuleDelete always confirms with a [y/N] prompt (no -y/--yes flag
-	// exists on this command yet), so this is unconditional — a UUID
-	// argument alone doesn't make the rest of the command non-interactive.
 	if err := requireTTY("no flag skips the delete confirmation yet; use 'tingly-box tui rule' or the Web UI instead"); err != nil {
 		return err
 	}
-	reader := bufio.NewReader(os.Stdin)
-	uid := c.UUID
-	if uid == "" {
-		picked, err := selectRuleInteractive(appManager, reader, "delete")
-		if err != nil {
-			return err
-		}
-		if picked == "" {
-			return nil
-		}
-		uid = picked
-	}
-	return runRuleDelete(appManager, reader, uid)
+	return tui.RunRuleMode(appManager.GetGlobalConfig())
 }
 
 // ConfigRuleExportCmdKong exports a rule (with its referenced providers).
@@ -317,211 +285,3 @@ func selectRuleInteractive(appManager *AppManager, reader *bufio.Reader, verb st
 	return rules[num-1].UUID, nil
 }
 
-// runRuleAddInteractive walks the operator through creating a new rule:
-// request-model, scenario, and one chosen service (provider + model).
-func runRuleAddInteractive(appManager *AppManager, reader *bufio.Reader) error {
-	fmt.Println("\nAdd New Rule")
-
-	requestModel, err := promptForInput(reader, "Request model (e.g. gpt-4o, claude-3-5-sonnet): ", true)
-	if err != nil {
-		return err
-	}
-
-	scenario, err := promptForScenario(reader)
-	if err != nil {
-		return err
-	}
-
-	service, err := pickServiceInteractive(appManager, reader)
-	if err != nil {
-		return err
-	}
-	if service == nil {
-		fmt.Println("Cancelled.")
-		return nil
-	}
-
-	rule := typ.Rule{
-		Scenario:     scenario,
-		RequestModel: requestModel,
-		Services:     []*loadbalance.Service{service},
-	}
-
-	fmt.Println("\n--- Rule Summary ---")
-	fmt.Printf("Request Model: %s\n", rule.RequestModel)
-	fmt.Printf("Scenario:      %s\n", rule.Scenario)
-	fmt.Printf("Service:       %s\n", formatPrimaryService(appManager, &rule))
-	fmt.Println("--------------------")
-	confirmed, err := promptForConfirmation(reader, "Save this rule? (Y/n): ")
-	if err != nil {
-		return err
-	}
-	if !confirmed {
-		fmt.Println("Cancelled.")
-		return nil
-	}
-
-	ruleUC := usecase.NewRuleUseCase(appManager.GetGlobalConfig())
-	res, err := ruleUC.Create(usecase.CreateRuleRequest{
-		Scenario:     scenario,
-		RequestModel: requestModel,
-		Services:     []*loadbalance.Service{service},
-	})
-	if err != nil {
-		var exists usecase.ErrRuleExists
-		if errors.As(err, &exists) {
-			return fmt.Errorf("rule for request-model %q + scenario %q already exists (UUID %s); use 'config rule update' instead",
-				exists.RequestModel, exists.Scenario, exists.UUID)
-		}
-		return err
-	}
-	fmt.Printf("✓ Rule added (UUID: %s)\n", res.Rule.UUID)
-	return nil
-}
-
-// runRuleUpdateService re-picks the service for an existing rule. Everything
-// else on the rule (request-model, scenario, flags, tactic) stays as-is.
-func runRuleUpdateService(appManager *AppManager, reader *bufio.Reader, ruleUUID string) error {
-	ruleUC := usecase.NewRuleUseCase(appManager.GetGlobalConfig())
-	result, err := ruleUC.Get(usecase.GetRuleRequest{UUID: ruleUUID})
-	if err != nil {
-		return err
-	}
-	rule := &result.Rule
-
-	fmt.Printf("\nUpdating rule '%s' (scenario: %s)\n", rule.RequestModel, rule.Scenario)
-	fmt.Printf("Current service: %s\n", formatPrimaryService(appManager, rule))
-
-	service, err := pickServiceInteractive(appManager, reader)
-	if err != nil {
-		return err
-	}
-	if service == nil {
-		fmt.Println("Cancelled.")
-		return nil
-	}
-
-	updated := *rule
-	updated.Services = []*loadbalance.Service{service}
-
-	fmt.Println("\n--- Update Summary ---")
-	fmt.Printf("Request Model: %s\n", updated.RequestModel)
-	fmt.Printf("Scenario:      %s\n", updated.Scenario)
-	fmt.Printf("New service:   %s\n", formatPrimaryService(appManager, &updated))
-	fmt.Println("----------------------")
-	confirmed, err := promptForConfirmation(reader, "Apply update? (Y/n): ")
-	if err != nil {
-		return err
-	}
-	if !confirmed {
-		fmt.Println("Cancelled.")
-		return nil
-	}
-
-	if _, err := ruleUC.UpdateService(usecase.UpdateServiceRequest{
-		UUID:     rule.UUID,
-		Services: []*loadbalance.Service{service},
-	}); err != nil {
-		return err
-	}
-	fmt.Println("✓ Rule updated.")
-	return nil
-}
-
-// runRuleDelete deletes a rule with confirmation.
-func runRuleDelete(appManager *AppManager, reader *bufio.Reader, ruleUUID string) error {
-	ruleUC := usecase.NewRuleUseCase(appManager.GetGlobalConfig())
-	result, err := ruleUC.Get(usecase.GetRuleRequest{UUID: ruleUUID})
-	if err != nil {
-		return err
-	}
-	rule := &result.Rule
-
-	fmt.Printf("\nAbout to delete rule:\n  Request model: %s\n  Scenario:      %s\n  UUID:          %s\n",
-		rule.RequestModel, rule.Scenario, rule.UUID)
-	fmt.Print("Confirm delete? (y/N): ")
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
-	}
-	answer := strings.ToLower(strings.TrimSpace(input))
-	if answer != "y" && answer != "yes" {
-		fmt.Println("Cancelled.")
-		return nil
-	}
-
-	if err := ruleUC.Delete(usecase.DeleteRuleRequest{UUID: rule.UUID}); err != nil {
-		return err
-	}
-	fmt.Println("✓ Rule deleted.")
-	return nil
-}
-
-// pickServiceInteractive prompts the operator for a provider (by index) and a
-// model string, building a single weighted Service. Returns (nil, nil) when
-// the operator cancels with "0".
-func pickServiceInteractive(appManager *AppManager, reader *bufio.Reader) (*loadbalance.Service, error) {
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
-	if len(providers) == 0 {
-		return nil, fmt.Errorf("no providers configured; add a provider first via 'config provider add'")
-	}
-
-	fmt.Println("\nSelect a provider for this rule:")
-	for i, p := range providers {
-		status := "[Enabled]"
-		if !p.Enabled {
-			status = "[Disabled]"
-		}
-		fmt.Printf("%d. %s %s (%s)\n", i+1, status, p.Name, p.UUID)
-	}
-	fmt.Print("\nProvider number (0 to cancel): ")
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return nil, fmt.Errorf("failed to read input: %w", err)
-	}
-	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-	if choice == "0" || choice == "" {
-		return nil, nil
-	}
-	var num int
-	if _, err := fmt.Sscanf(choice, "%d", &num); err != nil || num < 1 || num > len(providers) {
-		return nil, fmt.Errorf("invalid selection")
-	}
-	provider := providers[num-1]
-
-	model, err := promptForInput(reader, "Model name on this provider (e.g. gpt-4o, claude-3-5-sonnet-20241022): ", true)
-	if err != nil {
-		return nil, err
-	}
-
-	return &loadbalance.Service{
-		Provider: provider.UUID,
-		Model:    model,
-		Weight:   1,
-		Active:   true,
-	}, nil
-}
-
-// promptForScenario asks the operator to pick a scenario from the built-in
-// list (or type a custom one). The default is openai.
-func promptForScenario(reader *bufio.Reader) (typ.RuleScenario, error) {
-	scenarios := typ.BuiltinScenarios()
-	fmt.Println("\nSelect scenario:")
-	for i, s := range scenarios {
-		fmt.Printf("%d. %s\n", i+1, s)
-	}
-	fmt.Printf("Choose 1-%d, or type a custom scenario name (default: %s): ", len(scenarios), typ.ScenarioOpenAI)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-	if choice == "" {
-		return typ.ScenarioOpenAI, nil
-	}
-	var num int
-	if _, err := fmt.Sscanf(choice, "%d", &num); err == nil && num >= 1 && num <= len(scenarios) {
-		return scenarios[num-1], nil
-	}
-	return typ.RuleScenario(choice), nil
-}

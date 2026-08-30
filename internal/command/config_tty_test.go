@@ -82,12 +82,12 @@ func TestConfigRuleAdd_NoTTYNoFlags_ClearError(t *testing.T) {
 	}
 }
 
-func TestConfigRuleUpdate_NoTTY_ClearErrorEvenWithUUID(t *testing.T) {
-	// runRuleUpdateService always re-prompts for the new service, so a UUID
-	// argument alone must not bypass the guard.
+func TestConfigRuleUpdate_NoTTY_ClearError(t *testing.T) {
+	// Both now always open the TUI's Rule mode (no flag form exists for the
+	// new service), so there's nothing left to gate on except the TTY check.
 	withNonTTYStdin(t)
 
-	err := (&ConfigRuleUpdateCmdKong{UUID: "some-uuid"}).Run(nil)
+	err := (&ConfigRuleUpdateCmdKong{}).Run(nil)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -96,12 +96,10 @@ func TestConfigRuleUpdate_NoTTY_ClearErrorEvenWithUUID(t *testing.T) {
 	}
 }
 
-func TestConfigRuleDelete_NoTTY_ClearErrorEvenWithUUID(t *testing.T) {
-	// runRuleDelete always confirms with [y/N], so a UUID argument alone
-	// must not bypass the guard.
+func TestConfigRuleDelete_NoTTY_ClearError(t *testing.T) {
 	withNonTTYStdin(t)
 
-	err := (&ConfigRuleDeleteCmdKong{UUID: "some-uuid"}).Run(nil)
+	err := (&ConfigRuleDeleteCmdKong{}).Run(nil)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -139,14 +137,11 @@ func TestConfigRuleExport_NoTTYWithUUID_StillWorks(t *testing.T) {
 	}
 }
 
-func TestConfigProviderAdd_NoTTYPartialArgs_ClearError(t *testing.T) {
-	// Unlike config rule add, this one mixes given args with prompts for
-	// the rest instead of erroring on partial input — so the guard must
-	// cover every args count short of all four, not just zero.
-	withNonTTYStdin(t)
-
+func TestConfigProviderAdd_PartialArgs_ClearError(t *testing.T) {
+	// Same all-or-nothing shape as config rule add now: 1-3 positional args
+	// is always a clear error (never silently mixed with prompts for the
+	// rest), regardless of whether a TTY is attached.
 	cases := []ConfigProviderAddCmdKong{
-		{},
 		{Name: "openai"},
 		{Name: "openai", BaseURL: "https://api.openai.com"},
 		{Name: "openai", BaseURL: "https://api.openai.com", Token: "tok"},
@@ -156,9 +151,21 @@ func TestConfigProviderAdd_NoTTYPartialArgs_ClearError(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%+v: expected an error, got nil", cmd)
 		}
-		if !strings.Contains(err.Error(), "no TTY") {
-			t.Errorf("%+v: error = %q, want it to mention the missing TTY", cmd, err.Error())
+		if !strings.Contains(err.Error(), "partial arguments") {
+			t.Errorf("%+v: error = %q, want it to mention partial arguments", cmd, err.Error())
 		}
+	}
+}
+
+func TestConfigProviderAdd_NoArgsNoTTY_ClearError(t *testing.T) {
+	withNonTTYStdin(t)
+
+	err := (&ConfigProviderAddCmdKong{}).Run(nil)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no TTY") {
+		t.Errorf("error = %q, want it to mention the missing TTY", err.Error())
 	}
 }
 

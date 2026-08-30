@@ -297,8 +297,10 @@ Three rules for CLI commands that overlap with TUI functionality:
 2. **Partial flags** → error clearly (`"partial flags supplied; pass all
    of …, or run \`tingly-box tui rule\` for interactive mode"`). Better
    than hanging on a TTY read in a CI job.
-3. **No args** → fall back to bufio prompts. These are now a thin shim;
-   not actively developed. The canonical interactive UX is the TUI.
+3. **No args (or, for provider/rule update/delete, always)** → open the
+   TUI's Provider/Rule mode directly (`tui.RunProviderMode` /
+   `tui.RunRuleMode`) rather than a separate bufio implementation. See
+   §12 — this used to be a per-op bufio fallback; that's gone now.
 
 `--provider` accepts a UUID or an exact provider name. Ambiguous
 names (multiple providers with the same name) are rejected with the
@@ -314,20 +316,27 @@ entry-point handlers (`ConfigProviderInteractiveCmdKong`, etc.) now
 call `tui.Run{Provider,Rule}Mode` and `config interactive` redirects
 to `tui.RunTUI`.
 
-What's deliberately kept:
+The per-op bufio helpers this section used to describe as a kept,
+transitional fallback — `runProviderUpdateInteractive`,
+`runProviderDeleteInteractive`, `runRuleAddInteractive`,
+`runRuleUpdateService`, `runRuleDelete`, `pickServiceInteractive`,
+`promptForScenario`, plus `provider_add.go`'s partial-args wizard
+(`addProviderWithConfirmation`, `promptForAPIStyle`) — are gone.
+`config provider update`/`delete` and `config rule update`/`delete`
+now unconditionally open `tui.RunProviderMode`/`tui.RunRuleMode` (they
+lost their `UUID` argument in the process — there's no way to honor a
+preselected UUID through a generic TUI redirect, and silently ignoring
+it would be worse); `config provider add`/`config rule add` do the
+same when given no arguments, and error on partial arguments instead
+of silently mixing them with prompts for the rest (option (a) from the
+prior revision of this doc, applied — not option (b), since there was
+no reason to invent flag forms for operations whose whole point is
+picking something interactively).
 
-- The per-op bufio helpers (`runProviderUpdateInteractive`,
-  `runProviderDeleteInteractive`, `runProviderGetInteractive`,
-  `runRuleAddInteractive`, `runRuleUpdateService`,
-  `pickServiceInteractive`) are still wired to their flag-mode
-  subcommands (`config provider update`, `config rule add` with no
-  flags, etc.). They're the bufio fallback for the partial / no-flag
-  invocations of the CLI.
-
-This is a transitional state: the bufio helpers are no longer the
-canonical interactive UX (TUI is) but they're still the bufio
-fallback for the CLI's no-arg path. Future cleanups can either
-(a) reroute those CLI paths to TUI when stdin is a TTY, or
-(b) add full flag forms for the remaining ops (update / delete) and
-drop the bufio helpers entirely. Neither is needed right now —
-interactive users have TUI, scripts have flags.
+What's still bufio and deliberately so, because neither has a TUI
+equivalent to redirect to: `config provider get` (no uuid) — TUI's
+Provider→List already shows every provider, so a single-pick detail
+view isn't a mode TUI needs; and `config rule export` (no uuid) — TUI's
+Rule mode has no Export action at all. Both keep a minimal numbered
+picker (`runProviderGetInteractive`, `selectRuleInteractive`), TTY-
+guarded like everything else in this file.

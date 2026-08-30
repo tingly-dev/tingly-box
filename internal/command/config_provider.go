@@ -15,8 +15,8 @@ type ConfigProviderCmdKong struct {
 
 	Add    ConfigProviderAddCmdKong    `kong:"cmd,help='Add a new provider'"`
 	List   ConfigProviderListCmdKong   `kong:"cmd,help='List all providers'"`
-	Delete ConfigProviderDeleteCmdKong `kong:"cmd,help='Delete a provider (interactive)'"`
-	Update ConfigProviderUpdateCmdKong `kong:"cmd,help='Update a provider (interactive)'"`
+	Delete ConfigProviderDeleteCmdKong `kong:"cmd,help='Delete a provider (opens the TUI)'"`
+	Update ConfigProviderUpdateCmdKong `kong:"cmd,help='Update a provider (opens the TUI)'"`
 	Get    ConfigProviderGetCmdKong    `kong:"cmd,help='Get provider details by UUID'"`
 }
 
@@ -59,27 +59,28 @@ func (c *ConfigProviderListCmdKong) Run(appManager *AppManager) error {
 	return runProviderList(appManager)
 }
 
-// ConfigProviderDeleteCmdKong deletes a provider via interactive selection.
+// ConfigProviderDeleteCmdKong deletes a provider. There is no flag form —
+// picking which provider to delete is TUI/Web UI work, not something this
+// command reimplements with its own bufio picker.
 type ConfigProviderDeleteCmdKong struct{}
 
 func (c *ConfigProviderDeleteCmdKong) Run(appManager *AppManager) error {
-	// No flag form exists (no UUID arg on this command) — it's always
-	// interactive, so the check is unconditional, not just an empty-arg case.
 	if err := requireTTY("select and delete a provider via 'tingly-box tui' or the Web UI instead"); err != nil {
 		return err
 	}
-	return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
+	return tui.RunProviderMode(appManager.GetGlobalConfig())
 }
 
-// ConfigProviderUpdateCmdKong updates a provider via interactive selection.
+// ConfigProviderUpdateCmdKong updates a provider. Same reasoning as delete:
+// no flag form, opens the TUI's Provider mode (Edit) instead of a bespoke
+// bufio flow.
 type ConfigProviderUpdateCmdKong struct{}
 
 func (c *ConfigProviderUpdateCmdKong) Run(appManager *AppManager) error {
-	// Same as delete: no flag form, always interactive.
 	if err := requireTTY("select and update a provider via 'tingly-box tui' or the Web UI instead"); err != nil {
 		return err
 	}
-	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
+	return tui.RunProviderMode(appManager.GetGlobalConfig())
 }
 
 // ConfigProviderGetCmdKong displays a provider's details by UUID. Names are

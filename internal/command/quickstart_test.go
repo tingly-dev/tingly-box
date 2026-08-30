@@ -1,10 +1,7 @@
 package command
 
 import (
-	"bufio"
-	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -280,35 +277,6 @@ func TestQuickstartProviderTemplate(t *testing.T) {
 	if provider.Name != templateID {
 		t.Errorf("Expected name %s, got %s", templateID, provider.Name)
 	}
-}
-
-// TestPromptHelperFunctions tests the helper functions used by quickstart
-func TestPromptHelperFunctions(t *testing.T) {
-	// Test that promptForInput works with a simulated input
-	t.Run("promptForInput with simulated input", func(t *testing.T) {
-		input := "test-input\n"
-		stringReader := strings.NewReader(input)
-		reader := bufio.NewReader(stringReader)
-
-		// Capture output
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		result, err := promptForInput(reader, "Enter value: ", true)
-
-		// Restore stdout
-		w.Close()
-		os.Stdout = oldStdout
-		io.Copy(io.Discard, r) // Discard output
-
-		if err != nil {
-			t.Errorf("promptForInput failed: %v", err)
-		}
-		if result != "test-input" {
-			t.Errorf("Expected 'test-input', got '%s'", result)
-		}
-	})
 }
 
 // TestQuickstartConfigPersistence tests that configuration persists correctly
