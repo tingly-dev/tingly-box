@@ -71,9 +71,13 @@ a `transports/` package binding the real `openai`/`anthropic` SDKs, a
 examples, a dedicated CI workflow. That's a product, not a v1.
 
 **v1 ships a framework, not a product.** Two classes — `Server`, `Client` —
-enough to stand up the loop above end to end. Everything else (codegen,
-discovery, streaming, a second protocol, helpers) is a deliberate non-goal
-until someone has a concrete need for it.
+enough to stand up the loop above end to end. `Server` does speak both
+protocols tb supports (see below) — that one was worth doing now, since tb's
+own **dual provider** mechanism already exists to carry it and the
+alternative (pick one protocol, tell every caller to switch) pushes the
+limitation onto users of the provider instead of absorbing it in the SDK.
+Everything else (codegen, discovery, streaming, helpers) stays a deliberate
+non-goal until someone has a concrete need for it.
 
 ## Shape
 
@@ -119,9 +123,12 @@ pointed at tb, obtained from tb's own settings/token management UI. Colloquially
 "the admin API key", but nothing here is `/api/v1`-management-scoped; it is
 the model-auth credential the `/tingly/*` gateway already accepts.
 
-Only `chat()` ships in v1. No streaming, no `/v1/messages`, no admin-plane
+Only `chat()` ships in v1 — OpenAI wire only. No streaming, no admin-plane
 calls (list providers, create rule, …) — a plain `httpx`/`requests` call
 against tb's already-public API covers those if a handler ever needs them.
+`.tb` always speaks OpenAI to tb regardless of which protocol a `Server`
+request arrived on (below) — one outbound shape is enough; tb accepts
+OpenAI-style calls on any scenario no matter what the original caller used.
 
 ## `Server` — be a provider
 
@@ -132,7 +139,7 @@ srv = Server("my-sdk", tb_base_url="http://localhost:12580", tb_token=os.environ
 
 @srv.chat
 def handle(req):
-    return srv.tb.chat(model="claude-opus-4-8", messages=req.raw["messages"],
+    return srv.tb.chat(model="claude-opus-4-8", messages=req.as_openai_messages(),
                         scenario="custom")
 
 srv.run(port=8765)
@@ -142,38 +149,74 @@ srv.run(port=8765)
 
 - `GET /v1/models` — a one-entry model list (`srv.name`), so tb's
   "supports_models_endpoint" refresh can discover it, exactly like Ollama.
-- `POST /v1/chat/completions` — parses the body into a `ChatRequest`
-  (`model`, `messages`, plus `raw` for anything the two typed fields don't
-  cover), calls the registered handler, and returns the result:
-  - a `dict` is passed through as-is (the common case: it's already an
-    OpenAI ChatCompletion, e.g. straight from `srv.tb.chat(...)`);
-  - a `str` is wrapped into a minimal one-choice ChatCompletion envelope.
+- `POST /v1/chat/completions` (OpenAI) and `POST /v1/messages` (Anthropic) —
+  **both** parse the body into the same `ChatRequest` shape (`model`,
+  `messages`, plus `raw` for anything the two typed fields don't cover;
+  Anthropic's `system` field is folded in as a leading system message) and
+  call the **same** registered handler — a handler never branches on which
+  wire protocol the caller used. The result is then wrapped for whichever
+  endpoint was hit:
+  - on `/v1/chat/completions`: a `dict` is passed through as-is (the common
+    case — it's already an OpenAI ChatCompletion, e.g. straight from
+    `srv.tb.chat(...)`); a `str` is wrapped into a minimal one-choice
+    ChatCompletion envelope;
+  - on `/v1/messages`: a `dict` is reduced back to text (via the same
+    extraction `Client`'s `text_of()` does — it's assumed OpenAI-shaped,
+    since that's the only shape `.tb` ever hands back) and a `str` is used
+    directly; either way the result is wrapped into a minimal Anthropic
+    message envelope.
 
-No streaming, no `/v1/messages` (Anthropic protocol). Reasons, both
-deliberate scope cuts rather than oversights:
+Every `/v1/messages` request is treated as beta-shaped unconditionally —
+no `?beta=true` / `anthropic-version` branching. This mirrors what tb's own
+`vmodel` virtual server already does at its HTTP boundary ("accepts both and
+canonicalizes to the beta superset"): a real caller can't tell the
+difference in the response shape, so there is no second code path to
+maintain for v1.
 
-1. The Anthropic protocol side of a no-key self-hosted provider currently
-   hits a real bug: `anthropic-sdk-go`'s client treats an empty API key as
-   "go discover ambient credentials" and errors instead of sending an empty
-   header (the OpenAI SDK client sends the empty header, so that side works
-   today). `ai.NoKeySentinelToken` was the fix identified for this on the
-   prior branch but never merged. OpenAI-only sidesteps it entirely for v1.
-2. Streaming forces choices (SSE framing, partial-JSON handler contracts)
-   that don't matter until a handler exists that needs them.
+No streaming (still a deliberate cut — SSE framing and partial-JSON handler
+contracts don't matter until a handler exists that needs them), and no
+content blocks / tool calls in a handler's *response* — v1 handlers work
+with text on both wire protocols, matching the framework's larger "reduce
+to a relay/merge, not full protocol fidelity" scope.
+
+### The no-key + Anthropic-style footgun (and why it isn't a backend fix)
+
+The vendored `anthropic-sdk-go` treats a genuinely empty API key as "go
+discover ambient credentials" and errors before ever sending the request
+(the OpenAI SDK client sends an empty header as-is, so that side always
+worked). This looked, on the prior branch, like it needed a backend fix
+(`ai.NoKeySentinelToken`, never merged). It doesn't: self-hosted templates
+already leave the token field editable even with "no API key" checked
+(`optionalEditableToken` in `ProviderFormDialog.tsx`), and
+`CreateProvider`/`UpdateProvider` only *require* a token when
+`no_key_required` is false. So the fix is operational, not code: give the
+Anthropic side of the dual registration any non-empty placeholder token
+(e.g. `not-required`) — the SDK's credential-chain check is satisfied, the
+placeholder goes out over the wire, and `Server` ignores incoming auth
+entirely since it never checked it.
 
 ### Register it with tb
 
-Exactly the self-hosted flow, no new UI: Connect AI → **Self-hosted** →
-**Custom endpoint**, base URL `http://localhost:8765/v1`, no key. tb calls
-it like any other OpenAI-compatible provider from then on.
+As a **dual** provider (see `.design/dual-provider.md`) — the "Dual
+endpoint" card, not "Custom endpoint": Connect AI → **Self-hosted** →
+**Dual endpoint**, OpenAI URL `http://localhost:8765/v1`, Anthropic URL
+`http://localhost:8765` (the Anthropic SDK strips a trailing `/v1` if
+present, so either works, but the bare host matches how Bedrock/Vertex/
+Azure templates present their Anthropic side), same shared token (see
+above). tb then dispatches each inbound request to whichever URL matches
+the *client's own* protocol — exactly the mechanism dual-provider was built
+for, just with a Python process instead of Vertex/Bedrock behind it.
 
 ## Non-goals (v1)
 
 Deliberately deferred, not forgotten:
 
-- Anthropic protocol support for `Server` (needs the sentinel-token fix
-  above, or a second no-key path).
 - Streaming (`Server` responses, `Client.chat` as a stream).
+- Content blocks / tool calls in a handler's response (text only, both
+  protocols).
+- `Client` speaking Anthropic wire to tb (`.tb` is OpenAI-only; tb accepts
+  that on any scenario regardless of the original caller's protocol, so
+  there's no loss in staying single-shape outbound).
 - A generated control-plane client (`_api.py`-style) — only needed once a
   handler wants to *manage* tb (create providers/rules), not just call
   models through it.
@@ -186,9 +229,11 @@ Deliberately deferred, not forgotten:
 | File | Role |
 |---|---|
 | `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model |
-| `sdk/python/tingly/server.py` | `Server` — `@srv.chat`, `.tb`, `.run()` |
-| `sdk/python/tingly/types.py` | `Message`, `ChatRequest` |
+| `sdk/python/tingly/server.py` | `Server` — `@srv.chat`, `.tb`, `.run()`, both wire protocols |
+| `sdk/python/tingly/types.py` | `Message`, `ChatRequest`, `as_openai_messages()` |
 | `sdk/python/examples/relay.py` | Minimal pure-forwarder provider |
 | `sdk/python/examples/fanout.py` | Multi-model ask + merge |
 | `internal/data/providers.json` | Self-hosted provider templates (Ollama et al.) — the mechanism this SDK plugs into, unchanged |
-| `ai/provider.go` | `NoKeyRequired`, `GetAccessToken()` — why OpenAI-only avoids the Anthropic empty-key bug |
+| `.design/dual-provider.md` | The tb-side mechanism `Server`'s dual registration plugs into |
+| `frontend/src/components/ProviderFormDialog.tsx` | `optionalEditableToken` — why the no-key footgun has a UI-level workaround, not a backend one |
+| `internal/server/module/provider/handler.go` | `CreateProvider`'s `!req.NoKeyRequired && req.Token == ""` check — confirms a placeholder token is accepted |

@@ -1,14 +1,26 @@
 """Be a provider tb can call.
 
-`Server` speaks just enough OpenAI-compatible protocol
-(`GET /v1/models`, `POST /v1/chat/completions`, no streaming) to be
-registered in tb as a self-hosted provider — the same mechanism as Ollama
-or vLLM (Connect AI -> Self-hosted -> Custom endpoint, no key required).
+`Server` speaks just enough of both tb-supported protocols — OpenAI
+(`GET /v1/models`, `POST /v1/chat/completions`) and Anthropic
+(`POST /v1/messages`) — no streaming — to be registered in tb as a
+self-hosted **dual** provider: one process, both URLs, the same mechanism
+Connect AI's "Dual endpoint" card uses for any other provider (no key
+required).
 
-The handler you register does whatever it wants (pure relay, fan-out,
-lookups) and answers by returning either a plain string, or a dict that is
+Every request, on either endpoint, is reduced to one `ChatRequest` and
+handed to the single registered handler — a handler is written once and
+never branches on which wire protocol the caller used. `/v1/messages`
+requests are always handled as if beta (ignoring `anthropic-version` /
+`?beta=true` entirely), the same simplification tb's own vmodel virtual
+server already makes at its HTTP boundary.
+
+The handler answers by returning either a plain string, or a dict that is
 already an OpenAI-shaped chat completion (e.g. straight from
-`srv.tb.chat(...)`).
+`srv.tb.chat(...)` — `.tb` always speaks OpenAI to tb, regardless of which
+protocol the inbound request arrived on). A dict answering an
+`/v1/messages` request is reduced back to text and re-wrapped as an
+Anthropic message — v1 handlers work with text, not content blocks, on
+either side.
 """
 
 from __future__ import annotations
@@ -20,14 +32,14 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
 
-from .client import Client, DEFAULT_SCENARIO
+from .client import Client, DEFAULT_SCENARIO, text_of
 from .types import ChatRequest
 
 Handler = Callable[[ChatRequest], "str | dict"]
 
 
 class Server:
-    """A single-model OpenAI-compatible HTTP server.
+    """A single-model dual-protocol (OpenAI + Anthropic) HTTP server.
 
     Args:
         name: the model id this server advertises via `GET /v1/models`.
@@ -86,7 +98,12 @@ def _make_request_handler(srv: Server):
                 self._json(404, {"error": "not found"})
 
         def do_POST(self):
-            if self.path.rstrip("/") != "/v1/chat/completions":
+            path = self.path.rstrip("/")
+            if path == "/v1/chat/completions":
+                wire = "openai"
+            elif path == "/v1/messages":
+                wire = "anthropic"
+            else:
                 self._json(404, {"error": "not found"})
                 return
 
@@ -100,7 +117,12 @@ def _make_request_handler(srv: Server):
                 self._json(500, {"error": str(exc)})
                 return
 
-            self._json(200, result if isinstance(result, dict) else _wrap_text(req.model, result))
+            if wire == "openai":
+                payload = result if isinstance(result, dict) else _wrap_text_openai(req.model, result)
+            else:
+                text = result if isinstance(result, str) else text_of(result)
+                payload = _wrap_text_anthropic(req.model, text)
+            self._json(200, payload)
 
         def _json(self, status: int, payload: dict):
             body = json.dumps(payload).encode("utf-8")
@@ -113,7 +135,7 @@ def _make_request_handler(srv: Server):
     return RequestHandler
 
 
-def _wrap_text(model: str, text: str) -> dict:
+def _wrap_text_openai(model: str, text: str) -> dict:
     """Wrap a plain string handler reply into a minimal one-choice
     OpenAI ChatCompletion envelope."""
     return {
@@ -126,4 +148,19 @@ def _wrap_text(model: str, text: str) -> dict:
             "message": {"role": "assistant", "content": text},
             "finish_reason": "stop",
         }],
+    }
+
+
+def _wrap_text_anthropic(model: str, text: str) -> dict:
+    """Wrap a plain string handler reply into a minimal Anthropic Messages
+    envelope. Treated as beta-shaped unconditionally (see module docstring)."""
+    return {
+        "id": f"msg_{uuid.uuid4().hex[:24]}",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": 0, "output_tokens": len(text.split())},
     }

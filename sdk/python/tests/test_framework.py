@@ -77,7 +77,7 @@ class FrameworkTest(unittest.TestCase):
 
         @cls.srv.chat
         def handle(req):
-            return cls.srv.tb.chat(model="downstream-model", messages=req.raw["messages"])
+            return cls.srv.tb.chat(model="downstream-model", messages=req.as_openai_messages())
 
         threading.Thread(target=cls.srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
         _wait_until_serving(cls.srv)
@@ -108,6 +108,38 @@ class FrameworkTest(unittest.TestCase):
 
         self.assertEqual(text_of(body), "echo: hello")
         self.assertEqual(StubTB.calls[-1]["model"], "downstream-model")
+
+    def test_anthropic_endpoint_shares_the_same_handler_and_wraps_the_reply(self):
+        """The same registered handler serves /v1/messages: an Anthropic
+        request (system field + content-block message) is folded into the
+        same ChatRequest shape, and the handler's OpenAI-shaped tb reply is
+        reduced back to text and re-wrapped as an Anthropic message —
+        unconditionally, with no v1/beta branching."""
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.srv_port}/v1/messages",
+            data=json.dumps({
+                "model": "relay-test",
+                "max_tokens": 1024,
+                "system": "be terse",
+                "messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}],
+            }).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request) as resp:
+            body = json.loads(resp.read())
+
+        self.assertEqual(body["type"], "message")
+        self.assertEqual(body["role"], "assistant")
+        self.assertEqual(body["content"], [{"type": "text", "text": "echo: hello"}])
+        # The handler forwarded req.as_openai_messages() — the system field
+        # and the content-block message were both flattened to plain OpenAI
+        # message dicts before being sent on to the stub gateway.
+        self.assertEqual(StubTB.calls[-1]["model"], "downstream-model")
+        self.assertEqual(StubTB.calls[-1]["messages"], [
+            {"role": "system", "content": "be terse"},
+            {"role": "user", "content": "hello"},
+        ])
 
     def test_client_wraps_a_non_2xx_response_as_tingly_error(self):
         class AlwaysBadRequest(BaseHTTPRequestHandler):
