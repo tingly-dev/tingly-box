@@ -48,17 +48,17 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"status", []string{"status", "--help"}},
 		{"restart", []string{"restart", "--help"}},
 		{"open", []string{"open", "--help"}},
-		{"config-provider-add", []string{"config", "provider", "add", "--help"}},
-		{"config-provider-list", []string{"config", "provider", "list", "--help"}},
-		{"config-provider-delete", []string{"config", "provider", "delete", "--help"}},
-		{"config-provider-update", []string{"config", "provider", "update", "--help"}},
-		{"config-provider-get", []string{"config", "provider", "get", "--help"}},
-		{"config-rule-add", []string{"config", "rule", "add", "--help"}},
-		{"config-rule-list", []string{"config", "rule", "list", "--help"}},
-		{"config-rule-update", []string{"config", "rule", "update", "--help"}},
-		{"config-rule-delete", []string{"config", "rule", "delete", "--help"}},
-		{"config-rule-export", []string{"config", "rule", "export", "--help"}},
-		{"config-rule-import", []string{"config", "rule", "import", "--help"}},
+		{"provider-add", []string{"provider", "add", "--help"}},
+		{"provider-list", []string{"provider", "list", "--help"}},
+		{"provider-delete", []string{"provider", "delete", "some-uuid", "--help"}},
+		{"provider-update", []string{"provider", "update", "some-uuid", "--help"}},
+		{"provider-get", []string{"provider", "get", "some-uuid", "--help"}},
+		{"rule-add", []string{"rule", "add", "--help"}},
+		{"rule-list", []string{"rule", "list", "--help"}},
+		{"rule-update", []string{"rule", "update", "some-uuid", "--help"}},
+		{"rule-delete", []string{"rule", "delete", "some-uuid", "--help"}},
+		{"rule-export", []string{"rule", "export", "some-uuid", "--help"}},
+		{"rule-import", []string{"rule", "import", "--help"}},
 		{"agent-apply", []string{"agent", "apply", "--help"}},
 		{"agent-show", []string{"agent", "show", "--help"}},
 		{"agent-restore", []string{"agent", "restore", "--help"}},
@@ -96,64 +96,82 @@ func TestOAuthCommandRoutesByName(t *testing.T) {
 	}
 }
 
-// TestConfigProviderHasAllSubcommands ensures `config provider` exposes
+// TestProviderHasAllSubcommands ensures `provider` exposes
 // add/list/delete/update/get.
-func TestConfigProviderHasAllSubcommands(t *testing.T) {
+func TestProviderHasAllSubcommands(t *testing.T) {
+	// delete/update/get take a required positional UUID, which Kong
+	// validates even when only --help is requested — supply a placeholder
+	// so the check under test is subcommand routing, not arg validation.
+	needsUUID := map[string]bool{"delete": true, "update": true, "get": true}
 	for _, sub := range []string{"add", "list", "delete", "update", "get"} {
 		t.Run(sub, func(t *testing.T) {
 			_, parser := newTestParser(t)
-			if _, err := parser.Parse([]string{"config", "provider", sub, "--help"}); err != nil && !isHelpErr(err) {
-				t.Fatalf("config provider %s should parse: %v", sub, err)
+			args := []string{"provider", sub}
+			if needsUUID[sub] {
+				args = append(args, "some-uuid")
+			}
+			args = append(args, "--help")
+			if _, err := parser.Parse(args); err != nil && !isHelpErr(err) {
+				t.Fatalf("provider %s should parse: %v", sub, err)
 			}
 		})
 	}
 }
 
-// TestConfigRuleHasAllSubcommands ensures `config rule` exposes
+// TestRuleHasAllSubcommands ensures `rule` exposes
 // add/list/update/delete/export/import.
-func TestConfigRuleHasAllSubcommands(t *testing.T) {
+func TestRuleHasAllSubcommands(t *testing.T) {
+	// update/delete/export take a required positional UUID, which Kong
+	// validates even when only --help is requested — supply a placeholder
+	// so the check under test is subcommand routing, not arg validation.
+	needsUUID := map[string]bool{"update": true, "delete": true, "export": true}
 	for _, sub := range []string{"add", "list", "update", "delete", "export", "import"} {
 		t.Run(sub, func(t *testing.T) {
 			_, parser := newTestParser(t)
-			if _, err := parser.Parse([]string{"config", "rule", sub, "--help"}); err != nil && !isHelpErr(err) {
-				t.Fatalf("config rule %s should parse: %v", sub, err)
+			args := []string{"rule", sub}
+			if needsUUID[sub] {
+				args = append(args, "some-uuid")
+			}
+			args = append(args, "--help")
+			if _, err := parser.Parse(args); err != nil && !isHelpErr(err) {
+				t.Fatalf("rule %s should parse: %v", sub, err)
 			}
 		})
 	}
 }
 
-// TestConfigRuleExportCmdParsesAndForwardsFlags ensures `config rule export`
-// accepts its flags and exposes them on the Kong struct.
-func TestConfigRuleExportCmdParsesAndForwardsFlags(t *testing.T) {
+// TestRuleExportCmdParsesAndForwardsFlags ensures `rule export` accepts its
+// flags and exposes them on the Kong struct.
+func TestRuleExportCmdParsesAndForwardsFlags(t *testing.T) {
 	cli, parser := newTestParser(t)
 	if _, err := parser.Parse([]string{
-		"config", "rule", "export",
+		"rule", "export",
 		"some-uuid",
 		"--format", "base64",
 		"--output", "out.txt",
 	}); err != nil {
-		t.Fatalf("config rule export flags should parse: %v", err)
+		t.Fatalf("rule export flags should parse: %v", err)
 	}
-	if cli.Config.Rule.Export.UUID != "some-uuid" {
-		t.Errorf("UUID: %q", cli.Config.Rule.Export.UUID)
+	if cli.Rule.Export.UUID != "some-uuid" {
+		t.Errorf("UUID: %q", cli.Rule.Export.UUID)
 	}
-	if cli.Config.Rule.Export.Format != "base64" {
-		t.Errorf("Format: %q", cli.Config.Rule.Export.Format)
+	if cli.Rule.Export.Format != "base64" {
+		t.Errorf("Format: %q", cli.Rule.Export.Format)
 	}
-	if cli.Config.Rule.Export.Output != "out.txt" {
-		t.Errorf("Output: %q", cli.Config.Rule.Export.Output)
+	if cli.Rule.Export.Output != "out.txt" {
+		t.Errorf("Output: %q", cli.Rule.Export.Output)
 	}
 }
 
-// TestConfigRuleImportFromStdinWhenNoFile ensures `config rule import` with no
-// positional gets an empty File so runImport reads from stdin.
-func TestConfigRuleImportFromStdinWhenNoFile(t *testing.T) {
+// TestRuleImportFromStdinWhenNoFile ensures `rule import` with no positional
+// gets an empty File so runImport reads from stdin.
+func TestRuleImportFromStdinWhenNoFile(t *testing.T) {
 	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"config", "rule", "import"}); err != nil {
-		t.Fatalf("config rule import (no file) should parse: %v", err)
+	if _, err := parser.Parse([]string{"rule", "import"}); err != nil {
+		t.Fatalf("rule import (no file) should parse: %v", err)
 	}
-	if cli.Config.Rule.Import.File != "" {
-		t.Errorf("File should be empty, got %q", cli.Config.Rule.Import.File)
+	if cli.Rule.Import.File != "" {
+		t.Errorf("File should be empty, got %q", cli.Rule.Import.File)
 	}
 }
 
@@ -255,10 +273,10 @@ func TestAgentRestoreCommandExists(t *testing.T) {
 	}
 }
 
-// TestParentCommandDefaultsParse ensures `config`, `agent`, and `quota` parse with no
-// subcommand (their hidden default subcommands take over).
+// TestParentCommandDefaultsParse ensures `provider`, `rule`, `agent`, and
+// `quota` parse with no subcommand (their default subcommands take over).
 func TestParentCommandDefaultsParse(t *testing.T) {
-	for _, name := range []string{"config", "agent", "quota"} {
+	for _, name := range []string{"provider", "rule", "agent", "quota"} {
 		t.Run(name, func(t *testing.T) {
 			_, parser := newTestParser(t)
 			if _, err := parser.Parse([]string{name}); err != nil {
@@ -309,29 +327,29 @@ func TestAgentDefaultsToList(t *testing.T) {
 	}
 }
 
-// TestConfigProviderAddWithPositionalArgs ensures `config provider add`
-// accepts provider args.
-func TestConfigProviderAddWithPositionalArgs(t *testing.T) {
+// TestProviderAddWithPositionalArgs ensures `provider add` accepts provider
+// args.
+func TestProviderAddWithPositionalArgs(t *testing.T) {
 	cli, parser := newTestParser(t)
 	if _, err := parser.Parse([]string{
-		"config", "provider", "add", "my-provider",
+		"provider", "add", "my-provider",
 		"https://api.example.com",
 		"sk-xxx",
 		"openai",
 	}); err != nil {
-		t.Fatalf("config provider add with args should parse: %v", err)
+		t.Fatalf("provider add with args should parse: %v", err)
 	}
-	if cli.Config.Provider.Add.Name != "my-provider" {
-		t.Errorf("Name: %q", cli.Config.Provider.Add.Name)
+	if cli.Provider.Add.Name != "my-provider" {
+		t.Errorf("Name: %q", cli.Provider.Add.Name)
 	}
-	if cli.Config.Provider.Add.BaseURL != "https://api.example.com" {
-		t.Errorf("BaseURL: %q", cli.Config.Provider.Add.BaseURL)
+	if cli.Provider.Add.BaseURL != "https://api.example.com" {
+		t.Errorf("BaseURL: %q", cli.Provider.Add.BaseURL)
 	}
-	if cli.Config.Provider.Add.Token != "sk-xxx" {
-		t.Errorf("Token: %q", cli.Config.Provider.Add.Token)
+	if cli.Provider.Add.Token != "sk-xxx" {
+		t.Errorf("Token: %q", cli.Provider.Add.Token)
 	}
-	if cli.Config.Provider.Add.APIStyle != "openai" {
-		t.Errorf("APIStyle: %q", cli.Config.Provider.Add.APIStyle)
+	if cli.Provider.Add.APIStyle != "openai" {
+		t.Errorf("APIStyle: %q", cli.Provider.Add.APIStyle)
 	}
 }
 

@@ -1,7 +1,7 @@
 # Federated TUI: Design and Decisions
 
 > Audience: contributors touching `internal/command/tui/*` or the
-> `tingly-box tui` / `config` / `agent apply` CLI surface.
+> `tingly-box tui` / `provider` / `rule` / `agent apply` CLI surface.
 > This document records why `tui` became a mode menu (not just a
 > wizard), how the bubbletea modes and the flag-driven CLI split
 > responsibilities, and the gotchas (model-list fallback, back
@@ -17,6 +17,14 @@
 rules → agent. Everything else interactive lived in a parallel
 **bufio**-based text menu under `tingly-box config interactive` (and
 `config provider`, `config rule` with no subcommand).
+
+> **2026 update:** `config provider`/`config rule` and all bufio
+> fallbacks described in §11/§12 below are gone. `provider` and `rule`
+> are now top-level commands and a pure CI surface — every operation is
+> a single, fully-parameterized invocation with no interactive
+> fallback of any kind, not even TTY-gated. There is nothing left to
+> pick; picking something is `tingly-box tui` or Web UI work. §11/§12
+> are kept for historical context on how that surface got there.
 
 That left two divergent interactive surfaces:
 
@@ -67,12 +75,12 @@ tingly-box quickstart                # hidden alias — skips the mode menu,
                                      # for muscle memory / scripts
 ```
 
-`config interactive`, `config provider` (no subcommand), and
-`config rule` (no subcommand) now delegate into the corresponding TUI
-mode and print a one-line deprecation notice on stderr. The
-flag-driven CLI subcommands (`config provider add NAME URL TOKEN
-STYLE`, `config rule add --scenario … --request-model …`, etc.) are
-untouched and remain the CI path.
+`config interactive` and the no-subcommand `config provider`/`config
+rule` forms this section originally described are gone entirely (see
+the 2026 update above) — `provider`/`rule` are top-level commands with
+no bare/interactive form at all. The flag-driven subcommands (`provider
+add NAME URL TOKEN STYLE`, `rule add --scenario … --request-model …`,
+etc.) are the CI path and the only path.
 
 ---
 
@@ -277,66 +285,70 @@ mutation eventually shows up via the global logrus hook in
 
 ---
 
-## 11. CLI / CI mode
+## 11. CLI / CI mode (current design)
 
-TUI is the interactive surface; the flag-driven `config` and
-`agent` subcommands are the non-interactive surface. The full
-provisioning flow fits in three lines, no TTY required:
+`provider` and `rule` are top-level commands (`internal/command/provider_cmd.go`,
+`rule_cmd.go`) and, together with `agent apply`, are the entire
+non-interactive surface. TUI (`tingly-box tui`) and the Web UI are the
+entire interactive surface. There is no overlap and no fallback between
+them: `provider`/`rule` never prompt, never check for a TTY, and never
+redirect into the TUI — every invocation is a single, fully-parameterized
+operation, or it fails with a clear error naming the missing flag/arg.
+Picking something interactively is `tui`/Web UI work, full stop.
+
+The full provisioning flow fits in three lines, no TTY required:
 
 ```bash
-tingly-box config provider add openai https://api.openai.com $TOKEN openai
-tingly-box config rule add --scenario openai \
+tingly-box provider add openai https://api.openai.com $TOKEN openai
+tingly-box rule add --scenario openai \
   --request-model gpt-4o --provider openai --model gpt-4o
 tingly-box agent apply claude-code --provider openai --model gpt-4o -y
 ```
 
-Three rules for CLI commands that overlap with TUI functionality:
+Rules for these commands:
 
-1. **All four positional args / all flags** → run non-interactively,
-   no `(Y/n)` confirm. The user supplying the full config conveys intent.
-2. **Partial flags** → error clearly (`"partial flags supplied; pass all
-   of …, or run \`tingly-box tui rule\` for interactive mode"`). Better
-   than hanging on a TTY read in a CI job.
-3. **No args (or, for provider/rule update/delete, always)** → open the
-   TUI's Provider/Rule mode directly (`tui.RunProviderMode` /
-   `tui.RunRuleMode`) rather than a separate bufio implementation. See
-   §12 — this used to be a per-op bufio fallback; that's gone now.
+1. **`provider add`** takes all four positional args (name, base-url,
+   token, api-style) or none; anything partial is a clear error, never a
+   partial-prompt merge.
+2. **`provider update <uuid>`** / **`rule update <uuid>`** take a
+   required UUID plus one or more flags; update only touches the fields
+   explicitly passed, and errors if none were.
+3. **`provider delete <uuid>`** / **`rule delete <uuid>`** require
+   `-y`/`--yes`, checked before any DB lookup — a delete without `-y`
+   never even resolves whether the UUID exists.
+4. **`provider get <uuid>`** / **`rule export <uuid>`** always require
+   the UUID; there is no bare/picker form.
 
-`--provider` accepts a UUID or an exact provider name. Ambiguous
-names (multiple providers with the same name) are rejected with the
-matching UUIDs printed, so the user can pick by UUID.
+`--provider` (on `rule add`/`update`) accepts a UUID or an exact
+provider name. Ambiguous names (multiple providers with the same name)
+are rejected with the matching UUIDs printed, so the user can pick by
+UUID.
 
 ---
 
-## 12. Deprecation of the bufio menus
+## 12. History: from bufio menus to TUI redirect to pure CI
 
-`runConfigInteractiveMode`, `runProviderSubMenu`, `runRuleSubMenu`,
-and the `runRule{Export,Import}Interactive` shims were removed; their
-entry-point handlers (`ConfigProviderInteractiveCmdKong`, etc.) now
-call `tui.Run{Provider,Rule}Mode` and `config interactive` redirects
-to `tui.RunTUI`.
+This surface went through two intermediate designs before landing on
+the one in §11. Kept here for archaeology, not as current behavior.
 
-The per-op bufio helpers this section used to describe as a kept,
-transitional fallback — `runProviderUpdateInteractive`,
-`runProviderDeleteInteractive`, `runRuleAddInteractive`,
-`runRuleUpdateService`, `runRuleDelete`, `pickServiceInteractive`,
-`promptForScenario`, plus `provider_add.go`'s partial-args wizard
-(`addProviderWithConfirmation`, `promptForAPIStyle`) — are gone.
-`config provider update`/`delete` and `config rule update`/`delete`
-now unconditionally open `tui.RunProviderMode`/`tui.RunRuleMode` (they
-lost their `UUID` argument in the process — there's no way to honor a
-preselected UUID through a generic TUI redirect, and silently ignoring
-it would be worse); `config provider add`/`config rule add` do the
-same when given no arguments, and error on partial arguments instead
-of silently mixing them with prompts for the rest (option (a) from the
-prior revision of this doc, applied — not option (b), since there was
-no reason to invent flag forms for operations whose whole point is
-picking something interactively).
+**Bufio era.** `config interactive`, `config provider`/`config rule`
+(no subcommand), and per-op fallbacks (`runProviderUpdateInteractive`,
+`runRuleAddInteractive`, `pickServiceInteractive`, etc.) implemented
+their own numbered-menu prompts directly in `internal/command`,
+duplicating what the TUI's Provider/Rule modes already did better.
 
-What's still bufio and deliberately so, because neither has a TUI
-equivalent to redirect to: `config provider get` (no uuid) — TUI's
-Provider→List already shows every provider, so a single-pick detail
-view isn't a mode TUI needs; and `config rule export` (no uuid) — TUI's
-Rule mode has no Export action at all. Both keep a minimal numbered
-picker (`runProviderGetInteractive`, `selectRuleInteractive`), TTY-
-guarded like everything else in this file.
+**TUI-redirect era.** All of that bufio code was deleted and
+`config provider`/`config rule` (bare, or on update/delete with no
+args) instead called `tui.RunProviderMode`/`tui.RunRuleMode` directly,
+so there was exactly one interactive implementation. `config provider
+get`/`config rule export` kept a minimal bufio picker since TUI had no
+equivalent view to redirect to.
+
+**Current era (§11).** Even the TUI-redirect fallback was cut:
+`config` was renamed away entirely, `provider`/`rule` became top-level
+commands, and every subcommand now requires its full arguments — no
+bare form, no partial-arg prompt, no redirect into TUI. The reasoning:
+nobody manages providers/rules by hand through a CLI menu once a
+mature Web UI exists; the CLI's only remaining value is scriptable,
+argument-complete CI usage, so that's the only mode it supports.
+Anything interactive is `tui`/Web UI's job now, unconditionally.

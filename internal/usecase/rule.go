@@ -23,7 +23,7 @@ func NewRuleUseCase(cfg *serverconfig.Config) *RuleUseCase {
 
 // ErrRuleExists means a rule for the same (RequestModel, Scenario) pair
 // already exists. Carries the UUID of the existing rule so the caller can
-// point the user at it (CLI: "use `config rule update`"; TUI: "use Edit";
+// point the user at it (CLI: "use `rule update`"; TUI: "use Edit";
 // a future HTTP handler: 409 with UUID in the body) without this package
 // rendering any of that prose itself.
 type ErrRuleExists struct {

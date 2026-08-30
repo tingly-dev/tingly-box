@@ -38,7 +38,7 @@ server itself), `gui/*`. A use-case must never import a caller.
    endpoint is added later, so the API schema and the use-case contract are
    the same definition instead of a third hand-written shape.
 4. **Typed errors carrying data, not rendered text.** Example: `ErrRuleExists{UUID}`
-   lets the CLI print "use `config rule update`", the TUI print "use Edit",
+   lets the CLI print "use `rule update`", the TUI print "use Edit",
    and a future HTTP handler return 409 with the UUID in the body — from the
    same error value. Every current implementation in `internal/command` uses
    `fmt.Errorf` with hand-written prose baked into the message; that's the

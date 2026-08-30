@@ -8,7 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestResolveProviderRef covers the three branches that `config rule add`'s
+// TestResolveProviderRef covers the three branches that `rule add`'s
 // --provider flag depends on: UUID hit, unique name hit, ambiguous name
 // rejection. The third branch is the load-bearing one — silently picking
 // "the first match" would mis-route rules.
@@ -138,10 +138,10 @@ func TestRunRuleAddCI(t *testing.T) {
 	})
 }
 
-// TestConfigRuleAddCmdPartialFlagsErrors guards the "all or nothing" flag
-// contract — partial flags must not silently drop into bufio prompts, which
-// would hang a CI job on a TTY read.
-func TestConfigRuleAddCmdPartialFlagsErrors(t *testing.T) {
+// TestRuleAddCmdRequiresAllFlags guards the "all or nothing" flag contract —
+// rule add has no partial or interactive fallback of any kind; every flag
+// is required, full stop.
+func TestRuleAddCmdRequiresAllFlags(t *testing.T) {
 	am := newTestAppManager(t)
 	if _, err := addProviderForTest(am, "openai", "https://api.openai.com", "tok", protocol.APIStyleOpenAI); err != nil {
 		t.Fatalf("AddProvider: %v", err)
@@ -149,20 +149,21 @@ func TestConfigRuleAddCmdPartialFlagsErrors(t *testing.T) {
 
 	cases := []struct {
 		name string
-		cmd  ConfigRuleAddCmdKong
+		cmd  RuleAddCmdKong
 	}{
-		{"only scenario", ConfigRuleAddCmdKong{Scenario: "openai"}},
-		{"missing model", ConfigRuleAddCmdKong{Scenario: "openai", RequestModel: "gpt-4o", Provider: "openai"}},
-		{"missing provider", ConfigRuleAddCmdKong{Scenario: "openai", RequestModel: "gpt-4o", Model: "gpt-4o"}},
+		{"only scenario", RuleAddCmdKong{Scenario: "openai"}},
+		{"missing model", RuleAddCmdKong{Scenario: "openai", RequestModel: "gpt-4o", Provider: "openai"}},
+		{"missing provider", RuleAddCmdKong{Scenario: "openai", RequestModel: "gpt-4o", Model: "gpt-4o"}},
+		{"none given", RuleAddCmdKong{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.cmd.Run(am)
 			if err == nil {
-				t.Fatalf("expected partial-flags error")
+				t.Fatalf("expected a required-flags error")
 			}
-			if !strings.Contains(err.Error(), "partial flags") {
-				t.Errorf("error should mention 'partial flags'; got: %v", err)
+			if !strings.Contains(err.Error(), "required") {
+				t.Errorf("error should mention the flags are required; got: %v", err)
 			}
 		})
 	}

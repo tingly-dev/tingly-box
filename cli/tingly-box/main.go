@@ -42,8 +42,10 @@ type CLI struct {
 	// Create a double-click shortcut (desktop / start menu) to launch Tingly Box
 	Shortcut command.ShortcutCmdKong `kong:"cmd,help='Create a desktop/start-menu shortcut to launch Tingly Box'"`
 
-	// Configuration management (unified). Subcommands: provider, rule.
-	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, rules)'"`
+	// Provider / rule management: pure CI surface, one operation per
+	// invocation, never interactive — see provider_cmd.go / rule_cmd.go.
+	Provider command.ProviderCmdKong `kong:"cmd,help='Manage providers (list/add/get/update/delete)'"`
+	Rule     command.RuleCmdKong     `kong:"cmd,help='Manage routing rules (list/add/update/delete/export/import)'"`
 
 	// Agent commands
 	Agent command.AgentCmdKong `kong:"cmd,help='Agent configuration'"`
@@ -86,9 +88,9 @@ func main() {
 
 	// Parse CLI. NoExpandSubcommands keeps `--help` showing only the next
 	// level of subcommands rather than walking every leaf — so
-	// `tingly-box --help` lists `config` (not `config provider add` etc.),
-	// and `tingly-box config --help` lists `provider` / `rule` rather than
-	// every finer-grained operation.
+	// `tingly-box --help` lists `provider` / `rule` (not `provider add` etc.),
+	// and `tingly-box provider --help` lists list/add/get/update/delete
+	// rather than expanding each one's own flags.
 	parser, err := kong.New(&cli,
 		kong.Vars{
 			"version":   version,

@@ -1,7 +1,6 @@
 package command
 
 import (
-	"bufio"
 	"fmt"
 	"strings"
 
@@ -17,7 +16,7 @@ func runProviderList(appManager *AppManager) error {
 	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 
 	if len(providers) == 0 {
-		fmt.Println("No providers configured. Use 'config provider add' to add a provider.")
+		fmt.Println("No providers configured. Use 'provider add' to add a provider.")
 		return nil
 	}
 
@@ -38,39 +37,6 @@ func runProviderList(appManager *AppManager) error {
 	}
 
 	return nil
-}
-
-// runProviderGetInteractive runs interactive get mode. Selection happens by
-// menu number so we can pass the chosen provider's UUID downstream (names
-// aren't unique, so picking by name is ambiguous).
-func runProviderGetInteractive(appManager *AppManager, reader *bufio.Reader) error {
-	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
-
-	if len(providers) == 0 {
-		fmt.Println("❌ No providers configured.")
-		return nil
-	}
-
-	fmt.Println("\nView Provider Details")
-	fmt.Println("\nSelect a provider:")
-
-	for i, provider := range providers {
-		fmt.Printf("%d. %s (%s)\n", i+1, provider.Name, provider.UUID)
-	}
-
-	fmt.Print("\nEnter provider number or UUID: ")
-	input, _ := reader.ReadString('\n')
-	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-
-	var uuid string
-	var num int
-	if _, err := fmt.Sscanf(choice, "%d", &num); err == nil && num > 0 && num <= len(providers) {
-		uuid = providers[num-1].UUID
-	} else {
-		uuid = choice
-	}
-
-	return runProviderGet(appManager, uuid)
 }
 
 // runProviderGet displays provider details for the given UUID. Providers are

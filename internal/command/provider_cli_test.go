@@ -91,7 +91,7 @@ func TestRunProviderGetByUUID(t *testing.T) {
 }
 
 // TestRunProviderListDisplaysUUID verifies the list output includes each
-// provider's UUID. Operators need the UUID to pass to `config provider get`,
+// provider's UUID. Operators need the UUID to pass to `provider get`,
 // so hiding it would defeat the lookup-by-UUID design.
 func TestRunProviderListDisplaysUUID(t *testing.T) {
 	am := newTestAppManager(t)
@@ -193,21 +193,21 @@ func TestRunAddRejectsInvalidAPIStyle(t *testing.T) {
 	}
 }
 
-// TestConfigProviderGetCmdKongUsesUUID is a structural assertion: the field
-// the user supplies on the command line must be named UUID (not Name), so
-// the help text and behavior stay consistent with "providers are keyed by
+// TestProviderGetCmdKongUsesUUID is a structural assertion: the field the
+// user supplies on the command line must be named UUID (not Name), so the
+// help text and behavior stay consistent with "providers are keyed by
 // UUID". A regression here would silently rename the positional arg back
 // to a name.
-func TestConfigProviderGetCmdKongUsesUUID(t *testing.T) {
-	cfg := ConfigProviderGetCmdKong{UUID: "abc"}
+func TestProviderGetCmdKongUsesUUID(t *testing.T) {
+	cfg := ProviderGetCmdKong{UUID: "abc"}
 	if cfg.UUID != "abc" {
-		t.Errorf("ConfigProviderGetCmdKong.UUID round-trip failed: got %q", cfg.UUID)
+		t.Errorf("ProviderGetCmdKong.UUID round-trip failed: got %q", cfg.UUID)
 	}
 }
 
-// TestConfigProviderGetCmdKongRunWithUUID verifies Run forwards a supplied
-// UUID to runProviderGet (rather than dropping into interactive mode).
-func TestConfigProviderGetCmdKongRunWithUUID(t *testing.T) {
+// TestProviderGetCmdKongRunWithUUID verifies Run forwards a supplied UUID to
+// runProviderGet.
+func TestProviderGetCmdKongRunWithUUID(t *testing.T) {
 	am := newTestAppManager(t)
 
 	uuid, err := addProviderForTest(am, "p", "https://api.example.com", "tok", protocol.APIStyleOpenAI)
@@ -215,10 +215,10 @@ func TestConfigProviderGetCmdKongRunWithUUID(t *testing.T) {
 		t.Fatalf("AddProvider failed: %v", err)
 	}
 
-	cfg := ConfigProviderGetCmdKong{UUID: uuid}
+	cfg := ProviderGetCmdKong{UUID: uuid}
 	withSilencedStdout(t, func() {
 		if err := cfg.Run(am); err != nil {
-			t.Errorf("ConfigProviderGetCmdKong.Run with valid UUID returned error: %v", err)
+			t.Errorf("ProviderGetCmdKong.Run with valid UUID returned error: %v", err)
 		}
 	})
 }

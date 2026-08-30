@@ -4,37 +4,28 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tingly-dev/tingly-box/internal/command/tui"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
-// runAdd handles `config provider add`. Same all-or-nothing shape as
-// `config rule add`: all four positional args runs non-interactively (CI);
-// anything else opens the TUI's Provider mode (Add) rather than a bespoke
-// bufio flow that mixed given args with prompts for the rest — the
-// prior behavior let something you typed silently vanish behind the
-// following prompts, and duplicated what the TUI already does properly.
+// runAdd handles `provider add`. All four positional args are required —
+// this is a pure CI command with no interactive fallback of any kind
+// (unlike an earlier revision, this isn't gated on TTY presence either):
+// picking values interactively is `tingly-box tui` or Web UI work.
 func runAdd(appManager *AppManager, args []string) error {
-	if len(args) >= 4 {
-		var apiStyle APIStyle
-		switch strings.ToLower(args[3]) {
-		case "openai":
-			apiStyle = protocol.APIStyleOpenAI
-		case "anthropic":
-			apiStyle = protocol.APIStyleAnthropic
-		default:
-			return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
-		}
-		return addProviderCI(appManager, args[0], args[1], args[2], apiStyle)
+	if len(args) != 4 {
+		return fmt.Errorf("all four positional args are required: name, base-url, token, api-style; for interactive setup use 'tingly-box tui' or the Web UI")
 	}
-	if len(args) > 0 {
-		return fmt.Errorf("partial arguments supplied; for CI mode pass all four: name, base-url, token, api-style. For interactive use, run with no arguments")
+	var apiStyle APIStyle
+	switch strings.ToLower(args[3]) {
+	case "openai":
+		apiStyle = protocol.APIStyleOpenAI
+	case "anthropic":
+		apiStyle = protocol.APIStyleAnthropic
+	default:
+		return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
 	}
-	if err := requireTTY("pass all four positional args for non-interactive mode: name, base-url, token, api-style, or use 'tingly-box tui' for interactive setup"); err != nil {
-		return err
-	}
-	return tui.RunProviderMode(appManager.GetGlobalConfig())
+	return addProviderCI(appManager, args[0], args[1], args[2], apiStyle)
 }
 
 // addProviderCI adds a provider without prompting. Used when every required
