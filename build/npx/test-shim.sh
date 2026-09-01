@@ -76,6 +76,36 @@ grep -Eq "Version:[[:space:]]+$TAG" "$WORK/run.log" \
 	&& pass "T3: binary executed and reported $TAG" \
 	|| { fail "T3: version output missing:"; tail -10 "$WORK/run.log"; }
 
+# --- T4: stale version-cache sweep (Linux only: cache root is sandboxed) ----
+if [ "$(uname -s)" = "Linux" ]; then
+	echo "==> [T4] stale ~/.cache/tingly-box/<tag> dirs swept, guards respected"
+	CACHE_ROOT="$XDG_CACHE_HOME/tingly-box"
+	OLD1="$CACHE_ROOT/v0.0.1"       # oldest stale tag -> must be swept
+	OLD2="$CACHE_ROOT/v0.0.2"       # newest stale tag -> kept as rollback
+	FRESH="$CACHE_ROOT/v9.9.9"      # fresh mtime -> may be mid-download, kept
+	HUMANC="$CACHE_ROOT/backup"     # non-tag dir -> never touched
+	PTR="$CACHE_ROOT/current"       # file (future version pointer) -> kept
+	mkdir -p "$OLD1/bin" "$OLD2/bin" "$FRESH/bin" "$HUMANC"
+	echo x > "$PTR"
+	touch -t 202001010000 "$OLD1"
+	touch -t 202101010000 "$OLD2"
+	if run_shim; then pass "T4: shim ran (exit 0)"; else fail "T4: shim failed:"; tail -5 "$WORK/run.log"; fi
+	[ ! -d "$OLD1" ] && pass "T4: oldest stale tag dir swept" \
+		|| fail "T4: oldest stale tag dir NOT swept"
+	[ -d "$OLD2" ] && pass "T4: newest stale tag dir kept as rollback" \
+		|| fail "T4: rollback tag dir was deleted"
+	[ -d "$FRESH" ] && pass "T4: fresh tag dir untouched (concurrency guard)" \
+		|| fail "T4: fresh tag dir was deleted despite fresh mtime"
+	[ -d "$HUMANC" ] && pass "T4: non-tag dir untouched" \
+		|| fail "T4: non-tag dir was deleted"
+	[ -f "$PTR" ] && pass "T4: pointer file untouched" \
+		|| fail "T4: pointer file was deleted"
+	[ -d "$CACHE_ROOT/$TAG" ] && pass "T4: current tag dir kept" \
+		|| fail "T4: current tag dir was deleted"
+else
+	echo "==> [T4] skipped (non-Linux: cache root not sandboxed by XDG_CACHE_HOME)"
+fi
+
 echo
 if [ "$FAILED" -eq 0 ]; then
 	echo "🎉 All shim tests passed for $TAG"

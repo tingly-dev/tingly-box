@@ -41,8 +41,8 @@ global installs overwrite each other's bin links.
 
 ## Making `npm install -g` viable again
 
-Status: A + B implemented (2026-08), effective from the next publish; C is
-still a proposal. Today the README recommends `npx` only, because
+Status: A + B implemented (2026-08), E implemented (2026-09), effective from
+the next publish; C is still a proposal. Today the README recommends `npx` only, because
 `npm update -g tingly-box` intermittently fails with `ENOTEMPTY` and leaves the
 global install broken. The rest of this doc explains the failure and lays out
 the path to re-enable global installs.
@@ -53,11 +53,14 @@ the path to re-enable global installs.
   the cli one against the real release download, the bundle one against the
   packaged zips).
 - B is `cleanupRetiredInstallDirs()` in all three `build/npx/*/bin.js`.
+- E is `cleanupStaleBinaryCaches()` in all three `build/npx/*/bin.js`.
 - `build/npx/test-shim.sh <release-tag>` codifies the verification: it builds
   the published artifact the same way CI does (pin tag, esbuild bundle) and
   runs the matrix — sweep skipped under a fresh `node_modules` mtime, exact
-  retire-shape sweep under an old one (sibling/human dirs untouched), and an
-  end-to-end download + `version` against the real release. Run it before
+  retire-shape sweep under an old one (sibling/human dirs untouched), an
+  end-to-end download + `version` against the real release, and the
+  stale-cache sweep guards (rollback kept, fresh/non-tag/file entries
+  untouched; Linux only, where `XDG_CACHE_HOME` sandboxes the cache root). Run it before
   touching the shims or the publish workflow. CI runs it too: the
   `verify-npx-shim` job in `verify-build.yml` executes it on every release
   (and on manual runs against any tag).
@@ -174,12 +177,49 @@ users run `npm update -g` at all. Invert this:
    The stale `getLatestVersion()` in `bin.js` (it fetches the download URL and
    would fail to parse) gets deleted — "what is latest" is the Go side's job.
 3. `update` also GCs old `~/.cache/tingly-box/<tag>` dirs, keeping the
-   previous one as rollback.
+   previous one as rollback — same keep policy as E, which the shim already
+   applies on every launch; `update` just makes the GC immediate instead of
+   waiting for the next shim run.
 
 After C, the npm package is a thin installer/launcher that changes rarely
 (only when shim logic changes); users update via `tb update` and never touch
 `npm update -g`. This is the same endgame as Claude Code's native installer,
 reached without leaving npm as the distribution channel.
+
+#### E. GC stale binary caches
+
+Orthogonal to the install-dir problems above: every release downloads (cli,
+gui) or extracts (bundle) its binaries into a fresh
+`~/.cache/<package>/<tag>/` dir — by design, so updates never overwrite a
+binary in place (no Windows locked-exe problem, a running daemon keeps its
+old inode) — but nothing ever removed the old tag dirs, so the cache grew by
+one full binary per release forever.
+
+`cleanupStaleBinaryCaches()` in all three `build/npx/*/bin.js` sweeps them on
+every launch, once the current tag's binary is confirmed in place. Policy and
+guards:
+
+- Keep the tag in use, plus the most recently touched *other* tag dir as
+  rollback; sweep the rest.
+- Only directories whose name is exactly a release-tag shape (`latest` or
+  `vX.Y.Z[-pre]`, the `validateTransportVersion` grammar) are candidates —
+  files (e.g. plan C's future `current` pointer) and human-made dirs never
+  match.
+- Skip any candidate touched within the last hour: a concurrent
+  version-pinned `npx tingly-box@old` may be downloading into it right now.
+  True stale dirs get swept on a later launch — eventual cleanup, same intent
+  as B.
+- Deleting a binary still running from a swept dir is safe on POSIX (the
+  inode outlives the unlink); on Windows the locked exe makes `rmSync` throw,
+  the error is swallowed, and the sweep retries on a later launch.
+- Everything in try/catch; cleanup never blocks launch. Each package sweeps
+  only its own cache root (`tingly-box`, `tingly-box-gui`,
+  `tingly-box-bundle`).
+
+Note the sweep covers *our* cache only. npm's own `_npx` / `_cacache` stores
+also accumulate one entry per `npx tingly-box@<version>` invocation, but
+those are npm's caches with npm's own eviction (`npm cache` handles them);
+the shim has no business reaching into them.
 
 #### D. README posture
 
@@ -196,5 +236,6 @@ major versions). Once C lands, the update instruction becomes `tb update`.
    (A extended to the bundle package 2026-08.)
 2. Entry-semantics split + README/user-manual flip to "npm install -g
    supported" (see `cli-entry-semantics.md`). ✅ 2026-08
-3. C behind a normal feature PR (Go `update` command + shim `current`
+3. E in the next shim release (bin.js only). ✅ 2026-09
+4. C behind a normal feature PR (Go `update` command + shim `current`
    resolution); ship shim change in the same release train as the Go command.

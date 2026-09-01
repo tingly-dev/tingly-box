@@ -136,6 +136,38 @@ function cleanupRetiredInstallDirs() {
 	}
 }
 
+// Sweep stale versioned binary caches (<cacheRoot>/<tag>/) left behind by
+// earlier releases: every release extracts into its own tag dir and nothing
+// ever removed the old ones. Keeps the tag in use plus the most recently
+// touched other tag as rollback. See .design/npm.md.
+function cleanupStaleBinaryCaches(cacheRoot, keepTag) {
+	try {
+		// Exact release-tag dir shapes only ("latest" or vX.Y.Z[-pre]); files
+		// (e.g. a future `current` pointer) and human-made dirs never match.
+		const tagShape = /^(?:latest|v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
+		const candidates = [];
+		for (const entry of readdirSync(cacheRoot, { withFileTypes: true })) {
+			if (!entry.isDirectory() || !tagShape.test(entry.name)) continue;
+			if (entry.name === keepTag) continue;
+			const dirPath = join(cacheRoot, entry.name);
+			const mtimeMs = statSync(dirPath).mtimeMs;
+			// Fresh mtime: a concurrent launch (e.g. a version-pinned npx) may
+			// be extracting into it right now — skip, sweep on a later run.
+			if (Date.now() - mtimeMs < 60 * 60 * 1000) continue;
+			candidates.push({ dirPath, mtimeMs });
+		}
+		// Newest non-current tag survives as rollback; the rest go. A binary
+		// still running from a swept dir keeps its inode on POSIX; on Windows
+		// the locked exe makes rmSync throw and the sweep retries next launch.
+		candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+		for (const { dirPath } of candidates.slice(1)) {
+			rmSync(dirPath, { recursive: true, force: true });
+		}
+	} catch {
+		// Never block launch on cleanup.
+	}
+}
+
 // npx / `npm exec` sets npm_command=exec; a bin launched directly (e.g. from
 // `npm install -g`) does not. Entry-semantics rationale for everything below:
 // .design/cli-entry-semantics.md.
@@ -169,6 +201,9 @@ if (!existsSync(zipPath)) {
 
 // Extract binary and get path
 const binaryPath = await extractBinary(platformDir);
+
+// The binary for this tag is in place — old tag dirs are now safe to GC.
+cleanupStaleBinaryCaches(dirname(getCacheDir()), BINARY_RELEASE_BRANCH);
 
 try {
 	execFileSync(binaryPath, argsToUse, {

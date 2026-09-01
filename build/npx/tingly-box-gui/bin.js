@@ -320,6 +320,36 @@ function cleanupRetiredInstallDirs() {
 	}
 }
 
+// Sweep stale versioned app caches (<cacheRoot>/<tag>/) left behind by
+// earlier releases: every release downloads into its own tag dir and nothing
+// ever removed the old ones. Keeps the tag in use plus the most recently
+// touched other tag as rollback. See .design/npm.md.
+function cleanupStaleBinaryCaches(cacheRoot, keepTag) {
+	try {
+		// Exact release-tag dir shapes only ("latest" or vX.Y.Z[-pre]); files
+		// (e.g. a future `current` pointer) and human-made dirs never match.
+		const tagShape = /^(?:latest|v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
+		const candidates = [];
+		for (const entry of readdirSync(cacheRoot, { withFileTypes: true })) {
+			if (!entry.isDirectory() || !tagShape.test(entry.name)) continue;
+			if (entry.name === keepTag) continue;
+			const dirPath = join(cacheRoot, entry.name);
+			const mtimeMs = statSync(dirPath).mtimeMs;
+			// Fresh mtime: a concurrent launch (e.g. a version-pinned npx) may
+			// be downloading into it right now — skip, sweep on a later run.
+			if (Date.now() - mtimeMs < 60 * 60 * 1000) continue;
+			candidates.push({ dirPath, mtimeMs });
+		}
+		// Newest non-current tag survives as rollback; the rest go.
+		candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+		for (const { dirPath } of candidates.slice(1)) {
+			rmSync(dirPath, { recursive: true, force: true });
+		}
+	} catch {
+		// Never block launch on cleanup.
+	}
+}
+
 function formatBytes(bytes) {
 	if (bytes === 0) return "0 B";
 	const k = 1024;
@@ -389,6 +419,9 @@ function formatBytes(bytes) {
 
 		console.log(`✅ Downloaded and extracted to ${appPath}`);
 	}
+
+	// The app for this tag is in place — old tag dirs are now safe to GC.
+	cleanupStaleBinaryCaches(join(cacheDir(), "tingly-box-gui"), branchName);
 
 	console.log(`🔍 Launching app: ${appPath}`);
 
