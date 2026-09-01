@@ -85,6 +85,12 @@ class FrameworkTest(unittest.TestCase):
             # what the caller sent on the wire.
             return text_of(cls.srv.tb.chat(model="downstream-model", messages=body["messages"]))
 
+        @cls.srv.responses
+        def handle_responses(body):
+            # A plain string reply — exercises _wrap_text_openai_responses,
+            # no round trip through .tb needed for this one.
+            return f"responded to: {body['input']}"
+
         threading.Thread(target=cls.srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
         _wait_until_serving(cls.srv)
         cls.srv_port = cls.srv._httpd.server_address[1]
@@ -156,6 +162,27 @@ class FrameworkTest(unittest.TestCase):
             "messages": [{"role": "user", "content": "hi"}],
         })
         self.assertEqual(body["content"], [{"type": "text", "text": "echo: hi"}])
+
+    def test_responses_endpoint_gets_the_raw_body_and_wraps_a_string_reply(self):
+        """@srv.responses sees the raw OpenAI Responses request (the
+        `input` field, not `messages`) and a string reply comes back as a
+        minimal, wire-accurate Responses envelope."""
+        body = self._post("/v1/responses", {
+            "model": "relay-test",
+            "input": "hello",
+        })
+
+        self.assertEqual(body["object"], "response")
+        self.assertEqual(body["status"], "completed")
+        self.assertEqual(body["model"], "relay-test")
+        self.assertEqual(body["output"][0]["type"], "message")
+        self.assertEqual(body["output"][0]["role"], "assistant")
+        self.assertEqual(body["output"][0]["content"][0]["type"], "output_text")
+        self.assertEqual(body["output"][0]["content"][0]["text"], "responded to: hello")
+
+    def test_responses_endpoint_also_answers_without_the_v1_prefix(self):
+        body = self._post("/responses", {"model": "relay-test", "input": "hi again"})
+        self.assertEqual(body["output"][0]["content"][0]["text"], "responded to: hi again")
 
     def test_client_wraps_a_non_2xx_response_as_tingly_error(self):
         class AlwaysBadRequest(BaseHTTPRequestHandler):

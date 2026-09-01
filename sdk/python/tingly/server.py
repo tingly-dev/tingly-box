@@ -1,25 +1,43 @@
 """Be a provider tb can call.
 
 `Server` speaks just enough of tb's supported protocols to be registered as
-a self-hosted provider — OpenAI (`GET /v1/models`, `POST /v1/chat/completions`)
-via `@srv.chat`, and/or Anthropic (`POST /v1/messages`) via `@srv.messages`.
-No streaming. Both endpoints also answer without the `/v1` prefix
-(`/chat/completions`, `/messages`) — the one bit of path leniency this
-prototype bothers with, since which shape a caller's configured base URL
-expects is exactly the kind of detail not worth troubleshooting by hand.
+a self-hosted provider — OpenAI Chat Completions (`GET /v1/models`,
+`POST /v1/chat/completions`) via `@srv.chat`, OpenAI Responses
+(`POST /v1/responses`) via `@srv.responses`, and/or Anthropic
+(`POST /v1/messages`) via `@srv.messages`. tb itself dispatches to an
+outbound provider over any of these three shapes (see
+`.design/openai-endpoint-routing.md`), so a `Server` that wants to stand in
+for any kind of provider needs all three available. No streaming. Every
+endpoint also answers without the `/v1` prefix (`/chat/completions`,
+`/responses`, `/messages`) — the one bit of path leniency this prototype
+bothers with, since which shape a caller's configured base URL expects is
+exactly the kind of detail not worth troubleshooting by hand.
 
-This is a prototype, not a protocol-translation layer: the two decorators
+This is a prototype, not a protocol-translation layer: the three decorators
 are independent, and there is **no bridging between them**, and **no typed
 wrapper around the request either** — a handler gets exactly the raw
-parsed JSON body the caller sent, on both endpoints. `@srv.chat` sees the
-real OpenAI chat-completion request; `@srv.messages` sees the real
-Anthropic messages request — content blocks, `system`, tool defs and all.
-A handler that wants to serve both protocols registers both decorators and
+parsed JSON body the caller sent, on every endpoint. `@srv.chat` sees the
+real OpenAI chat-completion request; `@srv.responses` sees the real OpenAI
+Responses request; `@srv.messages` sees the real Anthropic messages
+request — content blocks, `system`, tool defs and all. A handler that wants
+to serve more than one protocol registers more than one decorator and
 writes native code for each against the real shape; the framework does not
-invent an in-between shape to hide either one behind. Every `/v1/messages`
+invent an in-between shape to hide any of them behind. Every `/v1/messages`
 (or `/messages`) request is handled as if beta unconditionally — no
 `?beta=true` / `anthropic-version` branching — the same simplification
 tb's own vmodel virtual server already makes at its HTTP boundary.
+
+The request's *type hint* (not its runtime shape — that's still a plain
+dict) points at the real upstream SDK types: `openai`'s
+`CompletionCreateParamsBase` / `ResponseCreateParamsBase` and
+`anthropic`'s `MessageCreateParamsBase`. All three are `TypedDict`s in
+their respective SDKs — a pure static-typing construct with zero runtime
+behavior, so referencing them costs nothing at runtime and doesn't
+reintroduce the shape this module otherwise refuses to invent: nothing is
+wrapped, validated, or converted, only annotated. The imports are guarded
+by `TYPE_CHECKING` so `openai`/`anthropic` are never required at runtime —
+only a type checker or an editor with those packages installed benefits
+from them.
 
 Each handler answers by returning either a plain string (wrapped into a
 minimal one-choice envelope in that handler's own protocol — a local
@@ -35,15 +53,23 @@ import os
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .client import Client, DEFAULT_SCENARIO
 
-Handler = Callable[[dict], "str | dict"]
+if TYPE_CHECKING:
+    from anthropic.types.message_create_params import MessageCreateParamsBase
+    from openai.types.chat.completion_create_params import CompletionCreateParamsBase
+    from openai.types.responses.response_create_params import ResponseCreateParamsBase
+
+ChatHandler = Callable[["CompletionCreateParamsBase"], "str | dict"]
+ResponsesHandler = Callable[["ResponseCreateParamsBase"], "str | dict"]
+MessagesHandler = Callable[["MessageCreateParamsBase"], "str | dict"]
 
 
 class Server:
-    """A single-model HTTP server, OpenAI and/or Anthropic protocol.
+    """A single-model HTTP server, speaking any mix of OpenAI Chat,
+    OpenAI Responses, and Anthropic protocol.
 
     Args:
         name: the model id this server advertises via `GET /v1/models`.
@@ -62,22 +88,30 @@ class Server:
         tb_scenario: str = DEFAULT_SCENARIO,
     ):
         self.name = name
-        self._chat_handler: Handler | None = None
-        self._messages_handler: Handler | None = None
+        self._chat_handler: ChatHandler | None = None
+        self._responses_handler: ResponsesHandler | None = None
+        self._messages_handler: MessagesHandler | None = None
         self._httpd: ThreadingHTTPServer | None = None
 
         base_url = tb_base_url or os.environ.get("TINGLY_BASE_URL")
         token = tb_token or os.environ.get("TINGLY_TOKEN")
         self.tb = Client(base_url, token, scenario=tb_scenario) if base_url else None
 
-    def chat(self, fn: Handler) -> Handler:
-        """Decorator registering the OpenAI-protocol handler
+    def chat(self, fn: ChatHandler) -> ChatHandler:
+        """Decorator registering the OpenAI Chat Completions handler
         (`POST /v1/chat/completions`). `fn` receives the raw parsed request
         body — the real OpenAI chat-completion request, unmodified."""
         self._chat_handler = fn
         return fn
 
-    def messages(self, fn: Handler) -> Handler:
+    def responses(self, fn: ResponsesHandler) -> ResponsesHandler:
+        """Decorator registering the OpenAI Responses handler
+        (`POST /v1/responses`). `fn` receives the raw parsed request body —
+        the real OpenAI Responses request, unmodified."""
+        self._responses_handler = fn
+        return fn
+
+    def messages(self, fn: MessagesHandler) -> MessagesHandler:
         """Decorator registering the Anthropic-protocol handler
         (`POST /v1/messages`). `fn` receives the raw parsed request body —
         the real Anthropic messages request, unmodified — and returns
@@ -87,8 +121,10 @@ class Server:
         return fn
 
     def run(self, host: str = "0.0.0.0", port: int = 8765):
-        if self._chat_handler is None and self._messages_handler is None:
-            raise RuntimeError("no handler registered — use @srv.chat and/or @srv.messages before srv.run()")
+        if self._chat_handler is None and self._responses_handler is None and self._messages_handler is None:
+            raise RuntimeError(
+                "no handler registered — use @srv.chat, @srv.responses, and/or @srv.messages before srv.run()"
+            )
 
         self._httpd = ThreadingHTTPServer((host, port), _make_request_handler(self))
         bound_port = self._httpd.server_address[1]
@@ -130,7 +166,9 @@ def _make_request_handler(srv: Server):
             body = json.loads(self.rfile.read(length) or b"{}")
 
             if path == "/chat/completions":
-                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered", _wrap_text_openai)
+                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered", _wrap_text_openai_chat)
+            elif path == "/responses":
+                self._dispatch(srv._responses_handler, body, "no @srv.responses handler registered", _wrap_text_openai_responses)
             elif path == "/messages":
                 self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered", _wrap_text_anthropic)
             else:
@@ -158,7 +196,7 @@ def _make_request_handler(srv: Server):
     return RequestHandler
 
 
-def _wrap_text_openai(model: str, text: str) -> dict:
+def _wrap_text_openai_chat(model: str, text: str) -> dict:
     """Wrap a plain string handler reply into a minimal one-choice
     OpenAI ChatCompletion envelope."""
     return {
@@ -171,6 +209,28 @@ def _wrap_text_openai(model: str, text: str) -> dict:
             "message": {"role": "assistant", "content": text},
             "finish_reason": "stop",
         }],
+    }
+
+
+def _wrap_text_openai_responses(model: str, text: str) -> dict:
+    """Wrap a plain string handler reply into a minimal OpenAI Responses
+    envelope — one completed message output item, no tool calls."""
+    return {
+        "id": f"resp_{uuid.uuid4().hex[:24]}",
+        "object": "response",
+        "created_at": int(time.time()),
+        "model": model,
+        "status": "completed",
+        "output": [{
+            "id": f"msg_{uuid.uuid4().hex[:24]}",
+            "type": "message",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": text, "annotations": []}],
+        }],
+        "parallel_tool_calls": False,
+        "tool_choice": "auto",
+        "tools": [],
     }
 
 
