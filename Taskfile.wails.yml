@@ -116,12 +116,15 @@ tasks:
       #   GUI_CONFIG_DIR=/other/dir GUI_PORT=12345 task wails:dev
       DEV_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default "./.tingly-box"}}'
       DEV_PORT: '{{.GUI_PORT | default "12333"}}'
+    # env must be task-level: go-task silently ignores a per-cmd `env:` block,
+    # so a cmd-level one never reached `wails3 dev` and the spawned
+    # `wails3 task wails:run` fell back to the default config dir/port.
+    env:
+      GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
+      GUI_PORT: '{{.DEV_PORT}}'
     cmds:
       - task: codegen
-      - cmd: wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
-        env:
-          GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
-          GUI_PORT: '{{.DEV_PORT}}'
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   wails:debug:
     summary: Runs the application in dev mode without codegen (fast restart)
@@ -130,11 +133,12 @@ tasks:
     vars:
       DEV_CONFIG_DIR: '{{.GUI_CONFIG_DIR | default "./.tingly-box"}}'
       DEV_PORT: '{{.GUI_PORT | default "12333"}}'
+    # Task-level env, same reason as wails:dev.
+    env:
+      GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
+      GUI_PORT: '{{.DEV_PORT}}'
     cmds:
-      - cmd: wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
-        env:
-          GUI_CONFIG_DIR: '{{.DEV_CONFIG_DIR}}'
-          GUI_PORT: '{{.DEV_PORT}}'
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   wails:binding:
     deps:
