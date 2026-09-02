@@ -13,11 +13,21 @@ import (
 // =============================================
 
 // MetadataUserID represents the JSON structure for metadata.user_id
-// This matches Claude Code's format (>= 2.1.78)
+// This matches Claude Code's format (>= 2.1.78), verified against 2.1.258:
+//
+//	{"device_id":"<64 hex>","account_uuid":"<uuid or empty>","session_id":"<uuid>"[,"parent_session_id":"<uuid>"]}
+//
+// Field order is what the CLI's JSON.stringify produces and is preserved by
+// the struct order here. parent_session_id is attached by subagent (Agent
+// tool) sessions only; it is passed through untouched so a subagent request
+// keeps its lineage after tingly-box rewrites device/account. (2.1.258 also
+// has a remote-only "tk" turn-attribution key that never appears on a local
+// CLI and is intentionally not modelled.)
 type MetadataUserID struct {
-	DeviceID    string `json:"device_id"`
-	AccountUUID string `json:"account_uuid"`
-	SessionID   string `json:"session_id"`
+	DeviceID        string `json:"device_id"`
+	AccountUUID     string `json:"account_uuid"`
+	SessionID       string `json:"session_id"`
+	ParentSessionID string `json:"parent_session_id,omitempty"`
 }
 
 // legacyUserIDRegex matches the legacy user_id format:

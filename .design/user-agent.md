@@ -105,7 +105,7 @@ vendor 特种 client 恒定:
 |-------------|------|:---:|:---:|--------------|------|
 | 通用 OpenAI（`NewOpenAIClient`,无 vendor 覆盖) | A 通用 | ✅ | ✅ | rule/scenario > client 入站 > openai-go SDK 默认 | `internal/client/openai.go` |
 | 通用非-OAuth Anthropic（`NewAnthropicClient` else 分支) | A 通用 | ✅ | ✅ | rule/scenario > client 入站 > anthropic-sdk-go SDK 默认 | `internal/client/anthropic.go` |
-| Claude Code OAuth（`claudeRoundTripper`) | B 特种 | ❌ | ❌ | `claude-cli/2.1.86 (external, cli)`(决定性) | `internal/client/claude_round_tripper.go:135` |
+| Claude Code OAuth（`ClaudeClient`) | B 特种 | ❌ | ❌ | `claude-cli/<constant.ClaudeCodeVersion> (external, cli)`(决定性，当前 2.1.258；见 `claude-code-client-compat.md`) | `internal/client/claude_round_tripper.go` / `internal/constant/claude_code.go` |
 | Kimi（`NewKimiClient`) | B 特种 | ❌ | ❌ | `KimiCLI/1.10.6`(决定性) | `internal/client/kimi_round_tripper.go:13` |
 | Gemini（`NewGeminiClient`) | B 特种 | ❌ | ❌ | `GeminiCLI/0.1.0 (linux; amd64)`(决定性) | `internal/client/gemini_client.go:145` |
 | Antigravity（`NewAntigravityClient`) | B 特种 | ❌ | ❌ | `antigravity/1.11.5 windows/amd64`(决定性) | `internal/client/antigravity_client.go:146` |

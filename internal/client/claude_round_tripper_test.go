@@ -6,6 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // mockTransport is a minimal http.RoundTripper for testing.
@@ -17,27 +18,37 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m.roundTrip(req)
 }
 
-// Test that the SDK middleware approach still applies the correct headers
+// Pinned client identity: every value here was captured from the official
+// 2.1.258 native binary (see .design/claude-code-client-compat.md §2).
 func TestClaudeSDKHeaders(t *testing.T) {
-	assert.Equal(t, "claude-cli/2.1.86 (external, cli)", claudeCLIUserAgent)
-	assert.Contains(t, claudeCLIUserAgent, "2.1.86")
-	assert.Equal(t, "v24.3.0", stainlessRuntimeVersion)
+	assert.Equal(t, "claude-cli/2.1.258 (external, cli)", claudeCLIUserAgent)
+	assert.Equal(t, "claude-cli/"+constant.ClaudeCodeVersion+" (external, cli)", claudeCLIUserAgent)
+	assert.Equal(t, "v26.3.0", stainlessRuntimeVersion)
+	assert.Equal(t, "0.112.1", stainlessPackageVersion)
+	assert.Equal(t, "node", stainlessRuntime)
+	assert.Equal(t, "js", stainlessLang)
+	assert.Equal(t, "0", stainlessRetryCount)
 	assert.Equal(t, "cli", claudeXApp)
 	assert.Equal(t, "600", stainlessTimeout)
+	assert.Equal(t, "2023-06-01", anthropicVersion)
 }
 
-func TestAnthropicBetaFlags(t *testing.T) {
-	for _, flag := range []string{
-		"claude-code-20250219",
-		"oauth-2025-04-20",
-		"interleaved-thinking-2025-05-14",
-		"structured-outputs-2025-12-15",
-		"fast-mode-2026-02-01",
-		"redact-thinking-2026-02-12",
-		"token-efficient-tools-2026-03-28",
-	} {
-		assert.Contains(t, anthropicBeta, flag, "anthropicBeta should contain %s", flag)
-	}
+// The JS SDK maps process.platform / process.arch to display names; the Go
+// runtime names must be translated, not forwarded.
+func TestStainlessOSArchNames(t *testing.T) {
+	assert.Equal(t, "MacOS", stainlessOSName("darwin"))
+	assert.Equal(t, "Linux", stainlessOSName("linux"))
+	assert.Equal(t, "Windows", stainlessOSName("windows"))
+	assert.Equal(t, "FreeBSD", stainlessOSName("freebsd"))
+	assert.Equal(t, "Other:plan9", stainlessOSName("plan9"))
+	assert.Equal(t, "Unknown", stainlessOSName(""))
+
+	assert.Equal(t, "x64", stainlessArchName("amd64"))
+	assert.Equal(t, "arm64", stainlessArchName("arm64"))
+	assert.Equal(t, "x32", stainlessArchName("386"))
+	assert.Equal(t, "arm", stainlessArchName("arm"))
+	assert.Equal(t, "other:riscv64", stainlessArchName("riscv64"))
+	assert.Equal(t, "unknown", stainlessArchName(""))
 }
 
 func TestRestoreToolNamesInMessage(t *testing.T) {

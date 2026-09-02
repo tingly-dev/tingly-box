@@ -5,15 +5,21 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 // CleanHeaderTransform cleans system messages and message content by:
 //  1. Stripping injected billing header blocks (x-anthropic-billing-header).
+//     The block's format and how tingly-box rebuilds it for Claude OAuth
+//     providers is documented in .design/claude-code-client-compat.md §4.
 //  2. Normalizing steganographic markers embedded by Claude Code to encode
 //     user geolocation (look-alike Unicode apostrophes and date separators),
 //     both in the system field and inside <system-reminder> blocks in the
-//     first message of the messages array.
+//     first message of the messages array. Neither the 2.1.86 nor the
+//     2.1.258 bundle still carries the Asia/Shanghai marker code (verified
+//     by string search and a TZ=Asia/Shanghai capture); the normalizer is
+//     kept as a zero-cost defense in case it returns.
 //  3. For Anthropic-to-Codex Responses conversion only, stripping Claude Code
 //     identity/capability preambles that otherwise pollute Codex instructions.
 //
@@ -123,8 +129,8 @@ func cleanSystemMessages(blocks []anthropic.TextBlockParam, stripClaudeCodePream
 	}
 	result := make([]anthropic.TextBlockParam, 0, len(blocks))
 	for _, block := range blocks {
-		// Skip billing header messages
-		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
+		// Skip billing header messages (same detector the injector uses)
+		if ops.IsBillingHeaderText(block.Text) {
 			continue
 		}
 
@@ -154,8 +160,8 @@ func cleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam, stripClaudeC
 	}
 	result := make([]anthropic.BetaTextBlockParam, 0, len(blocks))
 	for _, block := range blocks {
-		// Skip billing header messages
-		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
+		// Skip billing header messages (same detector the injector uses)
+		if ops.IsBillingHeaderText(block.Text) {
 			continue
 		}
 
