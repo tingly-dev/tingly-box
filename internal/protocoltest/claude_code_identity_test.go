@@ -2,6 +2,7 @@ package protocoltest
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -136,8 +137,14 @@ func TestClaudeCodeIdentity_EndToEnd(t *testing.T) {
 	if len(upBody.System) != 2 {
 		t.Fatalf("system blocks = %d, want 2 (billing header rebuilt in place): %+v", len(upBody.System), upBody.System)
 	}
-	if want := "x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000; cc_is_subagent=true;"; upBody.System[0].Text != want {
+	// cch is the xxHash64 of the wire body patched in by the client
+	// middleware, so only its shape is asserted here; the exact algorithm is
+	// pinned in internal/client/claude_cch_test.go against live captures.
+	if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.258\.8ee; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(upBody.System[0].Text) {
 		t.Errorf("system[0] =\n  %s\nwant\n  %s", upBody.System[0].Text, want)
+	}
+	if strings.Contains(upBody.System[0].Text, "cch=00000;") {
+		t.Errorf("cch placeholder reached the wire unpatched: %s", upBody.System[0].Text)
 	}
 	if !strings.HasPrefix(upBody.System[1].Text, "You are Claude Code") {
 		t.Errorf("system[1] preamble lost: %q", upBody.System[1].Text)

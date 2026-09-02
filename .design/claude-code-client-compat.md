@@ -21,7 +21,7 @@
 | `X-Stainless-OS` / `-Arch` | Go 的 `linux`/`amd64`（❌ 与真实客户端不一致） | SDK 映射名 `Linux`/`x64`、`MacOS`/`arm64` | `stainlessOSName` / `stainlessArchName` |
 | `x-stainless-helper-method: stream` | 发送（❌ 真实客户端从不发） | 不发送 | — |
 | `anthropic-beta` | 固定字符串（含已废弃的 `token-efficient-tools-2026-03-28`） | 按 model + 请求体 + 入站白名单**逐请求合成**，按官方 push 顺序输出 | `internal/client/claude_betas.go` |
-| billing header `cch` | 随机 5 hex（❌ 官方恒为 `00000`） | `cch=00000;` 常量；保留入站的 `cc_workload / cc_is_subagent / cc_prev_req / cc_prompt_id` | `internal/protocol/ops/claude_code_billing_header.go` |
+| billing header `cch` | 每请求随机 5 hex（❌ 官方是请求体的 xxHash64） | JS 层占位 `cch=00000;`，网络层按官方算法改写为 `xxHash64_zig(body′, seed) & 0xFFFFF`；保留入站的 `cc_workload / cc_is_subagent / cc_prev_req / cc_prompt_id` | `internal/client/claude_cch.go`（哈希）+ `internal/protocol/ops/claude_code_billing_header.go`（占位） |
 | fingerprint 输入文本 | 首条 user 消息的第一个 text block | 跳过 `<system-reminder>` 块后的第一个 text block（2.1.258 把 reminder 变成了 meta 消息） | `ops.extractFirstUserMessageText` |
 | `metadata.user_id` | `{device_id, account_uuid, session_id}` | 同上 + 透传 `parent_session_id`（子 agent） | `ops.MetadataUserID` |
 | 子 agent 头 | 无 | 透传 `x-claude-code-agent-id` / `x-claude-code-parent-agent-id` | `typ.ClaudeCodeClientHints` |
@@ -158,6 +158,8 @@ env -i PATH=$PATH TERM=xterm HOME=$PWD/h \
 - `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 会跳过 GrowthBook 拉取，所有 `tengu_*` 灰度 gate 走默认值
   （例如 `structured-outputs` 的 `tengu_tool_pear` 默认 false）。线上用户拿到的 gate 值不可知。
 - 假 API 若不给 `request-id` 响应头也没关系，但真实服务会给，2.1.258 会把它作为下一请求的 `cc_prev_req`（仅直连时）。
+- 加 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` 才能看到直连专属字段（`cch`、`cc_prompt_id`、`cc_prev_req`）。
+  **原生层会改写 body**：要研究这类字段必须跑原生二进制而不是 node + cli.js，并保存原始字节（`.raw`）。
 
 ---
 
@@ -308,7 +310,7 @@ count_tokens 只保留 `{claude-code, interleaved-thinking, context-management, 
 |---|---|---|
 | `cc_version=<VERSION>.<fp>` | 总是 | fp 见 3.3.2 |
 | `cc_entrypoint=<ep>` | 总是 | `CLAUDE_CODE_ENTRYPOINT ?? "unknown"`；交互式 = `cli`，`-p`/SDK = `sdk-cli`，CCR = `remote` |
-| `cch=00000` | `provider=="firstParty" && baseURL 是 api.anthropic.com`（或 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`），或 vertex | **常量**，2.1.86 无条件发 |
+| `cch=<5 hex>` | `provider=="firstParty" && baseURL 是 api.anthropic.com`（或 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`），或 vertex | JS 层写的是占位符 `00000`，**原生层在发送前改写为请求体哈希**（§3.3.4）；2.1.86 无条件发 |
 | `cc_workload=<w>` | 有 AsyncLocalStorage workload（如 `cron`） | 不受 base URL 影响 |
 | `cc_is_subagent=true` | agentContext 非主会话 | 不受 base URL 影响 |
 | `cc_prev_req=<req_…>` | 直连 && 上一响应的 `request-id` 匹配 `^req_[A-Za-z0-9_-]{1,36}$` | 2.1.86 没有 |
@@ -332,10 +334,40 @@ count_tokens 只保留 `{claude-code, interleaved-thinking, context-management, 
 
 #### 3.3.3 我们的实现（`ops.BuildClaudeCodeBillingHeader`）
 
-- 始终输出 `cc_version=<pinned>.<fp>; cc_entrypoint=cli; cch=00000;`。`cch` 改为常量：旧实现的随机 5 hex 与任何官方版本都对不上。
+- 始终输出 `cc_version=<pinned>.<fp>; cc_entrypoint=cli; cch=00000;`——这里的 `00000` 是**占位符**，与官方 JS 层一致；真正的值由 client 层中间件在最终字节上计算并原地替换（§3.3.4）。旧实现的随机 5 hex 与任何官方版本都对不上。
 - 入站若已有 billing header，**原地重建**（保持 `system[0]` 位置），并按官方顺序保留通过校验的
   `cc_workload / cc_is_subagent / cc_prev_req / cc_prompt_id`；校验正则与官方一致，其余键一律丢弃。
 - 不合成 `cc_prev_req` / `cc_prompt_id`（见 §5）。
+
+#### 3.3.4 `cch`：原生层的请求体哈希（曾被误判为常量）
+
+**教训先行**：JS bundle 里 `cch` 只有一处字面量 `" cch=00000;"`，两次抓包也只看到 `00000` 或省略，
+于是第一版结论是"常量"。这是错的——原因是 (a) 2.1.86 那次是用 node 跑 `cli.js`，根本没有原生层；
+(b) 2.1.258 那次走代理，字段被 `ii()` 门控整体省略。**判断任何"占位符"都必须让原生二进制真的把字段发出来再看。**
+用 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` 强制 first-party 后，原生二进制发出的是 `cch=4f05e` / `01571` / `d4767`，随 body 变化。
+
+算法（三组抓包逐字节复现，含中文/emoji 与 API-key 路径；外部报告与此一致）：
+
+```text
+preimage = 最终 wire JSON（cch 仍为占位 00000），仅做两处修改：
+           顶层 "model" 值置为 ""；删除顶层 "max_tokens" 成员
+cch      = xxHash64(preimage, seed = 0x4D659218E32A3268) & 0xFFFFF   → 5 位小写 hex
+```
+
+- seed 是二进制里唯一一处该 64 位常量（LE，偏移 `0x30341cc`）；据外部报告 2.1.138 起未变，2.1.37–2.1.137 为 `0x6E52736AC806831E`，2.1.172 起 preimage 才加入 model/max_tokens 修改。
+- **不是标准 xxHash64**：Bun/Zig 的实现 `PRIME64_4 = 0x85EBCA77C2B2AE63`（标准为 `0x85EBCA6B3B7B36EF`）。二进制里 Zig 常量出现 13 次、标准常量 0 次；用标准库算出的值全部不匹配。
+- 与 fingerprint 无关的另一处证据：JS 里 `Bun.hash()` 只用于诊断，不参与 cch。
+
+tingly 的实现（`internal/client/claude_cch.go`）复刻官方分层：ops 照常写占位符，`ClaudeClient` 在 SDK 中间件（发送前最后一站）里：
+
+1. 把 Go 编码器特有的转义还原成 JS `JSON.stringify` 形态（`\u003c \u003e \u0026 \u2028 \u2029` → 原字符）。
+   这一步本身也是修复：此前所有 `<system-reminder>` 都以 `\u003csystem-reminder\u003e` 上行，JS 客户端绝不会这样。
+2. 扫描顶层成员做 model/max_tokens 修改得到 preimage（不建 parse tree，仅字节扫描）。
+3. 计算 Zig 变体 xxHash64，把占位符原地替换（等长，Content-Length 不变）。
+
+因为哈希的是我们自己即将发送的字节，SDK 的 key 顺序与 JS 不同不影响正确性；服务端若按收到的字节重算，结果一致。
+验证：`TestRewriteClaudeCodeCCH_LiveCaptures`（设 `TINGLY_CC_CAPTURE_DIR` 指向抓包目录时对真实 body 逐字节回放）、
+`TestXXHash64Zig_Vectors`（Python 参考实现向量，其标准模式复现 `xxh64("")=ef46db3751d8e999`）。
 
 ### 3.4 `metadata.user_id`
 
@@ -414,8 +446,8 @@ billing header / metadata。升版后先跑它。
 1. **persona 固定为"交互式终端、直连 api.anthropic.com"**。UA `(external, cli)`、`cc_entrypoint=cli`、
    `cch=00000`、基线含 `redact-thinking` 都按这个 persona 取值，不跟随入站客户端的 entrypoint
    （入站可能是 `-p`、Agent SDK、CCR、甚至不是 Claude Code）。理由：一个自洽的 persona 优于把入站的碎片拼起来。
-2. **`cch` 用常量 `00000`**，放弃随机值：随机值不匹配任何官方版本，是纯粹的指纹异常；而且 2.1.258 只在直连时发它，
-   与 persona 一致。
+2. **`cch` 按官方算法计算**（§3.3.4），放弃随机值：随机值不匹配任何官方版本。第一版曾误判为常量 `00000`，
+   已更正；`00000` 只是 JS 层占位符。它只在直连时出现，与我们选定的 persona 一致。
 3. **不合成 `cc_prev_req` / `cc_prompt_id`**，只透传入站已有的。合成需要跨请求状态（按 session 记上一响应的 `request-id`、
    按 user turn 生成稳定 UUID），且语义（服务端是否用于缓存亲和 / 限流）未知，猜错的代价大于缺省。
    想让真实客户端自己带上这两个字段，可在其环境里设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`
@@ -438,6 +470,8 @@ billing header / metadata。升版后先跑它。
    - `function Jne`（allModelBetas）与主循环里的 `.push(` 顺序 → `composeClaudeCodeBetas` 与 emission order；
    - `x-anthropic-billing-header: cc_version` 渲染函数的字段与门控 → `BuildClaudeCodeBillingHeader` 与 `billingHeaderPreservedFields`；
    - `59cf53e54c78` 是否还在、`[4,7,20]` 是否变 → `computeFingerprint`；
+   - 二进制里搜 seed `0x4D659218E32A3268`（LE）是否还在；用 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` 抓 ≥3 个 body，
+     跑 `TINGLY_CC_CAPTURE_DIR=<dir> go test ./internal/client/ -run LiveCaptures` 确认 `cch` 逐字节复现；
    - `account_uuid:`/`session_id:` 的对象字面量 → `MetadataUserID`；
    - `"You are Claude Code` 三句 → preamble 常量；
    - `"x-app":` 处的默认头 → 新增头是否需要透传。
@@ -452,6 +486,7 @@ billing header / metadata。升版后先跑它。
 
 - **有状态合成 `cc_prompt_id` / `cc_prev_req`**（§5.3）：若观察到直连与经代理的流量在缓存命中率或限流上有差异，值得做。
   需要：按 session（metadata.session_id）缓存上一 upstream 响应的 `request-id`；按"最后一条 user 消息是否含非 tool_result 文本"判定新 turn 并生成 UUID。
+- **`cch` 的服务端校验方式未知**：我们哈希自己发出的字节并已做 JS 形态归一化；若服务端在重算前还做 key 重排等归一化，Go SDK 的 key 顺序（与 JS 不同）会导致不匹配。上线后若 OAuth 流量出现异常（限流/拒绝），优先怀疑这里。
 - **`x-app: cli-bg`**：后台会话 persona，目前无信号可判。
 - **`thinking.display`**：`Guard` 在 thinking 未指定时强制 `disabled` 的逻辑未动；2.1.258 交互式会显式给 `adaptive` + `display`，通常不会触发。
 - 抓包用的假服务与脚本没有入库（§2.4 已内联足以复现）；若需要常态化回归，可以放到 `tests/` 下做成可选的集成测试。

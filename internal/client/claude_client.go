@@ -214,6 +214,9 @@ func (c *ClaudeClient) perRequestOptions(ctx context.Context, sessionID string, 
 	options = append(options,
 		anthropicOption.WithHeader("X-Claude-Code-Session-Id", sessionID),
 		anthropicOption.WithHeader("anthropic-beta", joinBetas(composeClaudeCodeBetas(sig))),
+		// Last stop before the wire: JS-canonical JSON + the cch body hash
+		// (claude_cch.go), mirroring the official binary's native layer.
+		anthropicOption.WithMiddleware(claudeCodeCCHMiddleware),
 	)
 	hints := typ.GetClaudeCodeClientHints(ctx)
 	if hints.AgentID != "" {
@@ -351,7 +354,10 @@ func (c *ClaudeClient) countTokensClient(ctx context.Context, model string) anth
 	base := c.AnthropicClient.Client().Options
 	options := make([]anthropicOption.RequestOption, 0, len(base)+1)
 	options = append(options, base...)
-	options = append(options, anthropicOption.WithHeader("anthropic-beta", joinBetas(betas)))
+	options = append(options,
+		anthropicOption.WithHeader("anthropic-beta", joinBetas(betas)),
+		anthropicOption.WithMiddleware(claudeCodeCCHMiddleware),
+	)
 	return anthropic.NewClient(options...)
 }
 

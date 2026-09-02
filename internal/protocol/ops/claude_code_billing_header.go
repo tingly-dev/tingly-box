@@ -41,10 +41,12 @@ const (
 	// terminal. Must agree with constant.ClaudeCodeUserAgent ("(external, cli)").
 	claudeCodeEntrypoint = "cli"
 
-	// claudeCodeCCH is the constant cache-hash placeholder the CLI sends on
-	// direct first-party traffic. It has been "00000" in every release
-	// inspected (2.1.86 sent it unconditionally, 2.1.258 gates it on the base
-	// URL); it is not random and must not be randomized.
+	// claudeCodeCCH is the placeholder the CLI's JS layer renders; the
+	// official binary's native layer replaces it on the wire with a 5-hex
+	// xxHash64 of the outgoing body. tingly-box does the same one layer down
+	// (internal/client/claude_cch.go), so this block must carry exactly this
+	// placeholder for the client middleware to find and patch. It must not
+	// be randomized here: the hash has to be computed over the final bytes.
 	claudeCodeCCH = "00000"
 )
 
