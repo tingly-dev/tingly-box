@@ -75,20 +75,21 @@ func (s *TinglyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *TinglyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
-	// GUI-only route: lets a second GUI launch nudge this (running) instance
-	// to show its main window instead of erroring out — see run.go's
-	// notifyRunningGUI. Registered before Start so the route exists by the
-	// time the listener serves. A CLI server never registers this route, so
-	// the nudge 404s there and the second launch falls back to the error app.
-	// Must be registered on the network-facing Gin engine (not the webview
-	// middleware): the nudge arrives over localhost HTTP.
-	s.GetGinEngine().POST("/gui/open", func(c *gin.Context) {
+	// GUI-only route: lets the tray hub panel and a second GUI launch nudge
+	// this instance to show its main window over plain HTTP — see run.go's
+	// notifyRunningGUI and frontend HubPage.tsx. Registered before Start so
+	// the route exists by the time the listener serves. A CLI server never
+	// registers this route, so the nudge 404s there. Registered directly on
+	// the engine (not the /api/v1 group) to skip that group's middleware;
+	// the /api/v1 prefix keeps it reachable from the webview, whose asset
+	// middleware only forwards /api and /tingly to Gin (see app.go).
+	s.GetGinEngine().POST("/api/v1/gui/open", func(c *gin.Context) {
 		if c.GetHeader("Authorization") != "Bearer "+s.GetUserAuthToken() {
 			c.Status(http.StatusForbidden)
 			return
 		}
 		s.OpenMainWindow(c.Query("path"))
-		c.Status(http.StatusNoContent)
+		c.JSON(http.StatusOK, gin.H{"success": true})
 	})
 
 	s.Start(ctx)

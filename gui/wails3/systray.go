@@ -123,8 +123,9 @@ func useSystray(app *application.App, tinglyService *services.TinglyService) {
 	// Wire the hub panel's Home/Dashboard actions to open the main app
 	// window: a direct bound method (TinglyService.OpenMainWindow) rather
 	// than a fire-and-forget Events.Emit, so it's a single traceable call
-	// instead of a pub/sub round trip. The same handler serves the /gui/open
-	// HTTP nudge from a second GUI launch (see run.go's notifyRunningGUI).
+	// instead of a pub/sub round trip. The same handler serves the
+	// /api/v1/gui/open HTTP nudge used by the hub panel's action rows and by
+	// a second GUI launch (see run.go's notifyRunningGUI).
 	tinglyService.SetOpenMainWindowHandler(func(path string) {
 		// Hide the panel first: it's AlwaysOnTop (needed to float above the
 		// tray icon), so leaving it shown would sit visually on top of the

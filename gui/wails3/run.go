@@ -47,14 +47,15 @@ func acquireSingleInstanceLock(appManager *command.AppManager) (*lock.FileLock, 
 // same port, same token) to show its main window, so launching the app a
 // second time focuses the running instance instead of erroring out.
 //
-// It uses the in-process HTTP server's GUI-only /gui/open route (registered
-// by TinglyService.ServiceStartup) rather than wails' SingleInstanceOptions:
-// application.New is a process-wide singleton in wails3, so its built-in
-// second-instance check cannot run before our error-app paths — and the HTTP
-// nudge also distinguishes a running GUI (route exists → 204) from a running
-// CLI server (route absent → 404) for free.
+// It uses the in-process HTTP server's GUI-only /api/v1/gui/open route
+// (registered by TinglyService.ServiceStartup) rather than wails'
+// SingleInstanceOptions: application.New is a process-wide singleton in
+// wails3, so its built-in second-instance check cannot run before our
+// error-app paths — and the HTTP nudge also distinguishes a running GUI
+// (route exists → 200) from a running CLI server (route absent → 404) for
+// free.
 func notifyRunningGUI(appConfig *config.AppConfig) error {
-	url := fmt.Sprintf("http://localhost:%d/gui/open", appConfig.GetServerPort())
+	url := fmt.Sprintf("http://localhost:%d/api/v1/gui/open", appConfig.GetServerPort())
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return err
@@ -67,7 +68,7 @@ func notifyRunningGUI(appConfig *config.AppConfig) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d from running instance", resp.StatusCode)
 	}
 	return nil
