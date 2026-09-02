@@ -33,12 +33,12 @@ var (
 // navigating (dock reopen / "Open App" shouldn't yank the user off the page
 // they were on).
 //
-// Navigation always rides the /login/<token>?next=<path> reload — for a new
-// window because Login.tsx hard-reloads after auth anyway, and for a warm
-// window because the alternative (an EmitEvent the SPA listens for) goes
-// through the wails IPC bridge, which has proven unreliable in these
-// webviews — the same reason the hub panel's actions call the HTTP nudge
-// instead of the bound method.
+// Navigation deliberately avoids the EmitEvent-based SPA hop: events ride
+// the wails IPC bridge, which has proven unreliable in these webviews — the
+// same reason the hub panel's actions call the HTTP nudge instead of the
+// bound method. A new window loads through /login/<token>?next=<path>
+// (Login.tsx hard-reloads after auth); a warm window navigates straight to
+// the path via SetURL, since it's already authenticated.
 func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
 	if WindowMain == nil {
 		target := path
@@ -90,10 +90,15 @@ func showMainWindow(app *application.App, tinglyService *services.TinglyService,
 		return
 	}
 
-	// Warm window: navigate by reloading through the login shell (see the
-	// doc comment above); an empty path just brings the window forward.
+	// Warm window: it already authenticated on its first load (token in
+	// localStorage), so navigate straight to the SPA route — the asset
+	// middleware's SPA fallback serves index.html and BrowserRouter picks up
+	// the path. Routing through /login/<token> again also worked, but
+	// flashed the login screen on every hub action; if auth was somehow
+	// lost, ProtectedRoute redirects to login by itself. An empty path just
+	// brings the window forward.
 	if path != "" {
-		WindowMain.SetURL(fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path))
+		WindowMain.SetURL(path)
 	}
 	WindowMain.Show()
 	WindowMain.Focus()
