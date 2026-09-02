@@ -69,7 +69,8 @@ provider。这是系统里 service 的统一建模,前端的选择器
 }
 ```
 
-约定 key:`internal/server/config/flag.go` 的 `VisionProxyServiceKey`。
+约定 key:`internal/constant/flag.go` 的 `ExtensionVisionProxyService`
+(`"vision_proxy_service"`)。
 
 ### 3.2 Rule 级 —— RuleFlags typed 字段
 
@@ -114,56 +115,78 @@ const (
 
 ### 4.1 单一入口
 
-不论 rule 级还是 scenario 级,都从同一个 helper 进:
+不论 rule 级还是 scenario 级,都从同一个 helper 进(`internal/server`
+被拆分成 `internal/protocolserver` 之后,helper 挂在
+`ProtocolHandler` 上;`internal/server/server.go` 上还留着一份同名
+的旧方法,已无调用方,是拆分后的死代码):
 
 ```go
-// internal/server/vision_proxy.go
-func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
-    svc := s.resolveVisionService(scenarioType, rule)  // rule 先,scenario 后
-    if svc == nil { return }
-    _ = s.visionProxyProcessor.Process(&smartrouting.ProcessorContext{
-        Ctx:      c.Request.Context(),
-        Request:  typedRequest,
-        Services: []*loadbalance.Service{svc},
-    })
+// internal/protocolserver/protocol_handler.go
+func (ph *ProtocolHandler) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
+    if ph.deps.VisionProxyService == nil {
+        return
+    }
+    sessionID := resolveSessionID(c, typedRequest) // 见 §10.3
+    ph.deps.VisionProxyService.Apply(c.Request.Context(), ph.deps.Config, scenarioType, rule, typedRequest, sessionID)
 }
 ```
 
-优先级集中在 `resolveVisionService` 一个纯函数里,可单测、可读。**只
+`ph.deps.VisionProxyService` 是 `*visionproxy.Service`
+(`internal/vision/visionproxy/service.go`),在 `server.go` 启动时
+构造一次(`visionproxy.NewServiceFromPool(pool, resolver)`),经
+`ProtocolHandlerDeps` 注入。`Service.Apply` 内部做两件事:
+
+```go
+func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any, sessionID typ.SessionID) {
+    svc := s.Resolve(cfg, scenarioType, rule) // rule 先,scenario 后
+    if svc == nil { return }
+    _ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc}, sessionID)
+}
+```
+
+优先级集中在 `Service.Resolve` 一个纯函数里,可单测、可读。**只
 Process 一次**——既不需要"两个 helper 串联 + lock 互斥",也不存在
 "图描述两次"的窗口。
 
 ### 4.2 钩子位置
 
-每个入站 handler(`openai_chat.go` / `openai_responses.go` /
-`anthropic.go` 统管 v1 + beta)在 `determineRuleWithScenario` 之后、
-`SelectService` 之前调用:
+每个入站 handler(`internal/protocolserver/openai_chat.go` /
+`openai_responses.go` / `anthropic_message.go` 统管 v1 + beta)在
+`determineRuleWithScenario` 之后、`selectService` 之前调用:
 
 ```go
-rule, err = s.determineRuleWithScenario(c, scenarioType, modelName)
+rule, err = ph.determineRuleWithScenario(c, scenarioType, requestModel)
 // ...
-s.applyVisionProxy(c, scenarioType, rule, typedRequest)
-provider, _, err = s.routingSelector.SelectService(c, scenarioType, rule, typedRequest)
+ph.applyVisionProxy(c, scenarioType, rule, reqParams)
+provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqParams)
 ```
 
-放在 `SelectService` 之前是为了让下游接到的就是已经"图→文"完成的请求。
+放在 `selectService` 之前是为了让下游接到的就是已经"图→文"完成的请求。
 
 ### 4.3 处理器细节
 
-`VisionProxyProcessor`(`internal/server/processor/vision_proxy.go`)在
-`server.go` 启动时构造一次,被 `Server.visionProxyProcessor` 持有,这
-里直接调用——不走 smart routing 注册表(后者已删,§7)。
+`VisionProxyProcessor`(`internal/vision/visionproxy/vision_proxy.go`)
+被 `Service.Processor` 持有,`applyVisionProxy` 经 `Service.Apply` 间
+接调用——vision proxy **不走** smart routing 的处理器注册表
+(`internal/routing/smartrouting/processor.go` 的
+`RegisterProcessor`/`LookupProcessor`;该注册表本身还在给其它 op 用,
+只是 `proxy_vision` 这一项已经从里面删掉了,见 §7)。
 
 处理器原地改写请求里的 image block:
-- 最新一条消息里的 image → 调上游 vision 模型描述
-- 历史消息里的 image → 打 `imageHistoricalText` marker(**不调** vision)
+- 命中描述缓存的 image(不分最新/历史)→ 直接换成缓存里的真实描述,
+  不调 vision(§10)
+- 未命中缓存 + 最新一条消息里的 image → 调上游 vision 模型描述,成功
+  则写入缓存
+- 未命中缓存 + 历史消息里的 image → 打 `imageHistoricalText` marker
+  (**不调** vision)
 - 失败兜底(无可用 service / 上游报错 / 空响应)→ 打
-  `imageUnavailableText` marker
+  `imageUnavailableText` marker,**不写入缓存**
 
-支持三种请求形态:`*anthropic.BetaMessageNewParams` /
-`*anthropic.MessageNewParams` / `*openai.ChatCompletionNewParams`。
+支持四种请求形态:`*anthropic.BetaMessageNewParams` /
+`*anthropic.MessageNewParams` / `*openai.ChatCompletionNewParams` /
+`*responses.ResponseNewParams`(OpenAI Responses API,后加)。
 Anthropic 两种形态还会**下钻 `OfToolResult.Content`** 处理工具返回里
-的图(见 §6.1 的踩坑记录)。
+的图;OpenAI 形态后来也补上了 tool message 里的图(均见 §6.1)。
 
 ---
 
@@ -241,8 +264,13 @@ read-image / 许多 MCP 视觉工具),落在
 
 修复方式:每条消息的 content 交给 walker,先看顶层 `OfImage`,再
 **下钻 `OfToolResult.Content`**。两条路径共用 latest-vs-historical
-策略。OpenAI 协议的 tool role message 内容是字符串、不含 image,OpenAI
-路径不需要此处理。
+策略。写下这条时 OpenAI 协议的 tool role message 内容还是纯字符串、
+不含 image,OpenAI 路径当时确实不需要此处理——但后来 fork 把 tool
+message 的 content 从纯文本放宽成了完整的 part union(#1609),tool
+message 里也能带图了。不补上这条通道,图片会原样透传给下游,文本
+only 的 provider 直接报错拒绝(z.ai code 1210)而不是被描述掉。现在
+`collectOpenAI`(`internal/vision/visionproxy/vision_proxy.go`)会同
+时看 `OfUser` 和 `OfTool` 两种消息的 content parts。
 
 ### 6.2 partial `ScenarioConfig` 写入会清空 `Extensions`
 
@@ -284,8 +312,9 @@ vision proxy 早期版本带了 `source=vision_proxy`,走分支 1,于是 ctx 里
 
 ### 6.4 ctx 的传递
 
-`applyVisionProxy` 从 `c.Request.Context()` 取 ctx 传给
-`ProcessorContext.Ctx`,processor 再传给 `describe(ctx, ...)`,最终到
+`applyVisionProxy` 从 `c.Request.Context()` 取 ctx,一路原样传下去:
+`Service.Apply(ctx, ...)` → `Processor.Process(ctx, ...)` →
+`describeAll(ctx, ...)` → `describe(ctx, ...)`,最终到
 `logrus.WithContext(ctx)`。这条链路无任何 `context.Background()` 截断,
 所以中间件早期注入的 `request_id`(见
 `../internal/middleware/memory_log.go`)自然贯穿。
@@ -331,11 +360,17 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 
 ### 已删除的位置
 
+> 包名后来从 `internal/routing/smart_routing` 改成
+> `internal/routing/smartrouting`(去掉下划线),下面路径已按现状更新;
+> 删除的是 `proxy_vision` 专属的常量/case/switch 分支,**不是整个
+> registry**——`RegisterProcessor`/`LookupProcessor` 机制本身还在给其它
+> op(如 quota、time range)用。
+
 后端:
-- `internal/routing/smart_routing/op.go` —— `PositionProxyVision` / `OpProxyVisionEnabled` 常量,Operations 列表项
-- `internal/routing/smart_routing/type.go` —— `IsValid` 里的 `PositionProxyVision` case
-- `internal/routing/smart_routing/routing.go` —— `evaluateProxyVisionOp` 及其 switch case
-- `internal/server/processor/processor.go` —— `RegisterAll` 不再 `smartrouting.RegisterProcessor(...)`(processor 仍然构造并返回给 vision_proxy.go 用)
+- `internal/routing/smartrouting/op.go` —— `PositionProxyVision` / `OpProxyVisionEnabled` 常量,Operations 列表项
+- `internal/routing/smartrouting/type.go` —— `IsValid` 里的 `PositionProxyVision` case
+- `internal/routing/smartrouting/routing.go` —— `evaluateProxyVisionOp` 及其 switch case
+- `internal/server/processor/processor.go` —— `RegisterAll` 不再 `smartrouting.RegisterProcessor(...)`。这个文件本身后来也没了(`internal/server/processor/` 整个目录已删除,vision proxy 的构造/持有迁到了 `internal/vision/visionproxy` + `Server.visionProxyService` / `ProtocolHandlerDeps.VisionProxyService`,见 §4.1、§8)
 
 前端:
 - `frontend/src/components/rule-card/SmartRuleCatalogDialog.tsx` —— catalog 注释残留 + `OPERATION_OPTIONS.proxy_vision`
@@ -361,22 +396,25 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 
 | 功能 | 文件 |
 |------|------|
-| 处理器实现(图描述、改写) | `internal/server/processor/vision_proxy.go` |
-| 处理器接口 / `ProcessorContext` | `internal/routing/smart_routing/processor.go` |
-| **统一入口 helper**(`applyVisionProxy` + `resolveVisionService`) | `internal/server/vision_proxy.go` |
+| 处理器实现(图描述、改写) | `internal/vision/visionproxy/vision_proxy.go` |
+| Service 封装(`Resolve` + `Apply`) | `internal/vision/visionproxy/service.go` |
 | **描述缓存**(定容 LRU,§10) | `internal/vision/visionproxy/describe_cache.go` |
+| smart routing 处理器接口 / `ProcessorContext`(vision proxy 已不用,给其它 op 用) | `internal/routing/smartrouting/processor.go` |
+| **统一入口 helper**(`applyVisionProxy`) | `internal/protocolserver/protocol_handler.go`(`internal/server/server.go` 上还留一份同名死代码,见 §4.1) |
+| 构造 + 注入(`NewServiceFromPool`) | `internal/server/server.go`(构造)→ `ProtocolHandlerDeps.VisionProxyService`(注入) |
 | `RuleFlags` + `VisionProxyService` | `internal/typ/type.go` |
 | Flag registry + `FlagTypeServiceRef` 常量 | `internal/typ/flag_registry.go` |
 | `ScenarioFlags` / `ScenarioConfig` | `internal/typ/type.go` |
-| 场景配置 Get/Set | `internal/server/config/config.go` |
+| 场景配置 Get/Set | `internal/server/config/scenario.go` |
 | 场景配置 API | `internal/server/module/scenario/{routes,handler,types}.go` |
-| `VisionProxyServiceKey` 常量(Extensions key) | `internal/server/config/flag.go` |
-| 入站 handler(钩子点) | `internal/server/{openai_chat,openai_responses,anthropic}.go` |
+| `ExtensionVisionProxyService` 常量(Extensions key) | `internal/constant/flag.go` |
+| 入站 handler(钩子点) | `internal/protocolserver/{openai_chat,openai_responses,anthropic_message}.go` |
 | Scenario 级 UI | `frontend/src/components/PluginFeatures.tsx` |
 | Rule 级 UI | `frontend/src/components/rule-card/FlagCatalogDialog.tsx` |
 | `RuleFlags` ↔ wire 转换 | `frontend/src/components/rule-card/{utils.ts,useRuleCardHooks.ts}` |
 | 类型定义 | `frontend/src/components/RoutingGraphTypes.ts` |
 | 服务选择器对话框(复用) | `frontend/src/components/ModelSelectDialog.tsx` |
+| 实现细节补充(处理流程时序图、协议覆盖表) | `internal/vision/visionproxy/README.md` |
 
 ---
 
@@ -384,12 +422,12 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 
 | 层 | 用例 |
 |----|------|
-| `resolveVisionService` 优先级 | rule + scenario 都配 → rule;只 scenario → scenario;只 rule → rule;都不配 → nil;rule 配但 model 空 → 回退 scenario;nil rule + scenario → scenario |
-| `applyVisionProxy` 行为 | rule 配 + 有图 → 用 rule service 描述;scenario 配 + 有图 → 用 scenario service;都没配 + 有图 → 图保留(no-op);profile 场景(`claude_code:p1`)配的 service 能找到(独立于 base) |
+| `Service.Resolve` 优先级 | rule + scenario 都配 → rule;只 scenario → scenario;只 rule → rule;都不配 → nil;rule 配但 model 空 → 回退 scenario;nil rule + scenario → scenario |
+| `Service.Apply` 行为 | rule 配 + 有图 → 用 rule service 描述;scenario 配 + 有图 → 用 scenario service;都没配 + 有图 → 图保留(no-op);profile 场景(`claude_code:p1`)配的 service 能找到(独立于 base) |
 | 单次 Process 不变量 | 两者都配时 Process 也只调一次(用 rule 的 service) |
 | `parseScenarioVisionService` | nil/缺键/结构错/缺 provider/缺 model/空串 → nil;provider+model 齐备 → active service |
-| 处理器三种请求形态 | Beta / V1 Anthropic、OpenAI ChatCompletion 各覆盖 |
-| **tool_result 嵌套 image** | Beta + V1 各一例:tool_result 内的 image 最后一条消息会描述、历史消息只打 marker(不调 vision) |
+| 处理器四种请求形态 | Beta / V1 Anthropic、OpenAI ChatCompletion、OpenAI Responses 各覆盖 |
+| **tool_result 嵌套 image** | Beta + V1 各一例:tool_result 内的 image 最后一条消息会描述、历史消息只打 marker(不调 vision);OpenAI tool message 内嵌图片同样覆盖 |
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
