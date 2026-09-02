@@ -7,8 +7,9 @@ import (
 
 // StartFlagsKong is the Kong-tagged twin of options.StartFlags (cobra
 // version, still used by internal/command/server.go's cobra shim). Embedded
-// into GUICmdKong/SlimCmdKong/TrayCmdKong so `gui`/`slim`/`tray` share one
-// flag set — mirrors internal/command.StartCmdKong, the CLI's equivalent.
+// into main's root CLI struct — the GUI has a single mode, so these are the
+// binary's top-level flags. Mirrors internal/command.StartCmdKong, the CLI's
+// equivalent.
 type StartFlagsKong struct {
 	Port              int    `kong:"flag,name='port',short='p',help='Server port (default: from config or 12580)'"`
 	Host              string `kong:"flag,name='host',default='localhost',help='Server host'"`
@@ -17,17 +18,16 @@ type StartFlagsKong struct {
 	EnableOpenBrowser bool   `kong:"flag,name='browser',default='true',help='Auto-open browser when server starts'"`
 	Daemon            bool   `kong:"flag,name='daemon',hidden,help='Unused in GUI mode'"`
 	LogFile           string `kong:"flag,name='log-file',hidden,help='Unused in GUI mode'"`
-	PromptRestart     bool   `kong:"flag,name='prompt-restart',hidden,help='Unused in GUI mode'"`
 }
 
-// resolve mirrors internal/command's resolveStartCmdKongOptions: same
+// Resolve mirrors internal/command's resolveStartCmdKongOptions: same
 // fallback rules (explicit --debug wins, else config's debug setting; a
 // zero --port falls back to config, a non-zero one persists to config), just
 // without a *cobra.Command to check Flags().Changed on — Kong parses these
 // directly, so a set-but-false --debug can't be told apart from "not passed"
 // the way cobra's Changed() can. Existing behavior for GUI/CLI alike, not a
 // regression from this migration.
-func (f StartFlagsKong) resolve(appConfig *config.AppConfig) options.StartServerOptions {
+func (f StartFlagsKong) Resolve(appConfig *config.AppConfig) options.StartServerOptions {
 	resolvedDebug := f.EnableDebug
 	if !f.EnableDebug {
 		resolvedDebug = appConfig.GetDebug()
@@ -48,7 +48,6 @@ func (f StartFlagsKong) resolve(appConfig *config.AppConfig) options.StartServer
 		EnableOpenBrowser: f.EnableOpenBrowser,
 		Daemon:            f.Daemon,
 		LogFile:           f.LogFile,
-		PromptRestart:     f.PromptRestart,
 		RecordDir:         appConfig.ConfigDir() + "/record",
 	}
 }

@@ -1,30 +1,25 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
 	"log"
-	"os/exec"
-	"runtime"
+	"net/http"
+	"time"
 
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
-	"github.com/tingly-dev/tingly-box/gui/wails3/services"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/pkg/lock"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-//go:embed icons.icns
-var slimIcon []byte
-
 // acquireSingleInstanceLock ensures at most one tingly-box server instance
-// (GUI, tray, slim, or CLI) touches this config dir's server at a time.
+// (GUI or CLI) touches this config dir's server at a time.
 //
-// This exists alongside the port probe-and-release check in Start*: that
+// This exists alongside the port probe-and-release check in Start: that
 // check only proves *some* process is reachable on the port, not that it's
 // *this* config dir's server — a stale CLI/npx instance holding the port
 // still lets a dial-based probe succeed, so a GUI launch can slip past the
@@ -46,252 +41,34 @@ func acquireSingleInstanceLock(appManager *command.AppManager) (*lock.FileLock, 
 	return fileLock, nil
 }
 
-// openBrowser opens the default browser to the given URL
-func openBrowser(url string) error {
-	var cmd string
-	var args []string
-
-	switch runtime.GOOS {
-	case "windows":
-		cmd = "rundll32"
-		args = []string{"url.dll,FileProtocolHandler", url}
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	case "linux":
-		cmd = "xdg-open"
-		args = []string{url}
-	default:
-		return fmt.Errorf("unsupported platform")
-	}
-
-	return exec.Command(cmd, args...).Start()
-}
-
-// useSlimSystray sets up the system tray for slim mode
-func useSlimSystray(app *application.App, tinglyService *services.TinglyService) {
-	// Create the SystemTray menu
-	menu := app.Menu.New()
-
-	// Dashboard menu item
-	_ = menu.
-		Add("Dashboard").
-		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/login/%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
-		})
-
-	menu.AddSeparator()
-
-	// OpenAI menu item
-	_ = menu.
-		Add("OpenAI").
-		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/login/%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
-		})
-
-	// Anthropic menu item
-	_ = menu.
-		Add("Anthropic").
-		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/login/%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
-		})
-
-	// Claude Code menu item
-	_ = menu.
-		Add("Claude Code").
-		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/login/%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
-		})
-
-	menu.AddSeparator()
-
-	// Exit menu item
-	_ = menu.
-		Add("Exit").
-		OnClick(func(ctx *application.Context) {
-			app.Quit()
-		})
-
-	// Create SystemTray
-	SystemTray = app.SystemTray.New().
-		SetMenu(menu).
-		OnRightClick(func() {
-			SystemTray.OpenMenu()
-		})
-
-	// Use custom icon
-	SystemTray.SetIcon(slimIcon)
-}
-
-// hubWindowWidth/Height size the tray's hub panel (see
-// frontend/src/pages/HubPage.tsx) — a narrow strip like a menu-bar dropdown
-// rather than a small app window. The hub panel and the main app window
-// (WindowMain, shared with full GUI mode - see window.go) are two distinct
-// windows: the panel only ever renders /hub, the main window is the real
-// app, opened on demand from the panel's Home/Dashboard actions or the
-// tray's right-click menu.
-const (
-	hubWindowWidth  = 320
-	hubWindowHeight = 560
-)
-
-// showMainWindow shows the main app window (the real app, as opposed to the
-// hub panel), creating it on first use. path is where it should land.
+// notifyRunningGUI asks an already-running GUI instance (same config dir,
+// same port, same token) to show its main window, so launching the app a
+// second time focuses the running instance instead of erroring out.
 //
-// Login.tsx does a hard reload after auth, so a *new* window can only be
-// relied on to land where its initial URL's ?next= points - that's why
-// this window is created lazily with path baked in, rather than eagerly
-// with a fixed default and relying on EmitEvent to redirect it (the same
-// race the hub panel avoids via its own ?next=/hub). Once created, the
-// window is reused warm and EmitEvent-based navigation works normally.
-func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
-	if path == "" {
-		path = "/agent"
+// It uses the in-process HTTP server's GUI-only /gui/open route (registered
+// by TinglyService.ServiceStartup) rather than wails' SingleInstanceOptions:
+// application.New is a process-wide singleton in wails3, so its built-in
+// second-instance check cannot run before our error-app paths — and the HTTP
+// nudge also distinguishes a running GUI (route exists → 204) from a running
+// CLI server (route absent → 404) for free.
+func notifyRunningGUI(appConfig *config.AppConfig) error {
+	url := fmt.Sprintf("http://localhost:%d/gui/open", appConfig.GetServerPort())
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return err
 	}
-	log.Printf("[hub] showMainWindow: path=%q windowMainExists=%v", path, WindowMain != nil)
+	req.Header.Set("Authorization", "Bearer "+appConfig.GetGlobalConfig().GetUserToken())
 
-	if WindowMain == nil {
-		WindowMain = app.Window.NewWithOptions(application.WebviewWindowOptions{
-			Name:  WindowMainName,
-			Title: AppName,
-			Mac: application.MacWindow{
-				Backdrop: application.MacBackdropTranslucent,
-				TitleBar: application.MacTitleBarDefault,
-			},
-			BackgroundColour: application.NewRGB(27, 38, 54),
-			URL:              fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path),
-			Hidden:           true,
-		})
-		WindowMain.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-			event.Cancel()
-			WindowMain.Hide()
-		})
-	} else {
-		WindowMain.EmitEvent("systray-navigate", path)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
 	}
-
-	WindowMain.Show()
-	WindowMain.Maximise()
-	WindowMain.Focus()
-}
-
-func useWebSystray(app *application.App, tinglyService *services.TinglyService) {
-	// Create the SystemTray menu - kept minimal since the hub panel itself
-	// is the primary navigation surface now (see frontend HubPage.tsx).
-	menu := app.Menu.New()
-
-	_ = menu.
-		Add("Show Hub").
-		OnClick(func(ctx *application.Context) {
-			SystemTray.ShowWindow()
-		})
-
-	_ = menu.
-		Add("Open App").
-		OnClick(func(ctx *application.Context) {
-			showMainWindow(app, tinglyService, "")
-		})
-
-	menu.AddSeparator()
-
-	// Exit menu item
-	_ = menu.
-		Add("Exit").
-		OnClick(func(ctx *application.Context) {
-			app.Quit()
-		})
-
-	// Create the hub panel - a small, dedicated window that only ever shows
-	// /hub (never navigated elsewhere; "Home"/"Dashboard" on the hub page
-	// open the separate main window instead - see the "open-main-window"
-	// handler below).
-	//
-	// Frameless + DisableResize are required for AttachWindow below: Wails
-	// anchors the panel under the tray icon by reading the window's *current*
-	// frame size at click time (see systemtray_darwin.m's positionWindow) -
-	// resizing it after creation (our earlier Show+SetSize+Center approach)
-	// made that anchor drift on every subsequent show.
-	//
-	// HideOnFocusLost is deliberately NOT set: it hides the window on
-	// WindowLostFocus, and a borderless AlwaysOnTop panel can spuriously
-	// fire that the moment it becomes key, which looked exactly like clicks
-	// on its own buttons (e.g. Home/Dashboard) silently doing nothing -
-	// the click landed on a window already mid-hide.
-	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:          "hub-panel",
-		Title:         AppName,
-		Width:         hubWindowWidth,
-		Height:        hubWindowHeight,
-		Frameless:     true,
-		DisableResize: true,
-		AlwaysOnTop:   true,
-		HideOnEscape:  true,
-		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTranslucent,
-			// CanJoinAllSpaces + FullScreenAuxiliary lets the panel float
-			// above a fullscreen app too, like Bartender/1Password's
-			// menu-bar dropdown - without this, showing it while another
-			// app owns the fullscreen Space would silently do nothing.
-			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
-				application.MacWindowCollectionBehaviorFullScreenAuxiliary,
-		},
-		BackgroundColour: application.NewRGB(27, 38, 54),
-		// The Login page does a hard `window.location.href` reload after
-		// auth (see Login.tsx). ?next=/hub tells it where to land so the
-		// panel always ends up showing the hub, regardless of load timing.
-		URL:    fmt.Sprintf("/login/%s?next=/hub", tinglyService.GetUserAuthToken()),
-		Hidden: true,
-	})
-
-	// Create SystemTray and attach the hub panel: with a menu set and a
-	// window attached but no explicit OnClick/OnRightClick, Wails' smart
-	// defaults wire left-click to toggle+anchor the panel under the icon
-	// (SystemTray.ToggleWindow) and right-click to open the menu.
-	SystemTray = app.SystemTray.New().
-		SetMenu(menu).
-		AttachWindow(WindowSlim).
-		WindowOffset(6)
-
-	// Use custom icon
-	SystemTray.SetIcon(slimIcon)
-
-	// Wire the hub panel's Home/Dashboard actions to open the main app
-	// window: a direct bound method (TinglyService.OpenMainWindow) rather
-	// than a fire-and-forget Events.Emit, so it's a single traceable call
-	// instead of a pub/sub round trip.
-	tinglyService.SetOpenMainWindowHandler(func(path string) {
-		// Hide the panel first: it's AlwaysOnTop (needed to float above the
-		// tray icon), so leaving it shown would sit visually on top of the
-		// freshly-maximised main window, making the click look like a no-op.
-		WindowSlim.Hide()
-		showMainWindow(app, tinglyService, path)
-	})
-
-	// Prevent window from being destroyed on close - just hide it
-	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		event.Cancel()
-		WindowSlim.Hide()
-	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status %d from running instance", resp.StatusCode)
+	}
+	return nil
 }
 
 // appLauncher implements the AppLauncher interface
@@ -302,14 +79,21 @@ func NewAppLauncher() commandgui.AppLauncher {
 	return &appLauncher{}
 }
 
-// StartGUI launches the full GUI application
-func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error {
-	log.Printf("Starting full GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
+// Start launches the unified GUI application: in-process server + tray icon
+// with hub panel + main app window.
+func (l *appLauncher) Start(appManager *command.AppManager, opts options.StartServerOptions) error {
+	log.Printf("Starting GUI with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
 	// Single-instance check FIRST: catches a running tingly-box (CLI/npx/GUI)
 	// that the port probe below can't reliably tell apart from an unrelated
 	// process on the same port. See acquireSingleInstanceLock's doc comment.
+	// If the holder is another GUI instance, focus it and exit quietly
+	// instead of showing an error.
 	if _, err := acquireSingleInstanceLock(appManager); err != nil {
+		if notifyErr := notifyRunningGUI(appManager.AppConfig()); notifyErr == nil {
+			log.Printf("Another GUI instance is running; asked it to show its window")
+			return nil
+		}
 		runErrorApp(err.Error())
 		return err
 	}
@@ -324,10 +108,7 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 		return fmt.Errorf("port %d is already in use", opts.Port)
 	}
 
-	log.Printf("[Port Check] Port %d is available, starting application...", opts.Port)
-
-	// IMPORTANT: GUI mode should NOT auto-open browser (user uses the GUI window instead)
-	// Only CLI mode defaults to opening the browser
+	// GUI mode should NOT auto-open browser (user uses the GUI window instead)
 	opts.EnableOpenBrowser = false
 
 	// Create ServerManager with options
@@ -340,104 +121,11 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 		server.WithRecordDir(opts.RecordDir),
 	)
 
-	// Create Wails app with ServerManager embedded (full GUI: show dock icon)
+	// Create Wails app with ServerManager embedded
 	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug, application.ActivationPolicyRegular)
 
-	// IMPORTANT: Set up windows and systray after creating the app
-	useWindows(app)
-	useSystray(app)
-
-	// Run the Wails app
-	return app.Run()
-}
-
-// StartTray launches a systray only application with webui in menu
-func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.StartServerOptions) error {
-	log.Printf("Starting tray GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
-
-	// Single-instance check FIRST: see acquireSingleInstanceLock's doc comment.
-	if _, err := acquireSingleInstanceLock(appManager); err != nil {
-		runErrorApp(err.Error())
-		return err
-	}
-
-	// Check if port is available before starting the app
-	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
-	log.Printf("[Port Check] Port %d: available=%v, info=%s", opts.Port, available, info)
-
-	if !available {
-		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
-		return fmt.Errorf("port %d is already in use", opts.Port)
-	}
-
-	log.Printf("[Port Check] Port %d is available, starting tray application...", opts.Port)
-
-	// IMPORTANT: Tray mode should NOT auto-open browser (user opens via systray menu)
-	// Only CLI mode defaults to opening the browser
-	opts.EnableOpenBrowser = false
-
-	// Create ServerManager with options
-	serverManager := command.NewServerManager(
-		appManager.AppConfig(),
-		server.WithUI(opts.EnableUI),
-		server.WithDebug(opts.EnableDebug),
-		server.WithOpenBrowser(opts.EnableOpenBrowser),
-		server.WithHost(opts.Host),
-		server.WithRecordDir(opts.RecordDir),
-	)
-
-	// Create Wails app with ServerManager embedded (tray mode: keep dock icon like most apps)
-	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug, application.ActivationPolicyRegular)
-
-	// IMPORTANT: Set up systray after creating the app
-	useWebSystray(app, tinglyService)
-
-	// Run the Wails app
-	return app.Run()
-}
-
-// StartSlim launches the slim GUI application (systray only)
-func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.StartServerOptions) error {
-	log.Printf("Starting slim GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
-
-	// Single-instance check FIRST: see acquireSingleInstanceLock's doc comment.
-	if _, err := acquireSingleInstanceLock(appManager); err != nil {
-		runErrorApp(err.Error())
-		return err
-	}
-
-	// Check if port is available before starting the app
-	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
-	log.Printf("[Port Check] Port %d: available=%v, info=%s", opts.Port, available, info)
-
-	if !available {
-		// Create a minimal error-only app and run it (this will block until the user closes it)
-		// For slim mode, we just use the same error app as full mode
-		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
-		return fmt.Errorf("port %d is already in use", opts.Port)
-	}
-
-	log.Printf("[Port Check] Port %d is available, starting slim application...", opts.Port)
-
-	// IMPORTANT: Slim mode should NOT auto-open browser (user opens via systray menu)
-	// Only CLI mode defaults to opening the browser
-	opts.EnableOpenBrowser = false
-
-	// Create ServerManager with options
-	serverManager := command.NewServerManager(
-		appManager.AppConfig(),
-		server.WithUI(opts.EnableUI),
-		server.WithDebug(opts.EnableDebug),
-		server.WithOpenBrowser(opts.EnableOpenBrowser),
-		server.WithHost(opts.Host),
-		server.WithRecordDir(opts.RecordDir),
-	)
-
-	// Create slim Wails app with ServerManager embedded
-	app := newSlimAppWithServerManager(appManager, serverManager, opts.EnableDebug)
-
-	// Note: Server is started by TinglyService.ServiceStartup() when the Wails app runs
-	// No need to call serverManager.Start() here
+	// Set up the tray icon + hub panel (must run after creating the app)
+	useSystray(app, tinglyService)
 
 	// Run the Wails app
 	return app.Run()

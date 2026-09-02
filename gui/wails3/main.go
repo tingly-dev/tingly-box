@@ -24,22 +24,26 @@ var (
 	buildTime = "unknown"
 )
 
-// CLI is the Kong root structure for the GUI binary. --config-dir is parsed
-// here, before any subcommand's Run — AppConfig is built from it up front,
-// same as cli/tingly-box/main.go's CLI struct. tray is tagged the default
-// subcommand ("withargs": selected even with flags present, e.g.
-// `tingly-box-gui --config-dir X --port Y`) so bare `tingly-box-gui` keeps
-// launching straight into tray mode like it did pre-Kong.
+// CLI is the Kong root structure for the GUI binary. There are no
+// subcommands: the GUI has a single unified mode (server + tray with hub
+// panel + main window), so the server flags live directly on the root and
+// bare `tingly-box-gui` (or `tingly-box-gui --config-dir X --port Y`)
+// launches straight into it. --config-dir is parsed here, before Run —
+// AppConfig is built from it up front, same as cli/tingly-box/main.go.
 type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 
-	GUI  commandgui.GUICmdKong  `kong:"cmd,help='Start Tingly Box in full GUI mode (window + systray)'"`
-	Slim commandgui.SlimCmdKong `kong:"cmd,help='Start Tingly Box in slim GUI mode (systray only)'"`
-	Tray commandgui.TrayCmdKong `kong:"cmd,default='withargs',help='Start Tingly Box in tray GUI mode (systray only)'"`
+	commandgui.StartFlagsKong
+}
+
+// Run launches the unified GUI mode. Kong invokes this on the root node
+// since the grammar has no subcommands.
+func (c *CLI) Run(appManager *command.AppManager, launcher commandgui.AppLauncher) error {
+	return launcher.Start(appManager, c.Resolve(appManager.AppConfig()))
 }
 
 // main function serves as the application's entry point. It uses Kong to
-// parse CLI arguments and launches the appropriate GUI mode.
+// parse CLI arguments and launches the unified GUI.
 func main() {
 	command.BuildVersion = version
 	command.BuildGitCommit = gitCommit
@@ -53,10 +57,10 @@ func main() {
 	parser, err := kong.New(&cli,
 		kong.Name("tingly-box-gui"),
 		kong.Description("Tingly Box GUI mode provides a desktop application interface for managing the AI model proxy server."),
-		// GUICmdKong/SlimCmdKong/TrayCmdKong's Run() takes AppLauncher, an
-		// interface — Kong's ctx.Run(v) binds by v's concrete type, so a
-		// plain positional bind here would register *appLauncher and never
-		// match the interface parameter. BindTo pins it to the interface.
+		// CLI.Run takes AppLauncher, an interface — Kong's ctx.Run(v)
+		// binds by v's concrete type, so a plain positional bind here
+		// would register *appLauncher and never match the interface
+		// parameter. BindTo pins it to the interface.
 		kong.BindTo(launcher, (*commandgui.AppLauncher)(nil)),
 	)
 	if err != nil {

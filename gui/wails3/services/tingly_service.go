@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -76,24 +75,26 @@ func (s *TinglyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *TinglyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	// GUI-only route: lets a second GUI launch nudge this (running) instance
+	// to show its main window instead of erroring out — see run.go's
+	// notifyRunningGUI. Registered before Start so the route exists by the
+	// time the listener serves. A CLI server never registers this route, so
+	// the nudge 404s there and the second launch falls back to the error app.
+	// Must be registered on the network-facing Gin engine (not the webview
+	// middleware): the nudge arrives over localhost HTTP.
+	s.GetGinEngine().POST("/gui/open", func(c *gin.Context) {
+		if c.GetHeader("Authorization") != "Bearer "+s.GetUserAuthToken() {
+			c.Status(http.StatusForbidden)
+			return
+		}
+		s.OpenMainWindow(c.Query("path"))
+		c.Status(http.StatusNoContent)
+	})
+
 	s.Start(ctx)
 
 	// Store the application instance for later use
 	s.app = application.Get()
-
-	// Register an event handler that can be triggered from the frontend
-	s.app.Event.On("gin-api-event", func(event *application.CustomEvent) {
-		// Log the event data
-		s.app.Logger.Info("Received event from frontend", "data", event.Data)
-
-		// Emit an event back to the frontend
-		s.app.Event.Emit("gin-api-response",
-			map[string]interface{}{
-				"message": "Response from Gin API Service",
-				"time":    time.Now().Format(time.RFC3339),
-			},
-		)
-	})
 
 	return nil
 }
