@@ -10,9 +10,8 @@ import (
 // defaultDescribeCacheCapacity bounds the number of cached descriptions kept
 // in memory across all sessions. Values are small (a formatted description
 // string), so this bounds entry count rather than raw bytes — see
-// .sdlc/docs/vision-vision-proxy-description-cache-20260902.spec.md §3.2 for
-// the sizing rationale. No env override (YAGNI): raise this const directly
-// if a real workload needs more headroom.
+// .design/vision-proxy.md §10 for the sizing rationale. No env override
+// (YAGNI): raise this const directly if a real workload needs more headroom.
 const defaultDescribeCacheCapacity = 2000
 
 // visionCacheKey identifies one (session, vision service, image content)
