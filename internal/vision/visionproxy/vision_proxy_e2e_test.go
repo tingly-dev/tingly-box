@@ -8,7 +8,7 @@ package visionproxy
 // Quickest path (local debug — only the API key is required):
 //
 //   TINGLY_API_KEY='sk-…' \
-//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/server/module/visionproxy/...
+//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/vision/visionproxy/...
 //
 // Defaults used when the env var is absent:
 //   TINGLY_BASE_URL   = http://localhost:12580/anthropic

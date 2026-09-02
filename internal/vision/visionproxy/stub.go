@@ -1,7 +1,6 @@
-// Package visionproxytest provides shared test doubles for the vision proxy
-// plugin, reused both by internal/server/module/visionproxy's own tests and
-// by internal/server tests that need a real Service wired through a
-// visionproxy.VisionProxyProcessor (e.g. handler-ordering regression tests).
+// Test doubles for the vision proxy plugin, reused both by this package's
+// own tests and by other packages' tests that need a real Service wired
+// through a VisionProxyProcessor (e.g. handler-ordering regression tests).
 package visionproxy
 
 import (
@@ -35,10 +34,14 @@ func (StubResolver) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 // NewProcessor builds a visionproxy.VisionProxyProcessor wired to the stub
 // client/resolver above, echoing "<desc> via <model>" for every described image.
+// Gets its own describe cache (rather than falling back to
+// defaultDescribeCache) so callers building several stub processors in the
+// same test binary don't silently share cached descriptions across them.
 func NewProcessor() *VisionProxyProcessor {
 	return &VisionProxyProcessor{
 		Client:   StubVisionClient{Desc: "desc"},
 		Resolver: StubResolver{},
+		cache:    newDescribeCache(defaultDescribeCacheCapacity),
 	}
 }
 
