@@ -183,7 +183,8 @@ describe cache already has a real description for them.
                           │ (lastIdx = latest image-bearing) │            │
                           │ (no Describe call)               │            │
                           └──────────────────────────────────┴───────────┘
-  unavail  = "[image: (description unavailable)]"
+  unavail  = "[image error: the vision proxy failed to describe this image, …]"
+             (explicit proxy-side error report — see imageUnavailableText)
   historic = "[image: (omitted from history)]"
 ```
 

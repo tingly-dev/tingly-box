@@ -184,7 +184,10 @@ provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqPara
 - 未命中缓存 + 历史消息里的 image → 打 `imageHistoricalText` marker
   (**不调** vision)
 - 失败兜底(无可用 service / 上游报错 / 空响应)→ 打
-  `imageUnavailableText` marker,**不写入缓存**
+  `imageUnavailableText` marker,**不写入缓存**。marker 文案是**显式的
+  错误报告**(说明是 proxy 侧故障、图片被网关移除,并提示模型告知用户),
+  不是中性占位符——让下游模型和最终用户都能把问题归因到代理,而不是
+  以为图片本身或客户端有问题
 
 支持四种请求形态:`*anthropic.BetaMessageNewParams` /
 `*anthropic.MessageNewParams` / `*openai.ChatCompletionNewParams` /
