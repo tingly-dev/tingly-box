@@ -13,28 +13,28 @@ the request.
 
 ```
 boot (internal/server/server.go)
-  └─► visionproxy.NewServiceFromPool(pool, resolver, logger)
+  └─► visionproxy.NewServiceFromPool(pool, resolver)
         └─► Service{ Processor: &VisionProxyProcessor{
-              Client:   NewPoolVisionClient(pool, resolver, logger),
+              Client:   NewPoolVisionClient(pool, resolver),
               Resolver: resolver,
             }}
 
-per request (internal/server/vision_proxy.go → applyVisionProxy)
-  Service.Apply(ctx, cfg, scenarioType, rule, typedRequest)
+per request (internal/protocolserver/protocol_handler.go → applyVisionProxy)
+  Service.Apply(ctx, cfg, scenarioType, rule, typedRequest, sessionID)
         │
         ├─ Resolve(cfg, scenarioType, rule) → *loadbalance.Service
         │    rule.Flags.VisionProxyService wins over
         │    cfg.Scenarios[...].Extensions["vision_proxy_service"]
         │    nil  ⇒  neither scope configured a service → no-op
         │
-        └─ Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc})
+        └─ Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc}, sessionID)
              mutates typedRequest in place (see below)
 ```
 
 `Service.Apply` is called directly from the request handlers
 (`openai_chat.go`, `openai_responses.go`, `anthropic_message.go`) before
 service selection — it is not a smart-routing op. An earlier version
-registered `VisionProxyProcessor` into `internal/routing/smart_routing`'s processor
+registered `VisionProxyProcessor` into `internal/routing/smartrouting`'s processor
 registry so a matching rule could bypass routing with `{Position:
 proxy_vision, Operation: enabled}`; that path was removed in favor of the
 rule/scenario flags above, which are simpler to configure and don't require
@@ -51,26 +51,42 @@ subject of the current question. The processor therefore has two distinct
 responsibilities:
 
 1. **Describe the latest message's images.** Each image in the LAST
-   message of `req.Messages` is sent to the vision upstream; the
+   message of `req.Messages` is sent to the vision upstream (unless the
+   describe cache already has an answer for it — see below); the
    description is spliced in as a text block. This is the actual cost
    center.
 2. **Strip historical images.** Every image in messages BEFORE the last
    one is replaced with a fixed text marker (`[image: (omitted from
-   history)]`) — no vision call is made. The image is gone from the
-   request so the text-only downstream still accepts it.
+   history)]`) — no vision call is made — **unless** the describe cache
+   already has a real description for it (e.g. it was the latest message
+   last turn), in which case the real description is used instead.
+
+### Describe cache
+
+`describe_cache.go` is a fixed-capacity, process-local LRU cache from
+`(session, provider, model, image-content-hash)` to the already-formatted
+replacement text. Every image occurrence — latest or historical — checks
+this cache first (`spliceOrCollect`): a hit splices the cached text
+immediately, no upstream call either way; a miss falls through to the two
+behaviors above. Only successful describe calls are written back; fail-strip
+results never are. Session is part of the key so a description is only ever
+reused within the same conversation — see `.design/vision-proxy.md` §10 for
+the full rationale (why session, why provider+model, known limitations).
 
 ### Process pipeline
 
-Processing is two-phase: a **collect** walk that strips historical images
-in place and gathers the latest message's images as `imageRef`s (source +
-splice-back callback), then a **describe** fan-out that resolves each ref
-via the vision upstream — concurrently, with `describeConcurrency` (4)
-bounding both live goroutines and in-flight upstream calls (the semaphore
-is acquired before each goroutine spawns). Each ref splices into its own
-distinct block slot, so the concurrent writes need no locking. A panic in
-the describe path is recovered per-image and collapses to the fail-strip
-marker — the goroutines run outside the HTTP handler's recovery
-middleware, so containment lives here.
+Processing is two-phase: a **collect** walk that, for every image, checks
+the cache first — a hit splices the cached text immediately regardless of
+position; a historical miss strips with the fixed marker; a latest-message
+miss is gathered as an `imageRef` (source + splice-back callback) — then a
+**describe** fan-out that resolves each gathered ref via the vision
+upstream — concurrently, with `describeConcurrency` (4) bounding both live
+goroutines and in-flight upstream calls (the semaphore is acquired before
+each goroutine spawns). Each ref splices into its own distinct block slot,
+so the concurrent writes need no locking. A panic in the describe path is
+recovered per-image and collapses to the fail-strip marker — the goroutines
+run outside the HTTP handler's recovery middleware, so containment lives
+here. A successful describe result is written to the cache before splicing.
 
 ```
 req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
@@ -85,19 +101,23 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
         { OfImage: B }                                       ◄── latest target
       ] } ]
        │
-       │ Phase 1 — collect<Protocol>(req):
-       │   for each message i < lastIdx:
-       │     replace OfImage blocks with
-       │       { OfText: "[image: (omitted from history)]" }
-       │     (no Describe call — no upstream cost for historical images)
-       │   for each OfImage in messages[lastIdx]:
-       │     extractImageSource → (mediaType, b64Data, remoteURL)
-       │       - Beta:   img.Source.OfBase64 | img.Source.OfURL
-       │       - V1:     img.Source.OfBase64 | img.Source.OfURL
-       │       - OpenAI: ParseImageURLToAnthropicSource(image_url.url)
-       │     collect imageRef{source, splice}
+       │ Phase 1 — collect<Protocol>(req, session, usable, cache):
+       │   for each image block (any message index):
+       │     key := newVisionCacheKey(session, usable, mediaType, b64, remoteURL)
+       │     if cache.get(key) hits:
+       │       splice the cached text in immediately — done, no ref, no call
+       │     else if i < lastIdx (historical):
+       │       replace OfImage blocks with
+       │         { OfText: "[image: (omitted from history)]" }
+       │       (no Describe call — no upstream cost for historical images)
+       │     else (latest message):
+       │       collect imageRef{source, cacheKey: key, splice}
+       │   extractImageSource → (mediaType, b64Data, remoteURL)
+       │     - Beta:   img.Source.OfBase64 | img.Source.OfURL
+       │     - V1:     img.Source.OfBase64 | img.Source.OfURL
+       │     - OpenAI: ParseImageURLToAnthropicSource(image_url.url)
        │
-       │ pickUsableService(services)          (skipped when no refs)
+       │ pickUsableService(services)          (resolved once, up front)
        │   skip nil / inactive / unresolvable-provider svcs
        │
        │ Phase 2 — describeAll(refs): concurrent, ≤ describeConcurrency
@@ -120,6 +140,7 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
        │        = ""                                (empty   → fail-strip)
        │        = err                               (error   → fail-strip)
        │
+       │   on success: cache.put(key, replacement text)
        │   replace OfImage with OfText("[image: <desc>]" or fail-strip)
        ▼
   messages: [
@@ -142,20 +163,23 @@ For images in the LAST message the block is removed **regardless of
 outcome** — success, error, or empty response — so the downstream
 text-only model never receives unsupported content. Historical images
 follow a separate path: they are never sent to the vision upstream, so
-fail-strip does not apply; they always receive the omitted marker.
+fail-strip does not apply; they receive the omitted marker unless the
+describe cache already has a real description for them.
 
 ```
                           ┌──────────────────────────────────────────────┐
                           │ describe outcome                  → replacement│
                           ├──────────────────────────────────┬───────────┤
+  cache hit (any position)│ describeCache.get(key) ok         │ [image: …]│
+                          ├──────────────────────────────────┼───────────┤
   no usable service       │ usable == nil                    │  unavail   │
   vision client nil       │ p.Client == nil                  │  unavail   │
   Describe() error        │ err != nil                       │  unavail   │
   empty response          │ strings.TrimSpace(desc) == ""    │  unavail   │
   Describe() panics       │ recovered in safeDescribe        │  unavail   │
-  success                 │ desc non-empty                   │  [image: …]│
+  success                 │ desc non-empty (→ cached)         │  [image: …]│
                           ├──────────────────────────────────┴───────────┤
-  historical image        │ messages[i] where i < lastIdx    │  historic │
+  historical image, miss  │ messages[i] where i < lastIdx    │  historic │
                           │ (no Describe call)               │            │
                           └──────────────────────────────────┴───────────┘
   unavail  = "[image: (description unavailable)]"
@@ -168,7 +192,7 @@ fail-strip does not apply; they always receive the omitted marker.
 |--------------------------------------------|--------------------------------------------------|----------------------------------------|
 | `*anthropic.BetaMessageNewParams`          | `BetaImageBlockParam.Source` (Base64 \| URL)   | last message described; older stripped |
 | `*anthropic.MessageNewParams`              | `ImageBlockParam.Source` (Base64 \| URL)       | last message described; older stripped |
-| `*openai.ChatCompletionNewParams`          | `user.content[].OfImageURL.ImageURL.URL`       | last message described; older stripped |
+| `*openai.ChatCompletionNewParams`          | `user.content[].OfImageURL.ImageURL.URL` (`OfUser` and `OfTool` messages) | last message described; older stripped |
 | `*responses.ResponseNewParams`             | `input[].content[].OfInputImage`               | last item described; older stripped    |
 
 Images nested inside `tool_result` content blocks are also walked (Beta and
@@ -177,16 +201,23 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 
 ## Testing
 
-- `visionproxytest/` — shared test doubles (`StubVisionClient`,
-  `StubResolver`, fixture builders) reused by this package's own tests and
-  by `internal/server` tests that exercise `Service.Apply` through the real
-  handler call order (see `internal/server/openai_responses_vision_test.go`).
+- `stub.go` — shared test doubles (`StubVisionClient`, `StubResolver`,
+  `NewProcessor`, fixture builders) reused by this package's own tests and by
+  other packages' tests that exercise `Service.Apply` through the real
+  handler call order.
+- `describe_cache_test.go` — LRU mechanics in isolation (eviction, update,
+  key isolation across service/session, nil/zero-capacity no-op behavior).
+- `vision_proxy_test.go` / `vision_proxy_regression_test.go` — the
+  processor contract, including the `TestVisionProxy_Cache_*` cases for
+  session/model isolation, historical-hit-uses-real-description, and
+  failed-describe-not-cached.
 - `vision_proxy_e2e_test.go` (build tag `e2e`) drives a real deployment;
   requires `TINGLY_API_KEY`, see the file header for details.
 
 ## Out of scope (today)
 
-- Caching describe results across requests (each image is described once
-  per request, even if the identical image appears in multiple requests).
-- Deduplicating identical images within one request (each occurrence gets
-  its own describe call).
+- Deduplicating identical images within one request (each occurrence still
+  gets its own describe call the first time it's seen — the cache only
+  helps across separate `Process` calls, not within one).
+- Cross-process / cross-instance cache sharing (the describe cache is
+  in-memory, per gateway process — see `.design/vision-proxy.md` §10).
