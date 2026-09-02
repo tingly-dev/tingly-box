@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/pkg/lock"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
 // LogCmdKong streams or fetches system logs from the running tingly-box server

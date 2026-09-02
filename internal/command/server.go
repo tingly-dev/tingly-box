@@ -15,12 +15,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 	"github.com/tingly-dev/tingly-box/pkg/daemon"
-	"github.com/tingly-dev/tingly-box/pkg/lock"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 )
 

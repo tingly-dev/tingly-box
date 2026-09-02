@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/pkg/lock"
 )
 
 // AppManager is the command process host: it owns AppConfig and server

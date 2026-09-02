@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/pkg/lock"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
 // TestServerManagerStopWithoutStart tests stopping a server that was never started

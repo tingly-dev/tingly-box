@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/pkg/lock"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
 // stopProcessGracefully attempts to stop a process gracefully on Windows

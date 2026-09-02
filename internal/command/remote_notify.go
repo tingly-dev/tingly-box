@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/pkg/lock"
+	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
 // reloadedBot is the per-bot status returned by the server's reload endpoint.
