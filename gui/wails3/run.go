@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
@@ -14,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/lock"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 // acquireSingleInstanceLock ensures at most one tingly-box server instance
@@ -124,8 +126,22 @@ func (l *appLauncher) Start(appManager *command.AppManager, opts options.StartSe
 	// Create Wails app with ServerManager embedded
 	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug, application.ActivationPolicyRegular)
 
+	// Main-window geometry persistence target (see windowstate.go).
+	windowStatePath = filepath.Join(appManager.AppConfig().ConfigDir(), windowStateFile)
+
 	// Set up the tray icon + hub panel (must run after creating the app)
 	useSystray(app, tinglyService)
+
+	// Launching a desktop app should show its window: open the main window
+	// at startup (first run maximised, later runs at the saved geometry).
+	showMainWindow(app, tinglyService, "")
+
+	// Clicking the dock icon while the window is hidden should bring it
+	// back, like any regular macOS app. (The window is hidden, not closed,
+	// on close - see showMainWindow's WindowClosing hook.)
+	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+		showMainWindow(app, tinglyService, "")
+	})
 
 	// Run the Wails app
 	return app.Run()
