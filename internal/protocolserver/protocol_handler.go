@@ -183,11 +183,19 @@ func MCPEnabled(cfg *config.Config) bool {
 // service selection (after the rule is resolved). Delegates to
 // visionproxy.Service — see internal/server/module/visionproxy and
 // .design/vision-proxy.md for the design.
+//
+// Session id is resolved here independently of (and before) the
+// resolveSessionID call each handler makes later for tracking context — see
+// .sdlc/docs/vision-vision-proxy-description-cache-20260902.spec.md §3.1.
+// resolveSessionID is a pure function of (c, typedRequest), so recomputing it
+// here is cheap and does not require reordering the handlers' existing
+// session-injection calls.
 func (ph *ProtocolHandler) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
 	if ph.deps.VisionProxyService == nil {
 		return
 	}
-	ph.deps.VisionProxyService.Apply(c.Request.Context(), ph.deps.Config, scenarioType, rule, typedRequest)
+	sessionID := resolveSessionID(c, typedRequest)
+	ph.deps.VisionProxyService.Apply(c.Request.Context(), ph.deps.Config, scenarioType, rule, typedRequest, sessionID)
 }
 
 // isEnterpriseContextPresent reports whether the request carries an
