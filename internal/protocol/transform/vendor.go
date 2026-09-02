@@ -71,16 +71,27 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 	return req
 }
 
+// isClaudeCodeBackend reports whether the request is bound for Anthropic's
+// Claude Code backend: either by host, or because the provider is a Claude
+// Code OAuth issuer whatever its APIBase (a relay in front of Anthropic still
+// needs the billing header / metadata identity the OAuth chain re-signs).
+func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
+	if host == "api.anthropic.com" || host == "claude.ai" {
+		return true
+	}
+	return ctx != nil && ctx.Provider != nil && ctx.Provider.IsClaudeCodeProvider()
+}
+
 func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic.MessageNewParams, providerURL string) *anthropic.MessageNewParams {
 	if req.Model == "" {
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	switch host {
-	case "api.anthropic.com", "claude.ai":
+	switch {
+	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
-	case "api.deepseek.com":
+	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
 	}
@@ -92,11 +103,11 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	switch host {
-	case "api.anthropic.com", "claude.ai":
+	switch {
+	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
-	case "api.deepseek.com":
+	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
 	}

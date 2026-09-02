@@ -57,7 +57,7 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	isOAuthToken := IsClaudeOAuthToken(provider.GetAccessToken())
 
 	// Apply Claude Code specific headers
-	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID)
+	options = applyClaudeCodeHeaders(options, provider, model, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID)
 
 	// Add beta query parameter
 	options = append(options, anthropicOption.WithQuery("beta", "true"))
@@ -82,19 +82,14 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
-// orgOverride, when non-empty, replaces the login-time organization as the
+// model seeds the client-level anthropic-beta baseline (the per-request
+// Guard/GuardBeta recompute it from the body and override it); orgOverride,
+// when non-empty, replaces the login-time organization as the
 // anthropic-organization-id value (the claude_org_id rule flag).
-func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool, orgOverride string) []anthropicOption.RequestOption {
-	// Build beta header with all required flags
-	baseBetas := anthropicBeta
-
-	baseBetas = strings.TrimRight(baseBetas, ",")
-
-	// Ensure oauth is always present at the end
-	if !strings.Contains(baseBetas, "oauth") {
-		baseBetas = strings.TrimRight(baseBetas, ",")
-		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
-	}
+func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, model string, isOAuthToken bool, orgOverride string) []anthropicOption.RequestOption {
+	// Client-level baseline: the model-dependent flags a real CLI sends on
+	// every request. Request-scoped flags are added per call in Guard.
+	baseBetas := joinBetas(composeClaudeCodeBetas(claudeBetaSignals{Model: model, OAuth: isOAuthToken}))
 
 	// Auth header
 	if isOAuthToken {
@@ -103,7 +98,8 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 		options = append(options, anthropicOption.WithHeader("x-api-key", provider.GetAccessToken()))
 	}
 
-	// Claude Code specific headers
+	// Claude Code specific headers. No x-stainless-helper-method: the CLI
+	// calls messages.create({stream:true}) directly, not the .stream() helper.
 	options = append(options,
 		anthropicOption.WithHeader("accept", acceptHeader),
 		anthropicOption.WithHeader("anthropic-beta", baseBetas),
@@ -111,7 +107,6 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 		anthropicOption.WithHeader("anthropic-version", anthropicVersion),
 		anthropicOption.WithHeader("user-agent", claudeCLIUserAgent),
 		anthropicOption.WithHeader("x-app", claudeXApp),
-		anthropicOption.WithHeader("x-stainless-helper-method", stainlessHelperMethod),
 		anthropicOption.WithHeader("x-stainless-retry-count", stainlessRetryCount),
 		anthropicOption.WithHeader("x-stainless-runtime-version", stainlessRuntimeVersion),
 		anthropicOption.WithHeader("x-stainless-package-version", stainlessPackageVersion),
@@ -180,7 +175,7 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	if meta == nil {
 		panic("invalid metadata")
 	}
-	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	options := c.perRequestOptions(ctx, meta.SessionID, v1ClaudeBetaSignals(ctx, req, c.isOAuth()))
 	// Streaming responses bypass restoreToolNamesInMessage, so undo the rename
 	// on the wire instead. No-op for non-streaming responses.
 	if len(reverseMap) > 0 {
@@ -199,6 +194,51 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	}
 
 	return base, reverseMap
+}
+
+// isOAuth reports whether the provider credential is a Claude OAuth token
+// (the oauth-2025-04-20 beta rides only on those).
+func (c *ClaudeClient) isOAuth() bool {
+	return IsClaudeOAuthToken(c.AnthropicClient.provider.GetAccessToken())
+}
+
+// perRequestOptions extends the client's base options with the headers a
+// real Claude Code CLI derives per request: the session id, the composed
+// anthropic-beta list (overriding the client-level baseline — WithHeader
+// replaces) and, for subagent traffic, the agent lineage headers replayed
+// from the inbound client.
+func (c *ClaudeClient) perRequestOptions(ctx context.Context, sessionID string, sig claudeBetaSignals) []anthropicOption.RequestOption {
+	base := c.AnthropicClient.Client().Options
+	options := make([]anthropicOption.RequestOption, 0, len(base)+4)
+	options = append(options, base...)
+	options = append(options,
+		anthropicOption.WithHeader("X-Claude-Code-Session-Id", sessionID),
+		anthropicOption.WithHeader("anthropic-beta", joinBetas(composeClaudeCodeBetas(sig))),
+	)
+	hints := typ.GetClaudeCodeClientHints(ctx)
+	if hints.AgentID != "" {
+		options = append(options, anthropicOption.WithHeader("x-claude-code-agent-id", sanitizeClaudeHeaderValue(hints.AgentID)))
+	}
+	if hints.ParentAgentID != "" {
+		options = append(options, anthropicOption.WithHeader("x-claude-code-parent-agent-id", sanitizeClaudeHeaderValue(hints.ParentAgentID)))
+	}
+	return options
+}
+
+// sanitizeClaudeHeaderValue reproduces the CLI's agent-id header encoder:
+// '%' and every byte outside printable ASCII are percent-encoded so the value
+// is always a valid HTTP header value.
+func sanitizeClaudeHeaderValue(v string) string {
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		ch := v[i]
+		if ch == '%' || ch < 0x20 || ch > 0x7e {
+			fmt.Fprintf(&b, "%%%02X", ch)
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.String()
 }
 
 func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) (*AnthropicClient, map[string]string) {
@@ -240,7 +280,10 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	if meta == nil {
 		panic("invalid metadata")
 	}
-	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	options := c.perRequestOptions(ctx, meta.SessionID, betaClaudeBetaSignals(ctx, req, c.isOAuth()))
+	// The composed header is the whole anthropic-beta story: clear the SDK's
+	// per-param Betas so nothing is appended as a second header value.
+	req.Betas = nil
 	// Streaming responses bypass restoreBetaToolNamesInMessage, so undo the
 	// rename on the wire instead. No-op for non-streaming responses.
 	if len(reverseMap) > 0 {
@@ -260,10 +303,15 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	return base, reverseMap
 }
 
+// The Guard'ed client already carries the complete anthropic-beta header
+// (context_1m folded in), so the calls below go to the SDK directly instead of
+// through AnthropicClient's wrappers, whose withContext1MBeta /
+// context1MHeaderOpts would append context-1m again as a second header value.
+
 // MessagesNew creates a new message request.
 func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
 	guard, reverseMap := c.Guard(ctx, req)
-	msg, err := guard.MessagesNew(ctx, req)
+	msg, err := guard.client.Messages.New(ctx, *req)
 	if err != nil {
 		return nil, err
 	}
@@ -274,13 +322,13 @@ func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNe
 // MessagesNewStreaming creates a new streaming message request.
 func (c *ClaudeClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
 	guard, _ := c.Guard(ctx, req)
-	return guard.MessagesNewStreaming(ctx, req)
+	return guard.client.Messages.NewStreaming(ctx, *req)
 }
 
 // BetaMessagesNew creates a new beta message request.
 func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
 	guard, reverseMap := c.GuardBeta(ctx, req)
-	msg, err := guard.BetaMessagesNew(ctx, req)
+	msg, err := guard.client.Beta.Messages.New(ctx, *req)
 	if err != nil {
 		return nil, err
 	}
@@ -291,17 +339,33 @@ func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaM
 // BetaMessagesNewStreaming creates a new beta streaming message request.
 func (c *ClaudeClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
 	guard, _ := c.GuardBeta(ctx, req)
-	return guard.BetaMessagesNewStreaming(ctx, req)
+	return guard.client.Beta.Messages.NewStreaming(ctx, *req)
+}
+
+// countTokensClient builds a client whose anthropic-beta header is the
+// count_tokens subset the CLI sends (claude-code, interleaved-thinking,
+// context-management, oauth), for the given model.
+func (c *ClaudeClient) countTokensClient(ctx context.Context, model string) anthropic.Client {
+	sig := baseClaudeBetaSignals(ctx, model, c.isOAuth())
+	betas := filterClaudeCodeCountTokensBetas(composeClaudeCodeBetas(sig))
+	base := c.AnthropicClient.Client().Options
+	options := make([]anthropicOption.RequestOption, 0, len(base)+1)
+	options = append(options, base...)
+	options = append(options, anthropicOption.WithHeader("anthropic-beta", joinBetas(betas)))
+	return anthropic.NewClient(options...)
 }
 
 // MessagesCountTokens counts tokens for a message request.
 func (c *ClaudeClient) MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
-	return c.AnthropicClient.MessagesCountTokens(ctx, req)
+	client := c.countTokensClient(ctx, string(req.Model))
+	return client.Messages.CountTokens(ctx, *req)
 }
 
 // BetaMessagesCountTokens counts tokens for a beta message request.
 func (c *ClaudeClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
-	return c.AnthropicClient.BetaMessagesCountTokens(ctx, req)
+	client := c.countTokensClient(ctx, string(req.Model))
+	req.Betas = nil
+	return client.Beta.Messages.CountTokens(ctx, *req)
 }
 
 // Close closes any resources held by the client.

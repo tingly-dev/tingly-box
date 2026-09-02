@@ -1,5 +1,7 @@
 package typ
 
+import "github.com/tingly-dev/tingly-box/internal/constant"
+
 // FlagValueType describes how a rule flag is represented in storage and UI.
 type FlagValueType string
 
@@ -91,7 +93,7 @@ type FlagSpec struct {
 // Label is a human-friendly name; Value is the literal User-Agent header.
 func DefaultUserAgents() []FlagOption {
 	return []FlagOption{
-		{Label: "Claude Code (CLI)", Value: "claude-cli/2.1.86 (external, cli)"},
+		{Label: "Claude Code (CLI)", Value: constant.ClaudeCodeUserAgent()},
 		{Label: "Codex CLI", Value: "codex_cli_rs/0.20.0"},
 		{Label: "OpenClaw", Value: "openclaw/1.0.0"},
 		{Label: "Hermes", Value: "hermes-agent/1.0.0"},

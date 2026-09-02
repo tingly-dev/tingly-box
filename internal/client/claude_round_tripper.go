@@ -1,103 +1,22 @@
 package client
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
-// knownAnthropicBetas is the universe of valid anthropic-beta flag values
-// the upstream API recognizes — sourced from the SDK's AnthropicBeta*
-// constants plus Claude Code specific flags Anthropic ships ahead of the
-// public SDK. Anything outside this set is treated as garbage at the
-// outermost layer (likely a buggy or hostile caller).
-var knownAnthropicBetas = func() map[string]struct{} {
-	flags := []string{
-		// SDK-defined (libs/anthropic-sdk-go/beta.go)
-		anthropic.AnthropicBetaMessageBatches2024_09_24,
-		anthropic.AnthropicBetaPromptCaching2024_07_31,
-		anthropic.AnthropicBetaComputerUse2024_10_22,
-		anthropic.AnthropicBetaComputerUse2025_01_24,
-		anthropic.AnthropicBetaPDFs2024_09_25,
-		anthropic.AnthropicBetaTokenCounting2024_11_01,
-		anthropic.AnthropicBetaTokenEfficientTools2025_02_19,
-		anthropic.AnthropicBetaOutput128k2025_02_19,
-		anthropic.AnthropicBetaFilesAPI2025_04_14,
-		anthropic.AnthropicBetaMCPClient2025_04_04,
-		anthropic.AnthropicBetaMCPClient2025_11_20,
-		anthropic.AnthropicBetaDevFullThinking2025_05_14,
-		anthropic.AnthropicBetaInterleavedThinking2025_05_14,
-		anthropic.AnthropicBetaCodeExecution2025_05_22,
-		anthropic.AnthropicBetaExtendedCacheTTL2025_04_11,
-		anthropic.AnthropicBetaContext1m2025_08_07,
-		anthropic.AnthropicBetaContextManagement2025_06_27,
-		anthropic.AnthropicBetaModelContextWindowExceeded2025_08_26,
-		anthropic.AnthropicBetaSkills2025_10_02,
-		anthropic.AnthropicBetaFastMode2026_02_01,
-		anthropic.AnthropicBetaOutput300k2026_03_24,
-		anthropic.AnthropicBetaUserProfiles2026_03_24,
-		anthropic.AnthropicBetaAdvisorTool2026_03_01,
-		anthropic.AnthropicBetaManagedAgents2026_04_01,
-		anthropic.AnthropicBetaCacheDiagnosis2026_04_07,
-		anthropic.AnthropicBetaThinkingTokenCount2026_05_13,
-		// Claude Code specific flags not (yet) exposed by the SDK
-		"claude-code-20250219",
-		"oauth-2025-04-20",
-		"prompt-caching-scope-2026-01-05",
-		"structured-outputs-2025-12-15",
-		"redact-thinking-2026-02-12",
-		"token-efficient-tools-2026-03-28",
-		"oidc-federation-2026-04-01",
-	}
-	m := make(map[string]struct{}, len(flags))
-	for _, f := range flags {
-		m[f] = struct{}{}
-	}
-	return m
-}()
-
-// claudeCodeRequiredBetasOrdered is the required baseline as an ordered
-// slice, derived once from anthropicBeta. mergeBetaFlags iterates this on
-// every request instead of re-splitting the constant per call.
-var claudeCodeRequiredBetasOrdered = func() []string {
-	parts := strings.Split(anthropicBeta, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}()
-
-// claudeCodeRequiredBetas is the set form of the same baseline, for O(1)
-// membership checks in classifyUpstreamBetaFlag.
-var claudeCodeRequiredBetas = func() map[string]struct{} {
-	m := make(map[string]struct{}, len(claudeCodeRequiredBetasOrdered))
-	for _, p := range claudeCodeRequiredBetasOrdered {
-		m[p] = struct{}{}
-	}
-	return m
-}()
-
-// claudeCodeAllowedUpstreamBetas is the very narrow set of anthropic-beta
-// flags we accept FROM upstream callers on top of the required baseline.
+// Claude Code OAuth chain: pinned client identity.
 //
-// Why this is restrictive: Anthropic fingerprints Claude Code OAuth
-// traffic, and `anthropic-beta` is one of the signals. Forwarding any
-// SDK-known flag (e.g. message-batches, managed-agents, pdfs, mcp-client)
-// would emit a header shape no real claude-cli ever sends, which both
-// breaks fingerprinting and may trigger anti-abuse responses.
-//
-// Only flags that real Claude Code is known to add conditionally — or
-// that have been explicitly cleared as fingerprint-safe — belong here.
-// When in doubt, leave it out.
-var claudeCodeAllowedUpstreamBetas = map[string]struct{}{
-	// Model-conditional 1M context window; real Claude Code adds this
-	// for sonnet/opus, so accepting it from upstream is safe.
-	anthropic.AnthropicBetaContext1m2025_08_07: {},
-}
+// Every value below is what the official Claude Code release named by
+// constant.ClaudeCodeVersion puts on the wire, taken from the native binary's
+// bundle and confirmed by live captures against a fake API server
+// (.design/claude-code-client-compat.md §2). Keep them in lock-step with the
+// version: the server rejects a stale version outright
+// (claude_code_version_too_old), and a mismatched SDK/runtime triple is a
+// fingerprint tell.
 
 // claudeToolPrefix is empty to match real Claude Code behavior (no tool name prefix).
 const claudeToolPrefix = ""
@@ -123,25 +42,26 @@ var oauthToolRenameMap = map[string]string{
 }
 
 const (
-	// Claude Code client identification
-	claudeCLIUserAgent      = "claude-cli/2.1.86 (external, cli)"
+	// Claude Code client identification. The CLI sets x-app ("cli", or
+	// "cli-bg" for background sessions), User-Agent and
+	// X-Claude-Code-Session-Id itself; the X-Stainless-* set comes from the
+	// bundled @anthropic-ai/sdk. Since 2.1.251 the CLI ships as a native Bun
+	// binary, so the "node" runtime reports Bun's Node-compat version.
 	claudeXApp              = "cli"
-	stainlessHelperMethod   = "stream"
 	stainlessRetryCount     = "0"
-	stainlessRuntimeVersion = "v24.3.0"
-	stainlessPackageVersion = "0.74.0"
+	stainlessRuntimeVersion = "v26.3.0" // Bun 1.4.1 (2.1.258 binary)
+	stainlessPackageVersion = "0.112.1" // @anthropic-ai/sdk bundled in 2.1.258
 	stainlessRuntime        = "node"
 	stainlessLang           = "js"
-	stainlessTimeout        = "600"
+	stainlessTimeout        = "600" // API_TIMEOUT_MS default 600000 / 1000
 
 	// Anthropic API headers
-	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,structured-outputs-2025-12-15,fast-mode-2026-02-01,redact-thinking-2026-02-12,token-efficient-tools-2026-03-28"
-	anthropicOAuthBeta                    = "oauth-2025-04-20"
+	anthropicOAuthBeta                    = betaOAuth
 	anthropicDangerousDirectBrowserAccess = "true"
 	anthropicVersion                      = "2023-06-01"
 
 	// Model-specific beta flags
-	anthropicContext1m = "context-1m-2025-08-07"
+	anthropicContext1m = betaContext1M
 
 	// AnthropicContext1m is the exported version for use in other packages
 	AnthropicContext1m = anthropicContext1m
@@ -153,14 +73,59 @@ const (
 	maxStreamingLineSize = 52_428_800 // 50MB max line size
 )
 
-// stainlessOS returns the OS name for the x-stainless-os header
+// claudeCLIUserAgent is the pinned User-Agent ("claude-cli/<ver> (external, cli)").
+var claudeCLIUserAgent = constant.ClaudeCodeUserAgent()
+
+// stainlessOS returns the X-Stainless-OS value the JS SDK derives from
+// process.platform ("MacOS", "Linux", "Windows", ...).
 func stainlessOS() string {
-	return runtime.GOOS // e.g., "darwin", "linux", "windows"
+	return stainlessOSName(runtime.GOOS)
 }
 
-// stainlessArch returns the architecture for the x-stainless-arch header
+func stainlessOSName(goos string) string {
+	switch goos {
+	case "darwin":
+		return "MacOS"
+	case "linux":
+		return "Linux"
+	case "windows":
+		return "Windows"
+	case "freebsd":
+		return "FreeBSD"
+	case "openbsd":
+		return "OpenBSD"
+	case "android":
+		return "Android"
+	case "ios":
+		return "iOS"
+	case "":
+		return "Unknown"
+	default:
+		return fmt.Sprintf("Other:%s", goos)
+	}
+}
+
+// stainlessArch returns the X-Stainless-Arch value the JS SDK derives from
+// process.arch ("x64", "arm64", ...).
 func stainlessArch() string {
-	return runtime.GOARCH // e.g., "amd64", "arm64"
+	return stainlessArchName(runtime.GOARCH)
+}
+
+func stainlessArchName(goarch string) string {
+	switch goarch {
+	case "amd64":
+		return "x64"
+	case "arm64":
+		return "arm64"
+	case "386":
+		return "x32"
+	case "arm":
+		return "arm"
+	case "":
+		return "unknown"
+	default:
+		return fmt.Sprintf("other:%s", goarch)
+	}
 }
 
 // IsClaudeOAuthToken checks if the given API key is a Claude OAuth token

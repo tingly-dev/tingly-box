@@ -169,7 +169,36 @@ func ResolveRuleFlagsWithScenario(
 	// SDK default), so no precedence judgment is duplicated here.
 	applyClientUserAgent(c)
 
+	// Likewise the inbound Claude Code facts (beta flags, subagent ids) are
+	// attached unconditionally; only the Claude OAuth chain reads them, and
+	// it decides what is replayed (see client.composeClaudeCodeBetas).
+	applyClaudeCodeClientHints(c)
+
 	return flags
+}
+
+// applyClaudeCodeClientHints attaches the inbound anthropic-beta flags and
+// the Claude Code subagent headers to the request context for the Claude
+// OAuth chain (typ.GetClaudeCodeClientHints). No-op when the client sent none.
+func applyClaudeCodeClientHints(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	hints := typ.ClaudeCodeClientHints{
+		AgentID:       strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID: strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+	}
+	for _, v := range c.Request.Header.Values("anthropic-beta") {
+		for _, flag := range strings.Split(v, ",") {
+			if flag = strings.TrimSpace(flag); flag != "" {
+				hints.Betas = append(hints.Betas, flag)
+			}
+		}
+	}
+	if hints.IsZero() {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithClaudeCodeClientHints(c.Request.Context(), hints))
 }
 
 // applyRuleFlags attaches the resolved RuleFlags to the request context for
