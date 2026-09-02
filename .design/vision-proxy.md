@@ -1,3 +1,7 @@
+---
+updated: 2026-09-02
+---
+
 # Vision Proxy
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
