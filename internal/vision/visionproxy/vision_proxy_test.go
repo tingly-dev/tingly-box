@@ -550,7 +550,7 @@ func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}), "Process must not surface the upstream error — fail-strip semantics")
 	require.Equal(t, 0, countImages(req), "image stripped despite upstream failure")
-	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
+	require.Contains(t, collectText(req), "vision proxy failed", "fail-strip marker present")
 }
 
 // Every latest-message image gets its own describe call and is replaced.
@@ -594,7 +594,7 @@ func TestVisionProxy_DescribePanic_FailStrips(t *testing.T) {
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req), "images stripped despite panicking client")
-	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
+	require.Contains(t, collectText(req), "vision proxy failed", "fail-strip marker present")
 }
 
 // echoPayloadClient derives the description from the image payload itself,
@@ -657,7 +657,7 @@ func TestVisionProxy_EmptyDescription_StripImageWithUnavailableMarker(t *testing
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
-	require.Contains(t, collectText(req), "description unavailable",
+	require.Contains(t, collectText(req), "vision proxy failed",
 		"empty upstream response treated as fail-strip")
 }
 
@@ -935,7 +935,7 @@ func TestVisionProxy_Cache_FailedDescribeIsNotCached(t *testing.T) {
 	req1 := betaReqWithImages("describe", tinyPNGBase64)
 	require.NoError(t, p.Process(context.Background(), req1, svcs, session))
 	require.Equal(t, 1, fake.callCount())
-	require.Contains(t, collectText(req1), "description unavailable")
+	require.Contains(t, collectText(req1), "vision proxy failed")
 
 	req2 := betaReqWithImages("describe", tinyPNGBase64)
 	require.NoError(t, p.Process(context.Background(), req2, svcs, session))
