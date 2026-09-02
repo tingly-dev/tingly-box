@@ -100,11 +100,26 @@ func newVisionCacheKey(session string, usable *loadbalance.Service, mediaType, b
 	if usable != nil {
 		provider, model = usable.Provider, usable.Model
 	}
-	content := hashBase64Image(mediaType, b64)
-	if remoteURL != "" {
-		content = hashURLImage(remoteURL)
+	content := hashURLImage(remoteURL)
+	if remoteURL == "" {
+		content = hashBase64Image(mediaType, b64)
 	}
 	return visionCacheKey{session: session, provider: provider, model: model, content: content}
+}
+
+// newImageRef bundles one image occurrence's extracted source, its cache
+// key, and the splice-back callback. Every collectXxx call site needs the
+// same four fields together, so centralizing the construction here keeps
+// them from drifting out of sync (e.g. a cache key built from a different
+// mediaType/b64/remoteURL triple than the one actually described).
+func newImageRef(session string, usable *loadbalance.Service, mediaType, b64, remoteURL string, splice func(text string)) imageRef {
+	return imageRef{
+		mediaType: mediaType,
+		b64:       b64,
+		remoteURL: remoteURL,
+		cacheKey:  newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
+		splice:    splice,
+	}
 }
 
 // Process mutates req in place: every image block becomes a text block. On
@@ -113,8 +128,7 @@ func newVisionCacheKey(session string, usable *loadbalance.Service, mediaType, b
 // not choke on an unsupported content block. services is the candidate
 // upstream pool — the first active, resolvable service is used; pass a
 // single already-resolved service for the common case. sessionID scopes the
-// describe cache — see describe_cache.go and
-// .sdlc/docs/vision-vision-proxy-description-cache-20260902.spec.md §1 for
+// describe cache — see describe_cache.go and .design/vision-proxy.md §10 for
 // why a session boundary, not just image content, decides cache reuse.
 func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []*loadbalance.Service, sessionID typ.SessionID) error {
 	if req == nil {
@@ -288,15 +302,11 @@ func collectBeta(req *anthropic.BetaMessageNewParams, session string, usable *lo
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(cache, refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-					splice: func(text string) {
-						blocks[bi] = anthropic.BetaContentBlockParamUnion{
-							OfText: &anthropic.BetaTextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.BetaContentBlockParamUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				}))
 				continue
 			}
 			tr := blocks[bi].OfToolResult
@@ -310,15 +320,11 @@ func collectBeta(req *anthropic.BetaMessageNewParams, session string, usable *lo
 					continue
 				}
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(cache, refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-					splice: func(text string) {
-						inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
-							OfText: &anthropic.BetaTextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				}))
 			}
 		}
 	}
@@ -335,15 +341,11 @@ func collectV1(req *anthropic.MessageNewParams, session string, usable *loadbala
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(cache, refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-					splice: func(text string) {
-						blocks[bi] = anthropic.ContentBlockParamUnion{
-							OfText: &anthropic.TextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.ContentBlockParamUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				}))
 				continue
 			}
 			tr := blocks[bi].OfToolResult
@@ -357,15 +359,11 @@ func collectV1(req *anthropic.MessageNewParams, session string, usable *loadbala
 					continue
 				}
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(cache, refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-					splice: func(text string) {
-						inner[ii] = anthropic.ToolResultBlockParamContentUnion{
-							OfText: &anthropic.TextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.ToolResultBlockParamContentUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				}))
 			}
 		}
 	}
@@ -397,15 +395,11 @@ func collectOpenAI(req *openai.ChatCompletionNewParams, session string, usable *
 				continue
 			}
 			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-			refs = spliceOrCollect(cache, refs, isLast, imageRef{
-				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-				cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-				splice: func(text string) {
-					parts[pi] = openai.ChatCompletionContentPartUnionParam{
-						OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
-					}
-				},
-			})
+			refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+				parts[pi] = openai.ChatCompletionContentPartUnionParam{
+					OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
+				}
+			}))
 		}
 	}
 	return refs
@@ -441,15 +435,11 @@ func collectResponses(req *responses.ResponseNewParams, session string, usable *
 				continue
 			}
 			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(img.ImageURL.Or(""))
-			refs = spliceOrCollect(cache, refs, isLast, imageRef{
-				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-				cacheKey: newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
-				splice: func(text string) {
-					list[ci] = responses.ResponseInputContentUnionParam{
-						OfInputText: &responses.ResponseInputTextParam{Text: text},
-					}
-				},
-			})
+			refs = spliceOrCollect(cache, refs, isLast, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+				list[ci] = responses.ResponseInputContentUnionParam{
+					OfInputText: &responses.ResponseInputTextParam{Text: text},
+				}
+			}))
 		}
 	}
 	return refs
