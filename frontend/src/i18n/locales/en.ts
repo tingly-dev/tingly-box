@@ -1503,7 +1503,8 @@ export default {
     },
     "actions": {
       "home": "Home",
-      "dashboard": "Dashboard"
+      "dashboard": "Dashboard",
+      "settings": "Settings"
     }
   },
   "mcp": {

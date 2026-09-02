@@ -15,8 +15,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import TinglyService from '@/bindings';
-import { BarChart, ChevronRight, Home, Refresh } from '@/components/icons';
-import logo from '@/assets/images/logo-universal.png';
+import { BarChart, ChevronRight, Home, Refresh, Settings } from '@/components/icons';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
@@ -99,7 +98,8 @@ export default function HubPage() {
         >
             {/* Header: identity + status, like a menu-bar app's masthead */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 0.5, pt: 0.25 }}>
-                <Box component="img" src={logo} alt="" sx={{ width: 28, height: 28, borderRadius: 1 }} />
+                {/* Same brand mark the app's activity bar uses */}
+                <Box component="img" src="/assets/icon.svg" alt="" sx={{ width: 28, height: 28, borderRadius: 1 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.3 }} noWrap>
                         {t('hub.title')}
@@ -126,6 +126,13 @@ export default function HubPage() {
                 {hasUpdate && versionKnown && (
                     <Chip size="small" label={t('hub.status.updateAvailable')} color="info" variant="outlined" />
                 )}
+                <IconButton
+                    size="small"
+                    aria-label={t('hub.actions.settings')}
+                    onClick={() => openMainWindow('/system')}
+                >
+                    <Settings sx={{ fontSize: 18 }} />
+                </IconButton>
             </Stack>
 
             {/* Quick actions: list rows, not oversized buttons */}
