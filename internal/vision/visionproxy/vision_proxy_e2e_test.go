@@ -8,7 +8,7 @@ package visionproxy
 // Quickest path (local debug — only the API key is required):
 //
 //   TINGLY_API_KEY='sk-…' \
-//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/server/module/visionproxy/...
+//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/vision/visionproxy/...
 //
 // Defaults used when the env var is absent:
 //   TINGLY_BASE_URL   = http://localhost:12580/anthropic
@@ -148,7 +148,7 @@ func TestVisionProxy_E2E_V1Messages(t *testing.T) {
 	// Soft-warn (not fail) when the response carries the fail-strip marker:
 	// vision proxy ran but the upstream describe call failed. Routing
 	// still worked; the user just needs to fix the vision-proxy upstream.
-	if strings.Contains(body, "(description unavailable)") {
+	if strings.Contains(body, "vision proxy failed") {
 		t.Logf("WARNING: response references the vision-proxy fail-strip marker — describe call likely failed on the server side. Check the vision-proxy upstream provider / model.")
 	}
 }
@@ -203,7 +203,7 @@ func TestVisionProxy_E2E_BetaMessages(t *testing.T) {
 	body := strings.TrimSpace(text.String())
 	t.Logf("beta response (id=%s stop_reason=%s):\n%s", resp.ID, resp.StopReason, body)
 	require.NotEmpty(t, body)
-	if strings.Contains(body, "(description unavailable)") {
+	if strings.Contains(body, "vision proxy failed") {
 		t.Logf("WARNING: vision-proxy describe call failed upstream (response carries fail-strip marker)")
 	}
 }

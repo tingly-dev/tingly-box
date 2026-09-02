@@ -265,9 +265,10 @@ Use the top-level `proxy_vision.enabled` op. Its services list is the
 *upstream* the vision-proxy processor will call to describe images; the
 rule's match returns `(nil, false)` so the LoadBalancer picks the actual
 downstream model. Image content blocks are replaced in place with
-`[image: <description>]`; on any failure they are stripped with
-`[image: (description unavailable)]` so the downstream never sees an
-unsupported block.
+`[image: <description>]`; on any failure they are stripped with an
+explicit `[image error: the vision proxy failed …]` report so the
+downstream never sees an unsupported block and can tell the user the
+proxy failed.
 
 ```go
 SmartRouting{

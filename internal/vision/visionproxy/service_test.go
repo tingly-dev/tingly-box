@@ -53,6 +53,11 @@ func testService() *Service {
 	return NewService(&VisionProxyProcessor{
 		Client:   echoingVisionClient{},
 		Resolver: alwaysResolvingProvider{},
+		// Isolated per-call cache: several of these tests reuse the same
+		// fixture image + provider/model pair, and sharing
+		// defaultDescribeCache across them would let one test's cache
+		// entry silently substitute for another's live describe call.
+		cache: newDescribeCache(defaultDescribeCacheCapacity),
 	})
 }
 
@@ -103,7 +108,7 @@ func TestApply_RuleServiceUsedWhenBothConfigured(t *testing.T) {
 	rule := ruleWithVisionService("p-rule", "rule-model")
 
 	req := betaReqWithImage()
-	s.Apply(context.Background(), cfg, "claude_code", rule, req)
+	s.Apply(context.Background(), cfg, "claude_code", rule, req, typ.SessionID{Value: "test-session"})
 
 	if firstImagePresent(req) {
 		t.Fatal("image was not replaced")
@@ -118,7 +123,7 @@ func TestApply_ScenarioFallbackWhenRuleUnset(t *testing.T) {
 	cfg := testConfig("claude_code", scenarioVisionExt("p-scn", "scenario-model"))
 
 	req := betaReqWithImage()
-	s.Apply(context.Background(), cfg, "claude_code", &typ.Rule{}, req)
+	s.Apply(context.Background(), cfg, "claude_code", &typ.Rule{}, req, typ.SessionID{Value: "test-session"})
 
 	if firstImagePresent(req) {
 		t.Fatal("image was not replaced")
@@ -133,7 +138,7 @@ func TestApply_NoServiceIsNoOp(t *testing.T) {
 	cfg := testConfig("claude_code", map[string]interface{}{})
 
 	req := betaReqWithImage()
-	s.Apply(context.Background(), cfg, "claude_code", &typ.Rule{}, req)
+	s.Apply(context.Background(), cfg, "claude_code", &typ.Rule{}, req, typ.SessionID{Value: "test-session"})
 	if !firstImagePresent(req) {
 		t.Fatal("image was replaced even though neither scope configured a service")
 	}
@@ -146,7 +151,7 @@ func TestApply_ProfiledScenario(t *testing.T) {
 	cfg := testConfig("claude_code:p1", scenarioVisionExt("p-scn", "scenario-model"))
 
 	req := betaReqWithImage()
-	s.Apply(context.Background(), cfg, "claude_code:p1", &typ.Rule{}, req)
+	s.Apply(context.Background(), cfg, "claude_code:p1", &typ.Rule{}, req, typ.SessionID{Value: "test-session"})
 	if firstImagePresent(req) {
 		t.Fatal("profiled-scenario service was not applied")
 	}

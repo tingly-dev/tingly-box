@@ -660,6 +660,12 @@ func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 // service selection (after the rule is resolved). Delegates to
 // visionproxy.Service — see internal/server/module/visionproxy and
 // .design/vision-proxy.md for the design.
+//
+// NOTE: unused — superseded by ProtocolHandler.applyVisionProxy
+// (internal/protocolserver/protocol_handler.go) after the gateway split; kept
+// only because nothing has removed it yet. Signature updated in lockstep with
+// Service.Apply so the package keeps building.
 func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
-	s.visionProxyService.Apply(c.Request.Context(), s.config, scenarioType, rule, typedRequest)
+	sessionID := routing.ResolveSessionID(c, typedRequest)
+	s.visionProxyService.Apply(c.Request.Context(), s.config, scenarioType, rule, typedRequest, sessionID)
 }

@@ -40,8 +40,9 @@ func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver) *Ser
 // rule-level and scenario-level scopes. It must run before service selection
 // (after the rule is resolved). The effective service is chosen by Resolve —
 // rule level wins over scenario level — and the processor runs at most once
-// per request.
-func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
+// per request. sessionID scopes the describe cache (see
+// VisionProxyProcessor.Process) to the caller's conversation.
+func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any, sessionID typ.SessionID) {
 	if s == nil || s.Processor == nil || typedRequest == nil {
 		return
 	}
@@ -49,7 +50,7 @@ func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType ty
 	if svc == nil {
 		return
 	}
-	_ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc})
+	_ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc}, sessionID)
 }
 
 // Resolve picks the effective vision service for this request. Rule level
