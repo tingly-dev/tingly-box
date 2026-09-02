@@ -202,18 +202,6 @@ const LegacyRemoteCoderRedirect = () => {
 function AppContent() {
     const navigate = useNavigate();
 
-    // Listen for systray navigation events
-    useEffect(() => {
-        const off = Events.On('systray-navigate', (event: any) => {
-            const path = event.data || event;
-            navigate(path);
-        });
-
-        return () => {
-            off?.();
-        };
-    }, [navigate]);
-
     return (
         <Suspense fallback={<RouteFallback />}>
             <Routes>

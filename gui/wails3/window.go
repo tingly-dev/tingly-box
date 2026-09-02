@@ -28,24 +28,24 @@ var (
 )
 
 // showMainWindow shows the main app window (the real app, as opposed to the
-// hub panel), creating it on first use. path is where it should land.
+// hub panel), creating it on first use. path is where it should land; an
+// empty path means "just show it" — the window is brought forward without
+// navigating (dock reopen / "Open App" shouldn't yank the user off the page
+// they were on).
 //
-// Login.tsx does a hard reload after auth, so a *new* window can only be
-// relied on to land where its initial URL's ?next= points - that's why
-// this window is created lazily with path baked in, rather than eagerly
-// with a fixed default and relying on EmitEvent to redirect it (the same
-// race the hub panel avoids via its own ?next=/hub). Once created, the
-// window is reused warm and EmitEvent-based navigation works normally.
-//
-// Geometry: the first-ever launch maximises; afterwards the window restores
-// the user's last size/position (persisted debounced on move/resize - see
-// persistWindowStateOnChange) instead of the old always-Maximise behavior.
+// Navigation always rides the /login/<token>?next=<path> reload — for a new
+// window because Login.tsx hard-reloads after auth anyway, and for a warm
+// window because the alternative (an EmitEvent the SPA listens for) goes
+// through the wails IPC bridge, which has proven unreliable in these
+// webviews — the same reason the hub panel's actions call the HTTP nudge
+// instead of the bound method.
 func showMainWindow(app *application.App, tinglyService *services.TinglyService, path string) {
-	if path == "" {
-		path = "/agent"
-	}
-
 	if WindowMain == nil {
+		target := path
+		if target == "" {
+			target = "/agent"
+		}
+
 		saved := loadWindowState(windowStatePath)
 		if saved != nil {
 			if screens := app.Screen.GetAll(); len(screens) > 0 {
@@ -63,7 +63,7 @@ func showMainWindow(app *application.App, tinglyService *services.TinglyService,
 			},
 			// No BackgroundColour: the translucent backdrop shows until the
 			// webview paints its own theme - neutral in light and dark mode.
-			URL:    fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path),
+			URL:    fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), target),
 			Hidden: true,
 		}
 		if saved != nil {
@@ -90,7 +90,11 @@ func showMainWindow(app *application.App, tinglyService *services.TinglyService,
 		return
 	}
 
-	WindowMain.EmitEvent("systray-navigate", path)
+	// Warm window: navigate by reloading through the login shell (see the
+	// doc comment above); an empty path just brings the window forward.
+	if path != "" {
+		WindowMain.SetURL(fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path))
+	}
 	WindowMain.Show()
 	WindowMain.Focus()
 }
