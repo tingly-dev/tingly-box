@@ -364,6 +364,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | 处理器实现(图描述、改写) | `internal/server/processor/vision_proxy.go` |
 | 处理器接口 / `ProcessorContext` | `internal/routing/smart_routing/processor.go` |
 | **统一入口 helper**(`applyVisionProxy` + `resolveVisionService`) | `internal/server/vision_proxy.go` |
+| **描述缓存**(定容 LRU,§10) | `internal/vision/visionproxy/describe_cache.go` |
 | `RuleFlags` + `VisionProxyService` | `internal/typ/type.go` |
 | Flag registry + `FlagTypeServiceRef` 常量 | `internal/typ/flag_registry.go` |
 | `ScenarioFlags` / `ScenarioConfig` | `internal/typ/type.go` |
@@ -392,3 +393,78 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
+| **描述缓存**(§10) | LRU 淘汰最久未用;`get` 命中前移;`put` 更新已存在 key 不增条目;不同 service / 不同 session 同图片内容不互相命中;base64 与 URL 两种 key 不冲突;同 session 同图第二次命中不再调 vision;不同 session 各自独立调用;历史图片命中缓存后拿到真实描述而非固定 marker;失败描述不写入缓存(下次仍重试);换模型不复用旧模型的描述 |
+
+---
+
+## 10. 图片描述缓存
+
+### 10.1 要解决的问题
+
+§4.3 的"最新消息实时描述、历史消息打固定 marker"这个策略,在两种常见
+场景下会浪费成本、甚至反过来伤害下游:
+
+- **重复请求同一张图**(重试 / failover / 多轮工具调用反复截同一张
+  图)——每次都重新调用一次视觉模型,白白花 token 和延迟。
+- **视觉模型输出非确定**——同一张图两次描述的文本大概率不同,拼进请求
+  后会打断下游 provider 的 prompt 前缀缓存命中。
+
+### 10.2 方案:按 `(session, service, image)` 寻址的进程内 LRU
+
+新增 `internal/vision/visionproxy/describe_cache.go`:一个定容量、
+LRU 淘汰的内存缓存,key 是:
+
+```go
+type visionCacheKey struct {
+    session  string // typ.SessionID.String()
+    provider string // loadbalance.Service.Provider —— provider UUID,不是名字
+    model    string
+    content  string // "b64:"+sha256(mediaType+base64) 或 "url:"+remoteURL
+}
+```
+
+value 只存**拼好的替换文本**,不存图片字节——内存占用只随条目数和描述
+文本长度增长,与图片大小无关。默认容量 `defaultDescribeCacheCapacity`
+(2000),超出后淘汰最久未用的条目;不加 TTL。
+
+**为什么 key 里有 session,而不是纯按图片内容全局寻址**:讨论中发现
+"同一段字节"不等于"同一次提问该复用同一个答案"——视觉模型这次描述得不
+好,用户重发同一张图本来还有机会拿到更好的答案,纯全局缓存会把这个坏
+描述钉死到被 LRU 淘汰为止;两个不相关会话恰好发了内容相同的图片
+(占位图、测试图)也不该互相复用描述。把 `typ.SessionID`(复用
+`routing.ResolveSessionID` 已有的 `metadata.user_id` > `X-Tingly-Session-ID`
+header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这个会
+话**里已经看过的图吗",而不是"这段字节全局出现过吗"——会话有自然的
+生命周期,新会话就是全新的图,因此不需要再叠加 TTL。
+
+**为什么 key 里还要有 provider+model**:vision service 在同一 session
+内也可能被用户中途切换(rule/scenario 改了配置)。不带这两个维度,切
+模型后同一张图会静默复用旧模型的描述,而且这个"没生效"完全无感知。带
+上之后,换模型 = 自动、免费地让相关缓存失效,不需要额外监听配置变更。
+
+### 10.3 对 §4.3 处理流程的改动
+
+统一了"最新 / 历史"两条路径的入口决策(`spliceOrCollect`):
+
+1. **任何位置的图片先查缓存**——命中就直接替换成真实描述,不再区分
+   最新/历史。这是相对 §4.3 原描述的行为升级:历史图片如果在同一
+   session 内命中过缓存(比如上一轮它是最新消息、被真实描述过),这一
+   轮会拿到真实描述,而不是固定的 `imageHistoricalText` marker。
+2. **未命中 + 历史消息** → 行为不变,仍退回固定 marker,不为了填缓存
+   而额外调视觉模型(成本控制不变)。
+3. **未命中 + 最新消息** → 照旧调用视觉模型描述,**成功后写入缓存**
+   (失败 / fail-strip 结果绝不写入缓存,避免把临时故障永久记成"这张
+   图没法描述")。
+
+`VisionProxyProcessor.Process` 因此多了一个 `sessionID typ.SessionID`
+入参;调用方(`applyVisionProxy`,§4.2 提到的钩子位置)在调用前用
+`resolveSessionID(c, typedRequest)` 提前独立求一次这个值——它是纯函
+数,不依赖入站 handler 里"session 注入 context"那一步的先后顺序,所以
+不需要挪动任何现有代码。
+
+### 10.4 已知局限
+
+session 在没有 `metadata.user_id` / `X-Tingly-Session-ID` header 时兜
+底用 client IP——同一 NAT 后的不同用户会被分到同一个"session 桶"。这
+是 `typ.SessionID` / `routing.ResolveSessionID` 本身既有的权衡(LB
+affinity 已经在承担同样的代价),缓存层如实继承,不重新设计。
