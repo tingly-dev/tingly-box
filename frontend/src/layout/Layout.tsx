@@ -202,7 +202,10 @@ const LayoutInner = ({ children }: LayoutProps) => {
                 component="main"
                 sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
             >
-                <Box sx={mobileContentSx}>
+                {/* The hub panel is full-bleed: no mobile toolbar exists on
+                    /hub (nav is hidden above), so mobileContentSx's xs
+                    padding-top would just be 72px of dead space. */}
+                <Box sx={isHubPage ? { flex: 1, minHeight: 0, overflow: 'hidden' } : mobileContentSx}>
                     {children ?? <Outlet />}
                 </Box>
             </Box>
