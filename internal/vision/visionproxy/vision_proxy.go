@@ -58,7 +58,13 @@ func (p *VisionProxyProcessor) describeCacheFor() *describeCache {
 	return defaultDescribeCache
 }
 
-const imageUnavailableText = "[image: (description unavailable)]"
+// imageUnavailableText replaces an image when the vision proxy itself fails
+// (no usable service, upstream error, empty description). The wording is a
+// deliberate error report, not a neutral placeholder: the downstream model
+// should understand the image was lost to a gateway-side failure and relay
+// that to the user, so the user attributes the problem to the proxy — not to
+// their own image or the client.
+const imageUnavailableText = "[image error: the vision proxy failed to describe this image, so the gateway removed it from the request. This is a proxy-side failure — tell the user the image could not be processed by the vision proxy.]"
 
 // imageHistoricalText replaces image blocks that appear in messages PRIOR to
 // the latest one. Enabling the proxy implies the fallback model is
