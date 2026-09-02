@@ -182,7 +182,8 @@ describe cache already has a real description for them.
   historical image, miss  │ messages[i] where i < lastIdx    │  historic │
                           │ (no Describe call)               │            │
                           └──────────────────────────────────┴───────────┘
-  unavail  = "[image: (description unavailable)]"
+  unavail  = "[image error: the vision proxy failed to describe this image, …]"
+             (explicit proxy-side error report — see imageUnavailableText)
   historic = "[image: (omitted from history)]"
 ```
 
