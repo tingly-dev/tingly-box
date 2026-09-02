@@ -61,9 +61,10 @@ func showMainWindow(app *application.App, tinglyService *services.TinglyService,
 				Backdrop: application.MacBackdropTranslucent,
 				TitleBar: application.MacTitleBarDefault,
 			},
-			BackgroundColour: application.NewRGB(27, 38, 54),
-			URL:              fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path),
-			Hidden:           true,
+			// No BackgroundColour: the translucent backdrop shows until the
+			// webview paints its own theme - neutral in light and dark mode.
+			URL:    fmt.Sprintf("/login/%s?next=%s", tinglyService.GetUserAuthToken(), path),
+			Hidden: true,
 		}
 		if saved != nil {
 			opts.InitialPosition = application.WindowXY

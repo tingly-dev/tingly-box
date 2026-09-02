@@ -62,11 +62,18 @@ func useSystray(app *application.App, tinglyService *services.TinglyService) {
 	// resizing it after creation (our earlier Show+SetSize+Center approach)
 	// made that anchor drift on every subsequent show.
 	//
-	// HideOnFocusLost is deliberately NOT set: it hides the window on
-	// WindowLostFocus, and a borderless AlwaysOnTop panel can spuriously
-	// fire that the moment it becomes key, which looked exactly like clicks
-	// on its own buttons (e.g. Home/Dashboard) silently doing nothing -
-	// the click landed on a window already mid-hide.
+	// On macOS the panel is a real non-activating NSPanel
+	// (MacWindowClassPanel + NonActivating): showing it never activates our
+	// app or deactivates the frontmost one, exactly like 1Password/Bartender
+	// dropdowns. That also makes HideOnFocusLost safe to use again - the old
+	// spurious focus-loss (clicks on Home/Dashboard silently landing on a
+	// window already mid-hide) was activation churn from showing a regular
+	// AlwaysOnTop window, which a non-activating panel doesn't cause. So:
+	// click outside → panel resigns key → hides, like a native dropdown.
+	//
+	// No BackgroundColour: the translucent backdrop shows until the webview
+	// paints its own theme, which is neutral in both light and dark mode
+	// (the old hardcoded dark RGB flashed wrong in light mode).
 	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:          "hub-panel",
 		Title:         AppName,
@@ -74,10 +81,19 @@ func useSystray(app *application.App, tinglyService *services.TinglyService) {
 		Height:        hubWindowHeight,
 		Frameless:     true,
 		DisableResize: true,
-		AlwaysOnTop:   true,
-		HideOnEscape:  true,
+		// AlwaysOnTop keeps the panel over other windows on Windows/Linux,
+		// where it stays a plain frameless window; on macOS FloatingPanel
+		// already supplies the floating window level.
+		AlwaysOnTop:     true,
+		HideOnEscape:    true,
+		HideOnFocusLost: true,
 		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTranslucent,
+			Backdrop:    application.MacBackdropTranslucent,
+			WindowClass: application.MacWindowClassPanel,
+			PanelPreferences: application.MacPanelPreferences{
+				FloatingPanel: true,
+				NonActivating: true,
+			},
 			// CanJoinAllSpaces + FullScreenAuxiliary lets the panel float
 			// above a fullscreen app too, like Bartender/1Password's
 			// menu-bar dropdown - without this, showing it while another
@@ -85,7 +101,6 @@ func useSystray(app *application.App, tinglyService *services.TinglyService) {
 			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
 				application.MacWindowCollectionBehaviorFullScreenAuxiliary,
 		},
-		BackgroundColour: application.NewRGB(27, 38, 54),
 		// The Login page does a hard `window.location.href` reload after
 		// auth (see Login.tsx). ?next=/hub tells it where to land so the
 		// panel always ends up showing the hub, regardless of load timing.
