@@ -1498,7 +1498,8 @@ export default {
     },
     "quota": {
       "title": "Provider Quota",
-      "empty": "No quota data yet"
+      "empty": "No quota data yet",
+      "refresh": "Refresh quota"
     },
     "actions": {
       "home": "Home",

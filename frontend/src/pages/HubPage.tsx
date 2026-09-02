@@ -4,6 +4,7 @@ import {
     Chip,
     CircularProgress,
     Divider,
+    IconButton,
     List,
     ListItemButton,
     ListItemIcon,
@@ -14,7 +15,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import TinglyService from '@/bindings';
-import { BarChart, ChevronRight, Home } from '@/components/icons';
+import { BarChart, ChevronRight, Home, Refresh } from '@/components/icons';
 import logo from '@/assets/images/logo-universal.png';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
@@ -59,7 +60,11 @@ export default function HubPage() {
         return () => { cancelled = true; };
     }, []);
 
-    const { quotaData, refreshing } = useProviderQuota(providers, { fetchOnMount: true });
+    const { quotaData, refreshing, refreshQuota } = useProviderQuota(providers, { fetchOnMount: true });
+
+    // Force-refresh every provider's quota upstream (same per-provider
+    // endpoint the credential page uses), not just re-read the cache.
+    const refreshAll = () => providers.forEach((p) => { void refreshQuota(p.uuid); });
 
     const quotaRows = providers
         .map((p) => ({ provider: p, windows: quotaToWindows(quotaData[p.uuid]) }))
@@ -137,7 +142,7 @@ export default function HubPage() {
                         <ChevronRight fontSize="small" sx={{ color: 'text.disabled' }} />
                     </ListItemButton>
                     <Divider component="li" />
-                    <ListItemButton onClick={() => openMainWindow('/dashboard/7d')} sx={{ py: 1 }}>
+                    <ListItemButton onClick={() => openMainWindow('/dashboard/today')} sx={{ py: 1 }}>
                         <ListItemIcon sx={{ minWidth: 32 }}>
                             <BarChart fontSize="small" />
                         </ListItemIcon>
@@ -162,12 +167,22 @@ export default function HubPage() {
                     flexDirection: 'column',
                 }}
             >
-                <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: 'text.secondary', px: 1.5, pt: 1.25, pb: 0.5 }}
+                <Stack
+                    direction="row"
+                    sx={{ alignItems: 'center', justifyContent: 'space-between', px: 1.5, pt: 0.75, pb: 0.25 }}
                 >
-                    {t('hub.quota.title')}
-                </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                        {t('hub.quota.title')}
+                    </Typography>
+                    <IconButton
+                        size="small"
+                        aria-label={t('hub.quota.refresh')}
+                        onClick={refreshAll}
+                        disabled={providers.length === 0 || refreshing.size > 0}
+                    >
+                        <Refresh sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </Stack>
                 <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, px: 1.5, pb: 1.25 }}>
                     {loadingProviders ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
