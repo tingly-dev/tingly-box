@@ -198,8 +198,8 @@ func isEnterpriseContextPresent(c *gin.Context) bool {
 
 // resolveSessionID returns the session identifier for the current request as
 // a string. It delegates to routing.ResolveSessionID which checks (in
-// priority order): Anthropic metadata.user_id > X-Tingly-Session-ID header >
-// ClientIP fallback.
+// priority order): X-Tingly-Session-ID header > native client header >
+// Anthropic metadata.user_id > ClientIP fallback.
 func resolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 	return routing.ResolveSessionID(c, req)
 }

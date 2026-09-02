@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"net/http"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 
@@ -17,7 +19,7 @@ type SelectionContext struct {
 	Request interface{}
 
 	// SessionID is the resolved session identifier for affinity
-	// Priority: Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP
+	// Priority: Tingly header > native client header > Anthropic metadata.user_id > ClientIP
 	SessionID typ.SessionID
 
 	// GinContext provides access to HTTP headers and client info
@@ -55,12 +57,25 @@ func NewSelectionContext(
 }
 
 // ResolveSessionID returns the best available session identifier from the request.
-// Priority: Anthropic metadata.user_id > X-Tingly-Session-ID header > ClientIP
+// Priority: X-Tingly-Session-ID header > native client header > Anthropic metadata.user_id > ClientIP.
 // The client IP is always stored in IPBackup as a fallback for rate limiting or logging.
 func ResolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 	clientIP := c.ClientIP()
 
-	// 1. Extract from Anthropic request metadata.user_id
+	// 1. The explicit Tingly header always wins, allowing callers and trusted
+	// gateways to override identifiers supplied automatically by a client.
+	if id := c.GetHeader("X-Tingly-Session-ID"); id != "" {
+		return typ.SessionID{Source: typ.SessionSourceHeader, Value: id, IPBackup: clientIP}
+	}
+
+	// 2. Native coding-agent headers. Codex uses session_id while OpenCode uses
+	// x-opencode-session.
+	if id := nativeClientSessionID(c.Request.Header); id != "" {
+		return typ.SessionID{Source: typ.SessionSourceHeader, Value: id, IPBackup: clientIP}
+	}
+
+	// 3. Extract from Anthropic request metadata.user_id only when no explicit or
+	// native client session header was provided.
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
 		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
@@ -74,11 +89,17 @@ func ResolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 		}
 	}
 
-	// 2. X-Tingly-Session-ID header
-	if id := c.GetHeader("X-Tingly-Session-ID"); id != "" {
-		return typ.SessionID{Source: typ.SessionSourceHeader, Value: id, IPBackup: clientIP}
-	}
-
-	// 3. Fallback: client IP (IPBackup not needed since Value is the IP)
+	// 4. Fallback: client IP (IPBackup not needed since Value is the IP)
 	return typ.SessionID{Source: typ.SessionSourceIP, Value: clientIP}
+}
+
+// nativeClientSessionID extracts session identifiers emitted by supported coding agents.
+// Header.Get is case-insensitive and also handles Codex's underscore-bearing header name.
+func nativeClientSessionID(header http.Header) string {
+	for _, name := range []string{"session_id", "x-opencode-session"} {
+		if id := header.Get(name); id != "" {
+			return id
+		}
+	}
+	return ""
 }
