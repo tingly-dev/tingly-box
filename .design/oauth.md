@@ -98,6 +98,12 @@ An upstream 401/403 is also a failover trigger (`internal/protocolserver/failove
 a broken credential on one service falls over to a sibling and is reported to the
 health monitor, instead of surfacing to the client as "Please run /login".
 
+- **Quota window nudge** — `quotawindow.Run`
+  (`internal/server/module/quotawindow/quotawindow.go`) sends one tiny model
+  request per hour to every enabled OAuth provider (direct SDK call via
+  `E2EProber`, any cached model that goes through). Subscription windows only
+  start counting on the first real request, so this keeps them moving while idle.
+
 ## Re-authentication (in place)
 
 Recovery flow for a credential that has gone **permanently** invalid — refresh token

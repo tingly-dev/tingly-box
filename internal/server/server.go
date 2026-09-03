@@ -144,6 +144,9 @@ type Server struct {
 	// quota manager for provider quota tracking
 	quotaManager providerQuotaModule.Manager
 
+	// stops the hourly quota-window request loop
+	quotaWindowStop context.CancelFunc
+
 	// options
 	enableUI    bool
 	openBrowser bool

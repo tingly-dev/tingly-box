@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
+	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
@@ -38,6 +39,13 @@ func (s *Server) Start(port int) error {
 	if s.quotaManager != nil {
 		s.quotaManager.StartAutoRefresh(ctx)
 		log.Println("Provider quota auto-refresh started")
+	}
+
+	// Hourly tiny request to each OAuth provider keeps quota windows moving
+	if s.probeE2e != nil {
+		qctx, qcancel := context.WithCancel(context.Background())
+		s.quotaWindowStop = qcancel
+		go quotawindow.Run(qctx, s.probeE2e, s.config)
 	}
 
 	// Start configuration watcher
@@ -278,6 +286,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.quotaManager != nil {
 		s.quotaManager.StopAutoRefresh()
 		log.Println("Provider quota auto-refresh stopped")
+	}
+
+	if s.quotaWindowStop != nil {
+		s.quotaWindowStop()
+		s.quotaWindowStop = nil
 	}
 
 	if err := s.undoCodexImportOnStop(); err != nil {
