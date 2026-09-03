@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -62,6 +63,22 @@ func (h *Handler) GetClaudeConfig(c *gin.Context) {
 		InstallStatusLine:     snapshot.StatusLine,
 		ShowThinkingSummaries: agent.NormalizeClaudeCodeShowThinkingSummaries(snapshot.ShowThinkingSummaries),
 	})
+}
+
+// GetClaudeCodeEnv returns the gateway-routing environment variables for the
+// Claude Code CLI (ANTHROPIC_BASE_URL, model tiers, etc.) as KEY=VALUE strings.
+func (h *Handler) GetClaudeCodeEnv(c *gin.Context) {
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, ClaudeCodeEnvResponse{Success: false})
+		return
+	}
+	client := tbclient.NewTBClient(h.config)
+	env, err := client.GetClaudeCodeEnv(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ClaudeCodeEnvResponse{Success: true, Env: env})
 }
 
 // GetCodexConfig reads the values previously applied to the user's

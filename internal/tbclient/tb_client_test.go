@@ -14,130 +14,54 @@ import (
 
 func TestNewTBClient(t *testing.T) {
 	cfg := &serverconfig.Config{}
-
-	// We can't easily mock the dependencies without interfaces,
-	// so we'll test with nil values and check the constructor works
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	assert.NotNil(t, client)
 	assert.Equal(t, cfg, client.config)
 }
 
-func TestTBClient_BuildBaseURL(t *testing.T) {
-	cfg := &serverconfig.Config{ServerPort: 8080}
-	client := NewTBClient(cfg, nil)
-
-	assert.Equal(t, "http://localhost:8080/tingly/claude_code", client.buildBaseURL())
-}
-
-func TestTBClient_BuildBaseURL_DefaultPort(t *testing.T) {
-	cfg := &serverconfig.Config{} // ServerPort = 0, ServerHost = ""
-	client := NewTBClient(cfg, nil)
-
-	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.buildBaseURL())
-}
-
-func TestTBClient_BuildBaseURL_CustomHost(t *testing.T) {
-	cfg := &serverconfig.Config{ServerPort: 8080}
-	_ = cfg.SetServerHost("192.168.1.100") // Set custom host
-	client := NewTBClient(cfg, nil)
-
-	assert.Equal(t, "http://192.168.1.100:8080/tingly/claude_code", client.buildBaseURL())
-}
-
-func TestTBClient_BuildBaseURL_HostZeroAll(t *testing.T) {
-	cfg := &serverconfig.Config{ServerPort: 9000}
-	_ = cfg.SetServerHost("0.0.0.0") // Note: In actual runtime, server resolves 0.0.0.0 to actual local IP before storing
-	client := NewTBClient(cfg, nil)
-
-	assert.Equal(t, "http://0.0.0.0:9000/tingly/claude_code", client.buildBaseURL())
-}
-
-func TestTBClient_BuildBaseURL_ResolvedLocalIP(t *testing.T) {
-	cfg := &serverconfig.Config{ServerPort: 9000}
-	// Simulate what server does: network.ResolveHost("0.0.0.0") returns actual local IP
-	// For test consistency, we directly set a resolved IP
-	_ = cfg.SetServerHost("192.168.1.100")
-	client := NewTBClient(cfg, nil)
-
-	assert.Equal(t, "http://192.168.1.100:9000/tingly/claude_code", client.buildBaseURL())
-}
-
-func TestProviderInfo_Structure(t *testing.T) {
-	info := ProviderInfo{
-		UUID:     "test-uuid",
-		Name:     "test-provider",
-		APIBase:  "https://api.test.com",
-		APIStyle: "anthropic",
-		Enabled:  true,
-		Models:   []string{"model-1", "model-2"},
-	}
-
-	assert.Equal(t, "test-uuid", info.UUID)
-	assert.Equal(t, "test-provider", info.Name)
-	assert.Equal(t, "https://api.test.com", info.APIBase)
-	assert.Equal(t, "anthropic", info.APIStyle)
-	assert.True(t, info.Enabled)
-	assert.Equal(t, []string{"model-1", "model-2"}, info.Models)
-}
-
-func TestModelSelectionRequest_Structure(t *testing.T) {
-	req := ModelSelectionRequest{
-		ProviderUUID: "prov-1",
-		ModelID:      "model-1",
-	}
-
-	assert.Equal(t, "prov-1", req.ProviderUUID)
-	assert.Equal(t, "model-1", req.ModelID)
-}
-
-func TestModelConfig_Structure(t *testing.T) {
-	config := ModelConfig{
-		ProviderUUID: "prov-1",
-		ModelID:      "model-1",
-		BaseURL:      "https://api.test.com",
-		APIKey:       "test-key",
-		APIStyle:     "anthropic",
-	}
-
-	assert.Equal(t, "prov-1", config.ProviderUUID)
-	assert.Equal(t, "model-1", config.ModelID)
-	assert.Equal(t, "https://api.test.com", config.BaseURL)
-	assert.Equal(t, "test-key", config.APIKey)
-	assert.Equal(t, "anthropic", config.APIStyle)
-}
-
-func TestConnectionConfig_Structure(t *testing.T) {
-	config := ConnectionConfig{
-		BaseURL: "http://localhost:12580/tingly/claude_code",
-		APIKey:  "test-key",
-	}
-
-	assert.Equal(t, "http://localhost:12580/tingly/claude_code", config.BaseURL)
-	assert.Equal(t, "test-key", config.APIKey)
-}
-
-func TestDefaultServiceConfig_Structure(t *testing.T) {
-	config := DefaultServiceConfig{
-		ProviderUUID: "prov-1",
-		ProviderName: "Test Provider",
-		ModelID:      "model-1",
-		BaseURL:      "http://localhost:12580/tingly/claude_code",
-		APIKey:       "test-key",
-		APIStyle:     "anthropic",
-	}
-
-	assert.Equal(t, "prov-1", config.ProviderUUID)
-	assert.Equal(t, "Test Provider", config.ProviderName)
-	assert.Equal(t, "model-1", config.ModelID)
-	assert.Equal(t, "http://localhost:12580/tingly/claude_code", config.BaseURL)
-	assert.Equal(t, "test-key", config.APIKey)
-	assert.Equal(t, "anthropic", config.APIStyle)
-}
-
 func TestTBClient_Types(t *testing.T) {
-	// Test that TBClientImpl implements TBClient interface
 	var _ TBClient = (*TBClientImpl)(nil)
+	var _ TBClient = (*HTTPTBClient)(nil)
+}
+
+func TestNewHTTPTBClient(t *testing.T) {
+	client := NewHTTPTBClient("http://localhost:12580", "user-token", "model-token")
+
+	assert.NotNil(t, client)
+	assert.Equal(t, "http://localhost:12580", client.baseURL)
+	assert.Equal(t, "user-token", client.userToken)
+	assert.Equal(t, "model-token", client.modelToken)
+}
+
+func TestHTTPTBClient_GetHTTPEndpointForScenario(t *testing.T) {
+	client := NewHTTPTBClient("http://localhost:12580", "user-tok", "model-tok")
+
+	cfg, err := client.GetHTTPEndpointForScenario(context.Background(), typ.ScenarioSmartGuide)
+	require.NoError(t, err)
+	assert.Equal(t, "http://localhost:12580/tingly/_smart_guide", cfg.BaseURL)
+	assert.Equal(t, "model-tok", cfg.APIKey)
+
+	cfg, err = client.GetHTTPEndpointForScenario(context.Background(), typ.ScenarioClaudeCode)
+	require.NoError(t, err)
+	assert.Equal(t, "http://localhost:12580/tingly/claude_code", cfg.BaseURL)
+}
+
+func TestHTTPTBClient_TrailingSlashTrimmed(t *testing.T) {
+	client := NewHTTPTBClient("http://localhost:12580/", "tok", "mtok")
+	assert.Equal(t, "http://localhost:12580", client.baseURL)
+}
+
+func TestHTTPTBClient_EmptyProfileID(t *testing.T) {
+	client := NewHTTPTBClient("http://localhost:12580", "tok", "mtok")
+	path, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "")
+	require.NoError(t, err)
+	assert.Empty(t, path)
+}
+
+func TestSmartGuideRuleUUID(t *testing.T) {
+	uuid := SmartGuideRuleUUID("bot-123")
+	assert.Equal(t, "_internal_smart_guide_bot-123", uuid)
 }
 
 // ccRule builds an active claude_code rule with the given UUID and request model.
@@ -159,9 +83,7 @@ func ccSeparateFlag() typ.ScenarioConfig {
 }
 
 func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
-	// No scenario config and no rules → unified mode with canonical fallback.
-	client := NewTBClient(&serverconfig.Config{}, nil)
-
+	client := NewTBClient(&serverconfig.Config{})
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "tingly/cc", models.def)
@@ -172,13 +94,10 @@ func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
-	// Unified mode reads the cc rule's request_model for every tier. Uses the
-	// legacy UUID to exercise the pre-migration compatibility fallback.
 	cfg := &serverconfig.Config{
 		Rules: []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
 	}
-	client := NewTBClient(cfg, nil)
-
+	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "tingly/cc", models.def)
@@ -187,12 +106,10 @@ func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
-	// A customized request_model on the unified rule must propagate to all tiers.
 	cfg := &serverconfig.Config{
 		Rules: []typ.Rule{ccRule("built-in-cc", "team/coder[1m]")},
 	}
-	client := NewTBClient(cfg, nil)
-
+	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "team/coder[1m]", models.def)
@@ -203,7 +120,6 @@ func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_Separate(t *testing.T) {
-	// Separate mode reads each tier from its own built-in rule's request_model.
 	cfg := &serverconfig.Config{
 		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
 		Rules: []typ.Rule{
@@ -214,8 +130,7 @@ func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 			ccRule("builtin:claude_code:subagent", "tingly/cc-subagent"),
 		},
 	}
-	client := NewTBClient(cfg, nil)
-
+	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "tingly/cc-default", models.def)
@@ -226,16 +141,13 @@ func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
-	// Separate mode with a missing tier rule falls back to the canonical name.
 	cfg := &serverconfig.Config{
 		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
 		Rules: []typ.Rule{
 			ccRule("built-in-cc-default", "vendor/default"),
-			// no haiku/sonnet/opus/subagent rules
 		},
 	}
-	client := NewTBClient(cfg, nil)
-
+	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "vendor/default", models.def)
@@ -246,28 +158,23 @@ func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
-	// If both the modern and the legacy rule somehow coexist, the modern one
-	// is authoritative.
 	cfg := &serverconfig.Config{
 		Rules: []typ.Rule{
 			ccRule("builtin:claude_code:cc", "modern/model"),
 			ccRule("built-in-cc", "legacy/model"),
 		},
 	}
-	client := NewTBClient(cfg, nil)
-
+	client := NewTBClient(cfg)
 	models := client.resolveClaudeCodeModels()
 
 	assert.Equal(t, "modern/model", models.def)
 }
 
 func TestResolveClaudeCodeModels_Context1MSuffix(t *testing.T) {
-	// A rule with the 1M context flag advertises [1m] in the resolved model;
-	// an already-suffixed model is not doubled.
 	flagged := ccRule("builtin:claude_code:cc", "tingly/cc")
 	flagged.Flags.Context1M = true
 	cfg := &serverconfig.Config{Rules: []typ.Rule{flagged}}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	models := client.resolveClaudeCodeModels()
 	assert.Equal(t, "tingly/cc[1m]", models.def)
@@ -275,19 +182,17 @@ func TestResolveClaudeCodeModels_Context1MSuffix(t *testing.T) {
 	suffixed := ccRule("builtin:claude_code:cc", "team/coder[1m]")
 	suffixed.Flags.Context1M = true
 	cfg2 := &serverconfig.Config{Rules: []typ.Rule{suffixed}}
-	models2 := NewTBClient(cfg2, nil).resolveClaudeCodeModels()
+	models2 := NewTBClient(cfg2).resolveClaudeCodeModels()
 	assert.Equal(t, "team/coder[1m]", models2.def)
 }
 
 func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
-	// An inactive built-in-cc rule must not override the canonical fallback.
 	inactive := ccRule("built-in-cc", "should/not/use")
 	inactive.Active = false
 	cfg := &serverconfig.Config{Rules: []typ.Rule{inactive}}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	models := client.resolveClaudeCodeModels()
-
 	assert.Equal(t, "tingly/cc", models.def)
 }
 
@@ -296,7 +201,7 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 		ServerPort: 9000,
 		Rules:      []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
 	}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	env, err := client.GetClaudeCodeEnv(context.Background())
 	require.NoError(t, err)
@@ -319,10 +224,8 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 }
 
 func TestGetClaudeCodeSettingsPathForProfile_EmptyIDReturnsNoPath(t *testing.T) {
-	// The main scenario needs no materialized settings file — the caller
-	// falls back to GetClaudeCodeEnv (process env) in that case.
 	cfg := &serverconfig.Config{ServerPort: 9000}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	path, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "")
 	require.NoError(t, err)
@@ -331,7 +234,7 @@ func TestGetClaudeCodeSettingsPathForProfile_EmptyIDReturnsNoPath(t *testing.T) 
 
 func TestGetClaudeCodeSettingsPathForProfile_UnknownProfile(t *testing.T) {
 	cfg := &serverconfig.Config{ServerPort: 9000}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	_, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "ghost")
 	require.Error(t, err)
@@ -352,7 +255,7 @@ func TestGetClaudeCodeSettingsPathForProfile_MaterializesProfileSettings(t *test
 		},
 		Rules: []typ.Rule{profiledRule},
 	}
-	client := NewTBClient(cfg, nil)
+	client := NewTBClient(cfg)
 
 	path, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "p1")
 	require.NoError(t, err)
@@ -366,15 +269,11 @@ func TestGetClaudeCodeSettingsPathForProfile_MaterializesProfileSettings(t *test
 	}
 	require.NoError(t, json.Unmarshal(data, &written))
 
-	// The materialized file — the one --settings will point the CLI at —
-	// must carry the PROFILED scenario endpoint and the profile's resolved
-	// model, not the main scenario's.
 	assert.Equal(t, "http://localhost:9000/tingly/claude_code:p1", written.Env["ANTHROPIC_BASE_URL"])
 	assert.Equal(t, "team/coder", written.Env["ANTHROPIC_MODEL"])
 }
 
 func TestGetScenarioEndpointPath(t *testing.T) {
-	client := NewTBClient(&serverconfig.Config{}, nil)
 	tests := []struct {
 		scenario typ.RuleScenario
 		want     string
@@ -392,7 +291,7 @@ func TestGetScenarioEndpointPath(t *testing.T) {
 		{typ.ScenarioOpenAI, "/tingly/openai"},
 	}
 	for _, tt := range tests {
-		got := client.GetScenarioEndpointPath(tt.scenario)
+		got := GetScenarioEndpointPath(tt.scenario)
 		if got != tt.want {
 			t.Errorf("GetScenarioEndpointPath(%q) = %q, want %q", tt.scenario, got, tt.want)
 		}

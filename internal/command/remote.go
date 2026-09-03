@@ -402,18 +402,8 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	// Create TBClient for smartguide agent if appManager is available
 	var tbClient tbclient.TBClient
 	if appManager != nil && appManager.AppConfig() != nil {
-		cfg := appManager.AppConfig()
-		configDir := cfg.ConfigDir()
-
-		// Create provider store
-		providerStore, err := db.NewProviderStore(configDir)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to create provider store for TBClient, smartguide will use fallback config")
-		} else {
-			// Create TBClient
-			tbClient = tbclient.NewTBClient(cfg.GetGlobalConfig(), providerStore)
-			logrus.Info("Created TBClient for smartguide agent")
-		}
+		tbClient = tbclient.NewTBClient(appManager.AppConfig().GetGlobalConfig())
+		logrus.Info("Created TBClient for smartguide agent")
 	}
 
 	// Standalone bots get their own PairingManager so that /bind works the

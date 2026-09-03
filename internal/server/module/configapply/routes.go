@@ -23,6 +23,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(ClaudeConfigResponse{}),
 	)
 
+	router.GET("/config/claude/env", handler.GetClaudeCodeEnv,
+		swagger.WithDescription("Get the environment variables for routing Claude Code CLI through the tingly-box gateway"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(ClaudeCodeEnvResponse{}),
+	)
+
 	router.GET("/config/codex", handler.GetCodexConfig,
 		swagger.WithDescription("Get the currently applied Codex preferences"),
 		swagger.WithTags("config"),

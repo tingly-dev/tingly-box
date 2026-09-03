@@ -32,6 +32,13 @@ type ApplyConfigResponse struct {
 	BackupPaths      []string           `json:"backupPaths"`
 }
 
+// ClaudeCodeEnvResponse returns the gateway-routing environment variables
+// for the Claude Code CLI (ANTHROPIC_BASE_URL, model tiers, etc.).
+type ClaudeCodeEnvResponse struct {
+	Success bool     `json:"success"`
+	Env     []string `json:"env"`
+}
+
 // ClaudeConfigResponse returns the typed values currently persisted in the
 // user's main ~/.claude/settings.json so the frontend can restore Apply state.
 type ClaudeConfigResponse struct {

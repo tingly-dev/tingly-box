@@ -30,7 +30,6 @@ type BotManager struct {
 	store        *db.ImBotSettingsStore
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
-	tbClient     tbclient.TBClient
 	config       *config.Config
 }
 
@@ -89,7 +88,7 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	agentService := core.Agent
 
 	// Create TBClient (SmartGuide model configuration)
-	tbClient := tbclient.NewTBClient(cfg, sm.Provider())
+	tbClient := tbclient.NewTBClient(cfg)
 
 	// Build the consumers — the users of each bot's channel — and inject them
 	// into the bot manager. The lifecycle depends on neither purpose:
@@ -118,7 +117,6 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		store:        store,
 		sessionMgr:   sessionMgr,
 		agentService: agentService,
-		tbClient:     tbClient,
 		config:       cfg,
 	}
 
@@ -396,18 +394,6 @@ func (bm *BotManager) GetStore() *db.ImBotSettingsStore {
 	defer bm.mu.RUnlock()
 
 	return bm.store
-}
-
-// GetTBClient returns the TBClient for SmartGuide model configuration.
-func (bm *BotManager) GetTBClient() tbclient.TBClient {
-	if bm == nil {
-		return nil
-	}
-
-	bm.mu.RLock()
-	defer bm.mu.RUnlock()
-
-	return bm.tbClient
 }
 
 // PairingManager returns the underlying TOFU pairing manager for HTTP/CLI handlers
