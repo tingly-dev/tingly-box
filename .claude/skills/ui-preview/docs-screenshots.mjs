@@ -30,11 +30,13 @@
  *   theme-preview/dark-dashboard.png
  *   theme-preview/claude-dashboard.png
  *
- * Guardrails and MCP Tools are opt-in experimental features (gated behind
- * /api/v1/scenario/_global/flag/{guardrails,mcp}), which mocks/handlers.ts
- * now reports as off by default — matching production — so this script no
- * longer captures 8-guardrails.png / 10-mcp.png; their gated routes redirect
- * to /system/experimental just like they would for a real user.
+ * Guardrails, MCP Tools, and the skill_user/skill_ide prompt pages are all
+ * opt-in experimental features (gated behind
+ * /api/v1/scenario/_global/flag/{guardrails,mcp,skill_user,skill_ide}), which
+ * mocks/handlers.ts now reports as off by default — matching production —
+ * so this script no longer captures 8-guardrails.png / 10-mcp.png; their
+ * gated routes redirect to /system/experimental just like they would for a
+ * real user.
  */
 // playwright lives in frontend/node_modules; ESM bare-specifier resolution starts
 // from the *file* location, not cwd. createRequire with a cwd-based URL makes it

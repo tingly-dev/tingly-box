@@ -2136,13 +2136,10 @@ export const handlers = [
     }),
 
     // Experimental feature flags (guardrails, mcp, skill_user, skill_ide) —
-    // guardrails/mcp mirror the production default (off) so mock mode matches
-    // what real users see; skill_user/skill_ide stay enabled so their gated
-    // pages remain screenshot-able.
+    // all off by default in mock mode, mirroring production.
     http.get('/api/v1/scenario/:scenario/flag/:flag', ({ params }) => {
         const { scenario, flag } = params as { scenario: string; flag: string }
-        const value = flag === 'guardrails' || flag === 'mcp' ? false : true
-        return HttpResponse.json({ success: true, data: { scenario, flag, value } })
+        return HttpResponse.json({ success: true, data: { scenario, flag, value: false } })
     }),
 
     http.put('/api/v1/scenario/:scenario/flag/:flag', async ({ params, request }) => {
