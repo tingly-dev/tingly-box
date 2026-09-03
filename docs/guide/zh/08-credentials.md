@@ -72,11 +72,13 @@
 | 分区 | 说明 | 选中后 |
 |------|------|--------|
 | **Custom** | `Custom endpoint`（自带任意 Base URL）、`Import`（从文件/剪贴板导入）、`Paste & detect`（粘贴 `.env`、curl 命令或 JSON 片段，Tingly 自动提取 Provider 配置） | 打开空白配置表单 / 导入对话框 / 粘贴识别流程 |
-| **OAuth sign-in** | 支持 OAuth 授权的 Provider（Claude Code、Google Gemini CLI、Codex 等） | **直接发起 OAuth 授权**，无需填 API Key |
+| **OAuth sign-in** | 支持 OAuth 授权的 Provider（Claude Code、Google Gemini CLI、Codex 等） | **直接发起 OAuth 授权**，无需填 API Key。弹窗会预先展示固定的本地回调端口（如 Claude Code 使用 54545，Codex 使用 1455），并附带一个默认收起的 **"Running this remotely?"** 开关，展开后给出远程部署 Tingly-Box 时所需的 `ssh -L` 端口转发命令 |
 | **Self-hosted** | 本地自托管服务（如 Ollama），卡片显示 `localhost:端口` | 打开配置表单，Base URL 已预填但**可编辑**（按你的主机/端口调整） |
 | **API key providers** | 通过 API Key 接入的云端 Provider，按区域分组（CN / Global），卡片标注协议（OpenAI · Anthropic） | 打开配置表单，名称和 Base URL 已预填 |
 
 > 大多数 Provider 都已内置，只需提供它们各自需要的信息。列表里没有？选 **Custom endpoint** 手动填任意端点。
+
+> **Import 现在会展示导入结果**：导入不再是弹一个 Toast 就关闭，对话框会切换为一个结果列表，列出刚创建的每个 Provider——全部使用全新 UUID（不再有「按 UUID 匹配复用已有 Provider」的静默行为），若某个名称因冲突被自动加后缀，会附带「renamed」提示。每一行的 **Edit** 按钮会打开与其他地方相同的编辑对话框，改名或微调无需跳出当前流程。
 
 ### 第二步：填写配置表单
 
@@ -84,14 +86,16 @@
 
 选中非 OAuth 的 Provider 后弹出配置表单：
 
+- **Name（名称）**（必填）：现在始终显示在主表单中，不再收在 Advanced 折叠区里
 - **Base URL**（必填）：API 端点。预置 Provider 已预填；Custom / Self-hosted 可自由编辑
 - **API Key**（必填）：访问令牌；若是本地无鉴权服务，打开 **No API Key Required** 开关即可免填
 - **API Style（协议）**：
   - **OpenAI Compatible**（推荐）：大多数端点都兼容 OpenAI 协议，不确定时选它
   - **Anthropic**：原生 Anthropic 协议
   - 两者可同时启用（融合 Provider），让同一凭证同时服务 OpenAI 和 Anthropic 两种入站协议
-- **Proxy URL**（可选，展开高级）：为该 Provider 单独走 HTTP 代理
-- **User Agent**（可选，展开高级）：自定义请求头
+- **Advanced** 折叠区（默认收起）：目前只有 **Proxy URL**——为该 Provider 单独走 HTTP 代理。旧版的自定义 User-Agent 字段已移除。
+
+**编辑模式**下弹窗标题变为「Edit AI Config」，标题栏关闭按钮旁新增一个 **Enabled** 开关——启用/禁用不再收在 Advanced 里。
 
 填好后可点 **Test** 验证连通性，再 **Save** 保存。
 

@@ -125,7 +125,7 @@ The script outputs all PNGs directly to `docs/guide/images/`. It runs three batc
 
 | Batch | What |
 |-------|------|
-| 1 | 18 top-level pages (full viewport, mock data) |
+| 1 | 19 top-level pages (full viewport, mock data) |
 | 2 | Detail / interaction shots (config modal, routing-related pages) |
 | 3 | Routing graph (claude-code and sdk-proxy scenario pages) |
 
@@ -212,12 +212,21 @@ Flags live in `internal/typ/flag_registry.go` (backend source of truth) and
 are rendered in `FlagCatalogDialog.tsx`. Categories:
 
 - **App**: `cursor_compat`, `cursor_compat_auto`, `claude_code_compat`
+- **Request (protocol-agnostic)**: `extra_headers` (custom outbound HTTP headers; API-key providers only)
 - **Request (OpenAI)**: `custom_user_agent`, `openai_endpoint_override`,
   `use_max_completion_tokens`, `use_max_tokens`, `block_tools`
 - **Response**: `skip_usage`
 - **Reasoning**: `thinking_effort` (off / low ~1K / medium ~5K / high ~20K / max ~32K)
 - **Vision**: `vision_proxy_service` (service_ref — model picker)
 - **Routing**: `session_affinity` (TTL in seconds; 0 = disabled)
+
+SmartOp condition catalog (Smart routing sub-rules) as of this sync:
+`agent.claude_code`, `context_system`, `latest_user`, `time` (daily
+time-range), `thinking`, `token`, `service_ttft`, `service_capacity`,
+`service_quota` (tightest upstream quota % across a rule's services —
+absent data passes rather than blocks). See
+`frontend/src/components/rule-card/SmartRuleCatalogDialog.tsx` for the
+authoritative operator list per condition.
 
 ## Committing docs
 

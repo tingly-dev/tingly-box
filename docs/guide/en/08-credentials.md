@@ -72,11 +72,13 @@ A search box (filters by name) sits at the top; below it providers are grouped b
 | Section | What's in it | What happens on click |
 |---------|--------------|------------------------|
 | **Custom** | `Custom endpoint` (bring your own Base URL), `Import` (from file or clipboard), `Paste & detect` (paste a `.env`, curl command, or JSON snippet — Tingly extracts the provider config for you) | Opens a blank config form / the import dialog / the paste-and-detect flow |
-| **OAuth sign-in** | Providers that support OAuth (Claude Code, Google Gemini CLI, Codex, …) | **Launches the OAuth flow directly** — no API key needed |
+| **OAuth sign-in** | Providers that support OAuth (Claude Code, Google Gemini CLI, Codex, …) | **Launches the OAuth flow directly** — no API key needed. The dialog shows the fixed loopback callback port up front (e.g. Claude Code uses 54545, Codex 1455), plus a collapsed-by-default **"Running this remotely?"** toggle revealing the `ssh -L` forwarding command needed when Tingly-Box runs on a remote machine |
 | **Self-hosted** | Locally hosted services (e.g. Ollama); the card shows `localhost:port` | Opens the config form with the Base URL pre-filled but **editable** (adjust to your host/port) |
 | **API key providers** | Cloud providers accessed via API key, grouped by region (CN / Global); each card shows its protocol (OpenAI · Anthropic) | Opens the config form with name and Base URL pre-filled |
 
 > Most providers are pre-configured, so you'll only be asked for what they need. Not listed? Pick **Custom endpoint** to enter any base URL yourself.
+
+> **Import now shows what it created**: instead of closing with a toast, the import dialog switches into a result list of every provider it just created — each freshly minted with its own UUID (no more silent "reuse an existing provider on UUID match"), with a "renamed" hint on any name that got an auto-suffix to avoid a collision. Each row's **Edit** button opens the same edit dialog used everywhere else, so a rename or tweak doesn't require leaving the flow.
 
 ### Step 2: Fill in the config form
 
@@ -84,14 +86,16 @@ A search box (filters by name) sits at the top; below it providers are grouped b
 
 Choosing any non-OAuth provider opens the config form:
 
+- **Name** (required): always visible in the main form now, not tucked inside the Advanced accordion
 - **Base URL** (required): the API endpoint. Pre-filled for known providers; freely editable for Custom / Self-hosted
 - **API Key** (required): the access token. For a local service with no auth, flip the **No API Key Required** toggle to skip it
 - **API Style (protocol)**:
   - **OpenAI Compatible** (recommended): most endpoints speak the OpenAI API — start here unless you know otherwise
   - **Anthropic**: native Anthropic protocol
   - Both can be enabled at once (a fusion provider), letting one credential serve both OpenAI and Anthropic inbound protocols
-- **Proxy URL** (optional, under advanced): route this provider through a dedicated HTTP proxy
-- **User Agent** (optional, under advanced): custom request header
+- **Advanced** accordion (collapsed by default): currently just **Proxy URL** — route this provider through a dedicated HTTP proxy. The old custom User-Agent field was removed.
+
+In **edit mode** the dialog title becomes "Edit AI Config" and carries an **Enabled** switch next to the close button — enabling/disabling no longer lives inside Advanced.
 
 Click **Test** to verify connectivity, then **Save**.
 

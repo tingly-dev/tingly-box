@@ -41,6 +41,15 @@
 - Quick Start 第 3 步为 **Install DeepSeek Harness**，第 4 步为 **Configure DSH**——该步骤会将 dsh 的模型 Provider 插件指向本页的 Base URL 和 API Key
 - `dsh` 处于开发者预览阶段，其配置方式可能变化
 
+#### DSH 自动配置
+
+Config 会向 `$DSH_HOME/settings.yaml` 写入一个 `tingly-box` provider 条目，除 Base URL/API Key 外还包含两项额外设置：
+
+| 设置项 | 取值 | 作用 |
+|--------|------|------|
+| **Primary protocol（主协议）** | `openai-completions`（默认）/ `openai-responses` / `anthropic-messages` | Tingly-Box 转发给 dsh 的 `llm-pi-ai` 适配器时使用的接口格式。OpenAI Chat 是最通用的兼容格式；只有当该 provider 下的模型确实使用对应 API 时才应选择 OpenAI Responses 或 Anthropic Messages，选错会导致这些模型无法正常工作。 |
+| **Supported input modality（支持的输入模态）** | `text`（默认）/ `text_image` | 控制该 provider 下的模型默认是否接收图片输入。留空/`text` 表示 dsh 按纯文本模型处理；`text_image` 则同时接受图片输入。 |
+
 ---
 
 ## VS Code
@@ -93,6 +102,7 @@ VS Code 扩展通常通过 `baseURL` 环境变量或扩展设置指定 API 端�
 ## 相关页面
 
 - [Claude Code 场景](./03-scenario-claude-code.md)
+- [Cursor 场景](./04-scenario-cursor.md)
 - [Codex 场景](./04-scenario-codex.md)
 - [场景总览](./02-scenario-overview.md)
 - [凭证管理](./08-credentials.md)

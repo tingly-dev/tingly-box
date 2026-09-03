@@ -25,7 +25,7 @@ Same 4-step pattern as Claude Code (Connect AI Provider → Select a Model → I
 
 ### 3. Model Rules (collapsible)
 
-Same routing-graph UI as Claude Code — **Test All** / **Troubleshoot** / **Connect AI** / **New Rule** toolbar; see [Claude Code § Model Rules](./03-scenario-claude-code.md#5-model-rules) for the full breakdown.
+Same routing-graph UI as Claude Code — **Test All** / **Troubleshoot** / **Connect AI** / **New Rule** toolbar; see [Claude Code § Model Rules](./03-scenario-claude-code.md#5-model-rules) for the full breakdown, and [Routing Rules & Plugins § Troubleshoot](./20-routing-rules.md#troubleshoot-probe-panel) for the probe panel itself.
 
 ---
 
@@ -44,5 +44,5 @@ Same routing-graph UI as Claude Code — **Test All** / **Troubleshoot** / **Con
 ## Related Pages
 
 - [Claude Code Scenario](./03-scenario-claude-code.md)
-- [Other Coding Agents](./05-scenario-coding-agents.md)
+- [Other Coding Agents](./04-scenario-coding-agents.md)
 - [Credentials](./08-credentials.md)

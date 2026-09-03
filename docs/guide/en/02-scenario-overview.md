@@ -44,15 +44,17 @@ Card grid order (also the sidebar order):
 | DeepSeek | `/agent/dsh` | Route DeepSeek Harness (dsh) through your provider — self-hosted Web UI |
 | Xcode | `/agent/xcode` | Bring your model into Xcode's coding intelligence |
 | VS Code | `/agent/vscode` | Power VS Code Copilot Chat through Tingly Box |
+| Cursor | `/agent/cursor` | Bring your model into Cursor, with Cursor compatibility handling on by default (hidden by default) |
 | Custom | `/agent/custom` | Bring your own request model name — generic catch-all scenario (hidden by default) |
 | OpenAI SDK | `/agent/openai` | Drop-in OpenAI-compatible SDK endpoint |
 | Anthropic SDK | `/agent/anthropic` | Drop-in Anthropic-compatible SDK endpoint |
 | Embedding | `/agent/embed` | Route embedding requests to your provider |
-| Image Gen | `/agent/imagegen` | Route image generation through Tingly Box |
-| Team | `/agent/team` | Shared central model deployment for your whole team (hidden by default) |
-| Playground | `/agent/playground` | Interactive image generation test bench (not part of the card grid; reached via sidebar) |
+| Image Playground | `/agent/image` | Generate and edit images through Tingly Box, with an inline test bench |
+| Team | `/agent/team` | Isolated multi-team workspaces with their own routing and sharing keys (hidden by default) |
 
 > "Custom" was previously labeled "OpenClaw" / "Claw Agent" in the sidebar and docs; the path also moved from `/agent/agent` to `/agent/custom`.
+> "Image Playground" absorbed the old standalone Playground page — `/agent/imagegen` and `/agent/playground` both redirect to `/agent/image` now.
+> Cursor calls its configured Base URL from **Cursor's own cloud backend**, not from the local Cursor app, so a `localhost` address won't work unless this server is publicly reachable over HTTPS — see [Cursor Scenario](./04-scenario-cursor.md).
 
 ---
 
@@ -69,7 +71,7 @@ The left Activity Bar icon corresponds to the **Scenarios** group. Clicking it d
 ## Related Pages
 
 - [Claude Code Scenario](./03-scenario-claude-code.md)
+- [Cursor Scenario](./04-scenario-cursor.md)
 - [Other Coding Agents](./04-scenario-coding-agents.md)
 - [OpenAI / Anthropic SDK Proxy](./05-scenario-sdk-proxy.md)
-- [Custom / Embed / ImageGen](./06-scenario-special.md)
-- [Playground](./07-scenario-playground.md)
+- [Custom / Embed / Image Playground / Team](./06-scenario-special.md)

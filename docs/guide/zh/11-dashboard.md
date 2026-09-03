@@ -101,6 +101,7 @@
 | Cache Hit | 缓存命中率（%） |
 | Input Tokens | 输入 Token 数 |
 | Output Tokens | 输出 Token 数 |
+| Reasoning Tokens | 推理（思考）Token 数——不上报推理 Token 的模型显示为 0 或留空 |
 | Error Rate | 请求失败率（%） |
 
 ---
@@ -146,9 +147,11 @@
 | Requests | 总请求数；副标题显示人均活跃用户请求数 |
 | Errors | 错误次数与错误率 |
 
-### 已注册用户列表
+### 视图切换：By Account / By Model / By Provider
 
-每行一个用户，支持按名称搜索：
+表格上方的三态切换按钮控制统计的分组方式——无论切到哪种视图，上方的统计卡片都保持不变：
+
+**By account**（默认）——每行一个用户，支持按名称搜索：
 
 | 列 | 说明 |
 |----|------|
@@ -156,8 +159,14 @@
 | Requests | 请求次数 |
 | Total | Token 总量（可排序，默认排序列） |
 | Cache Read / Cache Write / Cache Hit | 与主看板相同的缓存拆分数据，按用户统计 |
-| Input / Output | Token 数量 |
+| Input / Output / Reasoning | Token 数量，含推理（思考）Token |
 | Error Rate | 该用户的失败率 |
+
+**By model** / **By provider**——表格切换为按模型（或 Provider）分组而非按用户，列结构相同（Token/缓存/错误率），支持按模型/Provider 名称搜索。点击某一行会在下方展开详情面板，列出使用该模型/Provider 的账户，副标题显示每个账户涉及的模型/Provider 数量（如「Across 3 providers」）。
+
+表格旁边是一个 **Top list**（排名占比条），展示当前视图下的头部条目——**Top accounts**、**Top models** 或 **Top providers**——每项显示名称及其占本周期总量的百分比，剩余部分归入 **Others** 一行。
+
+![Team Usage — By Model](../images/dashboard-team-usage-by-model.png)
 
 ---
 

@@ -117,20 +117,23 @@ await shot('guardrails-history', '/guardrails/history',         { waitMs: 4000 }
 await shot('mcp',                '/mcp/sources',                { waitMs: 4000 });
 await shot('system',             '/system');
 await shot('remote-control',     '/remote-control/telegram');
-await shot('remote-coder',       '/remote-coder/chat');
 await shot('experimental',       '/system/experimental');
 await shot('api-tokens',         '/tingly-box-token');
 await shot('virtual-models',     '/credentials/virtual-models');
 await shot('access-control',     '/access-control');
 await shot('prompt-skills',      '/prompt/skill');
-await shot('imagegen',           '/agent/imagegen',             { waitMs: 4500 });
-await shot('playground',         '/agent/playground',           { waitMs: 4500 });
+// ImageGen + the old standalone Playground merged into one page at
+// /agent/image (both /agent/imagegen and /agent/playground now redirect
+// here) — "Image Playground" card is inline below the config card.
+await shot('image-playground',   '/agent/image',                { waitMs: 4500 });
+await shot('cursor-scenario',    '/agent/cursor',                { waitMs: 4000 });
+await shot('team-workspace',     '/agent/team',                  { waitMs: 4000 });
+await shot('help-page',          '/help',                        { waitMs: 3000 });
 
 // --- Batch 2: detail / interaction shots -----------------------------------
 console.log('\nBatch 2: detail & interaction shots');
 
 await shot('dashboard-today',       '/dashboard/today',             { waitMs: 4500 });
-await shot('remote-coder-sessions', '/remote-coder/sessions');
 await shot('guardrails-groups',     '/guardrails/groups',           { waitMs: 4000 });
 await shot('mcp-local-mode',        '/mcp/local-mode');
 await shot('logs',                  '/system/logs');
@@ -184,6 +187,69 @@ await shot('connect-ai', '/credentials', {
         } catch { /* ok if button not present */ }
     },
 });
+
+// Cursor "Configure Cursor" modal — walks through pointing Cursor's own
+// cloud backend at this Base URL.
+await shot('cursor-config-modal', '/agent/cursor', {
+    waitMs: 3000,
+    action: async (page) => {
+        await page.getByRole('button', { name: /Config/i }).first().click().catch(() => {});
+        await page.waitForTimeout(1200);
+    },
+});
+
+// Image Playground — Edit mode: switch the Generate/Edit toggle so the
+// reference-image dropzone (paste-to-edit) renders instead of the prompt-only
+// generate form.
+await shot('image-playground-edit', '/agent/image', {
+    waitMs: 4000,
+    action: async (page) => {
+        await page.getByRole('button', { name: /^Edit$/ }).first().click().catch(() => {});
+        await page.waitForTimeout(1000);
+    },
+});
+
+// Team usage dashboard — "By model" view: ranked RosterTopList beside the
+// breakdown table (default view is "By account", matching dashboard-team-usage.png).
+await shot('dashboard-team-usage-by-model', '/dashboard/users', {
+    waitMs: 4000,
+    action: async (page) => {
+        await page.getByRole('button', { name: /By model/i }).first().click().catch(() => {});
+        await page.waitForTimeout(1200);
+    },
+});
+
+// Redesigned Probe panel: "Test All" auto-runs every active rule's quick
+// probe, then click the resulting status pill (e.g. "123ms" / "Success") to
+// open the full ProbeDialog — left control rail (orthogonal axes) + right
+// results column (status, journey, response, cURL).
+{
+    const page = await ctx.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.goto(`${BASE}/agent/claude_code`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
+    // "Test All" only matches by text, not accessible role/name here.
+    await page.locator('button:has-text("Test All")').first().click({ timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(6000);
+    // The status pill (in the rule card's own header, not the page toolbar)
+    // has no stable role/label — find it by its rendered latency ("823ms" /
+    // "1.4s") or verdict text and click its clickable ancestor.
+    const pill = page.locator('text=/^(\\d+ms|\\d+\\.\\d+s|Success|Failed)$/').first();
+    await pill.waitFor({ timeout: 8000 }).catch(() => {});
+    await pill.scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(500);
+    await pill.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    // Expand Request Journey + Response for a fuller, more representative shot.
+    await page.locator('text="Request Journey"').first().click().catch(() => {});
+    await page.waitForTimeout(500);
+    await page.locator('text="Response"').first().click().catch(() => {});
+    await page.waitForTimeout(600);
+    const out = path.join(OUT_DIR, 'probe-panel.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] probe-panel.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
 
 // --- Batch 3: routing graph & extensions catalog ---------------------------
 console.log('\nBatch 3: routing graph & extensions');

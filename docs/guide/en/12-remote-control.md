@@ -46,7 +46,7 @@ Each platform tab also shows a collapsible **Setup Guide** with connection steps
 
 ## Remote Control (`/remote-agent/:platform`)
 
-![Remote Control](../images/remote-agent.png)
+![Remote Control](../images/remote-control.png)
 
 The routing layer: *"Choose who can control each bot and where chat commands route."* For each bot, define the chain: **Access → Bot → Agent**.
 

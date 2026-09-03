@@ -15,11 +15,11 @@ Agent 场景是 Tingly-Box 的核心功能，将各类 AI 编程工具的 API �
 
 - [场景总览](./02-scenario-overview.md) — 场景导航与可见性管理
 - [Claude Code](./03-scenario-claude-code.md) — 主力场景，支持 Profile、统一/分离模型、转发规则
+- [Cursor](./04-scenario-cursor.md) — Cursor 代理，附公网可达性说明（默认隐藏）
 - [Codex](./04-scenario-codex.md) — OpenAI Codex CLI 代理，自动配置支持
 - [其他编程 Agent](./04-scenario-coding-agents.md) — OpenCode、Pi、DeepSeek Harness、VS Code、Xcode、Claude Desktop
 - [OpenAI / Anthropic SDK 代理](./05-scenario-sdk-proxy.md) — OpenAI 兼容接口与 Anthropic 原生接口
-- [Custom / Embed / ImageGen](./06-scenario-special.md) — Custom 通用兜底场景（原 OpenClaw）、Embedding、图像生成
-- [Playground（图像生成测试台）](./07-scenario-playground.md)
+- [Custom / Embed / Image Playground / Team](./06-scenario-special.md) — Custom 通用兜底场景（原 OpenClaw）、Embedding、Image Playground（生成+编辑）、多团队工作区
 
 ### 三、配置主链路
 
@@ -31,8 +31,9 @@ Provider 和凭证管理是所有场景正常工作的前提。
 
 ### 四、其他主入口
 
-- [用量看板](./11-dashboard.md) — 请求统计、Token 消耗、响应性能、活动热力图
+- [用量看板](./11-dashboard.md) — 请求统计、Token 消耗、响应性能、推理 Token、活动热力图、Team usage
 - [Remote](./12-remote-control.md) — 通过 IM 平台（微信、Telegram、飞书等）远程操控 Claude Code：Bots 接入、Remote Control 路由、IM Notify 通知
+- [提示与帮助](./13-help.md) — 桌面快捷方式、Provider 目录、路由/Tier 引导，集中在一个手风琴页面
 - [Prompt 管理](./14-prompt-management.md) — 用户录制、Skill、Command（Full Edition）
 - [防护栏（Guardrails）](./15-guardrails.md) — 策略导入/导出、规则管理、受保护凭证、历史审计
 - [MCP 与工具](./16-mcp-tools.md) — MCP 服务器注册与本地模式
@@ -48,7 +49,7 @@ Provider 和凭证管理是所有场景正常工作的前提。
 
 ### 七、高阶特性
 
-- [路由规则与插件标记](./20-routing-rules.md) — 直接路由（Tier/熔断器）、智能路由（SmartOp 条件）、规则插件标记
+- [路由规则与插件标记](./20-routing-rules.md) — 直接路由（Tier/熔断器）、智能路由（SmartOp 条件）、规则插件标记、Troubleshoot 探测面板
 - [模型选择](./21-model-select.md) — 为路由规则指定 Provider 与模型的交互入口
 
 ---

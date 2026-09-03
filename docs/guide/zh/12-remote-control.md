@@ -46,7 +46,7 @@
 
 ## Remote Control（`/remote-agent/:platform`）
 
-![Remote Control](../images/remote-agent.png)
+![Remote Control](../images/remote-control.png)
 
 路由层：「Choose who can control each bot and where chat commands route.」为每个 Bot 定义链路：**Access → Bot → Agent**。
 

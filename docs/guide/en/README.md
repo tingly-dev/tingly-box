@@ -15,11 +15,11 @@ Agent scenarios are the core of Tingly-Box — they proxy API requests from AI c
 
 - [Scenario Overview](./02-scenario-overview.md) — Navigation hub and visibility management
 - [Claude Code](./03-scenario-claude-code.md) — Primary scenario with Profile support, unified/separate model modes, and forwarding rules
+- [Cursor](./04-scenario-cursor.md) — Cursor proxy with cloud-reachability guidance (hidden by default)
 - [Codex](./04-scenario-codex.md) — OpenAI Codex CLI proxy with auto-config support
 - [Other Coding Agents](./04-scenario-coding-agents.md) — OpenCode, Pi, DeepSeek Harness, VS Code, Xcode, Claude Desktop
 - [OpenAI / Anthropic SDK Proxy](./05-scenario-sdk-proxy.md) — OpenAI-compatible and Anthropic native interfaces
-- [Custom / Embed / ImageGen](./06-scenario-special.md) — Custom catch-all (formerly OpenClaw), Embedding API, Image Generation
-- [Playground](./07-scenario-playground.md) — Interactive image generation test bench
+- [Custom / Embed / Image Playground / Team](./06-scenario-special.md) — Custom catch-all (formerly OpenClaw), Embedding API, Image Playground (generate + edit), multi-team workspaces
 
 ### III. Configuration Chain
 
@@ -31,8 +31,9 @@ Provider and credential management is a prerequisite for all scenarios.
 
 ### IV. Other Main Entry Points
 
-- [Usage Dashboard](./11-dashboard.md) — Request stats, token usage, response performance, activity heatmap
+- [Usage Dashboard](./11-dashboard.md) — Request stats, token usage, response performance, reasoning tokens, activity heatmap, Team usage
 - [Remote](./12-remote-control.md) — Control Claude Code via IM platforms: Bots, Remote Control routing, IM Notify (WeChat, Telegram, Feishu, etc.)
+- [Tips & Help](./13-help.md) — Desktop shortcut, provider catalog, and routing/tier guides in one accordion page
 - [Prompt Management](./14-prompt-management.md) — User recordings, Skills, Commands (Full Edition)
 - [Guardrails](./15-guardrails.md) — Policy import/export, rule management, protected credentials, audit history
 - [MCP & Tools](./16-mcp-tools.md) — MCP server registration and local mode
@@ -48,7 +49,7 @@ Provider and credential management is a prerequisite for all scenarios.
 
 ### VII. Advanced Topics
 
-- [Routing Rules & Plugins](./20-routing-rules.md) — Direct routing (tiers/circuit breaker), Smart routing (SmartOp conditions), rule plugin flags
+- [Routing Rules & Plugins](./20-routing-rules.md) — Direct routing (tiers/circuit breaker), Smart routing (SmartOp conditions), rule plugin flags, the Troubleshoot probe panel
 - [Model Select](./21-model-select.md) — Assign providers and models to forwarding rules
 
 ---

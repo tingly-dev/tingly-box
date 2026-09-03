@@ -92,22 +92,27 @@ Closed（正常） ──── 连续 3 次失败 ──→ Open（熔断）
 
 ### SmartOp 条件目录
 
-| 条件键 | 类型 | 可选值 | 说明 |
-|--------|------|--------|------|
-| `agent.claude_code` | enum | `main` / `subagent` / `compact` | Claude Code 请求类型 |
-| `token` | 阈值 | `ge:<N>` / `le:<N>` | 输入 Token 数量（大于等于/小于等于） |
-| `thinking` | bool | `on` / `off` | 客户端是否开启了扩展思考 |
-| `service_ttft` | 性能 | `fastest` / `fast` / `slow` / `slowest` | 上游服务首字节延迟（TTFT）性能档位 |
-| `service_capacity` | 状态 | `available` / `degraded` / `unavailable` | 上游服务当前容量状态 |
-| `context_system` | 存在性 | `exists` / `missing` | 请求是否携带 system prompt |
-| `latest_user` | 内容类型 | `text` / `image` / `file` / `rich` | 最新一条 user 消息的内容类型 |
+按条件选择器中的分类展示：
+
+| 条件 | 分类 | 可用算符 | 说明 |
+|------|------|----------|------|
+| Agent: Claude Code（`agent.claude_code`） | Agent | Equals：`main` / `subagent` / `compact` | Claude Code 请求类型 |
+| System Prompt（`context_system`） | Context | Contains：`<文本>` | 请求的 system prompt 是否包含指定文本 |
+| Latest User Message（`latest_user`） | Context | Contains：`<文本>` | 最新一条 user 消息是否包含指定文本 |
+| Time range（`time`） | Time | 指定时区下的每日起止时间窗口 | 匹配落在（或落在之外的）某个每日循环时间段内的请求 |
+| Thinking（`thinking`） | Request | `Enabled` / `Disabled` | 客户端是否开启了扩展思考 |
+| Token Count（`token`） | Request | `≥ N` / `≤ N` | 输入 Token 数量 |
+| Service TTFT（`service_ttft`） | Service | `Avg ≤/≥ N ms`、`P99 ≤/≥ N ms` | 该规则所有服务的首字节延迟（最优服务的均值或 P99） |
+| Service Capacity（`service_capacity`） | Service | `Util ≤/≥/</> N%` | 该规则所有服务的席位/并发利用率 |
+| Service Quota（`service_quota`） | Service | `Quota ≤/≥/</> N%` | 该规则所有服务对应 Provider 中**最紧张（最大）**的配额使用率——取最热的那个，而非平均值。缺失配额数据时该条件直接**放行**而非拦截，因此配额未知或数据陈旧不会影响正常路由 |
 
 ### 设计技巧
 
 - 多个条件使用 **AND 逻辑**（同一 SmartOp 内所有条件均须满足）
 - 最后一条子规则保持**无条件**（ops=[]），作为兜底默认路径
-- 利用 `agent.claude_code=compact` 将 Compact 压缩请求路由到更便宜的模型
-- 利用 `token ge:100000` 将超长上下文请求路由到支持大窗口的服务
+- 利用 Agent: Claude Code = `compact` 将 Compact 压缩请求路由到更便宜的模型
+- 利用 Token Count `≥ 100000` 将超长上下文请求路由到支持大窗口的服务
+- 利用 Service Quota `Quota ≥ 90%`，在某 Provider 配额真正耗尽之前就提前切换到备用服务组
 
 ---
 
@@ -126,6 +131,12 @@ Closed（正常） ──── 连续 3 次失败 ──→ Open（熔断）
 | Cursor compatibility | `cursor_compat` | 对 Cursor 客户端规范化富内容、封锁工具、去除 stream usage |
 | Auto-detect Cursor | `cursor_compat_auto` | 根据请求头自动识别 Cursor 并应用兼容处理 |
 | Claude Code compatibility | `claude_code_compat` | 将 messages 数组中 `system` 角色条目重写为 `user`，兼容不支持此扩展角色的第三方 Anthropic 兼容服务 |
+
+### Request（协议无关）类
+
+| 标记 | Key | 类型 | 说明 |
+|------|-----|------|------|
+| Custom Headers | `extra_headers` | 请求头列表 | 为匹配该规则的请求追加自定义 HTTP 请求头。仅对 API Key 类 Provider 生效——OAuth/专属客户端 Provider（Claude Code、Codex、Kimi、Gemini、Antigravity）保留自身握手请求头，不受此影响。请求头会按配置原样发送，包括网关自身也会设置的字段（`Authorization`、`User-Agent` 等）——是否覆盖这些字段由你自行决定并承担相应责任 |
 
 ### Request (OpenAI) 类
 
@@ -160,6 +171,45 @@ Closed（正常） ──── 连续 3 次失败 ──→ Open（熔断）
 | 标记 | Key | 类型 | 说明 |
 |------|-----|------|------|
 | Session affinity | `session_affinity` | 整数（秒） | 会话粘性 TTL（**规则级**）：同一会话在 TTL 内持续命中同一服务。0 表示禁用。内置 Claude Code、Claude Desktop、Codex 规则默认 1800 秒。通过 `metadata.user_id`、`X-Tingly-Session-ID` 请求头或客户端 IP 识别会话 |
+
+---
+
+## Troubleshoot（探测面板）
+
+一个经过重新设计的诊断面板，可以对某条规则（或直接对某个 Provider）发起一次真实的测试请求，并原地查看发生了什么——无需离开路由图。
+
+### 两个入口
+
+- **Quick test（快速测试）**——每张规则卡片头部的闪电图标可一键对该规则发起流式测试；结果以一枚彩色小药丸（延迟数值或 `Success`/`Failed`）显示在图标旁。点击药丸即可打开完整面板，并预先载入该结果。
+- **Test All**（工具栏，Model Rules 右上角）对所有**处于激活状态**的规则同时发起同样的快速测试——未激活的规则不会真正匹配流量，因此会被跳过。
+- **Troubleshoot**（工具栏）直接打开完整面板，不预先运行任何测试。
+
+### 面板布局
+
+![探测面板](../images/probe-panel.png)
+
+左侧是**控制栏**（将要发送什么），右侧是**结果栏**（收到了什么），两者无需靠记忆对照：
+
+**Request Config（左侧控制栏）**——彼此正交、可自由组合的维度：
+
+| 维度 | 可选值 | 说明 |
+|------|--------|------|
+| Request | `Nonstream` / `Stream` | 默认 Stream——最接近生产流量 |
+| Tool | `Off` / `On` | 附带一个工具定义，让探测请求也走一遍工具调用；与 stream/nonstream 均可组合 |
+| Scope | `Through TB` / `Direct` | Direct 完全跳过 Tingly-Box 的路由与中间件，用于判断故障出在上游还是 TB 内部。规则目标固定为 Through TB——这正是规则测试要验证的对象 |
+| Protocol | 依目标而定 | 回环请求所使用的客户端侧协议。规则目标锁定为该规则所属场景的协议；Provider 目标则收窄为该 Provider 实际支持的协议；Google 类 Provider 不可选（使用自有 SDK，无协议可选） |
+| Vision | `Off` / `User` / `Tool` | 附带一张红色测试图片——放在 user 消息中，或通过一次合成的工具调用返回（与 Agent 截图工具的形态一致）。具备视觉能力的链路会回答「red」，其他结果说明图片在链路中被丢弃或损坏 |
+| Thinking | `None` / `Low` / `Medium` / `High` / `Max` | 扩展思考强度；映射到 Provider 原生参数（Anthropic 的 `budget_tokens`、OpenAI 的 `reasoning_effort`、Gemini 的 `thinking_budget`） |
+| Message | 自由文本 | 覆盖默认探测消息（工具探测与普通探测的默认消息不同） |
+
+点击 **Run Test** 后，**结果栏（右侧）**显示：
+- 一条 **Success**/**Failed** 状态栏，附延迟与 Token 数量徽章（失败时显示错误信息）
+- **Request Journey**（可折叠）：命中的规则与已应用的标记、路由来源（会话粘性 / 智能路由 / 负载均衡 / 探测锁定）、最终解析出的 Provider → 模型、解析出的上游 API 类型、上游 URL，以及回环请求 URL——后端尚未返回的字段会以灰色占位显示
+- **Response**（可折叠）：提取出的助手回复文本，自带复制按钮
+- **Raw JSON**（可折叠）：完整的原始响应体
+- **cURL**（底部，横跨整个面板宽度）：根据当前 Request Config 实时重新生成的 `curl` 命令——纯粹是构造出来的，不会真正执行——并提示你在自行运行前替换成自己的 Key
+
+弹窗支持拖拽右下角调整大小，便于查看较长的 Journey 或流式响应；标题栏还提供独立的 **Copy cURL**、**Copy response**、**Re-run** 操作。
 
 ---
 

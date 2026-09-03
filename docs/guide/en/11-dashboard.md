@@ -101,6 +101,7 @@ Detailed breakdown by model/provider (paginated):
 | Cache Hit | Cache hit rate (%) |
 | Input Tokens | Input token count |
 | Output Tokens | Output token count |
+| Reasoning Tokens | Reasoning/thinking token count (0 or blank for models that don't report reasoning tokens) |
 | Error Rate | Request failure rate (%) |
 
 ---
@@ -146,9 +147,11 @@ Independent quick-switch: **Today / 7D / 30D / 90D**, plus a manual refresh butt
 | Requests | Total requests; subtitle shows average per active user |
 | Errors | Error count and rate |
 
-### All Registered Users Table
+### View: By Account / By Model / By Provider
 
-One row per user, searchable by name:
+A three-way toggle above the breakdown table switches its grouping — the summary cards above stay the same regardless of view:
+
+**By account** (default) — one row per user, searchable by name:
 
 | Column | Description |
 |--------|-------------|
@@ -156,8 +159,14 @@ One row per user, searchable by name:
 | Requests | Request count |
 | Total | Total tokens (sortable, default sort) |
 | Cache Read / Cache Write / Cache Hit | Same cache breakdown as the main dashboard, per user |
-| Input / Output | Token counts |
+| Input / Output / Reasoning | Token counts, including reasoning/thinking tokens |
 | Error Rate | Per-user failure rate |
+
+**By model** / **By provider** — the table pivots to one row per model (or provider) instead of per user, with the same token/cache/error columns, searchable by model/provider name. Selecting a row opens a detail panel below listing the accounts using that model/provider, subtitled with the model/provider count each account touches (e.g. *"Across 3 providers"*).
+
+Beside the breakdown table, a **Top list** (ranked share bars) surfaces the leaders for the active view — **Top accounts**, **Top models**, or **Top providers** — each entry showing its name and percentage share of the period's total, with the remainder grouped into an **Others** row.
+
+![Team Usage — By Model](../images/dashboard-team-usage-by-model.png)
 
 ---
 

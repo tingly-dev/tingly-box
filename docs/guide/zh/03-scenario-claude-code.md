@@ -92,6 +92,8 @@ Claude Code 是 Tingly-Box 的主力场景，将 Claude Code CLI 的 API 请求�
   - `BASH_MAX_TIMEOUT_MS`：Bash 命令最大超时
   - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`：自动压缩阈值（%，默认 85）。上下文使用率达到该百分比时触发自动压缩，设为 0 则禁用。
 
+- **Show thinking summaries** 开关：写入 `settings.json` 顶层的 `showThinkingSummaries` 字段（并非环境变量）。开启后 Claude Code 会在回复前展示模型的推理摘要；关闭仅隐藏摘要展示，不影响模型是否思考。默认开启。
+
 - **Preview generated env**：预览将要写入的环境变量块（写入 `~/.claude/settings.json`）
 
 - **Install Tingly-Box Claude Code status line** 复选框：勾选后同时将状态栏脚本安装到 `~/.claude/settings.json`，在 Claude Code 提示符中显示 Tingly-Box 连接状态。
@@ -118,7 +120,7 @@ Claude Code 是 Tingly-Box 的主力场景，将 Claude Code CLI 的 API 请求�
 ```
 
 - 每条规则可展开查看条件详情
-- 右上角提供 **Test All**（对所有启用规则运行一次快速流式测试）、**Troubleshoot**（查看路由日志/诊断）、**Connect AI**（添加 Provider）操作；页面允许新建规则时还会显示 **New Rule**
+- 右上角提供 **Test All**（对所有启用规则运行一次快速流式测试）、**Troubleshoot**（打开重新设计的探测面板——详见 [路由规则与插件 · Troubleshoot](./20-routing-rules.md#troubleshoot探测面板)）、**Connect AI**（添加 Provider）操作；页面允许新建规则时还会显示 **New Rule**
 - 节点图中的 Provider 卡片显示模型名称和 Provider 来源
 
 #### 1M 上下文窗口开关

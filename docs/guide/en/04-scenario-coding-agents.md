@@ -41,6 +41,15 @@ Proxies requests for [DeepSeek Harness](https://github.com/deepseek-ai/dsh), an 
 - Quick Start step 3 is **Install DeepSeek Harness**, step 4 **Configure DSH** — the config step points dsh's model-provider plugin at this page's Base URL and API Key
 - `dsh` is in developer preview; its configuration surface may change
 
+#### DSH Auto Config
+
+Config writes a `tingly-box` provider entry into `$DSH_HOME/settings.yaml` with two extra settings beyond Base URL/API Key:
+
+| Setting | Values | Purpose |
+|---------|--------|---------|
+| **Primary protocol** | `openai-completions` (default) / `openai-responses` / `anthropic-messages` | Which wire format Tingly-Box speaks to dsh's `llm-pi-ai` adapter with. OpenAI Chat is the most widely compatible; pick OpenAI Responses or Anthropic Messages only if the models under this provider actually use that API. Picking the wrong one breaks those models. |
+| **Supported input modality** | `text` (default) / `text_image` | Whether models under this provider accept image input by default. Empty/`text` = dsh treats them as text-only; `text_image` also accepts images. |
+
 ---
 
 ## VS Code
@@ -93,6 +102,7 @@ On the [Scenario Overview](./02-scenario-overview.md) page, use the hover eye ic
 ## Related Pages
 
 - [Claude Code Scenario](./03-scenario-claude-code.md)
+- [Cursor Scenario](./04-scenario-cursor.md)
 - [Codex Scenario](./04-scenario-codex.md)
 - [Scenario Overview](./02-scenario-overview.md)
 - [Credentials](./08-credentials.md)

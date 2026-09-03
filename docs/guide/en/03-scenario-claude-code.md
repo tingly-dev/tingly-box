@@ -91,6 +91,8 @@ Click **Auto Config** to open the **Claude Code Configuration Guide** modal with
   - `BASH_MAX_TIMEOUT_MS`: Bash command max timeout
   - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`: Auto-compact trigger threshold (%, default 85). When context usage reaches this %, history is automatically compacted. Set to 0 to disable.
 
+- **Show thinking summaries** toggle: Writes the top-level `showThinkingSummaries` field in `settings.json` (not an env var). When on, Claude Code displays the model's reasoning summary before its reply; turning it off only hides the summary display — it doesn't affect whether the model thinks. On by default.
+
 - **Preview generated env**: Preview the env variable block that will be written to `~/.claude/settings.json`
 
 - **Install Tingly-Box Claude Code status line** checkbox: When checked, also installs the status line script into `~/.claude/settings.json` — shows connection status in the Claude Code prompt.
@@ -117,7 +119,7 @@ Entry node (Direct/Smart) → IF condition (e.g. agent.claude_code = subagent) �
 ```
 
 - Each rule can be expanded to see condition details
-- Top-right: **Test All** (runs a quick streaming test against every active rule), **Troubleshoot** (view routing logs / diagnostics), **Connect AI** (add a provider), and — where rule creation is allowed on the page — **New Rule**
+- Top-right: **Test All** (runs a quick streaming test against every active rule), **Troubleshoot** (opens the redesigned probe panel — see [Routing Rules & Plugins § Troubleshoot](./20-routing-rules.md#troubleshoot-probe-panel)), **Connect AI** (add a provider), and — where rule creation is allowed on the page — **New Rule**
 - Provider cards in the graph show model name and provider source
 
 #### 1M Context Window Toggle

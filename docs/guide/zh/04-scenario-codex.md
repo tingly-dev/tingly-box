@@ -25,7 +25,7 @@ Codex 场景将 OpenAI Codex CLI 的 API 请求代理到你配置的 Provider，
 
 ### 3. Model Rules（可折叠）
 
-与 Claude Code 相同的路由图 UI——**Test All** / **Troubleshoot** / **Connect AI** / **New Rule** 工具栏；详见 [Claude Code · Model Rules](./03-scenario-claude-code.md#5-model-rules)。
+与 Claude Code 相同的路由图 UI——**Test All** / **Troubleshoot** / **Connect AI** / **New Rule** 工具栏；详见 [Claude Code · Model Rules](./03-scenario-claude-code.md#5-model-rules)，探测面板本身详见 [路由规则与插件 · Troubleshoot](./20-routing-rules.md#troubleshoot探测面板)。
 
 ---
 
@@ -44,5 +44,5 @@ Codex 场景将 OpenAI Codex CLI 的 API 请求代理到你配置的 Provider，
 ## 相关页面
 
 - [Claude Code 场景](./03-scenario-claude-code.md)
-- [其他编程 Agent](./05-scenario-coding-agents.md)
+- [其他编程 Agent](./04-scenario-coding-agents.md)
 - [凭证管理](./08-credentials.md)

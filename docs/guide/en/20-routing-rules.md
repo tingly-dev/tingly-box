@@ -92,22 +92,27 @@ Request Entry
 
 ### SmartOp Condition Catalog
 
-| Condition Key | Type | Values | Description |
-|--------------|------|--------|-------------|
-| `agent.claude_code` | enum | `main` / `subagent` / `compact` | Claude Code request type |
-| `token` | threshold | `ge:<N>` / `le:<N>` | Input token count (greater-than-or-equal / less-than-or-equal) |
-| `thinking` | bool | `on` / `off` | Whether the client has enabled extended thinking |
-| `service_ttft` | performance | `fastest` / `fast` / `slow` / `slowest` | Upstream TTFT (time-to-first-token) performance tier |
-| `service_capacity` | status | `available` / `degraded` / `unavailable` | Upstream service current capacity state |
-| `context_system` | presence | `exists` / `missing` | Whether the request carries a system prompt |
-| `latest_user` | content type | `text` / `image` / `file` / `rich` | Content type of the most recent user message |
+Grouped by category, as shown in the condition picker:
+
+| Condition | Category | Operators | Description |
+|-----------|----------|-----------|-------------|
+| Agent: Claude Code (`agent.claude_code`) | Agent | Equals: `main` / `subagent` / `compact` | Claude Code request kind |
+| System Prompt (`context_system`) | Context | Contains: `<text>` | Whether the request's system prompt contains the given text |
+| Latest User Message (`latest_user`) | Context | Contains: `<text>` | Whether the most recent user message contains the given text |
+| Time range (`time`) | Time | A daily start–end window in a chosen timezone | Match requests inside or outside a recurring daily time range |
+| Thinking (`thinking`) | Request | `Enabled` / `Disabled` | Whether the client has enabled extended thinking |
+| Token Count (`token`) | Request | `≥ N` / `≤ N` | Input token count |
+| Service TTFT (`service_ttft`) | Service | `Avg ≤/≥ N ms`, `P99 ≤/≥ N ms` | Time-to-first-token across the rule's services (best-service average or P99) |
+| Service Capacity (`service_capacity`) | Service | `Util ≤/≥/</> N%` | Seat/concurrency utilization across the rule's services |
+| Service Quota (`service_quota`) | Service | `Quota ≤/≥/</> N%` | Tightest (max) upstream quota usage across the rule's services' providers — the hottest one, not the average. Absent quota data lets the op **pass** rather than block, so quota-blind rules and cold data never break routing |
 
 ### Design Tips
 
 - Multiple conditions in one SmartOp use **AND logic** (all must pass)
 - The last sub-rule should be **unconditional** (ops=[]) as the default catch-all fallback
-- Use `agent.claude_code=compact` to route compact-mode requests to cheaper models
-- Use `token ge:100000` to route very long contexts to services with large context windows
+- Use `agent.claude_code` = `compact` to route compact-mode requests to cheaper models
+- Use `token ≥ 100000` to route very long contexts to services with large context windows
+- Use `service_quota` `Quota ≥ 90%` to fail a rule over to a backup service group before a provider's quota is actually exhausted
 
 ---
 
@@ -126,6 +131,12 @@ Click the Plugins card to open the **Flag Catalog** (category sidebar + detail p
 | Cursor compatibility | `cursor_compat` | Normalize rich content, gate tools, and strip stream usage for Cursor clients |
 | Auto-detect Cursor | `cursor_compat_auto` | Automatically detect Cursor via request headers and apply compatibility processing |
 | Claude Code compatibility | `claude_code_compat` | Rewrite `system` role entries in the messages array to `user` before forwarding, for third-party Anthropic-compatible providers that reject the non-standard role |
+
+### Request (protocol-agnostic)
+
+| Flag | Key | Type | Description |
+|------|-----|------|-------------|
+| Custom Headers | `extra_headers` | Header list | Append custom HTTP headers to the outbound upstream request for requests matched by this rule. Applies to API-key providers only — OAuth/vendor providers (Claude Code, Codex, Kimi, Gemini, Antigravity) keep their handshake headers and ignore this. Headers are sent as configured, including ones the gateway also sets (`Authorization`, `User-Agent`, …) — overriding those is your call and your responsibility |
 
 ### Request (OpenAI)
 
@@ -160,6 +171,45 @@ Click the Plugins card to open the **Flag Catalog** (category sidebar + detail p
 | Flag | Key | Type | Description |
 |------|-----|------|-------------|
 | Session affinity | `session_affinity` | Integer (seconds) | **Rule-level** TTL for session-to-service pinning: follow-up requests in the same session keep hitting the same service until TTL expires. 0 disables. Built-in Claude Code, Claude Desktop, and Codex rules default to 1800 s. Session identity resolved from `metadata.user_id`, `X-Tingly-Session-ID` header, or client IP |
+
+---
+
+## Troubleshoot (Probe Panel)
+
+A redesigned diagnostic panel for firing a real test request through a rule (or directly at a provider) and inspecting exactly what happened, without leaving the routing graph.
+
+### Two entry points
+
+- **Quick test** — a bolt icon in each rule card's header runs a one-click streaming test against just that rule; the result renders as a compact colored pill (latency or `Success`/`Failed`) next to the icon. Click the pill to open the full panel pre-loaded with that result.
+- **Test All** (toolbar, top-right of Model Rules) fires the same quick test against every *active* rule at once — inactive rules are skipped since they can't match real traffic anyway.
+- **Troubleshoot** (toolbar) opens the full panel directly, without running anything first.
+
+### Panel layout
+
+![Probe Panel](../images/probe-panel.png)
+
+A left **control rail** (what will be sent) next to a right **results column** (what came back), so the two never have to be reconciled by memory:
+
+**Request Config (left rail)** — orthogonal axes that compose freely with each other:
+
+| Axis | Options | Notes |
+|------|---------|-------|
+| Request | `Nonstream` / `Stream` | Stream is the default — closest to production traffic |
+| Tool | `Off` / `On` | Attaches a tool definition so the probe exercises tool calling; composes with both stream and nonstream |
+| Scope | `Through TB` / `Direct` | Direct skips Tingly-Box's routing & middleware entirely, to tell whether a failure is upstream or inside TB. Locked to "Through TB" for rule targets — that's what a rule test is for |
+| Protocol | Varies by target | The client-side wire protocol the loopback speaks. Locked to the rule's own scenario protocol for rule targets; reduced to what the provider can actually speak for provider targets; unavailable for Google providers (their own SDK, no protocol selection) |
+| Vision | `Off` / `User` / `Tool` | Attaches a red test image — in the user message, or returned from a synthetic tool round (the shape agent tools use for screenshots). A vision-capable route answers "red"; anything else means the image was dropped or corrupted along the path |
+| Thinking | `None` / `Low` / `Medium` / `High` / `Max` | Extended-thinking effort; maps to the provider's native knob (Anthropic `budget_tokens`, OpenAI `reasoning_effort`, Gemini `thinking_budget`) |
+| Message | free text | Override the default probe message (defaults differ for tool vs. plain probes) |
+
+**Results (right column)**, appearing after **Run Test**:
+- A **Success**/**Failed** status bar with **latency** and **token** chips (or the error message on failure)
+- **Request Journey** (collapsible): rule + applied flags, routing source (session affinity / smart routing / load balancer / pinned), resolved provider → model, resolved upstream API style, upstream URL, and the loopback request URL — each field renders as a greyed placeholder until the backend actually reports it
+- **Response** (collapsible): the extracted assistant text, with its own copy button
+- **Raw JSON** (collapsible): the full raw response body
+- **cURL** (bottom, full panel width): a live-regenerated `curl` command matching the current Request Config — nothing is executed, it's pure construction — with a hint to swap in your own key before running it yourself
+
+The dialog is resizable (drag the corner) for when the journey or a long streamed response needs more room, and carries its own **Copy cURL**, **Copy response**, and **Re-run** actions in the title bar.
 
 ---
 

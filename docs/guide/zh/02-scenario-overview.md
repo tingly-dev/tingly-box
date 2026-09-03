@@ -44,15 +44,17 @@
 | DeepSeek | `/agent/dsh` | 通过你的 Provider 路由 DeepSeek Harness（dsh）——自带独立 Web UI |
 | Xcode | `/agent/xcode` | 将你的模型接入 Xcode 的编程智能功能 |
 | VS Code | `/agent/vscode` | 通过 Tingly Box 驱动 VS Code Copilot Chat |
+| Cursor | `/agent/cursor` | 将你的模型接入 Cursor，默认开启 Cursor 兼容处理（默认隐藏） |
 | Custom | `/agent/custom` | 自定义请求模型名——通用兜底场景（默认隐藏） |
 | OpenAI SDK | `/agent/openai` | OpenAI 兼容 SDK 端点，即插即用 |
 | Anthropic SDK | `/agent/anthropic` | Anthropic 兼容 SDK 端点，即插即用 |
 | Embedding | `/agent/embed` | 将 Embedding 请求路由到你的 Provider |
-| Image Gen | `/agent/imagegen` | 通过 Tingly Box 路由图像生成请求 |
-| Team | `/agent/team` | 面向全团队的共享中央模型部署（默认隐藏） |
-| Playground | `/agent/playground` | 图像生成交互测试台（不在卡片网格中，通过侧边栏进入） |
+| Image Playground | `/agent/image` | 通过 Tingly Box 生成与编辑图像，内置交互测试台 |
+| Team | `/agent/team` | 拥有独立路由和共享密钥的多团队隔离工作区（默认隐藏） |
 
 > 「Custom」在侧边栏和旧文档中曾用名「OpenClaw」/「Claw Agent」，路径也从 `/agent/agent` 变为 `/agent/custom`。
+> 「Image Playground」合并了旧版独立的 Playground 页面——`/agent/imagegen` 与 `/agent/playground` 现在都会重定向到 `/agent/image`。
+> Cursor 是从 **Cursor 自己的云端后端**调用你配置的 Base URL，而不是从本机 Cursor 客户端调用，因此 `localhost` 地址无法使用，除非本服务已通过 HTTPS 公网可达——详见 [Cursor 场景](./04-scenario-cursor.md)。
 
 ---
 
@@ -69,7 +71,7 @@
 ## 相关页面
 
 - [Claude Code 场景](./03-scenario-claude-code.md)
+- [Cursor 场景](./04-scenario-cursor.md)
 - [其他编程 Agent](./04-scenario-coding-agents.md)
 - [OpenAI / Anthropic SDK 代理](./05-scenario-sdk-proxy.md)
-- [Custom / Embed / ImageGen](./06-scenario-special.md)
-- [Playground](./07-scenario-playground.md)
+- [Custom / Embed / Image Playground / Team](./06-scenario-special.md)
