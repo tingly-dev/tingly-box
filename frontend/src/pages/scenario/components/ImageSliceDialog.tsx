@@ -38,6 +38,14 @@ import {
 // 3x3 is the shape a sticker sheet almost always comes back as, so it is the
 // grid the dialog opens on.
 const AXIS_CHOICES = [1, 2, 3, 4, 5, 6];
+
+// The conventional "transparent here" checkerboard.
+const CHECKERBOARD_IMAGE = [
+    'linear-gradient(45deg, rgba(128,128,128,0.18) 25%, transparent 25%)',
+    'linear-gradient(-45deg, rgba(128,128,128,0.18) 25%, transparent 25%)',
+    'linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
+    'linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
+].join(', ');
 const EXPORT_SIZES = [512, 256];
 
 type LoadState =
@@ -207,11 +215,6 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             justifyContent: 'center',
                             borderRadius: 2,
                             bgcolor: 'action.hover',
-                            // A checkerboard makes a transparent sticker sheet
-                            // readable instead of blending into the surface.
-                            backgroundImage: 'linear-gradient(45deg, rgba(128,128,128,0.18) 25%, transparent 25%), linear-gradient(-45deg, rgba(128,128,128,0.18) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.18) 75%), linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
-                            backgroundSize: '16px 16px',
-                            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
                             p: 1,
                         }}
                     >
@@ -224,7 +227,21 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             </Typography>
                         )}
                         {image && (
-                            <Box sx={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+                            <Box
+                                sx={{
+                                    position: 'relative',
+                                    display: 'inline-block',
+                                    maxWidth: '100%',
+                                    // Scoped to exactly the image's own box: a
+                                    // checkerboard reads as "this part is
+                                    // transparent", so any of it visible outside
+                                    // the artwork is a lie about the artwork.
+                                    // An opaque image covers it completely.
+                                    backgroundImage: CHECKERBOARD_IMAGE,
+                                    backgroundSize: '16px 16px',
+                                    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+                                }}
+                            >
                                 <Box
                                     component="img"
                                     src={image.src}
