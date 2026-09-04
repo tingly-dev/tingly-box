@@ -16,6 +16,7 @@ interfaces, registration discipline, how to add a model).
 | -------- | -------------- |
 | [`vmodel-sequence.md`](./vmodel-sequence.md) | The `sequence` virtual model — a configurable program of per-request outcomes (e.g. `200, 200, 429`) that simulates a flaky upstream. Covers the per-request resolver pattern and why the cursor is a shared atomic. |
 | [`vmodel-benchmark.md`](./vmodel-benchmark.md) | Elevating `vmodel` into the single shared real-world test-bench for `*test` packages, plus the reusable preset check-logic layer. |
+| [`vmodel-transport.md`](./vmodel-transport.md) | Dispatching `vmodel` providers over real HTTP (private in-memory listener, optional unix socket) through the standard SDK + transport chain, instead of the in-memory `vmodel/client` short-circuit. Covers listener choice, the `vmodel://openai|anthropic` base-URL scheme, and the migration plan. |
 
 ## Related design notes
 
