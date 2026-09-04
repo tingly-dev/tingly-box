@@ -11,6 +11,8 @@ import (
 	openaiopt "github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 )
 
 // These tests drive Serve through the OFFICIAL SDKs over the in-memory
@@ -22,17 +24,35 @@ func newServed(t *testing.T) (*Server, *http.Client) {
 	t.Helper()
 	srv := Serve(NewService())
 	t.Cleanup(func() { _ = srv.Close() })
-	return srv, &http.Client{Transport: &http.Transport{DialContext: srv.DialContext}}
+	return srv, &http.Client{Transport: vmodelclient.NewTransport(srv.DialContext)}
 }
 
-func TestServe_OpenAI_NonStreaming(t *testing.T) {
+// openAISDK returns an OpenAI SDK client pointed at a fresh Server.
+func openAISDK(t *testing.T) openai.Client {
+	t.Helper()
 	_, hc := newServed(t)
-	client := openai.NewClient(
+	return openai.NewClient(
 		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
 		openaiopt.WithAPIKey("EMPTY"),
 		openaiopt.WithHTTPClient(hc),
 		openaiopt.WithMaxRetries(0),
 	)
+}
+
+// anthropicSDK returns an Anthropic SDK client pointed at a fresh Server.
+func anthropicSDK(t *testing.T) anthropicsdk.Client {
+	t.Helper()
+	_, hc := newServed(t)
+	return anthropicsdk.NewClient(
+		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
+		anthropicopt.WithAPIKey("EMPTY"),
+		anthropicopt.WithHTTPClient(hc),
+		anthropicopt.WithMaxRetries(0),
+	)
+}
+
+func TestServe_OpenAI_NonStreaming(t *testing.T) {
+	client := openAISDK(t)
 	resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
 		Model:    "echo-model",
 		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("ping")},
@@ -44,13 +64,7 @@ func TestServe_OpenAI_NonStreaming(t *testing.T) {
 }
 
 func TestServe_OpenAI_Streaming(t *testing.T) {
-	_, hc := newServed(t)
-	client := openai.NewClient(
-		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
-		openaiopt.WithAPIKey("EMPTY"),
-		openaiopt.WithHTTPClient(hc),
-		openaiopt.WithMaxRetries(0),
-	)
+	client := openAISDK(t)
 	stream := client.Chat.Completions.NewStreaming(context.Background(), openai.ChatCompletionNewParams{
 		Model:    "echo-model",
 		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("stream me")},
@@ -69,13 +83,7 @@ func TestServe_OpenAI_Streaming(t *testing.T) {
 }
 
 func TestServe_OpenAI_InjectedStatusIsPreserved(t *testing.T) {
-	_, hc := newServed(t)
-	client := openai.NewClient(
-		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
-		openaiopt.WithAPIKey("EMPTY"),
-		openaiopt.WithHTTPClient(hc),
-		openaiopt.WithMaxRetries(0),
-	)
+	client := openAISDK(t)
 	for _, tc := range []struct {
 		model  string
 		status int
@@ -91,12 +99,7 @@ func TestServe_OpenAI_InjectedStatusIsPreserved(t *testing.T) {
 }
 
 func TestServe_OpenAI_ModelsOnlyListOpenAIRegistry(t *testing.T) {
-	_, hc := newServed(t)
-	client := openai.NewClient(
-		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
-		openaiopt.WithAPIKey("EMPTY"),
-		openaiopt.WithHTTPClient(hc),
-	)
+	client := openAISDK(t)
 	page, err := client.Models.List(context.Background())
 	require.NoError(t, err)
 	ids := map[string]bool{}
@@ -108,13 +111,7 @@ func TestServe_OpenAI_ModelsOnlyListOpenAIRegistry(t *testing.T) {
 }
 
 func TestServe_Anthropic_NonStreaming(t *testing.T) {
-	_, hc := newServed(t)
-	client := anthropicsdk.NewClient(
-		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
-		anthropicopt.WithAPIKey("EMPTY"),
-		anthropicopt.WithHTTPClient(hc),
-		anthropicopt.WithMaxRetries(0),
-	)
+	client := anthropicSDK(t)
 	msg, err := client.Messages.New(context.Background(), anthropicsdk.MessageNewParams{
 		Model:     "echo-model",
 		MaxTokens: 64,
@@ -126,13 +123,7 @@ func TestServe_Anthropic_NonStreaming(t *testing.T) {
 }
 
 func TestServe_Anthropic_Streaming(t *testing.T) {
-	_, hc := newServed(t)
-	client := anthropicsdk.NewClient(
-		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
-		anthropicopt.WithAPIKey("EMPTY"),
-		anthropicopt.WithHTTPClient(hc),
-		anthropicopt.WithMaxRetries(0),
-	)
+	client := anthropicSDK(t)
 	stream := client.Messages.NewStreaming(context.Background(), anthropicsdk.MessageNewParams{
 		Model:     "echo-model",
 		MaxTokens: 64,
@@ -148,13 +139,7 @@ func TestServe_Anthropic_Streaming(t *testing.T) {
 }
 
 func TestServe_Anthropic_InjectedStatusIsPreserved(t *testing.T) {
-	_, hc := newServed(t)
-	client := anthropicsdk.NewClient(
-		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
-		anthropicopt.WithAPIKey("EMPTY"),
-		anthropicopt.WithHTTPClient(hc),
-		anthropicopt.WithMaxRetries(0),
-	)
+	client := anthropicSDK(t)
 	_, err := client.Messages.New(context.Background(), anthropicsdk.MessageNewParams{
 		Model:     "virtual-fail-429",
 		MaxTokens: 8,
@@ -182,13 +167,7 @@ func TestMemListener_DialHonoursContext(t *testing.T) {
 }
 
 func TestServe_UnsimulatedEndpointsReturn501(t *testing.T) {
-	_, hc := newServed(t)
-	oc := openai.NewClient(
-		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
-		openaiopt.WithAPIKey("EMPTY"),
-		openaiopt.WithHTTPClient(hc),
-		openaiopt.WithMaxRetries(0),
-	)
+	oc := openAISDK(t)
 	_, err := oc.Embeddings.New(context.Background(), openai.EmbeddingNewParams{
 		Model: "echo-model",
 		Input: openai.EmbeddingNewParamsInputUnion{OfString: openai.String("x")},
@@ -198,12 +177,7 @@ func TestServe_UnsimulatedEndpointsReturn501(t *testing.T) {
 	assert.Equal(t, http.StatusNotImplemented, oaiErr.StatusCode)
 	assert.Contains(t, err.Error(), "not supported by vmodel")
 
-	ac := anthropicsdk.NewClient(
-		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
-		anthropicopt.WithAPIKey("EMPTY"),
-		anthropicopt.WithHTTPClient(hc),
-		anthropicopt.WithMaxRetries(0),
-	)
+	ac := anthropicSDK(t)
 	_, err = ac.Messages.CountTokens(context.Background(), anthropicsdk.MessageCountTokensParams{
 		Model:    "echo-model",
 		Messages: []anthropicsdk.MessageParam{anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("x"))},

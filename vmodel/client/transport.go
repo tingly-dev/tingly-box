@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"time"
 )
 
 // Dialer opens a connection to a virtual-model server, typically
@@ -22,5 +23,6 @@ func NewTransport(d Dialer) *http.Transport {
 		DialContext:         d,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second, // reap idle pipes (each pins a server goroutine)
 	}
 }

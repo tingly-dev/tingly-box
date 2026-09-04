@@ -20,7 +20,6 @@ import (
 // one the previous in-process function call had). Clients reach it through
 // vmodelclient.NewTransport(srv.DialContext).
 type Server struct {
-	svc      *Service
 	listener *memListener
 	http     *http.Server
 }
@@ -33,15 +32,16 @@ func Serve(svc *Service) *Server {
 	router.Use(gin.Recovery())
 	svc.SetupOpenAIRoutes(router.Group("/openai"))
 	svc.SetupAnthropicRoutes(router.Group("/anthropic"))
+	// Anything the SDKs can reach but the virtual models do not simulate
+	// (embeddings, images, count_tokens, ...) gets a protocol-shaped 501
+	// instead of a bare router 404.
+	router.NoRoute(svc.handler.NotSupported)
 
 	ln := newMemListener()
-	s := &Server{svc: svc, listener: ln, http: &http.Server{Handler: router}}
+	s := &Server{listener: ln, http: &http.Server{Handler: router}}
 	go func() { _ = s.http.Serve(ln) }()
 	return s
 }
-
-// Service returns the served Service so callers can register models.
-func (s *Server) Service() *Service { return s.svc }
 
 // DialContext connects to this server; network and addr are ignored.
 func (s *Server) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {

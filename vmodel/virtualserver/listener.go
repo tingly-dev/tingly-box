@@ -35,18 +35,18 @@ func newMemListener() *memListener {
 // ignored; the listener is the only possible peer.
 func (l *memListener) Dial(ctx context.Context, _, _ string) (net.Conn, error) {
 	client, server := net.Pipe()
+	var err error
 	select {
 	case l.conns <- server:
 		return client, nil
 	case <-l.done:
-		_ = client.Close()
-		_ = server.Close()
-		return nil, errMemListenerClosed
+		err = errMemListenerClosed
 	case <-ctx.Done():
-		_ = client.Close()
-		_ = server.Close()
-		return nil, ctx.Err()
+		err = ctx.Err()
 	}
+	_ = client.Close()
+	_ = server.Close()
+	return nil, err
 }
 
 // Accept implements net.Listener.

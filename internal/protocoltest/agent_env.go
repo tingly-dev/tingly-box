@@ -8,6 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
@@ -100,6 +101,9 @@ type AgentTestEnv struct {
 	// appConfig is the application configuration
 	appConfig *config.AppConfig
 
+	// gateway is the gateway instance behind gatewayServer
+	gateway *server.Server
+
 	// gatewayServer is the HTTP test server for the gateway
 	gatewayServer *httptest.Server
 
@@ -140,6 +144,7 @@ func NewAgentTestEnv(AgentType AgentType) (*AgentTestEnv, error) {
 	return &AgentTestEnv{
 		configDir:        core.configDir,
 		appConfig:        core.appConfig,
+		gateway:          core.server,
 		gatewayServer:    core.gateway,
 		virtualServer:    core.virtual,
 		baseURL:          core.gateway.URL,
@@ -159,6 +164,9 @@ func (env *AgentTestEnv) Close(preserve bool) error {
 	// Close gateway server
 	if env.gatewayServer != nil {
 		env.gatewayServer.Close()
+	}
+	if env.gateway != nil {
+		env.gateway.CloseVirtualModelServer()
 	}
 
 	// Close virtual server

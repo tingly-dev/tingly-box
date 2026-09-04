@@ -1,15 +1,14 @@
 package client
 
 import (
+	"errors"
 	"net/http"
-	"strings"
-
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
-	openaiOption "github.com/openai/openai-go/v3/option"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 )
+
+var errNoVModelTransport = errors.New("no virtual-model transport configured for this ClientPool")
 
 // NewVModelOpenAIClient builds an OpenAI client for a virtual-model provider
 // over base, the transport that dials this process's virtualserver
@@ -19,19 +18,20 @@ import (
 // the generic ones; only the base URL (vmodel:// → http://vmodel.internal/...)
 // and the base transport differ. No pooled network transport is created.
 func NewVModelOpenAIClient(provider *typ.Provider, base http.RoundTripper) (*OpenAIClient, error) {
+	if base == nil {
+		return nil, errNoVModelTransport
+	}
 	return newOpenAIClientWithTransport(provider,
-		openAITransportChain(base, provider),
-		openaiOption.WithBaseURL(vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle)),
-	)
+		vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle),
+		providerTransportChain(base, provider))
 }
 
 // NewVModelAnthropicClient is the Anthropic counterpart of NewVModelOpenAIClient.
-// The Anthropic SDK appends /v1 itself, so the /v1 suffix of HTTPBase is
-// dropped here the same way NewAnthropicClient drops it from a real APIBase.
 func NewVModelAnthropicClient(provider *typ.Provider, base http.RoundTripper) (*AnthropicClient, error) {
-	baseURL := strings.TrimSuffix(vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle), "/v1")
+	if base == nil {
+		return nil, errNoVModelTransport
+	}
 	return newAnthropicClientWithTransport(provider,
-		anthropicTransportChain(base, provider),
-		anthropicOption.WithBaseURL(baseURL),
-	)
+		vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle),
+		providerTransportChain(base, provider))
 }

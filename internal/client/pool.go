@@ -74,10 +74,6 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 	} else if provider.IsVirtual() {
 		// Virtual-model provider: generic OpenAI client over the in-process
 		// virtualserver (vmodel/client), same chain as a real upstream.
-		if p.vmodelTransport == nil {
-			logrus.WithContext(ctx).Errorf("No virtual-model transport configured; cannot serve vmodel provider %s", provider.Name)
-			return nil
-		}
 		client, err = NewVModelOpenAIClient(provider, p.vmodelTransport)
 		if err != nil {
 			logrus.WithContext(ctx).Errorf("Failed to create vmodel client for provider %s: %v", provider.Name, err)
@@ -133,10 +129,6 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	case provider.IsVirtual():
 		// Virtual-model provider: generic Anthropic client over the in-process
 		// virtualserver (vmodel/client), same chain as a real upstream.
-		if p.vmodelTransport == nil {
-			logrus.WithContext(ctx).Errorf("No virtual-model transport configured; cannot serve vmodel provider %s", provider.Name)
-			return nil
-		}
 		client, err = NewVModelAnthropicClient(provider, p.vmodelTransport)
 	case provider.AuthType == typ.AuthTypeGCPVertex:
 		// Claude on GCP Vertex AI (service-account OAuth2).

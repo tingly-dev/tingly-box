@@ -73,13 +73,6 @@ func (s *Service) SetupOpenAIRoutes(group *gin.RouterGroup) {
 	v1.GET("/models", s.handler.ListOpenAIModels)
 	v1.POST("/chat/completions", s.handler.ChatCompletions)
 	v1.POST("/responses", s.handler.Responses)
-	// Endpoints the SDK can reach but the virtual models do not simulate.
-	// Answer 501 with a protocol-shaped error so a client sees "not supported
-	// by vmodel" rather than a bare router 404.
-	v1.POST("/embeddings", s.handler.NotSupported)
-	v1.POST("/images/generations", s.handler.NotSupported)
-	v1.POST("/images/edits", s.handler.NotSupported)
-	v1.POST("/images/variations", s.handler.NotSupported)
 }
 
 // SetupAnthropicRoutes mounts the Anthropic-only entrypoints on the given
@@ -95,6 +88,4 @@ func (s *Service) SetupAnthropicRoutes(group *gin.RouterGroup) {
 	v1 := group.Group("/v1")
 	v1.GET("/models", s.handler.ListAnthropicModels)
 	v1.POST("/messages", s.handler.Messages)
-	// See SetupOpenAIRoutes: explicit 501 instead of a bare router 404.
-	v1.POST("/messages/count_tokens", s.handler.NotSupported)
 }

@@ -41,11 +41,7 @@ type ClaudeClient struct {
 func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
 	logrus.Debug("creating claude-client")
 
-	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := strings.TrimRight(provider.APIBase, "/")
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = strings.TrimSuffix(apiBase, "/v1")
-	}
+	apiBase := anthropicBaseURL(provider.APIBase)
 
 	// Build base SDK options
 	options := []anthropicOption.RequestOption{

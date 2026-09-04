@@ -656,23 +656,32 @@ func TestSetTransportConfig_ClearsPoolOnRespectEnvProxyChange(t *testing.T) {
 	}
 }
 
-// A vmodel provider must come out of the ordinary constructors with the real
-// SDK client attached and injected statuses intact — no in-process shortcut.
-func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
-	srv := virtualserver.Serve(virtualserver.NewService())
-	defer srv.Close()
-
-	provider := &typ.Provider{
-		UUID: "vm-openai", Name: "vm-openai",
-		APIBase:  vmodelclient.APIBase(protocol.APIStyleOpenAI),
-		APIStyle: protocol.APIStyleOpenAI,
+func newVModelProvider(style protocol.APIStyle) *typ.Provider {
+	return &typ.Provider{
+		UUID: "vm-" + string(style), Name: "vm-" + string(style),
+		APIBase:  vmodelclient.APIBase(style),
+		APIStyle: style,
 		AuthType: typ.AuthTypeVirtual,
 		Enabled:  true,
 	}
+}
+
+// newVModelPool returns a ClientPool wired to a fresh virtualserver.
+func newVModelPool(t *testing.T) *ClientPool {
+	t.Helper()
+	srv := virtualserver.Serve(virtualserver.NewService())
+	t.Cleanup(func() { _ = srv.Close() })
 	pool := NewClientPool()
 	pool.SetVModelTransport(vmodelclient.NewTransport(srv.DialContext))
+	return pool
+}
+
+// A vmodel provider must come out of the ordinary constructors with the real
+// SDK client attached and injected statuses intact — no in-process shortcut.
+func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
+	pool := newVModelPool(t)
 	before := GetGlobalTransportPool().Stats()["transport_count"]
-	c := pool.GetOpenAIClient(context.Background(), provider, "echo-model")
+	c := pool.GetOpenAIClient(context.Background(), newVModelProvider(protocol.APIStyleOpenAI), "echo-model")
 	require.NotNil(t, c)
 	require.NotNil(t, c.Client(), "vmodel providers expose the real SDK client")
 	assert.Equal(t, before, GetGlobalTransportPool().Stats()["transport_count"],
@@ -695,19 +704,7 @@ func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
 }
 
 func TestClientPool_VModelProvider_Anthropic(t *testing.T) {
-	srv := virtualserver.Serve(virtualserver.NewService())
-	defer srv.Close()
-
-	provider := &typ.Provider{
-		UUID: "vm-anthropic", Name: "vm-anthropic",
-		APIBase:  vmodelclient.APIBase(protocol.APIStyleAnthropic),
-		APIStyle: protocol.APIStyleAnthropic,
-		AuthType: typ.AuthTypeVirtual,
-		Enabled:  true,
-	}
-	pool := NewClientPool()
-	pool.SetVModelTransport(vmodelclient.NewTransport(srv.DialContext))
-	c := pool.GetAnthropicClient(context.Background(), provider, "echo-model")
+	c := newVModelPool(t).GetAnthropicClient(context.Background(), newVModelProvider(protocol.APIStyleAnthropic), "echo-model")
 	require.NotNil(t, c)
 	msg, err := c.Client().Messages.New(context.Background(), anthropic.MessageNewParams{
 		Model:     "echo-model",
@@ -719,13 +716,7 @@ func TestClientPool_VModelProvider_Anthropic(t *testing.T) {
 }
 
 func TestClientPool_VModelProvider_WithoutTransportReturnsNil(t *testing.T) {
-	provider := &typ.Provider{
-		UUID: "vm-none", Name: "vm-none",
-		APIBase:  vmodelclient.APIBase(protocol.APIStyleOpenAI),
-		APIStyle: protocol.APIStyleOpenAI,
-		AuthType: typ.AuthTypeVirtual,
-		Enabled:  true,
-	}
+	provider := newVModelProvider(protocol.APIStyleOpenAI)
 	assert.Nil(t, NewClientPool().GetOpenAIClient(context.Background(), provider, "echo-model"))
 	assert.Nil(t, NewClientPool().GetAnthropicClient(context.Background(), provider, "echo-model"))
 }

@@ -64,21 +64,22 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 	// proxy is explicitly configured for the provider.
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	return newOpenAIClientWithTransport(provider, openAITransportChain(base, provider), extraOptions...)
+	return newOpenAIClientWithTransport(provider, provider.APIBase, providerTransportChain(base, provider), extraOptions...)
 }
 
-// openAITransportChain layers the generic provider round-trippers (rule
-// flags, advisor loopback stamp, logging) over base.
-func openAITransportChain(base http.RoundTripper, provider *typ.Provider) http.RoundTripper {
+// providerTransportChain layers the generic provider round-trippers (rule
+// flags, advisor loopback stamp, logging) over base. Shared by the OpenAI and
+// Anthropic constructors.
+func providerTransportChain(base http.RoundTripper, provider *typ.Provider) http.RoundTripper {
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }
 
-// newOpenAIClientWithTransport builds the SDK client on an already assembled
-// transport. Constructors that need a non-pooled base (e.g. vmodel) call this
-// so no unused pooled transport is created for the provider.
-func newOpenAIClientWithTransport(provider *typ.Provider, transport http.RoundTripper, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
+// newOpenAIClientWithTransport builds the SDK client for baseURL on an already
+// assembled transport. Constructors that need a non-pooled base or a rewritten
+// base URL (e.g. vmodel) call this directly.
+func newOpenAIClientWithTransport(provider *typ.Provider, baseURL string, transport http.RoundTripper, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
 	options := []option.RequestOption{
-		option.WithBaseURL(provider.APIBase),
+		option.WithBaseURL(baseURL),
 		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 	// Azure providers authenticate via the azure adapter's api-key header

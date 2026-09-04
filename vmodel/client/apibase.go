@@ -31,12 +31,6 @@ func APIBase(style protocol.APIStyle) string {
 	return Scheme + "://" + string(style)
 }
 
-// IsAPIBase reports whether apiBase carries the vmodel:// scheme.
-func IsAPIBase(apiBase string) bool {
-	u, err := url.Parse(strings.TrimSpace(apiBase))
-	return err == nil && u.Scheme == Scheme
-}
-
 // HTTPBase translates a vmodel APIBase into the http base URL handed to the
 // SDKs, e.g. http://vmodel.internal/openai/v1. Like a real provider's APIBase
 // it ends in /v1: the OpenAI SDK uses it as-is, the Anthropic client strips it.
@@ -54,9 +48,6 @@ func HTTPBase(apiBase string, style protocol.APIStyle) string {
 	}
 	if root == "" {
 		root = string(style)
-		if root == "" {
-			root = string(protocol.APIStyleOpenAI)
-		}
 	}
 	return "http://" + Host + "/" + root + "/v1"
 }

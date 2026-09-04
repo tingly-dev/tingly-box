@@ -96,8 +96,7 @@ Provider {
 | `vmodel://openai` | `http://vmodel.internal/openai/v1` | `/models`, `/chat/completions`, `/responses` |
 | `vmodel://anthropic` | `http://vmodel.internal/anthropic/v1` | `/models`, `/messages` |
 
-`vmodel/client` (`vmodelclient.APIBase`, `IsAPIBase`, `HTTPBase`,
-`NewTransport`) is the client side of the virtual server; `internal/client`
+`vmodel/client` (`vmodelclient.APIBase`, `HTTPBase`, `NewTransport`) is the client side of the virtual server; `internal/client`
 wraps it, `vmodel/virtualserver` is the server side. `vmodel.internal` never
 resolves on any network; the transport's dialer ignores it and connects to
 the listener directly. Rows that

@@ -164,7 +164,7 @@ vmodel/virtualserver                                        // server side
   serve.go     Serve, Server.DialContext, Server.Close
 
 vmodel/client                                               // client side
-  apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
+  apibase.go   Scheme, APIBase(style), HTTPBase              (vmodel://openai → http://vmodel.internal/openai/v1)
   transport.go NewTransport(dialer)                          (per-server, no process global)
 
 internal/client/pool.go                                     // dispatch, like Codex / Azure / Bedrock
@@ -235,10 +235,10 @@ the PID/port-file cleanup.
 
 ## Endpoints vmodel does not simulate
 
-`/embeddings`, `/images/*` and `/messages/count_tokens` are reachable through
-the SDKs but have no virtual implementation. The virtualserver answers them
-with an explicit 501 and a protocol-shaped "not supported by vmodel" error, so
-the gateway propagates a clear status instead of a bare router 404.
+`/embeddings`, `/images/*`, `/messages/count_tokens` and anything else the SDKs
+can reach but the virtual models do not simulate hit the private server's
+`NoRoute` handler, which answers 501 with a protocol-shaped "not supported by
+vmodel" error, so the gateway propagates a clear status instead of a bare 404.
 
 ## Non-goals
 
