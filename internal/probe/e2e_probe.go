@@ -110,28 +110,7 @@ func (e *E2EProber) resolveTargetToProviderModel(ctx context.Context, req *E2ERe
 	if err != nil {
 		return nil, "", nil, err
 	}
-	if provider.IsVirtual() {
-		// vmodel://local can't be dialed; reroute through loopback so the
-		// probe exercises the in-process handler end-to-end without mutating
-		// the stored provider record.
-		p, m, e2 := e.resolveVModelLoopbackTarget(ctx, provider, model)
-		return p, m, nil, e2
-	}
 	return provider, model, probeHeaders, nil
-}
-
-func (e *E2EProber) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.Provider, model string) (*typ.Provider, string, error) {
-	port := e.config.GetServerPort()
-	if port == 0 {
-		return nil, "", fmt.Errorf("server port unknown; cannot probe vmodel provider %q", provider.Name)
-	}
-
-	scenario, ok := defaultScenarioForAPIStyle(provider.APIStyle)
-	if !ok {
-		return nil, "", fmt.Errorf("vmodel probe unsupported for APIStyle %q", provider.APIStyle)
-	}
-	apiBase, apiStyle := loopbackAPIBase(port, scenario)
-	return e.loopbackConfigTarget(ctx, provider.Name, apiBase, apiStyle, model)
 }
 
 func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {

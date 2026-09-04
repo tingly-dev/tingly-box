@@ -334,6 +334,14 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
+	// Stop the private virtual-model server; its listener is in-memory so
+	// there is nothing on the host to clean up beyond the goroutines.
+	if s.vmodelServer != nil {
+		if err := s.vmodelServer.Close(); err != nil {
+			logrus.WithError(err).Debug("vmodel server shutdown")
+		}
+	}
+
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
 }

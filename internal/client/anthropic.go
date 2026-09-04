@@ -13,7 +13,6 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -52,7 +51,7 @@ type AnthropicClient struct {
 // NewAnthropicClient creates a new Anthropic client wrapper
 func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := strings.TrimRight(provider.APIBase, "/")
+	apiBase := strings.TrimRight(providerBaseURL(provider), "/")
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = strings.TrimSuffix(apiBase, "/v1")
 	}
@@ -132,7 +131,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 // Vertex path, which must rebuild this chain under its OAuth transport (see
 // vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
-	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	base := providerBaseTransport(provider, model, sessionID)
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }
 

@@ -67,59 +67,71 @@ the token. `IsOAuthToken()` provides a runtime check based on the
 
 ## `vmodel` providers
 
-Virtual-model providers are backed entirely in-process by the `vmodel`
-package — no outbound HTTP is ever made. The dispatcher short-circuits to
-the in-process handler immediately after rule resolution, so all middleware
-(guardrails, recording, usage tracking) still executes normally.
+Virtual-model providers are backed by the `vmodel` package running inside the
+gateway process, but they are **dispatched exactly like real providers**: the
+same official SDK, the same transport chain (rule flags, logging, probe
+headers, timeouts). The only vmodel-specific step is the dialer — a provider
+whose `APIBase` carries the `vmodel://` scheme is connected to a private
+in-memory HTTP listener served by `virtualserver.Serve` instead of the
+network. See `.design/vmodel-transport.md`.
 
 ```
 Provider {
     UUID:     "vmodel-builtin-anthropic"
-    APIBase:  "vmodel://local"        // sentinel; never dialed
+    APIBase:  "vmodel://anthropic"     // protocol root on the private listener
     APIStyle: "anthropic"
     AuthType: "vmodel"
     Source:   "builtin"
     VModelDetail: {
-        Models: ["claude-instant", "claude-echo", ...]
+        Models: ["virtual-claude-3", "echo-model", ...]
     }
     // Token is implicitly "EMPTY" — see GetAccessToken
 }
 ```
 
+### `vmodel://` base URLs
+
+| APIBase | SDK base URL | Serves |
+|---|---|---|
+| `vmodel://openai` | `http://vmodel.internal/openai/v1` | `/models`, `/chat/completions`, `/responses` |
+| `vmodel://anthropic` | `http://vmodel.internal/anthropic/v1` | `/models`, `/messages` |
+
+`ai.VModelAPIBase`, `ai.IsVModelAPIBase` and `ai.VModelHTTPBase` are the
+helpers. `vmodel.internal` never resolves on any network; the transport's
+`DialContext` ignores it and connects to the listener directly. Rows that
+still carry the legacy `vmodel://local` sentinel fall back to the provider's
+`APIStyle` and are rewritten by the builtin seed on the next start.
+
 ### Credential sentinel (`VModelSentinelToken`)
 
 The Anthropic and OpenAI SDKs install a lazy credential check that fires
 **at request time**: if `APIKey` is empty the SDK returns `ErrNoCredentials`
-before the HTTP call. Because vmodel requests are short-circuited to the
-in-process handler (see below) no real HTTP call is ever made, but the SDK
-client may still be constructed on code paths shared with real providers.
-
-To satisfy the check without requiring every vmodel provider to carry a real
-token, `GetAccessToken()` returns the sentinel string `"EMPTY"` for all
-`AuthTypeVirtual` providers. The sentinel is exported as `VModelSentinelToken`
-and is never transmitted to a real upstream.
+before the HTTP call. To satisfy it without requiring every vmodel provider to
+carry a real token, `GetAccessToken()` returns the sentinel string `"EMPTY"`
+for all `AuthTypeVirtual` providers. The private listener ignores
+credentials; the sentinel never reaches a network upstream.
 
 ### How the dispatcher routes a vmodel request
 
 1. The routing selector resolves the rule to a `(provider, model)` pair as
    usual.
-2. `provider.IsVirtual()` is true → the dispatcher rewrites the request body
-   with the resolved model ID and calls the in-process handler directly
-   (`virtualModelService.GetHandler().ChatCompletions(c)` or `.Messages(c)`).
-3. The vmodel handler looks up the model ID in its per-protocol registry and
-   streams a response.
+2. `ClientPool` builds the ordinary SDK client for the provider. Because
+   `APIBase` is `vmodel://…`, the client constructor rewrites the base URL to
+   its `http://vmodel.internal/...` form and uses the vmodel transport
+   (`client.SetVModelDialer`, installed once by `server.NewServer`).
+3. The request travels as real HTTP — status codes, headers, SSE framing —
+   to the virtualserver, which looks the model up in its per-protocol
+   registry and streams a response.
 
-### In-process endpoints
+### Public endpoints
 
-Two independent route groups are mounted at startup:
+Independently of provider dispatch, two authenticated route groups are
+mounted on the main engine for clients that want a fixed URL:
 
 | Prefix | Protocol | Endpoints |
 |---|---|---|
-| `/virtual/openai/v1` | OpenAI Chat | `GET /models`, `POST /chat/completions` |
+| `/virtual/openai/v1` | OpenAI Chat | `GET /models`, `POST /chat/completions`, `POST /responses` |
 | `/virtual/anthropic/v1` | Anthropic Messages | `GET /models`, `POST /messages` |
-
-These can be used directly (e.g. for local testing with an OpenAI SDK pointed
-at `http://localhost:12580/virtual/openai/v1`).
 
 ### Model list
 
@@ -131,27 +143,8 @@ path.
 
 ### Probe
 
-`APIBase` is the sentinel `vmodel://local`, which no HTTP client can dial.
-The probe resolution layer (`probe_v2_handler.resolveTargetToProviderModel`)
-detects `provider.IsVirtual()` after the initial resolve and re-routes
-through `resolveProviderConfigTarget` with a synthetic inline config:
-`APIBase = http://127.0.0.1:<port>/virtual/anthropic` (Anthropic SDK appends
-`/v1`) or `…/virtual/openai/v1` (OpenAI SDK appends nothing), and
-`Token = cfg.GetModelToken()`. From there the SDK probe is identical to a
-user-supplied provider_config target — round-tripping through HTTP loopback
-into the in-process vmodel handler, exercising route, auth middleware,
-registry lookup, and streaming response without leaving the process. The
-stored provider record is never mutated.
-
-### Builtin providers
-
-Two builtin providers — `vmodel-builtin-anthropic` and `vmodel-builtin-openai`
-— are seeded idempotently on every server startup via
-`virtualserver.EnsureBuiltinProviders`.  They are created with `Source: "builtin"`,
-which makes them undeletable and non-mutable through the API; only their
-`Enabled` flag may be toggled by the user.  On subsequent startups the
-`Enabled` flag is preserved while the model list is refreshed from the
-in-process registry.
+Nothing special: a vmodel provider is probed through the same SDK client as
+any other provider, so the probe traverses the real dispatch path.
 
 ---
 

@@ -68,7 +68,7 @@ var replayScenarioOrder = []string{"text", "tool_use", "streaming_text"}
 // and fast — no CLI install, no subprocess — and lets it cover the in-process
 // vmodel dispatch path that the spawn-the-CLI modes never touch.
 type ReplayCmd struct {
-	Upstream  string   `kong:"name='upstream',default='vmodel',enum='virtual,vmodel,real',help='Upstream to route through: virtual (VirtualServer mock), vmodel (in-process vmodel), real (live provider via --config)'"`
+	Upstream  string   `kong:"name='upstream',default='vmodel',enum='virtual,vmodel,real',help='Upstream to route through: virtual (VirtualServer mock), vmodel (builtin vmodel provider), real (live provider via --config)'"`
 	Scenario  []string `kong:"name='scenario',sep=',',help='Scenario(s) to run: text, tool_use, streaming_text (default: all)'"`
 	VModel    string   `kong:"name='vmodel',help='Override the vmodel registry ID for every scenario (upstream=vmodel only)'"`
 	Config    string   `kong:"name='config',help='Provider config file — required for upstream=real; the first runnable entry is used'"`

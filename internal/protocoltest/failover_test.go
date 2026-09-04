@@ -271,10 +271,10 @@ func TestFailover_CrossStyle_SetupError_AdvancesToFallback(t *testing.T) {
 }
 
 // TestFailover_VModel_CrossStyle_AnthropicFailToOpenAIEcho is the reported setup,
-// served entirely by the in-process vmodel clients (#1249): T0 is an Anthropic
-// vmodel that returns the injected 500, T1 is an OpenAI vmodel that echoes. The
-// Anthropic client now honors error injection (BetaMessagesNew), so the primary
-// genuinely fails and failover re-transforms to OpenAI. Because the primary can
+// served entirely by vmodel providers over the private virtualserver listener
+// (#1249): T0 is an Anthropic vmodel that returns the injected 500, T1 is an
+// OpenAI vmodel that echoes. The 500 arrives as a real HTTP status through the
+// SDK, so the primary genuinely fails and failover re-transforms to OpenAI. Because the primary can
 // only error, a 200 carrying the echo content proves the fallback served.
 func TestFailover_VModel_CrossStyle_AnthropicFailToOpenAIEcho(t *testing.T) {
 	env := pt.NewTestEnv(t)

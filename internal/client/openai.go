@@ -53,7 +53,7 @@ type OpenAIClient struct {
 // NewOpenAIClient creates a new OpenAI client wrapper
 func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
 	options := []option.RequestOption{
-		option.WithBaseURL(provider.APIBase),
+		option.WithBaseURL(providerBaseURL(provider)),
 		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 	// Azure providers authenticate via the azure adapter's api-key header
@@ -73,8 +73,10 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	//
 	// Use the transport pool instead of http.DefaultTransport so that env
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
-	// proxy is explicitly configured for the provider.
-	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	// proxy is explicitly configured for the provider. vmodel providers get
+	// the in-process virtualserver dialer here and nothing else special: the
+	// rest of the chain is identical to a real upstream.
+	base := providerBaseTransport(provider, model, sessionID)
 	transport = wrapWithRuleFlags(base, provider, true)
 	transport = wrapWithAdvisorLoopback(transport)
 	transport = wrapWithLogging(transport, provider)

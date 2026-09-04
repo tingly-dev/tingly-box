@@ -54,9 +54,11 @@ const (
 	ProviderSourceBuiltin ProviderSource = "builtin"
 )
 
-// VModelDetail contains virtual-model provider configuration. The dispatcher
-// short-circuits to the in-process vmodel handler when AuthType == vmodel,
-// bypassing any outbound HTTP. Models lists the protocol-specific model IDs
+// VModelDetail contains virtual-model provider configuration. A vmodel
+// provider is dispatched like any other provider — official SDK, standard
+// transport chain — with APIBase "vmodel://<protocol>" resolved by the client
+// layer to the private in-process virtualserver listener (see vmodel.go and
+// .design/vmodel-transport.md). Models lists the protocol-specific model IDs
 // enabled on this provider; an empty list means "all defaults registered for
 // the matching protocol".
 type VModelDetail struct {
@@ -258,8 +260,10 @@ func OpenAIEndpointModeForIssuer(issuer Issuer) OpenAIEndpointMode {
 	return EndpointModeChat
 }
 
-// IsVirtual reports whether this provider routes to the in-process vmodel
-// service instead of an outbound HTTP upstream.
+// IsVirtual reports whether this provider is backed by the in-process vmodel
+// service (reached over HTTP through the private vmodel:// listener) rather
+// than a network upstream. Model listing and the provider UI use this; the
+// dispatch path does not special-case it.
 func (p *Provider) IsVirtual() bool {
 	return p != nil && p.AuthType == AuthTypeVirtual
 }
@@ -344,8 +348,8 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 }
 
 // VModelSentinelToken satisfies the SDK's non-empty APIKey check for vmodel
-// providers. Vmodel requests short-circuit before any outbound HTTP, so this
-// value is never transmitted.
+// providers. It is sent to the private virtualserver listener, which ignores
+// credentials; it never reaches a network upstream.
 const VModelSentinelToken = "EMPTY"
 
 // GetAccessToken returns the access token based on auth type

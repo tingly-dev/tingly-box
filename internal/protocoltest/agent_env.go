@@ -283,10 +283,10 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 // routes to a seeded builtin virtual-model provider.
 //
 // Unlike SetupAgent (external VirtualServer mock) and SetupRealAgent (real
-// upstream), this exercises the in-process vmodel dispatch path:
+// upstream), this exercises the vmodel provider dispatch path:
 //
 //	gateway → built-in-<agent> rule → vmodel builtin provider
-//	        → provider.IsVirtual() short-circuit → in-process vmodel handler
+//	        → SDK + transport chain → vmodel:// dialer → private virtualserver
 //
 // The builtin vmodel providers are seeded into the provider store by
 // server.NewServer, so no provider is added here — only the rule is repointed.

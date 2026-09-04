@@ -1,5 +1,8 @@
 # vmodel transport — dispatch virtual providers over HTTP, not in-memory
 
+> Status: **implemented** (in-memory listener). The unix-socket option (step 5
+> below) is not built yet.
+
 ## Problem
 
 A provider with `auth_type = vmodel` is the only provider kind that does **not**
@@ -105,9 +108,11 @@ vmodel://anthropic     →  virtualserver /anthropic/v1/...
 
 The `vmodel://` scheme is what tells the transport pool to use `vmodelDial`;
 the host part selects the protocol root (mirrors today's `/virtual/openai` and
-`/virtual/anthropic` split so `/models` returns only dispatchable IDs). Inside
-the dialer the URL is rewritten to `http://vmodel/<host>/v1/...` so the SDKs see
-an ordinary http base URL. Nothing else about the provider row changes:
+`/virtual/anthropic` split so `/models` returns only dispatchable IDs). Before
+the SDK sees it the client constructor rewrites the URL to
+`http://vmodel.internal/<host>/v1` (`ai.VModelHTTPBase`), so the SDKs receive
+an ordinary http base URL; the transport's dialer ignores the placeholder host
+and connects to the listener. Nothing else about the provider row changes:
 `AuthType = vmodel`, `VModelDetail.Models`, builtin seeding and the UI stay as
 they are. `VModelSentinelToken` is still sent as the bearer/x-api-key (the
 virtualserver ignores it), so the SDK's non-empty-key check is satisfied
@@ -146,17 +151,19 @@ provider is virtual. Only the *dispatch* special case goes away.
 ```
 internal/server/server.go (NewServer)
   virtualModelService = virtualserver.NewService()          // unchanged
-  vmodelSrv = virtualserver.Serve(virtualModelService, opts) // NEW: private listener
-  client.GetGlobalTransportPool().SetVModelDialer(vmodelSrv.DialContext)
-  server.virtualModelService.EnsureBuiltinProviders(store)  // seeds vmodel://openai|anthropic
+  vmodelServer = virtualserver.Serve(virtualModelService)   // private in-memory listener
+  client.SetVModelDialer(vmodelServer.DialContext)
+  virtualModelService.EnsureBuiltinProviders(store)         // seeds vmodel://openai|anthropic
+  (Server.Stop closes vmodelServer)
 
-internal/client/transport_pool.go
-  createTransport(proxyURL):
-    if scheme(providerAPIBase) == "vmodel" → &http.Transport{DialContext: vmodelDialer}
-    (proxy is ignored for vmodel; log at debug if one was set)
+internal/client/vmodel_transport.go
+  SetVModelDialer(d)              // one cached *http.Transport{DialContext: d}
+  providerBaseTransport(provider) // vmodel:// → that transport, else the pooled one
+  providerBaseURL(provider)       // vmodel://openai → http://vmodel.internal/openai/v1
 
 internal/client/openai.go / anthropic.go
-  option.WithBaseURL(rewriteVModelBase(provider.APIBase))   // vmodel://openai → http://vmodel/openai/v1
+  the two constructors call providerBaseURL / providerBaseTransport; nothing
+  else in the chain (rule flags, advisor loopback, logging, timeout) changed
 ```
 
 `virtualserver.Serve` is a small addition to the existing package, modeled on

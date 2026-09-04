@@ -62,9 +62,9 @@ func (s *Server) UseAIEndpoints() {
 // actually dispatch.
 //
 // The canonical path for virtual models in normal use is still
-// /v1/messages and /v1/chat/completions, where the dispatcher
-// short-circuits to the same handler when it resolves to a vmodel provider
-// (see HandleAnthropicMessages and HandleOpenAIChatCompletions).
+// /v1/messages and /v1/chat/completions, where a vmodel provider is dispatched
+// like any other provider: through the SDK to the private in-memory
+// virtualserver listener (see .design/vmodel-transport.md).
 func (s *Server) UseVirtualModelEndpoints() {
 	mw := s.getModelAuthMiddleware()
 

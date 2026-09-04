@@ -1,6 +1,7 @@
 package virtualserver
 
 import (
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -13,12 +14,6 @@ const (
 
 	BuiltinAnthropicName = "Virtual Models (Anthropic)"
 	BuiltinOpenAIName    = "Virtual Models (OpenAI)"
-
-	// vmodelAPIBaseSentinel is a placeholder URL stored on builtin providers.
-	// The dispatcher short-circuits to the in-process handler before this URL
-	// would ever be dialed; it exists only to satisfy the non-empty-base
-	// invariant enforced elsewhere by the provider CRUD layer.
-	vmodelAPIBaseSentinel = "vmodel://local"
 )
 
 // BuildBuiltinProviders returns the list of builtin virtual-model providers
@@ -40,7 +35,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 		{
 			UUID:     BuiltinAnthropicUUID,
 			Name:     BuiltinAnthropicName,
-			APIBase:  vmodelAPIBaseSentinel,
+			APIBase:  ai.VModelAPIBase(ai.APIStyleAnthropic),
 			APIStyle: protocol.APIStyleAnthropic,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,
@@ -52,7 +47,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 		{
 			UUID:     BuiltinOpenAIUUID,
 			Name:     BuiltinOpenAIName,
-			APIBase:  vmodelAPIBaseSentinel,
+			APIBase:  ai.VModelAPIBase(ai.APIStyleOpenAI),
 			APIStyle: protocol.APIStyleOpenAI,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,
@@ -78,8 +73,9 @@ type ProviderSaver interface {
 //   - If a builtin provider is missing it is created (Enabled=false — virtual
 //     models are opt-in; users enable them from the provider page).
 //   - If a builtin provider already exists its Enabled flag is preserved
-//     (users may have enabled or disabled it) while the model list is
-//     refreshed to match what is currently registered.
+//     (users may have enabled or disabled it) while the model list and
+//     APIBase are refreshed to match what is currently registered (this also
+//     migrates rows that still carry the legacy "vmodel://local" sentinel).
 func (s *Service) EnsureBuiltinProviders(store ProviderSaver) error {
 	for _, p := range s.BuildBuiltinProviders() {
 		existing, err := store.GetByUUID(p.UUID)
