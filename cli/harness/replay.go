@@ -65,8 +65,8 @@ var replayScenarioOrder = []string{"text", "tool_use", "streaming_text"}
 //
 // Unlike `agent --mock` (which spawns the real CLI against a VirtualServer
 // mock), replay sends a fixed request body directly. This makes it hermetic
-// and fast — no CLI install, no subprocess — and lets it cover the in-process
-// vmodel dispatch path that the spawn-the-CLI modes never touch.
+// and fast — no CLI install, no subprocess — and lets it cover the builtin
+// vmodel provider dispatch path that the spawn-the-CLI modes never touch.
 type ReplayCmd struct {
 	Upstream  string   `kong:"name='upstream',default='vmodel',enum='virtual,vmodel,real',help='Upstream to route through: virtual (VirtualServer mock), vmodel (builtin vmodel provider), real (live provider via --config)'"`
 	Scenario  []string `kong:"name='scenario',sep=',',help='Scenario(s) to run: text, tool_use, streaming_text (default: all)'"`
@@ -81,15 +81,15 @@ func (*ReplayCmd) Help() string {
 
 A fixture is the on-the-wire request body an agent CLI sends. Replaying it
 exercises the gateway's built-in rule and dispatch pipeline without spawning
-the real CLI — hermetic, fast, and able to cover the in-process vmodel
+the real CLI — hermetic, fast, and able to cover the builtin vmodel provider
 dispatch path.
 
 Upstreams:
   virtual   Route to the in-process VirtualServer mock. The response is fully
             controlled by the scenario, so the scenario's content-level
             assertions are checked.
-  vmodel    Route to a seeded builtin virtual-model provider (in-process
-            dispatch). Structural assertions only.
+  vmodel    Route to a seeded builtin virtual-model provider (private
+            in-process HTTP listener). Structural assertions only.
   real      Route to a live provider read from --config (first runnable
             entry). Structural assertions only.
 
