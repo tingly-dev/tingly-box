@@ -110,9 +110,9 @@ The `vmodel://` scheme is what tells the transport pool to use `vmodelDial`;
 the host part selects the protocol root (mirrors today's `/virtual/openai` and
 `/virtual/anthropic` split so `/models` returns only dispatchable IDs). Before
 the SDK sees it the client constructor rewrites the URL to
-`http://vmodel.internal/<host>/v1` (`ai.VModelHTTPBase`), so the SDKs receive
-an ordinary http base URL; the transport's dialer ignores the placeholder host
-and connects to the listener. Nothing else about the provider row changes:
+`http://vmodel.internal/<host>/v1` (`virtualserver.HTTPBase`), so the SDKs
+receive an ordinary http base URL; the transport's dialer ignores the
+placeholder host and connects to the listener. Nothing else about the provider row changes:
 `AuthType = vmodel`, `VModelDetail.Models`, builtin seeding and the UI stay as
 they are. `VModelSentinelToken` is still sent as the bearer/x-api-key (the
 virtualserver ignores it), so the SDK's non-empty-key check is satisfied
@@ -151,19 +151,19 @@ provider is virtual. Only the *dispatch* special case goes away.
 ```
 internal/server/server.go (NewServer)
   virtualModelService = virtualserver.NewService()          // unchanged
-  vmodelServer = virtualserver.Serve(virtualModelService)   // private in-memory listener
-  client.SetVModelDialer(vmodelServer.DialContext)
+  vmodelServer = virtualserver.Serve(virtualModelService)   // private in-memory listener,
+                                                            // becomes the Transport() target
   virtualModelService.EnsureBuiltinProviders(store)         // seeds vmodel://openai|anthropic
   (Server.Stop closes vmodelServer)
 
-internal/client/vmodel_transport.go
-  SetVModelDialer(d)              // one cached *http.Transport{DialContext: d}
-  providerBaseTransport(provider) // vmodel:// → that transport, else the pooled one
-  providerBaseURL(provider)       // vmodel://openai → http://vmodel.internal/openai/v1
+vmodel/virtualserver                                        // everything vmodel-specific
+  apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
+  listener.go  memListener (net.Pipe-backed net.Listener)
+  serve.go     Serve, Server.Close, Transport()              (fails fast when nothing is serving)
 
 internal/client/openai.go / anthropic.go
-  the two constructors call providerBaseURL / providerBaseTransport; nothing
-  else in the chain (rule flags, advisor loopback, logging, timeout) changed
+  if virtualserver.IsAPIBase(provider.APIBase) { base URL = HTTPBase(...); base transport = Transport() }
+  nothing else in the chain (rule flags, advisor loopback, logging, timeout) changed
 ```
 
 `virtualserver.Serve` is a small addition to the existing package, modeled on

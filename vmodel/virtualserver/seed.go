@@ -1,7 +1,6 @@
 package virtualserver
 
 import (
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -35,7 +34,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 		{
 			UUID:     BuiltinAnthropicUUID,
 			Name:     BuiltinAnthropicName,
-			APIBase:  ai.VModelAPIBase(ai.APIStyleAnthropic),
+			APIBase:  APIBase(protocol.APIStyleAnthropic),
 			APIStyle: protocol.APIStyleAnthropic,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,
@@ -47,7 +46,7 @@ func (s *Service) BuildBuiltinProviders() []*typ.Provider {
 		{
 			UUID:     BuiltinOpenAIUUID,
 			Name:     BuiltinOpenAIName,
-			APIBase:  ai.VModelAPIBase(ai.APIStyleOpenAI),
+			APIBase:  APIBase(protocol.APIStyleOpenAI),
 			APIStyle: protocol.APIStyleOpenAI,
 			AuthType: typ.AuthTypeVirtual,
 			Source:   typ.ProviderSourceBuiltin,

@@ -1,17 +1,21 @@
-package ai
+package virtualserver
 
-import "testing"
+import (
+	"testing"
 
-func TestVModelAPIBase(t *testing.T) {
-	if got := VModelAPIBase(APIStyleOpenAI); got != "vmodel://openai" {
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+)
+
+func TestAPIBase(t *testing.T) {
+	if got := APIBase(protocol.APIStyleOpenAI); got != "vmodel://openai" {
 		t.Fatalf("got %q", got)
 	}
-	if !IsVModelAPIBase("vmodel://anthropic") || IsVModelAPIBase("https://api.openai.com/v1") || IsVModelAPIBase("") {
-		t.Fatal("IsVModelAPIBase mismatch")
+	if !IsAPIBase("vmodel://anthropic") || IsAPIBase("https://api.openai.com/v1") || IsAPIBase("") {
+		t.Fatal("IsAPIBase mismatch")
 	}
 }
 
-func TestVModelHTTPBase(t *testing.T) {
+func TestHTTPBase(t *testing.T) {
 	cases := []struct{ base, style, want string }{
 		{"vmodel://openai", "anthropic", "http://vmodel.internal/openai/v1"},
 		{"vmodel://anthropic", "openai", "http://vmodel.internal/anthropic/v1"},
@@ -21,8 +25,8 @@ func TestVModelHTTPBase(t *testing.T) {
 		{"vmodel://local", "", "http://vmodel.internal/openai/v1"},
 	}
 	for _, c := range cases {
-		if got := VModelHTTPBase(c.base, APIStyle(c.style)); got != c.want {
-			t.Errorf("VModelHTTPBase(%q,%q) = %q, want %q", c.base, c.style, got, c.want)
+		if got := HTTPBase(c.base, protocol.APIStyle(c.style)); got != c.want {
+			t.Errorf("HTTPBase(%q,%q) = %q, want %q", c.base, c.style, got, c.want)
 		}
 	}
 }

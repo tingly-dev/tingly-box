@@ -9,8 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openai/openai-go/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
 // TestClientPool_ClientConstruction exercises the GetXxxClient constructors
@@ -647,4 +652,37 @@ func TestSetTransportConfig_ClearsPoolOnRespectEnvProxyChange(t *testing.T) {
 	if len(pool.transports) != 0 {
 		t.Errorf("expected pool to be empty after clear, got %d entries", len(pool.transports))
 	}
+}
+
+// A vmodel provider must come out of the ordinary constructors with the real
+// SDK client attached and injected statuses intact — no in-process shortcut.
+func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
+	srv := virtualserver.Serve(virtualserver.NewService())
+	defer srv.Close()
+
+	provider := &typ.Provider{
+		UUID: "vm-openai", Name: "vm-openai",
+		APIBase:  virtualserver.APIBase(protocol.APIStyleOpenAI),
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeVirtual,
+		Enabled:  true,
+	}
+	c := NewClientPool().GetOpenAIClient(context.Background(), provider, "echo-model")
+	require.NotNil(t, c)
+	require.NotNil(t, c.Client(), "vmodel providers expose the real SDK client")
+
+	resp, err := c.ChatCompletionsNew(context.Background(), openai.ChatCompletionNewParams{
+		Model:    "echo-model",
+		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, resp.Choices[0].Message.Content, "Echo")
+
+	_, err = c.ChatCompletionsNew(context.Background(), openai.ChatCompletionNewParams{
+		Model:    "virtual-fail-429",
+		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("x")},
+	})
+	var apiErr *openai.Error
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, 429, apiErr.StatusCode, "injected status must survive the transport unchanged")
 }
