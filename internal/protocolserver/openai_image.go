@@ -138,7 +138,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	// The OpenAI client wrapper handles vendor fragmentation internally:
 	// OpenAI-compatible providers go straight through the SDK, DashScope and
 	// MiniMax are dispatched to their native imagegen adapters, and Codex
-	// (ChatGPT OAuth) rides the Responses API. The handler stays uniform.
+	// (ChatGPT OAuth) uses its native JSON images endpoint. The handler stays
+	// uniform.
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	resp, cancel, err := forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
 	if cancel != nil {

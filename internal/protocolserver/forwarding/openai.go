@@ -54,9 +54,9 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper client.OpenAIClientInte
 // ForwardOpenAIImageGeneration sends an image generation request. The wrapper's
 // ImagesGenerate handles vendor fragmentation internally — OpenAI-compatible
 // providers go through the SDK directly, DashScope / MiniMax are dispatched to
-// their native adapters, and Codex rides the Responses API — so this forwarder
-// stays a thin, uniform entry point. Image generation has no streaming and
-// skips the chat transform chain.
+// their native adapters, and Codex uses its native JSON images endpoint — so
+// this forwarder stays a thin, uniform entry point. Image generation has no
+// streaming and skips the chat transform chain.
 func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ImageGenerateParams) (*openai.ImagesResponse, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)

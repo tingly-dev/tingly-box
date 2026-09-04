@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -29,8 +30,7 @@ var _ OpenAIClientInterface = (*CodexClient)(nil)
 //   - Does NOT support standard Chat Completions API
 //   - Does NOT support /models endpoint
 //   - Does NOT support the public /images/generations or /images/edits contracts;
-//     generation rides the Responses API (image_generation tool) and editing uses
-//     the Codex-native JSON images endpoint (see codex_images.go)
+//     both operations use Codex-native JSON image endpoints (see codex_images.go)
 //   - Chat surfaces ONLY work through the Responses API with special parameters
 type CodexClient struct {
 	*OpenAIClient
@@ -117,21 +117,24 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
 }
 
-// ImagesGenerate creates a new image generation request.
-// For Codex, this transforms the request to use the Responses API with the image_generation tool,
-// as ChatGPT backend API does not support the standard /images/generations endpoint.
-// Persistence of generated images is handled by the server layer, not the client.
+// ImagesGenerate serves an OpenAI /images/generations request against the
+// Codex-native JSON endpoint and preserves every returned data element.
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	logrus.WithContext(ctx).Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
+	logrus.WithContext(ctx).Debugf("[Codex] Using native images/generations endpoint, model: %s", req.Model)
 
-	// Build Responses API request
-	responsesReq := c.buildImageGenerationResponsesRequest(req)
+	var resp openai.ImagesResponse
+	opts := []option.RequestOption{
+		option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
+	}
+	if err := c.Client().Post(ctx, "images/generations", buildCodexImageGenerationRequest(&req), &resp, opts...); err != nil {
+		return nil, fmt.Errorf("codex image generation failed: %w", err)
+	}
+	if len(resp.Data) == 0 {
+		return nil, fmt.Errorf("codex image generation returned no image data")
+	}
 
-	// Call streaming Responses API
-	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
-
-	// Parse streaming response
-	return c.parseImageGenerationStream(ctx, stream)
+	logrus.WithContext(ctx).Infof("[Codex] Image generation succeeded, images: %d", len(resp.Data))
+	return &resp, nil
 }
 
 // fastModelSuffix marks a virtual Codex catalog model id (e.g. "gpt-5.6-sol:fast")
@@ -377,150 +380,6 @@ func (c *CodexClient) ListModels(ctx context.Context) (*ModelListResult, error) 
 		Provider: c.provider.Name,
 		Reason:   "ChatGPT OAuth token cannot access /models endpoint",
 	}
-}
-
-// buildImageGenerationResponsesRequest transforms ImageGenerateParams into
-// a Responses API request with the image_generation tool.
-func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
-	// Build the Responses API request with Codex-specific defaults
-	params := responses.ResponseNewParams{
-		Model: req.Model,
-	}
-
-	// Set default values directly on the struct
-	params.Store = param.NewOpt(false)
-	params.Instructions = param.NewOpt(defaultInstructions)
-	params.ParallelToolCalls = param.NewOpt(false)
-	params.Include = []responses.ResponseIncludable{responses.ResponseIncludable(reasoningMarker)}
-
-	// Build input content
-	contentItem := responses.ResponseInputContentParamOfInputText(string(req.Prompt))
-	contentItems := responses.ResponseInputMessageContentListParam{contentItem}
-
-	// Build input message
-	inputItem := responses.ResponseInputItemUnionParam{
-		OfMessage: &responses.EasyInputMessageParam{
-			Type:    responses.EasyInputMessageTypeMessage,
-			Role:    responses.EasyInputMessageRoleUser,
-			Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: contentItems},
-		},
-	}
-	inputItems := responses.ResponseInputParam{inputItem}
-	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
-
-	// Determine quality (shared with the image edit path in codex_images.go)
-	quality := normalizeCodexImageQuality(string(req.Quality))
-
-	// Determine output format
-	outputFormat := "png"
-	if req.ResponseFormat != "" {
-		outputFormat = string(req.ResponseFormat)
-	}
-
-	// Build image_generation tool
-	toolParam := &responses.ToolImageGenerationParam{
-		Type:         "image_generation",
-		Size:         string(req.Size),
-		Quality:      quality,
-		OutputFormat: outputFormat,
-		//Action:       "auto",
-		//Background:   "auto",
-		//Moderation:   "auto",
-	}
-
-	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
-
-	// Log warning for unsupported N parameter
-	if req.N.Valid() {
-		n := req.N.Value
-		if n > 1 {
-			logrus.Debugf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
-		}
-	}
-
-	// Log warning for unsupported style parameter
-	if req.Style != "" {
-		logrus.Debugf("[Codex] Style parameter not supported for image generation")
-	}
-
-	// Set stream=true via ExtraFields
-	extraFields := map[string]interface{}{
-		"stream": true,
-	}
-	params.SetExtraFields(extraFields)
-
-	return params
-}
-
-// parseImageGenerationStream parses the streaming Responses API response
-// and extracts the generated image data from the output array.
-//
-// The image data comes through two event types:
-// 1. response.image_generation_call.partial_image - streaming partial image chunks
-// 2. response.output_item.done - final status of the image generation call
-func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
-	defer stream.Close()
-
-	var b64JSON string
-	var imageCallID string
-
-	// Collect image data from stream events
-	for stream.Next() {
-		event := stream.Current()
-
-		switch event.Type {
-		case "response.image_generation_call.partial_image":
-			// Partial image chunks during generation
-			partialEvent := event.AsResponseImageGenerationCallPartialImage()
-			if partialEvent.PartialImageB64 != "" {
-				b64JSON += partialEvent.PartialImageB64
-				imageCallID = partialEvent.ItemID
-				logrus.WithContext(ctx).Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
-					partialEvent.ItemID, len(b64JSON))
-			}
-
-		case "response.output_item.done":
-			// Final status of output items
-			doneEvent := event.AsResponseOutputItemDone()
-			item := doneEvent.Item
-
-			if item.Type == "image_generation_call" {
-				imageCall := item.AsImageGenerationCall()
-				// Check for image result in the done event
-				// The status can be "generating", "completed", or other values
-				// If we haven't received partial images, use the Result field
-				if b64JSON == "" && imageCall.Result != "" {
-					b64JSON = imageCall.Result
-					imageCallID = imageCall.ID
-					logrus.WithContext(ctx).Debugf("[Codex] Received image result in done event, id: %s, status: %s",
-						imageCall.ID, imageCall.Status)
-				}
-				// Update imageCallID even if we already have data from partial events
-				if imageCallID == "" {
-					imageCallID = imageCall.ID
-				}
-			}
-		}
-	}
-
-	if err := stream.Err(); err != nil {
-		return nil, fmt.Errorf("stream error: %w", err)
-	}
-
-	if b64JSON == "" {
-		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
-	}
-
-	logrus.WithContext(ctx).Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
-
-	// Build standard ImagesResponse from extracted data
-	return &openai.ImagesResponse{
-		Data: []openai.Image{
-			{
-				B64JSON: b64JSON,
-			},
-		},
-	}, nil
 }
 
 // parseResponsesStream parses the streaming Responses API response

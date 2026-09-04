@@ -2,13 +2,16 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +19,81 @@ import (
 )
 
 var testPNGBytes = []byte("\x89PNG\r\n\x1a\nfake-image-data")
+
+func newTestCodexImageClient(rt http.RoundTripper) *CodexClient {
+	sdk := openai.NewClient(
+		option.WithAPIKey("test-key"),
+		option.WithBaseURL("https://chatgpt.com/backend-api/"),
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: rt}}),
+	)
+	return &CodexClient{OpenAIClient: &OpenAIClient{client: sdk}}
+}
+
+func TestCodexImagesGenerate_NativeRequestPreservesMultipleImages(t *testing.T) {
+	inner := &captureRoundTripper{resp: jsonHTTPResponse(`{
+		"created":1778832973,
+		"background":"opaque",
+		"quality":"high",
+		"size":"1024x1536",
+		"data":[{"b64_json":"Zmlyc3Q="},{"b64_json":"c2Vjb25k"}]
+	}`)}
+	client := newTestCodexImageClient(inner)
+	req := openai.ImageGenerateParams{
+		Prompt:  "two friendly robots",
+		Model:   "gpt-image-2",
+		N:       param.NewOpt(int64(2)),
+		Quality: openai.ImageGenerateParamsQualityStandard,
+		Size:    openai.ImageGenerateParamsSize1024x1536,
+	}
+
+	resp, err := client.ImagesGenerate(context.Background(), req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "/backend-api/codex/images/generations", inner.req.URL.Path)
+	assert.NotEmpty(t, inner.req.Header.Get("x-codex-image-turn-id"))
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(inner.body, &body))
+	assert.Equal(t, "two friendly robots", body["prompt"])
+	assert.Equal(t, "gpt-image-2", body["model"])
+	assert.Equal(t, "auto", body["background"])
+	assert.Equal(t, float64(2), body["n"])
+	assert.Equal(t, "medium", body["quality"])
+	assert.Equal(t, "1024x1536", body["size"])
+	require.Len(t, resp.Data, 2)
+	assert.Equal(t, "Zmlyc3Q=", resp.Data[0].B64JSON)
+	assert.Equal(t, "c2Vjb25k", resp.Data[1].B64JSON)
+	assert.Equal(t, int64(1778832973), resp.Created)
+	assert.Equal(t, "opaque", string(resp.Background))
+	assert.Equal(t, "high", string(resp.Quality))
+	assert.Equal(t, "1024x1536", string(resp.Size))
+}
+
+func TestCodexImagesGenerate_OmitsUnsetNToMatchCodexDefault(t *testing.T) {
+	inner := &captureRoundTripper{resp: jsonHTTPResponse(`{"data":[{"b64_json":"Zm9v"}]}`)}
+	client := newTestCodexImageClient(inner)
+
+	_, err := client.ImagesGenerate(context.Background(), openai.ImageGenerateParams{Prompt: "cat", Model: "gpt-image-2"})
+	require.NoError(t, err)
+	assert.False(t, gjson.GetBytes(inner.body, "n").Exists())
+}
+
+func TestCodexImagesGenerate_EmptyDataReturnsError(t *testing.T) {
+	inner := &captureRoundTripper{resp: jsonHTTPResponse(`{"data":[]}`)}
+	client := newTestCodexImageClient(inner)
+
+	_, err := client.ImagesGenerate(context.Background(), openai.ImageGenerateParams{Prompt: "cat", Model: "gpt-image-2"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "returned no image data")
+}
+
+func jsonHTTPResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
 
 func TestBuildCodexImageEditRequest_SingleImage(t *testing.T) {
 	req := &openai.ImageEditParams{

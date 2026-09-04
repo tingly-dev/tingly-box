@@ -10,8 +10,8 @@
 
 ## 1. 背景:为什么需要单独一条协议
 
-image generation 早已就位(`/images/generations` + Responses API 两个并行
-surface),但 **edit(基于已有图片改图)** 一直缺失。补齐它的难点不在
+image generation 早已就位(`/images/generations` surface),但
+**edit(基于已有图片改图)** 一直缺失。补齐它的难点不在
 OpenAI 兼容侧——SDK 直接支持 multipart `/v1/images/edits`——而在 Codex
 (ChatGPT OAuth 订阅)侧:ChatGPT backend **不支持**公开的 multipart
 edits 协议。
@@ -41,10 +41,17 @@ POST {base}/codex/images/edits        ← 独立 endpoint
 | base URL `https://chatgpt.com/backend-api/codex` | `model-provider-info/src/lib.rs` |
 | quality 枚举只有 low/medium/high/auto(无 standard/hd) | `codex-api/src/images.rs` |
 
-关键结论:**edit 走的是 JSON + data URL,不是公开 API 的 multipart**。
-generation 我们继续沿用已验证的 Responses API(image_generation tool)
-路径——Responses surface 无法给该 tool 挂 reference image,这正是 edit
-必须走独立 endpoint 的原因。
+以上结论在 2026-09-04 以 openai/codex commit
+[`9d253c88`](https://github.com/openai/codex/commit/9d253c885cb7cc48aeb749a82e31e2070e14f73e)
+重新核验。该版本的 `ImageGenerationRequest` 明确定义了 `prompt`、`background?`、
+`model`、`n?`、`quality?`、`size?`；`ImagesClient::generate` 明确向相对路径
+`images/generations` 发起 JSON POST；image-generation backend 则统一附加
+`x-codex-image-turn-id`。这不是根据公开 OpenAI Images API 形状推测出来的适配。
+
+关键结论:**Codex generation 与 edit 都走原生 JSON images endpoint；edit
+额外使用 data URL，而不是公开 API 的 multipart**。generation 将 OpenAI 入站参数
+转换为 `{prompt, model, background, n?, quality, size}`，其中 `n` 仅在调用方
+显式设置时发送；原生响应的完整 `data[]` 按原顺序直接返回。
 
 ---
 
@@ -139,11 +146,27 @@ JSON 请求/响应,二者都会把它打死。所以:
 `x-codex-image-turn-id` 每次请求生成新 uuid——网关没有 Codex 的 turn
 概念,fresh id 是合理的替身。
 
-### 3.4 为什么 generation 不一并切到原生 endpoint
+#### `n` 的安全默认值
 
-现有 Responses-tool generation 路径已验证可用;原生 generations endpoint
-是它的平行实现而非修复。一次只引入一条新协议,等 edit 路径在真实订阅上
-跑稳,再评估是否统一。
+Codex 官方 `ImageGenerationRequest` 把 `n` 定义为可选 `u64`，但官方
+image-generation tool 构造 generation 和 edit 请求时都固定使用 `n: None`，
+且其 tool 参数没有向模型暴露生成数量。tingly-box 因此采用相同默认行为：
+调用方未设置 `n` 时不合成 `n: 1`，而是完全省略该字段，让 Codex backend
+应用自身默认值。只有 OpenAI-compatible 入站请求显式携带 `n` 时才透传。
+
+当前官方源码没有声明 generation `n` 的最大值（5 只适用于 edit reference
+images），因此网关不臆造一个可能与 backend 漂移的上限；实际模型、账号和
+配额限制由 Codex backend 统一拒绝。若产品需要成本护栏，应在 provider/rule
+策略层增加可配置上限，而不是在 Codex wire adapter 中静默改写数量。
+
+### 3.4 generation 原生 endpoint 与多图语义
+
+`CodexClient.ImagesGenerate` 调用相对路径 `images/generations`，经
+RoundTripper 重写为 `/backend-api/codex/images/generations`。请求与 edit 共用
+quality/default 归一逻辑，并附带 `x-codex-image-turn-id`。显式 `n`（包括
+`n: 2`）原样进入 Codex wire；未设置时省略。响应直接反序列化为
+`openai.ImagesResponse`，除空 `data` 报错外不截断、不重建，因此上游
+`data[]` 的数量、顺序和内容完整返回。
 
 ---
 
@@ -151,7 +174,7 @@ JSON 请求/响应,二者都会把它打死。所以:
 
 | 功能 | 文件 |
 |------|------|
-| Codex 原生 edit 协议(types + ImagesEdit + data URL 转换) | `internal/client/codex_images.go` |
+| Codex 原生 generation/edit 协议(types + request/response + data URL 转换) | `internal/client/codex_images.go` |
 | RoundTripper images 特例 + path 重写 | `internal/client/codex_round_tripper.go` |
 | 接口成员 + OpenAI 兼容实现 | `internal/client/openai.go` |
 | Kimi / vmodel 的 not-supported 存根 | `internal/client/kimi_client.go`、`vmodel/client/openai.go` |
@@ -184,8 +207,7 @@ altitude 四个独立 agent)。已采纳:
 
 - `decodeInlineImage` 改为复用 `internal/protocol/request.ParseImageURLToAnthropicSource`
   做 data URL 拆分,不再手写一遍 `data:`/`;base64,`/逗号解析。
-- edit 路径的 quality 归一(原 `codexImageQuality`)与 generation 路径
-  (`buildImageGenerationResponsesRequest` 内联逻辑)合并成
+- edit 路径的 quality 归一(原 `codexImageQuality`)与 generation 路径合并成
   `normalizeCodexImageQuality`——发现并修复了两者已经出现的漂移(edit
   路径此前漏了 `hd→high`)。
 - `HandleOpenAIImageGeneration`/`HandleOpenAIImageEdit` 尾部的

@@ -41,9 +41,8 @@ import (
 // (gpt-image-2 default model, auto defaults, 5-image cap, the
 // x-codex-image-turn-id request header). See .design/imageedit.md.
 //
-// Image generation continues to ride the Responses API image_generation tool
-// (codex_client.go); only editing needs this endpoint because the Responses
-// surface offers no way to attach reference images to that tool for Codex.
+// Generation and editing both use these native JSON endpoints. Editing differs
+// only by carrying reference images as data URLs.
 
 // codexMaxReferenceImages is the reference-image cap enforced by Codex's
 // built-in imagegen tool. The backend owns the hard limit; we only log when a
@@ -53,6 +52,18 @@ const codexMaxReferenceImages = 5
 
 type codexImageInput struct {
 	ImageURL string `json:"image_url"`
+}
+
+// codexImageGenerationRequest mirrors the Codex-native generations wire
+// request. N is a pointer so an omitted OpenAI option remains omitted on the
+// wire rather than being serialized as zero.
+type codexImageGenerationRequest struct {
+	Prompt     string `json:"prompt"`
+	Model      string `json:"model"`
+	Background string `json:"background,omitempty"`
+	N          *int64 `json:"n,omitempty"`
+	Quality    string `json:"quality,omitempty"`
+	Size       string `json:"size,omitempty"`
 }
 
 // codexImageEditRequest mirrors codex-rs ImageEditRequest: images, prompt and
@@ -65,6 +76,24 @@ type codexImageEditRequest struct {
 	N          *int64            `json:"n,omitempty"`
 	Quality    string            `json:"quality,omitempty"`
 	Size       string            `json:"size,omitempty"`
+}
+
+func buildCodexImageGenerationRequest(req *openai.ImageGenerateParams) *codexImageGenerationRequest {
+	out := &codexImageGenerationRequest{
+		Prompt:     req.Prompt,
+		Model:      string(req.Model),
+		Background: defaultCodexImageOption(string(req.Background)),
+		Quality:    normalizeCodexImageQuality(string(req.Quality)),
+		Size:       defaultCodexImageOption(string(req.Size)),
+	}
+	// Match the Codex CLI's safe default (`n: None`): never synthesize n=1.
+	// The wire schema still exposes n, so preserve an explicitly supplied value
+	// and let the Codex backend enforce its model/account-specific limit.
+	if req.N.Valid() {
+		n := req.N.Value
+		out.N = &n
+	}
+	return out
 }
 
 // ImagesEdit serves an OpenAI /images/edits request against the Codex-native
@@ -100,7 +129,7 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 // buildCodexImageEditRequest translates OpenAI ImageEditParams into the Codex
 // JSON edit request. Parameters the Codex wire schema does not carry (mask,
 // response_format, output_format, output_compression, input_fidelity) are
-// dropped, mirroring how ImagesGenerate treats n/style.
+// dropped because the Codex wire schema does not carry them.
 func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditRequest, error) {
 	readers := imageEditInputReaders(req)
 	if len(readers) == 0 {
@@ -182,8 +211,7 @@ func readerToDataURL(r io.Reader) (string, error) {
 // normalizeCodexImageQuality maps OpenAI quality values ("standard"/"hd", the
 // dall-e vocabulary) onto what the Codex endpoint accepts ("low"/"medium"/
 // "high"/"auto"), defaulting to "auto". Shared by the edit path here and the
-// Responses-based generation path in buildImageGenerationResponsesRequest
-// (codex_client.go) — keep both quality mappings in this one place.
+// native generation path — keep both quality mappings in this one place.
 func normalizeCodexImageQuality(quality string) string {
 	switch quality {
 	case "":
