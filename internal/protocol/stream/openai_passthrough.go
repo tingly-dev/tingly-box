@@ -340,6 +340,9 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	usage := protocol.ZeroTokenUsage()
 	streamStart := time.Now()
 	sawTerminal := false
+	// Remembered so an abnormal termination can name the response the client
+	// was already streaming, instead of inventing an id it has never seen.
+	responseID := ""
 
 	protocol.RunLoop(c, func(w io.Writer) bool {
 		select {
@@ -410,7 +413,14 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			// Codex CLI's ResponseCompleted decoder rejects events whose
 			// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
 			// upstream provider (e.g. DeepSeek) omits it.
-			if respUsage.Exists() {
+			//
+			// gjson reports an explicit JSON null as existing, so the backfill
+			// must also require an object: response.created / response.in_progress
+			// carry "usage": null, and synthesizing a details-only usage block
+			// there would hand the client a usage object missing every required
+			// field (input_tokens/output_tokens/total_tokens) — worse than the
+			// null it replaced.
+			if respUsage.IsObject() {
 				if rt := respUsage.Get("output_tokens_details.reasoning_tokens"); rt.Exists() {
 					reasoningTokens = rt.Int()
 				} else {
@@ -425,6 +435,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			if promptTokensTotal > 0 || outputTokens > 0 || cacheTokens > 0 || cacheWriteTokens > 0 || reasoningTokens > 0 {
 				usage = protocol.NewTokenUsageFull(int(promptTokensTotal-cacheTokens), int(outputTokens),
 					int(cacheTokens), int(cacheWriteTokens), int(reasoningTokens))
+			}
+
+			if id := resp.Get("id"); responseID == "" && id.Exists() {
+				responseID = id.String()
 			}
 
 			if model := resp.Get("model"); model.Exists() && model.String() != "" {
@@ -444,6 +458,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			return usage, nil
 		}
 
+		err = describeResponsesStreamError(err)
 		logrus.WithContext(c.Request.Context()).Errorf("Responses stream error: %v", err)
 		// Stream failed before any content reached the client: surface a
 		// retryable 5xx so mid-request failover can try the next tier,
@@ -452,14 +467,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			SendStreamingError(c, err)
 			return usage, err
 		}
-		errorChunk := map[string]interface{}{
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}
-		OpenAIResponsesEvent(c, "error", errorChunk)
+		SendResponsesStreamFailure(c, responseID, "stream_failed", err.Error())
 		return usage, err
 	}
 
@@ -476,13 +484,8 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		logrus.WithContext(c.Request.Context()).
 			WithField("elapsed", time.Since(streamStart).Round(time.Second)).
 			Warn("upstream ended responses stream without a terminal event")
-		OpenAIResponsesEvent(c, "error", map[string]interface{}{
-			"error": map[string]interface{}{
-				"message": "upstream ended responses stream without a terminal event",
-				"type":    "stream_error",
-				"code":    "upstream_truncated",
-			},
-		})
+		SendResponsesStreamFailure(c, responseID, "upstream_truncated",
+			"upstream ended responses stream without a terminal event")
 		return usage, fmt.Errorf("upstream ended responses stream without a terminal event")
 	}
 

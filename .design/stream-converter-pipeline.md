@@ -191,6 +191,34 @@ conv.HookErr() != nil
   → SSE 错误事件已由 converter emit，调用方只需返回 error，不再发 SSE
 ```
 
+### 8.1 Responses 流的终止事件必须是 `response.failed`
+
+`HandleOpenAIResponsesStream` 异常终止（上游 clean EOF 无终止事件 / 上游读错误）时，
+**只发 `event: error` 帧是不够的**，必须先发一个 `response.failed`
+（`SendResponsesStreamFailure`）。
+
+原因来自本surface最严格的消费者 —— Codex：
+`codex-rs/codex-api/src/sse/responses.rs` 的 `process_responses_event`
+**没有 `"error"` 分支**，该帧落进 catch-all 被丢弃；流随后正常 EOF，
+客户端只能报出通用的 `stream closed before response.completed`，
+真实原因（上游截断 / 读错误 / 上游 in-band error）全部丢失 ——
+这正是"重试多少次都没用、也看不出是什么问题"的来源（#1384）。
+
+`response.failed` 则有分支：Codex 读 `response.error.{code,message}`，
+分类成 context window / quota / rate limit / retryable 并把 message 显示出来。
+因此约定：
+
+- `response.failed` 在前（协议终止事件，Codex 与通用 Responses 客户端都认），
+  `error` 帧在后（兼容只认它的老客户端）。
+- `response.error.code` 沿用既有语义：`upstream_truncated`（上游无终止事件）、
+  `stream_failed`（上游读/解码错误）。
+- 若流中已出现过 `response.id`，带上它，让失败挂在客户端正在接收的那个 response 上。
+
+配套：`describeResponsesStreamError` 补齐 SDK 丢掉的细节 —— openai-go 的
+ssestream 只要事件带顶层 `error` 键就中断流（`"error": null` 也算），
+message 取该值的 gjson 字符串形式，null / `{}` 都会得到空串，
+于是只剩一句 `received error while streaming: `。该函数把原始事件重新附回错误里。
+
 ---
 
 ## 9. 保留的旧机制

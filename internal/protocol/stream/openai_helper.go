@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -245,4 +247,71 @@ func openaiChatSSEWriter(c *gin.Context) func(event interface{}) error {
 // writeSSEChunk writes a single SSE chunk — kept for callers in other files.
 func writeSSEChunk(c *gin.Context, _ interface{ Flush() }, chunk any) {
 	OpenAISSE(c, chunk)
+}
+
+// SendResponsesStreamFailure ends a Responses SSE stream the way the protocol
+// itself ends a failed turn: with a `response.failed` event carrying the reason,
+// followed by the legacy `error` frame.
+//
+// The terminal event is what makes the failure legible. A bare `event: error`
+// frame is dropped by the strictest consumer of this surface: Codex's SSE reader
+// (codex-rs, codex-api/src/sse/responses.rs) has no match arm for "error", so the
+// frame lands in the catch-all, nothing is recorded, and the stream still ends
+// with no terminal event — the client reports the generic "stream closed before
+// response.completed" and the actual reason (upstream truncation, read error,
+// in-band upstream error) is lost. That is also why retrying never helps: the
+// user never learns what to fix. "response.failed" IS handled there: the client
+// reads response.error.{code,message}, classifies it (context window, quota,
+// rate limit, otherwise retryable) and surfaces the message.
+//
+// responseID may be empty; when the stream already announced one, passing it
+// keeps the failure attached to the response the client was streaming.
+func SendResponsesStreamFailure(c *gin.Context, responseID, code, message string) {
+	response := map[string]interface{}{
+		"object": "response",
+		"status": "failed",
+		"error": map[string]interface{}{
+			"type":    "stream_error",
+			"code":    code,
+			"message": message,
+		},
+	}
+	if responseID != "" {
+		response["id"] = responseID
+	}
+	OpenAIResponsesEvent(c, "response.failed", map[string]interface{}{
+		"type":     "response.failed",
+		"response": response,
+	})
+	OpenAIResponsesEvent(c, "error", map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "stream_error",
+			"code":    code,
+		},
+	})
+}
+
+// describeResponsesStreamError restores the detail the OpenAI SDK drops when it
+// aborts a stream on an in-band error event.
+//
+// ssestream ends the stream as soon as an event carries a top-level "error" key
+// and uses gjson's string form of that value as the message — which is empty for
+// `"error": null` and for `"error": {}`. The result is a bare "received error
+// while streaming: " with nothing to act on. Re-attach the raw event so the log
+// line and the client both name what actually arrived.
+func describeResponsesStreamError(err error) error {
+	var streamErr *openaistream.StreamError
+	if !errors.As(err, &streamErr) {
+		return err
+	}
+	detail := strings.TrimSpace(strings.TrimPrefix(streamErr.Message, "received error while streaming:"))
+	if detail != "" {
+		return err
+	}
+	raw := strings.TrimSpace(string(streamErr.Event.Data))
+	if raw == "" {
+		return err
+	}
+	return fmt.Errorf("upstream sent an error event with no message (raw event: %s)", raw)
 }

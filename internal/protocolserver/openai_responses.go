@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tidwall/gjson"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -269,7 +270,49 @@ func (ph *ProtocolHandler) convertToResponsesParams(bodyBytes []byte, actualMode
 		return nil, err
 	}
 
+	if err := checkResponsesInputSurvived(processedData, params); err != nil {
+		return nil, err
+	}
+
 	return params, nil
+}
+
+// checkResponsesInputSurvived rejects a request whose input array did not
+// survive deserialization into the SDK params.
+//
+// The input union decodes all-or-nothing: a single item whose `type` the pinned
+// SDK does not model makes the whole array decode to nothing — and it does so
+// *without an error*, so the request would otherwise go upstream carrying only
+// instructions and tools, with the entire conversation silently gone. Agentic
+// clients replay their whole history on every turn, so once such an item exists
+// the failure repeats on every retry for the rest of the session. Failing here
+// names the offending item instead of leaving the provider to reject (or worse,
+// half-answer) a conversation-less request.
+func checkResponsesInputSurvived(processedData []byte, params *responses.ResponseNewParams) error {
+	items := gjson.GetBytes(processedData, "input")
+	if !items.IsArray() || len(items.Array()) == 0 {
+		return nil
+	}
+	if len(params.Input.OfInputItemList) > 0 || params.Input.OfString.Valid() {
+		return nil
+	}
+
+	// Re-decode item by item: only the failure path pays for this, and the
+	// index+type it recovers is the whole point of the message.
+	for i, item := range items.Array() {
+		var decoded responses.ResponseInputItemUnionParam
+		if err := json.Unmarshal([]byte(item.Raw), &decoded); err != nil {
+			return fmt.Errorf("input[%d] (type %q) is not a supported Responses input item: %w",
+				i, item.Get("type").String(), err)
+		}
+		encoded, err := json.Marshal(decoded)
+		if err != nil || len(gjson.ParseBytes(encoded).Map()) == 0 {
+			return fmt.Errorf("input[%d] has unsupported type %q; the whole conversation would be dropped",
+				i, item.Get("type").String())
+		}
+	}
+
+	return fmt.Errorf("input items were dropped during conversion; the whole conversation would be sent empty")
 }
 
 // HandleResponsesGet handles GET /v1/responses/{id}
