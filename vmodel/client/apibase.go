@@ -2,8 +2,9 @@
 // provider record names it (the vmodel:// APIBase scheme), how that address is
 // turned into a URL an SDK accepts, and the http.RoundTripper that reaches the
 // private in-process listener. The gateway's internal/client wraps these
-// pieces so a vmodel provider runs through the same SDK + transport chain as a
-// real upstream. Server side: vmodel/virtualserver. Design:
+// pieces (NewVModelOpenAIClient / NewVModelAnthropicClient, chosen by
+// ClientPool) so a vmodel provider runs through the same SDK + transport chain
+// as a real upstream. Server side: vmodel/virtualserver. Design:
 // .design/vmodel-transport.md.
 package vmodelclient
 

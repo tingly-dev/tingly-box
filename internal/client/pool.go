@@ -21,10 +21,6 @@ import (
 // ProxyURL is used to configure the transport but is NOT part of the key.
 //
 // Clients are automatically cleaned up via finalizers when garbage collected.
-//
-// Virtual-model providers are not special-cased here: they are constructed by
-// the same NewOpenAIClient / NewAnthropicClient and differ only in the dialer
-// their transport uses (see vmodel_transport.go).
 type ClientPool struct{}
 
 // NewClientPool creates a new ClientPool with default settings.
@@ -61,6 +57,14 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 			}
 		default:
 			logrus.Errorf("Unsupported oauth issuer: %s", issuer)
+			return nil
+		}
+	} else if provider.IsVirtual() {
+		// Virtual-model provider: generic OpenAI client over the in-process
+		// virtualserver (vmodel/client), same chain as a real upstream.
+		client, err = NewVModelOpenAIClient(provider, model, sessionID)
+		if err != nil {
+			logrus.WithContext(ctx).Errorf("Failed to create vmodel client for provider %s: %v", provider.Name, err)
 			return nil
 		}
 	} else if provider.AuthType == typ.AuthTypeAzureKey {
@@ -110,6 +114,10 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	case provider.AuthType == typ.AuthTypeAWSSigV4:
 		// Claude on Amazon Bedrock (SigV4 / Bedrock bearer token).
 		client, err = NewBedrockClient(provider, model, sessionID)
+	case provider.IsVirtual():
+		// Virtual-model provider: generic Anthropic client over the in-process
+		// virtualserver (vmodel/client), same chain as a real upstream.
+		client, err = NewVModelAnthropicClient(provider, model, sessionID)
 	case provider.AuthType == typ.AuthTypeGCPVertex:
 		// Claude on GCP Vertex AI (service-account OAuth2).
 		client, err = NewVertexAnthropicClient(provider, model, sessionID)

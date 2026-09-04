@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -688,4 +689,28 @@ func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
 	var apiErr *openai.Error
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 429, apiErr.StatusCode, "injected status must survive the transport unchanged")
+}
+
+func TestClientPool_VModelProvider_Anthropic(t *testing.T) {
+	srv := virtualserver.Serve(virtualserver.NewService())
+	defer srv.Close()
+	vmodelclient.Connect(srv.DialContext)
+	defer vmodelclient.Connect(nil)
+
+	provider := &typ.Provider{
+		UUID: "vm-anthropic", Name: "vm-anthropic",
+		APIBase:  vmodelclient.APIBase(protocol.APIStyleAnthropic),
+		APIStyle: protocol.APIStyleAnthropic,
+		AuthType: typ.AuthTypeVirtual,
+		Enabled:  true,
+	}
+	c := NewClientPool().GetAnthropicClient(context.Background(), provider, "echo-model")
+	require.NotNil(t, c)
+	msg, err := c.Client().Messages.New(context.Background(), anthropic.MessageNewParams{
+		Model:     "echo-model",
+		MaxTokens: 32,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, msg.Content[0].Text, "Echo")
 }

@@ -135,8 +135,9 @@ today; they are unchanged by this design.
   `inject.go`, tests): hand-written SDK-interface implementations. The package
   now holds only the client side of the HTTP path (scheme, base URL,
   transport); the protocol work is done by the real SDKs.
-- `ClientPool.SetVirtualClients` and the two `IsVirtual()` branches in
-  `GetOpenAIClient` / `GetAnthropicClient`.
+- `ClientPool.SetVirtualClients` and the singleton short-circuit in
+  `GetOpenAIClient` / `GetAnthropicClient`; the pool now dispatches
+  `IsVirtual()` to a dedicated constructor like every other provider kind.
 - The `vmodel-internal` dummy provider in `internal/server/server.go`.
 - `resolveVModelLoopbackTarget` in `internal/probe/e2e_probe.go` — the probe can
   now dial a vmodel provider like any other provider (UX principle 7: the
@@ -166,9 +167,12 @@ vmodel/client                                               // client side
   apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
   transport.go Connect(dialer), Transport()                  (fails fast when not connected)
 
-internal/client/openai.go / anthropic.go                    // wrap vmodel/client
-  if vmodelclient.IsAPIBase(provider.APIBase) { base URL = HTTPBase(...); base transport = Transport() }
-  nothing else in the chain (rule flags, advisor loopback, logging, timeout) changed
+internal/client/pool.go                                     // dispatch, like Codex / Azure / Bedrock
+  provider.IsVirtual() → NewVModelOpenAIClient / NewVModelAnthropicClient
+
+internal/client/vmodel_client.go                            // wrap vmodel/client on the generic clients
+  generic constructor + WithBaseURL(HTTPBase(...)) + WithHTTPClient(chain over Transport())
+  chain = rule flags → advisor loopback → logging, same as a real upstream
 ```
 
 `virtualserver.Serve` is a small addition to the existing package, modeled on

@@ -11,10 +11,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -53,11 +52,7 @@ type AnthropicClient struct {
 // NewAnthropicClient creates a new Anthropic client wrapper
 func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := provider.APIBase
-	if vmodelclient.IsAPIBase(apiBase) {
-		apiBase = vmodelclient.HTTPBase(apiBase, provider.APIStyle)
-	}
-	apiBase = strings.TrimRight(apiBase, "/")
+	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = strings.TrimSuffix(apiBase, "/v1")
 	}
@@ -137,11 +132,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 // Vertex path, which must rebuild this chain under its OAuth transport (see
 // vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
-	var base http.RoundTripper = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	if vmodelclient.IsAPIBase(provider.APIBase) {
-		// vmodel provider: same chain, but dial the in-process virtualserver.
-		base = vmodelclient.Transport()
-	}
+	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }
 

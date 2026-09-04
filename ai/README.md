@@ -117,12 +117,14 @@ credentials; the sentinel never reaches a network upstream.
 
 1. The routing selector resolves the rule to a `(provider, model)` pair as
    usual.
-2. `ClientPool` builds the ordinary SDK client for the provider. Because
-   `APIBase` is `vmodel://…`, the constructor rewrites the base URL with
-   `vmodelclient.HTTPBase` and uses `vmodelclient.Transport()` as the base of
-   the otherwise unchanged transport chain. `server.NewServer` started the
-   server with `virtualserver.Serve` and connected the client side with
-   `vmodelclient.Connect`.
+2. `ClientPool` sees `provider.IsVirtual()` and, like it does for Codex,
+   Azure or Bedrock, picks the dedicated constructor:
+   `NewVModelOpenAIClient` / `NewVModelAnthropicClient`
+   (`internal/client/vmodel_client.go`). Each layers `vmodel/client` on the
+   generic SDK client — base URL from `vmodelclient.HTTPBase`, transport chain
+   over `vmodelclient.Transport()` — the way `NewAzureClient` layers the azure
+   adapter. `server.NewServer` started the server with `virtualserver.Serve`
+   and connected the client side with `vmodelclient.Connect`.
 3. The request travels as real HTTP — status codes, headers, SSE framing —
    to the virtualserver, which looks the model up in its per-protocol
    registry and streams a response.
