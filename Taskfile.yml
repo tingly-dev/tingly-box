@@ -57,11 +57,14 @@ tasks:
     aliases:
       - http
     cmds:
-      - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false --pprof
- 
+      # --no-daemon: start now backgrounds by default, but local dev wants the
+      # server running in the foreground so `task start`/`task dev` keep
+      # streaming logs to this terminal instead of forking and exiting.
+      - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false --pprof --no-daemon
+
   restart:
     cmds:
-      - go run ./cli/tingly-box --verbose restart --debug --port 12580 --browser=false --pprof
+      - go run ./cli/tingly-box --verbose restart --debug --port 12580 --browser=false --pprof --no-daemon
 
   swagger:
     aliases:
