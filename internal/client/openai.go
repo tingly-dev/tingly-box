@@ -50,21 +50,10 @@ type OpenAIClient struct {
 	HttpClient *http.Client
 }
 
-// NewOpenAIClient creates a new OpenAI client wrapper
+// NewOpenAIClient creates a new OpenAI client wrapper over the standard
+// pooled transport chain (session-bound base, rule flags, advisor loopback,
+// logging).
 func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
-	options := []option.RequestOption{
-		option.WithBaseURL(provider.APIBase),
-		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
-	}
-	// Azure providers authenticate via the azure adapter's api-key header
-	// (appended last), not a bearer token; skip the empty base WithAPIKey.
-	if !provider.IsMultiFieldCredential() {
-		options = append(options, option.WithAPIKey(provider.GetAccessToken()))
-	}
-
-	// Create HTTP client with session-bound transport
-	var transport http.RoundTripper
-
 	// Rule flags (custom_user_agent with the fixed precedence rule/scenario >
 	// inbound client UA > SDK default, plus extra_headers on api_key
 	// providers) are applied by the single ruleFlagTransport. There is
@@ -75,9 +64,28 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 	// proxy is explicitly configured for the provider.
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	transport = wrapWithRuleFlags(base, provider, true)
-	transport = wrapWithAdvisorLoopback(transport)
-	transport = wrapWithLogging(transport, provider)
+	return newOpenAIClientWithTransport(provider, openAITransportChain(base, provider), extraOptions...)
+}
+
+// openAITransportChain layers the generic provider round-trippers (rule
+// flags, advisor loopback stamp, logging) over base.
+func openAITransportChain(base http.RoundTripper, provider *typ.Provider) http.RoundTripper {
+	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
+}
+
+// newOpenAIClientWithTransport builds the SDK client on an already assembled
+// transport. Constructors that need a non-pooled base (e.g. vmodel) call this
+// so no unused pooled transport is created for the provider.
+func newOpenAIClientWithTransport(provider *typ.Provider, transport http.RoundTripper, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
+	options := []option.RequestOption{
+		option.WithBaseURL(provider.APIBase),
+		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
+	}
+	// Azure providers authenticate via the azure adapter's api-key header
+	// (appended last), not a bearer token; skip the empty base WithAPIKey.
+	if !provider.IsMultiFieldCredential() {
+		options = append(options, option.WithAPIKey(provider.GetAccessToken()))
+	}
 
 	httpClient := &http.Client{
 		Transport: transport,

@@ -180,3 +180,35 @@ func TestMemListener_DialHonoursContext(t *testing.T) {
 	_, err := ln.Dial(ctx, "", "")
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestServe_UnsimulatedEndpointsReturn501(t *testing.T) {
+	_, hc := newServed(t)
+	oc := openai.NewClient(
+		openaiopt.WithBaseURL("http://vmodel.internal/openai/v1"),
+		openaiopt.WithAPIKey("EMPTY"),
+		openaiopt.WithHTTPClient(hc),
+		openaiopt.WithMaxRetries(0),
+	)
+	_, err := oc.Embeddings.New(context.Background(), openai.EmbeddingNewParams{
+		Model: "echo-model",
+		Input: openai.EmbeddingNewParamsInputUnion{OfString: openai.String("x")},
+	})
+	var oaiErr *openai.Error
+	require.ErrorAs(t, err, &oaiErr)
+	assert.Equal(t, http.StatusNotImplemented, oaiErr.StatusCode)
+	assert.Contains(t, err.Error(), "not supported by vmodel")
+
+	ac := anthropicsdk.NewClient(
+		anthropicopt.WithBaseURL("http://vmodel.internal/anthropic"),
+		anthropicopt.WithAPIKey("EMPTY"),
+		anthropicopt.WithHTTPClient(hc),
+		anthropicopt.WithMaxRetries(0),
+	)
+	_, err = ac.Messages.CountTokens(context.Background(), anthropicsdk.MessageCountTokensParams{
+		Model:    "echo-model",
+		Messages: []anthropicsdk.MessageParam{anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("x"))},
+	})
+	var anErr *anthropicsdk.Error
+	require.ErrorAs(t, err, &anErr)
+	assert.Equal(t, http.StatusNotImplemented, anErr.StatusCode)
+}

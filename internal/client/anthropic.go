@@ -49,33 +49,9 @@ type AnthropicClient struct {
 	httpClient *http.Client
 }
 
-// NewAnthropicClient creates a new Anthropic client wrapper
+// NewAnthropicClient creates a new Anthropic client wrapper over the standard
+// transport chain for its auth type.
 func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
-	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := strings.TrimRight(provider.APIBase, "/")
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = strings.TrimSuffix(apiBase, "/v1")
-	}
-
-	options := []anthropicOption.RequestOption{
-		anthropicOption.WithBaseURL(apiBase),
-		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
-	}
-	// Multi-field credential providers (Bedrock / Vertex) carry no bearer token;
-	// their cloud adapter option (appended last) installs its own auth. Setting
-	// an empty WithAPIKey would only plant a stray x-api-key header.
-	if !provider.IsMultiFieldCredential() {
-		options = append(options, anthropicOption.WithAPIKey(provider.GetAccessToken()))
-	}
-
-	// Create HTTP client with session-bound transport.
-	//
-	// context-1m is NOT injected here: it's a request-body/header concern
-	// applied per-call in the Beta/Messages methods (withContext1MBeta /
-	// context1MHeaderOpts) from the resolved rule flags (typ.GetRuleFlags), so
-	// it reaches both this generic client and ClaudeClient without a dedicated
-	// transport.
-	//
 	// Note: Claude Code OAuth providers never reach this constructor —
 	// ClientPool.GetAnthropicClient routes them to NewClaudeClient. So the
 	// transport here only ever serves generic Anthropic providers.
@@ -101,7 +77,35 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		// proxy is explicitly configured for the provider.
 		transport = anthropicTransport(provider, model, sessionID)
 	}
+	return newAnthropicClientWithTransport(provider, transport, extraOptions...)
+}
 
+// newAnthropicClientWithTransport builds the SDK client on an already
+// assembled transport. Constructors that need a non-pooled base (e.g. vmodel)
+// call this so no unused pooled transport is created for the provider.
+func newAnthropicClientWithTransport(provider *typ.Provider, transport http.RoundTripper, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
+	// Handle API base URL - Anthropic SDK expects base without /v1
+	apiBase := strings.TrimRight(provider.APIBase, "/")
+	if strings.HasSuffix(apiBase, "/v1") {
+		apiBase = strings.TrimSuffix(apiBase, "/v1")
+	}
+
+	options := []anthropicOption.RequestOption{
+		anthropicOption.WithBaseURL(apiBase),
+		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
+	}
+	// Multi-field credential providers (Bedrock / Vertex) carry no bearer token;
+	// their cloud adapter option (appended last) installs its own auth. Setting
+	// an empty WithAPIKey would only plant a stray x-api-key header.
+	if !provider.IsMultiFieldCredential() {
+		options = append(options, anthropicOption.WithAPIKey(provider.GetAccessToken()))
+	}
+
+	// context-1m is NOT injected here: it's a request-body/header concern
+	// applied per-call in the Beta/Messages methods (withContext1MBeta /
+	// context1MHeaderOpts) from the resolved rule flags (typ.GetRuleFlags), so
+	// it reaches both this generic client and ClaudeClient without a dedicated
+	// transport.
 	httpClient := &http.Client{
 		Transport: transport,
 	}
@@ -133,6 +137,12 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 // vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	return anthropicTransportChain(base, provider)
+}
+
+// anthropicTransportChain layers the generic provider round-trippers (rule
+// flags, advisor loopback stamp, logging) over base.
+func anthropicTransportChain(base http.RoundTripper, provider *typ.Provider) http.RoundTripper {
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }
 

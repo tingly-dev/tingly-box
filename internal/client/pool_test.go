@@ -671,9 +671,12 @@ func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
 		AuthType: typ.AuthTypeVirtual,
 		Enabled:  true,
 	}
+	before := GetGlobalTransportPool().Stats()["transport_count"]
 	c := NewClientPool().GetOpenAIClient(context.Background(), provider, "echo-model")
 	require.NotNil(t, c)
 	require.NotNil(t, c.Client(), "vmodel providers expose the real SDK client")
+	assert.Equal(t, before, GetGlobalTransportPool().Stats()["transport_count"],
+		"vmodel providers must not allocate a pooled network transport")
 
 	resp, err := c.ChatCompletionsNew(context.Background(), openai.ChatCompletionNewParams{
 		Model:    "echo-model",

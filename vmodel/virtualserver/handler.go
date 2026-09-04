@@ -43,6 +43,19 @@ func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry
 // Deprecated: prefer ListOpenAIModels / ListAnthropicModels for the
 // protocol-split entrypoints. Retained for the legacy mixed-protocol route
 // and for test fixtures that want both registries on one endpoint.
+// NotSupported answers 501 for endpoints the virtual models do not simulate
+// (embeddings, images, count_tokens). The body follows the OpenAI/Anthropic
+// error envelope shape so SDK clients surface a clean API error.
+func (h *Handler) NotSupported(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"type": "error",
+		"error": gin.H{
+			"message": fmt.Sprintf("%s is not supported by vmodel", c.Request.URL.Path),
+			"type":    "not_supported_error",
+		},
+	})
+}
+
 func (h *Handler) ListModels(c *gin.Context) {
 	models := h.anthropicReg.ListModels()
 	models = append(models, h.openaiReg.ListModels()...)

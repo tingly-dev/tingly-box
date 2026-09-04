@@ -1,7 +1,6 @@
 package client
 
 import (
-	"net/http"
 	"strings"
 
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -12,32 +11,26 @@ import (
 )
 
 // NewVModelOpenAIClient builds an OpenAI client for a virtual-model provider.
-// It layers vmodel/client on the generic OpenAI client, exactly like the Azure
-// constructor layers the azure adapter: the SDK, retries-off, request timeout
-// and rule-flag / advisor / logging transport chain are the generic ones; only
-// the base URL (vmodel:// → http://vmodel.internal/...) and the dialer (the
-// private in-process virtualserver listener) come from vmodel/client.
-func NewVModelOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*OpenAIClient, error) {
-	return NewOpenAIClient(provider, model, sessionID,
+// It layers vmodel/client on the generic OpenAI client, the way the Azure
+// constructor layers the azure adapter: SDK, retries-off, request timeout and
+// the rule-flag / advisor / logging transport chain are the generic ones; only
+// the base URL (vmodel:// → http://vmodel.internal/...) and the base transport
+// (the private in-process virtualserver listener) come from vmodel/client. No
+// pooled network transport is created for the provider.
+func NewVModelOpenAIClient(provider *typ.Provider, _ string, _ typ.SessionID) (*OpenAIClient, error) {
+	return newOpenAIClientWithTransport(provider,
+		openAITransportChain(vmodelclient.Transport(), provider),
 		openaiOption.WithBaseURL(vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle)),
-		openaiOption.WithHTTPClient(&http.Client{Transport: vmodelTransportChain(provider)}),
 	)
 }
 
 // NewVModelAnthropicClient is the Anthropic counterpart of NewVModelOpenAIClient.
 // The Anthropic SDK appends /v1 itself, so the /v1 suffix of HTTPBase is
 // dropped here the same way NewAnthropicClient drops it from a real APIBase.
-func NewVModelAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*AnthropicClient, error) {
+func NewVModelAnthropicClient(provider *typ.Provider, _ string, _ typ.SessionID) (*AnthropicClient, error) {
 	base := strings.TrimSuffix(vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle), "/v1")
-	return NewAnthropicClient(provider, model, sessionID,
+	return newAnthropicClientWithTransport(provider,
+		anthropicTransportChain(vmodelclient.Transport(), provider),
 		anthropicOption.WithBaseURL(base),
-		anthropicOption.WithHTTPClient(&http.Client{Transport: vmodelTransportChain(provider)}),
 	)
-}
-
-// vmodelTransportChain is the generic provider chain (rule flags, advisor
-// loopback stamp, logging) over the vmodel dialer instead of a pooled network
-// transport.
-func vmodelTransportChain(provider *typ.Provider) http.RoundTripper {
-	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(vmodelclient.Transport(), provider, true)), provider)
 }

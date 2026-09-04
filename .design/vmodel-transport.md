@@ -171,8 +171,9 @@ internal/client/pool.go                                     // dispatch, like Co
   provider.IsVirtual() → NewVModelOpenAIClient / NewVModelAnthropicClient
 
 internal/client/vmodel_client.go                            // wrap vmodel/client on the generic clients
-  generic constructor + WithBaseURL(HTTPBase(...)) + WithHTTPClient(chain over Transport())
-  chain = rule flags → advisor loopback → logging, same as a real upstream
+  newOpenAIClientWithTransport / newAnthropicClientWithTransport with
+  WithBaseURL(HTTPBase(...)) and the generic chain (rule flags → advisor
+  loopback → logging) over Transport(); no pooled network transport is created
 ```
 
 `virtualserver.Serve` is a small addition to the existing package, modeled on
@@ -231,6 +232,13 @@ the PID/port-file cleanup.
 5. Optional: `--vmodel-socket <path>` to additionally serve on a unix socket
    for out-of-process harnesses (`cli/harness --upstream=vmodel` from a
    subprocess).
+
+## Endpoints vmodel does not simulate
+
+`/embeddings`, `/images/*` and `/messages/count_tokens` are reachable through
+the SDKs but have no virtual implementation. The virtualserver answers them
+with an explicit 501 and a protocol-shaped "not supported by vmodel" error, so
+the gateway propagates a clear status instead of a bare router 404.
 
 ## Non-goals
 
