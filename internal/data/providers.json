@@ -506,6 +506,13 @@
       "base_url_anthropic": null,
       "models": [
         {
+          "id": "gpt-6-astra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-03",
+          "note": "最新旗舰模型，代码/应用/研究综合能力最强，目前限量灰度发布，需在 config.toml 手动开启，数周内成为 Astra 默认模型"
+        },
+        {
           "id": "gpt-5.6-sol",
           "context": 1050000,
           "max_output": 128000,
@@ -524,7 +531,7 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "平衡能力与成本，适合常规开发任务"
+          "note": "平衡能力与成本，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4"
         },
         {
           "id": "gpt-5.6-terra:fast",
@@ -538,29 +545,36 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "延迟和成本最低，适合高频、相对简单的任务"
+          "note": "延迟和成本最低，适合高频、相对简单的任务；已取代于 2026-08-31 退役的 gpt-5.4-mini"
         },
         {
-          "id": "gpt-5.4",
-          "context": 272000
-        },
-        {
-          "id": "gpt-5.4-mini",
-          "context": 272000
+          "id": "gpt-5.6-luna:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
         },
         {
           "id": "gpt-5.5",
-          "context": 272000
+          "context": 272000,
+          "note": "上一代旗舰模型，ChatGPT 登录会话默认模型"
         },
         {
           "id": "gpt-5.3-codex-spark",
-          "context": 128000
+          "context": 128000,
+          "note": "纯文本研究预览模型，优化近实时编码迭代"
         }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
       "icon": "opencode",
-      "openai_endpoint_mode": "responses"
+      "openai_endpoint_mode": "responses",
+      "last_updated": "2026-09-04",
+      "sources": [
+        "https://learn.chatgpt.com/docs/models",
+        "https://openai.com/index/gpt-6-astra/",
+        "https://9to5mac.com/2026/09/03/openai-releasing-major-upgrade-to-chatgpt-and-codex-with-gpt-6-astra-details-here/"
+      ]
     },
     "googleapis-com": {
       "id": "googleapis-com",
@@ -2878,6 +2892,30 @@
       "last_updated": "2026-08-19",
       "sources": [
         "https://github.com/sgl-project/sglang/pull/18630"
+      ]
+    },
+    "lemonade": {
+      "id": "lemonade",
+      "name": "AMD Lemonade",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "amd",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "AMD's open-source local LLM server, NPU/GPU-accelerated on Ryzen AI and Radeon",
+      "website": "https://lemonade-server.ai",
+      "base_url_openai": "http://localhost:13305/v1",
+      "base_url_anthropic": "http://localhost:13305",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "amd",
+      "last_updated": "2026-09-04",
+      "sources": [
+        "https://github.com/lemonade-sdk/lemonade",
+        "https://lemonade-server.ai/docs/api/openai/",
+        "https://lemonade-server.ai/docs/api/anthropic/",
+        "https://lemonade-server.ai/docs/integrations/claude-code/"
       ]
     }
   }
