@@ -110,7 +110,7 @@ The `vmodel://` scheme is what tells the transport pool to use `vmodelDial`;
 the host part selects the protocol root (mirrors today's `/virtual/openai` and
 `/virtual/anthropic` split so `/models` returns only dispatchable IDs). Before
 the SDK sees it the client constructor rewrites the URL to
-`http://vmodel.internal/<host>/v1` (`virtualserver.HTTPBase`), so the SDKs
+`http://vmodel.internal/<host>/v1` (`vmodelclient.HTTPBase`), so the SDKs
 receive an ordinary http base URL; the transport's dialer ignores the
 placeholder host and connects to the listener. Nothing else about the provider row changes:
 `AuthType = vmodel`, `VModelDetail.Models`, builtin seeding and the UI stay as
@@ -131,8 +131,10 @@ today; they are unchanged by this design.
 
 ## What gets deleted
 
-- `vmodel/client/` — the whole package (`openai.go`, `anthropic.go`,
-  `inject.go`, tests). Its job is now done by the real SDKs.
+- The old `vmodel/client/` contents (`openai.go`, `anthropic.go`,
+  `inject.go`, tests): hand-written SDK-interface implementations. The package
+  now holds only the client side of the HTTP path (scheme, base URL,
+  transport); the protocol work is done by the real SDKs.
 - `ClientPool.SetVirtualClients` and the two `IsVirtual()` branches in
   `GetOpenAIClient` / `GetAnthropicClient`.
 - The `vmodel-internal` dummy provider in `internal/server/server.go`.
@@ -151,18 +153,21 @@ provider is virtual. Only the *dispatch* special case goes away.
 ```
 internal/server/server.go (NewServer)
   virtualModelService = virtualserver.NewService()          // unchanged
-  vmodelServer = virtualserver.Serve(virtualModelService)   // private in-memory listener,
-                                                            // becomes the Transport() target
+  vmodelServer = virtualserver.Serve(virtualModelService)   // server side: private in-memory listener
+  vmodelclient.Connect(vmodelServer.DialContext)            // client side: Transport() now dials it
   virtualModelService.EnsureBuiltinProviders(store)         // seeds vmodel://openai|anthropic
-  (Server.Stop closes vmodelServer)
+  (Server.Stop disconnects and closes vmodelServer)
 
-vmodel/virtualserver                                        // everything vmodel-specific
-  apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
+vmodel/virtualserver                                        // server side
   listener.go  memListener (net.Pipe-backed net.Listener)
-  serve.go     Serve, Server.Close, Transport()              (fails fast when nothing is serving)
+  serve.go     Serve, Server.DialContext, Server.Close
 
-internal/client/openai.go / anthropic.go
-  if virtualserver.IsAPIBase(provider.APIBase) { base URL = HTTPBase(...); base transport = Transport() }
+vmodel/client                                               // client side
+  apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
+  transport.go Connect(dialer), Transport()                  (fails fast when not connected)
+
+internal/client/openai.go / anthropic.go                    // wrap vmodel/client
+  if vmodelclient.IsAPIBase(provider.APIBase) { base URL = HTTPBase(...); base transport = Transport() }
   nothing else in the chain (rule flags, advisor loopback, logging, timeout) changed
 ```
 

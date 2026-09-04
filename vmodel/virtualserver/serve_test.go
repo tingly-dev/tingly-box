@@ -22,7 +22,7 @@ func newServed(t *testing.T) (*Server, *http.Client) {
 	t.Helper()
 	srv := Serve(NewService())
 	t.Cleanup(func() { _ = srv.Close() })
-	return srv, &http.Client{Transport: Transport()}
+	return srv, &http.Client{Transport: &http.Transport{DialContext: srv.DialContext}}
 }
 
 func TestServe_OpenAI_NonStreaming(t *testing.T) {
@@ -170,12 +170,6 @@ func TestServe_CloseUnblocksDial(t *testing.T) {
 	require.NoError(t, srv.Close())
 	_, err := srv.DialContext(context.Background(), "tcp", "vmodel.internal:80")
 	require.Error(t, err)
-
-	// After Close nothing is serving: Transport must fail fast, not resolve the
-	// placeholder host.
-	req, _ := http.NewRequest(http.MethodGet, "http://vmodel.internal/openai/v1/models", nil)
-	_, err = Transport().RoundTrip(req)
-	require.ErrorIs(t, err, errNotServing)
 }
 
 func TestMemListener_DialHonoursContext(t *testing.T) {

@@ -4,11 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"log"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
@@ -21,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/network"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -337,6 +339,7 @@ func (s *Server) Stop(ctx context.Context) error {
 	// Stop the private virtual-model server; its listener is in-memory so
 	// there is nothing on the host to clean up beyond the goroutines.
 	if s.vmodelServer != nil {
+		vmodelclient.Connect(nil)
 		if err := s.vmodelServer.Close(); err != nil {
 			logrus.WithError(err).Debug("vmodel server shutdown")
 		}

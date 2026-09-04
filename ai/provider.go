@@ -57,7 +57,7 @@ const (
 // VModelDetail contains virtual-model provider configuration. A vmodel
 // provider is dispatched like any other provider — official SDK, standard
 // transport chain — with APIBase "vmodel://<protocol>" dialed by the client
-// layer to the private in-process virtualserver listener (see
+// layer to the private in-process virtualserver listener (see vmodel/client,
 // vmodel/virtualserver and .design/vmodel-transport.md). Models lists the protocol-specific model IDs
 // enabled on this provider; an empty list means "all defaults registered for
 // the matching protocol".

@@ -2,10 +2,8 @@ package virtualserver
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,24 +16,17 @@ import (
 //	/anthropic/v1/{models,messages}
 //
 // on a private in-memory listener. There is no auth middleware: the listener
-// is reachable only through Transport, which is the trust boundary (the same
-// one the previous in-process function call had).
+// is reachable only through DialContext, which is the trust boundary (the same
+// one the previous in-process function call had). Clients reach it via
+// vmodel/client: vmodelclient.Connect(srv.DialContext).
 type Server struct {
-	svc       *Service
-	listener  *memListener
-	http      *http.Server
-	transport *http.Transport
+	svc      *Service
+	listener *memListener
+	http     *http.Server
 }
 
-// current is the Server the client layer dials for vmodel:// providers — the
-// most recent Serve call. Cleared again by that Server's Close.
-var current atomic.Pointer[Server]
-
-var errNotServing = errors.New("vmodel: virtual-model server is not running in this process")
-
-// Serve starts an HTTP server for svc on a fresh in-memory listener and makes
-// it the target of Transport. It returns immediately; the server runs until
-// Close.
+// Serve starts an HTTP server for svc on a fresh in-memory listener. It
+// returns immediately; the server runs until Close.
 func Serve(svc *Service) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -44,18 +35,8 @@ func Serve(svc *Service) *Server {
 	svc.SetupAnthropicRoutes(router.Group("/anthropic"))
 
 	ln := newMemListener()
-	s := &Server{
-		svc:      svc,
-		listener: ln,
-		http:     &http.Server{Handler: router},
-	}
-	s.transport = &http.Transport{
-		DialContext:         ln.Dial,
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
-	}
+	s := &Server{svc: svc, listener: ln, http: &http.Server{Handler: router}}
 	go func() { _ = s.http.Serve(ln) }()
-	current.Store(s)
 	return s
 }
 
@@ -68,29 +49,9 @@ func (s *Server) DialContext(ctx context.Context, network, addr string) (net.Con
 }
 
 // Close stops accepting connections and shuts the server down with a short
-// grace period. If this server is the current Transport target, Transport
-// falls back to failing fast.
+// grace period.
 func (s *Server) Close() error {
-	current.CompareAndSwap(s, nil)
-	s.transport.CloseIdleConnections()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	return s.http.Shutdown(ctx)
-}
-
-// Transport returns the RoundTripper the client layer uses as the base of a
-// vmodel provider's transport chain. It dials the current Server; with no
-// Server running every request fails with a clear error instead of leaking a
-// DNS lookup for the placeholder host.
-func Transport() http.RoundTripper {
-	if s := current.Load(); s != nil {
-		return s.transport
-	}
-	return notServingTransport{}
-}
-
-type notServingTransport struct{}
-
-func (notServingTransport) RoundTrip(*http.Request) (*http.Response, error) {
-	return nil, &net.OpError{Op: "dial", Net: Scheme, Err: errNotServing}
 }

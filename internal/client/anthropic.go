@@ -13,7 +13,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -54,8 +54,8 @@ type AnthropicClient struct {
 func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
 	apiBase := provider.APIBase
-	if virtualserver.IsAPIBase(apiBase) {
-		apiBase = virtualserver.HTTPBase(apiBase, provider.APIStyle)
+	if vmodelclient.IsAPIBase(apiBase) {
+		apiBase = vmodelclient.HTTPBase(apiBase, provider.APIStyle)
 	}
 	apiBase = strings.TrimRight(apiBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
@@ -138,9 +138,9 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 // vertexAnthropicOptions).
 func anthropicTransport(provider *typ.Provider, model string, sessionID typ.SessionID) http.RoundTripper {
 	var base http.RoundTripper = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	if virtualserver.IsAPIBase(provider.APIBase) {
+	if vmodelclient.IsAPIBase(provider.APIBase) {
 		// vmodel provider: same chain, but dial the in-process virtualserver.
-		base = virtualserver.Transport()
+		base = vmodelclient.Transport()
 	}
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }

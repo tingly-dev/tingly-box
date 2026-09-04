@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
@@ -219,14 +220,14 @@ func (env *TestEnv) SetupVModelFailoverRoute(
 	// APIBase (dialed through the gateway's private virtualserver listener),
 	// AuthType=vmodel, and a VModelDetail advertising the served model.
 	if err := env.appConfig.AddProvider(&typ.Provider{
-		UUID: primaryUUID, Name: primaryUUID, APIBase: virtualserver.APIBase(primaryStyle), APIStyle: primaryStyle,
+		UUID: primaryUUID, Name: primaryUUID, APIBase: vmodelclient.APIBase(primaryStyle), APIStyle: primaryStyle,
 		AuthType: typ.AuthTypeVirtual, Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
 		VModelDetail: &typ.VModelDetail{Models: []string{primaryFailModel}},
 	}); err != nil {
 		t.Fatalf("add primary vmodel provider: %v", err)
 	}
 	if err := env.appConfig.AddProvider(&typ.Provider{
-		UUID: fallbackUUID, Name: fallbackUUID, APIBase: virtualserver.APIBase(fallbackStyle), APIStyle: fallbackStyle,
+		UUID: fallbackUUID, Name: fallbackUUID, APIBase: vmodelclient.APIBase(fallbackStyle), APIStyle: fallbackStyle,
 		AuthType: typ.AuthTypeVirtual, Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
 		VModelDetail: &typ.VModelDetail{Models: []string{fallbackModel}},
 	}); err != nil {

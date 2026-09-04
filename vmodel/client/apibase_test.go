@@ -1,4 +1,4 @@
-package virtualserver
+package vmodelclient
 
 import (
 	"testing"

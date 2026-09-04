@@ -44,6 +44,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -435,6 +436,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// layer dials it for vmodel:// providers, so they travel the same SDK +
 	// transport chain as real upstreams (.design/vmodel-transport.md).
 	server.vmodelServer = virtualserver.Serve(server.virtualModelService)
+	vmodelclient.Connect(server.vmodelServer.DialContext)
 
 	// Seed builtin virtual-model providers (idempotent). These become first-class
 	// rows in the provider store so they show up in the standard UI and dispatch

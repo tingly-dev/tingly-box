@@ -96,10 +96,11 @@ Provider {
 | `vmodel://openai` | `http://vmodel.internal/openai/v1` | `/models`, `/chat/completions`, `/responses` |
 | `vmodel://anthropic` | `http://vmodel.internal/anthropic/v1` | `/models`, `/messages` |
 
-`virtualserver.APIBase`, `virtualserver.IsAPIBase` and `virtualserver.HTTPBase`
-are the helpers — everything vmodel-specific lives in `vmodel/virtualserver`.
-`vmodel.internal` never resolves on any network; the transport's dialer
-ignores it and connects to the listener directly. Rows that
+`vmodel/client` (`vmodelclient.APIBase`, `IsAPIBase`, `HTTPBase`,
+`Transport`) is the client side of the virtual server; `internal/client`
+wraps it, `vmodel/virtualserver` is the server side. `vmodel.internal` never
+resolves on any network; the transport's dialer ignores it and connects to
+the listener directly. Rows that
 still carry the legacy `vmodel://local` sentinel fall back to the provider's
 `APIStyle` and are rewritten by the builtin seed on the next start.
 
@@ -118,9 +119,10 @@ credentials; the sentinel never reaches a network upstream.
    usual.
 2. `ClientPool` builds the ordinary SDK client for the provider. Because
    `APIBase` is `vmodel://…`, the constructor rewrites the base URL with
-   `virtualserver.HTTPBase` and uses `virtualserver.Transport()` as the base of
+   `vmodelclient.HTTPBase` and uses `vmodelclient.Transport()` as the base of
    the otherwise unchanged transport chain. `server.NewServer` started the
-   target with `virtualserver.Serve`.
+   server with `virtualserver.Serve` and connected the client side with
+   `vmodelclient.Connect`.
 3. The request travels as real HTTP — status codes, headers, SSE framing —
    to the virtualserver, which looks the model up in its per-protocol
    registry and streams a response.

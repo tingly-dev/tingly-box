@@ -18,7 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
-	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 )
 
 // OpenAIClientInterface defines the contract for OpenAI-compatible clients.
@@ -54,8 +54,8 @@ type OpenAIClient struct {
 // NewOpenAIClient creates a new OpenAI client wrapper
 func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
 	apiBase := provider.APIBase
-	if virtualserver.IsAPIBase(apiBase) {
-		apiBase = virtualserver.HTTPBase(apiBase, provider.APIStyle)
+	if vmodelclient.IsAPIBase(apiBase) {
+		apiBase = vmodelclient.HTTPBase(apiBase, provider.APIStyle)
 	}
 	options := []option.RequestOption{
 		option.WithBaseURL(apiBase),
@@ -80,9 +80,9 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 	// proxy is explicitly configured for the provider.
 	var base http.RoundTripper = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	if virtualserver.IsAPIBase(provider.APIBase) {
+	if vmodelclient.IsAPIBase(provider.APIBase) {
 		// vmodel provider: same chain, but dial the in-process virtualserver.
-		base = virtualserver.Transport()
+		base = vmodelclient.Transport()
 	}
 	transport = wrapWithRuleFlags(base, provider, true)
 	transport = wrapWithAdvisorLoopback(transport)

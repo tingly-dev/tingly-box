@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -659,10 +660,12 @@ func TestSetTransportConfig_ClearsPoolOnRespectEnvProxyChange(t *testing.T) {
 func TestClientPool_VModelProvider_DialsVirtualserver(t *testing.T) {
 	srv := virtualserver.Serve(virtualserver.NewService())
 	defer srv.Close()
+	vmodelclient.Connect(srv.DialContext)
+	defer vmodelclient.Connect(nil)
 
 	provider := &typ.Provider{
 		UUID: "vm-openai", Name: "vm-openai",
-		APIBase:  virtualserver.APIBase(protocol.APIStyleOpenAI),
+		APIBase:  vmodelclient.APIBase(protocol.APIStyleOpenAI),
 		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeVirtual,
 		Enabled:  true,

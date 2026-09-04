@@ -1,4 +1,11 @@
-package virtualserver
+// Package vmodelclient is the client side of the virtual-model server: how a
+// provider record names it (the vmodel:// APIBase scheme), how that address is
+// turned into a URL an SDK accepts, and the http.RoundTripper that reaches the
+// private in-process listener. The gateway's internal/client wraps these
+// pieces so a vmodel provider runs through the same SDK + transport chain as a
+// real upstream. Server side: vmodel/virtualserver. Design:
+// .design/vmodel-transport.md.
+package vmodelclient
 
 import (
 	"net/url"
@@ -8,19 +15,14 @@ import (
 )
 
 // Scheme is the URL scheme of a virtual-model provider's APIBase. The host
-// names the protocol root served by Server:
+// names the protocol root served by virtualserver.Server:
 //
 //	vmodel://openai     → /openai/v1/{models,chat/completions,responses}
 //	vmodel://anthropic  → /anthropic/v1/{models,messages}
-//
-// A provider with such an APIBase is dispatched like any other provider
-// (official SDK, standard transport chain); only the dialer differs, see
-// Transport. See .design/vmodel-transport.md.
 const Scheme = "vmodel"
 
 // Host is the placeholder host the SDKs are pointed at. It never resolves on
-// any network; Server's dialer ignores it and connects to the in-memory
-// listener directly.
+// any network; Transport ignores it and dials the in-memory listener directly.
 const Host = "vmodel.internal"
 
 // APIBase returns the canonical APIBase for a vmodel provider serving style.
