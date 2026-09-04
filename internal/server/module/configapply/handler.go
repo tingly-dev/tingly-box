@@ -75,7 +75,7 @@ func (h *Handler) GetClaudeCodeEnv(c *gin.Context) {
 	client := tbclient.NewTBClient(h.config)
 	env, err := client.GetClaudeCodeEnv(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, ClaudeCodeEnvResponse{Success: false, Error: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, ClaudeCodeEnvResponse{Success: true, Env: env})

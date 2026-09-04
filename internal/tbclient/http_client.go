@@ -1,6 +1,8 @@
 package tbclient
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +10,9 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
+
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -30,8 +35,23 @@ func NewHTTPTBClient(baseURL, userToken, modelToken string) *HTTPTBClient {
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		userToken:  userToken,
 		modelToken: modelToken,
-		httpClient: http.DefaultClient,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// apiResponse is the common envelope for management API responses that carry
+// only success/error/message (rule CRUD, etc.).
+type apiResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error"`
+}
+
+func (r apiResponse) err(prefix string) error {
+	if r.Success {
+		return nil
+	}
+	return fmt.Errorf("%s: %s", prefix, cmp.Or(r.Error, r.Message, "unknown error"))
 }
 
 func (c *HTTPTBClient) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
@@ -40,7 +60,7 @@ func (c *HTTPTBClient) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 		Env     []string `json:"env"`
 		Error   string   `json:"error"`
 	}
-	if err := c.getJSON(ctx, "/api/v1/config/claude/env", &resp); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/config/claude/env", nil, &resp); err != nil {
 		return nil, fmt.Errorf("get claude code env: %w", err)
 	}
 	if !resp.Success {
@@ -62,7 +82,7 @@ func (c *HTTPTBClient) GetClaudeCodeSettingsPathForProfile(ctx context.Context, 
 		Error string `json:"error"`
 	}
 	path := fmt.Sprintf("/api/v1/scenario/claude_code/profiles/%s/claude-config", profileID)
-	if err := c.getJSON(ctx, path, &resp); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
 		return "", fmt.Errorf("get profile claude config: %w", err)
 	}
 	if !resp.Success {
@@ -83,7 +103,7 @@ func (c *HTTPTBClient) GetHTTPEndpointForScenario(_ context.Context, scenario ty
 }
 
 func (c *HTTPTBClient) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
-	ruleUUID := SmartGuideRuleUUID(botUUID)
+	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
 
 	displayName := botName
 	if displayName == "" {
@@ -113,44 +133,22 @@ func (c *HTTPTBClient) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, 
 	}
 
 	path := fmt.Sprintf("/api/v1/rule/%s", ruleUUID)
-	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-		Error   string `json:"error"`
-	}
-	if err := c.postJSON(ctx, path, body, &resp); err != nil {
+	var resp apiResponse
+	if err := c.doJSON(ctx, http.MethodPost, path, body, &resp); err != nil {
 		return fmt.Errorf("ensure smart guide rule: %w", err)
 	}
-	if !resp.Success {
-		msg := resp.Message
-		if resp.Error != "" {
-			msg = resp.Error
-		}
-		return fmt.Errorf("ensure smart guide rule: %s", msg)
-	}
-	return nil
+	return resp.err("ensure smart guide rule")
 }
 
 func (c *HTTPTBClient) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	ruleUUID := SmartGuideRuleUUID(botUUID)
+	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
 	path := fmt.Sprintf("/api/v1/rule/%s", ruleUUID)
 
-	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-		Error   string `json:"error"`
-	}
-	if err := c.deleteJSON(ctx, path, &resp); err != nil {
+	var resp apiResponse
+	if err := c.doJSON(ctx, http.MethodDelete, path, nil, &resp); err != nil {
 		return fmt.Errorf("delete smart guide rule: %w", err)
 	}
-	if !resp.Success {
-		msg := resp.Message
-		if resp.Error != "" {
-			msg = resp.Error
-		}
-		return fmt.Errorf("delete smart guide rule: %s", msg)
-	}
-	return nil
+	return resp.err("delete smart guide rule")
 }
 
 func (c *HTTPTBClient) GetDataDir() string {
@@ -160,7 +158,7 @@ func (c *HTTPTBClient) GetDataDir() string {
 			ConfigDir string `json:"config_dir"`
 		} `json:"data"`
 	}
-	if err := c.getJSON(context.Background(), "/api/v1/info/config", &resp); err != nil || !resp.Success {
+	if err := c.doJSON(context.Background(), http.MethodGet, "/api/v1/info/config", nil, &resp); err != nil || !resp.Success {
 		return filepath.Join(".", "data")
 	}
 	if resp.Data.ConfigDir == "" {
@@ -173,11 +171,18 @@ func (c *HTTPTBClient) GetDataDir() string {
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-func (c *HTTPTBClient) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+// doJSON executes an HTTP request and JSON-decodes the response into out.
+// Pass nil body for bodyless requests (GET, DELETE).
+func (c *HTTPTBClient) doJSON(ctx context.Context, method, path string, body []byte, out any) error {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
 	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if c.userToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.userToken)
@@ -185,41 +190,13 @@ func (c *HTTPTBClient) doRequest(ctx context.Context, method, path string, body 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.httpClient.Do(req)
-}
 
-func (c *HTTPTBClient) getJSON(ctx context.Context, path string, out any) error {
-	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
 
-func (c *HTTPTBClient) postJSON(ctx context.Context, path string, body []byte, out any) error {
-	resp, err := c.doRequest(ctx, http.MethodPost, path, strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func (c *HTTPTBClient) deleteJSON(ctx context.Context, path string, out any) error {
-	resp, err := c.doRequest(ctx, http.MethodDelete, path, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))

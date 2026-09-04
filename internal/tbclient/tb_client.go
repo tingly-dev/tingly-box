@@ -11,14 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// SmartGuideRuleUUIDPrefix is the prefix for internal SmartGuide rules.
-const SmartGuideRuleUUIDPrefix = "_internal_smart_guide_"
-
-// SmartGuideRuleUUID generates the deterministic rule UUID for a specific bot.
-func SmartGuideRuleUUID(botUUID string) string {
-	return SmartGuideRuleUUIDPrefix + botUUID
-}
-
 // TBClient defines the interface for remote control interactions with the
 // tingly-box server. Both an in-memory implementation (TBClientImpl, for
 // in-process use) and an HTTP implementation (HTTPTBClient, for
@@ -154,7 +146,7 @@ func (c *TBClientImpl) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, 
 
 // DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot.
 func (c *TBClientImpl) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	ruleUUID := SmartGuideRuleUUID(botUUID)
+	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
 	return c.config.DeleteRule(ruleUUID)
 }
 

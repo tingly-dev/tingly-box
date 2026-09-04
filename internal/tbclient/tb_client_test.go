@@ -60,7 +60,7 @@ func TestHTTPTBClient_EmptyProfileID(t *testing.T) {
 }
 
 func TestSmartGuideRuleUUID(t *testing.T) {
-	uuid := SmartGuideRuleUUID("bot-123")
+	uuid := serverconfig.SmartGuideRuleUUID("bot-123")
 	assert.Equal(t, "_internal_smart_guide_bot-123", uuid)
 }
 

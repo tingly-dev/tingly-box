@@ -36,7 +36,8 @@ type ApplyConfigResponse struct {
 // for the Claude Code CLI (ANTHROPIC_BASE_URL, model tiers, etc.).
 type ClaudeCodeEnvResponse struct {
 	Success bool     `json:"success"`
-	Env     []string `json:"env"`
+	Env     []string `json:"env,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // ClaudeConfigResponse returns the typed values currently persisted in the
