@@ -97,7 +97,7 @@ Provider {
 | `vmodel://anthropic` | `http://vmodel.internal/anthropic/v1` | `/models`, `/messages` |
 
 `vmodel/client` (`vmodelclient.APIBase`, `IsAPIBase`, `HTTPBase`,
-`Transport`) is the client side of the virtual server; `internal/client`
+`NewTransport`) is the client side of the virtual server; `internal/client`
 wraps it, `vmodel/virtualserver` is the server side. `vmodel.internal` never
 resolves on any network; the transport's dialer ignores it and connects to
 the listener directly. Rows that
@@ -122,9 +122,9 @@ credentials; the sentinel never reaches a network upstream.
    `NewVModelOpenAIClient` / `NewVModelAnthropicClient`
    (`internal/client/vmodel_client.go`). Each layers `vmodel/client` on the
    generic SDK client — base URL from `vmodelclient.HTTPBase`, transport chain
-   over `vmodelclient.Transport()` — the way `NewAzureClient` layers the azure
+   over the pool's vmodel transport — the way `NewAzureClient` layers the azure
    adapter. `server.NewServer` started the server with `virtualserver.Serve`
-   and connected the client side with `vmodelclient.Connect`.
+   and gave its `ClientPool` `vmodelclient.NewTransport(srv.DialContext)`.
 3. The request travels as real HTTP — status codes, headers, SSE framing —
    to the virtualserver, which looks the model up in its per-protocol
    registry and streams a response.

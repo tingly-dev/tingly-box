@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"net/http"
 	"runtime"
 
 	"github.com/sirupsen/logrus"
@@ -21,7 +22,18 @@ import (
 // ProxyURL is used to configure the transport but is NOT part of the key.
 //
 // Clients are automatically cleaned up via finalizers when garbage collected.
-type ClientPool struct{}
+type ClientPool struct {
+	// vmodelTransport dials this process's virtualserver; set once by the
+	// server that owns it (SetVModelTransport). Virtual providers cannot be
+	// served until it is set.
+	vmodelTransport http.RoundTripper
+}
+
+// SetVModelTransport installs the transport virtual-model providers are
+// dispatched over (vmodelclient.NewTransport over the server's listener).
+func (p *ClientPool) SetVModelTransport(rt http.RoundTripper) {
+	p.vmodelTransport = rt
+}
 
 // NewClientPool creates a new ClientPool with default settings.
 func NewClientPool() *ClientPool {
@@ -62,7 +74,11 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 	} else if provider.IsVirtual() {
 		// Virtual-model provider: generic OpenAI client over the in-process
 		// virtualserver (vmodel/client), same chain as a real upstream.
-		client, err = NewVModelOpenAIClient(provider, model, sessionID)
+		if p.vmodelTransport == nil {
+			logrus.WithContext(ctx).Errorf("No virtual-model transport configured; cannot serve vmodel provider %s", provider.Name)
+			return nil
+		}
+		client, err = NewVModelOpenAIClient(provider, p.vmodelTransport)
 		if err != nil {
 			logrus.WithContext(ctx).Errorf("Failed to create vmodel client for provider %s: %v", provider.Name, err)
 			return nil
@@ -117,7 +133,11 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	case provider.IsVirtual():
 		// Virtual-model provider: generic Anthropic client over the in-process
 		// virtualserver (vmodel/client), same chain as a real upstream.
-		client, err = NewVModelAnthropicClient(provider, model, sessionID)
+		if p.vmodelTransport == nil {
+			logrus.WithContext(ctx).Errorf("No virtual-model transport configured; cannot serve vmodel provider %s", provider.Name)
+			return nil
+		}
+		client, err = NewVModelAnthropicClient(provider, p.vmodelTransport)
 	case provider.AuthType == typ.AuthTypeGCPVertex:
 		// Claude on GCP Vertex AI (service-account OAuth2).
 		client, err = NewVertexAnthropicClient(provider, model, sessionID)

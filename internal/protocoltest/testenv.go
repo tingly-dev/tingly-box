@@ -37,6 +37,7 @@ import (
 // native APIs (/v1/chat/completions, /v1/messages, etc.).
 type TestEnv struct {
 	appConfig     *config.AppConfig
+	gateway       *server.Server   // the gateway instance behind gatewayServer
 	gatewayServer *httptest.Server // real HTTP server; every request traverses it
 	virtual       *VirtualServer
 	modelToken    string
@@ -134,6 +135,7 @@ func preseedEnterpriseContextKeys(configDir string) error {
 type gatewayCore struct {
 	configDir  string
 	appConfig  *config.AppConfig
+	server     *server.Server
 	gateway    *httptest.Server
 	virtual    *VirtualServer
 	modelToken string
@@ -172,6 +174,7 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 	return &gatewayCore{
 		configDir:  configDir,
 		appConfig:  appConfig,
+		server:     gatewayServer,
 		gateway:    ts,
 		virtual:    NewVirtualServerForCLI(),
 		modelToken: appConfig.GetGlobalConfig().GetModelToken(),
@@ -209,6 +212,11 @@ func (env *TestEnv) Close() {
 	if env.gatewayServer != nil {
 		env.gatewayServer.Close()
 	}
+	if env.gateway != nil {
+		// NewServer starts the private virtual-model server; without this the
+		// serving goroutine would outlive every env in the process.
+		env.gateway.CloseVirtualModelServer()
+	}
 	if env.virtual != nil {
 		env.virtual.Close()
 	}
@@ -244,6 +252,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 
 	return &TestEnv{
 		appConfig:     core.appConfig,
+		gateway:       core.server,
 		gatewayServer: core.gateway,
 		virtual:       core.virtual,
 		modelToken:    core.modelToken,

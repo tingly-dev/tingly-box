@@ -22,7 +22,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/network"
-	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -169,6 +168,20 @@ func (s *Server) GetRouter() *gin.Engine {
 // GetLoadBalancer returns the load balancer instance
 func (s *Server) GetLoadBalancer() *protocolserver.LoadBalancer {
 	return s.loadBalancer
+}
+
+// CloseVirtualModelServer stops the private virtual-model HTTP server started
+// by NewServer. Stop calls it; test harnesses that build a Server without
+// Start must call it themselves so the serving goroutine does not outlive the
+// test. Safe to call more than once.
+func (s *Server) CloseVirtualModelServer() {
+	if s.vmodelServer == nil {
+		return
+	}
+	if err := s.vmodelServer.Close(); err != nil {
+		logrus.WithError(err).Debug("vmodel server shutdown")
+	}
+	s.vmodelServer = nil
 }
 
 // GetVirtualModelService returns the in-process virtual-model service, so
@@ -336,14 +349,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
-	// Stop the private virtual-model server; its listener is in-memory so
-	// there is nothing on the host to clean up beyond the goroutines.
-	if s.vmodelServer != nil {
-		vmodelclient.Connect(nil)
-		if err := s.vmodelServer.Close(); err != nil {
-			logrus.WithError(err).Debug("vmodel server shutdown")
-		}
-	}
+	s.CloseVirtualModelServer()
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)

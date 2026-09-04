@@ -432,11 +432,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.virtualModelService = virtualserver.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
 
-	// Serve the virtual models on a private in-memory listener; the client
-	// layer dials it for vmodel:// providers, so they travel the same SDK +
-	// transport chain as real upstreams (.design/vmodel-transport.md).
+	// Serve the virtual models on a private in-memory listener and hand this
+	// server's ClientPool the transport that dials it, so vmodel providers
+	// travel the same SDK + transport chain as real upstreams
+	// (.design/vmodel-transport.md).
 	server.vmodelServer = virtualserver.Serve(server.virtualModelService)
-	vmodelclient.Connect(server.vmodelServer.DialContext)
+	server.clientPool.SetVModelTransport(vmodelclient.NewTransport(server.vmodelServer.DialContext))
 
 	// Seed builtin virtual-model providers (idempotent). These become first-class
 	// rows in the provider store so they show up in the standard UI and dispatch

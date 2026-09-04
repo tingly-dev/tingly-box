@@ -15,27 +15,17 @@ import (
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
-func TestTransport_NotConnectedFailsFast(t *testing.T) {
-	vmodelclient.Connect(nil)
-	req, _ := http.NewRequest(http.MethodGet, "http://vmodel.internal/openai/v1/models", nil)
-	_, err := vmodelclient.Transport().RoundTrip(req)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no virtual-model server connected")
-}
-
-// The OpenAI SDK pointed at HTTPBase over Transport must reach the server and
-// see injected statuses as real HTTP errors.
-func TestTransport_SDKRoundTrip(t *testing.T) {
+// The OpenAI SDK pointed at HTTPBase over NewTransport must reach the server
+// and see injected statuses as real HTTP errors.
+func TestNewTransport_SDKRoundTrip(t *testing.T) {
 	srv := virtualserver.Serve(virtualserver.NewService())
 	defer srv.Close()
-	vmodelclient.Connect(srv.DialContext)
-	defer vmodelclient.Connect(nil)
 
 	apiBase := vmodelclient.APIBase(protocol.APIStyleOpenAI)
 	client := openai.NewClient(
 		openaiopt.WithBaseURL(vmodelclient.HTTPBase(apiBase, protocol.APIStyleOpenAI)),
 		openaiopt.WithAPIKey("EMPTY"),
-		openaiopt.WithHTTPClient(&http.Client{Transport: vmodelclient.Transport()}),
+		openaiopt.WithHTTPClient(&http.Client{Transport: vmodelclient.NewTransport(srv.DialContext)}),
 		openaiopt.WithMaxRetries(0),
 	)
 	resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{

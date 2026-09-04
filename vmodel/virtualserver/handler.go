@@ -38,11 +38,6 @@ func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry
 	return &Handler{anthropicReg: anthropicReg, openaiReg: openaiReg}
 }
 
-// ListModels handles GET /virtual/v1/models — returns the union of both registries.
-//
-// Deprecated: prefer ListOpenAIModels / ListAnthropicModels for the
-// protocol-split entrypoints. Retained for the legacy mixed-protocol route
-// and for test fixtures that want both registries on one endpoint.
 // NotSupported answers 501 for endpoints the virtual models do not simulate
 // (embeddings, images, count_tokens). The body follows the OpenAI/Anthropic
 // error envelope shape so SDK clients surface a clean API error.
@@ -56,6 +51,11 @@ func (h *Handler) NotSupported(c *gin.Context) {
 	})
 }
 
+// ListModels handles GET /virtual/v1/models — returns the union of both registries.
+//
+// Deprecated: prefer ListOpenAIModels / ListAnthropicModels for the
+// protocol-split entrypoints. Retained for the legacy mixed-protocol route
+// and for test fixtures that want both registries on one endpoint.
 func (h *Handler) ListModels(c *gin.Context) {
 	models := h.anthropicReg.ListModels()
 	models = append(models, h.openaiReg.ListModels()...)

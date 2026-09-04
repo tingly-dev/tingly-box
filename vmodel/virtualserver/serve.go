@@ -17,8 +17,8 @@ import (
 //
 // on a private in-memory listener. There is no auth middleware: the listener
 // is reachable only through DialContext, which is the trust boundary (the same
-// one the previous in-process function call had). Clients reach it via
-// vmodel/client: vmodelclient.Connect(srv.DialContext).
+// one the previous in-process function call had). Clients reach it through
+// vmodelclient.NewTransport(srv.DialContext).
 type Server struct {
 	svc      *Service
 	listener *memListener
@@ -28,7 +28,7 @@ type Server struct {
 // Serve starts an HTTP server for svc on a fresh in-memory listener. It
 // returns immediately; the server runs until Close.
 func Serve(svc *Service) *Server {
-	gin.SetMode(gin.ReleaseMode)
+	// gin mode is process-global and owned by the host; do not touch it here.
 	router := gin.New()
 	router.Use(gin.Recovery())
 	svc.SetupOpenAIRoutes(router.Group("/openai"))

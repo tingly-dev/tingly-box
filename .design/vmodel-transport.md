@@ -155,9 +155,9 @@ provider is virtual. Only the *dispatch* special case goes away.
 internal/server/server.go (NewServer)
   virtualModelService = virtualserver.NewService()          // unchanged
   vmodelServer = virtualserver.Serve(virtualModelService)   // server side: private in-memory listener
-  vmodelclient.Connect(vmodelServer.DialContext)            // client side: Transport() now dials it
+  clientPool.SetVModelTransport(vmodelclient.NewTransport(vmodelServer.DialContext))
   virtualModelService.EnsureBuiltinProviders(store)         // seeds vmodel://openai|anthropic
-  (Server.Stop disconnects and closes vmodelServer)
+  (Server.Stop / CloseVirtualModelServer closes vmodelServer; protocoltest.TestEnv.Close calls the latter)
 
 vmodel/virtualserver                                        // server side
   listener.go  memListener (net.Pipe-backed net.Listener)
@@ -165,7 +165,7 @@ vmodel/virtualserver                                        // server side
 
 vmodel/client                                               // client side
   apibase.go   Scheme, APIBase(style), IsAPIBase, HTTPBase   (vmodel://openai → http://vmodel.internal/openai/v1)
-  transport.go Connect(dialer), Transport()                  (fails fast when not connected)
+  transport.go NewTransport(dialer)                          (per-server, no process global)
 
 internal/client/pool.go                                     // dispatch, like Codex / Azure / Bedrock
   provider.IsVirtual() → NewVModelOpenAIClient / NewVModelAnthropicClient
