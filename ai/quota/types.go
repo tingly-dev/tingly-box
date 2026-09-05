@@ -264,7 +264,7 @@ type Config struct {
 	RefreshInterval time.Duration                  `json:"refresh_interval"` // background refresh interval (default 5 minutes)
 	CacheTTL        time.Duration                  `json:"cache_ttl"`        // stored-data validity period (default 20 minutes; keep > RefreshInterval so data survives missed ticks)
 	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
-	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
+	MaxRetries      int                            `json:"max_retries"`      // maximum retries after the initial request
 	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
 }
 
@@ -275,7 +275,7 @@ func DefaultConfig() *Config {
 		RefreshInterval: 5 * time.Minute,
 		CacheTTL:        20 * time.Minute,
 		RetryOnFailure:  true,
-		MaxRetries:      3,
+		MaxRetries:      2,
 		Providers:       make(map[string]ProviderUsageConfig),
 	}
 }

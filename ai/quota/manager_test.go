@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -180,18 +182,336 @@ func TestUnreadableProvidersReportWhyAndNothingElse(t *testing.T) {
 // recordingStore reports what a fetch attempt left behind.
 type recordingStore struct {
 	managerTestStore
+	current *ProviderUsage
+	getErr  error
 	saved   []*ProviderUsage
 	deleted []string
 }
 
 func (s *recordingStore) Save(_ context.Context, usage *ProviderUsage) error {
 	s.saved = append(s.saved, usage)
+	s.current = usage
 	return nil
+}
+
+func (s *recordingStore) Get(_ context.Context, _ string) (*ProviderUsage, error) {
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+	if s.current == nil {
+		return nil, ErrUsageNotFound
+	}
+	return s.current, nil
 }
 
 func (s *recordingStore) Delete(_ context.Context, uuid string) error {
 	s.deleted = append(s.deleted, uuid)
 	return nil
+}
+
+type sequenceFetcher struct {
+	errs  []error
+	usage *ProviderUsage
+	calls int
+}
+
+func (*sequenceFetcher) Name() string                 { return "sequence-test" }
+func (*sequenceFetcher) ProviderType() ProviderType   { return ProviderTypeCodex }
+func (*sequenceFetcher) Validate(*typ.Provider) error { return nil }
+func (*sequenceFetcher) RequiresAuth() typ.AuthType   { return typ.AuthTypeOAuth }
+func (f *sequenceFetcher) Fetch(context.Context, *typ.Provider) (*ProviderUsage, error) {
+	f.calls++
+	if f.calls <= len(f.errs) {
+		return nil, f.errs[f.calls-1]
+	}
+	return f.usage, nil
+}
+
+type cancelingFetcher struct {
+	cancel context.CancelFunc
+}
+
+func (*cancelingFetcher) Name() string                 { return "canceling-test" }
+func (*cancelingFetcher) ProviderType() ProviderType   { return ProviderTypeCodex }
+func (*cancelingFetcher) Validate(*typ.Provider) error { return nil }
+func (*cancelingFetcher) RequiresAuth() typ.AuthType   { return typ.AuthTypeOAuth }
+func (f *cancelingFetcher) Fetch(context.Context, *typ.Provider) (*ProviderUsage, error) {
+	f.cancel()
+	return nil, context.Canceled
+}
+
+type serializedFetcher struct {
+	current atomic.Int32
+	maximum atomic.Int32
+	calls   atomic.Int32
+}
+
+func (*serializedFetcher) Name() string                 { return "serialized-test" }
+func (*serializedFetcher) ProviderType() ProviderType   { return ProviderTypeCodex }
+func (*serializedFetcher) Validate(*typ.Provider) error { return nil }
+func (*serializedFetcher) RequiresAuth() typ.AuthType   { return typ.AuthTypeOAuth }
+func (f *serializedFetcher) Fetch(_ context.Context, provider *typ.Provider) (*ProviderUsage, error) {
+	f.calls.Add(1)
+	current := f.current.Add(1)
+	defer f.current.Add(-1)
+	for {
+		maximum := f.maximum.Load()
+		if current <= maximum || f.maximum.CompareAndSwap(maximum, current) {
+			break
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+	return &ProviderUsage{
+		ProviderUUID: provider.UUID,
+		FetchedAt:    time.Now(),
+		ExpiresAt:    time.Now().Add(time.Minute),
+	}, nil
+}
+
+func newRetryTestManager(t *testing.T, config *Config, store Store, fetcher Fetcher) (*Manager, *typ.Provider) {
+	t.Helper()
+	provider := &typ.Provider{
+		UUID:    "codex-1",
+		Name:    "Codex",
+		APIBase: "https://chatgpt.com/backend-api",
+		Enabled: true,
+	}
+	manager := NewManager(config, store, managerTestProviderManager{providers: []*typ.Provider{provider}}, logrus.New())
+	manager.retryDelay = func(int) time.Duration { return 0 }
+	if err := manager.RegisterFetcher(fetcher); err != nil {
+		t.Fatal(err)
+	}
+	return manager, provider
+}
+
+func TestFetchProviderQuotaRetriesTransientErrors(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxRetries = 2
+	want := &ProviderUsage{
+		ProviderUUID: "codex-1",
+		ProviderName: "Codex",
+		ProviderType: ProviderTypeCodex,
+		FetchedAt:    time.Now(),
+		ExpiresAt:    time.Now().Add(time.Minute),
+	}
+	fetcher := &sequenceFetcher{errs: []error{io.EOF, io.ErrUnexpectedEOF}, usage: want}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	got, err := manager.fetchProviderQuota(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("fetchProviderQuota() error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("fetchProviderQuota() = %p, want %p", got, want)
+	}
+	if fetcher.calls != 3 {
+		t.Fatalf("Fetch() calls = %d, want 3", fetcher.calls)
+	}
+	if len(store.saved) != 1 || store.saved[0] != want {
+		t.Fatalf("saved = %#v, want the successful usage once", store.saved)
+	}
+}
+
+func TestFetchProviderQuotaDoesNotRetryPermanentErrors(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxRetries = 2
+	fetcher := &sequenceFetcher{errs: []error{errors.New("status 401")}}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	usage, err := manager.fetchProviderQuota(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("fetchProviderQuota() error: %v", err)
+	}
+	if fetcher.calls != 1 {
+		t.Fatalf("Fetch() calls = %d, want 1", fetcher.calls)
+	}
+	if usage.LastError != "status 401" {
+		t.Fatalf("LastError = %q, want status 401", usage.LastError)
+	}
+}
+
+func TestFetchProviderQuotaDoesNotRetryCanceledContext(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxRetries = 2
+	fetcher := &sequenceFetcher{errs: []error{context.Canceled}}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := manager.fetchProviderQuota(ctx, provider)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("fetchProviderQuota() error = %v, want context.Canceled", err)
+	}
+	if fetcher.calls != 0 {
+		t.Fatalf("Fetch() calls = %d, want 0 for an already-canceled request", fetcher.calls)
+	}
+}
+
+func TestFetchProviderQuotaStopsWithoutSavingWhenContextIsCanceled(t *testing.T) {
+	config := DefaultConfig()
+	fetchedAt := time.Now().Add(-time.Hour)
+	cached := &ProviderUsage{
+		ProviderUUID: "codex-1",
+		ProviderName: "Codex",
+		ProviderType: ProviderTypeCodex,
+		FetchedAt:    fetchedAt,
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		Windows:      []*UsageWindow{{Key: "current", Limit: 100, Used: 20}},
+	}
+	store := &recordingStore{current: cached}
+	ctx, cancel := context.WithCancel(context.Background())
+	fetcher := &cancelingFetcher{cancel: cancel}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	usage, err := manager.fetchProviderQuota(ctx, provider)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("fetchProviderQuota() error = %v, want context.Canceled", err)
+	}
+	if usage != cached {
+		t.Fatal("context cancellation replaced the cached quota")
+	}
+	if !usage.FetchedAt.Equal(fetchedAt) || len(usage.Windows) != 1 {
+		t.Fatal("cached quota payload was not preserved")
+	}
+	if len(store.saved) != 0 {
+		t.Fatalf("saved %d records with a canceled context, want none", len(store.saved))
+	}
+}
+
+func TestFetchProviderQuotaRetriesTimeout(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxRetries = 1
+	fetcher := &sequenceFetcher{
+		errs:  []error{context.DeadlineExceeded},
+		usage: &ProviderUsage{ProviderUUID: "codex-1", FetchedAt: time.Now()},
+	}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	if _, err := manager.fetchProviderQuota(context.Background(), provider); err != nil {
+		t.Fatalf("fetchProviderQuota() error: %v", err)
+	}
+	if fetcher.calls != 2 {
+		t.Fatalf("Fetch() calls = %d, want 2", fetcher.calls)
+	}
+}
+
+func TestFetchProviderQuotaCoalescesSameProvider(t *testing.T) {
+	fetcher := &serializedFetcher{}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, DefaultConfig(), store, fetcher)
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := manager.fetchProviderQuota(context.Background(), provider)
+			errs <- err
+		}()
+	}
+	close(start)
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("fetchProviderQuota() error: %v", err)
+		}
+	}
+	if got := fetcher.maximum.Load(); got != 1 {
+		t.Fatalf("maximum concurrent fetches for one provider = %d, want 1", got)
+	}
+	if got := fetcher.calls.Load(); got != 1 {
+		t.Fatalf("Fetch() calls = %d, want 1 coalesced request", got)
+	}
+}
+
+func TestFetchProviderQuotaStopsAtRetryLimit(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxRetries = 2
+	fetcher := &sequenceFetcher{errs: []error{io.EOF, io.EOF, io.EOF, io.EOF}}
+	store := &recordingStore{}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	usage, err := manager.fetchProviderQuota(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("fetchProviderQuota() error: %v", err)
+	}
+	if fetcher.calls != 3 {
+		t.Fatalf("Fetch() calls = %d, want 3 (initial request plus 2 retries)", fetcher.calls)
+	}
+	if usage.LastError != io.EOF.Error() {
+		t.Fatalf("LastError = %q, want EOF", usage.LastError)
+	}
+}
+
+func TestFetchProviderQuotaPreservesLastSuccessfulSnapshot(t *testing.T) {
+	config := DefaultConfig()
+	config.RetryOnFailure = false
+	fetchedAt := time.Now().Add(-time.Hour)
+	cached := &ProviderUsage{
+		ProviderUUID: "codex-1",
+		ProviderName: "Codex",
+		ProviderType: ProviderTypeCodex,
+		FetchedAt:    fetchedAt,
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		Windows: []*UsageWindow{{
+			Key:         "current",
+			Type:        WindowTypeSession,
+			Used:        25,
+			Limit:       100,
+			UsedPercent: 25,
+		}},
+		RawResponse: []byte(`{"plan_type":"plus"}`),
+	}
+	store := &recordingStore{current: cached}
+	fetcher := &sequenceFetcher{errs: []error{io.EOF}}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+	before := time.Now()
+
+	usage, err := manager.fetchProviderQuota(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("fetchProviderQuota() error: %v", err)
+	}
+	if usage != cached {
+		t.Fatal("fetch failure replaced the last successful snapshot")
+	}
+	if !usage.FetchedAt.Equal(fetchedAt) {
+		t.Fatalf("FetchedAt = %v, want last successful time %v", usage.FetchedAt, fetchedAt)
+	}
+	if len(usage.Windows) != 1 || string(usage.RawResponse) != `{"plan_type":"plus"}` {
+		t.Fatal("cached quota data was not preserved")
+	}
+	if usage.LastError != io.EOF.Error() || usage.LastErrorAt == nil {
+		t.Fatalf("refresh error not recorded: %#v", usage)
+	}
+	wantRetryAt := before.Add(min(config.CacheTTL, failedRefreshTTL))
+	if usage.ExpiresAt.Before(wantRetryAt.Add(-time.Second)) || usage.ExpiresAt.After(wantRetryAt.Add(time.Second)) {
+		t.Fatalf("ExpiresAt = %v, want a bounded retry delay", usage.ExpiresAt)
+	}
+	if len(store.saved) != 1 || store.saved[0] != cached {
+		t.Fatalf("saved = %#v, want updated cached snapshot", store.saved)
+	}
+}
+
+func TestFetchProviderQuotaDoesNotOverwriteWhenCacheReadFails(t *testing.T) {
+	config := DefaultConfig()
+	config.RetryOnFailure = false
+	store := &recordingStore{getErr: errors.New("database is busy")}
+	fetcher := &sequenceFetcher{errs: []error{io.EOF}}
+	manager, provider := newRetryTestManager(t, config, store, fetcher)
+
+	usage, err := manager.fetchProviderQuota(context.Background(), provider)
+	if err == nil || !strings.Contains(err.Error(), "load cached quota after fetch failure") {
+		t.Fatalf("fetchProviderQuota() error = %v, want cache read error", err)
+	}
+	if usage != nil {
+		t.Fatalf("usage = %#v, want nil", usage)
+	}
+	if len(store.saved) != 0 {
+		t.Fatalf("saved %d records after uncertain cache read, want none", len(store.saved))
+	}
 }
 
 // Most providers have no quota fetcher, which is ordinary rather than broken.
