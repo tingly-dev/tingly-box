@@ -371,14 +371,13 @@ func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
 }
 
 // collectResponses mirrors collectBeta/collectV1 for the OpenAI Responses
-// API: it walks every input item's content list, replacing each
-// `input_image` part with a text part.
+// API: it walks every message and function-call output content list, replacing
+// each `input_image` part with a text part.
 //
 // Shapes handled: ResponseInputItemUnionParam.OfMessage (EasyInputMessageParam,
-// with EasyInputMessageContentUnionParam.OfInputItemContentList) and
+// with EasyInputMessageContentUnionParam.OfInputItemContentList),
 // ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
-// content list inline). Tool/function/output items don't carry
-// input_image parts in the current SDK union and are left alone.
+// content list inline), and OfFunctionCallOutput.
 func collectResponses(req *responses.ResponseNewParams) []imageRef {
 	items := req.Input.OfInputItemList
 	var refs []imageRef
@@ -399,6 +398,24 @@ func collectResponses(req *responses.ResponseNewParams) []imageRef {
 			list = items[mi].OfMessage.Content.OfInputItemContentList
 		case items[mi].OfInputMessage != nil:
 			list = items[mi].OfInputMessage.Content
+		case items[mi].OfFunctionCallOutput != nil:
+			output := items[mi].OfFunctionCallOutput.Output.OfResponseFunctionCallOutputItemArray
+			for ci := range output {
+				img := output[ci].OfInputImage
+				if img == nil {
+					continue
+				}
+				mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(img.ImageURL.Or(""))
+				refs = spliceOrCollect(refs, mi == lastIdx, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						output[ci] = responses.ResponseFunctionCallOutputItemUnionParam{
+							OfInputText: &responses.ResponseInputTextContentParam{Text: text},
+						}
+					},
+				})
+			}
+			continue
 		default:
 			continue
 		}

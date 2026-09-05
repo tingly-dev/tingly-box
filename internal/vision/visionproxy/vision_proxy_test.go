@@ -2,6 +2,7 @@ package visionproxy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -533,6 +535,37 @@ func TestVisionProxy_OpenAI_ToolMessageImage_Replaced(t *testing.T) {
 	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req), "tool-channel image must not reach the provider")
 	require.Contains(t, collectText(req), "a solid red square")
+}
+
+func TestVisionProxy_Responses_FunctionCallOutputImage_Replaced(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a solid red square")
+	p := mkProcessor(t, fake, prov)
+	req := responsesReqWithItems(
+		responses.ResponseInputItemUnionParam{OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+			CallID: "call_1", Name: "screenshot", Arguments: "{}",
+		}},
+		responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+			CallID: "call_1",
+			Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+				OfResponseFunctionCallOutputItemArray: responses.ResponseFunctionCallOutputItemListParam{
+					{OfInputText: &responses.ResponseInputTextContentParam{Text: "screenshot"}},
+					{OfInputImage: &responses.ResponseInputImageContentParam{
+						ImageURL: param.NewOpt("data:" + tinyPNGMediaType + ";base64," + tinyPNGBase64),
+					}},
+				},
+			},
+		}},
+	)
+
+	require.NoError(t, p.Process(context.Background(), req, []*loadbalance.Service{mkService(prov.UUID, true)}))
+	require.Equal(t, 1, fake.callCount())
+
+	chat := request.ConvertOpenAIResponsesToChat(req, 1024)
+	body, err := json.Marshal(chat)
+	require.NoError(t, err)
+	require.NotContains(t, string(body), `"image_url"`)
+	require.Contains(t, string(body), "a solid red square")
 }
 
 func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.T) {
