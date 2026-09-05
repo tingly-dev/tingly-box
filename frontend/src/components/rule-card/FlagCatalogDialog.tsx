@@ -21,6 +21,7 @@ import {
 import {
     Close as CloseIcon,
     Extension as ExtensionIcon,
+    FiberManualRecord as RecordIcon,
     Input as InputIcon,
     Link as LinkIcon,
     Output as OutputIcon,
@@ -65,7 +66,7 @@ interface CategoryMeta {
 }
 
 // Display order for the category sidebar. Unknown categories are appended.
-const CATEGORY_ORDER = ['app', 'request', 'request_openai', 'request_anthropic', 'response', 'reasoning', 'vision', 'routing'];
+const CATEGORY_ORDER = ['app', 'request', 'request_openai', 'request_anthropic', 'response', 'reasoning', 'vision', 'observability', 'routing'];
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
     app:               { label: 'App',         icon: <TerminalIcon   fontSize="small" /> },
@@ -76,6 +77,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     reasoning:         { label: 'Reasoning',   icon: <PsychologyIcon fontSize="small" /> },
     vision:            { label: 'Vision',      icon: <VisibilityIcon fontSize="small" /> },
     routing:           { label: 'Routing',     icon: <LinkIcon       fontSize="small" /> },
+    observability:     { label: 'Observe',     icon: <RecordIcon     fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] ?? {

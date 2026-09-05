@@ -139,7 +139,12 @@ vendor 链不挂——它们固定指向真实 vendor 端点,不可能 loopback�
 及其注入点(servertool/hook.go)与实现(mcp_tool_error.go)全部删除;
 advisor 调用的录制将来随统一录制路径(Phase 3)回归。
 
-**P5 — 录制覆盖不对称。** OpenAI 入站 handler 不接 recorder(§2.2 A)。
+**P5 — 录制覆盖不对称。✅ 已修复(Phase 2):** OpenAI Chat / Responses
+handler 接上 recorder(prologue 按 effective mode 创建、存 gin ctx,
+下游经 `recording.FromGin` 自取,不走签名);OpenAI→OpenAI 纯透传路径(`nonstreamOpenAIChat` /
+`streamOpenAIChat`)此前从不触碰 recorder(emit 永不发生),已补上
+成功/失败两侧的 emit(流式透传无 chunk tap,final 由 writer 状态合成,
+请求侧点位不受影响)。
 
 **P6 — 即使 P3 修活,挂载位置也录不到真实出站请求。**
 `RecordRoundTripper` 挂在**最外层**(§2.3),看到的是
@@ -153,6 +158,43 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 (`routes_middleware.go`、`servertool/hook.go`)不变。
 
 ---
+
+## 3.5 采集点位模型(Phase 2 定稿)
+
+录制配置从"三档模式枚举"改为**沿链路采集点的多选集合**(逗号分隔存储,
+先例 `block_tools`),值域 `typ.RecordingPoint`:
+
+| 点位 | 中文 | 采集内容 | 现状 |
+|------|------|----------|------|
+| `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + StagePre |
+| `upstream_request` | 出站请求 | 发往 provider 的最终请求(transform 后) | ✅ StagePost |
+| `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现,Phase 3 wire recorder 落地时开放——不上死开关) |
+| `client_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
+
+> **当前支持面 = 两个 request 点位。** 响应侧(服务返回 + 最终返回)整体
+> 暂停,待 Phase 3(wire)/ Phase 4(EventTap)分别恢复;暂停以注释形式
+> 保留代码位置,恢复时取消注释即可。
+
+- **旧值兼容**:`request` → 出站;`request_response` → 出站+最终;
+  `staged_request_response` → 入站+出站+最终。`typ.ParseRecordingMode`
+  统一归一化(去重、按管线序排序、未知 token 丢弃),存量配置零迁移;
+  写入口(rule/scenario)用 `IsValidRecordingMode` 严格校验拒绝未知 token,
+  并存归一化形态,配置随触碰逐步收敛到点集形式。
+- **继承**:`RuleFlags.Recording`(registry key `recording`,新类型
+  `multi_enum`,Shared/override)覆盖 scenario 级 `recording_v2` 默认,
+  与 `thinking_effort` 同模式;解析点 `typ.EffectiveRecording(rule, scenario)`
+  (handler prologue)与 `resolveRuleFlagsWithScenario`(ctx 传播)。
+- **过滤位置**:recorder 构造时归一化 mode,`emit()` 按 `Has(point)` 挑
+  字段;chain 的 StagePre/StagePost 分别按 `client_request` /
+  `upstream_request` 挂载(`recorder.Wants`,nil-safe)。obs 层不再校验
+  三档枚举,sink 只认"非空即启用"——mode 语义完全归 typ。
+- **sink 归属**:仍按 scenario 建目录/缓存(`GetOrCreateScenarioSink`
+  改为接收请求的 effective mode,rule 开、scenario 关也能建 sink);
+  录多深由 recorder 按请求过滤,sink 自身 mode 仅剩创建信息。
+- 行为护栏:`protocoltest` 的 flag 套件新增 `recording` 用例(rule 级
+  flag 单独启用 → gzip JSONL 落盘 → 断言 slim record 恰好带所选点位;
+  测试侧经既有导出面 `GetOrCreateScenarioSink` + `obs.Sink.ForceFlush`
+  冲刷,不为测试新增生产 API)。
 
 ## 4. 目标架构(to-be)
 
@@ -206,20 +248,22 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 
 ---
 
-## 5. 开放问题(落地前需拍板)
+## 5. 开放问题(已拍板项标注)
 
-- **CLI `--record-mode` 的去留**:统一到 flag 体系后,全局开关是保留为
-  "所有 scenario 的默认值"还是废弃?倾向保留为兜底(部署级 debug),
-  但文档与 UI 都以 flag 为主入口。
-- **Sink 归属**:rule 级启用时是否仍写 scenario sink?倾向是——rule 只
-  决定"录不录/录多深",落盘仍按 scenario 组织(目录结构不变,record
-  里已带 provider/model/scenario 字段可过滤)。
-- **`recording_v2` 字段名**:scenario 级 json key 保持 `recording_v2`
-  (兼容存量配置),rule 级新字段用干净的 `recording`;还是两级同名?
-  倾向前者,迁移成本最低。
-- **响应流录制在 client 层还是 chain 层**:chain 级已有流式 hooks,
-  client 层再录 wire 响应会重复;倾向 client 层只录 wire **请求**,
-  响应仍归 chain 级 hooks,直到 obs Phase 2 的 EventTap 统一。
+- ~~CLI `--record-mode` 的去留~~ **已拍板(Phase 1)**:废弃,启用完全
+  归 flag 体系;落盘目录固定 `<configDir>/record`。
+- ~~Sink 归属~~ **已拍板(Phase 2)**:rule 级启用仍写 scenario sink,
+  落盘按 scenario 组织;录多深由 recorder 按请求过滤。
+- ~~`recording_v2` 字段名~~ **已拍板(Phase 2)**:scenario 级保持
+  `recording_v2` json key(兼容存量),rule 级用 `recording`;两级的值
+  统一为点位集合(旧枚举解析层兼容)。
+- **响应流录制在 client 层还是 chain 层**(仍开放):chain 级已有流式
+  hooks,client 层再录 wire 响应会重复;倾向 client 层只录 wire
+  **请求**(即 `upstream_request` 补 header / `upstream_response` 新增),
+  最终返回仍归 chain 级 hooks,直到 obs Phase 2 的 EventTap 统一。
+- **OpenAI 纯透传流式的 `client_response` 质量**(新):该路径无 chunk
+  tap,final 由 writer 状态合成(仅 status/headers);补 tap 归入
+  Phase 4(EventTap)。
 
 ---
 
@@ -230,7 +274,7 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 | **Phase 0 ✅** | 本梳理文档 | `.design/recording.md` | 无 |
 | **Phase 1 清障 ✅(收窄范围)** | 已做:删 `RecordRoundTripper` 死代码与全部 `SetRecordSink` 机制;`ScenarioContextKey` 迁出(P7);删 `ClientPool.recordSink` / `server.recordSink` / `server.recordMode` / `WithRecordMode` / `WithRecording`;去除 CLI `--record-mode` / `--record-dir`(目录固定默认)。**刻意未动**:advisor/MCP 侧接线(`WithAdvisorRecordSink`、`HookDeps.GetScenarioSink`)与 P4 header 修复——单独小步处理 | `internal/client`、`internal/server`、`internal/command`、`gui/wails3`、`vmodel` | 低(删死代码,行为不变) |
 | **Phase 1.5 advisor 小步 ✅** | 修 P4(advisor ctx 标记 + 通用链只读 header transport,附单测);清 `WithAdvisorRecordSink` / `GetScenarioSink` 死数据注入 | `internal/client`、`mcp/runtime`、`servertool` | 低 |
-| **Phase 2 flag 融入** | `RuleFlags.Recording` 进 registry(Shared/override);`resolveRuleFlagsWithScenario` 继承;handler 用解析结果替代 `getScenarioRecordMode`;OpenAI 两个 handler 接 recorder(修 P5);前端类型 + codegen | `typ`、`server`、`protocolserver`、frontend 类型 | 中 |
+| **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;前端 multi_enum 控件 + `RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
 | **Phase 3 wire 录制** | 新 `recordTransport` 挂 wire transport(含 vendor 链);recorder 经 request ctx 传播;record 模型加 wire 请求字段(修 P6) | `internal/client`、`obs` | 中 |
 | **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);scenario 前端控件 registry 化 | `obs`、`transform`、frontend | 按其自身计划 |
 

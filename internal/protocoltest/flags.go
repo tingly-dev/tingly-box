@@ -1,11 +1,17 @@
 package protocoltest
 
 import (
+	"bufio"
+	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -278,6 +284,41 @@ func keysOf(m map[string]any) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// readRecordedLines walks recordDir for the gzip JSONL session files the
+// scenario sinks write ({dir}/{scenario}/sessions/{date}/{session}.jsonl.gz)
+// and decodes every record line into a generic map.
+func readRecordedLines(t flagTB, recordDir string) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	_ = filepath.WalkDir(recordDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl.gz") {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			t.Errorf("open record file %s: %v", path, err)
+			return nil
+		}
+		defer f.Close()
+		zr, err := gzip.NewReader(f)
+		if err != nil {
+			t.Errorf("gzip open %s: %v", path, err)
+			return nil
+		}
+		zr.Multistream(true)
+		sc := bufio.NewScanner(zr)
+		sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
+		for sc.Scan() {
+			var m map[string]any
+			if err := json.Unmarshal(sc.Bytes(), &m); err == nil {
+				records = append(records, m)
+			}
+		}
+		return nil
+	})
+	return records
 }
 
 func ruleFlagCases() []flagCase {
@@ -636,6 +677,72 @@ func ruleFlagCases() []flagCase {
 			}
 			if beta := up.Headers.Get("anthropic-beta"); !strings.Contains(beta, "context-1m") {
 				t.Errorf("rule flag did not inject context-1m beta upstream; anthropic-beta=%q", beta)
+			}
+		}},
+
+		// ── recording ────────────────────────────────────────────────────────
+		// The rule-level flag alone (scenario recording_v2 stays off) must
+		// produce obs records at exactly the selected capture points. Uses a
+		// dedicated env with a record dir; the sink's batch pipeline is
+		// force-flushed so the gzip JSONL lands before the assertions.
+		{key: "recording", run: func(t flagTB, env *TestEnv) {
+			dir, err := os.MkdirTemp("", "flag-recording-*")
+			if err != nil {
+				t.Fatalf("temp record dir: %v", err)
+			}
+			t.Cleanup(func() { os.RemoveAll(dir) })
+			renv, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(dir))
+			if err != nil {
+				t.Fatalf("create recording env: %v", err)
+			}
+			t.Cleanup(renv.Close)
+
+			// Select the two request points only — the emitted record must
+			// carry OriginalRequest + TransformedRequest and no FinalResponse.
+			model := renv.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(),
+				typ.RuleFlags{Recording: "client_request,upstream_request"})
+			res := sendFlag(t, renv, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
+			if res.HTTPStatus != 200 {
+				t.Fatalf("request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+			}
+			renv.FlushRecordSinks(context.Background(), sourceToRuleScenario(protocol.TypeOpenAIChat))
+
+			records := readRecordedLines(t, dir)
+			if len(records) == 0 {
+				t.Fatal("rule-level recording flag produced no obs records")
+			}
+			// Keys follow the exporter's slim schema (obs.FullRecord).
+			rec := records[len(records)-1]
+			if rec["original_request"] == nil {
+				t.Error("record missing original_request (client_request point selected)")
+			}
+			if rec["transformed_request"] == nil {
+				t.Error("record missing transformed_request (upstream_request point selected)")
+			}
+			if rec["final_response"] != nil {
+				t.Error("record carries final_response though client_response was not selected")
+			}
+
+			// Response-side recording is paused (emit commented out — see
+			// recorder.go / .design/recording.md §3.5): a stored value that
+			// still selects client_response must record the request points
+			// only, never a final_response.
+			s2 := flagScenario()
+			s2.Name = "flags-resp-paused"
+			model2 := renv.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, s2,
+				typ.RuleFlags{Recording: "client_request,upstream_request,client_response"})
+			res2 := sendFlag(t, renv, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model2, false, nil, nil)
+			if res2.HTTPStatus != 200 {
+				t.Fatalf("request failed: status=%d body=%s", res2.HTTPStatus, truncate(string(res2.RawBody), 300))
+			}
+			renv.FlushRecordSinks(context.Background())
+			records = readRecordedLines(t, dir)
+			rec = records[len(records)-1]
+			if rec["transformed_request"] == nil {
+				t.Error("paused-response record missing transformed_request")
+			}
+			if rec["final_response"] != nil {
+				t.Error("final_response emitted though response-side recording is paused")
 			}
 		}},
 

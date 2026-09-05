@@ -80,7 +80,7 @@ func NewRecordingTestHandler(t *testing.T, scenario typ.RuleScenario, mode obs.R
 	require.NotNil(t, sink, "obs.NewSink must succeed with WithExporters")
 
 	h := protocolserver.NewHandler(protocolserver.ProtocolHandlerDeps{
-		GetOrCreateScenarioSink: func(s typ.RuleScenario) *obs.Sink {
+		GetOrCreateScenarioSink: func(s typ.RuleScenario, _ obs.RecordMode) *obs.Sink {
 			if s == scenario {
 				return sink
 			}

@@ -2,6 +2,7 @@ package protocoltest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,6 +48,23 @@ type TestEnv struct {
 	routeModels map[string]string // key → requestModel
 	setupRoutes map[string]bool   // track which routes have been set up
 	configDir   string            // config directory for cleanup (CLI mode only)
+	srv         *server.Server    // gateway internals for test-only helpers (record sink flush)
+}
+
+// FlushRecordSinks force-flushes the recording sinks of the given scenarios
+// so buffered obs records land on disk. Recording tests call this after
+// driving traffic instead of waiting out the batch flush interval. Uses the
+// gateway's existing exported sink accessor: a cached sink is returned
+// regardless of the mode argument, and the empty mode never creates one.
+func (env *TestEnv) FlushRecordSinks(ctx context.Context, scenarios ...typ.RuleScenario) {
+	if env.srv == nil {
+		return
+	}
+	for _, sc := range scenarios {
+		if sink := env.srv.GetOrCreateScenarioSink(sc, ""); sink != nil {
+			_ = sink.ForceFlush(ctx)
+		}
+	}
 }
 
 // TestEnvOption is a functional option for configuring TestEnv.
@@ -137,6 +155,7 @@ type gatewayCore struct {
 	appConfig  *config.AppConfig
 	server     *server.Server
 	gateway    *httptest.Server
+	srv        *server.Server // the gateway behind `gateway`, for test-only internals (record sink flush)
 	virtual    *VirtualServer
 	modelToken string
 }
@@ -176,6 +195,7 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 		appConfig:  appConfig,
 		server:     gatewayServer,
 		gateway:    ts,
+		srv:        gatewayServer,
 		virtual:    NewVirtualServerForCLI(),
 		modelToken: appConfig.GetGlobalConfig().GetModelToken(),
 	}, nil
@@ -260,6 +280,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
 		configDir:     core.configDir,
+		srv:           core.srv,
 	}, nil
 }
 

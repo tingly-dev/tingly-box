@@ -80,8 +80,24 @@ func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 		sessionShort:    short,
 		sessionSrc:      src,
 		originalRequest: req,
-		mode:            mode,
+		mode:            normalizeMode(mode),
 	}, nil
+}
+
+// normalizeMode canonicalizes a mode value (legacy enum values expand to
+// point sets, tokens dedupe into pipeline order) so Wants/emit only ever see
+// normalized point sets.
+func normalizeMode(mode obs.RecordMode) obs.RecordMode {
+	return obs.RecordMode(typ.ParseRecordingMode(string(mode)))
+}
+
+// Wants reports whether this recorder's mode selects the given capture
+// point. Nil-safe: a nil recorder wants nothing.
+func (sr *ProtocolRecorder) Wants(p typ.RecordingPoint) bool {
+	if sr == nil {
+		return false
+	}
+	return typ.RecordingMode(sr.mode).Has(p)
 }
 
 // SetActiveService re-binds the recorder to a new provider/model. The
@@ -140,7 +156,7 @@ func (sr *ProtocolRecorder) BindProvider(provider *typ.Provider, model string, m
 		sr.model = model
 	}
 	if mode != "" {
-		sr.mode = mode
+		sr.mode = normalizeMode(mode)
 	}
 }
 
@@ -284,16 +300,22 @@ func (sr *ProtocolRecorder) emit(err error) {
 		r.Err = err.Error()
 	}
 
-	switch sr.mode {
-	case obs.RecordModeStagedRequestResponse:
+	// Capture-point filtering: each selected point contributes its slot.
+	// Response-side points are paused for now — request recording is the
+	// supported surface (.design/recording.md §3.5):
+	//   - upstream_response (Record.ProviderResponse) has no producer until
+	//     the wire-level recorder lands (Phase 3).
+	//   - client_response (Record.FinalResponse) is captured internally
+	//     (SetAssembledResponse / synthesis fallback) but its quality is not
+	//     good enough to emit yet; re-enable when the response path is
+	//     reworked (Phase 4 EventTap):
+	//     if m.Has(typ.RecordClientResponse) { r.FinalResponse = sr.finalResponse }
+	m := typ.RecordingMode(sr.mode)
+	if m.Has(typ.RecordClientRequest) {
 		r.OriginalRequest = sr.originalRequest
+	}
+	if m.Has(typ.RecordUpstreamRequest) {
 		r.TransformedRequest = sr.transformedRequest
-		r.FinalResponse = sr.finalResponse
-	case obs.RecordModeRequestOnly:
-		r.TransformedRequest = sr.transformedRequest
-	case obs.RecordModeRequestResponse:
-		r.TransformedRequest = sr.transformedRequest
-		r.FinalResponse = sr.finalResponse
 	}
 
 	sr.sink.Emit(r)

@@ -103,14 +103,11 @@ type ProtocolHandlerDeps struct {
 
 	// GetOrCreateScenarioSink reaches back into root *Server state that has
 	// not (yet) moved here: scenario recording sinks. Wiring it as a func
-	// keeps this package independent of *server.Server.
-	GetOrCreateScenarioSink func(scenario typ.RuleScenario) *obs.Sink
-
-	// GetScenarioRecordMode resolves the effective recording mode for a
-	// scenario (the scenario-level recording_v2 flag). Backed by root's
-	// s.scenarioRecordSinks, which have not moved to aimodel (recording
-	// lifecycle stays root-owned).
-	GetScenarioRecordMode func(scenario typ.RuleScenario) obs.RecordMode
+	// keeps this package independent of *server.Server. mode is the
+	// request's effective recording selection (rule override or scenario
+	// default) — it lets a rule-enabled request create the sink even when
+	// the scenario-level flag is off.
+	GetOrCreateScenarioSink func(scenario typ.RuleScenario, mode obs.RecordMode) *obs.Sink
 }
 
 // ProtocolHandler is the aggregate handler for the AI Model API. Individual method
@@ -159,13 +156,6 @@ func (ph *ProtocolHandler) mcpStripDisabledToolsEnabled() bool {
 		return false
 	}
 	return cfg.StripDisabledMCPTools
-}
-
-func (ph *ProtocolHandler) getScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode {
-	if ph.deps.GetScenarioRecordMode == nil {
-		return ""
-	}
-	return ph.deps.GetScenarioRecordMode(scenario)
 }
 
 // MCPEnabled centralizes the MCP feature-flag check so gateway handlers do
@@ -269,11 +259,11 @@ func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario strin
 		return rec
 	}
 
-	if ph.deps.GetOrCreateScenarioSink == nil {
+	if ph.deps.GetOrCreateScenarioSink == nil || !typ.RecordingMode(mode).Enabled() {
 		return nil
 	}
 	scenarioType := typ.RuleScenario(scenario)
-	sink := ph.deps.GetOrCreateScenarioSink(scenarioType)
+	sink := ph.deps.GetOrCreateScenarioSink(scenarioType, mode)
 	if sink == nil {
 		return nil
 	}

@@ -73,6 +73,7 @@ export interface RuleFlags {
     context1m?: boolean;
     claudeOrgId?: string;
     extraHeaders?: Record<string, string>;
+    recording?: string;
 }
 
 export interface RuleFlagsApi {
@@ -92,6 +93,7 @@ export interface RuleFlagsApi {
     context_1m?: boolean;
     claude_org_id?: string;
     extra_headers?: Record<string, string>;
+    recording?: string;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref' | 'headers' | 'multi_enum';

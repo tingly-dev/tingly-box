@@ -144,6 +144,18 @@ func ResolveRuleFlagsWithScenario(
 		// migrate20260610), so there is nothing to inject here.
 	}
 
+	// Recording: the rule's capture-point selection overrides the scenario's
+	// recording_v2 default (override inheritance, like thinking_effort). Both
+	// sides accept legacy enum values; the resolved value is normalized to a
+	// canonical point set so downstream consumers never re-parse legacy forms.
+	if m := typ.ParseRecordingMode(flags.Recording); m != typ.RecordingModeDisabled {
+		flags.Recording = string(m)
+	} else if scenarioConfig != nil {
+		flags.Recording = string(typ.ParseRecordingMode(string(scenarioConfig.Flags.RecordingV2)))
+	} else {
+		flags.Recording = ""
+	}
+
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios
 	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
 
