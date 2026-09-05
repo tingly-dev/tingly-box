@@ -9857,6 +9857,14 @@
             "type": "string",
             "description": "Field provider_uuid"
           },
+          "request": {
+            "description": "Field request"
+          },
+          "request_protocol": {
+            "type": "string",
+            "description": "Field request_protocol",
+            "example": "anthropic_v1"
+          },
           "rule_uuid": {
             "type": "string",
             "description": "Field rule_uuid"
