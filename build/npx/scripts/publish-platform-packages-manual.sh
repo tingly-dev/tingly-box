@@ -105,7 +105,19 @@ for name in "${NAMES[@]}"; do
 		continue
 	fi
 	echo "📦 npm publish ${name}@${VERSION} ${DRY_RUN}"
-	(cd "$OUT_DIR/$name" && npm publish --access public ${DRY_RUN:+"$DRY_RUN"} "${OTP_ARGS[@]}")
+	# The registry answers 409 "Failed to save packument" while it is still
+	# processing a previous PUT for the same name (or a tombstone left by an
+	# unpublish). Wait and retry a few times before giving up.
+	attempt=1
+	until (cd "$OUT_DIR/$name" && npm publish --access public ${DRY_RUN:+"$DRY_RUN"} "${OTP_ARGS[@]}") 2>&1 | tee "$WORK_DIR/publish.log"; test "${PIPESTATUS[0]}" -eq 0; do
+		if [ "$attempt" -ge 4 ] || ! grep -q "409 Conflict" "$WORK_DIR/publish.log"; then
+			echo "❌ publish of ${name}@${VERSION} failed" >&2
+			exit 1
+		fi
+		echo "⏳ 409 from the registry, retrying in 60s (attempt $attempt/3)…"
+		sleep 60
+		attempt=$((attempt + 1))
+	done
 done
 
 if [ -n "$DRY_RUN" ]; then
