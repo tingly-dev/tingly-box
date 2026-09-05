@@ -8,7 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
+	"github.com/tingly-dev/tingly-box/internal/recording"
 )
 
 // ErrorResponse represents an error response
