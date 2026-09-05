@@ -54,7 +54,7 @@ while IFS='|' read -r key name zip; do
   "homepage": "https://github.com/tingly-dev/tingly-box",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tingly-dev/tingly-box.git"
+    "url": "git+https://github.com/tingly-dev/tingly-box.git"
   },
   "license": "MPL-2.0",
   "author": "Tingly Dev",
