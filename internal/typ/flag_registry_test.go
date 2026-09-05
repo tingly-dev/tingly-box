@@ -74,6 +74,7 @@ func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 		FlagTypeInt:        true,
 		FlagTypeServiceRef: true,
 		FlagTypeHeaders:    true,
+		FlagTypeMultiEnum:  true,
 	}
 	for _, spec := range RuleFlagRegistry() {
 		if !allowed[spec.Type] {
@@ -115,6 +116,35 @@ func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
 		}
 	}
 }
+
+// TestRuleFlagRegistry_MultiEnumOptions asserts that every FlagTypeMultiEnum
+// spec declares at least two options with non-empty, unique, non-empty-valued
+// entries. Unlike enum there is no inactive-sentinel first option — the empty
+// set is the inactive state, so every option must carry a concrete value.
+func TestRuleFlagRegistry_MultiEnumOptions(t *testing.T) {
+	for _, spec := range RuleFlagRegistry() {
+		if spec.Type != FlagTypeMultiEnum {
+			continue
+		}
+		if len(spec.Options) < 2 {
+			t.Errorf("multi_enum flag %q has %d options, expected at least 2", spec.Key, len(spec.Options))
+		}
+		seen := map[string]bool{}
+		for i, opt := range spec.Options {
+			if opt.Value == "" {
+				t.Errorf("multi_enum flag %q option %d has empty Value", spec.Key, i)
+			}
+			if opt.Label == "" {
+				t.Errorf("multi_enum flag %q option %d has empty Label", spec.Key, i)
+			}
+			if seen[opt.Value] {
+				t.Errorf("multi_enum flag %q has duplicate option Value %q", spec.Key, opt.Value)
+			}
+			seen[opt.Value] = true
+		}
+	}
+}
+
 
 // TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode verifies that every flag
 // marked Shared declares an InheritanceMode and vice versa.

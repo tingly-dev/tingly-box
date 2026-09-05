@@ -19,6 +19,12 @@ const (
 	// editable key/value row list (add/remove rows); an empty map is treated
 	// as inactive. Backed by a map[string]string on the flags struct.
 	FlagTypeHeaders FlagValueType = "headers"
+	// FlagTypeMultiEnum is a multi-select over the spec's Options: the stored
+	// value is a comma-separated list of the selected Option values, "" when
+	// none selected (inactive). The UI renders a checkbox group. Unlike
+	// FlagTypeEnum there is no "first option = default" rule — the empty set
+	// is the inactive state.
+	FlagTypeMultiEnum FlagValueType = "multi_enum"
 )
 
 // FlagCategory groups flags for presentation in the UI.

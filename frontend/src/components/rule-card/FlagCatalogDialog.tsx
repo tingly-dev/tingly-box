@@ -1,12 +1,15 @@
 import {
     Box,
     Button,
+    Checkbox,
     Chip,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
     FormControl,
+    FormControlLabel,
+    FormGroup,
     InputLabel,
     MenuItem,
     Select,
@@ -30,7 +33,7 @@ import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/Ro
 import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
-import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue } from './flagHelpers';
+import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue } from './flagHelpers';
 import HeadersEditor from '@/components/flags/HeadersEditor';
 
 export interface FlagCatalogDialogProps {
@@ -439,6 +442,30 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                             )}
                                                         </Select>
                                                     </FormControl>
+                                                )}
+                                                {spec.type === 'multi_enum' && (
+                                                    <FormGroup sx={{ mt: 0.5 }}>
+                                                        {(spec.options || []).map((opt) => {
+                                                            const selected = multiEnumValues(draft, spec.key).includes(opt.value);
+                                                            return (
+                                                                <FormControlLabel
+                                                                    key={opt.value}
+                                                                    control={
+                                                                        <Checkbox
+                                                                            size="small"
+                                                                            checked={selected}
+                                                                            onChange={() => setDraft((d) => setFlagValue(
+                                                                                d,
+                                                                                spec.key,
+                                                                                toggleMultiEnumValue(getFlagValue(d, spec.key) as string | undefined, opt.value),
+                                                                            ))}
+                                                                        />
+                                                                    }
+                                                                    label={<Typography variant="body2">{opt.label}</Typography>}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </FormGroup>
                                                 )}
                                                 {spec.type === 'headers' && (
                                                     <Box sx={{ mt: 1 }}>
