@@ -41,8 +41,13 @@ function resolveBinarySource() {
 		if (local) {
 			console.warn(`⚠️  ${local.name}@${local.version} does not match tingly-box@${OWN_VERSION}, downloading the release instead`);
 		}
+		// A default launch only reaches the download when the platform
+		// package is missing or mismatched; say which if that download fails.
+		const hints = downloadFailureHints(platformPackageName(), OWN_VERSION, local?.version);
+		return { kind: "download", tag: BINARY_RELEASE_BRANCH, hints };
 	}
-	return { kind: "download", tag: VERSION === "latest" ? BINARY_RELEASE_BRANCH : VERSION };
+	// An explicit --transport-version asked for the download; no hints needed.
+	return { kind: "download", tag: VERSION, hints: [] };
 }
 
 // Copy the platform package's binary into the versioned cache dir, writing a
@@ -144,11 +149,7 @@ async function getPlatformArchAndBinary() {
 			installFromPackage(source.local, binaryPath);
 			console.log(`✅ Installed to ${binaryPath}`);
 		} else {
-			await downloadAndExtractZip(downloadUrl, tinglyBinDir, {
-				// A default launch only reaches the download when the platform
-				// package is missing; an explicit --transport-version asked for it.
-				hints: VERSION === "latest" ? downloadFailureHints(platformPackageName(), OWN_VERSION) : [],
-			});
+			await downloadAndExtractZip(downloadUrl, tinglyBinDir, { hints: source.hints });
 			console.log(`✅ Downloaded and extracted to ${binaryPath}`);
 		}
 	}

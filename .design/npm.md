@@ -290,12 +290,13 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   missing platform package and the reinstall command
   (`downloadFailureHints` in `shared/entry.js`) — reaching the download at
   all means the package is absent, so that is the fix, before retry/proxy.
-- **Publish order.** `publish-platform` (all five, from the release zips,
-  count checked against `PLATFORM_PACKAGES`) runs before `publish-cli`. The
-  cli job then does what a user does: `npm pack` the shim and
-  `npm install -g --prefix <scratch>` the tarball against the real registry,
-  asserting the binary came from `tingly-box-linux-x64` and nothing was
-  downloaded. The download fallback keeps its own smoke test.
+- **Publish order.** One `publish-cli` job (one production approval per
+  release): build all five platform packages from the release zips (count
+  checked against `PLATFORM_PACKAGES`), publish them, then wire and publish
+  the shim. Before publishing the shim the job does what a user does:
+  `npm pack` it and `npm install -g --prefix <scratch>` the tarball against
+  the real registry, asserting the binary came from `tingly-box-linux-x64`
+  and nothing was downloaded. The download fallback keeps its own smoke test.
 - **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
   `publish_bundle` input, the bundle entry in the web UI's update dialog,
   and every doc mention. The Go side keeps recognising the `npx-bundle` /

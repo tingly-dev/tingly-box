@@ -15,20 +15,20 @@ export function sourceArgs(npxSource, npmSource) {
 	return [IS_NPX ? `--source=${npxSource}` : `--source=${npmSource}`];
 }
 
-// Next steps when the GitHub release download fails. The normal install
-// never needs it: the platform package (shared/platform.js) ships the binary
-// through the npm registry. Reaching the download at all means that package
-// is missing — so the fix is to reinstall so npm fetches it (a mirror
-// registry works too), and only then to retry or proxy the download.
-export function downloadFailureHints(platformPackage, version) {
+// Next steps when the GitHub release download fails on a default launch.
+// Reaching the download at all means the platform package
+// (shared/platform.js) that normally ships the binary is missing or at the
+// wrong version. The fix is a fresh global install: npm resolves the
+// optional dependency again (a mirror registry works too). Under npx the
+// advice is the same — npx reuses its cached tree for a repeated spec and
+// would never refetch the package.
+export function downloadFailureHints(platformPackage, version, installedVersion) {
 	if (!platformPackage) return [];
-	const spec = `tingly-box@${version}`;
 	return [
-		`• The binary normally ships in the ${platformPackage} package, which is not installed here.`,
-		IS_NPX
-			? `  Re-run with optional dependencies enabled so npm fetches it`
-			: `  Reinstall with optional dependencies enabled so npm fetches it`,
-		`  (an npm mirror registry works too — no GitHub access needed):`,
-		IS_NPX ? `    npx -y ${spec}` : `    npm install -g ${spec}`,
+		installedVersion
+			? `• ${platformPackage}@${installedVersion} is installed but tingly-box@${version} needs the same version.`
+			: `• The binary normally ships in the ${platformPackage} package, which is not installed here.`,
+		`  Install fresh so npm fetches it (an npm mirror registry works too — no GitHub access needed):`,
+		`    npm install -g tingly-box@${version}`,
 	];
 }

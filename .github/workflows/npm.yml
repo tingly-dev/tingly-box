@@ -145,29 +145,43 @@ jobs:
             echo "| Build Docker image | ${{ steps.set_vars.outputs.build_docker }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Per-platform binary packages (tingly-box-linux-x64, …). Published BEFORE
-  # the cli package: `tingly-box` pins them as optionalDependencies at this
-  # exact version, so they must exist on the registry when the shim is
-  # installed. See .design/npm.md ("F. Platform packages").
-  publish-platform:
+  # Publish the per-platform binary packages (tingly-box-linux-x64, …) and
+  # then the cli shim that pins them as optionalDependencies at this exact
+  # version. One job so a release needs one production approval, and the
+  # platform packages exist on the registry before the shim is installed
+  # anywhere. See .design/npm.md ("F. Platform packages").
+  publish-cli:
     needs: setup
-    name: Publish Platform Packages
+    name: Publish CLI + Platform Packages
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: write
       id-token: write
     if: needs.setup.outputs.publish_cli == 'true'
+    env:
+      PKG_NAME: tingly-box
+      PKG_DIR: build/npx/tingly-box
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: build/npx/package-lock.json
 
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ---- platform packages -------------------------------------------
       - name: Download release binaries
         env:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
@@ -201,9 +215,6 @@ jobs:
           echo "✅ Built $BUILT platform packages:"
           cat built.txt
           du -sh platform/*
-
-      - name: Smoke-test the linux-x64 package
-        run: |
           platform/tingly-box-linux-x64/bin/tingly-box version
 
       - name: Publish platform packages to npm
@@ -221,38 +232,7 @@ jobs:
             (cd "platform/$name" && npm publish --provenance --access public --tag "$NPM_TAG")
           done < built.txt
 
-  # Publish the CLI shim package
-  publish-cli:
-    needs: [setup, publish-platform]
-    name: Publish CLI Package
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: write
-      id-token: write
-    if: needs.setup.outputs.publish_cli == 'true'
-    env:
-      PKG_NAME: tingly-box
-      PKG_DIR: build/npx/tingly-box
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: "https://registry.npmjs.org"
-          cache: "npm"
-          cache-dependency-path: build/npx/package-lock.json
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
+      # ---- cli shim ----------------------------------------------------
       - name: Update NPX package.json with new version
         working-directory: ${{ env.PKG_DIR }}
         run: |
@@ -267,9 +247,9 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          for name in $(node -e 'import("../shared/platform.js").then(m => console.log(Object.values(m.PLATFORM_PACKAGES).map(p => p.name).join(" ")))'); do
+          while read -r name; do
             npm pkg set "optionalDependencies.${name}=${VERSION}"
-          done
+          done < ../../../built.txt
           echo "optionalDependencies:"
           npm pkg get optionalDependencies
 
@@ -320,8 +300,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          # The platform packages were published by the previous job; give
-          # the registry a moment to serve the new version.
+          # Give the registry a moment to serve the platform package just published.
           for i in $(seq 1 12); do
             if npm view "tingly-box-linux-x64@${VERSION}" version >/dev/null 2>&1; then break; fi
             echo "waiting for tingly-box-linux-x64@${VERSION} on the registry ($i)..."

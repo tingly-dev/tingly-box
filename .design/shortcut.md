@@ -449,7 +449,6 @@ ever a direct, visible user click on the System page, same posture as
 | `internal/command/server.go`                 | `start`/`restart` call `refreshShortcut` |
 | `cli/tingly-box/main.go`                     | global `--source` flag, binds `LaunchSource` into `ctx.Run` |
 | `build/npx/tingly-box/bin.js`                | npx wrapper, injects `--source=npx`      |
-| `build/npx/tingly-box-bundle/bin.js`         | bundle wrapper, injects `--source=npx-bundle` |
 | `internal/server/module/shortcut/`           | HTTP handler for `GET`/`POST /api/v1/shortcut` |
 | `internal/server/server_options.go`          | `WithLaunchSource`                       |
 | `frontend/src/components/ShortcutCard.tsx`   | the card (web/npx/binary only, not Wails GUI) |

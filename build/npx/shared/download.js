@@ -23,8 +23,8 @@ export function formatBytes(bytes) {
 }
 
 // Print why the release download failed and what to do next, then exit.
-// `hints` are package-specific next-step lines, printed verbatim (e.g.
-// bundleSwitchHints()); the generic retry/proxy advice is always appended.
+// `hints` are caller-supplied next-step lines, printed verbatim (the cli
+// shim passes downloadFailureHints()); retry/proxy advice is always appended.
 function failDownload(url, reason, hints) {
 	console.error(`\n❌ Download failed: ${reason}`);
 	console.error(`   URL: ${url}`);

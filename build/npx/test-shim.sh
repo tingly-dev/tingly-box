@@ -63,11 +63,13 @@ SIBLING="$NM/.tingly-box-gui-Ab12Cd34"    # another package's retire dir
 HUMAN="$NM/.tingly-box-backup"            # human-made dir, must never be touched
 mkdir -p "$NM/tingly-box" "$RETIRED/junk" "$SIBLING" "$HUMAN"
 cp "$WORK/bin.js" "$NM/tingly-box/bin.js"
-# The shim reads its own version from package.json (platform-package match).
+# The shim reads its own version from package.json (platform-package match);
+# stamp the tag's version into the planted copy, never into the checkout.
 VERSION="${TAG#v}"
-(cd "$PKG_DIR" && npm version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null)
-cp "$PKG_DIR/package.json" "$NM/tingly-box/package.json"
-git -C "$PKG_DIR" checkout -q package.json 2>/dev/null || true
+node -e '
+const fs = require("fs"), [src, dst, version] = process.argv.slice(1);
+fs.writeFileSync(dst, JSON.stringify({ ...JSON.parse(fs.readFileSync(src, "utf8")), version }, null, 2));
+' "$PKG_DIR/package.json" "$NM/tingly-box/package.json" "$VERSION"
 
 run_shim() {
 	node "$NM/tingly-box/bin.js" --transport-version="$TAG" version \
