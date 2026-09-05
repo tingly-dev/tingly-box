@@ -79,9 +79,8 @@ tb open    # open the web UI
 npm install -g tingly-box@latest
 tb restart
 
-# switch to the bundle if the release download keeps failing: both packages
-# provide tb / tingly-box, so uninstall the other one first (npm refuses to
-# install them side by side with EEXIST; don't use --force)
+# switch between tingly-box and tingly-box-bundle (same tb / tingly-box commands):
+# uninstall the current one, then install the other
 npm uninstall -g tingly-box
 npm install -g tingly-box-bundle@latest
 ```
