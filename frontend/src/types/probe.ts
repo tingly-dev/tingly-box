@@ -65,9 +65,24 @@ export interface ProbeRequest {
     // Send the loopback request as a real client: 'claude_code' hands it to
     // TB's own Claude Code client implementation. Through-TB + Anthropic only.
     client?: ProbeClient;
+
+    // ── Playground ──────────────────────────────────────────────────────
+    // Per-request rule-flag overlay (registry keys → values). Only keys
+    // present are applied; through-TB only. Nothing is persisted.
+    flags?: Record<string, unknown>;
+    // Post-serialization body edits: JSON path → value (null deletes).
+    body_overrides?: Record<string, unknown>;
+    // Header set/override; empty value removes the header.
+    headers?: Record<string, string>;
+    // Rule targets: 'natural' (default) lets TB match the rule from the
+    // request model as for real traffic; 'pinned' forces the chosen rule.
+    routing?: ProbeRouting;
 }
 
+export type ProbeRouting = 'natural' | 'pinned';
 export type ProbeClient = 'claude_code';
+// The clients a probe can send as (mirrors the backend's ProbeClient values).
+export const PROBE_CLIENTS: { id: ProbeClient; protocol: ProbeProtocol }[] = [{ id: 'claude_code', protocol: 'anthropic_v1' }];
 export type ProbeMessageRole = 'user' | 'assistant' | 'system';
 
 export interface ProbeMessage {

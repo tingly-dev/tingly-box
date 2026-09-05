@@ -179,6 +179,16 @@ export const api = {
         return result?.success === false ? {...result, data: result.data ?? []} : result;
     },
 
+    // Every rule across every scenario (the handler only filters when a
+    // scenario query is present). Used by surfaces that pick a target from the
+    // whole catalog, e.g. the Playground target picker.
+    getAllRules: async (): Promise<any> =>
+        controlApi((client, headers) => client.GET('/api/v1/rules', {
+            headers,
+            // An empty scenario query means "no filter" server-side.
+            params: {query: {scenario: ''}},
+        })),
+
     getRule: async (uuid: string): Promise<any> =>
         controlApi((client, headers) => client.GET('/api/v1/rule/{uuid}', {
             headers,

@@ -65,6 +65,7 @@ const GuardrailsHistoryPage = lazy(() => import('./pages/guardrails/HistoryPage'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const UserUsagePage = lazy(() => import('./pages/UserUsagePage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
+const PlaygroundPage = lazy(() => import('./pages/playground/PlaygroundPage'));
 const UserPage = lazy(() => import('./pages/prompt/UserPage'));
 const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
 const TelegramPage = lazy(() => import('./pages/bots/TelegramPage'));
@@ -230,6 +231,7 @@ function AppContent() {
                         everyone else to their last-active activity. */}
                     <Route index element={<OnboardingGate />} />
                     <Route path="/help" element={<HelpPage />} />
+                    <Route path="/playground" element={<PlaygroundPage />} />
                     {/* Back-compat: the old standalone Onboarding page was folded into
                         Help as ProvidersCard — keep old bookmarks/links working. */}
                     <Route path="/onboarding" element={<Navigate to="/help" replace />} />

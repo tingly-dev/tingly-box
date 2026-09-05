@@ -164,7 +164,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
             downloadBlob(createZipBlob(entries), `${stem}-${selectedRects.length}.zip`);
         } catch {
             showNotification(
-                t('playground.slice.failed', { defaultValue: 'Could not slice this image' }),
+                t('image-playground.slice.failed', { defaultValue: 'Could not slice this image' }),
                 'error',
             );
         } finally {
@@ -181,7 +181,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                 <GridView fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
-                        {t('playground.slice.title', { defaultValue: 'Split into tiles' })}
+                        {t('image-playground.slice.title', { defaultValue: 'Split into tiles' })}
                     </Typography>
                     <Typography
                         variant="caption"
@@ -192,7 +192,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                 </Box>
                 <IconButton
                     onClick={onClose}
-                    aria-label={t('playground.slice.close', { defaultValue: 'Close slicer' })}
+                    aria-label={t('image-playground.slice.close', { defaultValue: 'Close slicer' })}
                 >
                     <Close />
                 </IconButton>
@@ -221,7 +221,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                         {load.status === 'loading' && <CircularProgress size={28} />}
                         {load.status === 'error' && (
                             <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', p: 3 }}>
-                                {t('playground.slice.loadFailed', {
+                                {t('image-playground.slice.loadFailed', {
                                     defaultValue: 'This image could not be read for slicing. Providers that return a remote URL may block browser access to their pixels.',
                                 })}
                             </Typography>
@@ -245,7 +245,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 <Box
                                     component="img"
                                     src={image.src}
-                                    alt={t('playground.slice.sheetAlt', { defaultValue: 'Image being sliced' })}
+                                    alt={t('image-playground.slice.sheetAlt', { defaultValue: 'Image being sliced' })}
                                     sx={{ display: 'block', maxWidth: '100%', maxHeight: '60vh' }}
                                 />
                                 {rects.map((rect) => {
@@ -263,7 +263,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                     toggleTile(rect.index);
                                                 }
                                             }}
-                                            aria-label={t('playground.slice.tile', {
+                                            aria-label={t('image-playground.slice.tile', {
                                                 defaultValue: 'Tile {{number}}',
                                                 number: rect.index + 1,
                                             })}
@@ -292,7 +292,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
 
                     <Stack spacing={2}>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {t('playground.slice.hint', {
+                            {t('image-playground.slice.hint', {
                                 defaultValue: 'Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Adjust the margin and gap until the outlines sit on the artwork, then click a tile to leave it out.',
                             })}
                         </Typography>
@@ -300,11 +300,11 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                         <Stack direction="row" spacing={1.5}>
                             <FormControl size="small" fullWidth>
                                 <InputLabel id="slice-rows-label">
-                                    {t('playground.slice.rows', { defaultValue: 'Rows' })}
+                                    {t('image-playground.slice.rows', { defaultValue: 'Rows' })}
                                 </InputLabel>
                                 <Select
                                     labelId="slice-rows-label"
-                                    label={t('playground.slice.rows', { defaultValue: 'Rows' })}
+                                    label={t('image-playground.slice.rows', { defaultValue: 'Rows' })}
                                     value={rows}
                                     onChange={(event) => setRows(Number(event.target.value))}
                                 >
@@ -315,11 +315,11 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             </FormControl>
                             <FormControl size="small" fullWidth>
                                 <InputLabel id="slice-cols-label">
-                                    {t('playground.slice.cols', { defaultValue: 'Columns' })}
+                                    {t('image-playground.slice.cols', { defaultValue: 'Columns' })}
                                 </InputLabel>
                                 <Select
                                     labelId="slice-cols-label"
-                                    label={t('playground.slice.cols', { defaultValue: 'Columns' })}
+                                    label={t('image-playground.slice.cols', { defaultValue: 'Columns' })}
                                     value={cols}
                                     onChange={(event) => setCols(Number(event.target.value))}
                                 >
@@ -332,7 +332,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
 
                         <Box>
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {t('playground.slice.margin', { defaultValue: 'Outer margin' })} · {Math.round(margin * 100)}%
+                                {t('image-playground.slice.margin', { defaultValue: 'Outer margin' })} · {Math.round(margin * 100)}%
                             </Typography>
                             <Slider
                                 size="small"
@@ -341,12 +341,12 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 max={MARGIN_MAX}
                                 step={0.005}
                                 onChange={(_, value) => setMargin(value as number)}
-                                aria-label={t('playground.slice.margin', { defaultValue: 'Outer margin' })}
+                                aria-label={t('image-playground.slice.margin', { defaultValue: 'Outer margin' })}
                             />
                         </Box>
                         <Box>
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {t('playground.slice.gutter', { defaultValue: 'Gap between tiles' })} · {Math.round(gutter * 100)}%
+                                {t('image-playground.slice.gutter', { defaultValue: 'Gap between tiles' })} · {Math.round(gutter * 100)}%
                             </Typography>
                             <Slider
                                 size="small"
@@ -355,17 +355,17 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 max={GUTTER_MAX}
                                 step={0.01}
                                 onChange={(_, value) => setGutter(value as number)}
-                                aria-label={t('playground.slice.gutter', { defaultValue: 'Gap between tiles' })}
+                                aria-label={t('image-playground.slice.gutter', { defaultValue: 'Gap between tiles' })}
                             />
                         </Box>
 
                         <FormControl size="small" fullWidth>
                             <InputLabel id="slice-export-label">
-                                {t('playground.slice.exportSize', { defaultValue: 'Output size' })}
+                                {t('image-playground.slice.exportSize', { defaultValue: 'Output size' })}
                             </InputLabel>
                             <Select
                                 labelId="slice-export-label"
-                                label={t('playground.slice.exportSize', { defaultValue: 'Output size' })}
+                                label={t('image-playground.slice.exportSize', { defaultValue: 'Output size' })}
                                 value={exportSize ?? 'original'}
                                 onChange={(event) => {
                                     const value = event.target.value;
@@ -374,12 +374,12 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             >
                                 <MenuItem value="original">
                                     {image
-                                        ? t('playground.slice.exportOriginalWithSize', {
+                                        ? t('image-playground.slice.exportOriginalWithSize', {
                                             defaultValue: 'Original · {{width}}×{{height}} px',
                                             width: Math.round(rects[0]?.width ?? 0),
                                             height: Math.round(rects[0]?.height ?? 0),
                                         })
-                                        : t('playground.slice.exportOriginal', { defaultValue: 'Original' })}
+                                        : t('image-playground.slice.exportOriginal', { defaultValue: 'Original' })}
                                 </MenuItem>
                                 {EXPORT_SIZES.map((value) => (
                                     <MenuItem key={value} value={value}>{value} px</MenuItem>
@@ -400,7 +400,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             )}
                             label={(
                                 <Typography variant="body2">
-                                    {t('playground.slice.selectedCount', {
+                                    {t('image-playground.slice.selectedCount', {
                                         defaultValue: '{{selected}} of {{total}} tiles',
                                         selected: selectedRects.length,
                                         total: rects.length,
@@ -414,7 +414,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
                 <Button onClick={onClose} color="inherit">
-                    {t('playground.slice.cancel', { defaultValue: 'Cancel' })}
+                    {t('image-playground.slice.cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 <Button
                     variant="contained"
@@ -423,8 +423,8 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                     onClick={() => void handleDownload()}
                 >
                     {selectedRects.length === 1
-                        ? t('playground.slice.downloadOne', { defaultValue: 'Download this tile' })
-                        : t('playground.slice.downloadZip', {
+                        ? t('image-playground.slice.downloadOne', { defaultValue: 'Download this tile' })
+                        : t('image-playground.slice.downloadZip', {
                             defaultValue: 'Download {{count}} PNGs (ZIP)',
                             count: selectedRects.length,
                         })}
