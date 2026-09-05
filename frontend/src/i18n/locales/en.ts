@@ -188,10 +188,6 @@ export default {
         "title": "Global Install (npm)",
         "description": "Update the installed CLI, then restart the server to apply"
       },
-      "bundle": {
-        "title": "Offline Bundle (npx)",
-        "description": "Download with built-in binary for network issues"
-      },
       "docker": {
         "title": "Docker Image",
         "description": "Pull from GitHub Container Registry"

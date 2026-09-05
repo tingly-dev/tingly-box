@@ -22,7 +22,21 @@ export function formatBytes(bytes) {
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-export async function downloadAndExtractZip(url, extractDir) {
+// Print why the release download failed and what to do next, then exit.
+// `hints` are caller-supplied next-step lines, printed verbatim (the cli
+// shim passes downloadFailureHints()); retry/proxy advice is always appended.
+function failDownload(url, reason, hints) {
+	console.error(`\n❌ Download failed: ${reason}`);
+	console.error(`   URL: ${url}`);
+	console.error(`\n💡 Next steps:`);
+	for (const line of hints) {
+		console.error(`   ${line}`);
+	}
+	console.error(`   • Retry later, or route the download through a proxy (HTTPS_PROXY).`);
+	process.exit(1);
+}
+
+export async function downloadAndExtractZip(url, extractDir, { hints = [] } = {}) {
 	console.log(`🔄 Downloading ZIP from ${url}...`);
 
 	// Fetch with redirect following and optional proxy support
@@ -36,11 +50,18 @@ export async function downloadAndExtractZip(url, extractDir) {
 		fetchOptions.dispatcher = dispatcher;
 	}
 
-	const res = await fetch(url, fetchOptions);
+	let res;
+	try {
+		res = await fetch(url, fetchOptions);
+	} catch (fetchError) {
+		// Network-level failure (DNS, timeout, proxy refusal): surface the
+		// underlying cause instead of an unhandled-rejection stack trace.
+		const cause = fetchError.cause?.message || fetchError.message;
+		failDownload(url, cause, hints);
+	}
 
 	if (!res.ok) {
-		console.error(`❌ Download failed: ${res.status} ${res.statusText}`);
-		process.exit(1);
+		failDownload(url, `${res.status} ${res.statusText}`, hints);
 	}
 
 	const contentLength = res.headers.get("content-length");

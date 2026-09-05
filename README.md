@@ -58,19 +58,17 @@ npx tingly-box@latest
 # or -y for convenience
 npx -y tingly-box@latest
 
-# if any network trouble, try bundle with binary built-in
-npx -y tingly-box-bundle@latest
-
-# npm mirror is supported for CN (one of below)
-npx --registry=https://registry.npmmirror.com -y tingly-box-bundle@latest
-npx --registry=https://mirrors.huaweicloud.com/repository/npm/ -y tingly-box-bundle@latest
-npx --registry=http://mirrors.tencent.com/npm/ -y tingly-box-bundle@latest
+# the binary for your platform comes from npm too (no GitHub download),
+# so an npm mirror is all you need for CN (one of below)
+npx --registry=https://registry.npmmirror.com -y tingly-box@latest
+npx --registry=https://mirrors.huaweicloud.com/repository/npm/ -y tingly-box@latest
+npx --registry=http://mirrors.tencent.com/npm/ -y tingly-box@latest
 ```
 
 **Install globally with npm**
 
 ```bash
-npm install -g tingly-box@latest   # or tingly-box-bundle (binaries built-in, same commands)
+npm install -g tingly-box@latest   # --registry=<mirror> works here too
 
 tb start   # tb = tingly-box; runs in the background (--no-daemon for foreground)
 tb open    # open the web UI

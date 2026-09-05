@@ -188,10 +188,6 @@ export default {
         "title": "Глобальная установка (npm)",
         "description": "Обновите установленный CLI, затем перезапустите сервер"
       },
-      "bundle": {
-        "title": "Офлайн-сборка (npx)",
-        "description": "Загрузка со встроенным бинарником — на случай проблем с сетью"
-      },
       "docker": {
         "title": "Docker-образ",
         "description": "Загрузить из GitHub Container Registry"

@@ -189,10 +189,6 @@ export default {
         "title": "全局安装（npm）",
         "description": "更新已安装的 CLI，然后重启服务以生效"
       },
-      "bundle": {
-        "title": "离线包（npx）",
-        "description": "下载包含内置二进制文件的离线包，解决网络问题"
-      },
       "docker": {
         "title": "Docker 镜像",
         "description": "从 GitHub Container Registry 拉取镜像"
