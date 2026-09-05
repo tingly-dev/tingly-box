@@ -27,19 +27,15 @@ help. To update a global install: `npm install -g tingly-box@latest`, then
 asks for confirmation while the server is running (a restart interrupts
 in-flight AI requests); pass `-y` to skip the prompt in scripts.
 
-If the release download is a problem, switch to `tingly-box-bundle`
-(binaries built-in, same commands). Both packages own the `tingly-box` and
-`tb` bin names, so npm refuses to install one over the other
-(`EEXIST: file already exists … bin/tb`) — uninstall the current package
-first:
+`tingly-box-bundle` is the same CLI with the binaries included in the npm
+package, so it needs no download beyond the npm registry itself. Both
+packages provide the `tingly-box` and `tb` commands, so only one of them is
+installed at a time. To switch from one to the other, uninstall the current
+package, then install the other:
 ```bash
 npm uninstall -g tingly-box
 npm install -g tingly-box-bundle@latest
 ```
-The same applies in the other direction. Do not use `--force`: it leaves the
-old package installed, and uninstalling it later silently deletes the bins
-the new package uses. The `tingly-box` shim prints these commands whenever
-its download fails.
 
 ### Method 2: Docker
 Run as a background container:
