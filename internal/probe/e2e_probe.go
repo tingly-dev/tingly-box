@@ -59,7 +59,7 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 	// connectivity) always dispatches for real. shapeKey guards against a
 	// cached success from one stream/tool combination short-circuiting a
 	// differently-shaped check against the same provider/model/endpoint.
-	cacheable := req.TargetType == E2ETargetProvider && req.Direct &&
+	cacheable := req.TargetType == E2ETargetProvider && req.Direct && !req.Customized() &&
 		(endpointOverride == "chat" || endpointOverride == "responses")
 	shapeKey := fmt.Sprintf("%v-%v", stream, tool)
 	if req.Vision.Enabled() {
@@ -76,6 +76,9 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 	}
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
+	}
+	if rw := req.probeRewrite(); rw != nil {
+		ctx = client.WithProbeRewrite(ctx, rw)
 	}
 	params := req.probeParams(model)
 	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
@@ -100,6 +103,15 @@ func (req *E2ERequest) probeParams(model string) probeParams {
 		Messages: req.Messages,
 		Client:   req.Client,
 	}
+}
+
+// probeRewrite returns the post-serialization edits for this request, or nil
+// when there are none.
+func (req *E2ERequest) probeRewrite() *client.ProbeRewrite {
+	if len(req.BodyOverrides) == 0 && len(req.Headers) == 0 {
+		return nil
+	}
+	return &client.ProbeRewrite{Body: req.BodyOverrides, Headers: req.Headers}
 }
 
 // checkClientSimulation enforces what sending as a real client needs once the
@@ -154,6 +166,20 @@ func (e *E2EProber) resolveTargetToProviderModel(ctx context.Context, req *E2ERe
 	}
 	if err != nil {
 		return nil, "", nil, err
+	}
+	// The flag overlay rides on the probe-header family so TB's loopback
+	// handler can fold it into flag resolution. It only makes sense where
+	// those headers reach a TB handler; anything else has no middleware to
+	// apply flags in.
+	if len(req.Flags) > 0 {
+		if len(probeHeaders) == 0 {
+			return nil, "", nil, fmt.Errorf("flags require a through-TB probe (this target does not traverse TB)")
+		}
+		encoded, err := typ.EncodeFlagOverlay(req.Flags)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("encode flags: %w", err)
+		}
+		probeHeaders[typ.ProbeFlagsHeader] = encoded
 	}
 	return provider, model, probeHeaders, nil
 }
@@ -333,6 +359,14 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 	probeHeaders := map[string]string{
 		"X-Tingly-Debug-Routing": "1",
 	}
+	// Default (natural): no pin. The request carries only the rule's request
+	// model and TB matches the rule exactly as it would for a real client;
+	// the matched rule comes back in the routing trace, so a mismatch with
+	// the rule the caller picked is visible rather than silently corrected.
+	// Pinned: force this rule, skipping only the matching step.
+	if req.Routing.Pinned() {
+		probeHeaders["X-Tingly-Probe-Rule"] = rule.UUID
+	}
 
 	provider, model, err := e.loopbackConfigTarget(ctx, string(scenario), apiBase, apiStyle, rule.RequestModel)
 	if err != nil {
@@ -351,14 +385,19 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 // everything else -> chat).
 func (e *E2EProber) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, params probeParams, endpointOverride string) (*E2EData, error) {
 	_, wrapProbeHeaders := client.GetProbeHeaders(ctx)
+	_, wrapRewrite := client.GetProbeRewrite(ctx)
 
 	var result *E2EData
 	var err error
 	// maybeCapture wires probe-header + routing-capture round trippers onto a
 	// client when this is a loopback probe, and returns a func that folds the
 	// captured routing trace into the result once the call completes. For direct
-	// probes (no probe headers) it returns a no-op.
+	// probes (no probe headers) it returns a no-op. The body/header rewrite
+	// (when present) goes on first so it sits innermost and has the last word.
 	maybeCapture := func(c any) func(*E2EData) {
+		if wrapRewrite {
+			client.ApplyProbeRewriteToClient(c)
+		}
 		if !wrapProbeHeaders {
 			return func(*E2EData) {}
 		}

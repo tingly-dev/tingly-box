@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	servertransform "github.com/tingly-dev/tingly-box/internal/protocolserver/transform"
@@ -97,6 +98,31 @@ func ResolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 	return flags
 }
 
+// applyProbeFlagOverlay folds the X-Tingly-Probe-Flags header (if any) into
+// flags. The probe API validated the overlay before sending it; a malformed
+// header here can only come from a hand-crafted request, so it is logged and
+// ignored rather than failing the request.
+func applyProbeFlagOverlay(c *gin.Context, flags typ.RuleFlags) typ.RuleFlags {
+	if c == nil || c.Request == nil {
+		return flags
+	}
+	raw := c.GetHeader(typ.ProbeFlagsHeader)
+	if raw == "" {
+		return flags
+	}
+	overlay, err := typ.DecodeFlagOverlay(raw)
+	if err != nil {
+		logrus.WithContext(c.Request.Context()).Warnf("ignoring %s: %v", typ.ProbeFlagsHeader, err)
+		return flags
+	}
+	merged, err := typ.ApplyFlagOverlay(flags, overlay)
+	if err != nil {
+		logrus.WithContext(c.Request.Context()).Warnf("ignoring %s: %v", typ.ProbeFlagsHeader, err)
+		return flags
+	}
+	return merged
+}
+
 // ResolveRuleFlagsWithScenario extends resolveRuleFlags to also inject scenario-level
 // flags and auto-apply CleanHeader for protocol transformation scenarios.
 //
@@ -143,6 +169,13 @@ func ResolveRuleFlagsWithScenario(
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
 		// migrate20260610), so there is nothing to inject here.
 	}
+
+	// Probe overlay (X-Tingly-Probe-Flags, playground): a per-request flag set
+	// applied after scenario inheritance so it can override any configured
+	// value — including turning a scenario-default flag off — but before the
+	// auto/suppression steps below, which encode physical constraints an
+	// experiment must not fake. Nothing is persisted.
+	flags = applyProbeFlagOverlay(c, flags)
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios
 	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)

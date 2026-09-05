@@ -19,6 +19,7 @@
 import {
     IconInfoCircle,
     IconRefresh,
+    IconTestPipe,
     IconX,
     IconTrash,
     IconTrashX,
@@ -192,6 +193,8 @@ export const Launch = tablerMui(IconExternalLink);
 export const ZoomIn = tablerMui(IconZoomIn);
 export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
+// Playground / workbench (IconFlask is already taken by VModel + Experimental).
+export const TestPipe = tablerMui(IconTestPipe);
 export const Filter = tablerMui(IconFilter);
 export const FilterOff = tablerMui(IconFilterOff);
 export const Sort = tablerMui(IconArrowsSort);

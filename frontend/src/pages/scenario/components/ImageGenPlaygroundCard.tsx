@@ -203,7 +203,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setReferenceImages([{ file, previewUrl: src }]);
         } catch {
             showNotification(
-                t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
+                t('image-playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
                 'error',
             );
         }
@@ -215,7 +215,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             await downloadImage(image.src, `${slugify(image.prompt)}-${image.index + 1}`);
         } catch {
             showNotification(
-                t('playground.downloadFailed', { defaultValue: 'Could not download this image' }),
+                t('image-playground.downloadFailed', { defaultValue: 'Could not download this image' }),
                 'error',
             );
         }
@@ -268,7 +268,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch (error: any) {
             updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== runId));
             const status = error?.status ? `${error.status}: ` : '';
-            const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
+            const message = error?.error?.message || error?.message || t('image-playground.requestFailed', { defaultValue: 'Request failed' });
             showNotification(`${status}${message}`, 'error');
         }
     }, [count, mode, model, prompt, quality, referenceImages, showNotification, size, t, updateRuns]);
@@ -282,7 +282,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         <>
             <UnifiedCard
                 size="full"
-                title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
+                title={t('image-playground.imageTitle', { defaultValue: 'Image Playground' })}
             >
                 <Box
                     onPaste={handlePaste}
@@ -306,7 +306,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     >
                         {noModels && !loadingRules && (
                             <Alert severity="info" variant="outlined">
-                                {t('playground.noImageModels', {
+                                {t('image-playground.noImageModels', {
                                     defaultValue: 'Add an image generation model rule below to start generating images.',
                                 })}
                             </Alert>
@@ -322,18 +322,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         >
                             <ToggleButton value="generate">
                                 <AutoAwesome fontSize="small" sx={{ mr: 0.75 }} />
-                                {t('playground.modeGenerate', { defaultValue: 'Generate' })}
+                                {t('image-playground.modeGenerate', { defaultValue: 'Generate' })}
                             </ToggleButton>
                             <ToggleButton value="edit">
                                 <Brush fontSize="small" sx={{ mr: 0.75 }} />
-                                {t('playground.modeEdit', { defaultValue: 'Edit' })}
+                                {t('image-playground.modeEdit', { defaultValue: 'Edit' })}
                             </ToggleButton>
                         </ToggleButtonGroup>
 
                         {mode === 'edit' && (
                             <Box>
                                 <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
-                                    {t('playground.referenceImages', { defaultValue: 'Reference images' })}
+                                    {t('image-playground.referenceImages', { defaultValue: 'Reference images' })}
                                 </Typography>
                                 <Box
                                     onClick={() => referenceFileInputRef.current?.click()}
@@ -362,7 +362,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         <Stack direction="row" spacing={1} sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', py: 0.5 }}>
                                             <FileUpload sx={{ fontSize: 20 }} />
                                             <Typography variant="body2">
-                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop images here, click to browse, or paste' })}
+                                                {t('image-playground.dropReferenceImage', { defaultValue: 'Drop images here, click to browse, or paste' })}
                                             </Typography>
                                         </Stack>
                                     ) : (
@@ -375,13 +375,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     <Box
                                                         component="img"
                                                         src={ref.previewUrl}
-                                                        alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
+                                                        alt={t('image-playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
                                                         sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                     />
                                                     <IconButton
                                                         size="small"
                                                         onClick={(event) => { event.stopPropagation(); handleRemoveReferenceImage(index); }}
-                                                        aria-label={t('playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
+                                                        aria-label={t('image-playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
                                                         sx={{
                                                             position: 'absolute',
                                                             top: -6,
@@ -399,7 +399,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             ))}
                                             {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && (
                                                 <Stack
-                                                    aria-label={t('playground.addReferenceImage', { defaultValue: 'Add image' })}
+                                                    aria-label={t('image-playground.addReferenceImage', { defaultValue: 'Add image' })}
                                                     sx={{
                                                         width: 56,
                                                         height: 56,
@@ -418,7 +418,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     )}
                                 </Box>
                                 <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
-                                    {t('playground.referenceHint', {
+                                    {t('image-playground.referenceHint', {
                                         defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP',
                                         max: MAX_EDIT_REFERENCE_IMAGES,
                                     })}
@@ -439,11 +439,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
                         <FormControl size="small" fullWidth>
                             <InputLabel id="image-model-label">
-                                {t('playground.model', { defaultValue: 'Model' })}
+                                {t('image-playground.model', { defaultValue: 'Model' })}
                             </InputLabel>
                             <Select
                                 labelId="image-model-label"
-                                label={t('playground.model', { defaultValue: 'Model' })}
+                                label={t('image-playground.model', { defaultValue: 'Model' })}
                                 value={model}
                                 onChange={(event) => setSelectedModel(event.target.value)}
                                 disabled={noModels}
@@ -458,10 +458,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             multiline
                             rows={5}
                             fullWidth
-                            label={t('playground.prompt', { defaultValue: 'Prompt' })}
+                            label={t('image-playground.prompt', { defaultValue: 'Prompt' })}
                             placeholder={mode === 'edit'
-                                ? t('playground.editPromptPlaceholder', { defaultValue: 'Describe the change you want to make…' })
-                                : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
+                                ? t('image-playground.editPromptPlaceholder', { defaultValue: 'Describe the change you want to make…' })
+                                : t('image-playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
                             disabled={noModels}
@@ -495,11 +495,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         >
                             <FormControl size="small">
                                 <InputLabel id="image-size-label">
-                                    {t('playground.size', { defaultValue: 'Size' })}
+                                    {t('image-playground.size', { defaultValue: 'Size' })}
                                 </InputLabel>
                                 <Select
                                     labelId="image-size-label"
-                                    label={t('playground.size', { defaultValue: 'Size' })}
+                                    label={t('image-playground.size', { defaultValue: 'Size' })}
                                     value={size}
                                     onChange={(event) => setSize(event.target.value)}
                                 >
@@ -512,11 +512,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </FormControl>
                             <FormControl size="small">
                                 <InputLabel id="image-quality-label">
-                                    {t('playground.quality', { defaultValue: 'Quality' })}
+                                    {t('image-playground.quality', { defaultValue: 'Quality' })}
                                 </InputLabel>
                                 <Select
                                     labelId="image-quality-label"
-                                    label={t('playground.quality', { defaultValue: 'Quality' })}
+                                    label={t('image-playground.quality', { defaultValue: 'Quality' })}
                                     value={quality}
                                     onChange={(event) => setQuality(event.target.value as Quality)}
                                 >
@@ -530,7 +530,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             <TextField
                                 size="small"
                                 type="number"
-                                label={t('playground.count', { defaultValue: 'N' })}
+                                label={t('image-playground.count', { defaultValue: 'N' })}
                                 value={count}
                                 onChange={(event) => {
                                     const nextCount = Number(event.target.value);
@@ -558,11 +558,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         >
                             {mode === 'edit'
                                 ? (pendingCount > 0
-                                    ? t('playground.editAnother', { defaultValue: 'Edit another · {{count}} running', count: pendingCount })
-                                    : t('playground.edit', { defaultValue: 'Edit Image' }))
+                                    ? t('image-playground.editAnother', { defaultValue: 'Edit another · {{count}} running', count: pendingCount })
+                                    : t('image-playground.edit', { defaultValue: 'Edit Image' }))
                                 : (pendingCount > 0
-                                    ? t('playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
-                                    : t('playground.generate', { defaultValue: 'Generate' }))}
+                                    ? t('image-playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
+                                    : t('image-playground.generate', { defaultValue: 'Generate' }))}
                         </Button>
                     </Stack>
 
@@ -595,19 +595,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Typography variant="subtitle2" sx={{
                                     color: "text.secondary"
                                 }}>
-                                    {t('playground.previewEmpty', { defaultValue: 'Your generated images will appear here' })}
+                                    {t('image-playground.previewEmpty', { defaultValue: 'Your generated images will appear here' })}
                                 </Typography>
                                 <Typography variant="caption" sx={{
                                     color: "text.disabled"
                                 }}>
-                                    {t('playground.previewHint', { defaultValue: 'Each generation will be kept for this session.' })}
+                                    {t('image-playground.previewHint', { defaultValue: 'Each generation will be kept for this session.' })}
                                 </Typography>
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
                                     <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
-                                        {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
+                                        {t('image-playground.sessionOutputs', { defaultValue: 'Session outputs' })}
                                     </Typography>
                                     <Typography
                                         variant="caption"
@@ -618,8 +618,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         }}
                                     >
                                         {runs.length === 1
-                                            ? t('playground.runCountOne', { defaultValue: '1 generation' })
-                                            : t('playground.runCount', {
+                                            ? t('image-playground.runCountOne', { defaultValue: '1 generation' })
+                                            : t('image-playground.runCount', {
                                                 defaultValue: '{{count}} generations',
                                                 count: runs.length,
                                             })}
@@ -674,8 +674,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     <CircularProgress size={24} />
                                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                         {run.mode === 'edit'
-                                                            ? t('playground.editingNew', { defaultValue: 'Editing images…' })
-                                                            : t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                            ? t('image-playground.editingNew', { defaultValue: 'Editing images…' })
+                                                            : t('image-playground.generatingNew', { defaultValue: 'Generating new images…' })}
                                                     </Typography>
                                                     <Typography
                                                         variant="caption"
@@ -720,7 +720,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                     fontWeight: 600,
                                                                 }}
                                                             >
-                                                                {t('playground.editBadge', { defaultValue: 'Edited' })}
+                                                                {t('image-playground.editBadge', { defaultValue: 'Edited' })}
                                                             </Typography>
                                                         )}
                                                         <Typography
@@ -763,7 +763,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                         index: i,
                                                                         kind: 'source',
                                                                     })}
-                                                                    aria-label={t('playground.viewSourceImage', {
+                                                                    aria-label={t('image-playground.viewSourceImage', {
                                                                         defaultValue: 'View original image {{number}}',
                                                                         number: i + 1,
                                                                     })}
@@ -781,7 +781,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                     <Box
                                                                         component="img"
                                                                         src={src}
-                                                                        alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
+                                                                        alt={t('image-playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
                                                                         sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                                     />
                                                                 </ButtonBase>
@@ -819,7 +819,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                         index,
                                                                         kind: 'output',
                                                                     })}
-                                                                    aria-label={t('playground.openResult', {
+                                                                    aria-label={t('image-playground.openResult', {
                                                                         defaultValue: 'Open generated image {{number}}',
                                                                         number: index + 1,
                                                                     })}
@@ -835,7 +835,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                     <Box
                                                                         component="img"
                                                                         src={src}
-                                                                        alt={t('playground.resultAlt', {
+                                                                        alt={t('image-playground.resultAlt', {
                                                                             defaultValue: 'Generated image {{number}}',
                                                                             number: index + 1,
                                                                         })}
@@ -885,7 +885,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                 <IconButton
                                                                     size="small"
                                                                     onClick={(event) => { event.stopPropagation(); void handleUseAsReference(src); }}
-                                                                    aria-label={t('playground.useAsReference', { defaultValue: 'Edit this image' })}
+                                                                    aria-label={t('image-playground.useAsReference', { defaultValue: 'Edit this image' })}
                                                                     sx={{
                                                                         position: 'absolute',
                                                                         bottom: 8,
@@ -905,7 +905,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             <Typography key={`${run.id}-${index}`} variant="caption" sx={{
                                                                 color: "text.secondary"
                                                             }}>
-                                                                {t('playground.emptyResult', { defaultValue: 'No image returned' })}
+                                                                {t('image-playground.emptyResult', { defaultValue: 'No image returned' })}
                                                             </Typography>
                                                         );
                                                     })}
@@ -968,7 +968,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         fontWeight: 600,
                                     }}
                                 >
-                                    {t('playground.originalBadge', { defaultValue: 'Original' })}
+                                    {t('image-playground.originalBadge', { defaultValue: 'Original' })}
                                 </Typography>
                             )}
                             <Typography
@@ -996,45 +996,45 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
                         <Tooltip
                             title={promptCopied
-                                ? t('playground.promptCopied', { defaultValue: 'Copied' })
-                                : t('playground.copyPrompt', { defaultValue: 'Copy prompt' })}
+                                ? t('image-playground.promptCopied', { defaultValue: 'Copied' })
+                                : t('image-playground.copyPrompt', { defaultValue: 'Copy prompt' })}
                             open={promptCopied || undefined}
                             disableHoverListener={promptCopied}
                         >
                             <IconButton
                                 onClick={() => { if (selectedImage) copyPrompt(selectedImage.prompt); }}
-                                aria-label={t('playground.copyPrompt', { defaultValue: 'Copy prompt' })}
+                                aria-label={t('image-playground.copyPrompt', { defaultValue: 'Copy prompt' })}
                                 sx={overlayIconSx}
                             >
                                 <ContentCopy fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
+                        <Tooltip title={t('image-playground.slice.action', { defaultValue: 'Split into tiles' })}>
                             <IconButton
                                 onClick={() => setSliceTarget(selectedImage)}
-                                aria-label={t('playground.slice.action', { defaultValue: 'Split into tiles' })}
+                                aria-label={t('image-playground.slice.action', { defaultValue: 'Split into tiles' })}
                                 sx={overlayIconSx}
                             >
                                 <GridView fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title={t('playground.download', { defaultValue: 'Download' })}>
+                        <Tooltip title={t('image-playground.download', { defaultValue: 'Download' })}>
                             <IconButton
                                 onClick={() => { if (selectedImage) void handleDownload(selectedImage); }}
-                                aria-label={t('playground.download', { defaultValue: 'Download' })}
+                                aria-label={t('image-playground.download', { defaultValue: 'Download' })}
                                 sx={overlayIconSx}
                             >
                                 <Download fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Edit this image' })}>
+                        <Tooltip title={t('image-playground.useAsReference', { defaultValue: 'Edit this image' })}>
                             <IconButton
                                 onClick={() => {
                                     if (!selectedImage) return;
                                     void handleUseAsReference(selectedImage.src);
                                     setSelectedImage(null);
                                 }}
-                                aria-label={t('playground.useAsReference', { defaultValue: 'Edit this image' })}
+                                aria-label={t('image-playground.useAsReference', { defaultValue: 'Edit this image' })}
                                 sx={overlayIconSx}
                             >
                                 <Edit fontSize="small" />
@@ -1042,7 +1042,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Tooltip>
                         <IconButton
                             onClick={() => setSelectedImage(null)}
-                            aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
+                            aria-label={t('image-playground.closePreview', { defaultValue: 'Close image preview' })}
                             sx={overlayIconSx}
                         >
                             <Close />
@@ -1064,8 +1064,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             component="img"
                             src={selectedImage.src}
                             alt={selectedImage.kind === 'source'
-                                ? t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 })
-                                : t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })}
+                                ? t('image-playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 })
+                                : t('image-playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })}
                             sx={{
                                 display: 'block',
                                 maxWidth: '100%',
