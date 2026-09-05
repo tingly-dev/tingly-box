@@ -5,10 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sort"
 	"strings"
 
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Secret placeholder env-var names used in generated cURL commands. Secrets
@@ -46,15 +51,11 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 		return nil, err
 	}
 
-	stream, tool := req.ResolveAxes()
-	params := probeParams{
-		Model:    model,
-		Message:  E2EMessage(tool, req.Message),
-		Stream:   stream,
-		Tool:     tool,
-		Thinking: req.Thinking,
-		Vision:   req.Vision,
+	if err := checkClientSimulation(req, provider, probeHeaders); err != nil {
+		return nil, err
 	}
+	stream, _ := req.ResolveAxes()
+	params := req.probeParams(model)
 
 	// resolveTargetToProviderModel has already applied the protocol override
 	// to the provider (loopback synthetic carries the client style; direct
@@ -74,6 +75,12 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	keyEnv := curlKeyEnvUpstream
 	if throughTB {
 		keyEnv = curlKeyEnvThroughTB
+	}
+
+	// Sending as Claude Code: render exactly what that client emits by
+	// letting it build the request and capturing it before it leaves.
+	if params.Client == ClientClaudeCode {
+		return e.buildClaudeCodeCurl(ctx, provider, params, probeHeaders, keyEnv)
 	}
 
 	var (
@@ -116,6 +123,78 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 		URL:       url,
 		Headers:   headers,
 		Body:      body,
+		KeyEnvVar: keyEnv,
+	}, nil
+}
+
+// buildClaudeCodeCurl renders the request TB's Claude Code client would send
+// to the loopback: the client is constructed exactly as for a run, with a
+// middleware that captures the outgoing request and answers with an empty
+// synthetic response, so nothing is executed and no header list is copied.
+func (e *E2EProber) buildClaudeCodeCurl(ctx context.Context, provider *typ.Provider, params probeParams, probeHeaders map[string]string, keyEnv string) (*CurlData, error) {
+	var (
+		captured *http.Request
+		body     []byte
+	)
+	capture := func(req *http.Request, _ anthropicOption.MiddlewareNext) (*http.Response, error) {
+		captured = req.Clone(req.Context())
+		if req.Body != nil {
+			body, _ = io.ReadAll(req.Body)
+			_ = req.Body.Close()
+		}
+		contentType, payload := "application/json", `{"id":"msg_probe","type":"message","role":"assistant","model":"`+params.Model+`","content":[],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}`
+		if params.Stream {
+			contentType, payload = "text/event-stream", ""
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": {contentType}},
+			Body:       io.NopCloser(strings.NewReader(payload)),
+			Request:    req,
+		}, nil
+	}
+	cc, _, err := newClaudeCodeClient(ctx, provider, params.Model, anthropicOption.WithMiddleware(capture))
+	if err != nil {
+		return nil, err
+	}
+	msgParams := buildAnthropicMessageParams(params, provider.IsClaudeCodeProvider())
+	if params.Stream {
+		if s := cc.MessagesNewStreaming(ctx, msgParams); s != nil {
+			for s.Next() {
+			}
+			_ = s.Close()
+		}
+	} else {
+		_, _ = cc.MessagesNew(ctx, msgParams)
+	}
+	if captured == nil {
+		return nil, fmt.Errorf("failed to capture the Claude Code request")
+	}
+
+	// Headers as emitted, with the gateway key placeholder in place of the
+	// real token and the transport-level probe pins added (they are set by
+	// the transport, below the capture point).
+	headers := map[string]string{}
+	for name, values := range captured.Header {
+		if len(values) == 0 || strings.EqualFold(name, "Content-Length") {
+			continue
+		}
+		v := values[0]
+		if provider.Token != "" && strings.Contains(v, provider.Token) {
+			v = strings.ReplaceAll(v, provider.Token, keyEnv)
+		}
+		headers[name] = v
+	}
+	for k, v := range probeHeaders {
+		headers[k] = v
+	}
+	url := captured.URL.String()
+	return &CurlData{
+		Command:   renderCurl(url, headers, string(body), params.Stream),
+		Method:    captured.Method,
+		URL:       url,
+		Headers:   headers,
+		Body:      string(body),
 		KeyEnvVar: keyEnv,
 	}, nil
 }

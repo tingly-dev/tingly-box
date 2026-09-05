@@ -38,7 +38,7 @@ type ClaudeClient struct {
 // ctx is the inbound request context: the pool constructs a client per request,
 // so per-request flags resolved here (the claude_org_id rule flag via
 // typ.GetRuleFlags) are correctly scoped to the request being served.
-func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
+func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*ClaudeClient, error) {
 	logrus.Debug("creating claude-client")
 
 	apiBase := anthropicBaseURL(provider.APIBase)
@@ -64,6 +64,10 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
 	}
 	options = append(options, anthropicOption.WithRequestTimeout(timeout))
+
+	// Caller extras last so they can override (probe: own http.Client,
+	// capture middleware).
+	options = append(options, extraOptions...)
 
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)

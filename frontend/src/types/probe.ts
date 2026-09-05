@@ -56,6 +56,23 @@ export interface ProbeRequest {
     // Vision: attach the canonical probe image in the user message ('user')
     // or a synthetic tool-result turn ('tool'). Omitted/'none' sends no image.
     vision?: ProbeVision;
+
+    // System prompt override; empty keeps the probe's echo instruction.
+    system?: string;
+    // Custom conversation replacing the single-message fixture. Exclusive
+    // with `message` and with `vision`; the last turn must be a user turn.
+    messages?: ProbeMessage[];
+    // Send the loopback request as a real client: 'claude_code' hands it to
+    // TB's own Claude Code client implementation. Through-TB + Anthropic only.
+    client?: ProbeClient;
+}
+
+export type ProbeClient = 'claude_code';
+export type ProbeMessageRole = 'user' | 'assistant' | 'system';
+
+export interface ProbeMessage {
+    role: ProbeMessageRole;
+    text: string;
 }
 
 export interface ProbeToolCall {

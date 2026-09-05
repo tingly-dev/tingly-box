@@ -3,9 +3,11 @@ package probe
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -69,22 +71,65 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 		return &Result{Success: true, Message: "Verified recently (cached)"}, nil
 	}
 
+	if err := checkClientSimulation(req, provider, probeHeaders); err != nil {
+		return nil, err
+	}
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
-	params := probeParams{
+	params := req.probeParams(model)
+	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
+	if cacheable && err == nil && result != nil && result.Success {
+		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
+	}
+	return result, err
+}
+
+// probeParams resolves the request into the flat shape the SDK helpers read.
+// Shared by Probe and BuildCurl so both build from the same decisions.
+func (req *E2ERequest) probeParams(model string) probeParams {
+	stream, tool := req.ResolveAxes()
+	return probeParams{
 		Model:    model,
 		Message:  E2EMessage(tool, req.Message),
 		Stream:   stream,
 		Tool:     tool,
 		Thinking: req.Thinking,
 		Vision:   req.Vision,
+		System:   req.System,
+		Messages: req.Messages,
+		Client:   req.Client,
 	}
-	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
-	if cacheable && err == nil && result != nil && result.Success {
-		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
+}
+
+// checkClientSimulation enforces what sending as a real client needs once the
+// target is resolved: a loopback (TB must receive the request) speaking the
+// Anthropic protocol (the only client implementation available, Claude Code).
+func checkClientSimulation(req *E2ERequest, provider *typ.Provider, probeHeaders map[string]string) error {
+	if req.Client == ClientNone {
+		return nil
 	}
-	return result, err
+	if len(probeHeaders) == 0 {
+		return fmt.Errorf("sending as %s requires a through-TB probe (this target does not traverse TB)", req.Client)
+	}
+	if provider.APIStyle != protocol.APIStyleAnthropic {
+		return fmt.Errorf("sending as %s requires the Anthropic protocol (the target speaks %s)", req.Client, provider.APIStyle)
+	}
+	return nil
+}
+
+// newClaudeCodeClient builds the loopback SDK client the way TB builds its
+// own Claude Code OAuth client — same constructor, same headers, same request
+// guard — pointed at the loopback provider. The http.Client is returned so
+// the probe wrappers (probe headers, routing capture) can layer onto it.
+func newClaudeCodeClient(ctx context.Context, provider *typ.Provider, model string, extra ...anthropicOption.RequestOption) (client.AnthropicClientInterface, *http.Client, error) {
+	hc := &http.Client{Transport: http.DefaultTransport}
+	opts := append([]anthropicOption.RequestOption{anthropicOption.WithHTTPClient(hc)}, extra...)
+	cc, err := client.NewClaudeClient(ctx, provider, model, typ.GetSessionID(ctx), opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build Claude Code client for provider %s: %w", provider.Name, err)
+	}
+	return cc, hc, nil
 }
 
 // resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
@@ -349,11 +394,26 @@ func (e *E2EProber) probeProviderWithSDK(ctx context.Context, provider *typ.Prov
 		}
 
 	case protocol.APIStyleAnthropic:
-		ac := e.clientPool.GetAnthropicClient(ctx, provider, params.Model)
-		if ac == nil {
-			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
+		var (
+			ac    client.AnthropicClientInterface
+			apply func(*E2EData)
+		)
+		if params.Client == ClientClaudeCode {
+			// Send as Claude Code: TB's own Claude Code client emits the
+			// loopback request, so what TB receives is what that client
+			// sends — no separately maintained header list.
+			cc, hc, cerr := newClaudeCodeClient(ctx, provider, params.Model)
+			if cerr != nil {
+				return nil, cerr
+			}
+			ac, apply = cc, maybeCapture(hc)
+		} else {
+			ac = e.clientPool.GetAnthropicClient(ctx, provider, params.Model)
+			if ac == nil {
+				return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
+			}
+			apply = maybeCapture(ac)
 		}
-		apply := maybeCapture(ac)
 		result, err = probeAnthropicMessages(ctx, ac, params)
 		if err == nil {
 			apply(result)

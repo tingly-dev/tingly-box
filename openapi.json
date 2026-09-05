@@ -9832,6 +9832,11 @@
             "type": "string",
             "description": "Field api_style"
           },
+          "client": {
+            "type": "string",
+            "description": "Field client",
+            "example": "claude_code"
+          },
           "direct": {
             "type": "boolean",
             "description": "Field direct"
@@ -9839,6 +9844,13 @@
           "message": {
             "type": "string",
             "description": "Field message"
+          },
+          "messages": {
+            "type": "array",
+            "description": "Field messages",
+            "items": {
+              "$ref": "#/components/schemas/ProbeMessage"
+            }
           },
           "model": {
             "type": "string",
@@ -9870,6 +9882,11 @@
             "type": "boolean",
             "description": "Field stream",
             "example": true
+          },
+          "system": {
+            "type": "string",
+            "description": "Field system",
+            "example": "You are a test agent."
           },
           "target_type": {
             "type": "string",
@@ -12998,6 +13015,25 @@
           "policy_name",
           "policy_type",
           "verdict"
+        ]
+      },
+      "ProbeMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "Field role",
+            "example": "user"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text",
+            "example": "What's in ./src?"
+          }
+        },
+        "required": [
+          "role",
+          "text"
         ]
       },
       "ProfileClaudeConfigData": {

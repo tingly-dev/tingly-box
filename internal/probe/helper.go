@@ -2,11 +2,15 @@ package probe
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -18,6 +22,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -40,6 +45,100 @@ type probeParams struct {
 	Tool     bool // true → attach probe tools + auto tool_choice (tool mode)
 	Thinking ThinkingLevel
 	Vision   VisionChannel // user/tool → attach the canonical vision fixture turn
+	// System replaces the echo instruction when set (custom system prompt).
+	System string
+	// Messages replaces the single-message fixture when non-empty (custom
+	// conversation). Validation guarantees it never coexists with Vision.
+	Messages []ProbeMessage
+	// Client is the real client the probe sends as (E2ERequest.Client).
+	Client ProbeClient
+}
+
+// systemPrompt is the system / instruction text for non-vision probes: the
+// caller's custom prompt, else the echo instruction that keeps replies short.
+func (p probeParams) systemPrompt() string {
+	if p.System != "" {
+		return p.System
+	}
+	return probeEchoInstruction
+}
+
+// claudeCodeBillingBlock is the billing system block a real Claude Code CLI
+// prepends to its requests — the block clean_header exists to strip. Values
+// are placeholders in the CLI's own format; TB never forwards them.
+const claudeCodeBillingBlock = "x-anthropic-billing-header: cc_version=2.1.86; cc_entrypoint=cli; cch=00000;"
+
+// claudeCodeUserID mints a Claude Code metadata.user_id (the JSON form the
+// CLI sends since 2.1.78) with a stable probe device id and a fresh session,
+// so session affinity buckets each run separately, as it would a new CLI
+// session. The Claude Code client implementation requires this field.
+func claudeCodeUserID() string {
+	device := sha256.Sum256([]byte("tingly-box probe device"))
+	m := ops.MetadataUserID{DeviceID: hex.EncodeToString(device[:]), SessionID: uuid.NewString()}
+	return m.Format()
+}
+
+// buildOpenAIChatConversation maps a custom conversation onto Chat messages.
+// A system turn mid-conversation is emitted as-is — that shape is a test
+// subject (claude_code_compat), not something to normalize away here.
+func buildOpenAIChatConversation(p probeParams) []openai.ChatCompletionMessageParamUnion {
+	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, len(p.Messages)+1)
+	msgs = append(msgs, openai.SystemMessage(p.systemPrompt()))
+	for _, m := range p.Messages {
+		switch m.Role {
+		case ProbeRoleAssistant:
+			msgs = append(msgs, openai.AssistantMessage(m.Text))
+		case ProbeRoleSystem:
+			msgs = append(msgs, openai.SystemMessage(m.Text))
+		default:
+			msgs = append(msgs, openai.UserMessage(m.Text))
+		}
+	}
+	return msgs
+}
+
+// buildOpenAIResponsesConversation maps a custom conversation onto Responses
+// input items (the system prompt travels in Instructions, not here).
+func buildOpenAIResponsesConversation(p probeParams) []responses.ResponseInputItemUnionParam {
+	items := make([]responses.ResponseInputItemUnionParam, 0, len(p.Messages))
+	for _, m := range p.Messages {
+		role := responses.EasyInputMessageRoleUser
+		switch m.Role {
+		case ProbeRoleAssistant:
+			role = responses.EasyInputMessageRoleAssistant
+		case ProbeRoleSystem:
+			role = responses.EasyInputMessageRoleSystem
+		}
+		items = append(items, responses.ResponseInputItemParamOfMessage(
+			responses.ResponseInputMessageContentListParam{
+				responses.ResponseInputContentParamOfInputText(m.Text),
+			},
+			role,
+		))
+	}
+	return items
+}
+
+// buildAnthropicConversation maps a custom conversation onto Messages. The
+// Anthropic protocol has no system role inside messages; a mid-conversation
+// system turn is emitted with role "system" on purpose — it is exactly the
+// non-standard shape claude_code_compat exists to handle.
+func buildAnthropicConversation(p probeParams) []anthropic.MessageParam {
+	msgs := make([]anthropic.MessageParam, 0, len(p.Messages))
+	for _, m := range p.Messages {
+		switch m.Role {
+		case ProbeRoleAssistant:
+			msgs = append(msgs, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Text)))
+		case ProbeRoleSystem:
+			msgs = append(msgs, anthropic.MessageParam{
+				Role:    anthropic.MessageParamRole(ProbeRoleSystem),
+				Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(m.Text)},
+			})
+		default:
+			msgs = append(msgs, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Text)))
+		}
+	}
+	return msgs
 }
 
 // thinkingEnabled reports whether the probe should enable extended thinking.
@@ -204,8 +303,11 @@ func buildOpenAIChatVisionMessages(p probeParams) []openai.ChatCompletionMessage
 			}, visionproxy.ToolCallID),
 		}
 	default:
+		if len(p.Messages) > 0 {
+			return buildOpenAIChatConversation(p)
+		}
 		return []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(probeEchoInstruction),
+			openai.SystemMessage(p.systemPrompt()),
 			openai.UserMessage(p.Message),
 		}
 	}
@@ -272,7 +374,7 @@ func buildOpenAIResponsesParams(p probeParams) responses.ResponseNewParams {
 	if !p.Vision.Enabled() {
 		// Echo instruction only for non-vision probes — the vision fixture
 		// prompt is the diagnostic and must not be echoed back.
-		params.Instructions = param.NewOpt(probeEchoInstruction)
+		params.Instructions = param.NewOpt(p.systemPrompt())
 	}
 	if p.Tool {
 		params.Tools = getProbeToolsResponses()
@@ -331,6 +433,9 @@ func buildOpenAIResponsesVisionInput(p probeParams) []responses.ResponseInputIte
 			}},
 		}
 	default:
+		if len(p.Messages) > 0 {
+			return buildOpenAIResponsesConversation(p)
+		}
 		return []responses.ResponseInputItemUnionParam{
 			responses.ResponseInputItemParamOfMessage(
 				responses.ResponseInputMessageContentListParam{
@@ -389,9 +494,17 @@ func buildAnthropicMessageParams(p probeParams, isClaudeCodeProvider bool) *anth
 	if !p.Vision.Enabled() {
 		// Echo instruction only for non-vision probes — the vision fixture
 		// prompt is the diagnostic and must not be echoed back.
-		system = []anthropic.TextBlockParam{{Text: probeEchoInstruction}}
+		system = []anthropic.TextBlockParam{{Text: p.systemPrompt()}}
 	}
-	if isClaudeCodeProvider {
+	asClaudeCode := p.Client == ClientClaudeCode
+	if asClaudeCode {
+		// What the real CLI puts in front of its system prompt: the identity
+		// block (with its cache breakpoint) and the billing block.
+		system = append([]anthropic.TextBlockParam{
+			{Text: client.ClaudeCodeSystemHeader, CacheControl: anthropic.NewCacheControlEphemeralParam()},
+			{Text: claudeCodeBillingBlock},
+		}, system...)
+	} else if isClaudeCodeProvider {
 		system = append([]anthropic.TextBlockParam{{Text: client.ClaudeCodeSystemHeader}}, system...)
 	}
 
@@ -400,6 +513,11 @@ func buildAnthropicMessageParams(p probeParams, isClaudeCodeProvider bool) *anth
 		MaxTokens: 1024,
 		System:    system,
 		Messages:  buildAnthropicVisionMessages(p),
+	}
+	if asClaudeCode {
+		// The CLI's session key — what session affinity buckets on, and what
+		// the Claude Code client implementation requires to be present.
+		params.Metadata = anthropic.MetadataParam{UserID: anthropic.String(claudeCodeUserID())}
 	}
 	if p.Tool {
 		params.Tools = getProbeToolsAnthropic()
@@ -459,6 +577,9 @@ func buildAnthropicVisionMessages(p probeParams) []anthropic.MessageParam {
 			}),
 		}
 	default:
+		if len(p.Messages) > 0 {
+			return buildAnthropicConversation(p)
+		}
 		return []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(p.Message)),
 		}

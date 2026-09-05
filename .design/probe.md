@@ -108,6 +108,24 @@ Optionally injected by callers that want to apply a specific rule's flags while 
 
 Always injected by loopback probes (both provider and rule). Causes `SimpleSelector.SelectService` to append routing-decision headers to the response (see below).
 
+### Request shaping (`system`, `messages`, `client`)
+
+- `E2ERequest.System` / `Messages` replace the fixture prompt / single message in the
+  three param builders; empty keeps today's behaviour. A mid-conversation `system` turn is
+  sent verbatim (it is the claude_code_compat test subject); the last turn must be `user`.
+- `E2ERequest.Client = "claude_code"` sends the loopback request **as Claude Code**: the
+  probe builds its SDK client with `client.NewClaudeClient` — the same constructor and
+  request guard TB uses to impersonate Claude Code toward Anthropic — pointed at the
+  loopback, so headers (user-agent, anthropic-beta, x-app, stainless, `?beta=true`),
+  the `X-Claude-Code-Session-Id` header, the disabled-thinking default and tool-name
+  conventions are whatever that client emits; nothing is listed twice. The probe adds
+  what the real CLI puts in the body and TB's upstream client does not: the identity
+  block with its cache breakpoint, the billing block (`x-anthropic-billing-header:`,
+  which clean_header strips) and a `metadata.user_id` session key (which the client
+  guard requires and session affinity buckets on). Through-TB and Anthropic only.
+  `BuildCurl` renders it by capturing the request from that client via an SDK middleware
+  instead of re-composing headers.
+
 ## Routing Trace (response headers → ProbeResult)
 
 When `X-Tingly-Debug-Routing: 1` is present, the routing decision is emitted across two chokepoints.
