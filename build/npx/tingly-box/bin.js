@@ -6,12 +6,12 @@ import { fileURLToPath } from "url";
 import { cacheDir } from "../shared/cachedir.js";
 import { cleanupRetiredInstallDirs, cleanupStaleBinaryCaches } from "../shared/cleanup.js";
 import { downloadAndExtractZip } from "../shared/download.js";
-import { DEFAULT_ARGS, sourceArgs } from "../shared/entry.js";
+import { DEFAULT_ARGS, bundleSwitchHints, sourceArgs } from "../shared/entry.js";
 import { execBinary } from "../shared/exec.js";
 import { parseTransportVersion } from "../shared/transport.js";
 
 // Configuration for binary downloads
-const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
+const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download";
 
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
@@ -86,7 +86,9 @@ async function getPlatformArchAndBinary() {
 
 	// If binary doesn't exist, download and extract ZIP
 	if (!existsSync(binaryPath)) {
-		await downloadAndExtractZip(downloadUrl, tinglyBinDir);
+		await downloadAndExtractZip(downloadUrl, tinglyBinDir, {
+			hints: bundleSwitchHints(branchName),
+		});
 
 		console.log(`✅ Downloaded and extracted to ${binaryPath}`);
 	}

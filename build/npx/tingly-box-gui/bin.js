@@ -10,7 +10,7 @@ import { downloadAndExtractZip } from "../shared/download.js";
 import { parseTransportVersion } from "../shared/transport.js";
 
 // Configuration for binary downloads
-const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
+const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download";
 
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process

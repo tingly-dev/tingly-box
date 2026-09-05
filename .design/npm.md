@@ -14,7 +14,7 @@ each GitHub release:
   the release tag into `BINARY_RELEASE_BRANCH` at publish time, so npm package
   version ↔ binary version are 1:1 coupled.
 - **`tingly-box-bundle`** — same shim plus the platform zips inside the package
-  (~70 MB, offline-ready). npx-oriented; not a global-install target.
+  (~70 MB, offline-ready). Works under npx and as a global install.
 - **`tingly-box-gui`** — shim variant for the desktop UI, published on demand.
 
 All three expose `tingly-box` and `tb` bins. The shim never writes into its own
@@ -45,9 +45,60 @@ A + B like the cli package. The residual difference on `npm install -g`
 updates is payload, not dependency sprawl: the retire-rename still moves
 ~70 MB of zips — a handful of large files rather than the pre-A hundreds of
 small ones, so the window is far narrower than it was but wider than the
-cli package's two tiny files. One footnote: both packages expose the same
-`tingly-box`/`tb` bin names — installs are one-or-the-other, side-by-side
-global installs overwrite each other's bin links.
+cli package's two tiny files. Both packages expose the same
+`tingly-box`/`tb` bin names — installs are one-or-the-other; see
+"Bin-name collision between the packages" below for what npm actually does
+and the switch procedure.
+
+## Bin-name collision between the packages
+
+Decided 2026-09, after a user hit `npm install -g tingly-box-bundle` failing
+with `EEXIST: file already exists … bin/tb` on top of an existing
+`tingly-box` global install.
+
+**What npm does.** npm ≥ 7 does not overwrite a global bin link owned by a
+different package; `bin-links/check-bin.js` reads the existing symlink (cmd
+shim on Windows) and rejects with `EEXIST` unless it points into the package
+being installed. Arborist runs that check in `[_reifyNode]` *before* the
+tarball is extracted and before any lifecycle script — its own comment says
+why: otherwise a package could ship a `preinstall` that unlinks system
+binaries. So there is no package-side hook that can make a side-by-side
+install succeed. Two quirks, verified with npm 10.9 against a scratch prefix:
+
+- The ownership test is a string-prefix match on the package path, and
+  `node_modules/tingly-box-bundle` starts with `node_modules/tingly-box`.
+  Installing `tingly-box` *over* the bundle therefore passes silently and
+  steals the links; only the bundle-over-cli direction fails loudly.
+- `--force` (npm's own suggestion) relinks the bins but leaves the old
+  package installed with no bins. A later `npm uninstall -g tingly-box`
+  then removes `tb`/`tingly-box` — the links now belong to the bundle — and
+  the user is left with a bundle install that has no commands.
+
+**Decision: keep the shared bin names.** "Same commands whichever package
+you installed" is the product promise (docs, shortcut relaunch, every
+command hint prints `tingly-box … / tb …`); renaming the bundle's bins to
+avoid a collision npm already reports clearly would trade a one-time,
+well-explained error for a permanent split. The two packages are
+alternatives, not layers.
+
+**Switching is uninstall-then-install, and the product says so where it
+matters.** The scenario that leads a user here is the cli shim failing to
+download the release, so that failure path — previously a bare
+`Download failed: <status>`, or an unhandled-rejection stack trace on a
+network error — now prints the next step (`shared/entry.js
+bundleSwitchHints`, printed by `shared/download.js`): under npx, `npx -y
+tingly-box-bundle@<ver>`; as an installed bin, `npm uninstall -g
+tingly-box` followed by `npm install -g tingly-box-bundle@<ver>`, with one
+line saying why the uninstall comes first. `<ver>` is the shim's baked tag
+minus the `v`, so the user lands on the bundle of the exact version they
+already have. README and the user manual carry the same two commands and
+warn off `--force`. `test-shim.sh` T5 pins the installed-bin variant.
+
+Not pursued: a version of the cli shim that falls back to fetching the
+bundle tarball from the npm registry when GitHub is unreachable. It would
+remove the switch entirely but pulls ~70 MB through a second download
+channel and needs tar extraction in the shim; revisit if the switch
+instructions prove insufficient.
 
 ## Making `npm install -g` viable again
 
@@ -70,7 +121,9 @@ the path to re-enable global installs.
   retire-shape sweep under an old one (sibling/human dirs untouched), an
   end-to-end download + `version` against the real release, and the
   stale-cache sweep guards (rollback kept, fresh/non-tag/file entries
-  untouched; Linux only, where `XDG_CACHE_HOME` sandboxes the cache root).
+  untouched; Linux only, where `XDG_CACHE_HOME` sandboxes the cache root),
+  and the download-failure hint (a non-existent tag must print the
+  uninstall-first switch to `tingly-box-bundle` and exit non-zero).
   It also esbuild-bundles the gui and bundle shims and parse-checks them,
   so a broken `shared/` import fails the harness for every package. Run it before
   touching the shims or the publish workflow. CI runs it too: the

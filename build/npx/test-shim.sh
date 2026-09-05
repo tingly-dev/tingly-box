@@ -121,6 +121,22 @@ else
 	echo "==> [T4] skipped (non-Linux: cache root not sandboxed by XDG_CACHE_HOME)"
 fi
 
+# --- T5: download failure prints the bundle switch (installed-bin mode) ----
+echo "==> [T5] non-existent tag: failure output names the uninstall-first switch"
+if node "$NM/tingly-box/bin.js" --transport-version=v0.0.0-nonexistent version \
+	> "$WORK/fail.log" 2>&1; then
+	fail "T5: shim exited 0 on a missing release"
+else
+	pass "T5: shim exited non-zero on a missing release"
+fi
+grep -q "npm uninstall -g tingly-box" "$WORK/fail.log" \
+	&& grep -q "npm install -g tingly-box-bundle@0.0.0-nonexistent" "$WORK/fail.log" \
+	&& pass "T5: uninstall-first switch to tingly-box-bundle printed" \
+	|| { fail "T5: switch hint missing:"; tail -10 "$WORK/fail.log"; }
+grep -q "Stack:" "$WORK/fail.log" \
+	&& fail "T5: stack trace leaked into the failure output" \
+	|| pass "T5: no stack trace in the failure output"
+
 echo
 if [ "$FAILED" -eq 0 ]; then
 	echo "🎉 All shim tests passed for $TAG"
