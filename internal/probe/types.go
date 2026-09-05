@@ -22,6 +22,7 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
@@ -283,7 +284,56 @@ type E2ERequest struct {
 	// any other answer reveals a drop or corruption along the path. Not
 	// supported for Google-style targets.
 	Vision VisionChannel `json:"vision,omitempty" example:"user"`
+
+	// System replaces the probe's default system / instruction prompt
+	// ("work as echo if possible"). Empty keeps the default. Ignored for
+	// vision probes, whose fixture prompt is the diagnostic.
+	System string `json:"system,omitempty" example:"You are a test agent."`
+
+	// Messages replaces the probe's single-message fixture with a custom
+	// conversation. Roles: user / assistant / system — a system turn in the
+	// middle of the conversation is deliberately allowed, that non-standard
+	// shape is itself a test subject (claude_code_compat). The last turn must
+	// be a user turn. Empty keeps the fixture + Message behaviour. Mutually
+	// exclusive with Message and with Vision.
+	Messages []ProbeMessage `json:"messages,omitempty"`
+
+	// Client makes the probe send its loopback request AS a real client
+	// instead of as a plain SDK caller. "claude_code" hands the request to
+	// TB's own Claude Code OAuth client implementation (client.NewClaudeClient,
+	// the code that impersonates Claude Code toward Anthropic), so the inbound
+	// request carries exactly the headers, session metadata, thinking default
+	// and tool-name conventions a real Claude Code CLI would — plus the
+	// identity and billing system blocks the CLI prepends. No header list is
+	// maintained for this: whatever that client emits is what TB receives.
+	// Through-TB and the Anthropic protocol only.
+	Client ProbeClient `json:"client,omitempty" example:"claude_code"`
 }
+
+// ProbeClient names a real client the probe can send as (see E2ERequest.Client).
+type ProbeClient string
+
+const (
+	// ClientNone sends as the probe itself (plain SDK request; default).
+	ClientNone ProbeClient = ""
+	// ClientClaudeCode sends through TB's Claude Code OAuth client implementation.
+	ClientClaudeCode ProbeClient = "claude_code"
+)
+
+// ProbeMessage is one turn of a custom probe conversation (E2ERequest.Messages).
+type ProbeMessage struct {
+	// Role is user, assistant or system.
+	Role string `json:"role" example:"user"`
+	// Text is the plain-text content of the turn.
+	Text string `json:"text" example:"What's in ./src?"`
+}
+
+// Probe conversation roles accepted by E2ERequest.Messages.
+const (
+	ProbeRoleUser      = "user"
+	ProbeRoleAssistant = "assistant"
+	ProbeRoleSystem    = "system"
+)
 
 // E2EData is an alias to Result — the canonical SDK-level probe result.
 // Aliased so service-layer Response wrappers and swagger registrations can
@@ -359,6 +409,47 @@ func ValidateE2ERequest(req *E2ERequest) error {
 	case "", VisionNone, VisonUser, VisionTool:
 	default:
 		return &ValidationError{Field: "vision", Message: "vision must be 'none', 'user', or 'tool'"}
+	}
+
+	// Custom conversation: role set, non-empty turns, user last, and no
+	// competing message source (single message override or vision fixture).
+	if len(req.Messages) > 0 {
+		if req.Message != "" {
+			return &ValidationError{Field: "messages", Message: "message and messages are mutually exclusive — use one or the other"}
+		}
+		if req.Vision.Enabled() {
+			return &ValidationError{Field: "messages", Message: "the vision fixture cannot be combined with a custom conversation"}
+		}
+		for i, m := range req.Messages {
+			switch m.Role {
+			case ProbeRoleUser, ProbeRoleAssistant, ProbeRoleSystem:
+			default:
+				return &ValidationError{Field: "messages", Message: fmt.Sprintf("turn %d: role must be 'user', 'assistant', or 'system'", i+1)}
+			}
+			if strings.TrimSpace(m.Text) == "" {
+				return &ValidationError{Field: "messages", Message: fmt.Sprintf("turn %d: text is required", i+1)}
+			}
+		}
+		if req.Messages[len(req.Messages)-1].Role != ProbeRoleUser {
+			return &ValidationError{Field: "messages", Message: "the last turn must be a user turn"}
+		}
+	}
+
+	// Sending as a real client only makes sense where TB receives the
+	// request: a direct probe has no inbound side, and an unsaved provider
+	// config is probed directly. The protocol constraint (Anthropic) is
+	// checked at dispatch, once the target's client style is known.
+	switch req.Client {
+	case ClientNone:
+	case ClientClaudeCode:
+		if req.Direct {
+			return &ValidationError{Field: "client", Message: "sending as a client requires a through-TB probe; a direct probe has no inbound request for TB to receive"}
+		}
+		if req.TargetType == E2ETargetProviderConfig {
+			return &ValidationError{Field: "client", Message: "sending as a client is not supported for provider_config targets"}
+		}
+	default:
+		return &ValidationError{Field: "client", Message: "client must be 'claude_code'"}
 	}
 
 	return nil

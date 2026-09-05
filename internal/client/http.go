@@ -98,13 +98,17 @@ func GetProbeHeaders(ctx context.Context) (map[string]string, bool) {
 }
 
 // applyTransportWrap layers wrap() onto the HTTP transport of a probe client.
-// Accepts *OpenAIClient or *AnthropicClient; no-op for any other type.
+// Accepts *OpenAIClient, *AnthropicClient, or a bare *http.Client (for
+// clients built around a caller-supplied http.Client, e.g. the probe's
+// Claude Code client); no-op for any other type.
 func applyTransportWrap(c interface{}, wrap func(http.RoundTripper) http.RoundTripper) {
 	switch tc := c.(type) {
 	case *OpenAIClient:
 		tc.HttpClient.Transport = wrap(tc.HttpClient.Transport)
 	case *AnthropicClient:
 		tc.httpClient.Transport = wrap(tc.httpClient.Transport)
+	case *http.Client:
+		tc.Transport = wrap(tc.Transport)
 	}
 }
 
