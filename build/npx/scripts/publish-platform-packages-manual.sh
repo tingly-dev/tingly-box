@@ -11,16 +11,29 @@
 # builds the packages with build-platform-packages.sh and runs `npm publish`
 # for each one; npm prompts for 2FA (browser / passkey) on every publish.
 #
-# Usage: publish-platform-packages-manual.sh <release-tag> [--dry-run]
+# Usage: publish-platform-packages-manual.sh <release-tag> [--dry-run] [--otp <code>]
 #   release-tag  e.g. v0.260903.1 (the npm version is the tag without "v")
 #   --dry-run    download + build + `npm publish --dry-run`, publish nothing
+#   --otp CODE   authenticator code to pass to npm publish (TOTP accounts).
+#                Without it npm prompts on the terminal for each package
+#                (or opens the browser for a passkey/WebAuthn account).
 #
 # Env: GITHUB_REPO (default tingly-dev/tingly-box), WORK_DIR (default ./.platform-publish)
 set -euo pipefail
 
-TAG="${1:?usage: $0 <release-tag> [--dry-run]}"
+TAG="${1:?usage: $0 <release-tag> [--dry-run] [--otp <code>]}"
+shift
 DRY_RUN=""
-[ "${2:-}" = "--dry-run" ] && DRY_RUN="--dry-run"
+OTP=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--dry-run) DRY_RUN="--dry-run" ;;
+		--otp) OTP="${2:?--otp needs a code}"; shift ;;
+		--otp=*) OTP="${1#--otp=}" ;;
+		*) echo "❌ unknown argument: $1" >&2; exit 1 ;;
+	esac
+	shift
+done
 
 if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
 	echo "❌ invalid tag '$TAG', expected e.g. v1.0.0 or v1.0.0-beta" >&2
@@ -77,14 +90,23 @@ cat "$WORK_DIR/built.txt"
 
 # ---- publish -------------------------------------------------------------
 # No --provenance: that needs the CI OIDC token and fails on a laptop.
-while read -r name; do
+# Read the list into an array first so npm keeps the terminal as stdin and
+# can prompt for the one-time password (a `while read < file` loop would
+# swallow the prompt and fail with EOTP).
+mapfile -t NAMES < "$WORK_DIR/built.txt"
+OTP_ARGS=()
+if [ -n "$OTP" ]; then
+	OTP_ARGS=(--otp "$OTP")
+	echo "⚠️  a TOTP code is valid for ~30s; if a later package fails with EOTP, rerun with a fresh code (published ones are skipped)"
+fi
+for name in "${NAMES[@]}"; do
 	if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
 		echo "ℹ️  ${name}@${VERSION} already on npm, skipping"
 		continue
 	fi
 	echo "📦 npm publish ${name}@${VERSION} ${DRY_RUN}"
-	(cd "$OUT_DIR/$name" && npm publish --access public $DRY_RUN)
-done < "$WORK_DIR/built.txt"
+	(cd "$OUT_DIR/$name" && npm publish --access public ${DRY_RUN:+"$DRY_RUN"} "${OTP_ARGS[@]}")
+done
 
 if [ -n "$DRY_RUN" ]; then
 	echo "🧪 dry run finished, nothing published"
