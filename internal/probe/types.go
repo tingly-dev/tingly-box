@@ -21,7 +21,12 @@
 package probe
 
 import (
+	"encoding/json"
 	"fmt"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
@@ -283,6 +288,87 @@ type E2ERequest struct {
 	// any other answer reveals a drop or corruption along the path. Not
 	// supported for Google-style targets.
 	Vision VisionChannel `json:"vision,omitempty" example:"user"`
+
+	// Request is a raw client request body in one of the three client
+	// protocols (RequestProtocol says which) — what a real client would send
+	// TB. The probe parses it with the same SDK decoders TB's handlers use
+	// for inbound traffic, fills in what the target decides (model; Anthropic
+	// max_tokens when absent) and sends it on that protocol's wire, so text,
+	// images, tools and tool results, cache breakpoints, thinking — anything
+	// the protocol accepts — travel as-is. Through TB, TB's own transform
+	// chain converts it to the upstream exactly as for production traffic.
+	// A raw request replaces the fixture: Message and the Tool / Vision /
+	// Thinking knobs (which only shape the fixture) are rejected alongside
+	// it; Stream still applies. Provider targets speak RequestProtocol on
+	// the wire (Protocol, if given, must agree); rule targets require the
+	// scenario's protocol family.
+	Request         json.RawMessage `json:"request,omitempty" swaggertype:"object"`
+	RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty" example:"anthropic_v1"`
+}
+
+// HasRawRequest reports whether the probe sends a caller-supplied request
+// instead of the fixture.
+func (req *E2ERequest) HasRawRequest() bool { return len(req.Request) > 0 }
+
+// WireProtocol is the client protocol the probe speaks: the raw request's
+// protocol when one is given, else the Protocol override, else "" (the
+// target's primary protocol).
+func (req *E2ERequest) WireProtocol() ProbeProtocol {
+	if req.HasRawRequest() {
+		return req.RequestProtocol
+	}
+	return req.Protocol
+}
+
+// parseRawRequest decodes the raw request with the SDK decoder of its
+// protocol — the same decoders TB's handlers use — and returns the typed
+// params (one of *anthropic.MessageNewParams, *openai.ChatCompletionNewParams,
+// *responses.ResponseNewParams).
+func (req *E2ERequest) parseRawRequest() (any, error) {
+	if !req.HasRawRequest() {
+		return nil, nil
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(req.Request, &probe); err != nil {
+		return nil, fmt.Errorf("request must be a JSON object: %w", err)
+	}
+	switch req.RequestProtocol {
+	case ProtocolAnthropic:
+		var p anthropic.MessageNewParams
+		if err := json.Unmarshal(req.Request, &p); err != nil {
+			return nil, fmt.Errorf("request is not an Anthropic Messages request: %w", err)
+		}
+		if len(p.Messages) == 0 {
+			return nil, fmt.Errorf("request.messages must contain at least one message")
+		}
+		return &p, nil
+	case ProtocolOpenAIChat:
+		var p openai.ChatCompletionNewParams
+		if err := json.Unmarshal(req.Request, &p); err != nil {
+			return nil, fmt.Errorf("request is not an OpenAI Chat Completions request: %w", err)
+		}
+		if len(p.Messages) == 0 {
+			return nil, fmt.Errorf("request.messages must contain at least one message")
+		}
+		return &p, nil
+	case ProtocolOpenAIResponses:
+		// Same preprocessing as the inbound Responses handler: input items
+		// need their type fields before the SDK's union decoder accepts them.
+		processed, err := protocol.PreprocessInputData(req.Request)
+		if err != nil {
+			return nil, fmt.Errorf("request is not an OpenAI Responses request: %w", err)
+		}
+		var p responses.ResponseNewParams
+		if err := json.Unmarshal(processed, &p); err != nil {
+			return nil, fmt.Errorf("request is not an OpenAI Responses request: %w", err)
+		}
+		if len(p.Input.OfInputItemList) == 0 && !p.Input.OfString.Valid() {
+			return nil, fmt.Errorf("request.input is required")
+		}
+		return &p, nil
+	default:
+		return nil, fmt.Errorf("request_protocol must be 'openai_chat', 'openai_responses', or 'anthropic_v1'")
+	}
 }
 
 // E2EData is an alias to Result — the canonical SDK-level probe result.
@@ -361,6 +447,44 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		return &ValidationError{Field: "vision", Message: "vision must be 'none', 'user', or 'tool'"}
 	}
 
+	// A raw client request replaces the fixture; the fixture knobs and the
+	// single-message override have nothing to shape, so reject them rather
+	// than silently ignore a setting the user made.
+	if req.HasRawRequest() {
+		if req.RequestProtocol == "" {
+			return &ValidationError{Field: "request_protocol", Message: "request_protocol is required with a raw request"}
+		}
+		if req.Message != "" {
+			return &ValidationError{Field: "message", Message: "message does not apply to a raw request (put the text in the request itself)"}
+		}
+		if tool := req.Tool; tool != nil && *tool {
+			return &ValidationError{Field: "tool", Message: "the tool knob only shapes the fixture; a raw request carries its own tools"}
+		}
+		if req.Vision.Enabled() {
+			return &ValidationError{Field: "vision", Message: "the vision knob only shapes the fixture; put the image in the raw request"}
+		}
+		if req.Thinking != "" && req.Thinking != ThinkingNone {
+			return &ValidationError{Field: "thinking", Message: "the thinking knob only shapes the fixture; set thinking in the raw request"}
+		}
+		if _, err := req.parseRawRequest(); err != nil {
+			return &ValidationError{Field: "request", Message: err.Error()}
+		}
+		switch req.TargetType {
+		case E2ETargetProvider, E2ETargetProviderConfig:
+			if req.Protocol != "" && req.Protocol != req.RequestProtocol {
+				return &ValidationError{Field: "protocol", Message: "protocol and request_protocol disagree; a raw request is sent on its own protocol"}
+			}
+		case E2ETargetRule:
+			scenario := req.Scenario
+			if scenario == "" {
+				scenario = string(typ.ScenarioOpenAI)
+			}
+			if _, style := ScenarioEndpoint(scenario); req.RequestProtocol.Family() != style {
+				return &ValidationError{Field: "request_protocol", Message: fmt.Sprintf("scenario %s speaks the %s protocol; the raw request is %s", scenario, style, req.RequestProtocol)}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -380,17 +504,17 @@ func (req *E2ERequest) ResolveAxes() (stream, tool bool) {
 // Returns the provider style unchanged for "", google, and unsupported
 // combinations — callers decide whether that is an error.
 func (req *E2ERequest) ResolveClientStyle(providerStyle protocol.APIStyle) protocol.APIStyle {
-	if req.Protocol == "" {
-		return providerStyle
+	if p := req.WireProtocol(); p != "" {
+		return p.Family()
 	}
-	return req.Protocol.Family()
+	return providerStyle
 }
 
 // ResolveOpenAIEndpointOverride translates Protocol into the endpointOverride
 // consumed by resolveOpenAIProbeEndpoint ("chat"/"responses", or "" to keep
 // the provider's default).
 func (req *E2ERequest) ResolveOpenAIEndpointOverride() string {
-	switch req.Protocol {
+	switch req.WireProtocol() {
 	case ProtocolOpenAIChat:
 		return "chat"
 	case ProtocolOpenAIResponses:
