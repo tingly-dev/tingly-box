@@ -35,8 +35,10 @@ relaunching via a version-pinned `npx -y <package>@<ver>` for every npm shim
 source — a global install's own exePath sits in the version-tagged download
 cache that a later update orphans, and npm's cache still holds the installed
 tarball so the npx relaunch works offline. The bundle variants exist so a
-`tingly-box-bundle` install's shortcut relaunches the offline-capable bundle
-package, not the network-fetching cli one.
+`tingly-box-bundle` install's shortcut relaunches that package, not the cli
+one; the bundle package is retired since the cli package ships its binary
+through npm (`npm.md`, F), but installs made from it still report these
+sources and their shortcuts keep relaunching the pinned bundle version.
 
 Both bins are always shipped (`tingly-box` and `tb`), so command hints print
 both forms (e.g. `'tingly-box restart' / 'tb restart'`) rather than guessing

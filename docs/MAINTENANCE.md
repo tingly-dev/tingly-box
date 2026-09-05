@@ -182,8 +182,7 @@ This is a manual workflow that publishes npm packages based on an existing GitHu
    |-------|-------------|---------|
    | `release_tag` | GitHub Release tag to download assets from | `v0.20260403.2230-hotfix` |
    | `npx_version` | NPX package version (defaults to tag without `v`) | `0.20260403.2230-hotfix` |
-   | `publish_cli` | Publish CLI package (`tingly-box`) | `true` |
-   | `publish_bundle` | Publish bundle package (`tingly-box-bundle`) | `true` |
+   | `publish_cli` | Publish the CLI package (`tingly-box`) and its platform packages | `true` |
    | `publish_gui` | Publish GUI package (`tingly-box-gui`) | `false` |
 
 5. **Important**: The `release_tag` must match an existing GitHub Release tag
@@ -193,15 +192,19 @@ This is a manual workflow that publishes npm packages based on an existing GitHu
 
 | Package | Description | Install Command |
 |---------|-------------|-----------------|
-| `tingly-box` | CLI package (downloads binary on first run) | `npx tingly-box@version` |
-| `tingly-box-bundle` | Bundle package (includes pre-built binaries, ~70MB) | `npx tingly-box-bundle@version` |
+| `tingly-box` | CLI shim; pulls the platform package below as an optional dependency, falls back to the GitHub release download | `npx tingly-box@version` |
+| `tingly-box-<os>-<cpu>` | Binary for one platform (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`); published before `tingly-box` at the same version | installed automatically |
 | `tingly-box-gui` | GUI package (desktop app) | `npx tingly-box-gui@version start` |
+
+`tingly-box-bundle` (binaries zipped inside one ~70MB package) is retired:
+the platform packages cover its purpose. Its old versions stay on npm for
+shortcuts created by earlier installs, which relaunch pinned versions.
 
 ### NPX Tags
 
 When the workflow completes, it creates git tags in the format `npx-{version}`:
 
-- `npx-0.20260403.2230-hotfix` - For CLI + Bundle releases
+- `npx-0.20260403.2230-hotfix` - For CLI releases
 - `npx-gui-0.20260403.2230-hotfix` - For GUI releases
 
 ### Example: Complete Release Flow
@@ -225,7 +228,6 @@ git push origin v0.20260403.2230-hotfix
 #    - release_tag: v0.20260403.2230-hotfix
 #    - npx_version: 0.20260403.2230-hotfix (or leave empty for auto)
 #    - publish_cli: true
-#    - publish_bundle: true
 
 # 7. NPX packages are published to npm and npx-* tags are created
 ```

@@ -63,13 +63,6 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
             icon: <NPM />,
         },
         {
-            id: 'bundle',
-            title: t('update.methods.bundle.title'),
-            description: t('update.methods.bundle.description'),
-            commands: [versionForCommand ? `npx -y tingly-box-bundle@${versionForCommand}` : 'npx -y tingly-box-bundle@latest'],
-            icon: <NPM />,
-        },
-        {
             id: 'docker',
             title: t('update.methods.docker.title'),
             description: t('update.methods.docker.description'),

@@ -21,21 +21,18 @@ npm install -g tingly-box
 tb start    # background by default; pass --no-daemon for foreground
 ```
 
+The binary for your platform is an npm package too (`tingly-box-linux-x64`,
+`tingly-box-darwin-arm64`, …), installed automatically alongside
+`tingly-box`. Nothing is fetched from GitHub, so an npm mirror registry
+(`--registry=https://registry.npmmirror.com`) is all a restricted network
+needs.
+
 `tingly-box` and `tb` are the same CLI; running it with no arguments shows
 help. To update a global install: `npm install -g tingly-box@latest`, then
 `tb restart` to switch the running server to the new version — `restart`
 asks for confirmation while the server is running (a restart interrupts
 in-flight AI requests); pass `-y` to skip the prompt in scripts.
 
-`tingly-box-bundle` is the same CLI with the binaries included in the npm
-package, so it needs no download beyond the npm registry itself. Both
-packages provide the `tingly-box` and `tb` commands, so only one of them is
-installed at a time. To switch from one to the other, uninstall the current
-package, then install the other:
-```bash
-npm uninstall -g tingly-box
-npm install -g tingly-box-bundle@latest
-```
 
 ### Method 2: Docker
 Run as a background container:

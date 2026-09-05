@@ -15,28 +15,20 @@ export function sourceArgs(npxSource, npmSource) {
 	return [IS_NPX ? `--source=${npxSource}` : `--source=${npmSource}`];
 }
 
-// Next step when the GitHub release download is unreachable: the bundle
-// package carries the binaries inside its npm tarball, so it only needs the
-// npm registry (mirrors included). All shim packages own the same
-// `tingly-box`/`tb` bin names, and npm refuses to relink a global bin owned
-// by another package (EEXIST) before any package script runs — so switching
-// a global install means uninstalling the old package first. `--force` is
-// not an alternative: the old package stays installed and a later
-// `npm uninstall -g` of it deletes the bins the bundle now uses.
-// Rationale and verification: .design/npm.md ("Bin-name collision").
-export function bundleSwitchHints(tag) {
-	const ver = tag === "latest" ? "latest" : tag.replace(/^v/, "");
-	if (IS_NPX) {
-		return [
-			`• Use the bundle package instead (binaries built-in, same commands):`,
-			`    npx -y tingly-box-bundle@${ver}`,
-		];
-	}
+// Next steps when the GitHub release download fails. The normal install
+// never needs it: the platform package (shared/platform.js) ships the binary
+// through the npm registry. Reaching the download at all means that package
+// is missing — so the fix is to reinstall so npm fetches it (a mirror
+// registry works too), and only then to retry or proxy the download.
+export function downloadFailureHints(platformPackage, version) {
+	if (!platformPackage) return [];
+	const spec = `tingly-box@${version}`;
 	return [
-		`• Switch to the bundle package (binaries built-in, same tingly-box / tb commands).`,
-		`  Uninstall first — both packages own the same bin names, so npm refuses`,
-		`  a side-by-side install (EEXIST):`,
-		`    npm uninstall -g tingly-box`,
-		`    npm install -g tingly-box-bundle@${ver}`,
+		`• The binary normally ships in the ${platformPackage} package, which is not installed here.`,
+		IS_NPX
+			? `  Re-run with optional dependencies enabled so npm fetches it`
+			: `  Reinstall with optional dependencies enabled so npm fetches it`,
+		`  (an npm mirror registry works too — no GitHub access needed):`,
+		IS_NPX ? `    npx -y ${spec}` : `    npm install -g ${spec}`,
 	];
 }
