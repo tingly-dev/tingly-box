@@ -108,6 +108,21 @@ Optionally injected by callers that want to apply a specific rule's flags while 
 
 Always injected by loopback probes (both provider and rule). Causes `SimpleSelector.SelectService` to append routing-decision headers to the response (see below).
 
+### Raw client requests (`request` + `request_protocol`)
+
+`E2ERequest.request` is a raw client request body in one of the three client protocols
+(`request_protocol`: `anthropic_v1` / `openai_chat` / `openai_responses`) — what a real
+client would send TB. It is parsed with the same SDK decoders the inbound handlers use
+(`anthropic.MessageNewParams`, `openai.ChatCompletionNewParams`,
+`responses.ResponseNewParams`), so text, images, tools and tool results, cache breakpoints
+and thinking all travel as-is. The probe fills only what the target decides — the model,
+and Anthropic `max_tokens` when absent — and sends it on that protocol's wire: a provider
+target speaks `request_protocol` (the `protocol` axis, if given, must agree), a rule target
+requires the scenario's protocol family. Through TB the transform chain then converts it
+to the upstream exactly as for production traffic. A raw request replaces the fixture, so
+`message` and the Tool / Vision / Thinking knobs are rejected alongside it; Stream still
+applies. `BuildCurl` renders it through the same builders.
+
 ## Routing Trace (response headers → ProbeResult)
 
 When `X-Tingly-Debug-Routing: 1` is present, the routing decision is emitted across two chokepoints.

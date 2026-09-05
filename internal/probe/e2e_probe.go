@@ -72,19 +72,31 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
-	params := probeParams{
+	params := req.probeParams(model)
+	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
+	if cacheable && err == nil && result != nil && result.Success {
+		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
+	}
+	return result, err
+}
+
+// probeParams resolves the request into the flat shape the SDK helpers read.
+// Shared by Probe and BuildCurl so both build from the same decisions.
+func (req *E2ERequest) probeParams(model string) probeParams {
+	stream, tool := req.ResolveAxes()
+	// Validation has already parsed the raw request; a failure here can only
+	// come from a caller that skipped ValidateE2ERequest, and the fixture is
+	// the correct fallback.
+	raw, _ := req.parseRawRequest()
+	return probeParams{
 		Model:    model,
 		Message:  E2EMessage(tool, req.Message),
 		Stream:   stream,
 		Tool:     tool,
 		Thinking: req.Thinking,
 		Vision:   req.Vision,
+		Raw:      raw,
 	}
-	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
-	if cacheable && err == nil && result != nil && result.Success {
-		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
-	}
-	return result, err
 }
 
 // resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
