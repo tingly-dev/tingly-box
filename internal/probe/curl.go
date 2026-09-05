@@ -12,6 +12,7 @@ import (
 
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -80,7 +81,7 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	// Sending as Claude Code: render exactly what that client emits by
 	// letting it build the request and capturing it before it leaves.
 	if params.Client == ClientClaudeCode {
-		return e.buildClaudeCodeCurl(ctx, provider, params, probeHeaders, keyEnv)
+		return e.buildClaudeCodeCurl(ctx, provider, params, probeHeaders, keyEnv, req)
 	}
 
 	var (
@@ -107,6 +108,12 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
+	// Same override function the probe transport applies to the real request.
+	if edited, err := client.ApplyBodyOverrides([]byte(body), req.BodyOverrides); err != nil {
+		return nil, fmt.Errorf("failed to apply body overrides: %w", err)
+	} else {
+		body = string(edited)
+	}
 
 	headers := map[string]string{"Content-Type": "application/json"}
 	switch clientStyle {
@@ -116,6 +123,13 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	default:
 		headers["Authorization"] = "Bearer " + keyEnv
 	}
+	// Through-TB probes pin their target (and carry the flag overlay) via
+	// probe headers; without them the rendered command would route like
+	// ordinary traffic instead of reproducing the probe.
+	for k, v := range probeHeaders {
+		headers[k] = v
+	}
+	applyCurlHeaderOverrides(headers, req.Headers)
 
 	return &CurlData{
 		Command:   renderCurl(url, headers, body, stream),
@@ -131,7 +145,7 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 // to the loopback: the client is constructed exactly as for a run, with a
 // middleware that captures the outgoing request and answers with an empty
 // synthetic response, so nothing is executed and no header list is copied.
-func (e *E2EProber) buildClaudeCodeCurl(ctx context.Context, provider *typ.Provider, params probeParams, probeHeaders map[string]string, keyEnv string) (*CurlData, error) {
+func (e *E2EProber) buildClaudeCodeCurl(ctx context.Context, provider *typ.Provider, params probeParams, probeHeaders map[string]string, keyEnv string, req *E2ERequest) (*CurlData, error) {
 	var (
 		captured *http.Request
 		body     []byte
@@ -188,6 +202,12 @@ func (e *E2EProber) buildClaudeCodeCurl(ctx context.Context, provider *typ.Provi
 	for k, v := range probeHeaders {
 		headers[k] = v
 	}
+	applyCurlHeaderOverrides(headers, req.Headers)
+	edited, err := client.ApplyBodyOverrides(body, req.BodyOverrides)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply body overrides: %w", err)
+	}
+	body = edited
 	url := captured.URL.String()
 	return &CurlData{
 		Command:   renderCurl(url, headers, string(body), params.Stream),
@@ -197,6 +217,27 @@ func (e *E2EProber) buildClaudeCodeCurl(ctx context.Context, provider *typ.Provi
 		Body:      string(body),
 		KeyEnvVar: keyEnv,
 	}, nil
+}
+
+// applyCurlHeaderOverrides mirrors client.ApplyHeaderOverrides for the
+// rendered header map: an override replaces any existing header of the same
+// name (case-insensitively), and an empty value removes it.
+func applyCurlHeaderOverrides(headers map[string]string, overrides map[string]string) {
+	names := make([]string, 0, len(overrides))
+	for name := range overrides {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for existing := range headers {
+			if strings.EqualFold(existing, name) {
+				delete(headers, existing)
+			}
+		}
+		if v := overrides[name]; v != "" {
+			headers[name] = v
+		}
+	}
 }
 
 // marshalStreamAware marshals an SDK params struct and, for streaming probes,

@@ -21,6 +21,7 @@
 package probe
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -308,6 +309,62 @@ type E2ERequest struct {
 	// maintained for this: whatever that client emits is what TB receives.
 	// Through-TB and the Anthropic protocol only.
 	Client ProbeClient `json:"client,omitempty" example:"claude_code"`
+
+	// Flags is a per-request rule-flag overlay (playground). Only the keys
+	// present are applied; each replaces the value resolved from rule +
+	// scenario inheritance for this one request, and nothing is persisted.
+	// Keys and value types are validated against typ.RuleFlagRegistry().
+	// Through-TB only: flags are TB middleware, so a direct probe cannot
+	// carry them (rejected, never silently ignored). Travels to the loopback
+	// handler in the X-Tingly-Probe-Flags header.
+	Flags typ.FlagOverlay `json:"flags,omitempty" swaggertype:"object"`
+
+	// BodyOverrides edits the serialized request body after the SDK built it
+	// and after the axes/flags shaped it: key = JSON path in sjson syntax
+	// ("temperature", "messages.0.content", "metadata.user_id"), value = the
+	// raw JSON to put there; a JSON null deletes the path. Probe and BuildCurl
+	// apply the same overrides to the same builder output, so the rendered
+	// payload and the request that leaves the process cannot differ.
+	BodyOverrides map[string]json.RawMessage `json:"body_overrides,omitempty" swaggertype:"object"`
+
+	// Headers sets or overrides HTTP headers on the outgoing probe request
+	// (an empty value removes the header). Applied last, so it wins over the
+	// SDK's own headers and the probe pins.
+	Headers map[string]string `json:"headers,omitempty"`
+
+	// Routing picks how a rule target enters TB. "" / "natural" (default)
+	// sends only the rule's request model to the scenario endpoint and lets
+	// TB match the rule exactly as it would for a real client — the full
+	// production chain; the Journey reports which rule actually matched,
+	// which may differ from the one picked. "pinned" forces the chosen rule
+	// via X-Tingly-Probe-Rule (skipping rule matching, everything else is
+	// production) — for testing a rule whose request model collides with
+	// another rule's, or one that is not active. Rule targets only; provider
+	// targets are pinned by definition (X-Tingly-Probe-Service).
+	Routing ProbeRouting `json:"routing,omitempty" example:"pinned"`
+}
+
+// ProbeRouting selects how a rule target enters TB (see E2ERequest.Routing).
+type ProbeRouting string
+
+const (
+	// RoutingNatural lets TB match the rule from the request model, as for real traffic (default).
+	RoutingNatural ProbeRouting = "natural"
+	// RoutingPinned forces the chosen rule via X-Tingly-Probe-Rule.
+	RoutingPinned ProbeRouting = "pinned"
+)
+
+// Pinned reports whether the rule target should be forced rather than matched.
+func (r ProbeRouting) Pinned() bool { return r == RoutingPinned }
+
+// Customized reports whether the request departs from the plain fixture
+// shape (custom conversation, client identity, flag overlay, body/header
+// overrides). Such probes are never served from the endpoint capability
+// cache — the whole point of customizing a probe is to watch what that
+// exact request does.
+func (req *E2ERequest) Customized() bool {
+	return req.System != "" || len(req.Messages) > 0 || req.Client != ClientNone || len(req.Flags) > 0 ||
+		len(req.BodyOverrides) > 0 || len(req.Headers) > 0
 }
 
 // ProbeClient names a real client the probe can send as (see E2ERequest.Client).
@@ -450,6 +507,43 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		}
 	default:
 		return &ValidationError{Field: "client", Message: "client must be 'claude_code'"}
+	}
+
+	// Flags are TB middleware behaviour; a direct probe bypasses exactly the
+	// layer they act in. Silently ignoring them would report "tested" for
+	// something that never ran — the worst kind of false success.
+	if len(req.Flags) > 0 {
+		if req.Direct {
+			return &ValidationError{Field: "flags", Message: "flags are TB middleware and cannot apply to a direct probe; switch scope to through-TB"}
+		}
+		if err := typ.ValidateFlagOverlay(req.Flags); err != nil {
+			return &ValidationError{Field: "flags", Message: err.Error()}
+		}
+	}
+
+	for path, raw := range req.BodyOverrides {
+		if strings.TrimSpace(path) == "" {
+			return &ValidationError{Field: "body_overrides", Message: "override path must not be empty"}
+		}
+		if !json.Valid(raw) {
+			return &ValidationError{Field: "body_overrides", Message: fmt.Sprintf("%q: value is not valid JSON", path)}
+		}
+	}
+
+	for name := range req.Headers {
+		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, ": \t\r\n") {
+			return &ValidationError{Field: "headers", Message: fmt.Sprintf("%q is not a valid header name", name)}
+		}
+	}
+
+	switch req.Routing {
+	case "", RoutingNatural:
+	case RoutingPinned:
+		if req.TargetType != E2ETargetRule {
+			return &ValidationError{Field: "routing", Message: "pinned routing only applies to rule targets (a provider target is pinned by definition)"}
+		}
+	default:
+		return &ValidationError{Field: "routing", Message: "routing must be 'natural' or 'pinned'"}
 	}
 
 	return nil

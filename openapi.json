@@ -9832,6 +9832,11 @@
             "type": "string",
             "description": "Field api_style"
           },
+          "body_overrides": {
+            "type": "object",
+            "description": "Field body_overrides",
+            "additionalProperties": {}
+          },
           "client": {
             "type": "string",
             "description": "Field client",
@@ -9840,6 +9845,18 @@
           "direct": {
             "type": "boolean",
             "description": "Field direct"
+          },
+          "flags": {
+            "type": "object",
+            "description": "Field flags",
+            "additionalProperties": {}
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "message": {
             "type": "string",
@@ -9868,6 +9885,11 @@
           "provider_uuid": {
             "type": "string",
             "description": "Field provider_uuid"
+          },
+          "routing": {
+            "type": "string",
+            "description": "Field routing",
+            "example": "pinned"
           },
           "rule_uuid": {
             "type": "string",
