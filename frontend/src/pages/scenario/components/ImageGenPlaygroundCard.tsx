@@ -23,7 +23,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Close, ContentCopy, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
@@ -200,6 +200,34 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         void handleAddReferenceImages(imageFiles);
     }, [handleAddReferenceImages]);
 
+    // The Paste button is the click-shaped twin of Ctrl+V: it asks the
+    // clipboard directly (Chromium-family browsers grant this after a prompt)
+    // and, where the browser won't hand the clipboard to a click, says so and
+    // points at the shortcut that always works — never a silent no-op.
+    const handlePasteFromClipboard = useCallback(async () => {
+        const nothingPasted = () => showNotification(
+            t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
+            'info',
+        );
+        try {
+            const items = await navigator.clipboard.read();
+            const files: File[] = [];
+            for (const item of items) {
+                const type = item.types.find((candidate) => candidate.startsWith('image/'));
+                if (!type) continue;
+                const blob = await item.getType(type);
+                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
+            }
+            if (files.length === 0) {
+                nothingPasted();
+                return;
+            }
+            await handleAddReferenceImages(files);
+        } catch {
+            nothingPasted();
+        }
+    }, [handleAddReferenceImages, showNotification, t]);
+
     // Hands a completed output straight back in as the next run's reference —
     // the artifact for the next action, not just a notification that one
     // exists. Reuses the already-rendered src as the preview (it's already a
@@ -310,6 +338,29 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [count, model, prompt, quality, referenceImages, showNotification, size, t, updateRuns]);
 
+    // The three ways a reference image gets here, as equals. Drop is not in
+    // the list because it has no button — the dashed box itself is the target.
+    const referenceSources = [
+        {
+            key: 'browse',
+            label: t('playground.referenceBrowse', { defaultValue: 'Browse' }),
+            icon: <FileUpload fontSize="small" />,
+            onClick: () => referenceFileInputRef.current?.click(),
+        },
+        {
+            key: 'paste',
+            label: t('playground.referencePaste', { defaultValue: 'Paste' }),
+            icon: <ContentPaste fontSize="small" />,
+            onClick: () => { void handlePasteFromClipboard(); },
+        },
+        {
+            key: 'sketch',
+            label: t('playground.sketch.action', { defaultValue: 'Sketch' }),
+            icon: <Create fontSize="small" />,
+            onClick: () => handleOpenSketch(null),
+        },
+    ];
+
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
         ? 'auto'
@@ -356,7 +407,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
                                     {t('playground.referenceImages', { defaultValue: 'Reference images' })}
                                     {' · '}
-                                    {t('playground.referenceOptional', { defaultValue: 'optional' })}
+                                    {t('playground.referenceOptional', { defaultValue: 'optional · or drop images here' })}
                                 </Typography>
                                 <Box
                                     onClick={() => referenceFileInputRef.current?.click()}
@@ -384,23 +435,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     {referenceImages.length === 0 ? (
                                         <Stack
                                             direction="row"
-                                            spacing={1}
+                                            spacing={0.5}
                                             useFlexGap
-                                            sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', color: 'text.secondary' }}
+                                            sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}
                                         >
-                                            <FileUpload sx={{ fontSize: 18 }} />
-                                            <Typography variant="body2">
-                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop, browse, or paste images' })}
-                                            </Typography>
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                startIcon={<Create fontSize="small" />}
-                                                onClick={(event) => { event.stopPropagation(); handleOpenSketch(null); }}
-                                                sx={{ flexShrink: 0, py: 0.25 }}
-                                            >
-                                                {t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}
-                                            </Button>
+                                            {referenceSources.map((source) => (
+                                                <Button
+                                                    key={source.key}
+                                                    size="small"
+                                                    color="inherit"
+                                                    startIcon={source.icon}
+                                                    onClick={(event) => { event.stopPropagation(); source.onClick(); }}
+                                                    sx={{ color: 'text.secondary', px: 1.25, '&:hover': { color: 'primary.main' } }}
+                                                >
+                                                    {source.label}
+                                                </Button>
+                                            ))}
                                         </Stack>
                                     ) : (
                                         <>
@@ -455,42 +505,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     </IconButton>
                                                 </Box>
                                             ))}
-                                            {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && (
-                                                <>
-                                                    <Stack
-                                                        aria-label={t('playground.addReferenceImage', { defaultValue: 'Add image' })}
+                                            {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && referenceSources.map((source) => (
+                                                <Tooltip key={source.key} title={source.label}>
+                                                    <ButtonBase
+                                                        onClick={(event) => { event.stopPropagation(); source.onClick(); }}
+                                                        aria-label={source.label}
                                                         sx={{
                                                             width: 56,
                                                             height: 56,
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
                                                             borderRadius: 1,
                                                             color: 'text.secondary',
                                                             border: '1px solid',
                                                             borderColor: 'divider',
+                                                            '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
                                                         }}
                                                     >
-                                                        <FileUpload sx={{ fontSize: 20 }} />
-                                                    </Stack>
-                                                    <Tooltip title={t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}>
-                                                        <ButtonBase
-                                                            onClick={(event) => { event.stopPropagation(); handleOpenSketch(null); }}
-                                                            aria-label={t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}
-                                                            sx={{
-                                                                width: 56,
-                                                                height: 56,
-                                                                borderRadius: 1,
-                                                                color: 'text.secondary',
-                                                                border: '1px solid',
-                                                                borderColor: 'divider',
-                                                                '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
-                                                            }}
-                                                        >
-                                                            <Create sx={{ fontSize: 20 }} />
-                                                        </ButtonBase>
-                                                    </Tooltip>
-                                                </>
-                                            )}
+                                                        {source.icon}
+                                                    </ButtonBase>
+                                                </Tooltip>
+                                            ))}
                                         </>
                                     )}
                                 </Box>
