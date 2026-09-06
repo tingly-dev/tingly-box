@@ -192,35 +192,7 @@ jobs:
       # registry's reason is visible in the log. Fails the job early.
       - name: Verify npm OIDC trusted-publisher exchange
         env:
-          PACKAGES: ${{ env.PKG_NAME }}
-        run: |
-          ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
-          echo "id-token claims npm matches against:"
-          node -e 'const c=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url")); console.log(JSON.stringify({repository:c.repository,repository_owner:c.repository_owner,workflow_ref:c.workflow_ref,job_workflow_ref:c.job_workflow_ref,environment:c.environment,event_name:c.event_name,ref:c.ref},null,2))' "$ID_TOKEN"
-          FAIL=0
-          for pkg in $PACKAGES; do
-            escaped=$(printf '%s' "$pkg" | sed 's|/|%2F|')
-            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
-              -H "Authorization: Bearer $ID_TOKEN" \
-              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
-            code=${body##*$'\n'}
-            resp=${body%$'\n'*}
-            if [ "$code" = "200" ]; then
-              echo "✅ $pkg: exchange OK"
-            else
-              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
-              FAIL=1
-            fi
-          done
-          [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
-
-      # npm silently falls back to token auth (and then fails with E404) when
-      # the OIDC exchange is rejected; do the same exchange here first so the
-      # registry's reason is visible in the log. Fails the job early.
-      - name: Verify npm OIDC trusted-publisher exchange
-        env:
-          PACKAGES: ${{ env.PKG_NAME }} @tingly-dev/tingly-box-linux-x64
+          PACKAGES: ${{ env.PKG_NAME }} @tingly-dev/tingly-box-linux-x64 @tingly-dev/tingly-box-linux-arm64 @tingly-dev/tingly-box-darwin-x64 @tingly-dev/tingly-box-darwin-arm64 @tingly-dev/tingly-box-win32-x64
         run: |
           ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
@@ -530,6 +502,34 @@ jobs:
         run: |
           npm --version
           node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
+
+      # npm silently falls back to token auth (and then fails with E404) when
+      # the OIDC exchange is rejected; do the same exchange here first so the
+      # registry's reason is visible in the log. Fails the job early.
+      - name: Verify npm OIDC trusted-publisher exchange
+        env:
+          PACKAGES: ${{ env.PKG_NAME }}
+        run: |
+          ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
+          echo "id-token claims npm matches against:"
+          node -e 'const c=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url")); console.log(JSON.stringify({repository:c.repository,repository_owner:c.repository_owner,workflow_ref:c.workflow_ref,job_workflow_ref:c.job_workflow_ref,environment:c.environment,event_name:c.event_name,ref:c.ref},null,2))' "$ID_TOKEN"
+          FAIL=0
+          for pkg in $PACKAGES; do
+            escaped=$(printf '%s' "$pkg" | sed 's|/|%2F|')
+            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
+              -H "Authorization: Bearer $ID_TOKEN" \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
+            code=${body##*$'\n'}
+            resp=${body%$'\n'*}
+            if [ "$code" = "200" ]; then
+              echo "✅ $pkg: exchange OK"
+            else
+              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
 
       - name: Configure Git
         run: |
