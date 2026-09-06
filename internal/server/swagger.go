@@ -6,11 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	managedagentmodule "github.com/tingly-dev/tingly-box/internal/server/module/managedagent"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
@@ -127,9 +129,21 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
 	team.RegisterRoutes(apiV1, team.NewHandler(nil))
 
+	// Managed agent control plane — over in-memory stores: schema generation
+	// only references the handlers.
+	managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(newManagedAgentServiceForDocs()))
+
 	// Provider quota API routes — nil manager; schema generation only
 	// references the handler, and available() guards every method at
 	// request time (there is no request time here).
 	quotaHandler := providerQuotaModule.NewHandler(nil, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+}
+
+// newManagedAgentServiceForDocs builds a Service over in-memory stores. It
+// exists so OpenAPI generation registers the same routes the running server
+// mounts in UseManagedAgentEndpoints without touching disk.
+func newManagedAgentServiceForDocs() *managedagent.Service {
+	_, stores := managedagent.NewMemStores()
+	return managedagent.NewService(managedagent.Config{Stores: stores})
 }

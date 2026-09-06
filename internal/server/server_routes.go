@@ -4,7 +4,12 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
+	managedagentmodule "github.com/tingly-dev/tingly-box/internal/server/module/managedagent"
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -33,6 +38,9 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	// Multi-tenant token management API
 	s.UseTokenManagementEndpoints()
+
+	// Managed agent sessions control plane
+	s.UseManagedAgentEndpoints()
 
 	// Virtual model endpoints for testing
 	s.UseVirtualModelEndpoints()
@@ -105,4 +113,34 @@ func (s *Server) UseTokenManagementEndpoints() {
 	api.Router.Use(s.getUserAuthMiddleware())
 	sharing.RegisterRoutes(api, sharing.NewHandler(store))
 	team.RegisterRoutes(api, team.NewHandler(sm.Team()))
+}
+
+// UseManagedAgentEndpoints registers /api/v1/agent/* — the managed agent
+// control plane (.design/managed-agent.md). Execution is not wired yet: the
+// Service runs without a Launcher, so sessions persist as queued.
+func (s *Server) UseManagedAgentEndpoints() {
+	if s.config == nil {
+		return
+	}
+	sm := s.config.StoreManager()
+	if sm == nil || sm.ManagedAgent() == nil {
+		return
+	}
+	eventLog, err := managedagent.NewEventLog(constant.GetAgentEventsDir(sm.BaseDir()))
+	if err != nil {
+		logrus.WithError(err).Error("managed agent: event log unavailable; endpoints disabled")
+		return
+	}
+	svc := managedagent.NewService(managedagent.Config{
+		Stores:        sm.ManagedAgent().Stores(eventLog),
+		WorkspacesDir: constant.GetAgentWorkspacesDir(sm.BaseDir()),
+	})
+	if err := svc.EnsureDefaults(context.Background()); err != nil {
+		logrus.WithError(err).Error("managed agent: failed to ensure default environment")
+	}
+
+	manager := swagger.NewRouteManager(s.engine)
+	api := manager.NewGroup("api", "v1", "")
+	api.Router.Use(s.getUserAuthMiddleware())
+	managedagentmodule.RegisterRoutes(api, managedagentmodule.NewHandler(svc))
 }
