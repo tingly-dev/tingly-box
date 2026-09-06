@@ -29,6 +29,11 @@ docker run -d \
 Open `http://localhost:12580` in your browser (the container logs print the
 full login URL).
 
+Image tags mirror the npm dist-tags: `latest` tracks the newest stable
+release, `rc` tracks the newest pre-release (e.g. `v1.2.3-rc1`), and every
+release is also available under its exact version tag (`v1.2.3`). Pre-releases
+never move `latest`.
+
 ### Using Docker Compose
 
 ```bash
