@@ -228,7 +228,18 @@ altitude 四个独立 agent)。已采纳:
 
 ## 6. 前端 / 后续
 
-- 前端 imagegen playground 的 edit UI 已落地(上传/拖拽/粘贴参考图 + prompt),
-  另有手绘草图作为参考图来源,见 `sketch-canvas.md`。
+- 前端 Playground **不区分 generate / edit 两种模式**。面板只有一个:prompt +
+  可选的参考图区(上传/拖拽/粘贴/手绘,见 `sketch-canvas.md`)+ 一个 Generate
+  按钮。端点由参考图数量推导:0 张 → `images/generations`,≥1 张 →
+  `images/edits`。历史卡片的元信息行把实际调用的端点写出来,让要接 API 的用户
+  看着结果就知道该调哪个接口。
+- 之所以不让前端选:两个端点的差别就是"有没有参考图",这是路由事实,不是用户意
+  图;"Edit"一词此前同时指模式、按钮、输出图上的动作和历史徽标,合并后整个退场
+  (`ux-principles.md` 第 2、3、6 条)。
+- **provider 能力是网关的事,前端无感。** 部分 provider(Kimi / vmodel /
+  DashScope / MiniMax)不支持 edits;前端不按 provider 类型做任何判断,失败由
+  现有错误通知表面化。后续网关应在选 service 阶段按能力绕开不支持的 service
+  (需要在 client 接口上加能力声明),但**不允许**把 edit 静默降级成
+  generation——用户给了参考图,结果就必须基于参考图。
 - 这些网关路由不在 swagger 管理范围内(swagger 只覆盖 `/api/v1` 管理面),
   无需 codegen。

@@ -218,11 +218,11 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
                 >
                     <ToggleButton value="generate">
                         <AutoAwesome fontSize="small" sx={{ mr: 0.75 }} />
-                        {t('playground.modeGenerate', { defaultValue: 'Generate' })}
+                        {t('imageGenQuickStart.opGenerations', { defaultValue: 'images/generations' })}
                     </ToggleButton>
                     <ToggleButton value="edit">
                         <Brush fontSize="small" sx={{ mr: 0.75 }} />
-                        {t('playground.modeEdit', { defaultValue: 'Edit' })}
+                        {t('imageGenQuickStart.opEdits', { defaultValue: 'images/edits' })}
                     </ToggleButton>
                 </ToggleButtonGroup>
                 <Tabs

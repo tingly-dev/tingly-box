@@ -17,15 +17,13 @@ import {
     Select,
     Stack,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Brush, Close, ContentCopy, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
@@ -33,12 +31,12 @@ import ImageSliceDialog from './ImageSliceDialog';
 import SketchCanvasDialog, { type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
-// Base panel height, plus the mode toggle row present in both modes. Edit
-// mode adds the reference-image dropzone on top of that (see
-// desktopPanelHeight below) — both panels share one height value so they
-// stay visually aligned (see the comment on the grid below).
-const PLAYGROUND_PANEL_HEIGHT = 340;
-const EDIT_REFERENCE_SECTION_HEIGHT = 108;
+// Base panel height with the reference-image row in its compact (empty)
+// state. Once references are added the row grows into a thumbnail strip
+// (see desktopPanelHeight below) — both panels share one height value so
+// they stay visually aligned (see the comment on the grid below).
+const PLAYGROUND_PANEL_HEIGHT = 348;
+const REFERENCE_STRIP_EXTRA_HEIGHT = 48;
 // Matches the Codex-native imagegen tool's reference-image cap (see
 // .design/imageedit.md) — the common denominator across providers behind
 // this scenario.
@@ -51,7 +49,10 @@ const overlayIconSx = {
     '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
 } as const;
 
-type Mode = 'generate' | 'edit';
+// Which gateway endpoint a run went through. Not a user choice: derived
+// from whether the run had reference images (see handleSubmit). Shown on
+// the history card so API users learn which endpoint does what they just did.
+type Endpoint = 'generations' | 'edits';
 type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
 interface ImageResult {
@@ -73,15 +74,15 @@ type SketchTarget = { index: number | null } | null;
 
 interface GenerationRun {
     id: string;
-    mode: Mode;
+    endpoint: Endpoint;
     prompt: string;
     model: string;
     size: string;
     quality: Quality;
     images: ImageResult[];
-    // Data URLs of the reference images an edit run was built from, kept for
+    // Data URLs of the reference images a run was built from, kept for
     // display alongside the output — the "what did I ask for" half of the
-    // history card (edit mode only).
+    // history card (only set when the run went through `edits`).
     sourceImages?: string[];
     status?: 'pending' | 'completed';
 }
@@ -134,7 +135,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
     const [selectedModel, setSelectedModel] = useState('');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
-    const [mode, setMode] = useState<Mode>('generate');
     const [prompt, setPrompt] = useState('');
     const [size, setSize] = useState('1024x1024');
     const [quality, setQuality] = useState<Quality>('auto');
@@ -183,11 +183,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setReferenceImages((current) => current.filter((_, i) => i !== index));
     }, []);
 
-    // Pasting an image anywhere on the panel is itself the mode signal — the
-    // user doesn't have to switch to Edit mode first and then find the
-    // dropzone. A paste with no image (e.g. plain text into the prompt field)
-    // is left alone. Scoped to this card's own DOM subtree via the React
-    // synthetic paste event, not a window-level listener.
+    // Pasting an image anywhere on the panel adds it as a reference — the
+    // user doesn't have to find the dropzone first. A paste with no image
+    // (e.g. plain text into the prompt field) is left alone. Scoped to this
+    // card's own DOM subtree via the React synthetic paste event, not a
+    // window-level listener.
     const handlePaste = useCallback((event: React.ClipboardEvent) => {
         const items = event.clipboardData?.items;
         if (!items) return;
@@ -197,11 +197,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             .filter((file): file is File => file !== null);
         if (imageFiles.length === 0) return;
         event.preventDefault();
-        setMode('edit');
         void handleAddReferenceImages(imageFiles);
     }, [handleAddReferenceImages]);
 
-    // Hands a completed output straight back in as the next edit's source —
+    // Hands a completed output straight back in as the next run's reference —
     // the artifact for the next action, not just a notification that one
     // exists. Reuses the already-rendered src as the preview (it's already a
     // data URL/data-equivalent), so this never re-encodes the image.
@@ -209,7 +208,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         try {
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
-            setMode('edit');
             setReferenceImages([{ file, previewUrl: src, source: 'upload' }]);
         } catch {
             showNotification(
@@ -219,13 +217,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    // A sketch is just another way to get a reference image, not a third
-    // mode: it lands in the same list, goes through the same edit request,
-    // and shows up in the run history like any upload. Redrawing replaces the
-    // sketch in place so it keeps its position among the other references.
+    // A sketch is just another way to get a reference image: it lands in the
+    // same list, goes through the same request, and shows up in the run
+    // history like any upload. Redrawing replaces the sketch in place so it
+    // keeps its position among the other references.
     const handleOpenSketch = useCallback((index: number | null) => {
         if (index === null && referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) return;
-        setMode('edit');
         setSketchTarget({ index });
     }, [referenceImages.length]);
 
@@ -260,29 +257,32 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
     const handleSubmit = useCallback(async () => {
         if (!prompt.trim() || !model) return;
-        if (mode === 'edit' && referenceImages.length === 0) return;
         const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const runMode = mode;
+        // The endpoint is a consequence of the inputs, not a mode the user
+        // picks: references present → edits, none → generations. Which
+        // providers can serve either is the gateway's concern, not this
+        // panel's (see .design/imageedit.md).
+        const editSources = referenceImages;
+        const endpoint: Endpoint = editSources.length > 0 ? 'edits' : 'generations';
         const generationPrompt = prompt.trim();
         const generationModel = model;
         const generationSize = size;
         const generationQuality = quality;
-        const editSources = referenceImages;
         updateRuns((currentRuns) => [...currentRuns, {
             id: runId,
-            mode: runMode,
+            endpoint,
             prompt: generationPrompt,
             model: generationModel,
             size: generationSize,
             quality: generationQuality,
             images: [],
-            sourceImages: runMode === 'edit' ? editSources.map((ref) => ref.previewUrl) : undefined,
+            sourceImages: endpoint === 'edits' ? editSources.map((ref) => ref.previewUrl) : undefined,
             status: 'pending',
         }]);
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const editFiles = editSources.map((ref) => ref.file);
-            const response = runMode === 'edit'
+            const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
                     model: generationModel,
@@ -308,12 +308,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
             showNotification(`${status}${message}`, 'error');
         }
-    }, [count, mode, model, prompt, quality, referenceImages, showNotification, size, t, updateRuns]);
+    }, [count, model, prompt, quality, referenceImages, showNotification, size, t, updateRuns]);
 
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
         ? 'auto'
-        : PLAYGROUND_PANEL_HEIGHT + (mode === 'edit' ? EDIT_REFERENCE_SECTION_HEIGHT : 0);
+        : PLAYGROUND_PANEL_HEIGHT + (referenceImages.length > 0 ? REFERENCE_STRIP_EXTRA_HEIGHT : 0);
 
     return (
         <>
@@ -349,28 +349,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Alert>
                         )}
 
-                        <ToggleButtonGroup
-                            value={mode}
-                            exclusive
-                            size="small"
-                            onChange={(_, next: Mode | null) => { if (next) setMode(next); }}
-                            disabled={noModels}
-                            fullWidth
-                        >
-                            <ToggleButton value="generate">
-                                <AutoAwesome fontSize="small" sx={{ mr: 0.75 }} />
-                                {t('playground.modeGenerate', { defaultValue: 'Generate' })}
-                            </ToggleButton>
-                            <ToggleButton value="edit">
-                                <Brush fontSize="small" sx={{ mr: 0.75 }} />
-                                {t('playground.modeEdit', { defaultValue: 'Edit' })}
-                            </ToggleButton>
-                        </ToggleButtonGroup>
-
-                        {mode === 'edit' && (
-                            <Box>
+                        {/* Reference images are optional input, not a mode. Empty, the
+                            row is a one-line invitation; with images it grows into a
+                            thumbnail strip. Either way the request below adapts. */}
+                        <Box>
                                 <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
                                     {t('playground.referenceImages', { defaultValue: 'Reference images' })}
+                                    {' · '}
+                                    {t('playground.referenceOptional', { defaultValue: 'optional' })}
                                 </Typography>
                                 <Box
                                     onClick={() => referenceFileInputRef.current?.click()}
@@ -390,7 +376,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         borderColor: 'divider',
                                         borderRadius: 1.5,
                                         bgcolor: 'action.hover',
-                                        minHeight: 64,
+                                        minHeight: referenceImages.length === 0 ? 44 : 64,
                                         alignItems: 'center',
                                         cursor: referenceImages.length < MAX_EDIT_REFERENCE_IMAGES ? 'pointer' : 'default',
                                     }}
@@ -400,11 +386,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             direction="row"
                                             spacing={1}
                                             useFlexGap
-                                            sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', color: 'text.secondary', py: 0.5 }}
+                                            sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', color: 'text.secondary' }}
                                         >
-                                            <FileUpload sx={{ fontSize: 20 }} />
+                                            <FileUpload sx={{ fontSize: 18 }} />
                                             <Typography variant="body2">
-                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop images here, click to browse, or paste' })}
+                                                {t('playground.dropReferenceImage', { defaultValue: 'Drop, browse, or paste images' })}
                                             </Typography>
                                             <Button
                                                 size="small"
@@ -508,12 +494,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         </>
                                     )}
                                 </Box>
-                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
-                                    {t('playground.referenceHint', {
-                                        defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP',
-                                        max: MAX_EDIT_REFERENCE_IMAGES,
-                                    })}
-                                </Typography>
+                                {referenceImages.length > 0 && (
+                                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
+                                        {t('playground.referenceHint', {
+                                            defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
+                                            max: MAX_EDIT_REFERENCE_IMAGES,
+                                        })}
+                                    </Typography>
+                                )}
                                 <input
                                     ref={referenceFileInputRef}
                                     type="file"
@@ -525,8 +513,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         event.target.value = '';
                                     }}
                                 />
-                            </Box>
-                        )}
+                        </Box>
 
                         <FormControl size="small" fullWidth>
                             <InputLabel id="image-model-label">
@@ -550,11 +537,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             rows={5}
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
-                            placeholder={mode === 'edit'
-                                ? (hasSketchReference
-                                    ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
-                                    : t('playground.editPromptPlaceholder', { defaultValue: 'Describe the change you want to make…' }))
-                                : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
+                            placeholder={hasSketchReference
+                                ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
+                                : referenceImages.length > 0
+                                    ? t('playground.referencePromptPlaceholder', { defaultValue: 'Describe what to make from these images…' })
+                                    : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
                             disabled={noModels}
@@ -639,23 +626,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             size="large"
                             fullWidth
                             onClick={handleSubmit}
-                            disabled={noModels || !prompt.trim() || !model || (mode === 'edit' && referenceImages.length === 0)}
+                            disabled={noModels || !prompt.trim() || !model}
                             startIcon={pendingCount > 0
                                 ? <CircularProgress size={18} color="inherit" />
-                                : (mode === 'edit' ? <Brush /> : <AutoAwesome />)}
+                                : <AutoAwesome />}
                             sx={{
                                 '&.Mui-disabled': {
                                     color: 'common.white',
                                 },
                             }}
                         >
-                            {mode === 'edit'
-                                ? (pendingCount > 0
-                                    ? t('playground.editAnother', { defaultValue: 'Edit another · {{count}} running', count: pendingCount })
-                                    : t('playground.edit', { defaultValue: 'Edit Image' }))
-                                : (pendingCount > 0
-                                    ? t('playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
-                                    : t('playground.generate', { defaultValue: 'Generate' }))}
+                            {pendingCount > 0
+                                ? t('playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
+                                : referenceImages.length > 0
+                                    ? t('playground.generateFromReferences', {
+                                        defaultValue_one: 'Generate from {{count}} image',
+                                        defaultValue_other: 'Generate from {{count}} images',
+                                        count: referenceImages.length,
+                                    })
+                                    : t('playground.generate', { defaultValue: 'Generate' })}
                         </Button>
                     </Stack>
 
@@ -766,9 +755,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                 >
                                                     <CircularProgress size={24} />
                                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                        {run.mode === 'edit'
-                                                            ? t('playground.editingNew', { defaultValue: 'Editing images…' })
-                                                            : t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                        {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
                                                     </Typography>
                                                     <Typography
                                                         variant="caption"
@@ -793,29 +780,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {run.model} · {run.size} · {run.quality}
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
                                                 </Stack>
                                             ) : (
                                             <Stack spacing={1.25} sx={{ height: '100%' }}>
                                                 <Box sx={{ minWidth: 0 }}>
                                                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-                                                        {run.mode === 'edit' && (
-                                                            <Typography
-                                                                component="span"
-                                                                variant="caption"
-                                                                sx={{
-                                                                    flexShrink: 0,
-                                                                    px: 0.75,
-                                                                    borderRadius: 1,
-                                                                    bgcolor: 'action.selected',
-                                                                    color: 'text.secondary',
-                                                                    fontWeight: 600,
-                                                                }}
-                                                            >
-                                                                {t('playground.editBadge', { defaultValue: 'Edited' })}
-                                                            </Typography>
-                                                        )}
                                                         <Typography
                                                             variant="body2"
                                                             sx={{
@@ -840,9 +811,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {run.model} · {run.size} · {run.quality}
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
-                                                    {run.mode === 'edit' && run.sourceImages && run.sourceImages.length > 0 && (
+                                                    {run.sourceImages && run.sourceImages.length > 0 && (
                                                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, overflowX: 'auto' }}>
                                                             {run.sourceImages.map((src, i) => (
                                                                 <ButtonBase
@@ -978,7 +949,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                 <IconButton
                                                                     size="small"
                                                                     onClick={(event) => { event.stopPropagation(); void handleUseAsReference(src); }}
-                                                                    aria-label={t('playground.useAsReference', { defaultValue: 'Edit this image' })}
+                                                                    aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
                                                                     sx={{
                                                                         position: 'absolute',
                                                                         bottom: 8,
@@ -1120,14 +1091,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Download fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Edit this image' })}>
+                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
                             <IconButton
                                 onClick={() => {
                                     if (!selectedImage) return;
                                     void handleUseAsReference(selectedImage.src);
                                     setSelectedImage(null);
                                 }}
-                                aria-label={t('playground.useAsReference', { defaultValue: 'Edit this image' })}
+                                aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
                                 sx={overlayIconSx}
                             >
                                 <Edit fontSize="small" />
