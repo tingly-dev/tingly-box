@@ -1,9 +1,11 @@
 // Platform binary packages: `tingly-box` declares one optionalDependency per
 // supported platform (@tingly-dev/tingly-box-linux-x64, …); npm installs only the one
-// whose os/cpu match and skips the rest silently. Each carries the raw Go
-// binary at bin/tingly-box[.exe], so an install needs nothing but the npm
-// registry (mirrors included) — no GitHub download. The cli shim resolves it
-// from here and falls back to the release download when it is missing (e.g.
+// whose os/cpu match and skips the rest silently. Each carries the release
+// zip (bin/tingly-box-<os>-<arch>.zip, the same asset the download path
+// fetches from GitHub), so an install needs nothing but the npm registry
+// (mirrors included) — no GitHub download — and node_modules holds ~30 MB
+// instead of the ~110 MB raw binary. The cli shim resolves it from here and
+// falls back to the release download when it is missing (e.g.
 // `--no-optional`, a registry mirror that hasn't synced the platform package
 // yet, or a dev checkout). Rationale: .design/npm.md ("F. Platform packages").
 //
@@ -36,20 +38,19 @@ export function platformPackageName() {
 // from `fromUrl` (the calling shim's import.meta.url), so it finds the
 // package wherever npm put it: nested under the global install, hoisted in
 // npx's cache, or a dev checkout's node_modules. Returns
-// { name, version, binaryPath } or null when not installed / incomplete.
+// { name, version, zipPath } or null when not installed / incomplete.
 // Never throws — the caller treats null as "use the download path".
 export function findPlatformPackage(fromUrl) {
-	const name = platformPackageName();
-	if (!name) return null;
+	const entry = PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
+	if (!entry) return null;
 	try {
 		// Distinct identifier from the `require` the esbuild banner defines.
 		const resolver = createRequire(fromUrl);
-		const pkgJsonPath = resolver.resolve(`${name}/package.json`);
+		const pkgJsonPath = resolver.resolve(`${entry.name}/package.json`);
 		const pkg = resolver(pkgJsonPath);
-		const binaryName = "tingly-box" + (process.platform === "win32" ? ".exe" : "");
-		const binaryPath = join(dirname(pkgJsonPath), "bin", binaryName);
-		if (!existsSync(binaryPath)) return null;
-		return { name, version: pkg.version, binaryPath };
+		const zipPath = join(dirname(pkgJsonPath), "bin", entry.zip);
+		if (!existsSync(zipPath)) return null;
+		return { name: entry.name, version: pkg.version, zipPath };
 	} catch {
 		return null;
 	}

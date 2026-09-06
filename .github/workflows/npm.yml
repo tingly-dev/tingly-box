@@ -187,6 +187,40 @@ jobs:
           npm --version
           node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
 
+      # npm silently falls back to token auth (and then fails with E404) when
+      # the OIDC exchange is rejected; do the same exchange here first so the
+      # registry's reason is visible in the log. Fails the job early.
+      - name: Verify npm OIDC trusted-publisher exchange
+        env:
+          PACKAGES: ${{ env.PKG_NAME }} @tingly-dev/tingly-box-linux-x64 @tingly-dev/tingly-box-linux-arm64 @tingly-dev/tingly-box-darwin-x64 @tingly-dev/tingly-box-darwin-arm64 @tingly-dev/tingly-box-win32-x64
+        run: |
+          ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
+          echo "id-token claims npm matches against:"
+          node -e 'const c=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url")); console.log(JSON.stringify({repository:c.repository,repository_owner:c.repository_owner,workflow_ref:c.workflow_ref,job_workflow_ref:c.job_workflow_ref,environment:c.environment,event_name:c.event_name,ref:c.ref},null,2))' "$ID_TOKEN"
+          FAIL=0
+          for pkg in $PACKAGES; do
+            escaped=$(printf '%s' "$pkg" | sed 's|/|%2F|')
+            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
+              -H "Authorization: Bearer $ID_TOKEN" \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
+            code=${body##*$'\n'}
+            resp=${body%$'\n'*}
+            if [ "$code" = "200" ]; then
+              echo "✅ $pkg: exchange OK"
+            else
+              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || {
+            echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
+            echo "Check on npmjs.com (package Settings -> Trusted Publisher): org tingly-dev, repo tingly-box, workflow npm.yml,"
+            echo "environment production, and Allowed actions includes 'npm publish' (configs created after 2026-09-03 default"
+            echo "to stage publish only). Or: npm trust list <pkg> / npm trust github <pkg> --repo tingly-dev/tingly-box --file npm.yml --env production --allow-publish"
+            exit 1
+          }
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -225,21 +259,49 @@ jobs:
           fi
           echo "✅ Built $BUILT platform packages:"
           cat built.txt
-          du -sh platform/*
-          platform/@tingly-dev/tingly-box-linux-x64/bin/tingly-box version
+          du -sh platform/@tingly-dev/*
+          # The package carries the release zip; run the binary out of it once.
+          unzip -q -o platform/@tingly-dev/tingly-box-linux-x64/bin/tingly-box-linux-amd64.zip tingly-box -d "$RUNNER_TEMP/sanity"
+          "$RUNNER_TEMP/sanity/tingly-box" version
 
+      # All five uploads run concurrently (one job, so still one production
+      # approval). A version that is already on the registry is a skip, not a
+      # failure: `npm view` can lag behind a publish by minutes on the read
+      # replicas, so the registry's own "previously published" rejection is
+      # treated as "already there" too. Per-package logs keep output readable.
       - name: Publish platform packages to npm
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
-          while read -r name; do
+          mkdir -p publish-logs
+          publish_one() {
+            local name="$1" log="publish-logs/$(echo "$1" | tr '/@' '__').log"
             if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
-              echo "ℹ️ ${name}@${VERSION} already exists on npm. Skipping publish."
-              continue
+              echo "skip" > "$log.status"; return 0
             fi
+            if (cd "platform/$name" && npm publish --provenance --access public --tag "$NPM_TAG") > "$log" 2>&1; then
+              echo "ok" > "$log.status"
+            elif grep -qiE "previously published|cannot publish over|EPUBLISHCONFLICT|already exists" "$log"; then
+              echo "skip" > "$log.status"
+            else
+              echo "fail" > "$log.status"
+            fi
+          }
+          while read -r name; do
             echo "📦 Publishing ${name}@${VERSION} (tag: ${NPM_TAG})..."
-            (cd "platform/$name" && npm publish --provenance --access public --tag "$NPM_TAG")
+            publish_one "$name" &
           done < built.txt
+          wait
+          FAILED=0
+          while read -r name; do
+            log="publish-logs/$(echo "$name" | tr '/@' '__').log"
+            case "$(cat "$log.status" 2>/dev/null)" in
+              ok)   echo "✅ ${name}@${VERSION} published" ;;
+              skip) echo "ℹ️  ${name}@${VERSION} already on npm, skipped" ;;
+              *)    echo "❌ ${name}@${VERSION} failed:"; sed 's/^/    /' "$log"; FAILED=1 ;;
+            esac
+          done < built.txt
+          [ "$FAILED" -eq 0 ]
 
       # ---- cli shim ----------------------------------------------------
       - name: Update NPX package.json with new version
@@ -310,7 +372,7 @@ jobs:
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           # Give the registry a moment to serve the platform package just published.
-          for i in $(seq 1 12); do
+          for i in $(seq 1 30); do
             if npm view "@tingly-dev/tingly-box-linux-x64@${VERSION}" version >/dev/null 2>&1; then break; fi
             echo "waiting for @tingly-dev/tingly-box-linux-x64@${VERSION} on the registry ($i)..."
             sleep 10
@@ -337,8 +399,13 @@ jobs:
 
           if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
             echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
+          elif npm publish --provenance --access public --tag "$NPM_TAG" 2>&1 | tee publish.log; test "${PIPESTATUS[0]}" -eq 0; then
+            echo "✅ $PKG_NAME@${VERSION} published"
+          elif grep -qiE "previously published|cannot publish over|EPUBLISHCONFLICT" publish.log; then
+            # `npm view` lags behind the registry; the registry itself says it is there.
+            echo "ℹ️ $PKG_NAME@${VERSION} already on npm (registry rejected the re-publish). Skipping."
           else
-            npm publish --provenance --access public --tag "$NPM_TAG"
+            exit 1
           fi
 
   # Append NPX install info to the existing version release (no extra tag/release)
@@ -475,6 +542,40 @@ jobs:
           npm --version
           node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
 
+      # npm silently falls back to token auth (and then fails with E404) when
+      # the OIDC exchange is rejected; do the same exchange here first so the
+      # registry's reason is visible in the log. Fails the job early.
+      - name: Verify npm OIDC trusted-publisher exchange
+        env:
+          PACKAGES: ${{ env.PKG_NAME }}
+        run: |
+          ID_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)
+          echo "id-token claims npm matches against:"
+          node -e 'const c=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url")); console.log(JSON.stringify({repository:c.repository,repository_owner:c.repository_owner,workflow_ref:c.workflow_ref,job_workflow_ref:c.job_workflow_ref,environment:c.environment,event_name:c.event_name,ref:c.ref},null,2))' "$ID_TOKEN"
+          FAIL=0
+          for pkg in $PACKAGES; do
+            escaped=$(printf '%s' "$pkg" | sed 's|/|%2F|')
+            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
+              -H "Authorization: Bearer $ID_TOKEN" \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
+            code=${body##*$'\n'}
+            resp=${body%$'\n'*}
+            if [ "$code" = "200" ]; then
+              echo "✅ $pkg: exchange OK"
+            else
+              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || {
+            echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
+            echo "Check on npmjs.com (package Settings -> Trusted Publisher): org tingly-dev, repo tingly-box, workflow npm.yml,"
+            echo "environment production, and Allowed actions includes 'npm publish' (configs created after 2026-09-03 default"
+            echo "to stage publish only). Or: npm trust list <pkg> / npm trust github <pkg> --repo tingly-dev/tingly-box --file npm.yml --env production --allow-publish"
+            exit 1
+          }
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -540,8 +641,13 @@ jobs:
 
           if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
             echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
+          elif npm publish --provenance --access public --tag "$NPM_TAG" 2>&1 | tee publish.log; test "${PIPESTATUS[0]}" -eq 0; then
+            echo "✅ $PKG_NAME@${VERSION} published"
+          elif grep -qiE "previously published|cannot publish over|EPUBLISHCONFLICT" publish.log; then
+            # `npm view` lags behind the registry; the registry itself says it is there.
+            echo "ℹ️ $PKG_NAME@${VERSION} already on npm (registry rejected the re-publish). Skipping."
           else
-            npm publish --provenance --access public --tag "$NPM_TAG"
+            exit 1
           fi
 
       - name: Append GUI NPX info to release notes

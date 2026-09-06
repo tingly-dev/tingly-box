@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { createRequire } from "module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { cacheDir } from "../shared/cachedir.js";
 import { cleanupRetiredInstallDirs, cleanupStaleBinaryCaches } from "../shared/cleanup.js";
-import { downloadAndExtractZip } from "../shared/download.js";
+import { downloadAndExtractZip, extractZipFile } from "../shared/download.js";
 import { DEFAULT_ARGS, downloadFailureHints, sourceArgs } from "../shared/entry.js";
 import { execBinary } from "../shared/exec.js";
 import { findPlatformPackage, platformPackageName } from "../shared/platform.js";
@@ -50,32 +50,16 @@ function resolveBinarySource() {
 	return { kind: "download", tag: VERSION, hints: [] };
 }
 
-// Copy the platform package's binary into the versioned cache dir, writing a
-// temp file and renaming so the final path only ever holds a complete
-// binary. The cache copy — rather than exec'ing inside node_modules — keeps
-// the invariants the download path already has: a running daemon keeps its
-// inode while `npm install -g` retires the package dir (on Windows npm
-// could not even remove a locked exe), and the stale-cache sweep, shortcut
-// relaunch and `--transport-version` all keep one layout.
-function installFromPackage(local, binaryPath) {
+// Extract the platform package's release zip into the versioned cache dir
+// — the same extraction the download path does, just from a local file.
+// Running from the cache rather than from node_modules keeps the invariants
+// the download path already has: a running daemon keeps its inode while
+// `npm install -g` retires the package dir (on Windows npm could not even
+// remove a locked exe), and the stale-cache sweep, shortcut relaunch and
+// `--transport-version` all keep one layout.
+async function installFromPackage(local, extractDir) {
 	console.log(`📦 Installing binary from ${local.name}@${local.version}...`);
-	const tmpPath = `${binaryPath}.tmp-${process.pid}`;
-	try {
-		copyFileSync(local.binaryPath, tmpPath);
-		if (process.platform !== "win32") {
-			chmodSync(tmpPath, 0o755);
-		}
-		try {
-			renameSync(tmpPath, binaryPath);
-		} catch {
-			rmSync(binaryPath, { force: true });
-			renameSync(tmpPath, binaryPath);
-		}
-	} catch (e) {
-		rmSync(tmpPath, { force: true });
-		console.error(`❌ Failed to install binary from ${local.name}: ${e.message}`);
-		process.exit(1);
-	}
+	await extractZipFile(local.zipPath, extractDir);
 }
 
 async function getPlatformArchAndBinary() {
@@ -146,7 +130,11 @@ async function getPlatformArchAndBinary() {
 	// download and extract the release ZIP
 	if (!existsSync(binaryPath)) {
 		if (source.kind === "package") {
-			installFromPackage(source.local, binaryPath);
+			await installFromPackage(source.local, tinglyBinDir);
+			if (!existsSync(binaryPath)) {
+				console.error(`❌ ${source.local.name} did not contain ${binaryPath}`);
+				process.exit(1);
+			}
 			console.log(`✅ Installed to ${binaryPath}`);
 		} else {
 			await downloadAndExtractZip(downloadUrl, tinglyBinDir, { hints: source.hints });

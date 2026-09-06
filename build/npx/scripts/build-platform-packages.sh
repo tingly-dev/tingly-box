@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Build the per-platform binary packages (@tingly-dev/tingly-box-linux-x64, …) that the
 # `tingly-box` package pulls in as optionalDependencies. Each package is the
-# raw Go binary from the release zip plus a package.json pinned to the same
-# version as the shim. Used by .github/workflows/npm.yml and test-shim.sh.
+# release zip itself (bin/<zip>, unchanged) plus a package.json pinned to the
+# same version as the shim; the shim extracts it into its versioned cache on
+# first run. Used by .github/workflows/npm.yml and test-shim.sh.
 # Design: .design/npm.md ("F. Platform packages").
 #
 # Usage: build-platform-packages.sh <version> <zip-dir> <out-dir>
@@ -39,19 +40,20 @@ while IFS='|' read -r key name zip; do
 	fi
 	binary="tingly-box"
 	[ "$os" = "win32" ] && binary="tingly-box.exe"
+	# Sanity: the zip must hold the binary at its top level (what the shim extracts).
+	unzip -l "$zip_path" | awk '{print $NF}' | grep -qx "$binary" \
+		|| { echo "$zip does not contain $binary at its top level" >&2; exit 1; }
 
 	pkg_dir="$OUT_DIR/$name"
 	rm -rf "$pkg_dir"
 	mkdir -p "$pkg_dir/bin"
-	# The release zip holds the binary at its top level; extract just that.
-	unzip -q -o -j "$zip_path" "$binary" -d "$pkg_dir/bin"
-	[ "$os" = "win32" ] || chmod 755 "$pkg_dir/bin/$binary"
+	cp "$zip_path" "$pkg_dir/bin/$zip"
 
 	cat > "$pkg_dir/package.json" <<JSON
 {
   "name": "$name",
   "version": "$VERSION",
-  "description": "tingly-box binary for $os-$cpu. Installed automatically as an optional dependency of the tingly-box package; not meant to be installed directly.",
+  "description": "tingly-box binary for $os-$cpu (release zip). Installed automatically as an optional dependency of the tingly-box package; not meant to be installed directly.",
   "homepage": "https://github.com/tingly-dev/tingly-box",
   "repository": {
     "type": "git",
@@ -76,14 +78,15 @@ JSON
 	cat > "$pkg_dir/README.md" <<MD
 # $name
 
-The tingly-box binary for $os-$cpu. This package is pulled in automatically
-by the [\`tingly-box\`](https://www.npmjs.com/package/tingly-box) package as
-an optional dependency; install that one instead:
+The tingly-box binary for $os-$cpu, as the release zip. This package is pulled
+in automatically by the [\`tingly-box\`](https://www.npmjs.com/package/tingly-box)
+package as an optional dependency and extracted on first run; install that
+one instead:
 
 \`\`\`bash
 npm install -g tingly-box
 \`\`\`
 MD
-	echo "built $name@$VERSION ($(du -h "$pkg_dir/bin/$binary" | cut -f1))" >&2
+	echo "built $name@$VERSION ($(du -h "$pkg_dir/bin/$zip" | cut -f1))" >&2
 	echo "$name"
 done <<< "$PLATFORMS"
