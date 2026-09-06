@@ -404,14 +404,10 @@ func printBanner(cfg BannerConfig) {
 	}
 }
 
-// formatVersion renders a build version for display: release builds get a
-// "v" prefix ("v1.4.2"), while non-release markers such as "dev" are shown
-// as-is.
+// formatVersion renders a build version for display: a bare release number
+// ("1.4.2") gets a "v" prefix; anything else ("dev", "v1.4.2") is shown as-is.
 func formatVersion(v string) string {
-	if v == "" || v == "dev" || strings.HasPrefix(v, "v") {
-		return v
-	}
-	if v[0] >= '0' && v[0] <= '9' {
+	if v != "" && v[0] >= '0' && v[0] <= '9' {
 		return "v" + v
 	}
 	return v
@@ -517,7 +513,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 
 		versionNote := " (version unknown)"
 		if runningVersion != "" {
-			versionNote = fmt.Sprintf(" (v%s)", strings.TrimPrefix(runningVersion, "v"))
+			versionNote = fmt.Sprintf(" (%s)", formatVersion(runningVersion))
 		}
 		fmt.Printf("Server is already running on port %d%s\n", runningPort, versionNote)
 		printBanner(BannerConfig{
@@ -528,7 +524,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 			IsDaemon:     false,
 		})
 		if runningVersion != "" && runningVersion != BuildVersion {
-			fmt.Printf("This launcher is v%s — run 'tingly-box restart' / 'tb restart' to switch the running server to it.\n", BuildVersion)
+			fmt.Printf("This launcher is %s — run 'tingly-box restart' / 'tb restart' to switch the running server to it.\n", formatVersion(BuildVersion))
 		} else {
 			fmt.Println("Use 'tingly-box restart' / 'tb restart' to restart the server")
 		}
