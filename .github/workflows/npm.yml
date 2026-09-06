@@ -225,7 +225,13 @@ jobs:
           # npm's own exchange attempt, verbose (dry-run still runs the OIDC step).
           echo "npm CLI oidc log:"
           (cd "$PKG_DIR" && npm publish --dry-run --loglevel verbose 2>&1 | grep -iE "oidc|exchange" || true)
-          [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
+          [ "$FAIL" -eq 0 ] || {
+            echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
+            echo "Check on npmjs.com (package Settings -> Trusted Publisher): org tingly-dev, repo tingly-box, workflow npm.yml,"
+            echo "environment production, and Allowed actions includes 'npm publish' (configs created after 2026-09-03 default"
+            echo "to stage publish only). Or: npm trust list <pkg> / npm trust github <pkg> --repo tingly-dev/tingly-box --file npm.yml --env production --allow-publish"
+            exit 1
+          }
 
       - name: Configure Git
         run: |
@@ -553,7 +559,13 @@ jobs:
           # npm's own exchange attempt, verbose (dry-run still runs the OIDC step).
           echo "npm CLI oidc log:"
           (cd "$PKG_DIR" && npm publish --dry-run --loglevel verbose 2>&1 | grep -iE "oidc|exchange" || true)
-          [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
+          [ "$FAIL" -eq 0 ] || {
+            echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
+            echo "Check on npmjs.com (package Settings -> Trusted Publisher): org tingly-dev, repo tingly-box, workflow npm.yml,"
+            echo "environment production, and Allowed actions includes 'npm publish' (configs created after 2026-09-03 default"
+            echo "to stage publish only). Or: npm trust list <pkg> / npm trust github <pkg> --repo tingly-dev/tingly-box --file npm.yml --env production --allow-publish"
+            exit 1
+          }
 
       - name: Configure Git
         run: |

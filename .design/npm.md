@@ -352,7 +352,9 @@ and npm >= 11.5.1 exchanges it for a single-publish credential. There is no
 - **npmjs.com side.** Every package (`tingly-box`, `tingly-box-gui`, the five
   platform packages) has one Trusted Publisher: GitHub Actions, org
   `tingly-dev`, repo `tingly-box`, workflow `npm.yml`, environment
-  `production`. All fields are exact-match; renaming the workflow file or the
+  `production`, with Allowed actions including `npm publish` (configs created
+  after 2026-09-03 default to stage publish only, which makes `npm publish`
+  fail with a generic "package not found"). All fields are exact-match; renaming the workflow file or the
   environment breaks publishing until the npm config is updated. Publishing
   access on each package is set to "Require two-factor authentication and
   disallow tokens".
