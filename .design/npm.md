@@ -332,7 +332,35 @@ major versions). Once C lands, the update instruction becomes `tb update`.
    supported" (see `cli-entry-semantics.md`). ✅ 2026-08
 3. E in the next shim release (bin.js only). ✅ 2026-09
 4. F: platform packages + bundle retirement (CI + bin.js). ✅ 2026-09.
-   First publish after this needs the npm token to be allowed to create the
-   five new `tingly-box-<os>-<cpu>` packages.
+   The five `tingly-box-<os>-<cpu>` packages were first published by hand
+   (`build/npx/scripts/publish-platform-packages-manual.sh`, 2026-09) so
+   Trusted Publishing could be configured on them; see G.
 5. C behind a normal feature PR (Go `update` command + shim `current`
    resolution); ship shim change in the same release train as the Go command.
+
+## G. npm auth: Trusted Publishing (OIDC), no tokens
+
+Status: implemented 2026-09.
+
+npm revoked classic tokens (2025-11), capped granular tokens at 90 days and is
+removing the "bypass 2FA" option, so a token in a GitHub secret cannot publish
+from CI any more. `npm.yml` therefore publishes via Trusted Publishing: the
+job requests a GitHub Actions OIDC id-token (`permissions: id-token: write`)
+and npm >= 11.5.1 exchanges it for a single-publish credential. There is no
+`NPM_TOKEN` secret and no `NODE_AUTH_TOKEN` in the workflow.
+
+- **npmjs.com side.** Every package (`tingly-box`, `tingly-box-gui`, the five
+  platform packages) has one Trusted Publisher: GitHub Actions, org
+  `tingly-dev`, repo `tingly-box`, workflow `npm.yml`, environment
+  `production`. All fields are exact-match; renaming the workflow file or the
+  environment breaks publishing until the npm config is updated. Publishing
+  access on each package is set to "Require two-factor authentication and
+  disallow tokens".
+- **Provenance** is attached automatically for OIDC publishes from a public
+  repo; the explicit `--provenance` flag is kept as a no-op guard.
+- **New package names** cannot be configured for Trusted Publishing before
+  they exist, so a brand-new package is published once by hand with
+  `build/npx/scripts/publish-platform-packages-manual.sh <tag>` (curl download,
+  interactive 2FA), then configured on npmjs.com, then left to CI.
+- **Local runs** (`npm publish` from a laptop) still work with 2FA and are the
+  fallback if GitHub OIDC is unavailable.

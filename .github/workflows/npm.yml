@@ -41,6 +41,11 @@ on:
         type: boolean
         default: true
 
+# npm auth: Trusted Publishing (OIDC). No npm token is stored anywhere; the
+# publish jobs mint a short-lived GitHub Actions id-token and npm (>= 11.5.1)
+# exchanges it for publish rights. Each package on npmjs.com is configured
+# with this repo, workflow file "npm.yml" and environment "production"; those
+# names must stay exactly in sync. Provenance is generated automatically.
 permissions:
   contents: write
   id-token: write
@@ -176,6 +181,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: build/npx/package-lock.json
 
+      - name: Check npm supports trusted publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -218,8 +228,6 @@ jobs:
           platform/tingly-box-linux-x64/bin/tingly-box version
 
       - name: Publish platform packages to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
@@ -320,8 +328,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
@@ -460,6 +466,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: build/npx/package-lock.json
 
+      - name: Check npm supports trusted publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -517,8 +528,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
