@@ -126,6 +126,8 @@ import {
     IconMenu,
     IconYinYang,
     IconPencil,
+    IconEraser,
+    IconArrowBackUp,
     IconAiAgents,
     IconPhoto,
     IconVector,
@@ -315,6 +317,8 @@ export const Brush = tablerMui(IconBrush);
 export const Menu = tablerMui(IconMenu);
 export const YinYang = tablerMui(IconYinYang);
 export const Create = tablerMui(IconPencil);
+export const Eraser = tablerMui(IconEraser);
+export const Undo = tablerMui(IconArrowBackUp);
 
 // --- Custom / AI -------------------------------------------------------------
 export const AiAgents = tablerMui(IconAiAgents);
