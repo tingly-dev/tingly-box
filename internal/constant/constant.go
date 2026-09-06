@@ -117,3 +117,20 @@ func GetImageDir(baseDir string) string {
 func GetRemoteTranscriptDir(baseDir string) string {
 	return filepath.Join(baseDir, RemoteDirName, TranscriptDirName)
 }
+
+// Managed agent sessions keep two things on disk beside the database:
+// materialised checkouts (workspaces) and one append-only event log per
+// session. Both follow the remote transcript precedent — unbounded,
+// append-only data stays out of the shared SQLite file. See
+// .design/managed-agent.md.
+const AgentDirName = "agent"
+
+// GetAgentWorkspacesDir returns the directory checkouts are materialised under.
+func GetAgentWorkspacesDir(baseDir string) string {
+	return filepath.Join(baseDir, AgentDirName, "workspaces")
+}
+
+// GetAgentEventsDir returns the directory holding one event log per session.
+func GetAgentEventsDir(baseDir string) string {
+	return filepath.Join(baseDir, AgentDirName, "events")
+}
