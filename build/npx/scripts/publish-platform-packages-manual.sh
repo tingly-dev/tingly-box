@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-off manual publish of the per-platform binary packages
-# (tingly-box-linux-x64, …) from a maintainer's machine.
+# (@tingly-dev/tingly-box-linux-x64, …) from a maintainer's machine.
 #
 # Needed once per package that does not exist on npm yet: a Trusted Publisher
 # (OIDC) can only be configured on an existing package, so the first version

@@ -1,5 +1,5 @@
 // Platform binary packages: `tingly-box` declares one optionalDependency per
-// supported platform (tingly-box-linux-x64, …); npm installs only the one
+// supported platform (@tingly-dev/tingly-box-linux-x64, …); npm installs only the one
 // whose os/cpu match and skips the rest silently. Each carries the raw Go
 // binary at bin/tingly-box[.exe], so an install needs nothing but the npm
 // registry (mirrors included) — no GitHub download. The cli shim resolves it
@@ -9,7 +9,9 @@
 //
 // scripts/build-platform-packages.sh and the publish workflow read this map
 // (via `node -e`) to build and wire the packages, so it is the single source
-// of truth for names and the release-zip mapping.
+// of truth for names and the release-zip mapping. Names are scoped under
+// @tingly-dev: npm's spam detection blocks batches of similar unscoped
+// names, a scope we own does not trip it (.design/npm.md, "G").
 
 import { createRequire } from "module";
 import { existsSync } from "fs";
@@ -18,11 +20,11 @@ import { dirname, join } from "path";
 // key: `${process.platform}-${process.arch}` → { name, zip }
 // zip: the release asset name (release.yml) the package is built from.
 export const PLATFORM_PACKAGES = {
-	"linux-x64": { name: "tingly-box-linux-x64", zip: "tingly-box-linux-amd64.zip" },
-	"linux-arm64": { name: "tingly-box-linux-arm64", zip: "tingly-box-linux-arm64.zip" },
-	"darwin-x64": { name: "tingly-box-darwin-x64", zip: "tingly-box-macos-amd64.zip" },
-	"darwin-arm64": { name: "tingly-box-darwin-arm64", zip: "tingly-box-macos-arm64.zip" },
-	"win32-x64": { name: "tingly-box-win32-x64", zip: "tingly-box-windows-amd64.zip" },
+	"linux-x64": { name: "@tingly-dev/tingly-box-linux-x64", zip: "tingly-box-linux-amd64.zip" },
+	"linux-arm64": { name: "@tingly-dev/tingly-box-linux-arm64", zip: "tingly-box-linux-arm64.zip" },
+	"darwin-x64": { name: "@tingly-dev/tingly-box-darwin-x64", zip: "tingly-box-macos-amd64.zip" },
+	"darwin-arm64": { name: "@tingly-dev/tingly-box-darwin-arm64", zip: "tingly-box-macos-arm64.zip" },
+	"win32-x64": { name: "@tingly-dev/tingly-box-win32-x64", zip: "tingly-box-windows-amd64.zip" },
 };
 
 export function platformPackageName() {

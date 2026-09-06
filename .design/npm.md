@@ -17,8 +17,8 @@ each GitHub release:
   zip from GitHub Releases into the same place. CI bakes the release tag into
   `BINARY_RELEASE_BRANCH` at publish time, so npm package version ↔ binary
   version are 1:1 coupled either way.
-- **`tingly-box-linux-x64`, `tingly-box-linux-arm64`, `tingly-box-darwin-x64`,
-  `tingly-box-darwin-arm64`, `tingly-box-win32-x64`** — one raw Go binary
+- **`@tingly-dev/tingly-box-linux-x64`, `-linux-arm64`, `-darwin-x64`,
+  `-darwin-arm64`, `-win32-x64`** — one raw Go binary
   each at `bin/tingly-box[.exe]`, no bins of their own, `os`/`cpu` fields
   set. Built from the release zips by
   `build/npx/scripts/build-platform-packages.sh` and published *before* the
@@ -264,7 +264,7 @@ reach, while the bundle package fetched everything from the npm registry.
 Decision: make the npm registry the binary's primary channel for the *one*
 package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
 
-- **Per-platform packages** `tingly-box-<os>-<cpu>` (Node's `process.platform`
+- **Per-platform packages** `@tingly-dev/tingly-box-<os>-<cpu>` (Node's `process.platform`
   / `process.arch` names, matching their `os`/`cpu` fields) carry the raw
   binary. `shared/platform.js` is the single source of truth for the names
   and the release-zip each is built from; the build script and the publish
@@ -295,7 +295,7 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   checked against `PLATFORM_PACKAGES`), publish them, then wire and publish
   the shim. Before publishing the shim the job does what a user does:
   `npm pack` it and `npm install -g --prefix <scratch>` the tarball against
-  the real registry, asserting the binary came from `tingly-box-linux-x64`
+  the real registry, asserting the binary came from `@tingly-dev/tingly-box-linux-x64`
   and nothing was downloaded. The download fallback keeps its own smoke test.
 - **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
   `publish_bundle` input, the bundle entry in the web UI's update dialog,
@@ -303,7 +303,7 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   `npm-bundle` sources so existing installs' shortcuts still work; the
   package on npm should be marked with `npm deprecate` by a maintainer.
 
-Verification: `test-shim.sh` T6 builds `tingly-box-linux-x64` from the
+Verification: `test-shim.sh` T6 builds `@tingly-dev/tingly-box-linux-x64` from the
 real release zip, plants it where npm nests a global install's optional
 deps, and checks install-from-package (no download, binary in the cache
 dir, version reported), then flips the package version and checks the
@@ -332,9 +332,9 @@ major versions). Once C lands, the update instruction becomes `tb update`.
    supported" (see `cli-entry-semantics.md`). ✅ 2026-08
 3. E in the next shim release (bin.js only). ✅ 2026-09
 4. F: platform packages + bundle retirement (CI + bin.js). ✅ 2026-09.
-   The five `tingly-box-<os>-<cpu>` packages were first published by hand
-   (`build/npx/scripts/publish-platform-packages-manual.sh`, 2026-09) so
-   Trusted Publishing could be configured on them; see G.
+   The five `@tingly-dev/tingly-box-<os>-<cpu>` packages were first published
+   by hand (`build/npx/scripts/publish-platform-packages-manual.sh`, 2026-09)
+   so Trusted Publishing could be configured on them; see G.
 5. C behind a normal feature PR (Go `update` command + shim `current`
    resolution); ship shim change in the same release train as the Go command.
 
@@ -358,6 +358,13 @@ and npm >= 11.5.1 exchanges it for a single-publish credential. There is no
   disallow tokens".
 - **Provenance** is attached automatically for OIDC publishes from a public
   repo; the explicit `--provenance` flag is kept as a no-op guard.
+- **Why the platform packages are scoped.** The first attempt used unscoped
+  `tingly-box-<os>-<cpu>` names; after four of them npm's spam detection
+  rejected the fifth (`403 Package name triggered spam detection`), a rule
+  that targets batches of similar names in the public namespace. Names under
+  a scope we own (`@tingly-dev`) do not trip it. The four unscoped packages
+  that did get published (`tingly-box-{linux-x64,linux-arm64,darwin-x64,darwin-arm64}@0.260903.1`)
+  are orphaned and should be `npm deprecate`d; no shim ever referenced them.
 - **New package names** cannot be configured for Trusted Publishing before
   they exist, so a brand-new package is published once by hand with
   `build/npx/scripts/publish-platform-packages-manual.sh <tag>` (curl download,
