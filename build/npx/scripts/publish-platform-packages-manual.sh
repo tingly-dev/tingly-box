@@ -108,8 +108,11 @@ for name in "${NAMES[@]}"; do
 	# The registry answers 409 "Failed to save packument" while it is still
 	# processing a previous PUT for the same name (or a tombstone left by an
 	# unpublish). Wait and retry a few times before giving up.
+	# stdin/stdout must stay the terminal: npm only shows the 2FA prompt /
+	# browser auth link when both are a TTY. Only stderr is copied to a log
+	# (via process substitution) so the 409 check can read it.
 	attempt=1
-	until (cd "$OUT_DIR/$name" && npm publish --access public ${DRY_RUN:+"$DRY_RUN"} "${OTP_ARGS[@]}") 2>&1 | tee "$WORK_DIR/publish.log"; test "${PIPESTATUS[0]}" -eq 0; do
+	until (cd "$OUT_DIR/$name" && npm publish --access public ${DRY_RUN:+"$DRY_RUN"} "${OTP_ARGS[@]}" 2> >(tee "$WORK_DIR/publish.log" >&2)); do
 		if [ "$attempt" -ge 4 ] || ! grep -q "409 Conflict" "$WORK_DIR/publish.log"; then
 			echo "❌ publish of ${name}@${VERSION} failed" >&2
 			exit 1
