@@ -213,6 +213,18 @@ jobs:
               FAIL=1
             fi
           done
+          # Control probes: packages known to use Trusted Publishing from
+          # other repos. Their (expected) rejection message shows what the
+          # registry says for "config exists but does not match this token".
+          for pkg in npm sigstore; do
+            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
+              -H "Authorization: Bearer $ID_TOKEN" \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$pkg")
+            echo "ℹ️  control $pkg: HTTP ${body##*$'\n'}: $(printf '%s' "${body%$'\n'*}" | jq -r '.message // .error // .' 2>/dev/null)"
+          done
+          # npm's own exchange attempt, verbose (dry-run still runs the OIDC step).
+          echo "npm CLI oidc log:"
+          (cd "$PKG_DIR" && npm publish --dry-run --loglevel verbose 2>&1 | grep -iE "oidc|exchange" || true)
           [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
 
       - name: Configure Git
@@ -529,6 +541,18 @@ jobs:
               FAIL=1
             fi
           done
+          # Control probes: packages known to use Trusted Publishing from
+          # other repos. Their (expected) rejection message shows what the
+          # registry says for "config exists but does not match this token".
+          for pkg in npm sigstore; do
+            body=$(curl -sS -o /dev/stdout -w '\n%{http_code}' -X POST \
+              -H "Authorization: Bearer $ID_TOKEN" \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$pkg")
+            echo "ℹ️  control $pkg: HTTP ${body##*$'\n'}: $(printf '%s' "${body%$'\n'*}" | jq -r '.message // .error // .' 2>/dev/null)"
+          done
+          # npm's own exchange attempt, verbose (dry-run still runs the OIDC step).
+          echo "npm CLI oidc log:"
+          (cd "$PKG_DIR" && npm publish --dry-run --loglevel verbose 2>&1 | grep -iE "oidc|exchange" || true)
           [ "$FAIL" -eq 0 ] || { echo "Fix the Trusted Publisher config on npmjs.com (repo, workflow filename npm.yml, environment production)"; exit 1; }
 
       - name: Configure Git
