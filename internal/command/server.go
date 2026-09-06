@@ -86,7 +86,10 @@ func (s *StatusCmdKong) Run(appManager *AppManager) error {
 // RestartCmdKong is the Kong version of restart command
 type RestartCmdKong struct {
 	StartCmdKong
-	Yes bool `kong:"flag,name='yes',short='y',help='Restart without asking for confirmation'"`
+	// Kept as a hidden no-op: `restart` no longer asks for confirmation (the
+	// verb itself is the intent), but the npx entrypoint, the Docker pm2
+	// wrapper and user scripts still pass -y.
+	Yes bool `kong:"flag,name='yes',short='y',hidden"`
 }
 
 func (r *RestartCmdKong) Run(appManager *AppManager, source LaunchSource) error {
@@ -105,23 +108,10 @@ func (r *RestartCmdKong) Run(appManager *AppManager, source LaunchSource) error 
 		runningPort = appManager.GetRuntimeServerPort()
 	}
 
-	// Restarting a running server interrupts in-flight AI requests, so a bare
-	// `restart` confirms first; -y (what the npx entrypoint passes — there the
-	// invocation itself expresses "run it now") proceeds directly. When the
-	// server isn't running there is nothing to interrupt and no question to
-	// ask. Without a terminal and without -y, leave the server untouched.
-	if wasRunning && !r.Yes {
-		if !isStdinTTY() {
-			fmt.Printf("Server is running on port %d — a restart would interrupt in-flight AI requests.\n", runningPort)
-			fmt.Println("Re-run with -y ('tingly-box restart -y' / 'tb restart -y') to restart without prompting.")
-			return nil
-		}
-		if !promptYesNo("Restart the server? In-flight AI requests will be interrupted.") {
-			fmt.Println("\nKeeping the running server untouched.")
-			return nil
-		}
-	}
-
+	// Typing `restart` already expresses the intent, so there is no second
+	// confirmation — the command stops the running server (interrupting any
+	// in-flight AI requests) and starts it again.
+	//
 	// A real restart continues on the port the server is actually running on,
 	// not the config default. That port may have come from `--port` at start
 	// time and is intentionally never persisted, so without this a bare
@@ -361,6 +351,7 @@ func printBanner(cfg BannerConfig) {
 	urlStyle := lipgloss.NewStyle().Foreground(success)
 	tokenStyle := lipgloss.NewStyle().Foreground(highlight)
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(primary)
+	versionStyle := lipgloss.NewStyle().Foreground(muted)
 
 	var lines []string
 	addLine := func(label, value string, valueStyle lipgloss.Style) {
@@ -380,11 +371,15 @@ func printBanner(cfg BannerConfig) {
 		addLine("Login Token", cfg.GlobalConfig.GetUserToken(), tokenStyle)
 	}
 
-	// Build title with product name and version
-	titleText := titleStyle.Render(fmt.Sprintf("Tingly Box - %s — Access Information", BuildVersion))
+	// Title: product name on one line, version on the next — nothing else.
+	titleText := titleStyle.Render("Tingly-Box")
+	versionText := versionStyle.Render(formatVersion(BuildVersion))
 
-	// Compute visual width for centering the title
+	// Compute visual width for centering the title lines
 	maxWidth := lipgloss.Width(titleText)
+	if w := lipgloss.Width(versionText); w > maxWidth {
+		maxWidth = w
+	}
 	for _, line := range lines {
 		if w := lipgloss.Width(line); w > maxWidth {
 			maxWidth = w
@@ -392,7 +387,8 @@ func printBanner(cfg BannerConfig) {
 	}
 
 	title := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, titleText)
-	allLines := append([]string{title, ""}, lines...)
+	version := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, versionText)
+	allLines := append([]string{title, version, ""}, lines...)
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -406,6 +402,19 @@ func printBanner(cfg BannerConfig) {
 	if cfg.IsDaemon {
 		fmt.Println("Server is running in background. Use 'tingly-box stop' / 'tb stop' to stop.")
 	}
+}
+
+// formatVersion renders a build version for display: release builds get a
+// "v" prefix ("v1.4.2"), while non-release markers such as "dev" are shown
+// as-is.
+func formatVersion(v string) string {
+	if v == "" || v == "dev" || strings.HasPrefix(v, "v") {
+		return v
+	}
+	if v[0] >= '0' && v[0] <= '9' {
+		return "v" + v
+	}
+	return v
 }
 
 // openBrowserURL opens the given URL in the default browser
@@ -433,16 +442,6 @@ func doStopServer(appManager *AppManager) error {
 
 	fmt.Println("Server stopped successfully")
 	return nil
-}
-
-// promptYesNo asks a [y/N] question on stdin, defaulting to no on anything
-// but an explicit yes (including EOF from a detached stdin).
-func promptYesNo(question string) bool {
-	fmt.Print(question + " [y/N]: ")
-	var response string
-	fmt.Scanln(&response)
-	response = strings.ToLower(strings.TrimSpace(response))
-	return response == "y" || response == "yes"
 }
 
 // startServer handles the server starting logic

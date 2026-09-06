@@ -4,9 +4,9 @@
 
 export const IS_NPX = process.env.npm_command === "exec";
 
-// Bare npx invocation = "run it now" (restart into the background, -y being
-// the consent a bare `restart` would otherwise prompt for); a bare installed
-// bin shows help.
+// Bare npx invocation = "run it now" (restart into the background; -y is a
+// compatibility no-op — `restart` no longer prompts); a bare installed bin
+// shows help.
 export const DEFAULT_ARGS = IS_NPX ? ["restart", "--daemon", "-y"] : ["--help"];
 
 // Records how this process was launched; also decides which npm package a

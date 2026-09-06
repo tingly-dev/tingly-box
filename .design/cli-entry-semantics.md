@@ -14,13 +14,15 @@ requests, which for an LLM gateway can be minutes-long streams.
 ## Decision
 
 Split the entry semantics by how the process was invoked; server lifecycle
-changes are either explicitly requested or explicitly confirmed.
+changes are always explicitly requested — by a lifecycle verb (`start`,
+`stop`, `restart`) or by a bare `npx` invocation, never by a casual run of an
+installed bin.
 
 **Bare invocation:**
 
 - **`npx tingly-box` / `npm exec`** (shim detects `npm_command=exec`): keeps
-  the historical run-now behavior as `restart --daemon -y` — the npx
-  invocation is itself the consent a bare `restart` would prompt for.
+  the historical run-now behavior as `restart --daemon` (the shim still
+  passes `-y`, now a hidden no-op kept for compatibility).
 - **Installed CLI** (global `npm install -g` bin run directly, or the raw Go
   binary): shows **help**. An installed CLI is a toolbox (like `git`,
   `docker`); the server is started deliberately with `tingly-box start`.
@@ -58,7 +60,7 @@ which one the user typed.
   recorded server version differs from this launcher (typical right after
   `npm install -g`), one extra hint line says so and points to
   `tingly-box restart`. `start` is purely informational when the server is
-  up; all interactive confirmation lives in `restart`.
+  up; interrupting a running server is what `restart` / `stop` are for.
 
   The running version comes from `<configDir>/tingly-server.version`
   (`pkg/lock.VersionFile`), a runtime artifact written next to the port file
@@ -69,13 +71,15 @@ which one the user typed.
   started by a build predating the file reads as "unknown" and simply gets
   the generic restart hint.
 
-**`restart`:** confirms before interrupting. When the server is running, a
-bare `restart` asks ("In-flight AI requests will be interrupted. [y/N]",
-default No); `-y`/`--yes` proceeds directly (what npx passes); without a TTY
-and without `-y` it leaves the server untouched and says to re-run with
-`-y`. When the server is not running there is nothing to interrupt, so it
-starts without asking — which keeps unattended first-boots (e.g. the Docker
-npx image's pm2 wrapper) working. `restart` inherits daemon-by-default.
+**`restart`:** acts immediately, no second confirmation. Typing the verb is
+already the intent — exactly like `stop`, which has never asked — and a
+`[y/N]` prompt on top of it was inconsistent (`stop` kills in-flight requests
+without asking) and broke unattended use (without a TTY the old code refused
+to act and told the user to re-run with `-y`). The in-flight-requests cost
+is documented instead of gated. `-y`/`--yes` is still accepted as a hidden
+no-op so existing invocations (the npx shim, the Docker npx image's pm2
+wrapper, user scripts) keep working. When the server is not running,
+`restart` simply starts it. `restart` inherits daemon-by-default.
 
 **`stop`:** remains the explicit, immediate lifecycle verb.
 

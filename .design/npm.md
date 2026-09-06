@@ -49,8 +49,8 @@ which is what `test-shim.sh` T6 does).
 
 No-args behavior is split by invocation (see `cli-entry-semantics.md`): under
 npx / `npm exec` (`npm_command=exec`) the shim keeps the historical run-now
-behavior as `restart --daemon -y` (the invocation is the consent a bare
-`restart` prompts for); run as an installed bin (global install) it passes
+behavior as `restart --daemon -y` (`-y` is a compatibility no-op — `restart`
+no longer prompts); run as an installed bin (global install) it passes
 `--help` instead — server lifecycle is explicit (`tingly-box start`, which
 daemonizes by default) so a casual `tingly-box` can't kill in-flight AI
 requests. `--source` follows the same split (`npx`/`npm`) with unified
