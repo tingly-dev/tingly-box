@@ -292,8 +292,14 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   all means the package is absent, so that is the fix, before retry/proxy.
 - **Publish order.** One `publish-cli` job (one production approval per
   release): build all five platform packages from the release zips (count
-  checked against `PLATFORM_PACKAGES`), publish them, then wire and publish
-  the shim. Before publishing the shim the job does what a user does:
+  checked against `PLATFORM_PACKAGES`), publish all five concurrently
+  (background processes in one step, so the single approval is kept; a
+  matrix job per platform would need a second approval for the shim job),
+  then wire and publish the shim. A version already on the registry is a
+  skip, not a failure, and the registry's own "previously published"
+  rejection counts as "already there" because `npm view` on the read
+  replicas can lag a publish by minutes. Before publishing the shim the job
+  does what a user does:
   `npm pack` it and `npm install -g --prefix <scratch>` the tarball against
   the real registry, asserting the binary came from `@tingly-dev/tingly-box-linux-x64`
   and nothing was downloaded. The download fallback keeps its own smoke test.
