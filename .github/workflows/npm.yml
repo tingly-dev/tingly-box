@@ -259,8 +259,10 @@ jobs:
           fi
           echo "✅ Built $BUILT platform packages:"
           cat built.txt
-          du -sh platform/*
-          platform/@tingly-dev/tingly-box-linux-x64/bin/tingly-box version
+          du -sh platform/@tingly-dev/*
+          # The package carries the release zip; run the binary out of it once.
+          unzip -q -o platform/@tingly-dev/tingly-box-linux-x64/bin/tingly-box-linux-amd64.zip tingly-box -d "$RUNNER_TEMP/sanity"
+          "$RUNNER_TEMP/sanity/tingly-box" version
 
       # All five uploads run concurrently (one job, so still one production
       # approval). A version that is already on the registry is a skip, not a

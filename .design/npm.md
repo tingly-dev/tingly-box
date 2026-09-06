@@ -18,11 +18,10 @@ each GitHub release:
   `BINARY_RELEASE_BRANCH` at publish time, so npm package version ↔ binary
   version are 1:1 coupled either way.
 - **`@tingly-dev/tingly-box-linux-x64`, `-linux-arm64`, `-darwin-x64`,
-  `-darwin-arm64`, `-win32-x64`** — one raw Go binary
-  each at `bin/tingly-box[.exe]`, no bins of their own, `os`/`cpu` fields
-  set. Built from the release zips by
-  `build/npx/scripts/build-platform-packages.sh` and published *before* the
-  shim at the same version. Not meant to be installed directly.
+  `-darwin-arm64`, `-win32-x64`** — the release zip, unchanged, at
+  `bin/tingly-box-<os>-<arch>.zip`; no bins of their own, `os`/`cpu` fields
+  set. Built by `build/npx/scripts/build-platform-packages.sh` and published
+  *before* the shim at the same version. Not meant to be installed directly.
 - **`tingly-box-gui`** — shim variant for the desktop UI, published on demand;
   download-only (no platform packages).
 
@@ -265,24 +264,29 @@ Decision: make the npm registry the binary's primary channel for the *one*
 package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
 
 - **Per-platform packages** `@tingly-dev/tingly-box-<os>-<cpu>` (Node's `process.platform`
-  / `process.arch` names, matching their `os`/`cpu` fields) carry the raw
-  binary. `shared/platform.js` is the single source of truth for the names
-  and the release-zip each is built from; the build script and the publish
-  workflow read it with `node -e`. Sizes match the zips (~20–30 MB each);
-  a user downloads exactly one.
+  / `process.arch` names, matching their `os`/`cpu` fields) carry the
+  release zip itself. `shared/platform.js` is the single source of truth
+  for the names and the zip each one holds; the build script and the
+  publish workflow read it with `node -e`. A user downloads exactly one
+  (~20–30 MB). The zip stays compressed in `node_modules`: the npm tarball
+  is gzip already, so shipping the raw binary saved nothing on the wire
+  but cost ~110 MB on disk per install for the non-UPX macOS/Windows
+  builds (2026-09, first cut shipped the raw binary).
 - **Exact-version pins.** CI sets `optionalDependencies.<name> = <version>`
   on the shim at publish time, and the shim uses a platform package only if
   `version === own version` (`shared/platform.js` + `resolveBinarySource()`
   in `bin.js`). A partial upgrade can't pair an old binary with a new shim;
   the mismatch falls through to the download with a warning.
-- **Copy to the versioned cache, don't exec in `node_modules`.** The shim
-  copies the binary into `~/.cache/tingly-box/v<ver>/bin/` (temp file +
-  rename) and runs it from there, so every invariant the download path
-  already had still holds: a running daemon keeps its inode while
-  `npm install -g` retires the package dir (on Windows npm could not even
-  remove a locked exe from under a running server), the stale-cache sweep
-  (E) sees one layout, and shortcut relaunch / `--transport-version` are
-  unchanged. Cost: one ~20 MB copy per version.
+- **Extract into the versioned cache, don't exec in `node_modules`.** The
+  shim extracts the packaged zip into `~/.cache/tingly-box/v<ver>/bin/`
+  with the same `extractZipBuffer` the download path uses (only the source
+  differs: local file vs GitHub) and runs it from there, so every invariant
+  the download path already had still holds: a running daemon keeps its
+  inode while `npm install -g` retires the package dir (on Windows npm
+  could not even remove a locked exe from under a running server), the
+  stale-cache sweep (E) sees one layout, and shortcut relaunch /
+  `--transport-version` are unchanged. Cost: one extraction (~1–2 s) per
+  version.
 - **Download stays as the fallback.** `--no-optional`, a mirror that hasn't
   synced the platform package yet, an unsupported platform, or an explicit
   `--transport-version` all take the GitHub path exactly as before. When the

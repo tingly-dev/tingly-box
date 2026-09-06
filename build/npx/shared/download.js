@@ -1,7 +1,8 @@
-// Release-zip download + extraction shared by the cli and gui shims
-// (the bundle shim extracts from packaged zips and has its own path).
+// Release-zip download + extraction shared by the cli and gui shims. The
+// cli shim also extracts the same zip from the platform package npm
+// installed next to it (extractZipFile), so both sources share one path.
 
-import { chmodSync, createWriteStream, existsSync, mkdirSync, statSync } from "fs";
+import { chmodSync, createWriteStream, existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { Readable } from "stream";
 import { ProxyAgent } from "undici";
@@ -84,7 +85,25 @@ export async function downloadAndExtractZip(url, extractDir, { hints = [] } = {}
 		}
 	}
 	const zipBuffer = Buffer.concat(chunks);
+	await extractZipBuffer(zipBuffer, extractDir);
+}
 
+// Extract a release zip that is already on disk (the platform package's
+// bin/<zip>) into extractDir.
+export async function extractZipFile(zipPath, extractDir) {
+	let zipBuffer;
+	try {
+		zipBuffer = readFileSync(zipPath);
+	} catch (error) {
+		console.error(`\n❌ Failed to read ${zipPath}: ${error.message}`);
+		process.exit(1);
+	}
+	await extractZipBuffer(zipBuffer, extractDir);
+}
+
+// Extract every file of a zip buffer into extractDir, keeping unix modes
+// (binaries stay executable). Exits the process on failure.
+export async function extractZipBuffer(zipBuffer, extractDir) {
 	// Extract ZIP from buffer using unzipper
 	try {
 		console.log(`\n📦 Extracting ZIP to ${extractDir}...`);
