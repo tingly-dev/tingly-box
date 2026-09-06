@@ -392,3 +392,26 @@ P0 结束就能演示完整故事；P1 是"敢给别人用"的门槛；P2 才是
 | §10 done ≠ locked | 归档 session 可 Resume；分支已 push 不随 workspace 回收 |
 | §11 交出下一步物件 | 完成即给 diff、PR 链接；IM 通知带按钮 |
 | §12 副作用限定表面 | 创建 docker 环境不自动发生；push 永远是显式动作 |
+
+---
+
+## 11. 落地记录
+
+### P0-a 数据模型 + API（2026-09-06）
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 领域 | `internal/managedagent/` | `types.go`（五个名词 + Event）、`store.go`（按实体拆的 store 接口）、`launcher.go`（执行 seam，nil 合法）、`service.go`（不变量：默认 local 环境、docker 建模但拒绝、live workspace 上的删除保护、同 workspace 续接 cc_session_id、分支命名）、`memstore.go`（测试与无 DB 宿主）、`eventlog.go`（每 session 一个 JSONL，同 remote transcript 先例） |
+| 持久化 | `internal/db/managed_agent*.go` | 四张索引表 `agent_sources / agent_environments / agent_workspaces / agent_sessions`，由 `StoreManager.ManagedAgent()` 暴露；docker 列（image / network / cpu / memory / disk / container_id）**已经在 schema 里** |
+| HTTP | `internal/server/module/managedagent/` | `/api/v1/agent/*`，UserAuth；`GET …/events` 同一 `after` 游标既可 JSON 分页也可 SSE 流 |
+| 接线 | `server_routes.go` `UseManagedAgentEndpoints`、`swagger.go` | 运行时无 Launcher → session 持久化为 `queued`；OpenAPI 用 MemStores 注册同一批路由 |
+| 磁盘 | `~/.tingly-box/agent/{workspaces,events}` | `constant.GetAgentWorkspacesDir / GetAgentEventsDir` |
+
+与 §6.1 的差异：`diff / push / pull-request / triggers / webhooks / probe` 还没有——它们依赖宿主 git 与执行体，随 P0-b（Launcher：local runtime）和 P2 一起来。
+
+### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
+
+1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。
+2. `Workspace.ContainerID` 已有列；`Workspace.Path` 始终是宿主路径，docker 只是把它 bind-mount 进去。
+3. `Launcher` 接口不带 runtime 语义：local 与 docker 是同一个 Launcher 实现里两个 `process.Factory`（`agentboot/process`），不是两个 Launcher。
+4. `EnvironmentListResponse.supported_runtimes` 让前端在 docker 未就绪时能解释"为什么不能选"，而不是给一个死选项（ux §8）。
