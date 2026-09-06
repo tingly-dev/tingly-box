@@ -148,6 +148,7 @@ jobs:
             echo "| Publish CLI (\`tingly-box\` + platform packages) | ${{ steps.set_vars.outputs.publish_cli }} |"
             echo "| Publish GUI (\`tingly-box-gui\`) | ${{ steps.set_vars.outputs.publish_gui }} |"
             echo "| Build Docker image | ${{ steps.set_vars.outputs.build_docker }} |"
+            echo "| Docker moving tag | \`${{ steps.set_vars.outputs.npm_tag }}\` (mirrors npm dist-tag) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Publish the per-platform binary packages (@tingly-dev/tingly-box-linux-x64, …) and
@@ -427,11 +428,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # The docker moving tag mirrors the npm dist-tag: a `latest` npm publish
+      # moves docker `latest`, an `rc` publish moves docker `rc` only.
       - name: Build and push Docker image
         uses: ./.github/actions/docker-build-push
         with:
           image_name: tingly-box
           version: ${{ needs.setup.outputs.release_tag }}
+          channel_tag: ${{ needs.setup.outputs.npm_tag }}
           github_token: ${{ github.token }}
           build_args: |
             TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}

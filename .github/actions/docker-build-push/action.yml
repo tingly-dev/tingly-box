@@ -11,6 +11,13 @@ inputs:
   version:
     description: 'Version tag for the image'
     required: true
+  channel_tag:
+    description: >-
+      Moving alias to additionally apply (e.g. "latest" for a stable release,
+      "rc" for a pre-release). Empty applies only the version tag. Must mirror
+      the npm dist-tag: only a `latest` npm publish may move docker `latest`.
+    required: false
+    default: ''
   dockerfile:
     description: 'Path to Dockerfile'
     required: false
@@ -53,7 +60,7 @@ runs:
         images: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image_name }}
         tags: |
           type=raw,value=${{ inputs.version }}
-          type=raw,value=latest
+          type=raw,value=${{ inputs.channel_tag }},enable=${{ inputs.channel_tag != '' }}
 
     - name: Build and push Docker image
       id: build
@@ -76,6 +83,7 @@ runs:
         ## Docker Image Published :rocket:
 
         **Tag:** `${{ inputs.version }}`
+        **Channel tag:** `${{ inputs.channel_tag || '(none)' }}`
         **Image:** `${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ inputs.version }}`
 
         ### Pull Command

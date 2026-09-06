@@ -55,6 +55,8 @@ jobs:
             exit 1
           fi
 
+      # Source builds are ad-hoc: only the requested tag is applied, never a
+      # moving alias such as `latest` or `rc` (those follow npm publishes).
       - name: Build and push Docker image
         uses: ./.github/actions/docker-build-push
         with:
