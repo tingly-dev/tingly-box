@@ -312,3 +312,13 @@ func maskTokenPreview(t string) string {
 	}
 	return t[:6] + "…" + t[len(t)-4:]
 }
+
+// promptYesNo asks a [y/N] question on stdin, defaulting to no on anything
+// but an explicit yes (including EOF from a detached stdin).
+func promptYesNo(question string) bool {
+	fmt.Print(question + " [y/N]: ")
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
+}

@@ -29,9 +29,9 @@ needs.
 
 `tingly-box` and `tb` are the same CLI; running it with no arguments shows
 help. To update a global install: `npm install -g tingly-box@latest`, then
-`tb restart` to switch the running server to the new version — `restart`
-asks for confirmation while the server is running (a restart interrupts
-in-flight AI requests); pass `-y` to skip the prompt in scripts.
+`tb restart` to switch the running server to the new version. `restart` acts
+immediately — like `stop`, the command itself is the intent — so be aware it
+interrupts any in-flight AI requests.
 
 
 ### Method 2: Docker

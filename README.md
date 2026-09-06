@@ -73,7 +73,7 @@ npm install -g tingly-box@latest   # --registry=<mirror> works here too
 tb start   # tb = tingly-box; runs in the background (--no-daemon for foreground)
 tb open    # open the web UI
 
-# update: reinstall, then restart to apply (asks first; -y skips)
+# update: reinstall, then restart to apply
 npm install -g tingly-box@latest
 tb restart
 ```
