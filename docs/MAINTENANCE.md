@@ -193,7 +193,7 @@ This is a manual workflow that publishes npm packages based on an existing GitHu
 | Package | Description | Install Command |
 |---------|-------------|-----------------|
 | `tingly-box` | CLI shim; pulls the platform package below as an optional dependency, falls back to the GitHub release download | `npx tingly-box@version` |
-| `tingly-box-<os>-<cpu>` | Binary for one platform (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`); published before `tingly-box` at the same version | installed automatically |
+| `@tingly-dev/tingly-box-<os>-<cpu>` | Binary for one platform (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`); published before `tingly-box` at the same version | installed automatically |
 | `tingly-box-gui` | GUI package (desktop app) | `npx tingly-box-gui@version start` |
 
 `tingly-box-bundle` (binaries zipped inside one ~70MB package) is retired:

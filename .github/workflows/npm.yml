@@ -26,7 +26,7 @@ on:
           - rc
         default: 'rc'
       publish_cli:
-        description: '[pkg: tingly-box + tingly-box-<os>-<cpu>] shim plus the per-platform binary packages it depends on'
+        description: '[pkg: tingly-box + @tingly-dev/tingly-box-<os>-<cpu>] shim plus the per-platform binary packages it depends on'
         required: false
         type: boolean
         default: true
@@ -41,6 +41,11 @@ on:
         type: boolean
         default: true
 
+# npm auth: Trusted Publishing (OIDC). No npm token is stored anywhere; the
+# publish jobs mint a short-lived GitHub Actions id-token and npm (>= 11.5.1)
+# exchanges it for publish rights. Each package on npmjs.com is configured
+# with this repo, workflow file "npm.yml" and environment "production"; those
+# names must stay exactly in sync. Provenance is generated automatically.
 permissions:
   contents: write
   id-token: write
@@ -145,7 +150,7 @@ jobs:
             echo "| Build Docker image | ${{ steps.set_vars.outputs.build_docker }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Publish the per-platform binary packages (tingly-box-linux-x64, …) and
+  # Publish the per-platform binary packages (@tingly-dev/tingly-box-linux-x64, …) and
   # then the cli shim that pins them as optionalDependencies at this exact
   # version. One job so a release needs one production approval, and the
   # platform packages exist on the registry before the shim is installed
@@ -175,6 +180,11 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
           cache-dependency-path: build/npx/package-lock.json
+
+      - name: Check npm supports trusted publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
 
       - name: Configure Git
         run: |
@@ -215,11 +225,9 @@ jobs:
           echo "✅ Built $BUILT platform packages:"
           cat built.txt
           du -sh platform/*
-          platform/tingly-box-linux-x64/bin/tingly-box version
+          platform/@tingly-dev/tingly-box-linux-x64/bin/tingly-box version
 
       - name: Publish platform packages to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
@@ -302,26 +310,24 @@ jobs:
           VERSION="${{ needs.setup.outputs.npx_version }}"
           # Give the registry a moment to serve the platform package just published.
           for i in $(seq 1 12); do
-            if npm view "tingly-box-linux-x64@${VERSION}" version >/dev/null 2>&1; then break; fi
-            echo "waiting for tingly-box-linux-x64@${VERSION} on the registry ($i)..."
+            if npm view "@tingly-dev/tingly-box-linux-x64@${VERSION}" version >/dev/null 2>&1; then break; fi
+            echo "waiting for @tingly-dev/tingly-box-linux-x64@${VERSION} on the registry ($i)..."
             sleep 10
           done
-          npm view "tingly-box-linux-x64@${VERSION}" version
+          npm view "@tingly-dev/tingly-box-linux-x64@${VERSION}" version
           # Exactly what `npm install -g tingly-box` does, from the tarball
           # we are about to publish, into a scratch prefix.
           npm pack --pack-destination "$RUNNER_TEMP" >/dev/null
           PREFIX="$RUNNER_TEMP/prefix"
           npm install -g --prefix "$PREFIX" "$RUNNER_TEMP/tingly-box-${VERSION}.tgz"
-          ls "$PREFIX/lib/node_modules/tingly-box/node_modules"
+          ls "$PREFIX/lib/node_modules/tingly-box/node_modules/@tingly-dev"
           XDG_CACHE_HOME="$RUNNER_TEMP/cache" "$PREFIX/bin/tingly-box" version | tee install.log
-          grep -q "Installing binary from tingly-box-linux-x64@${VERSION}" install.log
+          grep -q "Installing binary from @tingly-dev/tingly-box-linux-x64@${VERSION}" install.log
           ! grep -q "Downloading" install.log
           echo "✅ Global install resolved the binary from the platform package"
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
@@ -389,7 +395,7 @@ jobs:
           \`\`\`
 
           The binary for your platform ships in a companion package
-          (\`tingly-box-linux-x64\`, \`tingly-box-darwin-arm64\`, …) that npm
+          (\`@tingly-dev/tingly-box-linux-x64\`, \`@tingly-dev/tingly-box-darwin-arm64\`, …) that npm
           installs automatically — no GitHub download, npm mirrors work.
           NOTES_EOF
 
@@ -460,6 +466,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: build/npx/package-lock.json
 
+      - name: Check npm supports trusted publishing
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 required for OIDC trusted publishing"); process.exit(1) }' "$(npm --version)"
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -517,8 +528,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"

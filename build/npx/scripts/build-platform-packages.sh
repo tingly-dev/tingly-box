@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the per-platform binary packages (tingly-box-linux-x64, …) that the
+# Build the per-platform binary packages (@tingly-dev/tingly-box-linux-x64, …) that the
 # `tingly-box` package pulls in as optionalDependencies. Each package is the
 # raw Go binary from the release zip plus a package.json pinned to the same
 # version as the shim. Used by .github/workflows/npm.yml and test-shim.sh.
@@ -9,7 +9,8 @@
 #   version  npm version to stamp (release tag without the leading "v")
 #   zip-dir  directory holding the release zips (tingly-box-<os>-<arch>.zip);
 #            platforms whose zip is absent are skipped with a notice
-#   out-dir  one package directory per platform is written under here
+#   out-dir  one package directory per platform is written under here, at
+#            <out-dir>/<package name> (so <out-dir>/@tingly-dev/tingly-box-linux-x64)
 # Prints the names of the packages built, one per line, on stdout.
 set -euo pipefail
 
@@ -54,7 +55,7 @@ while IFS='|' read -r key name zip; do
   "homepage": "https://github.com/tingly-dev/tingly-box",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tingly-dev/tingly-box.git"
+    "url": "git+https://github.com/tingly-dev/tingly-box.git"
   },
   "license": "MPL-2.0",
   "author": "Tingly Dev",

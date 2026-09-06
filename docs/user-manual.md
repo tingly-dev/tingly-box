@@ -21,8 +21,8 @@ npm install -g tingly-box
 tb start    # background by default; pass --no-daemon for foreground
 ```
 
-The binary for your platform is an npm package too (`tingly-box-linux-x64`,
-`tingly-box-darwin-arm64`, …), installed automatically alongside
+The binary for your platform is an npm package too (`@tingly-dev/tingly-box-linux-x64`,
+`@tingly-dev/tingly-box-darwin-arm64`, …), installed automatically alongside
 `tingly-box`. Nothing is fetched from GitHub, so an npm mirror registry
 (`--registry=https://registry.npmmirror.com`) is all a restricted network
 needs.

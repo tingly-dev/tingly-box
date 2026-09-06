@@ -145,7 +145,7 @@ grep -q "Stack:" "$WORK/fail.log" \
 	|| pass "T5: no stack trace in the failure output"
 
 # --- T6: platform package (the npm install path) is used, no download ------
-# Build tingly-box-linux-x64 from the release zip like the publish workflow,
+# Build @tingly-dev/tingly-box-linux-x64 from the release zip like the publish workflow,
 # plant it where npm nests optional deps of a global install, and check the
 # shim installs from it into the versioned cache without touching GitHub.
 if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
@@ -156,15 +156,15 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
 	"$SCRIPT_DIR/scripts/build-platform-packages.sh" "$VERSION" "$WORK/zips" "$WORK/platform" >/dev/null 2>&1 \
 		&& pass "T6: platform package built from the release zip" \
 		|| fail "T6: build-platform-packages.sh failed"
-	mkdir -p "$NM/tingly-box/node_modules"
-	cp -r "$WORK/platform/tingly-box-linux-x64" "$NM/tingly-box/node_modules/"
+	mkdir -p "$NM/tingly-box/node_modules/@tingly-dev"
+	cp -r "$WORK/platform/@tingly-dev/tingly-box-linux-x64" "$NM/tingly-box/node_modules/@tingly-dev/"
 	rm -rf "$XDG_CACHE_HOME/tingly-box/$TAG"
 	if node "$NM/tingly-box/bin.js" version > "$WORK/pkg.log" 2>&1; then
 		pass "T6: shim ran (exit 0)"
 	else
 		fail "T6: shim failed:"; tail -5 "$WORK/pkg.log"
 	fi
-	grep -q "Installing binary from tingly-box-linux-x64@$VERSION" "$WORK/pkg.log" \
+	grep -q "Installing binary from @tingly-dev/tingly-box-linux-x64@$VERSION" "$WORK/pkg.log" \
 		&& ! grep -q "Downloading" "$WORK/pkg.log" \
 		&& pass "T6: binary came from the platform package, nothing downloaded" \
 		|| { fail "T6: expected the platform package path:"; head -5 "$WORK/pkg.log"; }
@@ -175,7 +175,7 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
 		&& pass "T6: binary copied into the versioned cache dir" \
 		|| fail "T6: cache copy missing"
 	# Version mismatch (partial upgrade) must fall back to the release download.
-	sed -i 's/"version": "[^"]*"/"version": "0.0.1"/' "$NM/tingly-box/node_modules/tingly-box-linux-x64/package.json"
+	sed -i 's/"version": "[^"]*"/"version": "0.0.1"/' "$NM/tingly-box/node_modules/@tingly-dev/tingly-box-linux-x64/package.json"
 	node "$NM/tingly-box/bin.js" version > "$WORK/mismatch.log" 2>&1 || true
 	grep -q "does not match tingly-box@$VERSION" "$WORK/mismatch.log" \
 		&& ! grep -q "Installing binary from" "$WORK/mismatch.log" \
