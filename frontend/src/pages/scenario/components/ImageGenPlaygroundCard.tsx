@@ -25,11 +25,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Brush, Close, ContentCopy, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Brush, Close, ContentCopy, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import ImageSliceDialog from './ImageSliceDialog';
+import SketchCanvasDialog, { type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
 // Base panel height, plus the mode toggle row present in both modes. Edit
@@ -61,7 +62,14 @@ interface ImageResult {
 interface ReferenceImage {
     file: File;
     previewUrl: string;
+    // Where the image came from. A sketch keeps its canvas re-openable (see
+    // handleOpenSketch) — "done" is a state, not a lock.
+    source: 'upload' | 'sketch';
 }
+
+// Which sketch the canvas dialog is working on: `null` closed, `index: null`
+// a new sketch, otherwise the reference image being redrawn.
+type SketchTarget = { index: number | null } | null;
 
 interface GenerationRun {
     id: string;
@@ -135,6 +143,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
+    const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
     const historyTrackRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
     const pendingCount = runs.filter((run) => run.status === 'pending').length;
@@ -162,9 +171,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (incoming.length === 0) return;
         const accepted = incoming.slice(0, Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length));
         if (accepted.length === 0) return;
-        const withPreviews = await Promise.all(accepted.map(async (file) => ({
+        const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => ({
             file,
             previewUrl: await fileToDataUrl(file),
+            source: 'upload',
         })));
         setReferenceImages((current) => [...current, ...withPreviews].slice(0, MAX_EDIT_REFERENCE_IMAGES));
     }, [referenceImages.length]);
@@ -200,7 +210,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
             setMode('edit');
-            setReferenceImages([{ file, previewUrl: src }]);
+            setReferenceImages([{ file, previewUrl: src, source: 'upload' }]);
         } catch {
             showNotification(
                 t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
@@ -208,6 +218,33 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             );
         }
     }, [showNotification, t]);
+
+    // A sketch is just another way to get a reference image, not a third
+    // mode: it lands in the same list, goes through the same edit request,
+    // and shows up in the run history like any upload. Redrawing replaces the
+    // sketch in place so it keeps its position among the other references.
+    const handleOpenSketch = useCallback((index: number | null) => {
+        if (index === null && referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) return;
+        setMode('edit');
+        setSketchTarget({ index });
+    }, [referenceImages.length]);
+
+    const handleSketchSubmit = useCallback((result: SketchResult) => {
+        const sketch: ReferenceImage = { ...result, source: 'sketch' };
+        setReferenceImages((current) => {
+            const index = sketchTarget?.index ?? null;
+            if (index !== null && index < current.length) {
+                return current.map((ref, i) => (i === index ? sketch : ref));
+            }
+            return [...current, sketch].slice(0, MAX_EDIT_REFERENCE_IMAGES);
+        });
+        setSketchTarget(null);
+    }, [sketchTarget]);
+
+    const sketchInitialImage = sketchTarget?.index !== null && sketchTarget?.index !== undefined
+        ? (referenceImages[sketchTarget.index]?.previewUrl ?? null)
+        : null;
+    const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
     // Hands the finished pixels over, not a notification that they exist.
     const handleDownload = useCallback(async (image: SelectedImage) => {
@@ -359,11 +396,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     }}
                                 >
                                     {referenceImages.length === 0 ? (
-                                        <Stack direction="row" spacing={1} sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', py: 0.5 }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            useFlexGap
+                                            sx={{ width: '100%', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', color: 'text.secondary', py: 0.5 }}
+                                        >
                                             <FileUpload sx={{ fontSize: 20 }} />
                                             <Typography variant="body2">
                                                 {t('playground.dropReferenceImage', { defaultValue: 'Drop images here, click to browse, or paste' })}
                                             </Typography>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                startIcon={<Create fontSize="small" />}
+                                                onClick={(event) => { event.stopPropagation(); handleOpenSketch(null); }}
+                                                sx={{ flexShrink: 0, py: 0.25 }}
+                                            >
+                                                {t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}
+                                            </Button>
                                         </Stack>
                                     ) : (
                                         <>
@@ -378,6 +429,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
                                                         sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                     />
+                                                    {ref.source === 'sketch' && (
+                                                        <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={(event) => { event.stopPropagation(); handleOpenSketch(index); }}
+                                                                aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    bottom: 2,
+                                                                    right: 2,
+                                                                    width: 20,
+                                                                    height: 20,
+                                                                    bgcolor: 'rgba(15, 23, 42, 0.7)',
+                                                                    color: 'common.white',
+                                                                    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.9)' },
+                                                                }}
+                                                            >
+                                                                <Create sx={{ fontSize: 13 }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
                                                     <IconButton
                                                         size="small"
                                                         onClick={(event) => { event.stopPropagation(); handleRemoveReferenceImage(index); }}
@@ -398,21 +470,40 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                 </Box>
                                             ))}
                                             {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && (
-                                                <Stack
-                                                    aria-label={t('playground.addReferenceImage', { defaultValue: 'Add image' })}
-                                                    sx={{
-                                                        width: 56,
-                                                        height: 56,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderRadius: 1,
-                                                        color: 'text.secondary',
-                                                        border: '1px solid',
-                                                        borderColor: 'divider',
-                                                    }}
-                                                >
-                                                    <FileUpload sx={{ fontSize: 20 }} />
-                                                </Stack>
+                                                <>
+                                                    <Stack
+                                                        aria-label={t('playground.addReferenceImage', { defaultValue: 'Add image' })}
+                                                        sx={{
+                                                            width: 56,
+                                                            height: 56,
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 1,
+                                                            color: 'text.secondary',
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
+                                                        }}
+                                                    >
+                                                        <FileUpload sx={{ fontSize: 20 }} />
+                                                    </Stack>
+                                                    <Tooltip title={t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}>
+                                                        <ButtonBase
+                                                            onClick={(event) => { event.stopPropagation(); handleOpenSketch(null); }}
+                                                            aria-label={t('playground.sketch.action', { defaultValue: 'Draw a sketch' })}
+                                                            sx={{
+                                                                width: 56,
+                                                                height: 56,
+                                                                borderRadius: 1,
+                                                                color: 'text.secondary',
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
+                                                            }}
+                                                        >
+                                                            <Create sx={{ fontSize: 20 }} />
+                                                        </ButtonBase>
+                                                    </Tooltip>
+                                                </>
                                             )}
                                         </>
                                     )}
@@ -460,7 +551,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
                             placeholder={mode === 'edit'
-                                ? t('playground.editPromptPlaceholder', { defaultValue: 'Describe the change you want to make…' })
+                                ? (hasSketchReference
+                                    ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
+                                    : t('playground.editPromptPlaceholder', { defaultValue: 'Describe the change you want to make…' }))
                                 : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
@@ -1081,6 +1174,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 src={sliceTarget?.src ?? null}
                 prompt={sliceTarget?.prompt ?? ''}
                 onClose={() => setSliceTarget(null)}
+                showNotification={showNotification}
+            />
+            <SketchCanvasDialog
+                open={sketchTarget !== null}
+                size={size}
+                initialImage={sketchInitialImage}
+                onClose={() => setSketchTarget(null)}
+                onSubmit={handleSketchSubmit}
                 showNotification={showNotification}
             />
         </>

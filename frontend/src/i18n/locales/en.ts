@@ -1679,6 +1679,32 @@ export default {
     "promptCopied": "Copied",
     "download": "Download",
     "downloadFailed": "Could not download this image",
+    "sketch": {
+      "action": "Draw a sketch",
+      "editAction": "Edit sketch",
+      "title": "Sketch",
+      "close": "Close sketch",
+      "canvasSize": "{{width}} × {{height}} px · matches Size",
+      "tool": "Tool",
+      "pen": "Pen",
+      "eraser": "Eraser",
+      "color": "Colour",
+      "brushSize": "Brush size",
+      "brush": {
+        "thin": "Thin",
+        "medium": "Medium",
+        "thick": "Thick"
+      },
+      "undo": "Undo (Ctrl+Z)",
+      "clear": "Clear canvas",
+      "canvasAlt": "Sketch canvas",
+      "hint": "A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.",
+      "cancel": "Cancel",
+      "use": "Use sketch",
+      "update": "Update sketch",
+      "failed": "Could not export the sketch",
+      "promptPlaceholder": "Describe what this sketch should become…"
+    },
     "slice": {
       "action": "Split into tiles",
       "title": "Split into tiles",

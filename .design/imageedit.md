@@ -228,8 +228,7 @@ altitude 四个独立 agent)。已采纳:
 
 ## 6. 前端 / 后续
 
-- 前端 imagegen playground 目前只有 generation;edit 的 UI(选图 + prompt)
-  是后续工作,API 已就绪(`/tingly/imagegen/v1/images/edits`,JSON 编码对
-  前端最友好)。
+- 前端 imagegen playground 的 edit UI 已落地(上传/拖拽/粘贴参考图 + prompt),
+  另有手绘草图作为参考图来源,见 `sketch-canvas.md`。
 - 这些网关路由不在 swagger 管理范围内(swagger 只覆盖 `/api/v1` 管理面),
   无需 codegen。

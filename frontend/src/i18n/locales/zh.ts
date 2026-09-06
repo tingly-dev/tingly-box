@@ -1675,6 +1675,32 @@ export default {
     "promptCopied": "已复制",
     "download": "下载",
     "downloadFailed": "无法下载这张图片",
+    "sketch": {
+      "action": "手绘草图",
+      "editAction": "修改草图",
+      "title": "草图",
+      "close": "关闭草图",
+      "canvasSize": "{{width}} × {{height}} px · 与尺寸一致",
+      "tool": "工具",
+      "pen": "画笔",
+      "eraser": "橡皮擦",
+      "color": "颜色",
+      "brushSize": "笔触粗细",
+      "brush": {
+        "thin": "细",
+        "medium": "中",
+        "thick": "粗"
+      },
+      "undo": "撤销 (Ctrl+Z)",
+      "clear": "清空画布",
+      "canvasAlt": "草图画布",
+      "hint": "画个大概就行，想要变成什么由提示词来说。草图会作为参考图像原样发给模型。",
+      "cancel": "取消",
+      "use": "使用草图",
+      "update": "更新草图",
+      "failed": "无法导出草图",
+      "promptPlaceholder": "描述这张草图应该变成什么…"
+    },
     "slice": {
       "action": "切分为多张",
       "title": "切分为多张",
