@@ -118,3 +118,17 @@ func TestProvisionDiffPush(t *testing.T) {
 		t.Fatal("expected clone failure")
 	}
 }
+
+func TestRedactURL(t *testing.T) {
+	in := "$ git clone -- https://alice:ghp_secret@github.com/o/r.git /tmp/x and ssh://bob@host/r"
+	got := RedactURL(in)
+	if strings.Contains(got, "ghp_secret") || strings.Contains(got, "alice") || strings.Contains(got, "bob@") {
+		t.Fatalf("credential leaked: %s", got)
+	}
+	if !strings.Contains(got, "https://***@github.com/o/r.git") {
+		t.Fatalf("unexpected redaction: %s", got)
+	}
+	if RedactURL("https://github.com/o/r.git") != "https://github.com/o/r.git" {
+		t.Fatal("plain URL must be unchanged")
+	}
+}

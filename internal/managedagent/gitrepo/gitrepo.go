@@ -262,7 +262,7 @@ func (g *Git) run(ctx context.Context, dir string, log func(string), args ...str
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	logf(log, "$ git %s", strings.Join(args, " "))
+	logf(log, "$ git %s", RedactURL(strings.Join(args, " ")))
 	err := cmd.Run()
 	if s := strings.TrimSpace(stderr.String()); s != "" && log != nil {
 		for _, line := range strings.Split(s, "\n") {
@@ -275,9 +275,18 @@ func (g *Git) run(ctx context.Context, dir string, log func(string), args ...str
 		if errors.As(err, &exit) {
 			code = " (exit " + strconv.Itoa(exit.ExitCode()) + ")"
 		}
-		return stdout.String(), fmt.Errorf("git %s%s: %s", args[0], code, firstLine(stderr.String(), err.Error()))
+		return stdout.String(), fmt.Errorf("git %s%s: %s", args[0], code, RedactURL(firstLine(stderr.String(), err.Error())))
 	}
 	return stdout.String(), nil
+}
+
+var userinfoRe = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^/@\s]+)@`)
+
+// RedactURL masks the userinfo of any URL in s (https://user:token@host →
+// https://***@host) so a source URL carrying an embedded credential never
+// reaches an event log or a chat notification verbatim.
+func RedactURL(s string) string {
+	return userinfoRe.ReplaceAllString(s, "${1}***@")
 }
 
 func firstLine(s, fallback string) string {

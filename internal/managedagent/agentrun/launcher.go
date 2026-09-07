@@ -348,9 +348,9 @@ func (l *Launcher) drive(rn *run, r managedagent.Run, prompt string) {
 func (l *Launcher) provision(ctx context.Context, r managedagent.Run) error {
 	ws := r.Workspace
 	l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem,
-		Text: fmt.Sprintf("provisioning workspace from %s (%s)", r.Source.URL, ws.BaseRef)})
+		Text: fmt.Sprintf("provisioning workspace from %s (%s)", gitrepo.RedactURL(r.Source.URL), ws.BaseRef)})
 	logLine := func(line string) {
-		l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem, Text: line})
+		l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem, Text: gitrepo.RedactURL(line)})
 	}
 	// A previous attempt cut short (crash mid-clone) leaves a directory the
 	// clone would refuse; the workspace is still "provisioning", so nothing
