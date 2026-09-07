@@ -409,9 +409,56 @@ P0 结束就能演示完整故事；P1 是"敢给别人用"的门槛；P2 才是
 
 与 §6.1 的差异：`diff / push / pull-request / triggers / webhooks / probe` 还没有——它们依赖宿主 git 与执行体，随 P0-b（Launcher：local runtime）和 P2 一起来。
 
+### P0-b 本地执行（2026-09-07）
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| git | `internal/managedagent/gitrepo/` | 每个 Source 一个 bare mirror（`agent/sources/`），每个 workspace `clone --reference --dissociate`；`Diff`（已提交 + 工作区 + untracked）、`Push`（`-u origin <branch>`，用宿主 git 凭证） |
+| 执行 | `internal/managedagent/agentrun/` | `Launcher`：provision → turn 循环；首轮 `--session-id <预生成 uuid>`，之后 `--resume`；审批/ask → `waiting_input` + pending 表；steer 在运行中排队、空闲时立即开一轮；用量从 `Result.Events` 折算 |
+| 路由 | `agentrun.Routing` | `Environment.CCProfile` 非空 → 物化 profile settings（`--settings`）；否则主 scenario env。与 `remote-cc-profile.md` §2 同源（TBClient） |
+| API | `GET …/diff`、`POST …/push` | push 是显式动作，运行中的 session 拒绝 push |
+| 接线 | `server_routes.go` | 真实 Launcher 已挂上；turn 超时 2h |
+
+仍未做：PR 创建（需要 GitHub 凭证模型）、Source 级凭证注入、workspace TTL 回收、重启后 `running` → `interrupted` 的恢复（等 `internal/task` 接线）。
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。
 2. `Workspace.ContainerID` 已有列；`Workspace.Path` 始终是宿主路径，docker 只是把它 bind-mount 进去。
 3. `Launcher` 接口不带 runtime 语义：local 与 docker 是同一个 Launcher 实现里两个 `process.Factory`（`agentboot/process`），不是两个 Launcher。
 4. `EnvironmentListResponse.supported_runtimes` 让前端在 docker 未就绪时能解释"为什么不能选"，而不是给一个死选项（ux §8）。
+5. `Workspace.AgentCwd` 与 `Path` 分离：local 相等，docker 时 `AgentCwd=/workspace`，git 仍在宿主对 `Path` 操作。
+
+---
+
+## 12. Session 留存与一致性；clone 还是 worktree
+
+### 12.1 Claude Code 会话的键是 (config dir, cwd)
+
+Claude Code 把自己的会话写在 `<config dir>/projects/<编码后的 cwd>/<session>.jsonl`。
+tb 的原则：
+
+- **tb 的事件日志 + 索引里的 `cc_session_id` 是事实来源**；Claude Code 的 JSONL 只是
+  `--resume` 的机制。tb 从不按路径去找 JSONL，只保证 resume 时的 (config dir, cwd)
+  与创建时相同。
+- 因此 session 挂在 **Workspace** 上而不是 Source 上：一个 workspace 的 `AgentCwd`
+  在其生命周期内不变。"路径一直在变"是 workspace 之间在变，不是 workspace 之内。
+- local：`AgentCwd = ~/.tingly-box/agent/workspaces/<id>/repo`，config dir 沿用用户的
+  `~/.claude`（skills、memory、全局 settings 都在）。
+- docker：容器内 `AgentCwd = /workspace` 固定；若 config dir 也是容器自带的，所有
+  workspace 的会话会塌缩到同一目录且随容器消失。P1 的做法：每个 workspace 在宿主上有
+  一个 `claude/` 状态目录，挂载进容器作为 config dir（`CLAUDE_CONFIG_DIR`）。这样
+  (config dir, cwd) 仍然每 workspace 唯一且持久。
+- workspace 被回收后 resume 不可能，新 session 从头开始——这是已建模的行为，不是缺陷。
+
+### 12.2 每个 workspace 一个独立 clone，不用 worktree
+
+| 方案 | 网络 | 磁盘 | docker 挂载 | 回收 | 结论 |
+|---|---|---|---|---|---|
+| 直接 clone | 每次全量 | 不共享 | 直接挂 | `rm -rf` | 太慢 |
+| 用户主仓的 worktree | 无 | 共享 | `.git` 文件指向主仓绝对路径，进容器即断 | 需 `worktree prune` | 主仓状态会污染 agent；只适合将来的本地目录 Source |
+| tb mirror + worktree / alternates | 增量 | 共享 | 同样是绝对路径问题 | prune | 收益只是省磁盘 |
+| **tb mirror + `clone --reference --dissociate`** | 增量 | 不共享 | 只挂 workspace 一个目录 | `rm -rf` | **采用** |
+
+mirror 是优化不是事实来源：mirror 失败退化为直接 clone，workspace 永远是普通目录。
+磁盘不共享是有意的代价；将来 local 可以单独做 alternates 优化，不影响 docker。
