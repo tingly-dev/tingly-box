@@ -1599,6 +1599,116 @@ const mockProfileClaudeConfigData = (profileId: string) => {
 let probeRequestCount = 0
 
 const defaultMockTeamID = '00000000-0000-0000-0000-000000000001'
+
+// ============================================
+// Managed agent (Tasks) mock state
+// ============================================
+let mockAgentSources: any[] = [
+    { id: 'src-tb', name: 'tingly-box', kind: 'git', url: 'https://github.com/tingly-dev/tingly-box.git', default_branch: 'main', credential_id: '', created_at: '2026-09-01T08:00:00Z', updated_at: '2026-09-01T08:00:00Z' },
+    { id: 'src-web', name: 'website', kind: 'git', url: 'git@github.com:tingly-dev/website.git', default_branch: 'main', credential_id: '', created_at: '2026-09-02T08:00:00Z', updated_at: '2026-09-02T08:00:00Z' },
+]
+let mockAgentEnvironments: any[] = [
+    { id: '00000000-0000-0000-0000-00000000a001', name: 'Local', runtime: 'local', is_default: true, env: {}, cc_profile: '', created_at: '2026-09-01T08:00:00Z', updated_at: '2026-09-01T08:00:00Z' },
+    { id: 'env-node', name: 'Local · Node 22', runtime: 'local', is_default: false, env: { NODE_OPTIONS: '--max-old-space-size=4096' }, cc_profile: 'claude_code:p1', setup_script: 'pnpm install', created_at: '2026-09-03T08:00:00Z', updated_at: '2026-09-03T08:00:00Z' },
+]
+const mockAgentDiff = {
+    changed_files: 3,
+    stat: ' frontend/src/pages/SignupForm.tsx      | 24 ++++++++++++---\n frontend/src/pages/SignupForm.test.tsx | 41 +++++++++++++++++++++++++\n frontend/src/utils/validate.ts         | 12 ++++++++\n 3 files changed, 73 insertions(+), 4 deletions(-)',
+    patch: 'diff --git a/frontend/src/utils/validate.ts b/frontend/src/utils/validate.ts\nnew file mode 100644\n--- /dev/null\n+++ b/frontend/src/utils/validate.ts\n@@ -0,0 +1,12 @@\n+export const isEmail = (v: string) => /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v);\n+\n+export const passwordIssue = (v: string): string | null => {\n+    if (v.length < 8) return \'at least 8 characters\';\n+    if (!/[0-9]/.test(v)) return \'one digit\';\n+    return null;\n+};\n',
+    untracked: [],
+    truncated: false,
+}
+const sourceRef = (id: string) => {
+    const s = mockAgentSources.find((x) => x.id === id)
+    return s ? { id: s.id, name: s.name } : undefined
+}
+const newMockAgentSession = (sourceId: string, environmentId: string, prompt: string, overrides: any = {}) => {
+    const id = `sess-${Math.random().toString(36).slice(2, 10)}`
+    const wsId = `ws-${Math.random().toString(36).slice(2, 10)}`
+    const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'task'
+    const now = new Date().toISOString()
+    const row = {
+        source_id: sourceId,
+        workspace: {
+            id: wsId, source_id: sourceId, environment_id: environmentId || mockAgentEnvironments[0].id,
+            path: `/home/me/.tingly-box/agent/workspaces/${wsId}/repo`, agent_cwd: `/home/me/.tingly-box/agent/workspaces/${wsId}/repo`,
+            base_ref: 'main', branch: `tb/${slug}-${wsId.slice(3)}`, state: 'provisioning', created_at: now, last_active_at: now,
+        },
+        session: {
+            id, title: prompt.split('\n')[0].slice(0, 80), workspace_id: wsId, status: 'queued', prompt, cc_session_id: '',
+            permission_mode: '', created_by: 'web', error: '',
+            usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cost: 0 },
+            artifact: { branch: `tb/${slug}-${wsId.slice(3)}`, pushed: false, pr_url: '', changed_files: 0 },
+            created_at: now, last_active_at: now, ...overrides,
+        },
+        events: [] as any[],
+    }
+    mockAgentSessions.push(row)
+    pushMockAgentEvent(row, 'user_message', prompt)
+    return row
+}
+const pushMockAgentEvent = (row: any, kind: string, text: string, requestId = '', payload?: any) => {
+    const seq = row.events.length + 1
+    row.events.push({ seq, session_id: row.session.id, kind, text, request_id: requestId || undefined, payload, at: new Date().toISOString() })
+    row.session.last_active_at = new Date().toISOString()
+}
+const setMockAgentStatus = (row: any, status: string) => {
+    row.session.status = status
+    row.session.last_active_at = new Date().toISOString()
+    pushMockAgentEvent(row, 'status', status)
+}
+// The scripted first turn: provision, run, ask for permission, wait.
+const scriptMockAgentSession = (row: any) => {
+    const t = (ms: number, fn: () => void) => setTimeout(fn, ms)
+    t(400, () => {
+        pushMockAgentEvent(row, 'system', `provisioning workspace from ${mockAgentSources.find((s) => s.id === row.source_id)?.url ?? 'origin'} (main)`)
+        pushMockAgentEvent(row, 'system', '$ git clone --no-tags --branch main --reference-if-able … --dissociate')
+    })
+    t(1200, () => {
+        row.workspace.state = 'ready'
+        pushMockAgentEvent(row, 'system', `workspace ready on branch ${row.workspace.branch}`)
+        setMockAgentStatus(row, 'running')
+        row.session.cc_session_id = 'c0ffee00-1234-4abc-9def-000000000001'
+    })
+    t(2200, () => {
+        pushMockAgentEvent(row, 'assistant_message', 'Let me look at the signup form and the existing validation helpers first.')
+        pushMockAgentEvent(row, 'tool_use', 'Read', 'tu-0', { file_path: 'frontend/src/pages/SignupForm.tsx' })
+        pushMockAgentEvent(row, 'tool_result', 'export const SignupForm = () => { … }', 'tu-0', { is_error: false })
+        row.session.usage = { input_tokens: 2140, output_tokens: 318, cache_read_tokens: 1800, cost: 0.021 }
+    })
+    t(3400, () => {
+        pushMockAgentEvent(row, 'assistant_message', 'I added isEmail and passwordIssue helpers and wired them into the form. I want to run the test suite to confirm nothing else broke.')
+        pushMockAgentEvent(row, 'tool_use', 'Bash', 'tu-1', { command: 'pnpm test -- SignupForm' })
+        pushMockAgentEvent(row, 'approval_request', 'Bash', 'req-1', { tool: 'Bash', input: { command: 'pnpm test -- SignupForm' } })
+        row.session.artifact.changed_files = 2
+        setMockAgentStatus(row, 'waiting_input')
+    })
+}
+let mockAgentSessions: any[] = []
+// A settled example and an archived one so the list has history on load.
+{
+    const done = newMockAgentSession('src-tb', '00000000-0000-0000-0000-00000000a001', 'Fix flaky provider health check test', {
+        status: 'idle', cc_session_id: 'c0ffee00-1234-4abc-9def-000000000002',
+        usage: { input_tokens: 18230, output_tokens: 2210, cache_read_tokens: 15000, cost: 0.142 },
+        last_active_at: '2026-09-06T14:20:00Z', created_at: '2026-09-06T13:50:00Z',
+    })
+    done.workspace.state = 'ready'
+    done.session.artifact.changed_files = 3
+    done.session.artifact.pushed = true
+    pushMockAgentEvent(done, 'system', 'workspace ready on branch ' + done.workspace.branch)
+    pushMockAgentEvent(done, 'status', 'running')
+    pushMockAgentEvent(done, 'assistant_message', 'The test raced the health poller. I made the poller injectable and the test now waits on it deterministically.')
+    pushMockAgentEvent(done, 'status', 'idle')
+    pushMockAgentEvent(done, 'system', 'pushed ' + done.workspace.branch)
+    done.session.last_active_at = '2026-09-06T14:20:00Z'
+
+    const old = newMockAgentSession('src-web', '00000000-0000-0000-0000-00000000a001', 'Update the pricing page copy', {
+        status: 'archived', last_active_at: '2026-09-01T10:00:00Z', created_at: '2026-09-01T09:00:00Z', finished_at: '2026-09-01T10:00:00Z',
+    })
+    old.workspace.state = 'reclaimed'
+    old.session.last_active_at = '2026-09-01T10:00:00Z'
+}
+
 let mockTeams = [
     { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
     { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
@@ -2198,6 +2308,148 @@ export const handlers = [
         const { scenario, flag } = params as { scenario: string; flag: string }
         const body = await request.json() as { value?: boolean }
         return HttpResponse.json({ success: true, data: { scenario, flag, value: body.value ?? true } })
+    }),
+
+    // ============================================
+    // Managed agent (Tasks) — /api/v1/agent/*
+    // A new session walks through provisioning → running → an approval
+    // request → idle over a few seconds, so the detail page's live states
+    // are all reachable in mock mode.
+    // ============================================
+    http.get('/api/v1/agent/sources', () => HttpResponse.json({ sources: mockAgentSources })),
+    http.post('/api/v1/agent/sources', async ({ request }) => {
+        const body = await request.json() as any
+        if (!body.url) return HttpResponse.json({ error: { message: 'url is required: validation', type: 'invalid_request_error' } }, { status: 400 })
+        const src = {
+            id: `src-${Date.now()}`, name: body.name || body.url.split('/').pop().replace(/\.git$/, ''), kind: 'git',
+            url: body.url, default_branch: body.default_branch || 'main', credential_id: '',
+            created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }
+        mockAgentSources.push(src)
+        return HttpResponse.json(src, { status: 201 })
+    }),
+    http.put('/api/v1/agent/sources/:id', async ({ params, request }) => {
+        const body = await request.json() as any
+        const src = mockAgentSources.find((s) => s.id === params.id)
+        if (!src) return HttpResponse.json({ error: { message: 'not found' } }, { status: 404 })
+        Object.assign(src, { name: body.name || src.name, url: body.url, default_branch: body.default_branch || 'main' })
+        return HttpResponse.json(src)
+    }),
+    http.delete('/api/v1/agent/sources/:id', ({ params }) => {
+        const live = mockAgentSessions.some((s) => s.source_id === params.id && s.session.status !== 'archived')
+        if (live) return HttpResponse.json({ error: { message: 'source has live workspace(s); archive their sessions first: conflict' } }, { status: 409 })
+        mockAgentSources = mockAgentSources.filter((s) => s.id !== params.id)
+        return new HttpResponse(null, { status: 204 })
+    }),
+
+    http.get('/api/v1/agent/environments', () => HttpResponse.json({ environments: mockAgentEnvironments, supported_runtimes: ['local'] })),
+    http.post('/api/v1/agent/environments', async ({ request }) => {
+        const body = await request.json() as any
+        if (body.runtime === 'docker') return HttpResponse.json({ error: { message: 'runtime "docker" is not available yet: validation' } }, { status: 400 })
+        const env = { id: `env-${Date.now()}`, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...body, runtime: body.runtime || 'local' }
+        mockAgentEnvironments.push(env)
+        return HttpResponse.json(env, { status: 201 })
+    }),
+    http.put('/api/v1/agent/environments/:id', async ({ params, request }) => {
+        const body = await request.json() as any
+        const env = mockAgentEnvironments.find((e) => e.id === params.id)
+        if (!env) return HttpResponse.json({ error: { message: 'not found' } }, { status: 404 })
+        Object.assign(env, body)
+        return HttpResponse.json(env)
+    }),
+    http.delete('/api/v1/agent/environments/:id', ({ params }) => {
+        const env = mockAgentEnvironments.find((e) => e.id === params.id)
+        if (env?.is_default) return HttpResponse.json({ error: { message: 'the default environment cannot be deleted: conflict' } }, { status: 409 })
+        mockAgentEnvironments = mockAgentEnvironments.filter((e) => e.id !== params.id)
+        return new HttpResponse(null, { status: 204 })
+    }),
+
+    http.get('/api/v1/agent/sessions', ({ request }) => {
+        const url = new URL(request.url)
+        const active = url.searchParams.get('active') === 'true'
+        const rows = mockAgentSessions
+            .filter((r) => !active || ['queued', 'running', 'waiting_input', 'idle'].includes(r.session.status))
+            .sort((a, b) => b.session.last_active_at.localeCompare(a.session.last_active_at))
+            .map((r) => ({ session: r.session, source: sourceRef(r.source_id), branch: r.workspace.branch }))
+        return HttpResponse.json({ sessions: rows })
+    }),
+    http.post('/api/v1/agent/sessions', async ({ request }) => {
+        const body = await request.json() as any
+        if (!body.prompt) return HttpResponse.json({ error: { message: 'prompt is required: validation' } }, { status: 400 })
+        const row = newMockAgentSession(body.source_id, body.environment_id, body.prompt)
+        scriptMockAgentSession(row)
+        return HttpResponse.json({ session: row.session, workspace: row.workspace }, { status: 201 })
+    }),
+    http.get('/api/v1/agent/sessions/:id', ({ params }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        return HttpResponse.json({ session: row.session, workspace: row.workspace })
+    }),
+    http.get('/api/v1/agent/sessions/:id/events', ({ params, request }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        const after = Number(new URL(request.url).searchParams.get('after') || 0)
+        const events = row.events.filter((e: any) => e.seq > after)
+        return HttpResponse.json({ events, next: events.length ? events[events.length - 1].seq : after })
+    }),
+    http.post('/api/v1/agent/sessions/:id/messages', async ({ params, request }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (!['queued', 'running', 'waiting_input', 'idle'].includes(row.session.status)) {
+            return HttpResponse.json({ error: { message: `session is ${row.session.status}: conflict` } }, { status: 409 })
+        }
+        const body = await request.json() as any
+        pushMockAgentEvent(row, 'user_message', body.text)
+        setTimeout(() => {
+            setMockAgentStatus(row, 'running')
+            setTimeout(() => {
+                pushMockAgentEvent(row, 'assistant_message', `Done: ${body.text}`)
+                setMockAgentStatus(row, 'idle')
+            }, 1500)
+        }, 300)
+        return new HttpResponse(null, { status: 202 })
+    }),
+    http.post('/api/v1/agent/sessions/:id/respond', async ({ params, request }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (row.session.status !== 'waiting_input') return HttpResponse.json({ error: { message: `session is ${row.session.status}, not waiting for input: conflict` } }, { status: 409 })
+        const body = await request.json() as any
+        pushMockAgentEvent(row, 'approval_response', body.approved ? 'approved' : 'denied', body.request_id)
+        setMockAgentStatus(row, 'running')
+        setTimeout(() => {
+            pushMockAgentEvent(row, 'tool_result', body.approved ? 'PASS  internal/auth (0.42s)' : 'skipped', 'tu-1')
+            pushMockAgentEvent(row, 'assistant_message', body.approved ? 'Tests pass. I added validation to the signup form and covered the empty-email and weak-password cases.' : 'Understood, I will not run the tests. The changes are in place; run them when you are ready.')
+            row.session.artifact.changed_files = 3
+            setMockAgentStatus(row, 'idle')
+        }, 1500)
+        return new HttpResponse(null, { status: 202 })
+    }),
+    http.post('/api/v1/agent/sessions/:id/interrupt', ({ params }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        setMockAgentStatus(row, 'idle')
+        return new HttpResponse(null, { status: 202 })
+    }),
+    http.post('/api/v1/agent/sessions/:id/archive', ({ params }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        setMockAgentStatus(row, 'archived')
+        row.session.finished_at = new Date().toISOString()
+        return HttpResponse.json({ session: row.session, workspace: row.workspace })
+    }),
+    http.get('/api/v1/agent/sessions/:id/diff', ({ params }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (row.session.artifact.changed_files === 0) return HttpResponse.json({ changed_files: 0, stat: '', patch: '', truncated: false })
+        return HttpResponse.json(mockAgentDiff)
+    }),
+    http.post('/api/v1/agent/sessions/:id/push', ({ params }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (row.session.status === 'running') return HttpResponse.json({ error: { message: 'session is running: conflict' } }, { status: 409 })
+        row.session.artifact.pushed = true
+        pushMockAgentEvent(row, 'system', `pushed ${row.workspace.branch}`)
+        return HttpResponse.json({ session: row.session, workspace: row.workspace })
     }),
 
     http.post('/api/v1/rule', async ({ request }) => {
