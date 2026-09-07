@@ -79,6 +79,14 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 			logrus.WithContext(ctx).Errorf("Failed to create vmodel client for provider %s: %v", provider.Name, err)
 			return nil
 		}
+	} else if IsOpenCodeZen(provider.APIBase) {
+		// OpenCode Zen: plain api_key provider, but every request needs the
+		// vendor session header (#1713).
+		client, err = NewOpenCodeClient(provider, model, sessionID)
+		if err != nil {
+			logrus.WithContext(ctx).Errorf("Failed to create OpenCode client for provider %s: %v", provider.Name, err)
+			return nil
+		}
 	} else if provider.AuthType == typ.AuthTypeAzureKey {
 		// GPT / o-series on Azure OpenAI (api-key auth).
 		client, err = NewAzureClient(provider, model, sessionID)
@@ -133,6 +141,10 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	case provider.AuthType == typ.AuthTypeGCPVertex:
 		// Claude on GCP Vertex AI (service-account OAuth2).
 		client, err = NewVertexAnthropicClient(provider, model, sessionID)
+	case IsOpenCodeZen(provider.APIBase):
+		// OpenCode Zen's Anthropic-style base needs the same vendor session
+		// header as its OpenAI-style one (#1713).
+		client, err = NewOpenCodeAnthropicClient(provider, model, sessionID)
 	default:
 		client, err = NewAnthropicClient(provider, model, sessionID)
 	}
