@@ -419,6 +419,12 @@ P0 结束就能演示完整故事；P1 是"敢给别人用"的门槛；P2 才是
 | API | `GET …/diff`、`POST …/push` | push 是显式动作，运行中的 session 拒绝 push |
 | 接线 | `server_routes.go` | 真实 Launcher 已挂上；turn 超时 2h |
 
+真实链路冒烟：`TB_MANAGED_AGENT_E2E=1 go test ./internal/managedagent/agentrun/ -run RealCLI -v`
+——真实 `claude` CLI + 真实 Launcher + 临时 gateway + 进程内 vmodel 上游（复用
+`protocoltest.AgentTestEnv`，与 `harness agent claude --mock` 同源）。已验证：stdin 投递 prompt、
+`--settings` 路由、`--session-id` / `--resume` 续接上下文（第二轮按上下文回答）、用量折算。
+CI 不跑它（需要本机 CLI），阶段验收时手动跑。
+
 仍未做：PR 创建（需要 GitHub 凭证模型）、Source 级凭证注入、workspace TTL 回收、重启后 `running` → `interrupted` 的恢复（等 `internal/task` 接线）。
 
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
