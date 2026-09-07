@@ -8,9 +8,9 @@
 // change, not a page change.
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Chip, type ChipProps} from '@mui/material';
+import {Chip, FormControl, InputLabel, ListItemText, MenuItem, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
 import {formatDistanceToNowStrict} from 'date-fns';
-import {agentApi, isActiveStatus, type AgentEvent, type AgentSession, type AgentWorkspace} from '@/services/agentApi';
+import {agentApi, isActiveStatus, type AgentEvent, type AgentSession, type AgentWorkspace, type PermissionMode} from '@/services/agentApi';
 
 export const STATUS_COLOR: Record<string, ChipProps['color']> = {
     queued: 'default',
@@ -124,4 +124,53 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
     }, [sessionId, refresh]);
 
     return {session, workspace, events, loading, error, notFound, refresh, setSession};
+};
+
+// The modes in the order the backend lists them; the empty value inherits
+// the settings file's defaultMode. Labels and one-line descriptions come
+// from i18n so the picker teaches what each mode does (ux §8).
+export const PERMISSION_MODES: PermissionMode[] = ['', 'default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'];
+
+export const permissionModeKey = (m: PermissionMode | string | undefined): string => (m ? m : 'inherit');
+
+interface PermissionModeSelectProps {
+    value: PermissionMode | string;
+    onChange: (mode: PermissionMode) => void;
+    // inheritLabel names what "" means in this context (e.g. the environment's mode).
+    inheritHint?: string;
+    disabled?: boolean;
+    size?: 'small' | 'medium';
+    sx?: SxProps<Theme>;
+}
+
+export const PermissionModeSelect = ({value, onChange, inheritHint, disabled, size = 'small', sx}: PermissionModeSelectProps) => {
+    const {t} = useTranslation();
+    return (
+        <FormControl size={size} disabled={disabled} sx={sx}>
+            <InputLabel id="permission-mode">{t('tasks.mode.label')}</InputLabel>
+            <Select
+                labelId="permission-mode"
+                label={t('tasks.mode.label')}
+                value={value ?? ''}
+                displayEmpty
+                onChange={(e) => onChange(e.target.value as PermissionMode)}
+                renderValue={(v) => {
+                    const key = permissionModeKey(v as string);
+                    return key === 'inherit' && inheritHint ? `${t('tasks.mode.inherit')} · ${inheritHint}` : t(`tasks.mode.${key}`);
+                }}
+            >
+                {PERMISSION_MODES.map((m) => {
+                    const key = permissionModeKey(m);
+                    return (
+                        <MenuItem key={key} value={m}>
+                            <ListItemText
+                                primary={t(`tasks.mode.${key}`)}
+                                secondary={<Typography variant="caption" color="text.secondary">{t(`tasks.mode.${key}Help`)}</Typography>}
+                            />
+                        </MenuItem>
+                    );
+                })}
+            </Select>
+        </FormControl>
+    );
 };

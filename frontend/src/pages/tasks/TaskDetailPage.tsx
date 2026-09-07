@@ -6,7 +6,7 @@ import {useCallback, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, CircularProgress, Divider, IconButton, Stack, Tab, Tabs,
+    Alert, Box, Button, Card, Chip, CircularProgress, Divider, IconButton, ListItemText, Menu, MenuItem, Stack, Tab, Tabs,
     TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
@@ -14,10 +14,10 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import {ArrowBack, Block as IconStop, Delete as IconArchive, Send as IconSend} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
-import {agentApi, isActiveStatus} from '@/services/agentApi';
+import {agentApi, isActiveStatus, type PermissionMode} from '@/services/agentApi';
 import EventTimeline, {type PendingRequest} from './EventTimeline';
 import ChangesPanel from './ChangesPanel';
-import {relativeTime, shortId, StatusChip, useSessionPoll} from './taskShared';
+import {PERMISSION_MODES, permissionModeKey, relativeTime, shortId, StatusChip, useSessionPoll} from './taskShared';
 
 const TaskDetailPage = () => {
     const {sessionId} = useParams<{sessionId: string}>();
@@ -33,6 +33,19 @@ const TaskDetailPage = () => {
     const [sending, setSending] = useState(false);
     const [archiveOpen, setArchiveOpen] = useState(false);
     const [archiving, setArchiving] = useState(false);
+    const [modeAnchor, setModeAnchor] = useState<HTMLElement | null>(null);
+
+    const changeMode = async (mode: PermissionMode) => {
+        setModeAnchor(null);
+        if (!sessionId || !session || mode === (session.permission_mode ?? '')) return;
+        const res = await agentApi.setPermissionMode(sessionId, mode);
+        if (!res.ok) {
+            notify.error(res.error);
+            return;
+        }
+        setSession(res.data.session);
+        await refresh();
+    };
 
     // A request is pending while the session waits and no response event
     // has followed it in the log.
@@ -117,6 +130,26 @@ const TaskDetailPage = () => {
             </Stack>
             <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, pl: {xs: 0, sm: 5}}}>
                 <Typography variant="caption" color="text.secondary">{relativeTime(session.last_active_at)}</Typography>
+                {/* The mode is a concrete value, editable in place while the
+                    session is active; a change takes effect from the next turn. */}
+                <Tooltip title={t(`tasks.mode.${permissionModeKey(session.permission_mode)}Help`)}>
+                    <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`${t('tasks.mode.label')}: ${t(`tasks.mode.${permissionModeKey(session.permission_mode)}`)}`}
+                        onClick={active ? (e) => setModeAnchor(e.currentTarget) : undefined}
+                    />
+                </Tooltip>
+                <Menu open={!!modeAnchor} anchorEl={modeAnchor} onClose={() => setModeAnchor(null)}>
+                    {PERMISSION_MODES.map((m) => {
+                        const key = permissionModeKey(m);
+                        return (
+                            <MenuItem key={key} selected={(session.permission_mode ?? '') === m} onClick={() => changeMode(m)}>
+                                <ListItemText primary={t(`tasks.mode.${key}`)} secondary={t(`tasks.mode.${key}Help`)} />
+                            </MenuItem>
+                        );
+                    })}
+                </Menu>
                 {session.usage && (session.usage.input_tokens > 0 || session.usage.output_tokens > 0) && (
                     <Typography variant="caption" color="text.secondary">
                         · {t('tasks.detail.tokens', {input: session.usage.input_tokens, output: session.usage.output_tokens})}

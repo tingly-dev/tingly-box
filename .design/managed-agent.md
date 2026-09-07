@@ -487,6 +487,21 @@ IM prompt 预算 2h，超时只是不再占着聊天，session 继续等网页�
 | `git clone <url>` 未加 `--`；ssh 可能挂在交互提示上 | `--`；`GIT_SSH_COMMAND=ssh -o BatchMode=yes`（用户未设时） |
 | RecoverOnStart 被列表默认 200 条上限截断 | 显式大 Limit |
 
+### P0-g 权限模式（2026-09-07）
+
+模式集合与 Claude Code CLI 一致：`default / acceptEdits / auto / plan / dontAsk / bypassPermissions`，
+空值 = 沿用 settings 文件的 `defaultMode`（优先级同 `remote-cc-profile.md` §2.1：session 覆盖 >
+settings defaultMode > CLI 默认）。
+
+| 层 | 规则 |
+|---|---|
+| Environment | `permission_mode` 作为该环境里新 session 的默认 |
+| Session | 创建时可覆盖；活跃中 `PUT /agent/sessions/:id/permission-mode` 修改，**从下一轮生效**（正在跑的进程保持启动时的模式，事件里明说） |
+| Launcher | 每轮把 `session.permission_mode` 传 `--permission-mode`；`bypassPermissions` 时宿主自动批准审批请求并记录 `approval_response: approved (bypassPermissions)`，不进入 `waiting_input`。这与 @cc 的 `noApprovalModes` 是同一条策略：只有 bypass 承诺无条件放行 |
+| `auto` | 交给 CLI 的分类器；分类器不决定的调用仍以审批请求到达宿主，网页 / IM 照常等人答 |
+| AskUserQuestion | 任何模式下都不自动回答 |
+| UI | composer 的 Permissions 下拉（每项带一句说明，ux §8）；详情页头部的模式 chip 点开即改；环境表单里设默认 |
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

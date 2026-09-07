@@ -18,6 +18,8 @@ export type SourceRequest = Schemas['SourceRequest'];
 export type EnvironmentRequest = Schemas['EnvironmentRequest'];
 export type CreateSessionRequest = Schemas['CreateSessionRequest'];
 
+export type PermissionMode = '' | 'default' | 'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'auto';
+
 export type SessionStatus =
     | 'queued' | 'running' | 'waiting_input' | 'idle' | 'done' | 'failed' | 'archived';
 
@@ -69,7 +71,7 @@ export const agentApi = {
 
     // ---- environments
     listEnvironments: () =>
-        call<{environments: AgentEnvironment[]; supported_runtimes: string[]}>(
+        call<{environments: AgentEnvironment[]; supported_runtimes: string[]; permission_modes: string[]}>(
             (c, headers) => c.GET('/api/v1/agent/environments', {headers})),
     createEnvironment: (body: EnvironmentRequest) =>
         call<AgentEnvironment>((c, headers) => c.POST('/api/v1/agent/environments', {headers, body})),
@@ -104,6 +106,10 @@ export const agentApi = {
     respond: (id: string, body: {request_id: string; approved: boolean; answer?: string}) =>
         call<unknown>((c, headers) => c.POST('/api/v1/agent/sessions/{session_id}/respond', {
             headers, params: {path: {session_id: id}}, body: {answer: '', ...body},
+        })),
+    setPermissionMode: (id: string, mode: PermissionMode) =>
+        call<SessionDetail>((c, headers) => c.PUT('/api/v1/agent/sessions/{session_id}/permission-mode', {
+            headers, params: {path: {session_id: id}}, body: {permission_mode: mode},
         })),
     interrupt: (id: string) =>
         call<unknown>((c, headers) => c.POST('/api/v1/agent/sessions/{session_id}/interrupt', {

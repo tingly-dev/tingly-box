@@ -771,6 +771,23 @@ export default {
     }
   },
   "tasks": {
+    "mode": {
+      "label": "权限",
+      "inherit": "沿用",
+      "inheritHelp": "使用 Claude Code settings 文件里的默认模式",
+      "default": "逐个询问",
+      "defaultHelp": "每个需要权限的工具都先问你",
+      "acceptEdits": "放行编辑",
+      "acceptEditsHelp": "文件编辑直接执行，其他工具仍会询问",
+      "auto": "自动",
+      "autoHelp": "由 Claude Code 的分类器决定，拿不准的才问你",
+      "plan": "规划",
+      "planHelp": "只读：agent 只做规划，不改动任何东西",
+      "dontAsk": "不询问",
+      "dontAskHelp": "需要权限的调用直接拒绝，不再询问",
+      "bypassPermissions": "全部放行",
+      "bypassPermissionsHelp": "所有调用自动批准，日志仍会记录执行了什么"
+    },
     "title": "任务",
     "subtitle": "把仓库和一句任务交给 agent。它在独立的 checkout 里工作，你在这里或 IM 里随时插话，最后拿到一个分支。",
     "composer": {

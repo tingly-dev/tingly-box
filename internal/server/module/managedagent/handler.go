@@ -136,7 +136,7 @@ func (h *Handler) ListEnvironments(c *gin.Context) {
 			supported = append(supported, rt)
 		}
 	}
-	c.JSON(http.StatusOK, EnvironmentListResponse{Environments: list, SupportedRuntimes: supported})
+	c.JSON(http.StatusOK, EnvironmentListResponse{Environments: list, SupportedRuntimes: supported, PermissionModes: managedagent.PermissionModes})
 }
 
 func (h *Handler) CreateEnvironment(c *gin.Context) {
@@ -200,7 +200,7 @@ func environmentInput(r EnvironmentRequest) managedagent.EnvironmentInput {
 	return managedagent.EnvironmentInput{
 		Name: r.Name, Runtime: r.Runtime, Image: r.Image, SetupScript: r.SetupScript,
 		Env: r.Env, SecretRefs: r.SecretRefs, Network: r.Network, Resources: r.Resources,
-		CCProfile: r.CCProfile,
+		CCProfile: r.CCProfile, PermissionMode: r.PermissionMode,
 	}
 }
 
@@ -264,6 +264,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	sess, err := h.svc.CreateSession(c.Request.Context(), managedagent.CreateSessionInput{
 		SourceID: req.SourceID, EnvironmentID: req.EnvironmentID, WorkspaceID: req.WorkspaceID,
 		BaseRef: req.BaseRef, Prompt: req.Prompt, Title: req.Title, CreatedBy: "web",
+		PermissionMode: req.PermissionMode,
 	})
 	if err != nil {
 		sendError(c, err)
@@ -330,6 +331,24 @@ func (h *Handler) Respond(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusAccepted)
+}
+
+func (h *Handler) SetPermissionMode(c *gin.Context) {
+	id, ok := requireParam(c, "session_id")
+	if !ok {
+		return
+	}
+	var req SetPermissionModeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	sess, err := h.svc.SetPermissionMode(c.Request.Context(), id, req.PermissionMode)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, h.detail(c, sess))
 }
 
 func (h *Handler) Interrupt(c *gin.Context) {

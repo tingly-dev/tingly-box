@@ -770,6 +770,23 @@ export default {
     }
   },
   "tasks": {
+    "mode": {
+      "label": "Permissions",
+      "inherit": "Inherit",
+      "inheritHelp": "Use the Claude Code settings file's default mode",
+      "default": "Ask",
+      "defaultHelp": "Ask before each tool that needs permission",
+      "acceptEdits": "Accept edits",
+      "acceptEditsHelp": "File edits run without asking; other tools still ask",
+      "auto": "Auto",
+      "autoHelp": "Claude Code decides with its classifier; only unclear calls ask you",
+      "plan": "Plan",
+      "planHelp": "Read-only: the agent plans, nothing is changed",
+      "dontAsk": "Don't ask",
+      "dontAskHelp": "Calls that would need permission are refused instead of asked",
+      "bypassPermissions": "Bypass",
+      "bypassPermissionsHelp": "Everything is approved automatically; the log still shows what ran"
+    },
     "title": "Tasks",
     "subtitle": "Hand a repository and a prompt to the agent. It works in its own checkout; you steer from here or from IM and get a branch back.",
     "composer": {

@@ -14,11 +14,12 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import DialogHeader from '@/components/DialogHeader';
 import {Add as IconAdd, Computer as IconEnv, Delete as IconDelete, Edit as IconEdit} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
-import {agentApi, type AgentEnvironment, type EnvironmentRequest} from '@/services/agentApi';
+import {agentApi, type AgentEnvironment, type EnvironmentRequest, type PermissionMode} from '@/services/agentApi';
+import {PermissionModeSelect} from './taskShared';
 
 const emptyForm = (): EnvironmentRequest => ({
     name: '', runtime: 'local', image: '', setup_script: '', env: {}, secret_refs: [], network: 'none',
-    resources: {}, cc_profile: '',
+    resources: {}, cc_profile: '', permission_mode: '',
 });
 
 const envToLines = (env?: Record<string, string>): string =>
@@ -70,7 +71,7 @@ const EnvironmentsPage = () => {
             ? {
                 name: env.name, runtime: env.runtime, image: env.image ?? '', setup_script: env.setup_script ?? '',
                 env: env.env ?? {}, secret_refs: env.secret_refs ?? [], network: env.network ?? 'none',
-                resources: env.resources ?? {}, cc_profile: env.cc_profile ?? '',
+                resources: env.resources ?? {}, cc_profile: env.cc_profile ?? '', permission_mode: env.permission_mode ?? '',
             }
             : emptyForm();
         setForm(f);
@@ -135,6 +136,7 @@ const EnvironmentsPage = () => {
                                         <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', rowGap: 0.5}}>
                                             <Chip size="small" variant="outlined" label={e.runtime === 'docker' ? `docker · ${e.image}` : t('tasks.environments.runtimeLocal')} />
                                             {e.cc_profile && <Chip size="small" variant="outlined" label={e.cc_profile} />}
+                                            {e.permission_mode && <Chip size="small" variant="outlined" label={t(`tasks.mode.${e.permission_mode}`)} />}
                                             {e.env && Object.keys(e.env).length > 0 && (
                                                 <Chip size="small" variant="outlined" label={`${Object.keys(e.env).length} env`} />
                                             )}
@@ -191,6 +193,10 @@ const EnvironmentsPage = () => {
                                 fullWidth
                             />
                         )}
+                        <PermissionModeSelect
+                            value={form.permission_mode ?? ''}
+                            onChange={(m: PermissionMode) => setForm({...form, permission_mode: m})}
+                        />
                         <TextField
                             label={t('tasks.environments.ccProfile')}
                             helperText={t('tasks.environments.ccProfileHelp')}

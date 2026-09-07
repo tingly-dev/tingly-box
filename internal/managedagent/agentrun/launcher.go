@@ -428,7 +428,7 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 		SessionID:            sess.CCSessionID,
 		Resume:               resume,
 		PermissionPromptTool: "stdio",
-		PermissionMode:       sess.PermissionMode,
+		PermissionMode:       string(sess.PermissionMode),
 		Env:                  env,
 		SettingsPath:         settings,
 		Timeout:              l.cfg.TurnTimeout,
@@ -461,11 +461,20 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 			}
 		case agentboot.ApprovalRequestEvent:
 			payload, _ := json.Marshal(map[string]any{"tool": e.ToolName, "input": e.Input, "reason": e.Reason})
+			l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventApprovalRequest,
+				RequestID: e.ID, Text: e.ToolName, Payload: payload})
+			if sess.PermissionMode.AutoApproves() {
+				// bypassPermissions: the host answers, the log still shows
+				// what ran. AskUserQuestion is never auto-answered.
+				if err := handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: true}); err == nil {
+					l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventApprovalResponse,
+						RequestID: e.ID, Text: "approved (" + string(sess.PermissionMode) + ")"})
+				}
+				continue
+			}
 			rn.mu.Lock()
 			rn.pending[e.ID] = pendingApproval
 			rn.mu.Unlock()
-			l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventApprovalRequest,
-				RequestID: e.ID, Text: e.ToolName, Payload: payload})
 			l.setStatus(ctx, sess.ID, managedagent.SessionWaitingInput, "")
 		case agentboot.AskRequestEvent:
 			payload, _ := json.Marshal(map[string]any{"tool": e.ToolName, "input": e.Input, "message": e.Message})

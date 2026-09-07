@@ -58,7 +58,7 @@ func TestSessionFlow(t *testing.T) {
 	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/environments", "", &envs); rec.Code != 200 {
 		t.Fatalf("list environments: %d %s", rec.Code, rec.Body)
 	}
-	if len(envs.Environments) != 1 || !envs.Environments[0].IsDefault || len(envs.SupportedRuntimes) != 1 {
+	if len(envs.Environments) != 1 || !envs.Environments[0].IsDefault || len(envs.SupportedRuntimes) != 1 || len(envs.PermissionModes) == 0 {
 		t.Fatalf("unexpected environments: %+v", envs)
 	}
 
@@ -101,6 +101,13 @@ func TestSessionFlow(t *testing.T) {
 	}
 	if len(page.Events) != 1 || page.Events[0].Text != "and docs" || page.Next != 2 {
 		t.Fatalf("events page: %+v", page)
+	}
+
+	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"auto"}`, &detail); rec.Code != 200 || detail.Session.PermissionMode != managedagent.PermissionAuto {
+		t.Fatalf("set permission mode: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"yolo"}`, nil); rec.Code != 400 {
+		t.Fatalf("bad permission mode: %d", rec.Code)
 	}
 
 	var list SessionListResponse

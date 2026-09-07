@@ -96,6 +96,11 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 		swagger.WithTags(tag),
 		swagger.WithDescription("Answer a pending approval or ask request"),
 		swagger.WithRequestModel(RespondRequest{}))
+	group.PUT("/agent/sessions/:session_id/permission-mode", h.SetPermissionMode,
+		swagger.WithTags(tag),
+		swagger.WithDescription("Change an active session's Claude Code permission mode; applies from the next turn"),
+		swagger.WithRequestModel(SetPermissionModeRequest{}),
+		swagger.WithResponseModel(SessionDetail{}))
 	group.POST("/agent/sessions/:session_id/interrupt", h.Interrupt,
 		swagger.WithTags(tag),
 		swagger.WithDescription("Stop the current turn; the session stays resumable"))

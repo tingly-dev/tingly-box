@@ -14,9 +14,9 @@ import EmptyState from '@/components/EmptyState';
 import {Add as IconAdd, PlayArrow as IconPlay, Terminal as IconTerminal} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import {
-    agentApi, isActiveStatus, type AgentEnvironment, type AgentSource, type SessionListItem,
+    agentApi, isActiveStatus, type AgentEnvironment, type AgentSource, type PermissionMode, type SessionListItem,
 } from '@/services/agentApi';
-import {relativeTime, StatusChip} from './taskShared';
+import {PermissionModeSelect, relativeTime, StatusChip} from './taskShared';
 
 const TasksPage = () => {
     const {t} = useTranslation();
@@ -32,6 +32,7 @@ const TasksPage = () => {
     const [prompt, setPrompt] = useState('');
     const [sourceId, setSourceId] = useState('');
     const [environmentId, setEnvironmentId] = useState('');
+    const [permissionMode, setPermissionMode] = useState<PermissionMode>('');
     const [starting, setStarting] = useState(false);
 
     const load = useCallback(async () => {
@@ -74,7 +75,7 @@ const TasksPage = () => {
         setStarting(true);
         const res = await agentApi.createSession({
             source_id: sourceId, environment_id: environmentId, prompt: prompt.trim(),
-            workspace_id: '', base_ref: '', title: '',
+            workspace_id: '', base_ref: '', title: '', permission_mode: permissionMode,
         });
         setStarting(false);
         if (!res.ok) {
@@ -84,6 +85,7 @@ const TasksPage = () => {
         navigate(`/tasks/${res.data.session.id}`);
     };
 
+    const selectedEnvironment = environments.find((e) => e.id === environmentId);
     const canStart = prompt.trim().length > 0 && !!sourceId && !!environmentId && !starting;
 
     return (
@@ -165,6 +167,12 @@ const TasksPage = () => {
                                     </Select>
                                 </FormControl>
                             )}
+                            <PermissionModeSelect
+                                value={permissionMode}
+                                onChange={setPermissionMode}
+                                inheritHint={selectedEnvironment?.permission_mode ? t(`tasks.mode.${selectedEnvironment.permission_mode}`) : undefined}
+                                sx={{minWidth: 200}}
+                            />
                             <Box sx={{flex: 1, display: {xs: 'none', sm: 'block'}}} />
                             <Button
                                 variant="contained"

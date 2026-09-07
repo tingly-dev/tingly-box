@@ -29,21 +29,22 @@ func (AgentSourceRecord) TableName() string { return "agent_sources" }
 // AgentEnvironmentRecord is where an agent runs. Docker-only columns are
 // present from the start so enabling that runtime is not a migration.
 type AgentEnvironmentRecord struct {
-	ID          string            `gorm:"primaryKey;column:id;size:36"`
-	Name        string            `gorm:"column:name;not null;size:128"`
-	Runtime     string            `gorm:"column:runtime;not null;size:16"`
-	Image       string            `gorm:"column:image;size:255"`
-	SetupScript string            `gorm:"column:setup_script;type:text"`
-	Env         map[string]string `gorm:"column:env;type:text;serializer:json"`
-	SecretRefs  []string          `gorm:"column:secret_refs;type:text;serializer:json"`
-	Network     string            `gorm:"column:network;size:16"`
-	CPU         float64           `gorm:"column:cpu"`
-	MemoryMB    int               `gorm:"column:memory_mb"`
-	DiskMB      int               `gorm:"column:disk_mb"`
-	CCProfile   string            `gorm:"column:cc_profile;size:128"`
-	IsDefault   bool              `gorm:"column:is_default;not null;default:false"`
-	CreatedAt   time.Time         `gorm:"column:created_at"`
-	UpdatedAt   time.Time         `gorm:"column:updated_at"`
+	ID             string            `gorm:"primaryKey;column:id;size:36"`
+	Name           string            `gorm:"column:name;not null;size:128"`
+	Runtime        string            `gorm:"column:runtime;not null;size:16"`
+	Image          string            `gorm:"column:image;size:255"`
+	SetupScript    string            `gorm:"column:setup_script;type:text"`
+	Env            map[string]string `gorm:"column:env;type:text;serializer:json"`
+	SecretRefs     []string          `gorm:"column:secret_refs;type:text;serializer:json"`
+	Network        string            `gorm:"column:network;size:16"`
+	CPU            float64           `gorm:"column:cpu"`
+	MemoryMB       int               `gorm:"column:memory_mb"`
+	DiskMB         int               `gorm:"column:disk_mb"`
+	CCProfile      string            `gorm:"column:cc_profile;size:128"`
+	PermissionMode string            `gorm:"column:permission_mode;size:32"`
+	IsDefault      bool              `gorm:"column:is_default;not null;default:false"`
+	CreatedAt      time.Time         `gorm:"column:created_at"`
+	UpdatedAt      time.Time         `gorm:"column:updated_at"`
 }
 
 func (AgentEnvironmentRecord) TableName() string { return "agent_environments" }
@@ -115,7 +116,7 @@ func toAgentEnvironmentRecord(e *managedagent.Environment) *AgentEnvironmentReco
 		ID: e.ID, Name: e.Name, Runtime: string(e.Runtime), Image: e.Image,
 		SetupScript: e.SetupScript, Env: e.Env, SecretRefs: e.SecretRefs,
 		Network: string(e.Network), CPU: e.Resources.CPU, MemoryMB: e.Resources.MemoryMB,
-		DiskMB: e.Resources.DiskMB, CCProfile: e.CCProfile, IsDefault: e.IsDefault,
+		DiskMB: e.Resources.DiskMB, CCProfile: e.CCProfile, PermissionMode: string(e.PermissionMode), IsDefault: e.IsDefault,
 		CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt,
 	}
 }
@@ -126,7 +127,7 @@ func fromAgentEnvironmentRecord(r *AgentEnvironmentRecord) managedagent.Environm
 		SetupScript: r.SetupScript, Env: r.Env, SecretRefs: r.SecretRefs,
 		Network:   managedagent.NetworkPolicy(r.Network),
 		Resources: managedagent.Resources{CPU: r.CPU, MemoryMB: r.MemoryMB, DiskMB: r.DiskMB},
-		CCProfile: r.CCProfile, IsDefault: r.IsDefault,
+		CCProfile: r.CCProfile, PermissionMode: managedagent.PermissionMode(r.PermissionMode), IsDefault: r.IsDefault,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
@@ -152,7 +153,7 @@ func fromAgentWorkspaceRecord(r *AgentWorkspaceRecord) managedagent.Workspace {
 func toAgentSessionRecord(s *managedagent.Session) *AgentSessionRecord {
 	return &AgentSessionRecord{
 		ID: s.ID, Title: s.Title, WorkspaceID: s.WorkspaceID, Status: string(s.Status),
-		Prompt: s.Prompt, CCSessionID: s.CCSessionID, PermissionMode: s.PermissionMode,
+		Prompt: s.Prompt, CCSessionID: s.CCSessionID, PermissionMode: string(s.PermissionMode),
 		CreatedBy: s.CreatedBy, Error: s.Error,
 		InputTokens: s.Usage.InputTokens, OutputTokens: s.Usage.OutputTokens,
 		CacheReadTokens: s.Usage.CacheReadTokens, Cost: s.Usage.Cost,
@@ -166,7 +167,7 @@ func fromAgentSessionRecord(r *AgentSessionRecord) managedagent.Session {
 	return managedagent.Session{
 		ID: r.ID, Title: r.Title, WorkspaceID: r.WorkspaceID,
 		Status: managedagent.SessionStatus(r.Status), Prompt: r.Prompt,
-		CCSessionID: r.CCSessionID, PermissionMode: r.PermissionMode,
+		CCSessionID: r.CCSessionID, PermissionMode: managedagent.PermissionMode(r.PermissionMode),
 		CreatedBy: r.CreatedBy, Error: r.Error,
 		Usage: managedagent.Usage{
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,

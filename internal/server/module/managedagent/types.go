@@ -37,6 +37,10 @@ type EnvironmentRequest struct {
 	Network     managedagent.NetworkPolicy `json:"network"`
 	Resources   managedagent.Resources     `json:"resources"`
 	CCProfile   string                     `json:"cc_profile"`
+	// PermissionMode is the default for sessions started here: "" (inherit
+	// the settings file), default, plan, acceptEdits, dontAsk,
+	// bypassPermissions or auto.
+	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
 }
 
 // EnvironmentListResponse lists environments, default first.
@@ -45,6 +49,8 @@ type EnvironmentListResponse struct {
 	// SupportedRuntimes tells the UI which runtimes can be selected today so
 	// it can explain "docker: not yet" instead of offering a dead option.
 	SupportedRuntimes []managedagent.Runtime `json:"supported_runtimes"`
+	// PermissionModes lists the selectable Claude Code permission modes.
+	PermissionModes []managedagent.PermissionMode `json:"permission_modes"`
 }
 
 // ---------- sessions ----------
@@ -59,6 +65,13 @@ type CreateSessionRequest struct {
 	BaseRef       string `json:"base_ref"`
 	Prompt        string `json:"prompt" binding:"required"`
 	Title         string `json:"title"`
+	// PermissionMode overrides the environment's default; empty inherits.
+	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
+}
+
+// SetPermissionModeRequest changes an active session's mode from the next turn.
+type SetPermissionModeRequest struct {
+	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
 }
 
 // SessionListQuery filters GET /agent/sessions.

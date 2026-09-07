@@ -1609,7 +1609,7 @@ let mockAgentSources: any[] = [
 ]
 let mockAgentEnvironments: any[] = [
     { id: '00000000-0000-0000-0000-00000000a001', name: 'Local', runtime: 'local', is_default: true, env: {}, cc_profile: '', created_at: '2026-09-01T08:00:00Z', updated_at: '2026-09-01T08:00:00Z' },
-    { id: 'env-node', name: 'Local · Node 22', runtime: 'local', is_default: false, env: { NODE_OPTIONS: '--max-old-space-size=4096' }, cc_profile: 'claude_code:p1', setup_script: 'pnpm install', created_at: '2026-09-03T08:00:00Z', updated_at: '2026-09-03T08:00:00Z' },
+    { id: 'env-node', name: 'Local · Node 22', runtime: 'local', is_default: false, env: { NODE_OPTIONS: '--max-old-space-size=4096' }, cc_profile: 'claude_code:p1', permission_mode: 'auto', setup_script: 'pnpm install', created_at: '2026-09-03T08:00:00Z', updated_at: '2026-09-03T08:00:00Z' },
 ]
 const mockAgentDiff = {
     changed_files: 3,
@@ -2342,7 +2342,7 @@ export const handlers = [
         return new HttpResponse(null, { status: 204 })
     }),
 
-    http.get('/api/v1/agent/environments', () => HttpResponse.json({ environments: mockAgentEnvironments, supported_runtimes: ['local'] })),
+    http.get('/api/v1/agent/environments', () => HttpResponse.json({ environments: mockAgentEnvironments, supported_runtimes: ['local'], permission_modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.post('/api/v1/agent/environments', async ({ request }) => {
         const body = await request.json() as any
         if (body.runtime === 'docker') return HttpResponse.json({ error: { message: 'runtime "docker" is not available yet: validation' } }, { status: 400 })
@@ -2376,7 +2376,7 @@ export const handlers = [
     http.post('/api/v1/agent/sessions', async ({ request }) => {
         const body = await request.json() as any
         if (!body.prompt) return HttpResponse.json({ error: { message: 'prompt is required: validation' } }, { status: 400 })
-        const row = newMockAgentSession(body.source_id, body.environment_id, body.prompt)
+        const row = newMockAgentSession(body.source_id, body.environment_id, body.prompt, { permission_mode: body.permission_mode || '' })
         scriptMockAgentSession(row)
         return HttpResponse.json({ session: row.session, workspace: row.workspace }, { status: 201 })
     }),
@@ -2423,6 +2423,14 @@ export const handlers = [
             setMockAgentStatus(row, 'idle')
         }, 1500)
         return new HttpResponse(null, { status: 202 })
+    }),
+    http.put('/api/v1/agent/sessions/:id/permission-mode', async ({ params, request }) => {
+        const row = mockAgentSessions.find((r) => r.session.id === params.id)
+        if (!row) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        const body = await request.json() as any
+        row.session.permission_mode = body.permission_mode
+        pushMockAgentEvent(row, 'system', `permission mode: ${body.permission_mode || 'inherit'}`)
+        return HttpResponse.json({ session: row.session, workspace: row.workspace })
     }),
     http.post('/api/v1/agent/sessions/:id/interrupt', ({ params }) => {
         const row = mockAgentSessions.find((r) => r.session.id === params.id)

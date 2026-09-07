@@ -192,15 +192,16 @@ func repoNameFromURL(raw string) string {
 
 // EnvironmentInput is the caller-editable part of an Environment.
 type EnvironmentInput struct {
-	Name        string
-	Runtime     Runtime
-	Image       string
-	SetupScript string
-	Env         map[string]string
-	SecretRefs  []string
-	Network     NetworkPolicy
-	Resources   Resources
-	CCProfile   string
+	Name           string
+	Runtime        Runtime
+	Image          string
+	SetupScript    string
+	Env            map[string]string
+	SecretRefs     []string
+	Network        NetworkPolicy
+	Resources      Resources
+	CCProfile      string
+	PermissionMode PermissionMode
 }
 
 func (s *Service) CreateEnvironment(ctx context.Context, in EnvironmentInput) (*Environment, error) {
@@ -310,6 +311,10 @@ func applyEnvironmentInput(env *Environment, in EnvironmentInput) error {
 	env.Network = in.Network
 	env.Resources = in.Resources
 	env.CCProfile = strings.TrimSpace(in.CCProfile)
+	if !ValidPermissionMode(in.PermissionMode) {
+		return invalid("unknown permission mode %q", in.PermissionMode)
+	}
+	env.PermissionMode = in.PermissionMode
 	return nil
 }
 
@@ -340,6 +345,8 @@ type CreateSessionInput struct {
 	Prompt        string
 	Title         string
 	CreatedBy     string
+	// PermissionMode overrides the environment's default; empty inherits.
+	PermissionMode PermissionMode
 }
 
 func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Session, error) {
@@ -349,6 +356,9 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}
 	if in.CreatedBy == "" {
 		in.CreatedBy = "web"
+	}
+	if !ValidPermissionMode(in.PermissionMode) {
+		return nil, invalid("unknown permission mode %q", in.PermissionMode)
 	}
 
 	var (
@@ -431,17 +441,22 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 		}
 	}
 
+	mode := in.PermissionMode
+	if mode == PermissionInherit {
+		mode = env.PermissionMode
+	}
 	sess := &Session{
-		ID:           uuid.NewString(),
-		Title:        sessionTitle(in.Title, in.Prompt),
-		WorkspaceID:  ws.ID,
-		Status:       SessionQueued,
-		Prompt:       in.Prompt,
-		CCSessionID:  ccSessionID,
-		CreatedBy:    in.CreatedBy,
-		Artifact:     Artifact{Branch: ws.Branch},
-		CreatedAt:    now,
-		LastActiveAt: now,
+		ID:             uuid.NewString(),
+		Title:          sessionTitle(in.Title, in.Prompt),
+		WorkspaceID:    ws.ID,
+		Status:         SessionQueued,
+		Prompt:         in.Prompt,
+		PermissionMode: mode,
+		CCSessionID:    ccSessionID,
+		CreatedBy:      in.CreatedBy,
+		Artifact:       Artifact{Branch: ws.Branch},
+		CreatedAt:      now,
+		LastActiveAt:   now,
 	}
 	if err := s.stores.Sessions.CreateSession(ctx, sess); err != nil {
 		return nil, err
@@ -527,6 +542,39 @@ func (s *Service) Respond(ctx context.Context, sessionID string, r Response) err
 		return conflict("no launcher is configured")
 	}
 	return s.launcher.Respond(ctx, sess.ID, r)
+}
+
+// SetPermissionMode changes an active session's mode. It applies from the
+// next turn: the running Claude Code process keeps the mode it was launched
+// with, which the status event says explicitly.
+func (s *Service) SetPermissionMode(ctx context.Context, sessionID string, mode PermissionMode) (*Session, error) {
+	if !ValidPermissionMode(mode) {
+		return nil, invalid("unknown permission mode %q", mode)
+	}
+	sess, err := s.stores.Sessions.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !sess.Status.IsActive() {
+		return nil, conflict("session is %s", sess.Status)
+	}
+	if sess.PermissionMode == mode {
+		return sess, nil
+	}
+	sess.PermissionMode = mode
+	if err := s.stores.Sessions.UpdateSession(ctx, sess); err != nil {
+		return nil, err
+	}
+	label := string(mode)
+	if mode == PermissionInherit {
+		label = "inherit"
+	}
+	note := "permission mode: " + label
+	if sess.Status == SessionRunning || sess.Status == SessionWaitingInput {
+		note += " (from the next turn)"
+	}
+	_ = s.stores.Events.AppendEvent(ctx, &Event{SessionID: sess.ID, Kind: EventSystem, Text: note, At: s.now()})
+	return sess, nil
 }
 
 // Interrupt stops the current turn. The session remains active.

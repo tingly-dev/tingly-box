@@ -389,3 +389,66 @@ func TestLauncher_ArchiveWhileRunningStopsProcess(t *testing.T) {
 		t.Fatal("steer after archive must fail")
 	}
 }
+
+func TestLauncher_BypassPermissionsAutoApproves(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	ctx := context.Background()
+	origin := newOrigin(t)
+	factory := process.NewFakeFactory()
+	handles := make(chan *process.FakeHandle, 4)
+	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
+	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
+		stdins.track(h)
+		handles <- h
+	}
+	_, stores := managedagent.NewMemStores()
+	git := &gitrepo.Git{}
+	launcher, _ := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{
+		SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionBypassPermissions,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var h *process.FakeHandle
+	select {
+	case h = <-handles:
+	case <-time.After(10 * time.Second):
+		t.Fatal("agent never started")
+	}
+	if !contains(h.Spec().Command, "bypassPermissions") {
+		t.Fatalf("mode not passed to the CLI: %v", h.Spec().Command)
+	}
+	writeLine(t, h, map[string]any{"type": claude.SDKControlRequestMessage, "request_id": "req-9",
+		"request": map[string]any{"subtype": claude.ControlRequestSubtypeCanUseTool, "tool_name": "Bash", "input": map[string]any{"command": "rm -rf build"}}})
+	// The host answers; the session never waits.
+	waitFor(t, "auto approval on stdin", func() bool { return strings.Contains(stdins.get(h), "req-9") })
+	if s, _ := svc.GetSession(ctx, sess.ID); s.Status != managedagent.SessionRunning {
+		t.Fatalf("status = %s, want running (no waiting_input under bypass)", s.Status)
+	}
+	events, _ := svc.ListEvents(ctx, sess.ID, 0, 0)
+	var req, resp bool
+	for _, e := range events {
+		if e.Kind == managedagent.EventApprovalRequest && e.RequestID == "req-9" {
+			req = true
+		}
+		if e.Kind == managedagent.EventApprovalResponse && e.RequestID == "req-9" && strings.Contains(e.Text, "bypassPermissions") {
+			resp = true
+		}
+	}
+	if !req || !resp {
+		t.Fatalf("auto approval not logged: req=%v resp=%v", req, resp)
+	}
+	writeLine(t, h, map[string]any{"type": claude.SDKResultMessage, "subtype": claude.ResultSubtypeSuccess, "is_error": false})
+	h.FinishOutput()
+	h.SignalExit(nil)
+	waitFor(t, "idle", func() bool {
+		s, _ := svc.GetSession(ctx, sess.ID)
+		return s.Status == managedagent.SessionIdle
+	})
+}

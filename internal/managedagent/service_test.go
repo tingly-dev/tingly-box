@@ -148,3 +148,51 @@ func TestBranchName(t *testing.T) {
 		t.Fatalf("empty slug fallback = %q", got)
 	}
 }
+
+func TestPermissionModes(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+	src, _ := svc.CreateSource(ctx, SourceInput{URL: "https://github.com/org/repo.git"})
+
+	if _, err := svc.CreateEnvironment(ctx, EnvironmentInput{Name: "x", PermissionMode: "yolo"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("unknown mode must be rejected, got %v", err)
+	}
+	env, err := svc.CreateEnvironment(ctx, EnvironmentInput{Name: "auto", PermissionMode: PermissionAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inherit from the environment, or override per session.
+	inherited, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, EnvironmentID: env.ID, Prompt: "a"})
+	if inherited.PermissionMode != PermissionAuto {
+		t.Fatalf("session mode = %q, want auto from environment", inherited.PermissionMode)
+	}
+	over, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, EnvironmentID: env.ID, Prompt: "b", PermissionMode: PermissionPlan})
+	if over.PermissionMode != PermissionPlan {
+		t.Fatalf("session mode = %q, want plan override", over.PermissionMode)
+	}
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "c", PermissionMode: "nope"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("unknown session mode must be rejected, got %v", err)
+	}
+
+	// Changing mid-session is recorded and applies from the next turn.
+	over.Status = SessionRunning
+	_ = svc.stores.Sessions.UpdateSession(ctx, over)
+	changed, err := svc.SetPermissionMode(ctx, over.ID, PermissionBypassPermissions)
+	if err != nil || changed.PermissionMode != PermissionBypassPermissions {
+		t.Fatalf("set mode: %+v, %v", changed, err)
+	}
+	events, _ := svc.ListEvents(ctx, over.ID, 0, 0)
+	last := events[len(events)-1]
+	if last.Kind != EventSystem || !strings.Contains(last.Text, "bypassPermissions") || !strings.Contains(last.Text, "next turn") {
+		t.Fatalf("mode change event = %+v", last)
+	}
+	if _, err := svc.Archive(ctx, over.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPermissionMode(ctx, over.ID, PermissionAuto); !errors.Is(err, ErrConflict) {
+		t.Fatalf("archived session must refuse a mode change, got %v", err)
+	}
+	if !PermissionBypassPermissions.AutoApproves() || PermissionAuto.AutoApproves() || PermissionDefault.AutoApproves() {
+		t.Fatal("only bypassPermissions auto-approves")
+	}
+}
