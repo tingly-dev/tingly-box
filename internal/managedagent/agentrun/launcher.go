@@ -43,7 +43,9 @@ func (f RoutingFunc) Resolve(ctx context.Context, p string) ([]string, string, e
 // Provisioner materialises a workspace checkout. gitrepo.Git satisfies it.
 type Provisioner interface {
 	Provision(ctx context.Context, req gitrepo.ProvisionRequest) error
-	Diff(ctx context.Context, dir, baseRef string) (*gitrepo.Diff, error)
+	// ChangedFiles is the cheap count used after every turn; the full Diff
+	// (with the patch) is only produced when a caller asks for it.
+	ChangedFiles(ctx context.Context, dir, baseRef string) (int, error)
 }
 
 // Config wires a Launcher.
@@ -95,17 +97,43 @@ const (
 	pendingAsk
 )
 
+// provisionTimeout bounds clone + branch creation. A remote that never
+// answers must not hold a run open forever.
+const provisionTimeout = 30 * time.Minute
+
 // run is one live session: at most one turn at a time, steering messages
 // queued for the next turn, and the control requests awaiting an answer.
 type run struct {
 	sessionID string
-	cancel    context.CancelFunc
+	// ctx spans the run's whole life; Stop cancels it, which ends
+	// provisioning or the current turn wherever it is.
+	ctx    context.Context
+	cancel context.CancelFunc
 
-	mu      sync.Mutex
-	handle  agentboot.ExecutionHandle // current turn; nil while idle
-	pending map[string]pendingKind
-	queue   []string
-	busy    bool
+	mu          sync.Mutex
+	handle      agentboot.ExecutionHandle // current turn; nil while idle
+	pending     map[string]pendingKind
+	queue       []string
+	busy        bool
+	interrupted bool // set by Interrupt so the turn ends idle, not failed
+}
+
+// claim marks the run busy; false if it already was.
+func (rn *run) claim() bool {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	if rn.busy {
+		return false
+	}
+	rn.busy = true
+	return true
+}
+
+// release marks the run idle without touching the queue.
+func (rn *run) release() {
+	rn.mu.Lock()
+	rn.busy = false
+	rn.mu.Unlock()
 }
 
 // Start provisions the workspace if needed and runs the first turn. It
@@ -119,35 +147,33 @@ func (l *Launcher) Start(ctx context.Context, r managedagent.Run) error {
 		return fmt.Errorf("agentrun: runtime %q is not available yet", r.Environment.Runtime)
 	}
 	rn := l.register(r.Session.ID)
+	if !rn.claim() {
+		return fmt.Errorf("agentrun: session %s is already running", r.Session.ID)
+	}
 	go l.drive(rn, r, r.Session.Prompt)
 	return nil
 }
 
 // Send queues a steering message. A running turn picks it up as the next
-// prompt; an idle session starts a turn immediately.
+// prompt; an idle session starts a turn immediately. The run is claimed
+// under its own lock before anything else happens, so two concurrent Sends
+// cannot both start a turn.
 func (l *Launcher) Send(ctx context.Context, sessionID, text string) error {
-	rn := l.get(sessionID)
-	if rn == nil {
-		// Not live in this process (restart, or a queued session): rebuild
-		// the run from the stores and start a turn with this text.
-		r, err := l.load(ctx, sessionID)
-		if err != nil {
-			return err
-		}
-		rn = l.register(sessionID)
-		go l.drive(rn, r, text)
-		return nil
-	}
+	rn := l.register(sessionID)
 	rn.mu.Lock()
-	defer rn.mu.Unlock()
 	if rn.busy {
 		rn.queue = append(rn.queue, text)
+		rn.mu.Unlock()
 		return nil
 	}
 	rn.busy = true
+	rn.mu.Unlock()
+
+	// Not live in this process (restart, or a session that finished its
+	// last turn): rebuild the run from the stores and start a turn.
 	r, err := l.load(ctx, sessionID)
 	if err != nil {
-		rn.busy = false
+		rn.release()
 		return err
 	}
 	go l.drive(rn, r, text)
@@ -206,6 +232,9 @@ func (l *Launcher) Interrupt(ctx context.Context, sessionID string) error {
 	rn.mu.Lock()
 	handle := rn.handle
 	rn.queue = nil
+	// Flag first: if the process is still being started, turn() cancels it
+	// the moment the handle exists.
+	rn.interrupted = rn.busy
 	rn.mu.Unlock()
 	if handle != nil {
 		handle.Cancel()
@@ -233,8 +262,8 @@ func (l *Launcher) register(sessionID string) *run {
 	if rn, ok := l.runs[sessionID]; ok {
 		return rn
 	}
-	_, cancel := context.WithCancel(context.Background())
-	rn := &run{sessionID: sessionID, cancel: cancel, pending: map[string]pendingKind{}, busy: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	rn := &run{sessionID: sessionID, ctx: ctx, cancel: cancel, pending: map[string]pendingKind{}}
 	l.runs[sessionID] = rn
 	return rn
 }
@@ -269,28 +298,44 @@ func (l *Launcher) load(ctx context.Context, sessionID string) (managedagent.Run
 // drive runs provisioning (once) and then turns until the steer queue is
 // empty. It owns rn.busy.
 func (l *Launcher) drive(rn *run, r managedagent.Run, prompt string) {
-	ctx := context.Background()
-	defer func() {
+	ctx := rn.ctx
+	// idle marks the run free for the next Send. It runs on every exit
+	// path; the loop below clears it atomically with the queue check so a
+	// message enqueued during the last turn can never be stranded.
+	idle := func() {
 		rn.mu.Lock()
 		rn.busy = false
 		rn.mu.Unlock()
-	}()
+	}
 
 	if r.Workspace.State == managedagent.WorkspaceProvisioning {
-		if err := l.provision(ctx, r); err != nil {
-			l.setStatus(ctx, r.Session.ID, managedagent.SessionFailed, err.Error())
+		pCtx, cancel := context.WithTimeout(ctx, provisionTimeout)
+		err := l.provision(pCtx, r)
+		cancel()
+		if err != nil {
+			if ctx.Err() == nil { // not a Stop
+				l.setStatus(ctx, r.Session.ID, managedagent.SessionFailed, err.Error())
+			}
+			idle()
 			return
 		}
 	}
 	if r.Workspace.State != managedagent.WorkspaceReady {
 		l.setStatus(ctx, r.Session.ID, managedagent.SessionFailed, "workspace is "+string(r.Workspace.State))
+		idle()
 		return
 	}
 
 	for {
+		if ctx.Err() != nil {
+			idle()
+			return
+		}
 		l.turn(ctx, rn, r, prompt)
 		rn.mu.Lock()
-		if len(rn.queue) == 0 {
+		if len(rn.queue) == 0 || ctx.Err() != nil {
+			rn.queue = nil
+			rn.busy = false
 			rn.mu.Unlock()
 			return
 		}
@@ -320,13 +365,18 @@ func (l *Launcher) provision(ctx context.Context, r managedagent.Run) error {
 		URL: r.Source.URL, BaseRef: ws.BaseRef, Branch: ws.Branch, Dir: ws.Path, Log: logLine,
 	})
 	now := time.Now()
+	// Persist with a fresh context: the provisioning one may be the very
+	// timeout / cancellation that just failed the clone.
+	fin := context.Background()
 	if err != nil {
 		ws.State, ws.Error, ws.LastActiveAt = managedagent.WorkspaceFailed, err.Error(), now
-		_ = l.cfg.Stores.Workspaces.UpdateWorkspace(ctx, ws)
+		if uerr := l.cfg.Stores.Workspaces.UpdateWorkspace(fin, ws); uerr != nil {
+			l.log.WithError(uerr).WithField("workspace", ws.ID).Warn("failed to persist workspace failure")
+		}
 		return fmt.Errorf("provision workspace: %w", err)
 	}
 	ws.State, ws.Error, ws.LastActiveAt = managedagent.WorkspaceReady, "", now
-	if err := l.cfg.Stores.Workspaces.UpdateWorkspace(ctx, ws); err != nil {
+	if err := l.cfg.Stores.Workspaces.UpdateWorkspace(fin, ws); err != nil {
 		return err
 	}
 	l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem,
@@ -390,7 +440,11 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 	}
 	rn.mu.Lock()
 	rn.handle = handle
+	cancelNow := rn.interrupted
 	rn.mu.Unlock()
+	if cancelNow {
+		handle.Cancel()
+	}
 	defer func() {
 		rn.mu.Lock()
 		rn.handle = nil
@@ -431,12 +485,14 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 
 	// Finish: fold usage and the change count into the index. The result
 	// message is terminal for the transport and never reaches the stream, so
-	// usage comes from the aggregated Result.
+	// usage comes from the aggregated Result. Persistence uses its own
+	// context: the run's may already be cancelled by Stop.
+	fin := context.Background()
 	usage, resultErr := foldResult(res)
 	if resultErr != "" {
-		l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventError, Text: resultErr})
+		l.append(fin, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventError, Text: resultErr})
 	}
-	sess, err = l.cfg.Stores.Sessions.GetSession(ctx, r.Session.ID)
+	sess, err = l.cfg.Stores.Sessions.GetSession(fin, r.Session.ID)
 	if err != nil {
 		return
 	}
@@ -444,26 +500,35 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 	sess.Usage.OutputTokens += usage.OutputTokens
 	sess.Usage.CacheReadTokens += usage.CacheReadTokens
 	sess.Usage.Cost += usage.Cost
-	if d, derr := l.cfg.Git.Diff(ctx, r.Workspace.Path, r.Workspace.BaseRef); derr == nil {
-		sess.Artifact.Changed = d.ChangedFiles
+	if n, derr := l.cfg.Git.ChangedFiles(fin, r.Workspace.Path, r.Workspace.BaseRef); derr == nil {
+		sess.Artifact.Changed = n
 	}
 	sess.LastActiveAt = time.Now()
+	rn.mu.Lock()
+	interrupted := rn.interrupted
+	rn.interrupted = false
+	rn.mu.Unlock()
+	interruptedNote := ""
 	switch {
 	case sess.Status == managedagent.SessionArchived:
 		// Archived mid-turn (Stop cancelled us); leave the status alone.
-	case werr != nil && !errors.Is(turnCtx.Err(), context.Canceled):
+	case interrupted || errors.Is(ctx.Err(), context.Canceled):
+		// The user stopped this turn; the session is still resumable.
+		sess.Status, sess.Error = managedagent.SessionIdle, ""
+		interruptedNote = ": interrupted"
+	case werr != nil:
 		sess.Status, sess.Error = managedagent.SessionFailed, werr.Error()
 	default:
 		sess.Status, sess.Error = managedagent.SessionIdle, ""
 	}
-	if err := l.cfg.Stores.Sessions.UpdateSession(ctx, sess); err != nil {
+	if err := l.cfg.Stores.Sessions.UpdateSession(fin, sess); err != nil {
 		l.log.WithError(err).Warn("failed to finish turn")
 	}
-	msg := string(sess.Status)
+	msg := string(sess.Status) + interruptedNote
 	if sess.Error != "" {
 		msg += ": " + sess.Error
 	}
-	l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventStatus, Text: msg})
+	l.append(fin, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventStatus, Text: msg})
 }
 
 // foldResult extracts usage and an error string from the terminal result
@@ -501,7 +566,9 @@ func foldResult(res *agentboot.Result) (managedagent.Usage, string) {
 	return u, errText
 }
 
-func (l *Launcher) setStatus(ctx context.Context, sessionID string, st managedagent.SessionStatus, errMsg string) {
+func (l *Launcher) setStatus(_ context.Context, sessionID string, st managedagent.SessionStatus, errMsg string) {
+	// Store writes must land even when the run's context was cancelled.
+	ctx := context.Background()
 	sess, err := l.cfg.Stores.Sessions.GetSession(ctx, sessionID)
 	if err != nil {
 		return
@@ -524,11 +591,11 @@ func (l *Launcher) setStatus(ctx context.Context, sessionID string, st managedag
 	l.append(ctx, managedagent.Event{SessionID: sessionID, Kind: managedagent.EventStatus, Text: text})
 }
 
-func (l *Launcher) append(ctx context.Context, e managedagent.Event) {
+func (l *Launcher) append(_ context.Context, e managedagent.Event) {
 	if e.At.IsZero() {
 		e.At = time.Now()
 	}
-	if err := l.cfg.Stores.Events.AppendEvent(ctx, &e); err != nil {
+	if err := l.cfg.Stores.Events.AppendEvent(context.Background(), &e); err != nil {
 		l.log.WithError(err).WithField("session", e.SessionID).Warn("failed to append event")
 	}
 }

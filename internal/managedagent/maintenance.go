@@ -15,6 +15,10 @@ import (
 // not to); the session log and index survive either way (§10 done ≠ locked).
 const DefaultWorkspaceTTL = 7 * 24 * time.Hour
 
+// recoveryListLimit bounds the startup scan; anything beyond it is not a
+// realistic single-host session count.
+const recoveryListLimit = 100000
+
 // RecoverOnStart reconciles sessions that were live when the previous
 // process died. Runs (and their Claude Code processes) do not survive a
 // restart, so:
@@ -24,7 +28,8 @@ const DefaultWorkspaceTTL = 7 * 24 * time.Hour
 //   - queued → started again through the Launcher (the prompt is already in
 //     the log; provisioning restarts from scratch if it was cut short).
 func (s *Service) RecoverOnStart(ctx context.Context) error {
-	active, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{Active: true})
+	// Every active session, not the list page's default cap.
+	active, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{Active: true, Limit: recoveryListLimit})
 	if err != nil {
 		return err
 	}
@@ -92,11 +97,6 @@ func (s *Service) ReclaimWorkspace(ctx context.Context, id string) (*Workspace, 
 	}
 	if len(live) > 0 {
 		return nil, conflict("workspace has %d active session(s); archive them first", len(live))
-	}
-	if s.launcher != nil {
-		for _, sess := range live {
-			_ = s.launcher.Stop(ctx, sess.ID)
-		}
 	}
 	if ws.Path != "" {
 		if err := os.RemoveAll(ws.Path); err != nil {

@@ -147,6 +147,9 @@ func TestBridge_NotifiesAndAnswersApproval(t *testing.T) {
 		defer ch.mu.Unlock()
 		return len(ch.sent) == 2 && strings.Contains(ch.sent[1].Body, "3 changed file")
 	})
+	// An interrupted turn is not a finish.
+	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventStatus, Text: "idle: interrupted"})
+	time.Sleep(50 * time.Millisecond)
 	rt.mu.Lock()
 	events := strings.Join(rt.events, ",")
 	rt.mu.Unlock()

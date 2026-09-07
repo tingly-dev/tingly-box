@@ -294,3 +294,98 @@ func contains(list []string, s string) bool {
 }
 
 var _ agentboot.Agent = (*claude.Agent)(nil)
+
+// newLiveSession boots a service + launcher over a fake claude and returns
+// the first turn's process handle once it is running.
+func newLiveSession(t *testing.T) (*managedagent.Service, *Launcher, *managedagent.Session, *process.FakeHandle, *stdinLog) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	ctx := context.Background()
+	origin := newOrigin(t)
+	factory := process.NewFakeFactory()
+	handles := make(chan *process.FakeHandle, 4)
+	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
+	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
+		stdins.track(h)
+		handles <- h
+	}
+	_, stores := managedagent.NewMemStores()
+	git := &gitrepo.Git{}
+	launcher, err := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var h *process.FakeHandle
+	select {
+	case h = <-handles:
+	case <-time.After(10 * time.Second):
+		t.Fatal("agent never started")
+	}
+	waitFor(t, "running", func() bool {
+		s, _ := svc.GetSession(ctx, sess.ID)
+		return s.Status == managedagent.SessionRunning
+	})
+	return svc, launcher, sess, h, stdins
+}
+
+func TestLauncher_InterruptLeavesSessionIdle(t *testing.T) {
+	ctx := context.Background()
+	svc, _, sess, h, _ := newLiveSession(t)
+	if err := svc.Interrupt(ctx, sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-h.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("interrupt did not stop the process")
+	}
+	waitFor(t, "idle after interrupt", func() bool {
+		s, _ := svc.GetSession(ctx, sess.ID)
+		return s.Status == managedagent.SessionIdle && s.Error == ""
+	})
+	// Still resumable: a follow-up starts a new turn.
+	if err := svc.SendMessage(ctx, sess.ID, "continue"); err != nil {
+		t.Fatalf("send after interrupt: %v", err)
+	}
+	waitFor(t, "running again", func() bool {
+		s, _ := svc.GetSession(ctx, sess.ID)
+		return s.Status == managedagent.SessionRunning
+	})
+}
+
+func TestLauncher_ArchiveWhileRunningStopsProcess(t *testing.T) {
+	ctx := context.Background()
+	svc, launcher, sess, h, _ := newLiveSession(t)
+	archived, err := svc.Archive(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archived.Status != managedagent.SessionArchived {
+		t.Fatalf("status = %s", archived.Status)
+	}
+	select {
+	case <-h.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("archive did not stop the process")
+	}
+	// The turn's finish must not flip an archived session back.
+	time.Sleep(100 * time.Millisecond)
+	if s, _ := svc.GetSession(ctx, sess.ID); s.Status != managedagent.SessionArchived {
+		t.Fatalf("status after process exit = %s, want archived", s.Status)
+	}
+	if launcher.get(sess.ID) != nil {
+		t.Fatal("run still registered")
+	}
+	if err := svc.SendMessage(ctx, sess.ID, "x"); err == nil {
+		t.Fatal("steer after archive must fail")
+	}
+}

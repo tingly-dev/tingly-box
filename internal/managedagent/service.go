@@ -360,8 +360,11 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 		if err != nil {
 			return nil, err
 		}
-		if ws.State == WorkspaceReclaimed {
+		switch ws.State {
+		case WorkspaceReclaimed:
 			return nil, conflict("workspace %s has been reclaimed; start from its source instead", ws.ID)
+		case WorkspaceFailed:
+			return nil, conflict("workspace %s failed to provision (%s); start from its source instead", ws.ID, ws.Error)
 		}
 	}
 
@@ -494,14 +497,12 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, text string) error
 	if !sess.Status.IsActive() {
 		return conflict("session is %s; create a new session in its workspace instead", sess.Status)
 	}
-	now := s.now()
+	// Only the event is written here. The index row is the Launcher's to
+	// update (status, activity) — a second writer racing it on the whole
+	// row could put a stale status back.
 	if err := s.stores.Events.AppendEvent(ctx, &Event{
-		SessionID: sess.ID, Kind: EventUserMessage, Text: text, At: now,
+		SessionID: sess.ID, Kind: EventUserMessage, Text: text, At: s.now(),
 	}); err != nil {
-		return err
-	}
-	sess.LastActiveAt = now
-	if err := s.stores.Sessions.UpdateSession(ctx, sess); err != nil {
 		return err
 	}
 	if s.launcher == nil {
@@ -554,11 +555,11 @@ func (s *Service) Archive(ctx context.Context, sessionID string) (*Session, erro
 	if sess.Status == SessionArchived {
 		return sess, nil
 	}
-	if s.launcher != nil && sess.Status.IsActive() {
-		if err := s.launcher.Stop(ctx, sess.ID); err != nil {
-			return nil, err
-		}
-	}
+	wasActive := sess.Status.IsActive()
+	// The row is marked archived BEFORE the run is stopped: the cancelled
+	// turn's finish path re-reads the session and leaves an archived one
+	// alone, so ordering it this way is what keeps it from writing idle
+	// back over the archive.
 	now := s.now()
 	sess.Status = SessionArchived
 	sess.LastActiveAt = now
@@ -572,6 +573,11 @@ func (s *Service) Archive(ctx context.Context, sessionID string) (*Session, erro
 		SessionID: sess.ID, Kind: EventStatus, Text: string(SessionArchived), At: now,
 	}); err != nil {
 		return nil, err
+	}
+	if s.launcher != nil && wasActive {
+		if err := s.launcher.Stop(ctx, sess.ID); err != nil {
+			return nil, err
+		}
 	}
 	return sess, nil
 }
@@ -594,7 +600,8 @@ func (s *Service) Diff(ctx context.Context, sessionID string) (*Diff, error) {
 	if err != nil {
 		return nil, err
 	}
-	if d.ChangedFiles != sess.Artifact.Changed {
+	// Refresh the cached count only while nothing else is writing the row.
+	if d.ChangedFiles != sess.Artifact.Changed && sess.Status != SessionRunning && sess.Status != SessionQueued {
 		sess.Artifact.Changed = d.ChangedFiles
 		_ = s.stores.Sessions.UpdateSession(ctx, sess)
 	}

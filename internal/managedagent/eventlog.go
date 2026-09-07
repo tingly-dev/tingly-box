@@ -95,8 +95,17 @@ func (l *EventLog) ListEvents(_ context.Context, sessionID string, after int64, 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
+		line := sc.Bytes()
+		// Seq is the first field of every line (Event's field order), so
+		// lines behind the cursor are skipped on a prefix read instead of
+		// a full decode — polling clients pass a cursor near the tail.
+		if after > 0 {
+			if seq, ok := leadingSeq(line); ok && seq <= after {
+				continue
+			}
+		}
 		var e Event
-		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+		if err := json.Unmarshal(line, &e); err != nil {
 			// A torn trailing line (crash mid-write) is dropped, not fatal.
 			continue
 		}
@@ -112,6 +121,23 @@ func (l *EventLog) ListEvents(_ context.Context, sessionID string, after int64, 
 		return nil, fmt.Errorf("read event log: %w", err)
 	}
 	return out, nil
+}
+
+// leadingSeq parses the seq from a line that starts with {"seq":N.
+func leadingSeq(line []byte) (int64, bool) {
+	const prefix = `{"seq":`
+	if len(line) <= len(prefix) || string(line[:len(prefix)]) != prefix {
+		return 0, false
+	}
+	var n int64
+	i := len(prefix)
+	for ; i < len(line) && line[i] >= '0' && line[i] <= '9'; i++ {
+		n = n*10 + int64(line[i]-'0')
+	}
+	if i == len(prefix) {
+		return 0, false
+	}
+	return n, true
 }
 
 // lastSeq finds the highest Seq already on disk for a session.

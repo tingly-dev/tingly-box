@@ -92,6 +92,23 @@ func TestProvisionDiffPush(t *testing.T) {
 		t.Fatalf("branch not on origin: %q", out)
 	}
 
+	if n, err := g.ChangedFiles(ctx, ws, "main"); err != nil || n != 3 {
+		t.Fatalf("ChangedFiles = %d, %v", n, err)
+	}
+
+	// A commit id as the base ref is checked out after the clone.
+	sha := strings.TrimSpace(sh(t, ws, "rev-parse", "main"))
+	ws3 := filepath.Join(t.TempDir(), "ws3", "repo")
+	if err := g.Provision(ctx, ProvisionRequest{URL: origin, BaseRef: sha, Branch: "tb/z", Dir: ws3}); err != nil {
+		t.Fatalf("provision at sha: %v", err)
+	}
+	if got := strings.TrimSpace(sh(t, ws3, "rev-parse", "HEAD")); got != sha {
+		t.Fatalf("HEAD = %s, want %s", got, sha)
+	}
+	if got := strings.TrimSpace(sh(t, ws3, "rev-parse", "--abbrev-ref", "HEAD")); got != "tb/z" {
+		t.Fatalf("branch = %q", got)
+	}
+
 	// Existing dir is refused.
 	if err := g.Provision(ctx, ProvisionRequest{URL: origin, Branch: "b", Dir: ws}); err == nil {
 		t.Fatal("expected error for existing dir")

@@ -468,6 +468,25 @@ IM prompt 预算 2h，超时只是不再占着聊天，session 继续等网页�
 
 没有引入 `internal/task`：恢复与回收只是启动时一次 + 一个 ticker，不需要持久任务队列。等到 Trigger（cron / webhook）才接。
 
+### P0 加固（2026-09-07）
+
+自查 + code-review 一轮后修掉的问题，都有测试钉住：
+
+| 问题 | 修法 |
+|---|---|
+| `Stop` 取消的 context 没人用，归档后进程继续跑 | run 持有 `ctx`，provision 与 turn 都从它派生；归档先写 `archived` 再 Stop，turn 结束时看到 archived 不回写 |
+| Interrupt 让 session 变 `failed` | `interrupted` 标记 → `idle: interrupted`；进程尚未启动时的 Interrupt 在 handle 出现时立即取消 |
+| turn 结束与 `Send` 之间的窗口会把消息卡在队列里 | 队列检查与 `busy=false` 在同一把锁下完成 |
+| 两个并发 `Send` 对非活跃 run 各起一轮 | `register` 后先在 run 锁下 claim busy，再 load |
+| provisioning 超时后用已取消的 ctx 写库，workspace 永远 `provisioning` | clone 有 30 分钟上限；落库一律用独立 context |
+| Service 与 Launcher 双写 session 整行 | `SendMessage` 只写事件；`Diff` 只在非 running 时刷新计数 |
+| IM 把中断 / 重启后的 `idle` 当作"完成"通知 | 只有裸 `idle` 才是 finished |
+| 每次轮询整文件 JSON 解码 | cursor 之前的行只读 `{"seq":N` 前缀 |
+| 每轮结束跑完整 diff（含 patch）只为一个计数 | `ChangedFiles`（name-only + untracked） |
+| BaseRef 为 commit sha 时 `--branch` 失败 | sha 走 clone 后 `checkout --detach` |
+| `git clone <url>` 未加 `--`；ssh 可能挂在交互提示上 | `--`；`GIT_SSH_COMMAND=ssh -o BatchMode=yes`（用户未设时） |
+| RecoverOnStart 被列表默认 200 条上限截断 | 显式大 Limit |
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

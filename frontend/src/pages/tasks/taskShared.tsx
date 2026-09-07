@@ -68,6 +68,10 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
     const [notFound, setNotFound] = useState(false);
     const cursor = useRef(0);
     const inFlight = useRef(false);
+    // The poll loop reads the latest status through a ref: the effect that
+    // owns the timer must not re-run on every status change (that would
+    // reset the cursor), yet the cadence has to follow the live status.
+    const statusRef = useRef<string | undefined>(undefined);
 
     const refresh = useCallback(async () => {
         if (!sessionId || inFlight.current) return;
@@ -83,6 +87,7 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
                 return;
             }
             setError(undefined);
+            statusRef.current = detail.data.session.status;
             setSession(detail.data.session);
             setWorkspace(detail.data.workspace);
             if (page.ok && page.data.events.length > 0) {
@@ -103,20 +108,19 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
         setNotFound(false);
         let timer: ReturnType<typeof setTimeout> | undefined;
         let stopped = false;
+        statusRef.current = undefined;
         const tick = async () => {
             await refresh();
             if (stopped) return;
-            const active = isActiveStatus(session?.status);
-            timer = setTimeout(tick, active || !session ? ACTIVE_INTERVAL_MS : SETTLED_INTERVAL_MS);
+            const status = statusRef.current;
+            const active = status === undefined || isActiveStatus(status);
+            timer = setTimeout(tick, active ? ACTIVE_INTERVAL_MS : SETTLED_INTERVAL_MS);
         };
         tick();
         return () => {
             stopped = true;
             if (timer) clearTimeout(timer);
         };
-        // session is read for cadence only; re-subscribing on every status
-        // change would reset the cursor.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId, refresh]);
 
     return {session, workspace, events, loading, error, notFound, refresh, setSession};

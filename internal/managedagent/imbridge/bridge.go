@@ -90,10 +90,12 @@ func (b *Bridge) OnEvent(e managedagent.Event) {
 	case managedagent.EventApprovalRequest, managedagent.EventAskRequest:
 		go b.prompt(e)
 	case managedagent.EventStatus:
-		switch strings.SplitN(e.Text, ":", 2)[0] {
-		case string(managedagent.SessionIdle):
+		// A bare "idle" is a completed turn. "idle: interrupted" (user stop)
+		// and "idle: interrupted by restart" are not something to announce.
+		switch {
+		case e.Text == string(managedagent.SessionIdle):
 			go b.notify(e, EventFinished)
-		case string(managedagent.SessionFailed):
+		case strings.HasPrefix(e.Text, string(managedagent.SessionFailed)):
 			go b.notify(e, EventFailed)
 		}
 	}

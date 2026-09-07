@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -63,7 +64,10 @@ func (g *Git) Provision(ctx context.Context, req ProvisionRequest) error {
 	}
 
 	args := []string{"clone", "--no-tags"}
-	if req.BaseRef != "" {
+	// --branch takes a branch or tag; a commit id is checked out after the
+	// clone instead.
+	byCommit := isCommitID(req.BaseRef)
+	if req.BaseRef != "" && !byCommit {
 		args = append(args, "--branch", req.BaseRef)
 	}
 	if mirror, err := g.ensureMirror(ctx, req.URL, req.Log); err != nil {
@@ -71,14 +75,54 @@ func (g *Git) Provision(ctx context.Context, req ProvisionRequest) error {
 	} else if mirror != "" {
 		args = append(args, "--reference-if-able", mirror, "--dissociate")
 	}
-	args = append(args, req.URL, req.Dir)
+	// "--" keeps a URL that starts with "-" from being parsed as an option.
+	args = append(args, "--", req.URL, req.Dir)
 	if _, err := g.run(ctx, "", req.Log, args...); err != nil {
 		return err
+	}
+	if byCommit {
+		if _, err := g.run(ctx, req.Dir, req.Log, "checkout", "--detach", req.BaseRef); err != nil {
+			return err
+		}
 	}
 	if _, err := g.run(ctx, req.Dir, req.Log, "checkout", "-b", req.Branch); err != nil {
 		return err
 	}
 	return nil
+}
+
+var commitIDRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+// isCommitID reports whether ref looks like an abbreviated or full SHA-1.
+func isCommitID(ref string) bool { return commitIDRe.MatchString(ref) }
+
+// ChangedFiles counts tracked changes against baseRef plus untracked files
+// without producing a patch — cheap enough to run after every turn.
+func (g *Git) ChangedFiles(ctx context.Context, dir, baseRef string) (int, error) {
+	base, err := g.run(ctx, dir, nil, "merge-base", baseRef, "HEAD")
+	if err != nil {
+		base = baseRef
+	}
+	base = strings.TrimSpace(base)
+	names, err := g.run(ctx, dir, nil, "diff", "--name-only", base)
+	if err != nil {
+		return 0, err
+	}
+	untracked, err := g.run(ctx, dir, nil, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return 0, err
+	}
+	return countLines(names) + countLines(untracked), nil
+}
+
+func countLines(s string) int {
+	n := 0
+	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
+		if line != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // ensureMirror creates or refreshes the bare mirror for url and returns its
@@ -95,7 +139,7 @@ func (g *Git) ensureMirror(ctx context.Context, url string, log func(string)) (s
 	if err := os.MkdirAll(g.MirrorsDir, 0o700); err != nil {
 		return "", err
 	}
-	_, err := g.run(ctx, "", log, "clone", "--mirror", url, dir)
+	_, err := g.run(ctx, "", log, "clone", "--mirror", "--", url, dir)
 	return dir, err
 }
 
@@ -209,6 +253,11 @@ func (g *Git) run(ctx context.Context, dir string, log func(string), args ...str
 	// Never block on a credential or host-key prompt: a managed run has no
 	// terminal to answer it, so fail fast and surface the error instead.
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
+	if os.Getenv("GIT_SSH_COMMAND") == "" {
+		// ssh must fail rather than wait on a host-key or passphrase prompt
+		// there is no terminal to answer.
+		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+	}
 	cmd.Env = append(cmd.Env, g.Env...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
