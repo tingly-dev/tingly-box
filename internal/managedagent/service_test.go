@@ -45,6 +45,9 @@ func TestSource_ValidationAndDefaults(t *testing.T) {
 	if _, err := svc.CreateSource(ctx, SourceInput{URL: "git@github.com:org/repo.git"}); err != nil {
 		t.Fatalf("scp-like url rejected: %v", err)
 	}
+	if _, err := svc.CreateSource(ctx, SourceInput{URL: "/srv/git/repo.git"}); err != nil {
+		t.Fatalf("local path rejected: %v", err)
+	}
 }
 
 func TestEnvironment_DockerNotAvailableYet(t *testing.T) {

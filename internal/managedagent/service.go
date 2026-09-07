@@ -159,6 +159,12 @@ func looksLikeGitURL(raw string) bool {
 	if scpLikeGitURL.MatchString(raw) {
 		return true
 	}
+	// A local repository (absolute path or file://) is a valid git remote:
+	// git clones it like any other, and it is how tests and a future
+	// local-directory source reach the same code path.
+	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "file://") {
+		return true
+	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return false
