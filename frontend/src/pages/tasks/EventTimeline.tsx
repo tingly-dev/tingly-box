@@ -234,12 +234,16 @@ const EventTimeline = ({events, pending, onRespond}: Props) => {
                                 {e.text}
                             </Typography>
                         );
-                    case 'status':
+                    case 'status': {
+                        // "idle: interrupted" → status label plus the note.
+                        const [status, ...rest] = (e.text ?? '').split(':');
+                        const note = rest.join(':').trim();
                         return (
                             <Typography key={e.seq} variant="caption" color="text.disabled" sx={{textAlign: 'center'}}>
-                                — {t(`tasks.status.${(e.text ?? '').split(':')[0]}`, {defaultValue: e.text})} —
+                                — {t(`tasks.status.${status}`, {defaultValue: status})}{note ? ` · ${note}` : ''} —
                             </Typography>
                         );
+                    }
                     default:
                         return <Fragment key={e.seq} />;
                 }

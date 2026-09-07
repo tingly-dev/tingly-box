@@ -292,6 +292,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	// Stop remote control if running
 	s.StopRemoteCoder()
 
+	// Stop managed agent runs so no claude process outlives the server.
+	if s.managedAgent != nil {
+		s.managedAgent.Shutdown(ctx)
+	}
+
 	// Shutdown ImBot settings handler
 	if s.imbotSettingsHandler != nil {
 		s.imbotSettingsHandler.Shutdown()

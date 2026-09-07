@@ -13,6 +13,7 @@ import (
 type recordingLauncher struct {
 	mu      sync.Mutex
 	started []string
+	stopped []string
 }
 
 func (l *recordingLauncher) Start(_ context.Context, r Run) error {
@@ -24,7 +25,12 @@ func (l *recordingLauncher) Start(_ context.Context, r Run) error {
 func (l *recordingLauncher) Send(context.Context, string, string) error      { return nil }
 func (l *recordingLauncher) Respond(context.Context, string, Response) error { return nil }
 func (l *recordingLauncher) Interrupt(context.Context, string) error         { return nil }
-func (l *recordingLauncher) Stop(context.Context, string) error              { return nil }
+func (l *recordingLauncher) Stop(_ context.Context, id string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stopped = append(l.stopped, id)
+	return nil
+}
 
 func TestRecoverOnStart(t *testing.T) {
 	ctx := context.Background()
@@ -115,5 +121,25 @@ func TestReclaimWorkspaces(t *testing.T) {
 	}
 	if _, err := svc.CreateSession(ctx, CreateSessionInput{WorkspaceID: old.WorkspaceID, Prompt: "again"}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("want ErrConflict on reclaimed workspace, got %v", err)
+	}
+}
+
+func TestShutdownStopsLiveRuns(t *testing.T) {
+	ctx := context.Background()
+	_, stores := NewMemStores()
+	launcher := &recordingLauncher{}
+	svc := NewService(Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	src, _ := svc.CreateSource(ctx, SourceInput{URL: "https://x/y.git"})
+	running, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "a"})
+	idle, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "b"})
+	running.Status = SessionRunning
+	idle.Status = SessionIdle
+	_ = stores.Sessions.UpdateSession(ctx, running)
+	_ = stores.Sessions.UpdateSession(ctx, idle)
+
+	svc.Shutdown(ctx)
+	if len(launcher.stopped) != 1 || launcher.stopped[0] != running.ID {
+		t.Fatalf("stopped = %v, want only the running session", launcher.stopped)
 	}
 }

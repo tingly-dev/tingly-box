@@ -177,3 +177,22 @@ func (s *Service) RunMaintenance(ctx context.Context, ttl, interval time.Duratio
 		}
 	}
 }
+
+// Shutdown stops every live run so no agent process outlives the server.
+// Sessions are left as they are; RecoverOnStart reconciles them on the
+// next start (running → idle, resumable).
+func (s *Service) Shutdown(ctx context.Context) {
+	if s.launcher == nil {
+		return
+	}
+	active, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{Active: true, Limit: recoveryListLimit})
+	if err != nil {
+		logrus.WithError(err).Warn("managed agent: shutdown could not list sessions")
+		return
+	}
+	for i := range active {
+		if active[i].Status == SessionRunning || active[i].Status == SessionWaitingInput {
+			_ = s.launcher.Stop(ctx, active[i].ID)
+		}
+	}
+}
