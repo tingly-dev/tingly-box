@@ -69,9 +69,24 @@ type SessionListQuery struct {
 	Limit       int    `form:"limit"`
 }
 
+// SessionListItem is one row of the sessions list: the session plus the
+// two things the list renders from its workspace, so the page needs no
+// second round trip per row.
+type SessionListItem struct {
+	Session managedagent.Session `json:"session"`
+	Source  *SourceRef           `json:"source,omitempty"`
+	Branch  string               `json:"branch,omitempty"`
+}
+
+// SourceRef names a source without its credential or URL details.
+type SourceRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // SessionListResponse lists sessions, most recently active first.
 type SessionListResponse struct {
-	Sessions []managedagent.Session `json:"sessions"`
+	Sessions []SessionListItem `json:"sessions"`
 }
 
 // SessionDetail is a session with its workspace resolved, so the detail page

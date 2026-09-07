@@ -15870,6 +15870,24 @@
           "session"
         ]
       },
+      "SessionListItem": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceRef"
+          }
+        },
+        "required": [
+          "session"
+        ]
+      },
       "SessionListQuery": {
         "type": "object",
         "properties": {
@@ -15905,7 +15923,7 @@
             "type": "array",
             "description": "Field sessions",
             "items": {
-              "$ref": "#/components/schemas/Session"
+              "$ref": "#/components/schemas/SessionListItem"
             }
           }
         },
@@ -16389,6 +16407,23 @@
         },
         "required": [
           "sources"
+        ]
+      },
+      "SourceRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ]
       },
       "SourceRequest": {

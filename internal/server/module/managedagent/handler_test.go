@@ -105,7 +105,7 @@ func TestSessionFlow(t *testing.T) {
 
 	var list SessionListResponse
 	do(t, engine, http.MethodGet, "/api/v1/agent/sessions?active=true", "", &list)
-	if len(list.Sessions) != 1 {
+	if len(list.Sessions) != 1 || list.Sessions[0].Source == nil || list.Sessions[0].Source.ID != src.ID || list.Sessions[0].Branch == "" {
 		t.Fatalf("active list: %+v", list)
 	}
 	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/archive", "", &detail); rec.Code != 200 || detail.Session.Status != managedagent.SessionArchived {

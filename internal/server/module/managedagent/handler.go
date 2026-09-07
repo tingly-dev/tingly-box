@@ -222,7 +222,37 @@ func (h *Handler) ListSessions(c *gin.Context) {
 		sendError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, SessionListResponse{Sessions: list})
+	c.JSON(http.StatusOK, SessionListResponse{Sessions: h.listItems(c, list)})
+}
+
+// listItems resolves each session's workspace and source once per distinct
+// id. Lookups are best-effort: a row whose workspace is gone still lists.
+func (h *Handler) listItems(c *gin.Context, list []managedagent.Session) []SessionListItem {
+	ctx := c.Request.Context()
+	workspaces := map[string]*managedagent.Workspace{}
+	sources := map[string]*managedagent.Source{}
+	items := make([]SessionListItem, 0, len(list))
+	for i := range list {
+		item := SessionListItem{Session: list[i]}
+		ws, seen := workspaces[list[i].WorkspaceID]
+		if !seen {
+			ws, _ = h.svc.GetWorkspace(ctx, list[i].WorkspaceID)
+			workspaces[list[i].WorkspaceID] = ws
+		}
+		if ws != nil {
+			item.Branch = ws.Branch
+			src, seen := sources[ws.SourceID]
+			if !seen {
+				src, _ = h.svc.GetSource(ctx, ws.SourceID)
+				sources[ws.SourceID] = src
+			}
+			if src != nil {
+				item.Source = &SourceRef{ID: src.ID, Name: src.Name}
+			}
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 func (h *Handler) CreateSession(c *gin.Context) {
