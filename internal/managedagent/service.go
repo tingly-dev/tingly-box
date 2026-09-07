@@ -19,6 +19,7 @@ import (
 type Service struct {
 	stores   Stores
 	launcher Launcher
+	git      Git
 	// workspacesDir is the host directory checkouts are materialised under
 	// (~/.tingly-box/agent/workspaces).
 	workspacesDir string
@@ -29,6 +30,7 @@ type Service struct {
 type Config struct {
 	Stores        Stores
 	Launcher      Launcher // optional; nil leaves sessions queued
+	Git           Git      // optional; nil disables diff / push
 	WorkspacesDir string
 }
 
@@ -38,6 +40,7 @@ func NewService(cfg Config) *Service {
 	return &Service{
 		stores:        cfg.Stores,
 		launcher:      cfg.Launcher,
+		git:           cfg.Git,
 		workspacesDir: cfg.WorkspacesDir,
 		now:           time.Now,
 	}
@@ -399,6 +402,7 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 			LastActiveAt:  now,
 		}
 		ws.Path = filepath.Join(s.workspacesDir, ws.ID, "repo")
+		ws.AgentCwd = ws.Path // RuntimeLocal; the docker runtime substitutes its mount point
 		ws.Branch = branchName(in.Title, in.Prompt, ws.ID)
 		if err := s.stores.Workspaces.CreateWorkspace(ctx, ws); err != nil {
 			return nil, err
@@ -564,6 +568,78 @@ func (s *Service) Archive(ctx context.Context, sessionID string) (*Session, erro
 		return nil, err
 	}
 	return sess, nil
+}
+
+// ---------- artifacts ----------
+
+// Diff returns the session workspace's change summary against its base ref.
+func (s *Service) Diff(ctx context.Context, sessionID string) (*Diff, error) {
+	sess, ws, err := s.sessionWorkspace(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if s.git == nil {
+		return nil, conflict("git is not configured")
+	}
+	if ws.State != WorkspaceReady {
+		return nil, conflict("workspace is %s", ws.State)
+	}
+	d, err := s.git.Diff(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	if d.ChangedFiles != sess.Artifact.Changed {
+		sess.Artifact.Changed = d.ChangedFiles
+		_ = s.stores.Sessions.UpdateSession(ctx, sess)
+	}
+	return d, nil
+}
+
+// Push pushes the workspace branch to its origin and records the fact on the
+// session's artifact. Push is an explicit control-plane action, never
+// something the agent does from inside the checkout (§5.3).
+func (s *Service) Push(ctx context.Context, sessionID string) (*Session, error) {
+	sess, ws, err := s.sessionWorkspace(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if s.git == nil {
+		return nil, conflict("git is not configured")
+	}
+	if ws.State != WorkspaceReady {
+		return nil, conflict("workspace is %s", ws.State)
+	}
+	if sess.Status == SessionRunning {
+		return nil, conflict("session is running; interrupt it or wait for the turn to finish before pushing")
+	}
+	now := s.now()
+	logLine := func(line string) {
+		_ = s.stores.Events.AppendEvent(ctx, &Event{SessionID: sess.ID, Kind: EventSystem, Text: line, At: s.now()})
+	}
+	if err := s.git.Push(ctx, ws, logLine); err != nil {
+		logLine("push failed: " + err.Error())
+		return nil, err
+	}
+	sess.Artifact.Pushed = true
+	sess.Artifact.Branch = ws.Branch
+	sess.LastActiveAt = now
+	if err := s.stores.Sessions.UpdateSession(ctx, sess); err != nil {
+		return nil, err
+	}
+	logLine("pushed " + ws.Branch)
+	return sess, nil
+}
+
+func (s *Service) sessionWorkspace(ctx context.Context, sessionID string) (*Session, *Workspace, error) {
+	sess, err := s.stores.Sessions.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	ws, err := s.stores.Workspaces.GetWorkspace(ctx, sess.WorkspaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sess, ws, nil
 }
 
 // ---------- naming ----------

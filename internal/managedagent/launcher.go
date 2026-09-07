@@ -36,3 +36,20 @@ type Response struct {
 	Approved  bool   `json:"approved"`
 	Answer    string `json:"answer,omitempty"`
 }
+
+// Git is the host-side repository seam: what the control plane needs from
+// a workspace's checkout beyond running the agent. It runs on the host under
+// every runtime, so credentials never enter the sandbox.
+type Git interface {
+	Diff(ctx context.Context, ws *Workspace) (*Diff, error)
+	Push(ctx context.Context, ws *Workspace, log func(line string)) error
+}
+
+// Diff is a workspace's change summary against its base ref.
+type Diff struct {
+	ChangedFiles int      `json:"changed_files"`
+	Stat         string   `json:"stat"`
+	Patch        string   `json:"patch"`
+	Untracked    []string `json:"untracked,omitempty"`
+	Truncated    bool     `json:"truncated"`
+}

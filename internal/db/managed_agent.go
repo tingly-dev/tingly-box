@@ -54,6 +54,7 @@ type AgentWorkspaceRecord struct {
 	SourceID      string    `gorm:"column:source_id;not null;size:36;index:idx_agent_workspaces_source"`
 	EnvironmentID string    `gorm:"column:environment_id;not null;size:36;index:idx_agent_workspaces_env"`
 	Path          string    `gorm:"column:path;not null;type:text"`
+	AgentCwd      string    `gorm:"column:agent_cwd;type:text"`
 	BaseRef       string    `gorm:"column:base_ref;not null;size:255"`
 	Branch        string    `gorm:"column:branch;not null;size:255"`
 	ContainerID   string    `gorm:"column:container_id;size:128"`
@@ -133,7 +134,7 @@ func fromAgentEnvironmentRecord(r *AgentEnvironmentRecord) managedagent.Environm
 func toAgentWorkspaceRecord(w *managedagent.Workspace) *AgentWorkspaceRecord {
 	return &AgentWorkspaceRecord{
 		ID: w.ID, SourceID: w.SourceID, EnvironmentID: w.EnvironmentID, Path: w.Path,
-		BaseRef: w.BaseRef, Branch: w.Branch, ContainerID: w.ContainerID,
+		AgentCwd: w.AgentCwd, BaseRef: w.BaseRef, Branch: w.Branch, ContainerID: w.ContainerID,
 		State: string(w.State), Error: w.Error,
 		CreatedAt: w.CreatedAt, LastActiveAt: w.LastActiveAt,
 	}
@@ -142,7 +143,7 @@ func toAgentWorkspaceRecord(w *managedagent.Workspace) *AgentWorkspaceRecord {
 func fromAgentWorkspaceRecord(r *AgentWorkspaceRecord) managedagent.Workspace {
 	return managedagent.Workspace{
 		ID: r.ID, SourceID: r.SourceID, EnvironmentID: r.EnvironmentID, Path: r.Path,
-		BaseRef: r.BaseRef, Branch: r.Branch, ContainerID: r.ContainerID,
+		AgentCwd: r.AgentCwd, BaseRef: r.BaseRef, Branch: r.Branch, ContainerID: r.ContainerID,
 		State: managedagent.WorkspaceState(r.State), Error: r.Error,
 		CreatedAt: r.CreatedAt, LastActiveAt: r.LastActiveAt,
 	}

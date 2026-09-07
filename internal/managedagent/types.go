@@ -99,17 +99,23 @@ const (
 // RuntimeDocker) plus the agent's working branch. It is short-lived; the
 // branch is pushed out before the directory is reclaimed.
 type Workspace struct {
-	ID            string         `json:"id"`
-	SourceID      string         `json:"source_id"`
-	EnvironmentID string         `json:"environment_id"`
-	Path          string         `json:"path"`
-	BaseRef       string         `json:"base_ref"`
-	Branch        string         `json:"branch"`
-	ContainerID   string         `json:"container_id,omitempty"`
-	State         WorkspaceState `json:"state"`
-	Error         string         `json:"error,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	LastActiveAt  time.Time      `json:"last_active_at"`
+	ID            string `json:"id"`
+	SourceID      string `json:"source_id"`
+	EnvironmentID string `json:"environment_id"`
+	Path          string `json:"path"`
+	// AgentCwd is the checkout as the agent sees it: equal to Path under
+	// RuntimeLocal, a fixed mount point (e.g. /workspace) under RuntimeDocker.
+	// Claude Code keys its own session files on this path together with its
+	// config dir, so it must stay constant for the workspace's lifetime for
+	// --resume to work (.design/managed-agent.md §12).
+	AgentCwd     string         `json:"agent_cwd"`
+	BaseRef      string         `json:"base_ref"`
+	Branch       string         `json:"branch"`
+	ContainerID  string         `json:"container_id,omitempty"`
+	State        WorkspaceState `json:"state"`
+	Error        string         `json:"error,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	LastActiveAt time.Time      `json:"last_active_at"`
 }
 
 // ---------- Session ----------

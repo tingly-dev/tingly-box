@@ -86,6 +86,14 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 	group.POST("/agent/sessions/:session_id/interrupt", h.Interrupt,
 		swagger.WithTags(tag),
 		swagger.WithDescription("Stop the current turn; the session stays resumable"))
+	group.GET("/agent/sessions/:session_id/diff", h.Diff,
+		swagger.WithTags(tag),
+		swagger.WithDescription("Change summary of the session's workspace against its base ref (stat, patch, untracked)"),
+		swagger.WithResponseModel(managedagent.Diff{}))
+	group.POST("/agent/sessions/:session_id/push", h.Push,
+		swagger.WithTags(tag),
+		swagger.WithDescription("Push the workspace branch to origin (host-side git; an explicit action, never the agent's)"),
+		swagger.WithResponseModel(SessionDetail{}))
 	group.POST("/agent/sessions/:session_id/archive", h.Archive,
 		swagger.WithTags(tag),
 		swagger.WithDescription("End a session; its branch and log are kept"),

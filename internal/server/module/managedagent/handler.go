@@ -327,6 +327,32 @@ func (h *Handler) Archive(c *gin.Context) {
 	c.JSON(http.StatusOK, h.detail(c, sess))
 }
 
+func (h *Handler) Diff(c *gin.Context) {
+	id, ok := requireParam(c, "session_id")
+	if !ok {
+		return
+	}
+	d, err := h.svc.Diff(c.Request.Context(), id)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+func (h *Handler) Push(c *gin.Context) {
+	id, ok := requireParam(c, "session_id")
+	if !ok {
+		return
+	}
+	sess, err := h.svc.Push(c.Request.Context(), id)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, h.detail(c, sess))
+}
+
 // Events serves a session's log. With `Accept: text/event-stream` it keeps
 // the connection open and pushes new events as they are appended; otherwise
 // it returns one JSON page. Same data, same `after` cursor, so a client can
