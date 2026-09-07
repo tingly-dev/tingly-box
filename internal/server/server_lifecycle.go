@@ -17,6 +17,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
@@ -40,6 +41,12 @@ func (s *Server) Start(port int) error {
 	if s.quotaManager != nil {
 		s.quotaManager.StartAutoRefresh(ctx)
 		log.Println("Provider quota auto-refresh started")
+	}
+
+	// Managed agent sessions: reconcile what the previous process left
+	// behind, then sweep idle checkouts hourly (.design/managed-agent.md).
+	if s.managedAgent != nil {
+		go s.managedAgent.RunMaintenance(ctx, managedagent.DefaultWorkspaceTTL, time.Hour)
 	}
 
 	// Hourly tiny request to each OAuth provider keeps quota windows moving

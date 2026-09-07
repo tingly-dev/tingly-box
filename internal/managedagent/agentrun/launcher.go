@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -305,6 +306,15 @@ func (l *Launcher) provision(ctx context.Context, r managedagent.Run) error {
 		Text: fmt.Sprintf("provisioning workspace from %s (%s)", r.Source.URL, ws.BaseRef)})
 	logLine := func(line string) {
 		l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem, Text: line})
+	}
+	// A previous attempt cut short (crash mid-clone) leaves a directory the
+	// clone would refuse; the workspace is still "provisioning", so nothing
+	// in it is worth keeping.
+	if _, statErr := os.Stat(ws.Path); statErr == nil {
+		logLine("removing incomplete checkout from a previous attempt")
+		if rmErr := os.RemoveAll(ws.Path); rmErr != nil {
+			return fmt.Errorf("clean incomplete checkout: %w", rmErr)
+		}
 	}
 	err := l.cfg.Git.Provision(ctx, gitrepo.ProvisionRequest{
 		URL: r.Source.URL, BaseRef: ws.BaseRef, Branch: ws.Branch, Dir: ws.Path, Log: logLine,

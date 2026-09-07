@@ -779,6 +779,90 @@
         }
       }
     },
+    "/api/v1/agent/workspaces": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List checkouts, most recently active first",
+        "description": "List checkouts, most recently active first",
+        "operationId": "apiV1AgentWorkspacesGet",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "query",
+            "description": "Filter by source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Filter by environment",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state: provisioning | ready | failed | reclaimed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/workspaces/{workspace_id}/reclaim": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Remove a checkout's directory; refused while a session in it is active. Session logs are kept.",
+        "description": "Remove a checkout's directory; refused while a session in it is active. Session logs are kept.",
+        "operationId": "apiV1AgentWorkspacesWorkspace_idReclaimPost",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/model-token/reset": {
       "post": {
         "tags": [
@@ -18136,6 +18220,21 @@
           "state",
           "created_at",
           "last_active_at"
+        ]
+      },
+      "WorkspaceListResponse": {
+        "type": "object",
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "description": "Field workspaces",
+            "items": {
+              "$ref": "#/components/schemas/Workspace"
+            }
+          }
+        },
+        "required": [
+          "workspaces"
         ]
       },
       "errorDetail": {

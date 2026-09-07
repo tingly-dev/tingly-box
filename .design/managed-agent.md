@@ -458,6 +458,16 @@ e2e 抓到的两个问题（已修）：
 IM prompt 预算 2h，超时只是不再占着聊天，session 继续等网页。前端还没有"创建 route"的入口
 （bot-arch.md §10 的既有缺口），目前用 API 建。
 
+### P0-e 工作空间管理（2026-09-07）
+
+| 动作 | 位置 | 规则 |
+|---|---|---|
+| 重启恢复 | `Service.RecoverOnStart`，`Server.Start` 里触发 | `running` / `waiting_input` → `idle` + 状态事件"interrupted by restart"，`cc_session_id` 保留所以下一条消息就是 `--resume`；`queued` → 重新 `Launcher.Start`；Launcher 遇到半成品 checkout 目录先删再 clone |
+| TTL 回收 | `Service.ReclaimIdleWorkspaces`，每小时一次 | workspace 的所有 session 都非活跃且最后活动早于 7 天 → `rm -rf` 目录，state=`reclaimed`。session 日志与索引不动；回收后的 workspace 不能再开新 session（从 Source 重新开始） |
+| 手动回收 | `POST /agent/workspaces/:id/reclaim`、`GET /agent/workspaces` | 有活跃 session 时 409 |
+
+没有引入 `internal/task`：恢复与回收只是启动时一次 + 一个 ticker，不需要持久任务队列。等到 Trigger（cron / webhook）才接。
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

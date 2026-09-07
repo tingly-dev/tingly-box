@@ -357,6 +357,34 @@ func (h *Handler) Archive(c *gin.Context) {
 	c.JSON(http.StatusOK, h.detail(c, sess))
 }
 
+// ---------- workspaces ----------
+
+func (h *Handler) ListWorkspaces(c *gin.Context) {
+	list, err := h.svc.ListWorkspaces(c.Request.Context(), managedagent.WorkspaceFilter{
+		SourceID:      c.Query("source_id"),
+		EnvironmentID: c.Query("environment_id"),
+		State:         managedagent.WorkspaceState(c.Query("state")),
+	})
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, WorkspaceListResponse{Workspaces: list})
+}
+
+func (h *Handler) ReclaimWorkspace(c *gin.Context) {
+	id, ok := requireParam(c, "workspace_id")
+	if !ok {
+		return
+	}
+	ws, err := h.svc.ReclaimWorkspace(c.Request.Context(), id)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, ws)
+}
+
 func (h *Handler) Diff(c *gin.Context) {
 	id, ok := requireParam(c, "session_id")
 	if !ok {

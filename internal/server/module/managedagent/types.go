@@ -122,3 +122,8 @@ type EventListResponse struct {
 	// Next is the seq to pass as `after` on the next call.
 	Next int64 `json:"next"`
 }
+
+// WorkspaceListResponse lists checkouts, most recently active first.
+type WorkspaceListResponse struct {
+	Workspaces []managedagent.Workspace `json:"workspaces"`
+}

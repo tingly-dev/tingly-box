@@ -55,6 +55,19 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 		swagger.WithTags(tag),
 		swagger.WithDescription("Delete a non-default environment that has no live workspaces"))
 
+	// Workspaces
+	group.GET("/agent/workspaces", h.ListWorkspaces,
+		swagger.WithTags(tag),
+		swagger.WithDescription("List checkouts, most recently active first"),
+		swagger.WithQuery("source_id", "string", "Filter by source"),
+		swagger.WithQuery("environment_id", "string", "Filter by environment"),
+		swagger.WithQuery("state", "string", "Filter by state: provisioning | ready | failed | reclaimed"),
+		swagger.WithResponseModel(WorkspaceListResponse{}))
+	group.POST("/agent/workspaces/:workspace_id/reclaim", h.ReclaimWorkspace,
+		swagger.WithTags(tag),
+		swagger.WithDescription("Remove a checkout's directory; refused while a session in it is active. Session logs are kept."),
+		swagger.WithResponseModel(managedagent.Workspace{}))
+
 	// Sessions
 	group.GET("/agent/sessions", h.ListSessions,
 		swagger.WithTags(tag),
