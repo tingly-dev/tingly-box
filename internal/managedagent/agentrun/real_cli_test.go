@@ -116,6 +116,11 @@ func TestRealCLI_SessionRoundTrip(t *testing.T) {
 	if final.CCSessionID == "" {
 		t.Fatalf("no cc session id recorded\n%s", dump)
 	}
+	// The marker alone is not proof: a real model answers "Paris" too. The
+	// virtual upstream must have served the turn.
+	if env.VirtualServer().CallCount() == 0 {
+		t.Fatalf("the virtual upstream never saw a request; the CLI routed elsewhere\n%s", dump)
+	}
 	t.Logf("first turn ok: cc_session=%s usage=%+v\n%s", final.CCSessionID, final.Usage, dump)
 
 	// Second turn resumes the same Claude Code session.

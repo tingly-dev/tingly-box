@@ -2,12 +2,14 @@ package server
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/managedagent/agentrun"
@@ -152,7 +154,29 @@ func (s *Server) UseManagedAgentEndpoints() {
 			logrus.WithError(perr).WithField("ccProfile", ccProfile).Warn("managed agent: profile settings unavailable; using main scenario")
 		}
 		env, eerr := tb.GetClaudeCodeEnv(ctx)
-		return env, "", eerr
+		if eerr != nil {
+			return nil, "", eerr
+		}
+		// The main scenario is materialised as the "default" derived
+		// settings file (user's ~/.claude/settings.json as the base, gateway
+		// routing on top) rather than injected as process env. A managed
+		// session must route deterministically: settings.json env outranks
+		// process env in Claude Code, and the host running tb may itself
+		// carry Claude Code variables (a CI runner, a Claude Code remote
+		// session) that would otherwise silently win. Falls back to env if
+		// the file cannot be written.
+		envMap := make(map[string]string, len(env))
+		for _, kv := range env {
+			if i := strings.IndexByte(kv, '='); i > 0 {
+				envMap[kv[:i]] = kv[i+1:]
+			}
+		}
+		path, berr := agent.BuildCCProfileSettings("default", string(typ.ScenarioClaudeCode), "", envMap)
+		if berr != nil {
+			logrus.WithError(berr).Warn("managed agent: default settings unavailable; injecting gateway env instead")
+			return env, "", nil
+		}
+		return env, path, nil
 	})
 	ccConfig := claude.DefaultConfig()
 	ccConfig.DefaultExecutionTimeout = managedAgentTurnTimeout

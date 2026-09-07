@@ -425,6 +425,22 @@ P0 结束就能演示完整故事；P1 是"敢给别人用"的门槛；P2 才是
 `--settings` 路由、`--session-id` / `--resume` 续接上下文（第二轮按上下文回答）、用量折算。
 CI 不跑它（需要本机 CLI），阶段验收时手动跑。
 
+全栈 e2e：`TB_MANAGED_AGENT_E2E=1 go test ./internal/managedagent/agentrun/ -run FullStack -v`
+——真实 `internal/server`（StoreManager、事件日志目录、`UseManagedAgentEndpoints` 里接线的 Launcher、
+TBClient 路由）+ HTTP API + 真实 CLI + 虚拟上游。两条 e2e 都断言 `VirtualServer().CallCount() > 0`：
+**只看 "Paris" 标记不够**，真模型也会这么答。
+
+e2e 抓到的两个问题（已修）：
+
+1. **子进程 Claude Code 继承父会话身份。** tb 若运行在一个 Claude Code 会话内（Claude Code 终端里
+   `tb start`、Claude Code 远程容器），子 `claude` 会继承 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`
+   （无视 base URL）与 `CLAUDE_CODE_REMOTE*`（改用父会话 OAuth 身份），tb 的路由被静默忽略。
+   修复在 `agentboot/claude/environment.go`：clean env 剔除会话身份变量，用户配置变量
+   （`CLAUDE_CONFIG_DIR`、`CLAUDE_CODE_MAX_OUTPUT_TOKENS` 等）保留。@cc 同样受益。
+2. **主 scenario 路由改为物化 settings 文件。** 原先只注入 env；现在与 profile 同一机制：
+   `~/.tingly-box/claude/default/settings.json` = 用户主 settings 为底 + gateway 路由，`--settings`
+   传入。托管会话必须确定性路由，不能依赖宿主 env 恰好一致。env 仍作为兜底。
+
 仍未做：PR 创建（需要 GitHub 凭证模型）、Source 级凭证注入、workspace TTL 回收、重启后 `running` → `interrupted` 的恢复（等 `internal/task` 接线）。
 
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）

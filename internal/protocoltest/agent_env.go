@@ -205,6 +205,13 @@ func (env *AgentTestEnv) ModelToken() string {
 	return env.modelToken
 }
 
+// VirtualServer exposes the mock upstream so a caller can assert traffic
+// actually reached it (CallCount), not just that an answer came back —
+// a CLI that silently falls back to another provider can still answer.
+func (env *AgentTestEnv) VirtualServer() *VirtualServer {
+	return env.virtualServer
+}
+
 // VirtualServerURL returns the URL of the virtual server
 func (env *AgentTestEnv) VirtualServerURL() string {
 	if env.virtualServer == nil {
