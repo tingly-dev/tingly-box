@@ -452,3 +452,52 @@ func TestLauncher_BypassPermissionsAutoApproves(t *testing.T) {
 		return s.Status == managedagent.SessionIdle
 	})
 }
+
+// TestLauncher_CLIStderrReachesSessionError runs a stand-in "claude" that
+// rejects its arguments the way the real CLI does (message on stderr,
+// non-zero exit) and checks the message lands on the session, where the
+// user can act on it.
+func TestLauncher_CLIStderrReachesSessionError(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	ctx := context.Background()
+	script := filepath.Join(t.TempDir(), "claude")
+	// Discovery probes --version and expects the real banner; everything
+	// else fails the way the CLI fails on an unknown mode.
+	os.WriteFile(script, []byte("#!/bin/sh\ncase \"$1\" in --version) echo '2.0.0 (Claude Code)'; exit 0;; esac\necho \"error: option '--permission-mode <mode>' argument 'auto' is invalid. Allowed choices are acceptEdits, bypassPermissions, plan.\" >&2\nexit 1\n"), 0o755)
+
+	_, stores := managedagent.NewMemStores()
+	git := &gitrepo.Git{}
+	cfg := claude.DefaultConfig()
+	cfg.CLIPath = script
+	launcher, err := New(Config{Stores: stores, Agent: claude.NewAgentWithConfig(cfg), Git: git})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: newOrigin(t)})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "failed", func() bool {
+		s, _ := svc.GetSession(ctx, sess.ID)
+		return s.Status == managedagent.SessionFailed
+	})
+	s, _ := svc.GetSession(ctx, sess.ID)
+	if !strings.Contains(s.Error, "argument 'auto' is invalid") {
+		t.Fatalf("CLI stderr not surfaced: %q", s.Error)
+	}
+	// The user's way out: switch the mode and send again in the same checkout.
+	if _, err := svc.SetPermissionMode(ctx, sess.ID, managedagent.PermissionAcceptEdits); err != nil {
+		t.Fatalf("mode change after failure: %v", err)
+	}
+	if err := svc.SendMessage(ctx, sess.ID, "retry"); err != nil {
+		t.Fatalf("retry after failure: %v", err)
+	}
+}

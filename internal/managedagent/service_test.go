@@ -196,3 +196,33 @@ func TestPermissionModes(t *testing.T) {
 		t.Fatal("only bypassPermissions auto-approves")
 	}
 }
+
+func TestFailedSessionCanRetryWhenWorkspaceReady(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+	src, _ := svc.CreateSource(ctx, SourceInput{URL: "https://github.com/org/repo.git"})
+	sess, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "a"})
+	sess.Status, sess.Error = SessionFailed, "argument 'bogus' is invalid"
+	_ = svc.stores.Sessions.UpdateSession(ctx, sess)
+
+	// Provisioning still failed → nothing to retry into.
+	if err := svc.SendMessage(ctx, sess.ID, "again"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("want conflict while workspace is not ready, got %v", err)
+	}
+	ws, _ := svc.GetWorkspace(ctx, sess.WorkspaceID)
+	ws.State = WorkspaceReady
+	_ = svc.stores.Workspaces.UpdateWorkspace(ctx, ws)
+
+	if _, err := svc.SetPermissionMode(ctx, sess.ID, PermissionAcceptEdits); err != nil {
+		t.Fatalf("mode change on a failed session must be allowed: %v", err)
+	}
+	if err := svc.SendMessage(ctx, sess.ID, "again"); err != nil {
+		t.Fatalf("retry on a failed session must be allowed: %v", err)
+	}
+	if _, err := svc.Archive(ctx, sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendMessage(ctx, sess.ID, "again"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("archived stays closed, got %v", err)
+	}
+}

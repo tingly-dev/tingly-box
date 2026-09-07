@@ -509,7 +509,7 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, text string) error
 	if err != nil {
 		return err
 	}
-	if !sess.Status.IsActive() {
+	if !s.canRetry(ctx, sess) {
 		return conflict("session is %s; create a new session in its workspace instead", sess.Status)
 	}
 	// Only the event is written here. The index row is the Launcher's to
@@ -524,6 +524,22 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, text string) error
 		return nil
 	}
 	return s.launcher.Send(ctx, sess.ID, text)
+}
+
+// canRetry reports whether a session can take another message: active, or
+// failed with its checkout still in place (a failed turn — a rejected
+// permission mode, an upstream error — is retried by changing what caused
+// it and sending again; done ≠ locked). A failed provisioning is not
+// retryable here: the workspace itself is failed.
+func (s *Service) canRetry(ctx context.Context, sess *Session) bool {
+	if sess.Status.IsActive() {
+		return true
+	}
+	if sess.Status != SessionFailed {
+		return false
+	}
+	ws, err := s.stores.Workspaces.GetWorkspace(ctx, sess.WorkspaceID)
+	return err == nil && ws.State == WorkspaceReady
 }
 
 // Respond answers a pending approval or ask request.
@@ -555,7 +571,7 @@ func (s *Service) SetPermissionMode(ctx context.Context, sessionID string, mode 
 	if err != nil {
 		return nil, err
 	}
-	if !sess.Status.IsActive() {
+	if !s.canRetry(ctx, sess) {
 		return nil, conflict("session is %s", sess.Status)
 	}
 	if sess.PermissionMode == mode {

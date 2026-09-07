@@ -108,7 +108,10 @@ const TaskDetailPage = () => {
     }
 
     const active = isActiveStatus(session?.status);
-    const canSteer = active && session?.status !== 'waiting_input';
+    // A failed turn is retried by changing what caused it (often the
+    // permission mode) and sending again, as long as the checkout exists.
+    const retryable = session?.status === 'failed' && workspace?.state === 'ready';
+    const canSteer = (active && session?.status !== 'waiting_input') || retryable;
     const hint = session?.status === 'waiting_input'
         ? t('tasks.detail.waiting')
         : session?.status === 'running' || session?.status === 'queued'
@@ -137,7 +140,7 @@ const TaskDetailPage = () => {
                         size="small"
                         variant="outlined"
                         label={`${t('tasks.mode.label')}: ${t(`tasks.mode.${permissionModeKey(session.permission_mode)}`)}`}
-                        onClick={active ? (e) => setModeAnchor(e.currentTarget) : undefined}
+                        onClick={active || retryable ? (e) => setModeAnchor(e.currentTarget) : undefined}
                     />
                 </Tooltip>
                 <Menu open={!!modeAnchor} anchorEl={modeAnchor} onClose={() => setModeAnchor(null)}>
@@ -171,7 +174,7 @@ const TaskDetailPage = () => {
         </Stack>
     );
 
-    const composer = session && session.status !== 'archived' && session.status !== 'failed' && (
+    const composer = session && session.status !== 'archived' && (active || retryable) && (
         <Stack direction="row" spacing={1} sx={{alignItems: 'flex-end'}}>
             <TextField
                 fullWidth
@@ -181,7 +184,7 @@ const TaskDetailPage = () => {
                 placeholder={t('tasks.detail.steerPlaceholder')}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                disabled={!active}
+                disabled={!active && !retryable}
                 onKeyDown={(e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && text.trim()) send();
                 }}
@@ -201,7 +204,10 @@ const TaskDetailPage = () => {
     const conversation = session && (
         <Stack spacing={1.5}>
             {session.status === 'failed' && (
-                <Alert severity="error">{t('tasks.detail.failed')}{session.error ? `: ${session.error}` : ''}</Alert>
+                <Alert severity="error">
+                    {t('tasks.detail.failed')}{session.error ? `: ${session.error}` : ''}
+                    {retryable && <Typography variant="body2" sx={{mt: 0.5}}>{t('tasks.detail.retryHint')}</Typography>}
+                </Alert>
             )}
             <EventTimeline events={events} pending={pending} onRespond={respond} />
             {hint && (

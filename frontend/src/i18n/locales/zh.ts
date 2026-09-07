@@ -865,6 +865,7 @@ export default {
       "running": "agent 正在工作…",
       "waiting": "agent 在等你回答上面的问题。",
       "idle": "agent 完成了本轮。发送后续指令，或推送分支。",
+      "retryHint": "修正原因（例如在上方切换权限模式），再发一条消息即可在同一个 checkout 里重试。",
       "notFound": "任务不存在"
     },
     "sources": {

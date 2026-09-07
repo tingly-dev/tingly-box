@@ -864,6 +864,7 @@ export default {
       "running": "The agent is working…",
       "waiting": "The agent is waiting for your answer above.",
       "idle": "The agent finished its turn. Send a follow-up or push the branch.",
+      "retryHint": "Fix the cause (for example switch the permissions mode above) and send a message to retry in the same checkout.",
       "notFound": "Task not found"
     },
     "sources": {

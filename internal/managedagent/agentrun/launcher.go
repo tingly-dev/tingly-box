@@ -391,7 +391,7 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 		l.log.WithError(err).Warn("session vanished before turn")
 		return
 	}
-	if !sess.Status.IsActive() {
+	if !sess.Status.IsActive() && sess.Status != managedagent.SessionFailed {
 		return
 	}
 
@@ -422,7 +422,9 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 
 	turnCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	stderr := newTailBuffer(stderrTailBytes)
 	handle, err := l.cfg.Agent.Execute(turnCtx, prompt, agentboot.ExecutionOptions{
+		Stderr:               stderr,
 		ProjectPath:          r.Workspace.AgentCwd,
 		OutputFormat:         agentboot.OutputFormatStreamJSON,
 		SessionID:            sess.CCSessionID,
@@ -526,7 +528,13 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 		sess.Status, sess.Error = managedagent.SessionIdle, ""
 		interruptedNote = ": interrupted"
 	case werr != nil:
+		// The CLI explains itself on stderr (a rejected --permission-mode,
+		// a missing binary dependency); attach the tail so the user can act
+		// on it — switch the mode, send a message to retry.
 		sess.Status, sess.Error = managedagent.SessionFailed, werr.Error()
+		if tail := stderr.String(); tail != "" {
+			sess.Error += " — " + tail
+		}
 	default:
 		sess.Status, sess.Error = managedagent.SessionIdle, ""
 	}
@@ -607,4 +615,35 @@ func (l *Launcher) append(_ context.Context, e managedagent.Event) {
 	if err := l.cfg.Stores.Events.AppendEvent(context.Background(), &e); err != nil {
 		l.log.WithError(err).WithField("session", e.SessionID).Warn("failed to append event")
 	}
+}
+
+// stderrTailBytes bounds how much of the CLI's stderr a turn keeps.
+const stderrTailBytes = 2048
+
+// tailBuffer keeps the last n bytes written to it. Writes never fail, so a
+// chatty process can't stall on its own diagnostics.
+type tailBuffer struct {
+	mu  sync.Mutex
+	n   int
+	buf []byte
+}
+
+func newTailBuffer(n int) *tailBuffer { return &tailBuffer{n: n} }
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > t.n {
+		t.buf = t.buf[len(t.buf)-t.n:]
+	}
+	return len(p), nil
+}
+
+// String returns the tail with surrounding whitespace trimmed and internal
+// newlines collapsed, ready to sit on one error line.
+func (t *tailBuffer) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.Join(strings.Fields(string(t.buf)), " ")
 }

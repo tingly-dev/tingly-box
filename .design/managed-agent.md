@@ -501,6 +501,8 @@ settings defaultMode > CLI 默认）。
 | `auto` | 交给 CLI 的分类器；分类器不决定的调用仍以审批请求到达宿主，网页 / IM 照常等人答 |
 | AskUserQuestion | 任何模式下都不自动回答 |
 | UI | composer 的 Permissions 下拉（每项带一句说明，ux §8）；详情页头部的模式 chip 点开即改；环境表单里设默认 |
+| 不探测 CLI 版本 | 老 CLI 不支持某模式就让它报错：CLI 的 stderr 尾部（agentboot 新增 `ExecutionOptions.Stderr` 按执行捕获）附在 `session.error` 上，失败的 session 只要 checkout 还在就可以换模式再发一条消息重试（`canRetry`） |
+| 守卫 | agentboot 会静默丢弃它不认识的 `--permission-mode`，`modes_test.go` 保证我们提供的每个模式都在它的转发集合里 |
 
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
