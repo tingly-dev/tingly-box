@@ -141,7 +141,8 @@ func (s *Server) UseManagedAgentEndpoints() {
 		logrus.WithError(err).Error("managed agent: event log unavailable; endpoints disabled")
 		return
 	}
-	stores := sm.ManagedAgent().Stores(eventLog)
+	bus := managedagent.NewEventBus(eventLog)
+	stores := sm.ManagedAgent().Stores(bus)
 	git := &gitrepo.Git{MirrorsDir: constant.GetAgentMirrorsDir(base)}
 
 	tb := tbclient.NewTBClient(s.config)
@@ -200,6 +201,8 @@ func (s *Server) UseManagedAgentEndpoints() {
 	if err := svc.EnsureDefaults(context.Background()); err != nil {
 		logrus.WithError(err).Error("managed agent: failed to ensure default environment")
 	}
+	s.managedAgent = svc
+	s.managedAgentBus = bus
 
 	manager := swagger.NewRouteManager(s.engine)
 	api := manager.NewGroup("api", "v1", "")

@@ -443,6 +443,21 @@ e2e 抓到的两个问题（已修）：
 
 仍未做：PR 创建（需要 GitHub 凭证模型）、Source 级凭证注入、workspace TTL 回收、重启后 `running` → `interrupted` 的恢复（等 `internal/task` 接线）。
 
+### P0-d IM 挂钩（2026-09-07）
+
+按"挂在通知 hook 上，不做复杂"的原则：
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 事件总线 | `managedagent.EventBus` | `EventStore` 装饰器，每条事件落盘后同步分发给订阅者。Service 与 Launcher 不知道订阅者存在；之后 SSE fan-out 也挂这里 |
+| 桥 | `internal/managedagent/imbridge` | 实现 `scenario.Scenario`（名字 `tasks`），订阅总线：首条 user_message → `started` 通知；`approval_request` / `ask_request` → `rt.Ask`（confirm 两个按钮 / 自由文本），回复经 `Service.Respond` 写回；`status idle/failed` → `finished` / `failed` 通知 |
+| 路由 | 现有 Notify route | `POST /api/v1/bots/:bot/routes {"source":"tasks", ...}`，`event_filter` 可选 `started / needs_input / finished / failed`。无路由则静默 |
+| 接线 | `server_control.go` | bot runtime 建好后注册桥并订阅总线 |
+
+网页与 IM 是同一个 pending 表：任一侧先答生效，后到的回复因 `Respond` 报 not-pending 被丢弃。
+IM prompt 预算 2h，超时只是不再占着聊天，session 继续等网页。前端还没有"创建 route"的入口
+（bot-arch.md §10 的既有缺口），目前用 API 建。
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

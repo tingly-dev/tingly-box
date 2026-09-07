@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/managedagent/imbridge"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
@@ -136,6 +137,14 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		s.scenarioRegistry.Register(claudecode.New(s.interactionRegistry))
 		runtime := remotescenario.NewRouteRuntime(s.channelRegistry, sm.BotAccess(), access.NewEvaluator(sm.BotAccess()), RuntimeAuditSink())
 		notifyHandler = notifymodule.NewHandlerWithRouting(s.scenarioRegistry, s.interactionRegistry, runtime)
+		// Managed agent sessions ride the same runtime: milestones become
+		// notifications and approvals become prompts on any Notify route
+		// whose source is "tasks" (.design/managed-agent.md §7).
+		if s.managedAgent != nil && s.managedAgentBus != nil {
+			bridge := imbridge.New(s.managedAgent, runtime)
+			s.scenarioRegistry.Register(bridge)
+			s.managedAgentBus.Subscribe(bridge.OnEvent)
+		}
 	} else {
 		notifyHandler = notifymodule.NewHandler()
 	}
