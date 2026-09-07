@@ -134,3 +134,9 @@ func GetAgentWorkspacesDir(baseDir string) string {
 func GetAgentEventsDir(baseDir string) string {
 	return filepath.Join(baseDir, AgentDirName, "events")
 }
+
+// GetAgentMirrorsDir returns the directory holding one bare git mirror per
+// managed agent source (gitrepo).
+func GetAgentMirrorsDir(baseDir string) string {
+	return filepath.Join(baseDir, AgentDirName, "sources")
+}

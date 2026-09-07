@@ -380,6 +380,39 @@
         }
       }
     },
+    "/api/v1/agent/sessions/{session_id}/diff": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
+        "description": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
+        "operationId": "apiV1AgentSessionsSession_idDiffGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agent/sessions/{session_id}/events": {
       "get": {
         "tags": [
@@ -503,6 +536,39 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/push": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
+        "description": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
+        "operationId": "apiV1AgentSessionsSession_idPushPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
                 }
               }
             }
@@ -10395,6 +10461,41 @@
           "message"
         ]
       },
+      "Diff": {
+        "type": "object",
+        "properties": {
+          "changed_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field changed_files"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "stat": {
+            "type": "string",
+            "description": "Field stat"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          },
+          "untracked": {
+            "type": "array",
+            "description": "Field untracked",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "changed_files",
+          "stat",
+          "patch",
+          "truncated"
+        ]
+      },
       "DirectChat": {
         "type": "object",
         "properties": {
@@ -17938,6 +18039,10 @@
       "Workspace": {
         "type": "object",
         "properties": {
+          "agent_cwd": {
+            "type": "string",
+            "description": "Field agent_cwd"
+          },
           "base_ref": {
             "type": "string",
             "description": "Field base_ref"
@@ -17990,6 +18095,7 @@
           "source_id",
           "environment_id",
           "path",
+          "agent_cwd",
           "base_ref",
           "branch",
           "state",

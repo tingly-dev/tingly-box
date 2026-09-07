@@ -94,7 +94,7 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := managedagent.NewService(managedagent.Config{
-		Stores: stores, Launcher: launcher, Git: gitAdapter{git}, WorkspacesDir: filepath.Join(t.TempDir(), "ws"),
+		Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: filepath.Join(t.TempDir(), "ws"),
 	})
 	if err := svc.EnsureDefaults(ctx); err != nil {
 		t.Fatal(err)
@@ -291,22 +291,6 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
-}
-
-// gitAdapter adapts gitrepo.Git to the Service's Git seam (mirrors the
-// production adapter in the server wiring).
-type gitAdapter struct{ g *gitrepo.Git }
-
-func (a gitAdapter) Diff(ctx context.Context, ws *managedagent.Workspace) (*managedagent.Diff, error) {
-	d, err := a.g.Diff(ctx, ws.Path, ws.BaseRef)
-	if err != nil {
-		return nil, err
-	}
-	return &managedagent.Diff{ChangedFiles: d.ChangedFiles, Stat: d.Stat, Patch: d.Patch, Untracked: d.Untracked, Truncated: d.Truncated}, nil
-}
-
-func (a gitAdapter) Push(ctx context.Context, ws *managedagent.Workspace, log func(string)) error {
-	return a.g.Push(ctx, ws.Path, ws.Branch, log)
 }
 
 var _ agentboot.Agent = (*claude.Agent)(nil)

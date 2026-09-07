@@ -2,16 +2,22 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/managedagent"
+	"github.com/tingly-dev/tingly-box/internal/managedagent/agentrun"
+	"github.com/tingly-dev/tingly-box/internal/managedagent/gitrepo"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	managedagentmodule "github.com/tingly-dev/tingly-box/internal/server/module/managedagent"
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -116,8 +122,9 @@ func (s *Server) UseTokenManagementEndpoints() {
 }
 
 // UseManagedAgentEndpoints registers /api/v1/agent/* — the managed agent
-// control plane (.design/managed-agent.md). Execution is not wired yet: the
-// Service runs without a Launcher, so sessions persist as queued.
+// control plane (.design/managed-agent.md) — and wires its local runtime:
+// host-side git under <base>/agent, Claude Code through agentboot, gateway
+// routing through the same TBClient the @cc executor uses.
 func (s *Server) UseManagedAgentEndpoints() {
 	if s.config == nil {
 		return
@@ -126,14 +133,45 @@ func (s *Server) UseManagedAgentEndpoints() {
 	if sm == nil || sm.ManagedAgent() == nil {
 		return
 	}
-	eventLog, err := managedagent.NewEventLog(constant.GetAgentEventsDir(sm.BaseDir()))
+	base := sm.BaseDir()
+	eventLog, err := managedagent.NewEventLog(constant.GetAgentEventsDir(base))
 	if err != nil {
 		logrus.WithError(err).Error("managed agent: event log unavailable; endpoints disabled")
 		return
 	}
+	stores := sm.ManagedAgent().Stores(eventLog)
+	git := &gitrepo.Git{MirrorsDir: constant.GetAgentMirrorsDir(base)}
+
+	tb := tbclient.NewTBClient(s.config)
+	routing := agentrun.RoutingFunc(func(ctx context.Context, ccProfile string) ([]string, string, error) {
+		if _, profileID := typ.ParseScenarioProfile(typ.RuleScenario(ccProfile)); profileID != "" {
+			path, perr := tb.GetClaudeCodeSettingsPathForProfile(ctx, profileID)
+			if perr == nil && path != "" {
+				return nil, path, nil
+			}
+			logrus.WithError(perr).WithField("ccProfile", ccProfile).Warn("managed agent: profile settings unavailable; using main scenario")
+		}
+		env, eerr := tb.GetClaudeCodeEnv(ctx)
+		return env, "", eerr
+	})
+	ccConfig := claude.DefaultConfig()
+	ccConfig.DefaultExecutionTimeout = managedAgentTurnTimeout
+	launcher, err := agentrun.New(agentrun.Config{
+		Stores:  stores,
+		Agent:   claude.NewAgentWithConfig(ccConfig),
+		Git:     git,
+		Routing: routing,
+		Logger:  logrus.StandardLogger(),
+	})
+	if err != nil {
+		logrus.WithError(err).Error("managed agent: launcher unavailable; endpoints disabled")
+		return
+	}
 	svc := managedagent.NewService(managedagent.Config{
-		Stores:        sm.ManagedAgent().Stores(eventLog),
-		WorkspacesDir: constant.GetAgentWorkspacesDir(sm.BaseDir()),
+		Stores:        stores,
+		Launcher:      launcher,
+		Git:           agentrun.GitAdapter{Git: git},
+		WorkspacesDir: constant.GetAgentWorkspacesDir(base),
 	})
 	if err := svc.EnsureDefaults(context.Background()); err != nil {
 		logrus.WithError(err).Error("managed agent: failed to ensure default environment")
@@ -144,3 +182,7 @@ func (s *Server) UseManagedAgentEndpoints() {
 	api.Router.Use(s.getUserAuthMiddleware())
 	managedagentmodule.RegisterRoutes(api, managedagentmodule.NewHandler(svc))
 }
+
+// managedAgentTurnTimeout bounds one agent turn. Coding tasks run far longer
+// than a chat reply, so this is looser than the remote-control default.
+const managedAgentTurnTimeout = 2 * time.Hour
