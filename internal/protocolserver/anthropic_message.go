@@ -187,10 +187,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 
 	// Snapshot a pristine template only when failover is possible; the single
 	// service case reuses the original request with no clone overhead.
-	// "Possible" includes the endpoint-learning retry, which re-enters this
-	// pipeline as a second attempt on the *same* service: without a snapshot it
-	// would re-transform the request object the first attempt already mutated.
-	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
+	multi := DispatchMayRetry(rule, provider, requestModel)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()
@@ -315,10 +312,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	}
 
 	// Snapshot a pristine template only when failover is possible.
-	// "Possible" includes the endpoint-learning retry, which re-enters this
-	// pipeline as a second attempt on the *same* service: without a snapshot it
-	// would re-transform the request object the first attempt already mutated.
-	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
+	multi := DispatchMayRetry(rule, provider, requestModel)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()

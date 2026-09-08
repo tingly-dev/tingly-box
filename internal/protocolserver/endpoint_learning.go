@@ -1,7 +1,7 @@
 package protocolserver
 
 import (
-	"strings"
+	"bytes"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -11,27 +11,68 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Request-scoped plumbing between the endpoint resolution done inside an
-// attempt and the dispatch loop that owns the retry decision.
+// ctxKeyEndpointDecision carries the endpointDecision below. One key rather
+// than one per field: these values are facets of a single decision with a
+// single lifetime, and the dispatch loop resets them together.
+const ctxKeyEndpointDecision = "tingly_endpoint_decision"
+
+// endpointDecision is the per-attempt contract between endpoint resolution
+// (inside the attempt) and the dispatch loop that owns the retry decision.
 //
-//   - ctxKeyResolvedEndpoint: what the attempt actually used, so the loop can
-//     compute the alternative without re-deriving it.
-//   - ctxKeyForcedEndpoint: the loop's instruction for the retry attempt.
-//
-// The gin context is the same channel the rest of the per-request routing
-// state travels on (rule flags, tracking); a parameter would have to thread
-// through every transform signature to reach the same place.
-const (
-	ctxKeyResolvedEndpoint = "tingly_resolved_openai_endpoint"
-	ctxKeyForcedEndpoint   = "tingly_forced_openai_endpoint"
-	// ctxKeyEndpointPinned marks a resolution that came from the rule's
-	// openai_endpoint_override. A pinned endpoint is the caller's explicit
-	// choice and is never second-guessed by learning.
-	ctxKeyEndpointPinned = "tingly_openai_endpoint_pinned"
-	// ctxKeySetupFailed marks an attempt that failed inside the gateway
-	// (target resolution, transform) rather than at the upstream.
-	ctxKeySetupFailed = "tingly_attempt_setup_failed"
-)
+// The gin context is the channel because dispatchAttempt is
+// func(provider, model): widening that signature to carry an outcome would
+// reach every handler closure and FailAttemptSetup. That is the deeper fix if
+// this contract ever grows again.
+type endpointDecision struct {
+	// resolved is the endpoint the current attempt used; forced is the one
+	// the loop is making it use for a learning retry.
+	resolved, forced protocol.APIType
+	// pinned marks a resolution the rule's openai_endpoint_override dictated.
+	// setupFailed marks an attempt the gateway failed itself, before the
+	// upstream saw it. Neither is a verdict on the endpoint.
+	pinned, setupFailed bool
+	// mode caches EffectiveEndpointMode for modeProvider. Resolution, the
+	// snapshot decision and the retry check all ask for it within one attempt,
+	// and deriving it parses URLs.
+	mode         ai.OpenAIEndpointMode
+	modeProvider string
+}
+
+// endpointDecisionFor returns the request's decision, creating it on first use.
+func endpointDecisionFor(c *gin.Context) *endpointDecision {
+	if c == nil {
+		return &endpointDecision{}
+	}
+	if v, ok := c.Get(ctxKeyEndpointDecision); ok {
+		if d, ok := v.(*endpointDecision); ok {
+			return d
+		}
+	}
+	d := &endpointDecision{}
+	c.Set(ctxKeyEndpointDecision, d)
+	return d
+}
+
+// reset clears everything scoped to one attempt. forced survives: the loop
+// sets it for the retry attempt it is about to run.
+func (d *endpointDecision) reset() {
+	d.resolved = ""
+	d.pinned = false
+	d.setupFailed = false
+}
+
+// effectiveMode is EffectiveEndpointMode memoized for the attempt's provider.
+func (d *endpointDecision) effectiveMode(provider *typ.Provider) ai.OpenAIEndpointMode {
+	uuid := ""
+	if provider != nil {
+		uuid = provider.UUID
+	}
+	if d.modeProvider != uuid || d.mode == "" {
+		d.mode = EffectiveEndpointMode(provider)
+		d.modeProvider = uuid
+	}
+	return d.mode
+}
 
 // EffectiveEndpointMode is the provider's declared OpenAIEndpointMode, with one
 // host-derived fallback: an OpenCode Zen provider carrying no declaration is
@@ -41,10 +82,13 @@ const (
 // ProviderTemplate.OpenAIEndpointMode is only ever copied onto a Provider by
 // the OAuth path (Codex); a provider created from a template through the normal
 // API keeps the zero value — which is why openai-com's "both" has never taken
-// effect either. Rather than add a startup migration that still leaves a
-// provider added at runtime broken until the next restart, derive the fact
-// where it is used, from the same host match the OpenCode client already
-// relies on.
+// effect either.
+//
+// This is a stopgap, and the deeper fix is named in
+// .design/openai-endpoint-routing.md §10: serve the template's declaration
+// lazily at request time, the way TemplateManager already serves max_tokens
+// and web-search capability, which would retire the host match here and repair
+// "both" at the same time.
 //
 // Pure: reads provider fields only.
 func EffectiveEndpointMode(provider *typ.Provider) ai.OpenAIEndpointMode {
@@ -62,13 +106,13 @@ func EffectiveEndpointMode(provider *typ.Provider) ai.OpenAIEndpointMode {
 	return ai.EndpointModeUnknown
 }
 
-// ResolveOpenAIEndpointForRequest wraps the pure resolver with the two pieces
-// of request state it deliberately does not read: the endpoint the dispatch
-// loop is forcing for a learning retry, and what has already been learned for
-// this provider+model. It also records the decision for the loop.
+// ResolveOpenAIEndpointForRequest wraps the pure resolver with the request
+// state it deliberately does not read: the endpoint the dispatch loop is
+// forcing for a learning retry, and what has already been learned for this
+// service. It also records the decision for the loop.
 //
-// Every handler resolves through here so no dispatch path can silently opt
-// out of learning — or of being retried.
+// Every handler resolves through here so no dispatch path can silently opt out
+// of learning — or of being retried.
 func ResolveOpenAIEndpointForRequest(
 	c *gin.Context,
 	provider *typ.Provider,
@@ -76,96 +120,76 @@ func ResolveOpenAIEndpointForRequest(
 	flags typ.RuleFlags,
 	incoming IncomingAPIType,
 ) (protocol.APIType, error) {
-	if forced, ok := forcedEndpoint(c); ok {
-		c.Set(ctxKeyResolvedEndpoint, forced)
-		return forced, nil
+	d := endpointDecisionFor(c)
+	if d.forced != "" {
+		d.resolved = d.forced
+		return d.forced, nil
 	}
 
 	// A rule that pins the endpoint owns the decision; record that so the
 	// learning retry stands down instead of overruling it.
-	c.Set(ctxKeyEndpointPinned, ParseEndpointOverride(flags.OpenAIEndpointOverride) != OverrideAuto)
+	d.pinned = ParseEndpointOverride(flags.OpenAIEndpointOverride) != OverrideAuto
 
 	var learned protocol.APIType
-	if endpointLearningEnabled(provider) {
-		learned = defaultEndpointMemory.Lookup(provider.UUID, model)
+	if d.effectiveMode(provider) == ai.EndpointModePerModel {
+		learned = defaultEndpointMemory.Lookup(endpointMemoryKey(provider.UUID, model))
 	}
 
 	target, err := ResolveOpenAIEndpoint(provider, flags, incoming, learned)
 	if err != nil {
 		return "", err
 	}
-	c.Set(ctxKeyResolvedEndpoint, target)
+	d.resolved = target
 	return target, nil
 }
 
-// endpointLearningEnabled reports whether this provider opted into the
-// learning fallback by declaring EndpointModePerModel. Everything downstream
-// — installing the buffer for a single-service rule, spending an extra
-// round-trip, writing to the memory — is gated on this one declaration, which
-// is what keeps the blast radius at "providers whose upstream is known to be
-// per-model" instead of "every provider", the flaw that sank the old
-// AdaptiveProbe.
-func endpointLearningEnabled(provider *typ.Provider) bool {
-	return EffectiveEndpointMode(provider) == ai.EndpointModePerModel
-}
-
-// ResetEndpointDecision clears the per-attempt decision state. The dispatch
-// loop calls it before every attempt: a later attempt may land on a provider
-// of another API style that never resolves an OpenAI endpoint at all, and a
-// stale value there would let the retry fire on someone else's failure.
-func ResetEndpointDecision(c *gin.Context) {
-	if c == nil {
-		return
+// DispatchMayRetry reports whether `attempt` can run more than once for this
+// request — because the rule has a fallback tier, or because endpoint learning
+// may retry the same service on the other endpoint.
+//
+// It states one invariant in one place for the two consumers that must agree:
+// the dispatch loop (which installs the response buffer) and the handlers
+// (which snapshot a pristine request). If they disagree, a second attempt
+// re-transforms the request object the first one already mutated.
+//
+// Once an endpoint is learned there is nothing left to retry, so the cost of
+// buffering and snapshotting is paid only until the answer is known — see
+// forgetStaleEndpoint for how a mapping that stops working gets re-learned.
+func DispatchMayRetry(rule *typ.Rule, provider *typ.Provider, model string) bool {
+	if rule != nil && len(rule.GetActiveServices()) > 1 {
+		return true
 	}
-	c.Set(ctxKeyResolvedEndpoint, protocol.APIType(""))
-	c.Set(ctxKeyEndpointPinned, false)
-	c.Set(ctxKeySetupFailed, false)
+	if EffectiveEndpointMode(provider) != ai.EndpointModePerModel {
+		return false
+	}
+	return defaultEndpointMemory.Lookup(endpointMemoryKey(provider.UUID, model)) == ""
 }
 
 // MarkAttemptSetupFailed records that the gateway itself failed the attempt
 // before reaching the upstream. Such a failure is written as a 500, which the
-// mismatch matcher would otherwise read as "maybe the wrong endpoint" and pay
-// a pointless round-trip for.
+// mismatch matcher would otherwise read as "maybe the wrong endpoint".
 func MarkAttemptSetupFailed(c *gin.Context) {
-	if c != nil {
-		c.Set(ctxKeySetupFailed, true)
-	}
+	endpointDecisionFor(c).setupFailed = true
 }
 
-func boolFromContext(c *gin.Context, key string) bool {
-	if c == nil {
-		return false
+// forgetStaleEndpoint drops a learned mapping after the endpoint it names
+// failed with a server error. Without this, a model the upstream moves between
+// formats stays broken for the rest of the TTL: the learned value routes every
+// request to the dead endpoint, and DispatchMayRetry — seeing an answer
+// already known — installs no buffer to retry with. Forgetting costs one
+// failed request and lets the next one re-learn.
+func forgetStaleEndpoint(c *gin.Context, provider *typ.Provider, model string, status int) {
+	if status < 500 || endpointDecisionFor(c).effectiveMode(provider) != ai.EndpointModePerModel {
+		return
 	}
-	v, ok := c.Get(key)
-	if !ok {
-		return false
+	serviceID := endpointMemoryKey(provider.UUID, model)
+	if defaultEndpointMemory.Lookup(serviceID) == "" {
+		return
 	}
-	b, _ := v.(bool)
-	return b
-}
-
-func forcedEndpoint(c *gin.Context) (protocol.APIType, bool) {
-	if c == nil {
-		return "", false
-	}
-	v, ok := c.Get(ctxKeyForcedEndpoint)
-	if !ok {
-		return "", false
-	}
-	ep, ok := v.(protocol.APIType)
-	return ep, ok && ep != ""
-}
-
-func resolvedEndpoint(c *gin.Context) protocol.APIType {
-	if c == nil {
-		return ""
-	}
-	if v, ok := c.Get(ctxKeyResolvedEndpoint); ok {
-		if ep, ok := v.(protocol.APIType); ok {
-			return ep
-		}
-	}
-	return ""
+	defaultEndpointMemory.Forget(serviceID)
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"stage": "endpoint_forgotten", "provider": provider.UUID, "model": model, "status": status,
+	}).Infof("[endpoint] %s/%s failed on its learned endpoint; will re-learn", provider.UUID, model)
 }
 
 // endpointMismatchMarkers are the upstream rejections that mean "this model
@@ -179,14 +203,18 @@ func resolvedEndpoint(c *gin.Context) protocol.APIType {
 //
 // The last one carries no marker at all, which is why looksLikeEndpointMismatch
 // also accepts a bare 5xx. That is safe only because the whole path is gated on
-// EndpointModePerModel: a provider that has not declared per-model variance
-// never reaches this test, so an ordinary upstream 500 is never retried on a
-// different endpoint.
-var endpointMismatchMarkers = []string{
-	"not supported for format",
-	"endpoint is unavailable",
-	"unsupported endpoint",
+// EndpointModePerModel: a provider whose format does not vary by model never
+// reaches this test, so an ordinary upstream 500 is never retried elsewhere.
+var endpointMismatchMarkers = [][]byte{
+	[]byte("not supported for format"),
+	[]byte("endpoint is unavailable"),
+	[]byte("unsupported endpoint"),
 }
+
+// endpointMismatchScanLimit caps how much of a failure body is scanned. The
+// markers sit in the first JSON object; a relay echoing a request back would
+// otherwise be lowercased in full.
+const endpointMismatchScanLimit = 4096
 
 // looksLikeEndpointMismatch reports whether a buffered attempt failure is
 // plausibly "wrong endpoint for this model".
@@ -201,9 +229,12 @@ func looksLikeEndpointMismatch(status int, body []byte) bool {
 	if status != 400 && status != 401 && status != 404 {
 		return false
 	}
-	lower := strings.ToLower(string(body))
+	if len(body) > endpointMismatchScanLimit {
+		body = body[:endpointMismatchScanLimit]
+	}
+	lower := bytes.ToLower(body)
 	for _, marker := range endpointMismatchMarkers {
-		if strings.Contains(lower, marker) {
+		if bytes.Contains(lower, marker) {
 			return true
 		}
 	}
@@ -211,26 +242,15 @@ func looksLikeEndpointMismatch(status int, body []byte) bool {
 }
 
 // retryOnAlternateEndpoint gives a failed attempt on a per-model provider one
-// second chance on the other OpenAI endpoint, and remembers the answer when
-// it works. Returns whether a retry actually ran (the caller then re-reads
-// the gate).
+// second chance on the other OpenAI endpoint, remembers the answer when it
+// works, and returns the status the dispatch loop should judge.
 //
-// It is the whole of the "adaptive" behavior, and every guard here is one of
-// the ways the old AdaptiveProbe went wrong:
-//
-//   - Reactive, never proactive: this runs after a real request already
-//     failed at the upstream. A failure the gateway produced itself, or an
-//     endpoint the rule pinned, is not second-guessed.
-//   - Gated on the provider's declared mode, so no other upstream can ever
-//     pay for it.
-//   - Pre-commit only: a stream that has put bytes on the wire cannot be
-//     retried, and is not.
-//   - One retry, then normal failover takes over.
-//   - Cooldown on failure, so a sick upstream cannot turn into a hot loop:
-//     one extra request per (provider, model) per minute, at worst. Success
-//     is not throttled at all — it is remembered, and a remembered mapping
-//     produces no failure to retry.
-//   - Only the success is remembered.
+// It is the whole of the "adaptive" behavior. Two properties keep it from
+// repeating the AdaptiveProbe (PR #976) mistakes: it is reactive — it runs
+// only after a real request already failed at the upstream, so there is no
+// cold-start probe and no synthetic token spend — and it is gated on the
+// provider's mode, so no other upstream can pay for it. The remaining guards
+// are inline below.
 func (ph *ProtocolHandler) retryOnAlternateEndpoint(
 	c *gin.Context,
 	gate *firstChunkGate,
@@ -239,59 +259,61 @@ func (ph *ProtocolHandler) retryOnAlternateEndpoint(
 	status int,
 	attemptNo int,
 	attempt dispatchAttempt,
-) bool {
-	if !endpointLearningEnabled(provider) || gate.Committed() {
-		return false
+) int {
+	d := endpointDecisionFor(c)
+	if d.effectiveMode(provider) != ai.EndpointModePerModel || gate.Committed() {
+		return status
 	}
-	if _, forced := forcedEndpoint(c); forced {
-		return false // already the retry
+	if d.forced != "" {
+		return status // already the retry
 	}
-	if boolFromContext(c, ctxKeyEndpointPinned) {
-		return false // the rule chose this endpoint explicitly
+	if d.pinned {
+		return status // the rule chose this endpoint explicitly
 	}
-	if boolFromContext(c, ctxKeySetupFailed) {
-		return false // our own failure, not the upstream's verdict
+	if d.setupFailed {
+		return status // our own failure, not the upstream's verdict
 	}
-	used := resolvedEndpoint(c)
-	alternate := alternateEndpoint(used)
+	alternate := alternateEndpoint(d.resolved)
 	if alternate == "" {
-		return false // not an OpenAI-shaped attempt
+		return status // not an OpenAI-shaped attempt
 	}
 	if !looksLikeEndpointMismatch(status, gate.BufferedBody()) {
-		return false
+		return status
 	}
-	if !defaultEndpointMemory.ShouldRetry(provider.UUID, model) {
-		return false
+	serviceID := endpointMemoryKey(provider.UUID, model)
+	if !defaultEndpointMemory.ShouldRetry(serviceID) {
+		return status
 	}
-	defaultEndpointMemory.MarkRetry(provider.UUID, model)
+	defaultEndpointMemory.MarkRetry(serviceID)
 
 	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-		"stage":    "endpoint_learning_retry",
-		"provider": provider.UUID,
-		"model":    model,
-		"attempt":  attemptNo,
-		"status":   status,
-		"from":     used,
-		"to":       alternate,
-	}).Infof("[endpoint] %s/%s failed on %s, retrying on %s", provider.UUID, model, used, alternate)
+		"stage": "endpoint_learning_retry", "provider": provider.UUID, "model": model,
+		"attempt": attemptNo, "status": status, "from": d.resolved, "to": alternate,
+	}).Infof("[endpoint] %s/%s failed on %s, retrying on %s", provider.UUID, model, d.resolved, alternate)
 
 	gate.Discard()
-	c.Set(ctxKeyForcedEndpoint, alternate)
-	defer c.Set(ctxKeyForcedEndpoint, protocol.APIType(""))
+	d.forced = alternate
+	defer func() { d.forced = "" }()
 
 	attempt(provider, model)
 
-	if gate.Committed() || isSuccessStatus(gate.Status()) {
-		defaultEndpointMemory.Remember(provider.UUID, model, alternate)
+	retried := gate.Status()
+	if gate.Committed() || isSuccessStatus(retried) {
+		defaultEndpointMemory.Remember(serviceID, alternate)
 		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":    "endpoint_learned",
-			"provider": provider.UUID,
-			"model":    model,
-			"endpoint": alternate,
-			"ttl":      endpointMemoryTTL.String(),
+			"stage": "endpoint_learned", "provider": provider.UUID, "model": model,
+			"endpoint": alternate, "ttl": endpointMemoryTTL.String(),
 		}).Infof("[endpoint] learned %s/%s speaks %s", provider.UUID, model, alternate)
+		return retried
 	}
-	return true
+
+	// A terminal status from the retry must not mask a retryable original:
+	// the first failure had earned this service a fallback to a healthy
+	// sibling, and the second endpoint's verdict does not take that away.
+	if isRetryableStatus(retried) || !isRetryableStatus(status) {
+		return retried
+	}
+	return status
 }
 
 // isSuccessStatus treats a buffered 2xx as success. A gate that was never

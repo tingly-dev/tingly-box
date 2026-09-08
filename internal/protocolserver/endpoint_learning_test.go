@@ -2,6 +2,7 @@ package protocolserver
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -20,51 +22,53 @@ import (
 
 func TestEndpointMemory_LookupRememberExpiry(t *testing.T) {
 	now := time.Now()
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
 	m := newEndpointMemory()
-	m.now = func() time.Time { return now }
 
-	if got := m.Lookup("p1", "luna"); got != "" {
+	if got := m.Lookup(endpointMemoryKey("p1", "luna")); got != "" {
 		t.Fatalf("empty store returned %q", got)
 	}
 
-	m.Remember("p1", "luna", protocol.TypeOpenAIResponses)
-	if got := m.Lookup("p1", "luna"); got != protocol.TypeOpenAIResponses {
+	m.Remember(endpointMemoryKey("p1", "luna"), protocol.TypeOpenAIResponses)
+	if got := m.Lookup(endpointMemoryKey("p1", "luna")); got != protocol.TypeOpenAIResponses {
 		t.Errorf("learned value = %q, want responses", got)
 	}
 	// Keyed per model, not per provider.
-	if got := m.Lookup("p1", "kimi-k3"); got != "" {
+	if got := m.Lookup(endpointMemoryKey("p1", "kimi-k3")); got != "" {
 		t.Errorf("another model on the same provider returned %q", got)
 	}
 
 	now = now.Add(endpointMemoryTTL + time.Second)
-	if got := m.Lookup("p1", "luna"); got != "" {
+	if got := m.Lookup(endpointMemoryKey("p1", "luna")); got != "" {
 		t.Errorf("expired entry still returned %q", got)
 	}
 }
 
 func TestEndpointMemory_FailedRetryCooldown(t *testing.T) {
 	now := time.Now()
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
 	m := newEndpointMemory()
-	m.now = func() time.Time { return now }
 
-	if !m.ShouldRetry("p1", "luna") {
+	if !m.ShouldRetry(endpointMemoryKey("p1", "luna")) {
 		t.Fatal("first retry must be allowed")
 	}
-	m.MarkRetry("p1", "luna")
-	if m.ShouldRetry("p1", "luna") {
+	m.MarkRetry(endpointMemoryKey("p1", "luna"))
+	if m.ShouldRetry(endpointMemoryKey("p1", "luna")) {
 		t.Error("a second retry inside the cooldown must be refused")
 	}
 
 	now = now.Add(endpointRetryCooldown + time.Second)
-	if !m.ShouldRetry("p1", "luna") {
+	if !m.ShouldRetry(endpointMemoryKey("p1", "luna")) {
 		t.Error("retry must be allowed again after the cooldown")
 	}
 
 	// The cooldown gates failures only: a success clears it outright, and the
 	// learned mapping then means no failure arises to retry in the first place.
-	m.MarkRetry("p1", "luna")
-	m.Remember("p1", "luna", protocol.TypeOpenAIResponses)
-	if !m.ShouldRetry("p1", "luna") {
+	m.MarkRetry(endpointMemoryKey("p1", "luna"))
+	m.Remember(endpointMemoryKey("p1", "luna"), protocol.TypeOpenAIResponses)
+	if !m.ShouldRetry(endpointMemoryKey("p1", "luna")) {
 		t.Error("remembering an answer must clear the cooldown")
 	}
 }
@@ -115,6 +119,17 @@ func TestAlternateEndpoint(t *testing.T) {
 }
 
 // ── the loop ────────────────────────────────────────────────────────────────
+
+// resetEndpointMemory swaps in a fresh store for one test and restores the
+// process-wide one afterwards, so these tests neither inherit nor leak
+// learned state.
+func resetEndpointMemory(t *testing.T) *endpointMemory {
+	t.Helper()
+	previous := defaultEndpointMemory
+	defaultEndpointMemory = newEndpointMemory()
+	t.Cleanup(func() { defaultEndpointMemory = previous })
+	return defaultEndpointMemory
+}
 
 // perModelFailoverHandler builds a handler with the deps failover selection
 // needs (config-backed provider lookup, load balancer, health monitor), plus a
@@ -182,7 +197,7 @@ func testGinContext() (*gin.Context, *httptest.ResponseRecorder) {
 // retry the same service on Responses, serve that answer, and remember it so
 // the next request pays no extra round-trip.
 func TestDispatch_PerModel_LearnsResponsesOnlyModel(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := singleServiceRule(provider, "gpt-5.6-luna")
 	c, rec := testGinContext()
@@ -214,7 +229,7 @@ func TestDispatch_PerModel_LearnsResponsesOnlyModel(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("client saw %d, want the retry's 200", rec.Code)
 	}
-	if got := defaultEndpointMemory.Lookup(provider.UUID, "gpt-5.6-luna"); got != protocol.TypeOpenAIResponses {
+	if got := defaultEndpointMemory.Lookup(endpointMemoryKey(provider.UUID, "gpt-5.6-luna")); got != protocol.TypeOpenAIResponses {
 		t.Errorf("learned = %q, want responses", got)
 	}
 }
@@ -222,9 +237,9 @@ func TestDispatch_PerModel_LearnsResponsesOnlyModel(t *testing.T) {
 // TestDispatch_PerModel_UsesLearnedEndpointWithoutRetry proves the learning is
 // worth having: once known, the right endpoint is used on the first attempt.
 func TestDispatch_PerModel_UsesLearnedEndpointWithoutRetry(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
-	defaultEndpointMemory.Remember(provider.UUID, "gpt-5.6-luna", protocol.TypeOpenAIResponses)
+	defaultEndpointMemory.Remember(endpointMemoryKey(provider.UUID, "gpt-5.6-luna"), protocol.TypeOpenAIResponses)
 	rule := singleServiceRule(provider, "gpt-5.6-luna")
 	c, rec := testGinContext()
 	ph := &ProtocolHandler{}
@@ -248,7 +263,7 @@ func TestDispatch_PerModel_UsesLearnedEndpointWithoutRetry(t *testing.T) {
 // narrow: a 401 that is a credential problem carries no format marker and
 // must not spend a round-trip on the other endpoint.
 func TestDispatch_PerModel_DoesNotRetryCredentialFailures(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := singleServiceRule(provider, "kimi-k3")
 	c, _ := testGinContext()
@@ -264,7 +279,7 @@ func TestDispatch_PerModel_DoesNotRetryCredentialFailures(t *testing.T) {
 	if attempts != 1 {
 		t.Errorf("attempts = %d, want 1 (no endpoint retry for a credential failure)", attempts)
 	}
-	if got := defaultEndpointMemory.Lookup(provider.UUID, "kimi-k3"); got != "" {
+	if got := defaultEndpointMemory.Lookup(endpointMemoryKey(provider.UUID, "kimi-k3")); got != "" {
 		t.Errorf("nothing should have been learned, got %q", got)
 	}
 }
@@ -273,7 +288,7 @@ func TestDispatch_PerModel_DoesNotRetryCredentialFailures(t *testing.T) {
 // a provider that has not declared per-model variance behaves exactly as
 // before — one attempt, no buffering for a single-service rule, no learning.
 func TestDispatch_OtherModes_NeverRetryEndpoints(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	provider.OpenAIEndpointMode = ai.EndpointModeChat
 	rule := singleServiceRule(provider, "gpt-5.6-luna")
@@ -290,7 +305,7 @@ func TestDispatch_OtherModes_NeverRetryEndpoints(t *testing.T) {
 	if attempts != 1 {
 		t.Errorf("attempts = %d, want 1: learning is gated on the declared mode", attempts)
 	}
-	if got := defaultEndpointMemory.Lookup(provider.UUID, "gpt-5.6-luna"); got != "" {
+	if got := defaultEndpointMemory.Lookup(endpointMemoryKey(provider.UUID, "gpt-5.6-luna")); got != "" {
 		t.Errorf("learned %q on a mode that must never learn", got)
 	}
 }
@@ -299,7 +314,7 @@ func TestDispatch_OtherModes_NeverRetryEndpoints(t *testing.T) {
 // from doubling its own traffic: the second request inside the cooldown gets
 // one attempt, not two.
 func TestDispatch_PerModel_CooldownStopsRepeatedRetries(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := singleServiceRule(provider, "sick-model")
 	ph := &ProtocolHandler{}
@@ -355,7 +370,7 @@ func TestEffectiveEndpointMode_HostFallback(t *testing.T) {
 // the retryable original, or the request dies on one service while a healthy
 // sibling sits idle.
 func TestDispatch_PerModel_FailedRetryStillFailsOver(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	zen := perModelProvider()
 	sibling := &typ.Provider{UUID: "p-sibling", Name: "sibling", APIStyle: protocol.APIStyleOpenAI, APIBase: "https://sibling.example.invalid/v1"}
 	ph, rule := perModelFailoverHandler(t, zen, sibling, "gpt-5.6-luna", "gpt-5.6-luna")
@@ -387,7 +402,7 @@ func TestDispatch_PerModel_FailedRetryStillFailsOver(t *testing.T) {
 // TestDispatch_PerModel_PinnedEndpointIsNotSecondGuessed: a rule that sets
 // openai_endpoint_override made the choice; learning must not overrule it.
 func TestDispatch_PerModel_PinnedEndpointIsNotSecondGuessed(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := singleServiceRule(provider, "gpt-5.6-luna")
 	c, _ := testGinContext()
@@ -413,7 +428,7 @@ func TestDispatch_PerModel_PinnedEndpointIsNotSecondGuessed(t *testing.T) {
 // resolution failure is the gateway's own 500 and says nothing about which
 // endpoint the model speaks.
 func TestDispatch_PerModel_SetupFailureIsNotAnUpstreamVerdict(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := singleServiceRule(provider, "gpt-5.6-luna")
 	c, _ := testGinContext()
@@ -435,7 +450,7 @@ func TestDispatch_PerModel_SetupFailureIsNotAnUpstreamVerdict(t *testing.T) {
 // attempt on a provider of another API style resolves no OpenAI endpoint, and
 // must not inherit the previous attempt's.
 func TestDispatch_PerModel_StaleDecisionDoesNotLeakAcrossAttempts(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	zen := perModelProvider()
 	sibling := &typ.Provider{UUID: "p-anthropic", Name: "claude", APIStyle: protocol.APIStyleAnthropic, APIBase: "https://anthropic.example.invalid"}
 	ph, rule := perModelFailoverHandler(t, zen, sibling, "gpt-5.6-luna", "claude-sonnet-5")
@@ -469,7 +484,7 @@ func TestDispatch_PerModel_StaleDecisionDoesNotLeakAcrossAttempts(t *testing.T) 
 // installation opened: a rule with no active services (a probe pinning one by
 // header) must still dispatch, not answer an empty 200.
 func TestDispatch_PerModel_EmptyServiceListStillAttempts(t *testing.T) {
-	defaultEndpointMemory = newEndpointMemory()
+	resetEndpointMemory(t)
 	provider := perModelProvider()
 	rule := &typ.Rule{UUID: "r1", Scenario: typ.ScenarioOpenAI, Active: true}
 	c, rec := testGinContext()
@@ -486,5 +501,92 @@ func TestDispatch_PerModel_EmptyServiceListStillAttempts(t *testing.T) {
 	}
 	if rec.Code != http.StatusOK || rec.Body.Len() == 0 {
 		t.Errorf("client saw %d with %d bytes, want the attempt's answer", rec.Code, rec.Body.Len())
+	}
+}
+
+// TestDispatchMayRetry_StopsBufferingOnceLearned: the response buffer and the
+// pristine-request snapshot exist to make a second attempt possible. Once the
+// endpoint is known there is no second attempt, and a per-model provider
+// should stop paying for one on every request.
+func TestDispatchMayRetry_StopsBufferingOnceLearned(t *testing.T) {
+	memory := resetEndpointMemory(t)
+	zen := perModelProvider()
+	rule := singleServiceRule(zen, "gpt-5.6-luna")
+
+	if !DispatchMayRetry(rule, zen, "gpt-5.6-luna") {
+		t.Error("with nothing learned a retry is still possible")
+	}
+
+	memory.Remember(endpointMemoryKey(zen.UUID, "gpt-5.6-luna"), protocol.TypeOpenAIResponses)
+	if DispatchMayRetry(rule, zen, "gpt-5.6-luna") {
+		t.Error("once learned there is nothing to retry, so nothing to buffer")
+	}
+	// Another model on the same provider is still unknown.
+	if !DispatchMayRetry(rule, zen, "kimi-k3") {
+		t.Error("learning one model must not silence another")
+	}
+	// A multi-service rule always retries, learned or not.
+	multi := &typ.Rule{UUID: "r-multi", Scenario: typ.ScenarioOpenAI, Active: true,
+		Services: []*loadbalance.Service{
+			{Provider: zen.UUID, Model: "gpt-5.6-luna", Active: true},
+			{Provider: "p-other", Model: "gpt-5.6-luna", Active: true},
+		}}
+	if !DispatchMayRetry(multi, zen, "gpt-5.6-luna") {
+		t.Error("a fallback tier is reason enough to buffer")
+	}
+}
+
+// TestDispatch_PerModel_ForgetsAnEndpointThatStopsWorking closes the loop the
+// previous test opens: with no buffer installed, a learned mapping that goes
+// stale must not pin the model to a dead endpoint for the rest of the TTL.
+func TestDispatch_PerModel_ForgetsAnEndpointThatStopsWorking(t *testing.T) {
+	memory := resetEndpointMemory(t)
+	zen := perModelProvider()
+	serviceID := endpointMemoryKey(zen.UUID, "gpt-5.6-luna")
+	memory.Remember(serviceID, protocol.TypeOpenAIResponses)
+	rule := singleServiceRule(zen, "gpt-5.6-luna")
+	ph := &ProtocolHandler{}
+
+	c, _ := testGinContext()
+	attempts := 0
+	ph.DispatchWithPriorityFailover(c, rule, zen, "gpt-5.6-luna", func(p *typ.Provider, model string) {
+		attempts++
+		_, _ = ResolveOpenAIEndpointForRequest(c, p, model, typ.RuleFlags{}, IncomingAPIChat)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "Internal server error"}})
+	})
+
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1: a known endpoint is not retried, only forgotten", attempts)
+	}
+	if got := memory.Lookup(serviceID); got != "" {
+		t.Errorf("stale mapping survived as %q; the next request would fail the same way", got)
+	}
+	// And the next request may learn again.
+	if !DispatchMayRetry(rule, zen, "gpt-5.6-luna") {
+		t.Error("after forgetting, the next request must be able to retry")
+	}
+}
+
+// TestEndpointMemory_SweepsDeadEntries guards the one map against unbounded
+// growth: model names come from the request.
+func TestEndpointMemory_SweepsDeadEntries(t *testing.T) {
+	now := time.Now()
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
+	m := newEndpointMemory()
+
+	for i := range endpointMemorySweepAt + 1 {
+		m.MarkRetry(endpointMemoryKey("p1", fmt.Sprintf("model-%d", i)))
+	}
+	if got := len(m.entries); got <= endpointMemorySweepAt {
+		t.Fatalf("entries = %d, expected the map to have grown past the sweep threshold first", got)
+	}
+
+	// Past the cooldown every one of those entries is dead; the next write
+	// drops them.
+	now = now.Add(endpointRetryCooldown + time.Second)
+	m.MarkRetry(endpointMemoryKey("p1", "fresh"))
+	if got := len(m.entries); got != 1 {
+		t.Errorf("entries after sweep = %d, want only the fresh one", got)
 	}
 }

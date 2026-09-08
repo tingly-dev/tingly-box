@@ -168,10 +168,7 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 	// Snapshot a pristine template only when failover is possible. The template
 	// is the typed ResponseNewParams (post-vision-proxy — cloned per attempt so
 	// PreprocessInputData and vision proxy are not re-run).
-	// "Possible" includes the endpoint-learning retry, which re-enters this
-	// pipeline as a second attempt on the *same* service: without a snapshot it
-	// would re-transform the request object the first attempt already mutated.
-	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
+	multi := DispatchMayRetry(rule, provider, actualModel)
 
 	// ── Per-attempt pipeline (provider-dependent) ──
 	ph.DispatchWithPriorityFailover(c, rule, provider, actualModel,

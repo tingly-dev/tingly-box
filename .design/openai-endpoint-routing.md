@@ -241,9 +241,22 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
    Claude Code + kimi/glm 组合白付一次失败往返。
 2. 失败且**像 endpoint 不匹配**时，换另一个 endpoint 在**同一个 service** 上
    重试一次。
-3. 重试成功 → 把 `(provider UUID, model) → endpoint` 写进内存缓存，TTL 8 小时。
+3. 重试成功 → 把 `service (provider UUID + model) → endpoint` 写进内存缓存，
+   TTL 8 小时。key 用 `loadbalance.FormatServiceID`，和熔断器 / 用量统计同一把
+   钥匙，日志里能对上；时间走 `internal/clock`，和 breaker / affinity 一起被
+   模拟器推进。
 
 命中缓存的后续请求第一次就走对，零额外往返。
+
+**缓冲只持续到学会为止。** 重试要成立，需要两样东西：响应缓冲（`firstChunkGate`）
+和请求快照（handler 里的 pristine template，一次 marshal + unmarshal）。对 Claude
+Code 这种上百 KB 的请求体，后者不是小钱。所以 `DispatchMayRetry` 在已经学到答案
+时返回 false——没有第二次尝试，也就不必为它付费。
+
+代价是学到的映射一旦失效（上游把某个模型换了格式），没有缓冲就没法当场重试。
+`forgetStaleEndpoint` 补上这半：学过的 endpoint 上再遇 5xx 就把映射丢掉，这一次
+请求照常失败，**下一次**重新进入学习路径。用一次失败换掉了稳态下每请求一次的
+JSON 往返。
 
 ### 8.2 为什么这次不是 Adaptive 的老路
 
@@ -284,12 +297,19 @@ endpoint 都不会变好。
 
 ### 8.4 护栏
 
-- 每个请求最多一次 endpoint 重试；重试仍失败则交回正常 failover。
+- 每个请求最多一次 endpoint 重试；重试仍失败则交回正常 failover，且**失败的重试
+  不会掩盖原始状态**——第一次失败若是可 failover 的，健康的 sibling 仍然拿得到
+  这一轮。
 - 重试发生在**失败被记账之前**：不消耗 failover tier，不算 breaker 失败，不上报
   健康状态——service 没病，是 endpoint 猜错了。
-- 只在首字节之前重试。复用既有的 `firstChunkGate`：单 service 的规则平时绕过
-  gate，`per_model` 是唯一的例外（要缓冲才能重试），代价是这类 provider 的单
-  service 请求也走一次缓冲。
+- 只在首字节之前重试。复用既有的 `firstChunkGate` 而不是自己再套一层——
+  `CommitFirstChunkIfGate` 是对 `*firstChunkGate` 的类型断言，嵌套会断掉首字节
+  信号链，把流式响应憋到请求结束。
+- 「这个请求会不会被尝试第二次」由 `DispatchMayRetry` 一处回答，dispatch 循环
+  （装不装 gate）和四个 handler（做不做请求快照）共用它。两边一旦说法不一致，
+  重试就会拿着被第一次尝试改过的请求对象重新走一遍转换。
+- 规则里 `openai_endpoint_override` 钉死过的 endpoint 不重试；网关自己的失败
+  （transform / 目标解析，`FailAttemptSetup` 写的 500）也不算上游判决。
 - **冷却只管失败**。重试成功 → 写入 8 小时学习结果并清掉冷却，之后直接用学到的
   endpoint，根本不会再产生需要重试的失败；重试也失败 → 什么都不学，1 分钟内不再
   花第二次往返。最坏额外流量因此有上界：**每个 (provider, model) 每分钟至多 1 次

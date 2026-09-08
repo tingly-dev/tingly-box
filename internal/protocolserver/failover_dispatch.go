@@ -378,12 +378,12 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	attempt dispatchAttempt,
 ) {
 	activeServices := rule.GetActiveServices()
-	// A single-service rule normally needs no buffer: with no fallback tier
-	// there is nothing to retry. A per-model provider is the exception — the
-	// endpoint retry below is a second attempt at the *same* service, so the
-	// buffer has to be in place for it too.
-	if len(activeServices) <= 1 && !endpointLearningEnabled(initialProvider) {
+	// Nothing to iterate and nothing to retry: dispatch once, unbuffered.
+	// (An empty service list reaches here from the probe paths that pin a
+	// service by header.)
+	if len(activeServices) == 0 || !DispatchMayRetry(rule, initialProvider, initialModel) {
 		attempt(initialProvider, initialModel)
+		forgetStaleEndpoint(c, initialProvider, initialModel, c.Writer.Status())
 		return
 	}
 
@@ -403,16 +403,9 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	// breaker store gets fed the right serviceID on failure.
 	rec, _ := recording.GetRecorderFromContext(c)
 
-	// A rule can reach here with an empty service list (a probe pinning a
-	// service by header, for instance) once the gate is installed for endpoint
-	// learning. Bound the loop below by at least one so the request is still
-	// attempted — len(activeServices) alone would run zero attempts and answer
-	// an empty 200.
-	maxAttempts := max(len(activeServices), 1)
-
-	for i := 0; i < maxAttempts; i++ {
+	for i := 0; i < len(activeServices); i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)
-		ResetEndpointDecision(c)
+		endpointDecisionFor(c).reset()
 		tried[serviceID] = true
 
 		// Update context before logging/dispatch so request-scoped observability
@@ -460,9 +453,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// charged to the service — the service is not sick, the endpoint
 		// guess was wrong — so it costs neither a failover tier nor a
 		// breaker strike.
-		if ph.retryOnAlternateEndpoint(c, gate, provider, model, status, i+1, attempt) {
-			status = statusAfterEndpointRetry(status, gate)
-		}
+		status = ph.retryOnAlternateEndpoint(c, gate, provider, model, status, i+1, attempt)
 
 		if !isRetryableStatus(status) {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
@@ -550,25 +541,6 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		provider = nextProvider
 		model = nextService.Model
 	}
-}
-
-// statusAfterEndpointRetry decides which status the failover loop judges after
-// an endpoint retry ran.
-//
-// The retry's own status wins when it says something new: it succeeded, or it
-// is itself retryable. What it must not do is *mask* a retryable original — a
-// terminal status from the second endpoint (say a 404 on /responses) would
-// otherwise end the request on a service whose first failure had earned a
-// fallback to a healthy sibling.
-func statusAfterEndpointRetry(original int, gate *firstChunkGate) int {
-	retried := gate.Status()
-	if gate.Committed() || isSuccessStatus(retried) || isRetryableStatus(retried) {
-		return retried
-	}
-	if isRetryableStatus(original) {
-		return original
-	}
-	return retried
 }
 
 func failoverLogFields(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, serviceID string) logrus.Fields {
