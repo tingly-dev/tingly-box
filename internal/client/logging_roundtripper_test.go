@@ -160,13 +160,66 @@ func TestLoggingRoundTripper_TransportFailureAddsFailReason(t *testing.T) {
 	}
 }
 
-// captureFieldsHook records every logrus entry's full field set.
-type captureFieldsHook struct{ entries []logrus.Fields }
+// captureFieldsHook records every logrus entry's full field set and level.
+type captureFieldsHook struct {
+	entries []logrus.Fields
+	levels  []logrus.Level
+}
 
 func (h *captureFieldsHook) Levels() []logrus.Level { return logrus.AllLevels }
 func (h *captureFieldsHook) Fire(e *logrus.Entry) error {
 	h.entries = append(h.entries, e.Data)
+	h.levels = append(h.levels, e.Level)
 	return nil
+}
+
+// TestLoggingRoundTripper_HTTPStatusSetsLogLevel verifies that a provider
+// response (RoundTrip returns err == nil) is logged at a severity matching
+// its status code, not always Info — otherwise a 500 from the provider is
+// indistinguishable from a 200 to anyone filtering logs by level.
+func TestLoggingRoundTripper_HTTPStatusSetsLogLevel(t *testing.T) {
+	cases := []struct {
+		status    int
+		wantLevel logrus.Level
+	}{
+		{200, logrus.InfoLevel},
+		{404, logrus.WarnLevel},
+		{429, logrus.WarnLevel},
+		{500, logrus.ErrorLevel},
+		{503, logrus.ErrorLevel},
+	}
+
+	for _, c := range cases {
+		t.Run(http.StatusText(c.status), func(t *testing.T) {
+			hook := &captureFieldsHook{}
+			logrus.AddHook(hook)
+			t.Cleanup(func() {
+				logrus.StandardLogger().ReplaceHooks(logrus.LevelHooks{})
+			})
+
+			fn := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: c.status, Body: http.NoBody}, nil
+			})
+			lrt := &loggingRoundTripper{
+				inner:    &fn,
+				provider: &typ.Provider{Name: "test"},
+				proxy:    "direct",
+			}
+
+			req, _ := http.NewRequest("GET", "http://api.example.com/", nil)
+			if _, err := lrt.RoundTrip(req); err != nil {
+				t.Fatalf("RoundTrip: %v", err)
+			}
+
+			if len(hook.levels) == 0 {
+				t.Fatal("no log entry captured")
+			}
+			gotLevel := hook.levels[len(hook.levels)-1]
+			if gotLevel != c.wantLevel {
+				t.Errorf("status %d logged at %v, want %v", c.status, gotLevel, c.wantLevel)
+			}
+		})
+	}
 }
 
 // roundTripFunc is a one-shot http.RoundTripper backed by a function.
