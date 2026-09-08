@@ -151,7 +151,10 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	// Snapshot a pristine template only when failover is possible.
-	multi := len(rule.GetActiveServices()) > 1
+	// "Possible" includes the endpoint-learning retry, which re-enters this
+	// pipeline as a second attempt on the *same* service: without a snapshot it
+	// would re-transform the request object the first attempt already mutated.
+	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()
@@ -213,7 +216,7 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	case protocol.APIStyleOpenAI:
 		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
 		tempFlags := ResolveRuleFlags(c, rule)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
+		resolvedTarget, routeErr := ResolveOpenAIEndpointForRequest(c, provider, actualModel, tempFlags, IncomingAPIChat)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

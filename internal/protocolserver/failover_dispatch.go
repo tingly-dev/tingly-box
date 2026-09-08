@@ -62,6 +62,8 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
+	// The 500 below is ours, not the upstream's verdict on the endpoint.
+	MarkAttemptSetupFailed(c)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
 			Message: err.Error(),
@@ -214,6 +216,19 @@ func (g *firstChunkGate) Committed() bool {
 	return g.committed
 }
 
+// BufferedBody exposes the captured (not yet written) body so the
+// orchestrator can read *why* an attempt failed, not just its status.
+// Endpoint learning needs the upstream's message text: the same "wrong
+// endpoint for this model" condition arrives as 401, 500-with-marker, or
+// bare 500 depending on the vendor behind the model. Empty once committed —
+// there is nothing left to inspect and nothing left to retry.
+func (g *firstChunkGate) BufferedBody() []byte {
+	if g.committed {
+		return nil
+	}
+	return g.buf.Bytes()
+}
+
 // CommitFirstChunk is the producer's "first real chunk arrived" signal.
 // It flushes captured headers + status + buffered body to the real
 // writer and switches to pass-through. Idempotent.
@@ -363,7 +378,11 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	attempt dispatchAttempt,
 ) {
 	activeServices := rule.GetActiveServices()
-	if len(activeServices) <= 1 {
+	// A single-service rule normally needs no buffer: with no fallback tier
+	// there is nothing to retry. A per-model provider is the exception — the
+	// endpoint retry below is a second attempt at the *same* service, so the
+	// buffer has to be in place for it too.
+	if len(activeServices) <= 1 && !endpointLearningEnabled(initialProvider) {
 		attempt(initialProvider, initialModel)
 		return
 	}
@@ -384,8 +403,16 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	// breaker store gets fed the right serviceID on failure.
 	rec, _ := recording.GetRecorderFromContext(c)
 
-	for i := 0; i < len(activeServices); i++ {
+	// A rule can reach here with an empty service list (a probe pinning a
+	// service by header, for instance) once the gate is installed for endpoint
+	// learning. Bound the loop below by at least one so the request is still
+	// attempted — len(activeServices) alone would run zero attempts and answer
+	// an empty 200.
+	maxAttempts := max(len(activeServices), 1)
+
+	for i := 0; i < maxAttempts; i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)
+		ResetEndpointDecision(c)
 		tried[serviceID] = true
 
 		// Update context before logging/dispatch so request-scoped observability
@@ -426,6 +453,17 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			return
 		}
 		status := gate.Status()
+
+		// Endpoint learning: on a per-model provider, a failure that looks
+		// like "wrong endpoint for this model" earns one retry on the other
+		// endpoint against the same service. It runs before any failure is
+		// charged to the service — the service is not sick, the endpoint
+		// guess was wrong — so it costs neither a failover tier nor a
+		// breaker strike.
+		if ph.retryOnAlternateEndpoint(c, gate, provider, model, status, i+1, attempt) {
+			status = statusAfterEndpointRetry(status, gate)
+		}
+
 		if !isRetryableStatus(status) {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_terminal"
@@ -512,6 +550,25 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		provider = nextProvider
 		model = nextService.Model
 	}
+}
+
+// statusAfterEndpointRetry decides which status the failover loop judges after
+// an endpoint retry ran.
+//
+// The retry's own status wins when it says something new: it succeeded, or it
+// is itself retryable. What it must not do is *mask* a retryable original — a
+// terminal status from the second endpoint (say a 404 on /responses) would
+// otherwise end the request on a service whose first failure had earned a
+// fallback to a healthy sibling.
+func statusAfterEndpointRetry(original int, gate *firstChunkGate) int {
+	retried := gate.Status()
+	if gate.Committed() || isSuccessStatus(retried) || isRetryableStatus(retried) {
+		return retried
+	}
+	if isRetryableStatus(original) {
+		return original
+	}
+	return retried
 }
 
 func failoverLogFields(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, serviceID string) logrus.Fields {

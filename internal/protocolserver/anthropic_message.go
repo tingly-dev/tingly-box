@@ -187,7 +187,10 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 
 	// Snapshot a pristine template only when failover is possible; the single
 	// service case reuses the original request with no clone overhead.
-	multi := len(rule.GetActiveServices()) > 1
+	// "Possible" includes the endpoint-learning retry, which re-enters this
+	// pipeline as a second attempt on the *same* service: without a snapshot it
+	// would re-transform the request object the first attempt already mutated.
+	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()
@@ -253,7 +256,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpointForRequest(c, provider, requestModel, ResolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return
@@ -312,7 +315,10 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	}
 
 	// Snapshot a pristine template only when failover is possible.
-	multi := len(rule.GetActiveServices()) > 1
+	// "Possible" includes the endpoint-learning retry, which re-enters this
+	// pipeline as a second attempt on the *same* service: without a snapshot it
+	// would re-transform the request object the first attempt already mutated.
+	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()
@@ -376,7 +382,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpointForRequest(c, provider, requestModel, ResolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

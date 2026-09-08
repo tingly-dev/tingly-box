@@ -2644,6 +2644,7 @@
       "pricing_doc": "https://opencode.ai/docs/providers/",
       "base_url_openai": "https://opencode.ai/zen/v1",
       "base_url_anthropic": "https://opencode.ai/zen",
+      "openai_endpoint_mode": "per_model",
       "models": [
         {
           "id": "qwen3.7-max"
@@ -2713,6 +2714,7 @@
       "pricing_doc": "https://opencode.ai/docs/providers/",
       "base_url_openai": "https://opencode.ai/zen/go/v1",
       "base_url_anthropic": "https://opencode.ai/zen/go",
+      "openai_endpoint_mode": "per_model",
       "models": [
         {
           "id": "kimi-k3"

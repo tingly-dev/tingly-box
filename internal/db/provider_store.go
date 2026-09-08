@@ -39,7 +39,7 @@ type ProviderRecord struct {
 	APIBaseAnthropic string `gorm:"column:api_base_anthropic"`
 
 	// OpenAIEndpointMode declares which OpenAI endpoints this provider exposes
-	// ("", "chat", "responses", "both"). See ai.OpenAIEndpointMode.
+	// ("", "chat", "responses", "both", "per_model"). See ai.OpenAIEndpointMode.
 	OpenAIEndpointMode string `gorm:"column:openai_endpoint_mode"`
 
 	// Credential fields - stored with provider as a unit

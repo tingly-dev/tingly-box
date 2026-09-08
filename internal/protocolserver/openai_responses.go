@@ -168,7 +168,10 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 	// Snapshot a pristine template only when failover is possible. The template
 	// is the typed ResponseNewParams (post-vision-proxy — cloned per attempt so
 	// PreprocessInputData and vision proxy are not re-run).
-	multi := len(rule.GetActiveServices()) > 1
+	// "Possible" includes the endpoint-learning retry, which re-enters this
+	// pipeline as a second attempt on the *same* service: without a snapshot it
+	// would re-transform the request object the first attempt already mutated.
+	multi := len(rule.GetActiveServices()) > 1 || endpointLearningEnabled(provider)
 
 	// ── Per-attempt pipeline (provider-dependent) ──
 	ph.DispatchWithPriorityFailover(c, rule, provider, actualModel,
@@ -210,7 +213,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 		ph.FailAttemptSetup(c, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
 		return
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpointForRequest(c, provider, actualModel, ResolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return
