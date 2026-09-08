@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -12,8 +13,11 @@ import (
 // returned, so the gateway can propagate it to the client instead of flattening
 // every forwarding failure into a 500. It understands the error types returned
 // by each vendor SDK (OpenAI / Anthropic share apierror.Error; google-genai
-// uses genai.APIError). When the error does not carry a usable upstream status
-// (e.g. a transport-level failure with no HTTP response), it returns fallback.
+// uses genai.APIError). When the error does not carry a usable upstream status,
+// a transport-level failure (DNS, TCP connect, TLS, timeout — no HTTP response
+// was ever received) maps to 502 Bad Gateway, since that describes it more
+// accurately than a generic internal error; anything else falls back to
+// fallback.
 func UpstreamStatus(err error, fallback int) int {
 	if err == nil {
 		return fallback
@@ -34,5 +38,25 @@ func UpstreamStatus(err error, fallback int) int {
 		return genaiErr.Code
 	}
 
+	if _, _, ok := ClassifyTransportError(err); ok {
+		return http.StatusBadGateway
+	}
+
 	return fallback
+}
+
+// UpstreamMessage returns a client-safe description of err. An SDK-typed
+// provider error already carries a reasonably clean message from the
+// provider itself, so it passes through unchanged; a transport-level failure
+// is described by category instead — the raw Go dial/DNS/TLS error text can
+// be long, jargon-heavy, and is a server-log detail, not something an API
+// caller needs verbatim.
+func UpstreamMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	if reason, msg, ok := ClassifyTransportError(err); ok {
+		return string(reason) + ": " + msg
+	}
+	return err.Error()
 }
