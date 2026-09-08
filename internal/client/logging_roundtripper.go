@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -77,6 +78,16 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	entry := logrus.WithContext(req.Context()).WithFields(fields)
 	if err != nil {
+		// A transport-level failure (DNS, TCP connect, TLS, timeout) never
+		// reached the upstream, so err is a raw Go net/url error — usually
+		// readable, but not categorized, which is what makes it slow to
+		// eyeball in a log stream. reason surfaces that category as its own
+		// field so entries are filterable/greppable without parsing the
+		// message text; the full err still goes out via WithError for the
+		// exact underlying detail.
+		if reason, _, ok := protocol.ClassifyTransportError(err); ok {
+			entry = entry.WithField("fail_reason", string(reason))
+		}
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
 	}

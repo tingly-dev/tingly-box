@@ -71,7 +71,7 @@ func SendStreamingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to create streaming request: " + err.Error(),
+			Message: "Failed to create streaming request: " + protocol.UpstreamMessage(err),
 			Type:    "api_error",
 		},
 	})
@@ -83,7 +83,7 @@ func SendForwardingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to forward request: " + err.Error(),
+			Message: "Failed to forward request: " + protocol.UpstreamMessage(err),
 			Type:    "api_error",
 		},
 	})

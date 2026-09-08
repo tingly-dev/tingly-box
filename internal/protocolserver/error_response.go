@@ -81,11 +81,14 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 	// defaults to 500 Internal Server Error otherwise.
 	statusCode := protocol.UpstreamStatus(err, http.StatusInternalServerError)
 
+	// c.Error keeps the full raw error for the server-side access log
+	// (internal/middleware/memory_log.go); the JSON body below shows the
+	// client a categorized, non-leaky message instead.
 	asErr := fmt.Errorf("%s: %s", err.Error(), desc)
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(statusCode, ErrorResponse{
 		Error: ErrorDetail{
-			Message: asErr.Error(),
+			Message: fmt.Sprintf("%s: %s", protocol.UpstreamMessage(err), desc),
 			Type:    "protocol_error",
 			Code:    desc,
 		},
