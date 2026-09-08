@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -91,7 +92,22 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
 	}
-	entry.WithField("status", resp.StatusCode).Infof("upstream %d via %s", resp.StatusCode, proxy)
+	// The provider did respond, so RoundTrip returned no error — but a 4xx/5xx
+	// body is just as much a failure as the transport case above, and without
+	// this it only ever reaches Info level, indistinguishable from a 200 to
+	// anyone filtering logs by severity. The response body (the actual error
+	// reason) isn't read here — the SDK layer above still owns parsing it
+	// into a typed error — so this only classifies by status.
+	statusEntry := entry.WithField("status", resp.StatusCode)
+	msg := fmt.Sprintf("upstream %d via %s", resp.StatusCode, proxy)
+	switch {
+	case resp.StatusCode >= 500:
+		statusEntry.Error(msg)
+	case resp.StatusCode >= 400:
+		statusEntry.Warn(msg)
+	default:
+		statusEntry.Info(msg)
+	}
 	return resp, nil
 }
 

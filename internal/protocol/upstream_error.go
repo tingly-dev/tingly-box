@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -45,18 +46,47 @@ func UpstreamStatus(err error, fallback int) int {
 	return fallback
 }
 
-// UpstreamMessage returns a client-safe description of err. An SDK-typed
-// provider error already carries a reasonably clean message from the
-// provider itself, so it passes through unchanged; a transport-level failure
-// is described by category instead — the raw Go dial/DNS/TLS error text can
-// be long, jargon-heavy, and is a server-log detail, not something an API
-// caller needs verbatim.
+// UpstreamMessage returns a client-safe description of err.
+//
+// A transport-level failure is described by category instead of the raw Go
+// dial/DNS/TLS error text — long, jargon-heavy, and a server-log detail, not
+// something an API caller needs verbatim.
+//
+// An SDK-typed provider error already carries the provider's own error body,
+// which is genuinely useful to the caller (e.g. "rate_limit_error"), so that
+// part passes through. But openai.Error and anthropic.Error's own Error()
+// also embeds the full outbound request line — method + the exact URL we
+// called upstream (openai-go/internal/apierror/apierror.go, anthropic-sdk-go
+// same) — which leaks our upstream endpoint (a custom/internal API base in
+// particular) to the downstream caller for no reason; this reconstructs the
+// message from the same fields minus that line. genai.APIError's Error()
+// never included the URL, so it passes through unchanged.
 func UpstreamMessage(err error) string {
 	if err == nil {
 		return ""
 	}
+
+	var oaiErr *openai.Error
+	if errors.As(err, &oaiErr) {
+		return statusText(oaiErr.StatusCode) + ": " + oaiErr.RawJSON()
+	}
+
+	var anthropicErr *anthropic.Error
+	if errors.As(err, &anthropicErr) {
+		msg := statusText(anthropicErr.StatusCode)
+		if anthropicErr.RequestID != "" {
+			msg += fmt.Sprintf(" (Request-ID: %s)", anthropicErr.RequestID)
+		}
+		return msg + ": " + anthropicErr.RawJSON()
+	}
+
 	if reason, msg, ok := ClassifyTransportError(err); ok {
 		return string(reason) + ": " + msg
 	}
+
 	return err.Error()
+}
+
+func statusText(code int) string {
+	return fmt.Sprintf("%d %s", code, http.StatusText(code))
 }
