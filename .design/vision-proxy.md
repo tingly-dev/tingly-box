@@ -241,8 +241,18 @@ read-image / 许多 MCP 视觉工具),落在
 
 修复方式:每条消息的 content 交给 walker,先看顶层 `OfImage`,再
 **下钻 `OfToolResult.Content`**。两条路径共用 latest-vs-historical
-策略。OpenAI 协议的 tool role message 内容是字符串、不含 image,OpenAI
-路径不需要此处理。
+策略。
+
+后来 OpenAI 两种形态各自补上了同一个洞,原因相同:工具返回是图片的主要
+来源。Chat 侧 fork 把 tool message 的 content 从 text-only 放宽成完整
+part union 之后补 `OfTool`(#1609);Responses 侧补 `OfFunctionCallOutput`
+的 output 数组(Codex 的 screenshot 就落在这里)。
+
+**补遍历时必须同时补 `latestImageAnchor` 的判定**:工具结果同样是「最新
+一轮」的承载体——Codex 会话里截图出现在提问的 user 消息**之后**,只按
+user 消息定锚会把最新的图当历史 strip 成 marker,vision 上游一次都不调,
+表现是「不报 400 了,但模型什么也没看到」。三种形态现在的锚判定都包含
+工具通道。
 
 ### 6.2 partial `ScenarioConfig` 写入会清空 `Extensions`
 
@@ -389,6 +399,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | `parseScenarioVisionService` | nil/缺键/结构错/缺 provider/缺 model/空串 → nil;provider+model 齐备 → active service |
 | 处理器三种请求形态 | Beta / V1 Anthropic、OpenAI ChatCompletion 各覆盖 |
 | **tool_result 嵌套 image** | Beta + V1 各一例:tool_result 内的 image 最后一条消息会描述、历史消息只打 marker(不调 vision) |
+| **工具通道 image** | Chat `OfTool`、Responses `OfFunctionCallOutput` 各一例:最新一轮的工具截图会描述(锚判定含工具结果),历史的只打 marker |
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
