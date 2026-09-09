@@ -13,7 +13,13 @@
 //
 // Geometry here is pure and unit-tested; the canvas calls live at the bottom.
 
-import { applyTransform, type CanvasDimensions, type CanvasPoint, type CanvasTransform } from './sketchCanvas';
+import {
+    applyTransform,
+    isIdentityTransform,
+    type CanvasDimensions,
+    type CanvasPoint,
+    type CanvasTransform,
+} from './sketchCanvas';
 
 export type JointKey =
     | 'head' | 'neck'
@@ -41,34 +47,9 @@ export interface PoseFigure {
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
-// The hit-testing skeleton. The manikin is drawn from `figureParts` further
-// down; these segments are the coarse silhouette used to answer "did the
-// pointer land on the body?", with `width` a fraction of the figure's current
-// bounding-box height so proportions survive scaling.
-interface Bone { from: JointKey; to: JointKey; width: number }
-
-export const BONES: readonly Bone[] = [
-    { from: 'neck', to: 'hip', width: 0.105 },
-    { from: 'shoulderL', to: 'shoulderR', width: 0.080 },
-    { from: 'hipL', to: 'hipR', width: 0.082 },
-    { from: 'neck', to: 'shoulderL', width: 0.062 },
-    { from: 'neck', to: 'shoulderR', width: 0.062 },
-    { from: 'hip', to: 'hipL', width: 0.070 },
-    { from: 'hip', to: 'hipR', width: 0.070 },
-    { from: 'shoulderL', to: 'elbowL', width: 0.062 },
-    { from: 'shoulderR', to: 'elbowR', width: 0.062 },
-    { from: 'elbowL', to: 'wristL', width: 0.046 },
-    { from: 'elbowR', to: 'wristR', width: 0.046 },
-    { from: 'hipL', to: 'kneeL', width: 0.086 },
-    { from: 'hipR', to: 'kneeR', width: 0.086 },
-    { from: 'kneeL', to: 'ankleL', width: 0.062 },
-    { from: 'kneeR', to: 'ankleR', width: 0.062 },
-    { from: 'neck', to: 'head', width: 0.042 },
-];
-
 // The head's long radius: also the padding that keeps the visual box (and
 // the scale grip on its corner) clear of the silhouette.
-export const HEAD_RADIUS_RATIO = 0.07;
+const HEAD_RADIUS_RATIO = 0.07;
 
 // Every thickness in the manikin is a fraction of "how big is this person",
 // and that number must NOT be the bounding box: a lying figure has the same
@@ -77,7 +58,7 @@ export const HEAD_RADIUS_RATIO = 0.07;
 // one measure a pose cannot change (`swingJoint` rotates, never stretches),
 // so scale is read from it and converted back to the standing height the
 // ratios were authored against.
-export const TORSO_HEIGHT_RATIO = 0.36;
+const TORSO_HEIGHT_RATIO = 0.36;
 
 export const figureUnit = (figure: PoseFigure): number => {
     // hip → neck, the bone itself. The hip *line's* midpoint drifts with the
@@ -97,10 +78,10 @@ export const figureUnit = (figure: PoseFigure): number => {
 // selected, to swap a pose in place.
 // A figure lands at 70% of the canvas height, centred. Big enough to read as
 // the subject, small enough to leave room for the scene around it.
-export const FIGURE_HEIGHT_RATIO = 0.7;
+const FIGURE_HEIGHT_RATIO = 0.7;
 // Width of the unit box relative to its height. Arms out to the side need
 // more room than a body is wide.
-export const FIGURE_ASPECT = 0.45;
+const FIGURE_ASPECT = 0.45;
 
 export type PosePresetKey =
     | 'standing' | 'contrapposto' | 'handsOnHips' | 'armsCrossed' | 'tPose' | 'armsUp'
@@ -140,6 +121,16 @@ const BONE = {
     thigh: 0.235, shin: 0.225,
 } as const;
 
+const ORIGIN: CanvasPoint = { x: 0, y: 0 };
+
+const rotatePoint = (point: CanvasPoint, pivot: CanvasPoint, angle: number): CanvasPoint => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
+};
+
 const rad = (degrees: number) => (degrees * Math.PI) / 180;
 // Down is 0, so a spec reads the way a person describes a limb: "hanging" is 0.
 const along = (degrees: number, length: number): CanvasPoint => ({
@@ -150,11 +141,8 @@ const plus = (point: CanvasPoint, delta: CanvasPoint): CanvasPoint => ({ x: poin
 // Rotating one offset, rather than adding two angled vectors: the shoulder and
 // hip stubs have to keep their length when the shoulder or hip line tilts, or
 // the "same bones in every pose" guarantee quietly breaks for tilted poses.
-const turned = (offset: CanvasPoint, degrees: number): CanvasPoint => {
-    const cos = Math.cos(rad(degrees));
-    const sin = Math.sin(rad(degrees));
-    return { x: offset.x * cos - offset.y * sin, y: offset.x * sin + offset.y * cos };
-};
+const turned = (offset: CanvasPoint, degrees: number): CanvasPoint =>
+    rotatePoint(offset, ORIGIN, rad(degrees));
 
 const buildPose = (spec: PoseSpec): PresetPoints => {
     const lean = spec.lean ?? 0;
@@ -235,7 +223,7 @@ const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
     leaning: { lean: -12, arms: { l: [-20, -10], r: [16, 10] }, legs: { l: [-6, 0], r: [11, 6] } },
 };
 
-export const POSE_PRESETS: Record<PosePresetKey, PresetPoints> = Object.fromEntries(
+const POSE_PRESETS: Record<PosePresetKey, PresetPoints> = Object.fromEntries(
     (Object.keys(POSE_SPECS) as PosePresetKey[]).map((key) => [key, buildPose(POSE_SPECS[key])]),
 ) as Record<PosePresetKey, PresetPoints>;
 
@@ -273,8 +261,7 @@ export const createFigure = (
     // one side), and every later transform pivots on the joint bounds. Making
     // the two agree here is what lets a pose be swapped in place without the
     // figure drifting.
-    const bounds = figureBounds(figure);
-    return translateFigure(figure, cx - (bounds.x + bounds.width / 2), cy - (bounds.y + bounds.height / 2));
+    return centerFigureAt(figure, { x: cx, y: cy });
 };
 
 // Where the next figure should land. Dropping every one at the canvas centre
@@ -308,7 +295,7 @@ export const placeNewFigure = (existing: readonly PoseFigure[], dims: CanvasDime
 };
 
 // Every figure whose body is under the point, bottom of the stack first.
-export const figuresAt = (
+const figuresAt = (
     figures: readonly PoseFigure[],
     point: CanvasPoint,
     tolerance = 0,
@@ -331,23 +318,12 @@ export const nextFigureAt = (
 
 // Swaps the pose while keeping the figure where it is and roughly how big it
 // is: re-entry (principle 10) applies inside the dialog too.
-// Matched on the torso bone, not on the bounding box: box height changes with
-// the pose (a crouch is shorter than a stand), so matching boxes would resize
-// the person every time the pose changed.
-const torsoLength = (figure: PoseFigure): number => Math.hypot(
-    figure.joints.neck.x - figure.joints.hip.x,
-    figure.joints.neck.y - figure.joints.hip.y,
-);
-
 export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: CanvasDimensions): PoseFigure => {
-    const bounds = figureBounds(figure);
-    const fresh = createFigure(preset, dims, {
-        x: bounds.x + bounds.width / 2,
-        y: bounds.y + bounds.height / 2,
-    }, figure.shade);
-    const freshTorso = torsoLength(fresh);
-    const factor = freshTorso > 0 ? torsoLength(figure) / freshTorso : 1;
-    return { ...scaleFigure(fresh, factor), id: figure.id };
+    const fresh = createFigure(preset, dims, figureCenter(figure), figure.shade);
+    // Matched on `figureUnit`, the body, not on the bounding box: box height
+    // changes with the pose (a crouch is shorter than a stand), so matching
+    // boxes would resize the person every time the pose changed.
+    return { ...scaleFigure(fresh, figureUnit(figure) / figureUnit(fresh)), id: figure.id };
 };
 
 // --- the skeleton ------------------------------------------------------------
@@ -378,14 +354,6 @@ export const subtreeOf = (key: JointKey): JointKey[] => JOINT_KEYS.filter((candi
 });
 
 const SUBTREES = Object.fromEntries(JOINT_KEYS.map((key) => [key, subtreeOf(key)])) as Record<JointKey, JointKey[]>;
-
-const rotatePoint = (point: CanvasPoint, pivot: CanvasPoint, angle: number): CanvasPoint => {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const dx = point.x - pivot.x;
-    const dy = point.y - pivot.y;
-    return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
-};
 
 // Forward kinematics: swing `key` toward `target` about its parent and take
 // its subtree along. Bone lengths never change, so a figure keeps its
@@ -420,8 +388,39 @@ export const figureBounds = (figure: PoseFigure): Rect => {
 // The head sticks out past the crown joint and every bone is a thick capsule,
 // so the visual box is fatter than the joint box. Used for hit-testing the
 // body and for placing the scale handle.
-export const figurePadding = (figure: PoseFigure): number =>
+// The pivot every transform in this module turns about: the centre of the
+// *joint* bounds, not of the visual box. Stated once, because `createFigure`
+// depends on it agreeing with how presets are normalised.
+export const figureCenter = (figure: PoseFigure): CanvasPoint => {
+    const bounds = figureBounds(figure);
+    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+};
+
+export const centerFigureAt = (figure: PoseFigure, point: CanvasPoint): PoseFigure => {
+    const center = figureCenter(figure);
+    return translateFigure(figure, point.x - center.x, point.y - center.y);
+};
+
+const figurePadding = (figure: PoseFigure): number =>
     Math.max(figureUnit(figure) * HEAD_RADIUS_RATIO, 1);
+
+// Scaled and centred to sit inside `box` with a margin. The thumbnail grid
+// needs this; keeping it here means the "visual bounds, not joint bounds"
+// choice is made once, in the module that knows the difference.
+export const fitFigureInto = (figure: PoseFigure, box: CanvasDimensions, pad = 0): PoseFigure => {
+    const bounds = figureVisualBounds(figure);
+    const factor = Math.min(
+        (box.width - pad * 2) / Math.max(bounds.width, 1),
+        (box.height - pad * 2) / Math.max(bounds.height, 1),
+    );
+    const scaled = scaleFigure(figure, factor);
+    const scaledBounds = figureVisualBounds(scaled);
+    return translateFigure(
+        scaled,
+        box.width / 2 - (scaledBounds.x + scaledBounds.width / 2),
+        box.height / 2 - (scaledBounds.y + scaledBounds.height / 2),
+    );
+};
 
 export const figureVisualBounds = (figure: PoseFigure): Rect => {
     const bounds = figureBounds(figure);
@@ -446,36 +445,43 @@ export const translateFigure = (figure: PoseFigure, dx: number, dy: number): Pos
 // Used when a saved sketch is re-opened on a differently sized canvas. Goes
 // through the same uniform transform as the strokes, so the drawing and the
 // figures standing in it stay in register.
-export const transformFigure = (figure: PoseFigure, transform: CanvasTransform): PoseFigure =>
-    mapJoints(figure, (p) => applyTransform(p, transform));
+export const transformFigures = (
+    figures: readonly PoseFigure[],
+    transform: CanvasTransform,
+): PoseFigure[] => (isIdentityTransform(transform)
+    ? figures as PoseFigure[]
+    : figures.map((figure) => mapJoints(figure, (p) => applyTransform(p, transform))));
 
 export const moveJoint = (figure: PoseFigure, key: JointKey, point: CanvasPoint): PoseFigure => ({
     ...figure,
     joints: { ...figure.joints, [key]: point },
 });
 
-export const MIN_FIGURE_HEIGHT = 24;
+// In `figureUnit` space, like every other size in this module: a bounding box
+// would mean a different physical minimum per pose, letting a lying figure be
+// shrunk to a fraction of the size a standing one is held at.
+export const MIN_FIGURE_UNIT = 32;
+
+const safeFactor = (factor: number): number => (Number.isFinite(factor) && factor > 0 ? factor : 1);
 
 // The floor belongs to the *drag*, not to the transform: a resize gesture must
 // not leave a figure too small to grab again, but scaling a figure as part of
 // applying a pose or refitting a canvas has no business being second-guessed.
-// Never above 1 — clamping an already-tiny figure to MIN/height would turn
-// "make it smaller" into "make it bigger".
+// Never above 1 — clamping an already-tiny figure would turn "make it smaller"
+// into "make it bigger".
 export const clampScaleFactor = (figure: PoseFigure, factor: number): number => {
-    const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    const safe = safeFactor(factor);
     if (safe >= 1) return safe;
-    const height = Math.max(figureBounds(figure).height, 1);
-    return Math.max(safe, Math.min(1, MIN_FIGURE_HEIGHT / height));
+    return Math.max(safe, Math.min(1, MIN_FIGURE_UNIT / figureUnit(figure)));
 };
 
 // Uniform scale about the figure's own centre.
 export const scaleFigure = (figure: PoseFigure, factor: number, origin?: CanvasPoint): PoseFigure => {
-    const bounds = figureBounds(figure);
-    const pivot = origin ?? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
-    const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    const pivot = origin ?? figureCenter(figure);
+    const factorApplied = safeFactor(factor);
     return mapJoints(figure, (p) => ({
-        x: pivot.x + (p.x - pivot.x) * safe,
-        y: pivot.y + (p.y - pivot.y) * safe,
+        x: pivot.x + (p.x - pivot.x) * factorApplied,
+        y: pivot.y + (p.y - pivot.y) * factorApplied,
     }));
 };
 
@@ -487,13 +493,36 @@ export const flipFigure = (figure: PoseFigure): PoseFigure => {
     return mapJoints(figure, (p) => ({ x: axis * 2 - p.x, y: p.y }));
 };
 
-export const distanceToSegment = (point: CanvasPoint, a: CanvasPoint, b: CanvasPoint): number => {
+// Where the point projects onto the segment (`t`), and how far it is from it.
+// A tapered limb needs both: its half-width at the point of closest approach
+// is the radius interpolated at that same `t`.
+const projectOnSegment = (point: CanvasPoint, a: CanvasPoint, b: CanvasPoint): { t: number; distance: number } => {
     const vx = b.x - a.x;
     const vy = b.y - a.y;
     const lengthSq = vx * vx + vy * vy;
-    if (lengthSq === 0) return Math.hypot(point.x - a.x, point.y - a.y);
+    if (lengthSq === 0) return { t: 0, distance: Math.hypot(point.x - a.x, point.y - a.y) };
     const t = Math.max(0, Math.min(1, ((point.x - a.x) * vx + (point.y - a.y) * vy) / lengthSq));
-    return Math.hypot(point.x - (a.x + vx * t), point.y - (a.y + vy * t));
+    return { t, distance: Math.hypot(point.x - (a.x + vx * t), point.y - (a.y + vy * t)) };
+};
+
+export const distanceToSegment = (point: CanvasPoint, a: CanvasPoint, b: CanvasPoint): number =>
+    projectOnSegment(point, a, b).distance;
+
+const insideSegment = (point: CanvasPoint, segment: Segment, tolerance: number): boolean => {
+    const { t, distance } = projectOnSegment(point, segment.from, segment.to);
+    return distance <= segment.fromRadius + (segment.toRadius - segment.fromRadius) * t + tolerance;
+};
+
+// The point taken back into the ellipse's own frame, where "inside" is the
+// unit circle.
+const insideEllipse = (point: CanvasPoint, ellipse: Ellipse, tolerance: number): boolean => {
+    const cos = Math.cos(-ellipse.angle);
+    const sin = Math.sin(-ellipse.angle);
+    const dx = point.x - ellipse.center.x;
+    const dy = point.y - ellipse.center.y;
+    const x = (dx * cos - dy * sin) / Math.max(ellipse.radiusX + tolerance, 1e-6);
+    const y = (dx * sin + dy * cos) / Math.max(ellipse.radiusY + tolerance, 1e-6);
+    return x * x + y * y <= 1;
 };
 
 export const hitTestJoint = (figure: PoseFigure, point: CanvasPoint, radius: number): JointKey | null => {
@@ -512,12 +541,21 @@ export const hitTestJoint = (figure: PoseFigure, point: CanvasPoint, radius: num
 
 // True when the point is on the mannequin's silhouette (any bone capsule or
 // the head), which is what "grab the body and move it" means.
+// True when the point is on the mannequin's silhouette, which is what "grab
+// the body and move it" means. Tested against `figureParts` — the shapes that
+// are actually drawn — rather than against a second table of limb widths: two
+// tables of the same physical fact drift, and then what you can grab stops
+// matching what you can see.
 export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 0): boolean => {
-    const height = figureUnit(figure);
-    const head = figure.joints.head;
-    if (Math.hypot(point.x - head.x, point.y - head.y) <= height * HEAD_RADIUS_RATIO + tolerance) return true;
-    return BONES.some((bone) => distanceToSegment(point, figure.joints[bone.from], figure.joints[bone.to])
-        <= (height * bone.width) / 2 + tolerance);
+    const parts = figureParts(figure);
+    if ([parts.head, parts.chest, parts.pelvis, ...parts.hands, ...parts.feet]
+        .some((ellipse) => insideEllipse(point, ellipse, tolerance))) return true;
+    if ([parts.waist, ...parts.hipBalls, ...parts.balls]
+        .some((ball) => Math.hypot(point.x - ball.center.x, point.y - ball.center.y) <= ball.radius + tolerance)) {
+        return true;
+    }
+    return [parts.neck, parts.spine, ...parts.limbs]
+        .some((segment) => insideSegment(point, segment, tolerance));
 };
 
 // Bottom-right of the visual box: the familiar corner grip, so scaling does
@@ -561,11 +599,11 @@ export interface FigureParts {
     feet: Ellipse[];
 }
 
-const midpoint = (a: CanvasPoint, b: CanvasPoint): CanvasPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const lerp = (a: CanvasPoint, b: CanvasPoint, t: number): CanvasPoint => ({
     x: a.x + (b.x - a.x) * t,
     y: a.y + (b.y - a.y) * t,
 });
+const midOf = (a: CanvasPoint, b: CanvasPoint): CanvasPoint => lerp(a, b, 0.5);
 const angleOf = (a: CanvasPoint, b: CanvasPoint): number => Math.atan2(b.y - a.y, b.x - a.x);
 const spanOf = (a: CanvasPoint, b: CanvasPoint): number => Math.hypot(b.x - a.x, b.y - a.y);
 
@@ -582,10 +620,11 @@ const R = {
 
 export const figureParts = (figure: PoseFigure): FigureParts => {
     const joints = figure.joints;
-    const u = (ratio: number) => figureUnit(figure) * ratio;
+    const unit = figureUnit(figure);
+    const u = (ratio: number) => unit * ratio;
 
-    const shoulderMid = midpoint(joints.shoulderL, joints.shoulderR);
-    const hipMid = midpoint(joints.hipL, joints.hipR);
+    const shoulderMid = midOf(joints.shoulderL, joints.shoulderR);
+    const hipMid = midOf(joints.hipL, joints.hipR);
     const shoulderSpan = spanOf(joints.shoulderL, joints.shoulderR);
     const hipSpan = spanOf(joints.hipL, joints.hipR);
     const torso = Math.max(spanOf(joints.neck, hipMid), 1);
@@ -722,13 +761,13 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 // shape; with it each body reads as a separate solid object.
 export interface FigureTone { body: string; joint: string; head: string; rim: string }
 
-export const FIGURE_SHADES: readonly FigureTone[] = [
+const FIGURE_SHADES: readonly FigureTone[] = [
     { body: '#aeb2b6', joint: '#8f9398', head: '#b9bdc1', rim: '#7c8085' },
     { body: '#8d9298', joint: '#70757b', head: '#9aa0a6', rim: '#5d6268' },
     { body: '#c0c5ca', joint: '#a2a7ad', head: '#ccd0d4', rim: '#8e9399' },
 ];
 
-export const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5', rim: '#6d7789' };
+const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5', rim: '#6d7789' };
 
 // Which tone the next figure should wear. Least-used rather than "one past
 // the count": after a delete, counting the list hands out a shade another
@@ -741,7 +780,7 @@ export const leastUsedShade = (figures: readonly PoseFigure[]): number => {
     return counts.indexOf(Math.min(...counts));
 };
 
-export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
+const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
     ? SELECTED_TONE
     : FIGURE_SHADES[(figure.shade ?? 0) % FIGURE_SHADES.length]);
 const HANDLE_FILL = '#2563eb';
@@ -793,7 +832,7 @@ const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment, grow = 0):
     ctx.fill();
 };
 
-export const RIM_RATIO = 0.006;
+const RIM_RATIO = 0.006;
 
 export const drawFigure = (
     ctx: CanvasRenderingContext2D,
@@ -843,7 +882,8 @@ export const drawFigure = (
     fillEllipse(ctx, parts.pelvis);
 
     ctx.fillStyle = tone.joint;
-    for (const ball of [parts.waist, ...parts.balls]) fillBall(ball);
+    fillBall(parts.waist);
+    for (const ball of parts.balls) fillBall(ball);
 
     ctx.fillStyle = tone.head;
     fillEllipse(ctx, parts.head);

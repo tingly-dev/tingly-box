@@ -25,8 +25,7 @@ import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
-import type { PoseFigure } from '@/utils/poseFigure';
-import type { Stroke } from '@/utils/sketchCanvas';
+import { parseImageSize } from '@/utils/sketchCanvas';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import ImageSliceDialog from './ImageSliceDialog';
@@ -74,11 +73,6 @@ interface ReferenceImage {
     // sends `file`; this rides along for the editor only.
     layers?: SketchLayers;
 }
-
-// A stable identity for "no figures": the canvas resets its surface when its
-// initial figures change, so this must not be a fresh array per render.
-const EMPTY_FIGURES: PoseFigure[] = [];
-const EMPTY_STROKES: Stroke[] = [];
 
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
 // a new sketch, otherwise the reference image being redrawn.
@@ -283,26 +277,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setSketchTarget(null);
     }, [sketchTarget]);
 
-    // Re-opening a sketch hands the canvas its layers back. A sketch without
-    // them (one flattened by an older build) still opens, as pixels to draw
-    // on. Memoised because the dialog resets its surface whenever this
-    // changes, and a fresh array on every render would wipe the user's edits.
-    const sketchInitial = useMemo(() => {
+    // The layers of the sketch being re-opened, or null for a new one.
+    // Memoised because the canvas resets whenever this changes, and a fresh
+    // object on every render would wipe what the user is drawing.
+    const sketchInitial = useMemo<SketchLayers | null>(() => {
         const index = sketchTarget?.index;
         const target = index !== null && index !== undefined ? referenceImages[index] : undefined;
-        if (!target) return { image: null, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES, size: null };
-        if (target.layers) {
-            return {
-                image: target.layers.backdrop,
-                strokes: target.layers.strokes,
-                figures: target.layers.figures,
-                size: target.layers.size,
-            };
-        }
-        // No layers: a flattened sketch. It still opens, as pixels to keep
-        // drawing on, just not as editable strokes or a posable figure.
-        return { image: target.previewUrl, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES, size: null };
-    }, [sketchTarget, referenceImages]);
+        if (!target) return null;
+        if (target.layers) return target.layers;
+        // No layers: a sketch flattened by an older build. It still opens, as
+        // pixels to keep drawing on, just not as strokes or a posable figure.
+        return { size: parseImageSize(size), strokes: [], figures: [], backdrop: target.previewUrl };
+    }, [sketchTarget, referenceImages, size]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
     // Hands the finished pixels over, not a notification that they exist.
@@ -1217,10 +1203,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <SketchCanvasDialog
                 open={sketchTarget !== null}
                 size={size}
-                initialImage={sketchInitial.image}
-                initialStrokes={sketchInitial.strokes}
-                initialFigures={sketchInitial.figures}
-                initialSize={sketchInitial.size}
+                initial={sketchInitial}
                 onClose={() => setSketchTarget(null)}
                 onSubmit={handleSketchSubmit}
                 showNotification={showNotification}

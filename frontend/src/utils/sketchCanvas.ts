@@ -89,7 +89,7 @@ export const SKETCH_COLORS = ['#111827', '#dc2626', '#2563eb', '#16a34a', '#f59e
 export class StrokeHistory<T> {
     private readonly frames: T[] = [];
 
-    constructor(private readonly capacity = 30) {}
+    constructor(readonly capacity = 30) {}
 
     get length(): number {
         return this.frames.length;
@@ -152,14 +152,14 @@ export const applyStrokeStyle = (
 };
 
 export const renderStroke = (ctx: CanvasRenderingContext2D, stroke: Stroke, dims: CanvasDimensions): void => {
-    if (stroke.points.length === 0) return;
+    const { points } = stroke;
+    if (points.length === 0) return;
     applyStrokeStyle(ctx, stroke, dims);
-    const [first, ...rest] = stroke.points;
     ctx.beginPath();
-    ctx.moveTo(first.x, first.y);
+    ctx.moveTo(points[0].x, points[0].y);
     // A tap with no movement still has to leave a dot.
-    if (rest.length === 0) ctx.lineTo(first.x + 0.01, first.y + 0.01);
-    for (const point of rest) ctx.lineTo(point.x, point.y);
+    if (points.length === 1) ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+    for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
     ctx.stroke();
 };
 
@@ -183,6 +183,11 @@ export interface CanvasTransform { scale: number; dx: number; dy: number }
 
 export const IDENTITY_TRANSFORM: CanvasTransform = { scale: 1, dx: 0, dy: 0 };
 
+// A value predicate, not `t === IDENTITY_TRANSFORM`: a caller should never
+// have to know whether it was handed the shared constant or an equal one.
+export const isIdentityTransform = (transform: CanvasTransform): boolean =>
+    transform.scale === 1 && transform.dx === 0 && transform.dy === 0;
+
 export const fitTransform = (from: CanvasDimensions, to: CanvasDimensions): CanvasTransform => {
     if (from.width <= 0 || from.height <= 0) return IDENTITY_TRANSFORM;
     if (from.width === to.width && from.height === to.height) return IDENTITY_TRANSFORM;
@@ -200,7 +205,7 @@ export const applyTransform = (point: CanvasPoint, transform: CanvasTransform): 
 });
 
 export const transformStrokes = (strokes: readonly Stroke[], transform: CanvasTransform): Stroke[] => {
-    if (transform === IDENTITY_TRANSFORM) return strokes as Stroke[];
+    if (isIdentityTransform(transform)) return strokes as Stroke[];
     return strokes.map((stroke) => ({
         ...stroke,
         points: stroke.points.map((point) => applyTransform(point, transform)),

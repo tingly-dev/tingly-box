@@ -4,10 +4,8 @@ import { useTranslation } from 'react-i18next';
 import {
     createFigure,
     drawFigure,
-    figureVisualBounds,
+    fitFigureInto,
     POSE_LIBRARY,
-    scaleFigure,
-    translateFigure,
     type PosePresetKey,
 } from '@/utils/poseFigure';
 
@@ -29,17 +27,8 @@ const PoseThumbnail: React.FC<{ pose: PosePresetKey }> = ({ pose }) => {
         // Fitted to the tile rather than drawn at the canvas's own sizing:
         // arms out or lying down, a pose is much wider than a standing one and
         // would be cropped at exactly the poses that need to be recognisable.
-        const figure = createFigure(pose, { width, height });
-        const bounds = figureVisualBounds(figure);
-        const pad = width * 0.08;
-        const factor = Math.min((width - pad * 2) / bounds.width, (height - pad * 2) / bounds.height);
-        const scaled = scaleFigure(figure, factor);
-        const scaledBounds = figureVisualBounds(scaled);
-        drawFigure(ctx, translateFigure(
-            scaled,
-            width / 2 - (scaledBounds.x + scaledBounds.width / 2),
-            height / 2 - (scaledBounds.y + scaledBounds.height / 2),
-        ));
+        const box = { width, height };
+        drawFigure(ctx, fitFigureInto(createFigure(pose, box), box, width * 0.08));
     }, [pose]);
 
     return (

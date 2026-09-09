@@ -16,7 +16,7 @@ import {
     JOINT_PARENT,
     leastUsedShade,
     POSE_LIBRARY,
-    MIN_FIGURE_HEIGHT,
+    MIN_FIGURE_UNIT,
     moveJoint,
     nextFigureAt,
     placeNewFigure,
@@ -25,7 +25,7 @@ import {
     scaleHandlePoint,
     subtreeOf,
     swingJoint,
-    transformFigure,
+    transformFigures,
     translateFigure,
 } from './poseFigure';
 
@@ -477,7 +477,17 @@ describe('clampScaleFactor', () => {
     it('stops a resize drag at the grabbable minimum', () => {
         const figure = createFigure('standing', DIMS);
         const factor = clampScaleFactor(figure, 0.0001);
-        expect(figureBounds(scaleFigure(figure, factor)).height).toBeCloseTo(MIN_FIGURE_HEIGHT, 4);
+        expect(figureUnit(scaleFigure(figure, factor))).toBeCloseTo(MIN_FIGURE_UNIT, 4);
+    });
+
+    it('holds every pose to the same physical minimum, not the same box', () => {
+        // A bounding box would let a lying figure shrink to a fraction of the
+        // size a standing one is held at.
+        for (const pose of ['standing', 'lying', 'crouching'] as const) {
+            const figure = createFigure(pose, DIMS);
+            const smallest = scaleFigure(figure, clampScaleFactor(figure, 0.0001));
+            expect(figureUnit(smallest)).toBeCloseTo(MIN_FIGURE_UNIT, 4);
+        }
     });
 
     it('never turns a shrink into a growth on an already tiny figure', () => {
@@ -498,10 +508,10 @@ describe('clampScaleFactor', () => {
     });
 });
 
-describe('transformFigure', () => {
+describe('transformFigures', () => {
     it('moves and scales every joint together', () => {
         const figure = createFigure('standing', DIMS);
-        const moved = transformFigure(figure, { scale: 0.5, dx: 10, dy: -4 });
+        const [moved] = transformFigures([figure], { scale: 0.5, dx: 10, dy: -4 });
         for (const key of JOINT_KEYS) {
             expect(moved.joints[key].x).toBeCloseTo(figure.joints[key].x * 0.5 + 10, 4);
             expect(moved.joints[key].y).toBeCloseTo(figure.joints[key].y * 0.5 - 4, 4);
