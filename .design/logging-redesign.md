@@ -109,3 +109,12 @@ This redesign fixes (A). The `request_id` from (A) is now aligned with (B)'s
   filter with `GetSystemLogs`.
 - `openapi.json` not regenerated for `GET /api/v1/requests` and
   `GET /api/v1/requests/:id`; frontend uses placeholder client.
+
+## Related docs
+
+- `.design/logging.md` — what a log entry / client-facing error message
+  actually *contains* once it reaches this pipeline: upstream failure
+  classification (transport vs. HTTP-level), status-code mapping, log
+  severity by status, and the URL-redaction rule for SDK-typed errors. This
+  doc covers the architecture (sources, routing, correlation); that one
+  covers content.
