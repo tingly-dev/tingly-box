@@ -170,3 +170,39 @@ export const renderStrokes = (
 ): void => {
     for (const stroke of strokes) renderStroke(ctx, stroke, dims);
 };
+
+// --- moving a sketch between canvas sizes -----------------------------------
+//
+// Layers are absolute canvas coordinates, so re-opening a saved sketch after
+// the Playground's Size changed would otherwise drop half the drawing off a
+// smaller canvas, or strand it in the corner of a bigger one. The mapping is
+// uniform (never squashed to fit a new aspect: a squashed figure would stop
+// having consistent bone lengths) and centres what it scales.
+
+export interface CanvasTransform { scale: number; dx: number; dy: number }
+
+export const IDENTITY_TRANSFORM: CanvasTransform = { scale: 1, dx: 0, dy: 0 };
+
+export const fitTransform = (from: CanvasDimensions, to: CanvasDimensions): CanvasTransform => {
+    if (from.width <= 0 || from.height <= 0) return IDENTITY_TRANSFORM;
+    if (from.width === to.width && from.height === to.height) return IDENTITY_TRANSFORM;
+    const scale = Math.min(to.width / from.width, to.height / from.height);
+    return {
+        scale,
+        dx: (to.width - from.width * scale) / 2,
+        dy: (to.height - from.height * scale) / 2,
+    };
+};
+
+export const applyTransform = (point: CanvasPoint, transform: CanvasTransform): CanvasPoint => ({
+    x: point.x * transform.scale + transform.dx,
+    y: point.y * transform.scale + transform.dy,
+});
+
+export const transformStrokes = (strokes: readonly Stroke[], transform: CanvasTransform): Stroke[] => {
+    if (transform === IDENTITY_TRANSFORM) return strokes as Stroke[];
+    return strokes.map((stroke) => ({
+        ...stroke,
+        points: stroke.points.map((point) => applyTransform(point, transform)),
+    }));
+};

@@ -290,17 +290,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const sketchInitial = useMemo(() => {
         const index = sketchTarget?.index;
         const target = index !== null && index !== undefined ? referenceImages[index] : undefined;
-        if (!target) return { image: null, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES };
+        if (!target) return { image: null, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES, size: null };
         if (target.layers) {
             return {
                 image: target.layers.backdrop,
                 strokes: target.layers.strokes,
                 figures: target.layers.figures,
+                size: target.layers.size,
             };
         }
         // No layers: a flattened sketch. It still opens, as pixels to keep
         // drawing on, just not as editable strokes or a posable figure.
-        return { image: target.previewUrl, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES };
+        return { image: target.previewUrl, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES, size: null };
     }, [sketchTarget, referenceImages]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
@@ -1219,6 +1220,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 initialImage={sketchInitial.image}
                 initialStrokes={sketchInitial.strokes}
                 initialFigures={sketchInitial.figures}
+                initialSize={sketchInitial.size}
                 onClose={() => setSketchTarget(null)}
                 onSubmit={handleSketchSubmit}
                 showNotification={showNotification}

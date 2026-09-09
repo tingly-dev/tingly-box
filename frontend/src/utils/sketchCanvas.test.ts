@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
     applyStrokeStyle,
+    applyTransform,
+    fitTransform,
+    IDENTITY_TRANSFORM,
     renderStroke,
     renderStrokes,
     strokeWidthFor,
+    transformStrokes,
     BRUSH_SIZES,
     ERASER_WIDTH_MULTIPLIER,
     SKETCH_BACKGROUND,
@@ -165,5 +169,50 @@ describe('strokes as data', () => {
             { tool: 'eraser', color: '#111827', brush: 'thin', points: [{ x: 2, y: 2 }] },
         ], DIMS);
         expect(calls).toEqual(['begin', 'move 1,1', 'line 1,1', 'stroke', 'begin', 'move 2,2', 'line 2,2', 'stroke']);
+    });
+});
+
+describe('moving a sketch between canvas sizes', () => {
+    it('is a no-op when the size did not change', () => {
+        expect(fitTransform({ width: 1024, height: 1024 }, { width: 1024, height: 1024 }))
+            .toBe(IDENTITY_TRANSFORM);
+    });
+
+    it('scales uniformly and centres, so nothing is squashed or lost', () => {
+        const t = fitTransform({ width: 1024, height: 1024 }, { width: 512, height: 512 });
+        expect(t.scale).toBeCloseTo(0.5);
+        expect(applyTransform({ x: 1024, y: 1024 }, t)).toEqual({ x: 512, y: 512 });
+
+        const tall = fitTransform({ width: 1024, height: 1024 }, { width: 1024, height: 1792 });
+        expect(tall.scale).toBeCloseTo(1);
+        // Centred in the taller canvas rather than pinned to the top.
+        expect(applyTransform({ x: 512, y: 512 }, tall)).toEqual({ x: 512, y: 896 });
+    });
+
+    it('keeps every drawing inside the new canvas', () => {
+        const from = { width: 1024, height: 1792 };
+        const to = { width: 512, height: 512 };
+        const t = fitTransform(from, to);
+        for (const corner of [{ x: 0, y: 0 }, { x: from.width, y: from.height }]) {
+            const mapped = applyTransform(corner, t);
+            expect(mapped.x).toBeGreaterThanOrEqual(0);
+            expect(mapped.x).toBeLessThanOrEqual(to.width);
+            expect(mapped.y).toBeGreaterThanOrEqual(0);
+            expect(mapped.y).toBeLessThanOrEqual(to.height);
+        }
+    });
+
+    it('maps stroke points and leaves the rest of the stroke alone', () => {
+        const t = fitTransform({ width: 1024, height: 1024 }, { width: 512, height: 512 });
+        const [stroke] = transformStrokes([
+            { tool: 'eraser', color: '#dc2626', brush: 'thick', points: [{ x: 100, y: 200 }] },
+        ], t);
+        expect(stroke.points).toEqual([{ x: 50, y: 100 }]);
+        expect(stroke.tool).toBe('eraser');
+        expect(stroke.brush).toBe('thick');
+    });
+
+    it('refuses to divide by a zero-sized canvas', () => {
+        expect(fitTransform({ width: 0, height: 0 }, { width: 512, height: 512 })).toBe(IDENTITY_TRANSFORM);
     });
 });

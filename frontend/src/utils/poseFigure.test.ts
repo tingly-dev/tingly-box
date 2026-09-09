@@ -6,6 +6,7 @@ import {
     distanceToSegment,
     figureBounds,
     figureParts,
+    figureUnit,
     figureVisualBounds,
     flipFigure,
     hitTestBody,
@@ -13,15 +14,18 @@ import {
     isScaleHandleHit,
     JOINT_KEYS,
     JOINT_PARENT,
+    leastUsedShade,
     POSE_LIBRARY,
     MIN_FIGURE_HEIGHT,
     moveJoint,
     nextFigureAt,
     placeNewFigure,
+    clampScaleFactor,
     scaleFigure,
     scaleHandlePoint,
     subtreeOf,
     swingJoint,
+    transformFigure,
     translateFigure,
 } from './poseFigure';
 
@@ -98,12 +102,6 @@ describe('transforms', () => {
         const after = figureBounds(scaled);
         expect(after.height).toBeCloseTo(before.height * 2, 4);
         expect(after.x + after.width / 2).toBeCloseTo(before.x + before.width / 2, 4);
-    });
-
-    it('refuses to shrink a figure below the grabbable minimum', () => {
-        const figure = createFigure('standing', DIMS);
-        const scaled = scaleFigure(figure, 0.0001);
-        expect(figureBounds(scaled).height).toBeGreaterThanOrEqual(MIN_FIGURE_HEIGHT - 1e-6);
     });
 
     it('ignores a non-finite or negative scale factor', () => {
@@ -302,6 +300,30 @@ describe('shades', () => {
         const figure = createFigure('standing', DIMS, undefined, 2);
         expect(applyPreset(figure, 'walking', DIMS).shade).toBe(2);
     });
+
+    it('hands the first three figures three different tones', () => {
+        const figures: PoseFigure[] = [];
+        for (let i = 0; i < 3; i += 1) {
+            figures.push(createFigure('standing', DIMS, undefined, leastUsedShade(figures)));
+        }
+        expect(figures.map((figure) => figure.shade)).toEqual([0, 1, 2]);
+    });
+
+    it('reuses the freed tone after a delete instead of colliding', () => {
+        const figures: PoseFigure[] = [];
+        for (let i = 0; i < 3; i += 1) {
+            figures.push(createFigure('standing', DIMS, undefined, leastUsedShade(figures)));
+        }
+        const remaining = [figures[0], figures[2]];
+        expect(leastUsedShade(remaining)).toBe(1);
+        const next = createFigure('standing', DIMS, undefined, leastUsedShade(remaining));
+        expect(remaining.some((figure) => figure.shade === next.shade)).toBe(false);
+    });
+
+    it('treats a figure saved before shades existed as the first tone', () => {
+        const legacy = { ...createFigure('standing', DIMS), shade: undefined };
+        expect(leastUsedShade([legacy])).toBe(1);
+    });
 });
 
 describe('the skeleton', () => {
@@ -420,6 +442,69 @@ describe('the pose library', () => {
         );
         for (const pose of everyPose) {
             expect(torso(applyPreset(figure, pose, DIMS))).toBeCloseTo(torso(figure), 3);
+        }
+    });
+});
+
+describe('figure scale is the body, not the bounding box', () => {
+    it('gives a lying figure the same limbs as a standing one', () => {
+        // The lying pose has a fifth of the box height but the same bones.
+        // Sizing anything off the box turns it into the stick figure the
+        // manikin exists to avoid.
+        const standing = createFigure('standing', DIMS);
+        const lying = createFigure('lying', DIMS);
+        expect(figureBounds(lying).height).toBeLessThan(figureBounds(standing).height * 0.4);
+        expect(figureUnit(lying)).toBeCloseTo(figureUnit(standing), 4);
+        expect(figureParts(lying).head.radiusY).toBeCloseTo(figureParts(standing).head.radiusY, 4);
+        expect(figureParts(lying).limbs[4].fromRadius).toBeCloseTo(figureParts(standing).limbs[4].fromRadius, 4);
+    });
+
+    it('keeps a lying figure as grabbable as a standing one', () => {
+        const lying = createFigure('lying', DIMS);
+        expect(hitTestBody(lying, lying.joints.kneeL)).toBe(true);
+        const beside = { x: lying.joints.kneeL.x, y: lying.joints.kneeL.y - figureUnit(lying) * 0.02 };
+        expect(hitTestBody(lying, beside)).toBe(true);
+    });
+
+    it('does not change thickness when a limb is swung', () => {
+        const figure = createFigure('standing', DIMS);
+        const swung = swingJoint(figure, 'elbowL', { x: 0, y: 0 });
+        expect(figureUnit(swung)).toBeCloseTo(figureUnit(figure), 4);
+    });
+});
+
+describe('clampScaleFactor', () => {
+    it('stops a resize drag at the grabbable minimum', () => {
+        const figure = createFigure('standing', DIMS);
+        const factor = clampScaleFactor(figure, 0.0001);
+        expect(figureBounds(scaleFigure(figure, factor)).height).toBeCloseTo(MIN_FIGURE_HEIGHT, 4);
+    });
+
+    it('never turns a shrink into a growth on an already tiny figure', () => {
+        const tiny = scaleFigure(createFigure('standing', DIMS), 0.01);
+        expect(clampScaleFactor(tiny, 0.5)).toBeLessThanOrEqual(1);
+        expect(figureBounds(scaleFigure(tiny, clampScaleFactor(tiny, 0.5))).height)
+            .toBeLessThanOrEqual(figureBounds(tiny).height);
+    });
+
+    it('leaves a growth alone', () => {
+        expect(clampScaleFactor(createFigure('standing', DIMS), 2)).toBe(2);
+    });
+
+    it('applies a pose to a tiny figure without inflating it', () => {
+        const tiny = scaleFigure(createFigure('standing', DIMS), 0.03);
+        const torso = (f: PoseFigure) => Math.hypot(f.joints.neck.x - f.joints.hip.x, f.joints.neck.y - f.joints.hip.y);
+        expect(torso(applyPreset(tiny, 'lying', DIMS))).toBeCloseTo(torso(tiny), 4);
+    });
+});
+
+describe('transformFigure', () => {
+    it('moves and scales every joint together', () => {
+        const figure = createFigure('standing', DIMS);
+        const moved = transformFigure(figure, { scale: 0.5, dx: 10, dy: -4 });
+        for (const key of JOINT_KEYS) {
+            expect(moved.joints[key].x).toBeCloseTo(figure.joints[key].x * 0.5 + 10, 4);
+            expect(moved.joints[key].y).toBeCloseTo(figure.joints[key].y * 0.5 - 4, 4);
         }
     });
 });

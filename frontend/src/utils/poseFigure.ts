@@ -13,7 +13,7 @@
 //
 // Geometry here is pure and unit-tested; the canvas calls live at the bottom.
 
-import type { CanvasDimensions, CanvasPoint } from './sketchCanvas';
+import { applyTransform, type CanvasDimensions, type CanvasPoint, type CanvasTransform } from './sketchCanvas';
 
 export type JointKey =
     | 'head' | 'neck'
@@ -69,6 +69,26 @@ export const BONES: readonly Bone[] = [
 // The head's long radius: also the padding that keeps the visual box (and
 // the scale grip on its corner) clear of the silhouette.
 export const HEAD_RADIUS_RATIO = 0.07;
+
+// Every thickness in the manikin is a fraction of "how big is this person",
+// and that number must NOT be the bounding box: a lying figure has the same
+// body as a standing one but a fifth of the box, which would shrink its limbs
+// into the stick figure this module exists to avoid. The torso bone is the
+// one measure a pose cannot change (`swingJoint` rotates, never stretches),
+// so scale is read from it and converted back to the standing height the
+// ratios were authored against.
+export const TORSO_HEIGHT_RATIO = 0.36;
+
+export const figureUnit = (figure: PoseFigure): number => {
+    // hip → neck, the bone itself. The hip *line's* midpoint drifts with the
+    // torso's lean (the stubs to hipL/hipR rotate with it), which would make
+    // the same body measure differently lying down than standing up.
+    const torso = Math.hypot(
+        figure.joints.neck.x - figure.joints.hip.x,
+        figure.joints.neck.y - figure.joints.hip.y,
+    );
+    return Math.max(torso / TORSO_HEIGHT_RATIO, 1);
+};
 
 // Presets are normalised into a unit box (x across the figure's width, y from
 // crown to ankles). They are starting points, not a pose picker standing
@@ -401,7 +421,7 @@ export const figureBounds = (figure: PoseFigure): Rect => {
 // so the visual box is fatter than the joint box. Used for hit-testing the
 // body and for placing the scale handle.
 export const figurePadding = (figure: PoseFigure): number =>
-    Math.max(figureBounds(figure).height * HEAD_RADIUS_RATIO, 1);
+    Math.max(figureUnit(figure) * HEAD_RADIUS_RATIO, 1);
 
 export const figureVisualBounds = (figure: PoseFigure): Rect => {
     const bounds = figureBounds(figure);
@@ -423,6 +443,12 @@ const mapJoints = (figure: PoseFigure, fn: (point: CanvasPoint) => CanvasPoint):
 export const translateFigure = (figure: PoseFigure, dx: number, dy: number): PoseFigure =>
     mapJoints(figure, (p) => ({ x: p.x + dx, y: p.y + dy }));
 
+// Used when a saved sketch is re-opened on a differently sized canvas. Goes
+// through the same uniform transform as the strokes, so the drawing and the
+// figures standing in it stay in register.
+export const transformFigure = (figure: PoseFigure, transform: CanvasTransform): PoseFigure =>
+    mapJoints(figure, (p) => applyTransform(p, transform));
+
 export const moveJoint = (figure: PoseFigure, key: JointKey, point: CanvasPoint): PoseFigure => ({
     ...figure,
     joints: { ...figure.joints, [key]: point },
@@ -430,18 +456,26 @@ export const moveJoint = (figure: PoseFigure, key: JointKey, point: CanvasPoint)
 
 export const MIN_FIGURE_HEIGHT = 24;
 
-// Uniform scale about the figure's own centre, clamped so a figure can never
-// be shrunk into an invisible dot the user then cannot grab.
+// The floor belongs to the *drag*, not to the transform: a resize gesture must
+// not leave a figure too small to grab again, but scaling a figure as part of
+// applying a pose or refitting a canvas has no business being second-guessed.
+// Never above 1 — clamping an already-tiny figure to MIN/height would turn
+// "make it smaller" into "make it bigger".
+export const clampScaleFactor = (figure: PoseFigure, factor: number): number => {
+    const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    if (safe >= 1) return safe;
+    const height = Math.max(figureBounds(figure).height, 1);
+    return Math.max(safe, Math.min(1, MIN_FIGURE_HEIGHT / height));
+};
+
+// Uniform scale about the figure's own centre.
 export const scaleFigure = (figure: PoseFigure, factor: number, origin?: CanvasPoint): PoseFigure => {
     const bounds = figureBounds(figure);
     const pivot = origin ?? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
     const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
-    const clamped = bounds.height * safe < MIN_FIGURE_HEIGHT && safe < 1
-        ? Math.max(MIN_FIGURE_HEIGHT / Math.max(bounds.height, 1), 1e-3)
-        : safe;
     return mapJoints(figure, (p) => ({
-        x: pivot.x + (p.x - pivot.x) * clamped,
-        y: pivot.y + (p.y - pivot.y) * clamped,
+        x: pivot.x + (p.x - pivot.x) * safe,
+        y: pivot.y + (p.y - pivot.y) * safe,
     }));
 };
 
@@ -479,7 +513,7 @@ export const hitTestJoint = (figure: PoseFigure, point: CanvasPoint, radius: num
 // True when the point is on the mannequin's silhouette (any bone capsule or
 // the head), which is what "grab the body and move it" means.
 export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 0): boolean => {
-    const height = figureBounds(figure).height;
+    const height = figureUnit(figure);
     const head = figure.joints.head;
     if (Math.hypot(point.x - head.x, point.y - head.y) <= height * HEAD_RADIUS_RATIO + tolerance) return true;
     return BONES.some((bone) => distanceToSegment(point, figure.joints[bone.from], figure.joints[bone.to])
@@ -548,8 +582,7 @@ const R = {
 
 export const figureParts = (figure: PoseFigure): FigureParts => {
     const joints = figure.joints;
-    const height = Math.max(figureBounds(figure).height, 1);
-    const u = (ratio: number) => height * ratio;
+    const u = (ratio: number) => figureUnit(figure) * ratio;
 
     const shoulderMid = midpoint(joints.shoulderL, joints.shoulderR);
     const hipMid = midpoint(joints.hipL, joints.hipR);
@@ -697,6 +730,17 @@ export const FIGURE_SHADES: readonly FigureTone[] = [
 
 export const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5', rim: '#6d7789' };
 
+// Which tone the next figure should wear. Least-used rather than "one past
+// the count": after a delete, counting the list hands out a shade another
+// figure is already wearing, which is the collision shades exist to prevent.
+// Ties go to the lowest index, so the first three figures still read 0, 1, 2.
+export const leastUsedShade = (figures: readonly PoseFigure[]): number => {
+    const counts = FIGURE_SHADES.map(
+        (_, index) => figures.filter((figure) => (figure.shade ?? 0) === index).length,
+    );
+    return counts.indexOf(Math.min(...counts));
+};
+
 export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
     ? SELECTED_TONE
     : FIGURE_SHADES[(figure.shade ?? 0) % FIGURE_SHADES.length]);
@@ -758,7 +802,7 @@ export const drawFigure = (
 ): void => {
     const parts = figureParts(figure);
     const tone = toneFor(figure, options.selected === true);
-    const rim = Math.max(figureBounds(figure).height * RIM_RATIO, 1);
+    const rim = Math.max(figureUnit(figure) * RIM_RATIO, 1);
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 

@@ -20,6 +20,9 @@ import PoseLibraryPopover from './PoseLibraryPopover';
 import {
     applyStrokeStyle,
     BRUSH_SIZES,
+    fitTransform,
+    IDENTITY_TRANSFORM,
+    transformStrokes,
     fitWithin,
     parseImageSize,
     renderStrokes,
@@ -34,6 +37,7 @@ import {
 } from '@/utils/sketchCanvas';
 import {
     applyPreset,
+    clampScaleFactor,
     createFigure,
     drawFigure,
     drawFigureHandles,
@@ -43,9 +47,11 @@ import {
     nextFigureAt,
     placeNewFigure,
     isScaleHandleHit,
+    leastUsedShade,
     moveJoint,
     scaleFigure,
     swingJoint,
+    transformFigure,
     translateFigure,
     type JointKey,
     type PoseFigure,
@@ -55,6 +61,9 @@ import {
 type Tool = 'pen' | 'eraser' | 'pose';
 
 export interface SketchLayers {
+    // The canvas these coordinates were authored on. Without it, re-opening a
+    // sketch after Size changed would drop part of the drawing off the edge.
+    size: CanvasDimensions;
     strokes: Stroke[];
     figures: PoseFigure[];
     // Pixels the sketch was opened on top of and cannot re-derive: a sketch
@@ -104,6 +113,9 @@ interface SketchCanvasDialogProps {
     initialImage: string | null;
     initialStrokes: Stroke[];
     initialFigures: PoseFigure[];
+    // The canvas the layers were authored on; `null` for a sketch with no
+    // layers. Different from the current Size means everything is refitted.
+    initialSize: CanvasDimensions | null;
     onClose: () => void;
     onSubmit: (result: SketchResult) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
@@ -122,6 +134,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     initialImage,
     initialStrokes,
     initialFigures,
+    initialSize,
     onClose,
     onSubmit,
     showNotification,
@@ -163,6 +176,9 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     const dims = useMemo(() => parseImageSize(size), [size]);
     const cssSize = useMemo(() => fitWithin(dims, stageBox), [dims, stageBox]);
     const dirty = strokes.length > 0 || figures.length > 0 || backdrop !== null;
+    // Re-opening an existing sketch, by any of the three things it can carry —
+    // not just a backdrop, which a layered sketch no longer has.
+    const isEditing = initialImage !== null || initialStrokes.length > 0 || initialFigures.length > 0;
     const selectedFigure = useMemo(
         () => figures.find((figure) => figure.id === selectedId) ?? null,
         [figures, selectedId],
@@ -206,15 +222,22 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         canvas.width = dims.width;
         canvas.height = dims.height;
         paintBackground(ctx);
+        // A sketch saved at another Size is refitted, uniformly and centred,
+        // rather than replayed at its old coordinates on the new canvas.
+        const transform = initialSize ? fitTransform(initialSize, dims) : IDENTITY_TRANSFORM;
+        const strokesToOpen = transformStrokes(initialStrokes, transform);
+        const figuresToOpen = transform === IDENTITY_TRANSFORM
+            ? initialFigures
+            : initialFigures.map((figure) => transformFigure(figure, transform));
         historyRef.current.clear();
         // Undo is seeded from the strokes themselves: each frame is the list
         // one stroke shorter. That is what lets Ctrl+Z keep peeling marks that
         // were drawn before the sketch was saved, instead of stopping dead at
         // whatever state it re-opened in. (Figures cannot be rebuilt this way
         // — they come back at their saved pose, and undo starts from there.)
-        for (let i = 0; i < initialStrokes.length; i += 1) {
+        for (let i = 0; i < strokesToOpen.length; i += 1) {
             historyRef.current.push({
-                strokes: initialStrokes.slice(0, i),
+                strokes: strokesToOpen.slice(0, i),
                 figures: null,
                 backdrop: null,
                 hadBackdrop: initialImage !== null,
@@ -222,27 +245,27 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         }
         drawingRef.current = null;
         poseDragRef.current = null;
-        setCanUndo(initialStrokes.length > 0);
-        setStrokes(initialStrokes);
+        setCanUndo(strokesToOpen.length > 0);
+        setStrokes(strokesToOpen);
         setBackdrop(null);
-        setFigures(initialFigures);
+        setFigures(figuresToOpen);
         // Re-opening a sketch that has one figure lands on the figure tool
         // with that figure selected: the handles are the answer to "is this
         // still posable?", so they should be on screen before the first click.
-        setSelectedId(initialFigures.length === 1 ? initialFigures[0].id : null);
-        setTool(initialFigures.length > 0 ? 'pose' : 'pen');
-        renderStrokes(ctx, initialStrokes, dims);
+        setSelectedId(figuresToOpen.length === 1 ? figuresToOpen[0].id : null);
+        setTool(figuresToOpen.length > 0 ? 'pose' : 'pen');
+        renderStrokes(ctx, strokesToOpen, dims);
         if (initialImage) {
             loadDataUrl(initialImage)
                 .then((image) => {
                     if (cancelled) return;
                     setBackdrop(image);
-                    redraw(initialStrokes, image);
+                    redraw(strokesToOpen, image);
                 })
                 .catch(() => undefined);
         }
         return () => { cancelled = true; };
-    }, [open, canvasEl, dims, initialImage, initialStrokes, initialFigures, getContext, paintBackground, redraw]);
+    }, [open, canvasEl, dims, initialImage, initialStrokes, initialFigures, initialSize, getContext, paintBackground, redraw]);
 
     // Track the stage's box so the canvas can be sized to fit it — a fixed
     // pixel size would either overflow phones or leave desktops with a stamp.
@@ -334,9 +357,11 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     // (principle 2). Poses are swapped afterwards, in place.
     const handleAddFigure = useCallback(() => {
         snapshotFigures();
-        // Placed clear of the figures already down, and in the next tone, so
-        // a second figure is visibly a second figure.
-        const figure = createFigure('standing', dims, placeNewFigure(figures, dims), figures.length);
+        // Placed clear of the figures already down, and in the least-used
+        // tone rather than "the next one": after a delete, counting the list
+        // hands out a shade another figure already wears, which is the exact
+        // collision the shade exists to prevent.
+        const figure = createFigure('standing', dims, placeNewFigure(figures, dims), leastUsedShade(figures));
         setFigures((current) => [...current, figure]);
         setSelectedId(figure.id);
         setTool('pose');
@@ -484,23 +509,22 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             }
         }
 
-        for (let index = figures.length - 1; index >= 0; index -= 1) {
-            const figure = figures[index];
-            const joint = hitTestJoint(figure, point, jointRadius);
-            if (joint) {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                setSelectedId(figure.id);
-                poseDragRef.current = {
-                    pointerId: event.pointerId,
-                    mode: 'joint',
-                    figureId: figure.id,
-                    before: figures,
-                    committed: false,
-                    joint,
-                    detached: event.altKey,
-                };
-                return;
-            }
+        // Joints of the selected figure only: handles are drawn for that one
+        // alone, and grabbing an invisible joint on a figure you have not
+        // selected swings its limb when you meant to move it.
+        const joint = selectedFigure ? hitTestJoint(selectedFigure, point, jointRadius) : null;
+        if (selectedFigure && joint) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            poseDragRef.current = {
+                pointerId: event.pointerId,
+                mode: 'joint',
+                figureId: selectedFigure.id,
+                before: figures,
+                committed: false,
+                joint,
+                detached: event.altKey,
+            };
+            return;
         }
 
         // Clicking a pile walks down it rather than always grabbing the top
@@ -546,7 +570,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             return;
         }
         const distance = Math.hypot(point.x - drag.origin.x, point.y - drag.origin.y);
-        const factor = distance / drag.startDistance;
+        const factor = clampScaleFactor(drag.start, distance / drag.startDistance);
         updateFigure(drag.figureId, () => scaleFigure(drag.start, factor, drag.origin));
     }, [pointFromEvent, pushSnapshot, updateFigure]);
 
@@ -584,10 +608,13 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 previewUrl: output.toDataURL('image/png'),
                 // The layers travel with the result, as data rather than
                 // pixels: this is what makes a saved sketch re-editable.
-                layers: { strokes, figures, backdrop: initialImage },
+                // `backdrop &&` rather than `initialImage`: Clear and Undo
+                // drop the backdrop, and a cleared canvas must not come back
+                // with the picture it was opened on.
+                layers: { size: dims, strokes, figures, backdrop: backdrop ? initialImage : null },
             });
         }, 'image/png');
-    }, [canvasEl, dims, figures, initialImage, onSubmit, showNotification, strokes, t]);
+    }, [backdrop, canvasEl, dims, figures, initialImage, onSubmit, showNotification, strokes, t]);
 
     const toolLabel = (key: Tool) => {
         if (key === 'pen') return t('playground.sketch.pen', { defaultValue: 'Pen' });
@@ -856,7 +883,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     {t('playground.sketch.cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 <Button variant="contained" onClick={handleSubmit} disabled={!dirty} startIcon={<Create />}>
-                    {initialImage
+                    {isEditing
                         ? t('playground.sketch.update', { defaultValue: 'Update sketch' })
                         : t('playground.sketch.use', { defaultValue: 'Use sketch' })}
                 </Button>
