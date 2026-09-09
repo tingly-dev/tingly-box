@@ -25,11 +25,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, OpenInFull, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { parseImageSize } from '@/utils/sketchCanvas';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
+import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import ImageSliceDialog from './ImageSliceDialog';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
@@ -120,7 +121,14 @@ interface GenerationRun {
     // display alongside the output — the "what did I ask for" half of the
     // history card (only set when the run went through `edits`).
     sourceImages?: string[];
-    status?: 'pending' | 'completed';
+    // How many images the run asked for — kept so a failed run can be retried
+    // with exactly the request it made.
+    count?: number;
+    status?: 'pending' | 'completed' | 'failed';
+    // Why a failed run failed, shown on its card. A run that fails stays in
+    // the strip: silently removing it leaves the user with a toast that has
+    // already gone and no record of what was asked.
+    error?: string;
 }
 
 // Reads a File into a base64 data URL, the same representation already used
@@ -326,6 +334,41 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setRuns(nextRuns);
     }, []);
 
+    // The session outlives a reload: whatever the last visit left in
+    // IndexedDB comes back on mount (only when memory is empty — navigating
+    // between pages keeps the in-memory copy, which is newer), and every
+    // change is written back. A run that was still pending when the page went
+    // away can never complete, so it comes back as failed rather than as a
+    // spinner that spins forever.
+    const [sessionRestored, setSessionRestored] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        if (imageGenSessionRuns.length > 0 || imageGenSessionImports.length > 0) {
+            setSessionRestored(true);
+            return undefined;
+        }
+        void loadPlaygroundSession<GenerationRun, ImportedImage>().then(({ runs: savedRuns, imports: savedImports }) => {
+            if (cancelled) return;
+            if (imageGenSessionRuns.length === 0 && savedRuns.length > 0) {
+                imageGenSessionRuns = savedRuns.map((run) => (run.status === 'pending'
+                    ? { ...run, status: 'failed', error: t('playground.interruptedByReload', { defaultValue: 'Interrupted by a page reload' }) }
+                    : run));
+                setRuns(imageGenSessionRuns);
+            }
+            if (imageGenSessionImports.length === 0 && savedImports.length > 0) {
+                imageGenSessionImports = savedImports;
+                setImported(imageGenSessionImports);
+            }
+            setSessionRestored(true);
+        });
+        return () => { cancelled = true; };
+    }, [t]);
+
+    useEffect(() => {
+        if (!sessionRestored) return;
+        void savePlaygroundSession({ runs, imports: imported });
+    }, [imported, runs, sessionRestored]);
+
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
             const track = historyTrackRef.current;
@@ -453,16 +496,21 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // the artifact for the next action, not just a notification that one
     // exists. Reuses the already-rendered src as the preview (it's already a
     // data URL/data-equivalent), so this never re-encodes the image.
+    //
+    // It joins the references rather than replacing them: the row holds up
+    // to five, and "use this one too" is the common case. At the cap the
+    // oldest makes room.
     const handleUseAsReference = useCallback(async (src: string) => {
         try {
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
-            setReferenceImages([{
+            const next: ReferenceImage = {
                 file,
                 previewUrl: src,
                 source: 'upload',
                 ...(await readImageSize(src) ?? {}),
-            }]);
+            };
+            setReferenceImages((current) => [...current, next].slice(-MAX_EDIT_REFERENCE_IMAGES));
         } catch {
             showNotification(
                 t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
@@ -548,61 +596,124 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    const handleSubmit = useCallback(async () => {
-        if (!prompt.trim() || !model) return;
-        const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    interface GenerationRequest {
+        prompt: string;
+        model: string;
+        size: string;
+        quality: Quality;
+        count: number;
+        sources: { file: File; previewUrl: string }[];
+        // Set when re-running a failed run: its card flips back to pending
+        // instead of a second card appearing.
+        runId?: string;
+    }
+
+    // One path for a fresh request and a retry, so a retry is the same call
+    // the original was and not a re-implementation that drifts.
+    const runGeneration = useCallback(async (request: GenerationRequest) => {
+        const runId = request.runId ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         // The endpoint is a consequence of the inputs, not a mode the user
         // picks: references present → edits, none → generations. Which
         // providers can serve either is the gateway's concern, not this
         // panel's (see .design/imageedit.md).
-        const editSources = referenceImages;
-        const endpoint: Endpoint = editSources.length > 0 ? 'edits' : 'generations';
-        const generationPrompt = prompt.trim();
-        const generationModel = model;
-        const generationSize = size;
-        const generationQuality = quality;
-        updateRuns((currentRuns) => [...currentRuns, {
+        const endpoint: Endpoint = request.sources.length > 0 ? 'edits' : 'generations';
+        const pendingRun: GenerationRun = {
             id: runId,
             createdAt: Date.now(),
             endpoint,
-            prompt: generationPrompt,
-            model: generationModel,
-            size: generationSize,
-            quality: generationQuality,
+            prompt: request.prompt,
+            model: request.model,
+            size: request.size,
+            quality: request.quality,
+            count: request.count,
             images: [],
-            sourceImages: endpoint === 'edits' ? editSources.map((ref) => ref.previewUrl) : undefined,
+            sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
             status: 'pending',
-        }]);
+        };
+        updateRuns((currentRuns) => (currentRuns.some((run) => run.id === runId)
+            ? currentRuns.map((run) => (run.id === runId ? { ...pendingRun, createdAt: run.createdAt } : run))
+            : [...currentRuns, pendingRun]));
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
-            const editFiles = editSources.map((ref) => ref.file);
+            const editFiles = request.sources.map((ref) => ref.file);
             const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
-                    model: generationModel,
-                    prompt: generationPrompt,
-                    n: count,
-                    size: generationSize as any,
-                    quality: generationQuality as any,
+                    model: request.model,
+                    prompt: request.prompt,
+                    n: request.count,
+                    size: request.size as any,
+                    quality: request.quality as any,
                 })
                 : await client.images.generate({
-                    model: generationModel,
-                    prompt: generationPrompt,
-                    n: count,
-                    size: generationSize as any,
-                    quality: generationQuality,
+                    model: request.model,
+                    prompt: request.prompt,
+                    n: request.count,
+                    size: request.size as any,
+                    quality: request.quality,
                 });
             const images = response.data ?? [];
             updateRuns((currentRuns) => currentRuns.map((run) => (
-                run.id === runId ? { ...run, images, status: 'completed' } : run
+                run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
             )));
         } catch (error: any) {
-            updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== runId));
             const status = error?.status ? `${error.status}: ` : '';
             const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
+            updateRuns((currentRuns) => currentRuns.map((run) => (
+                run.id === runId ? { ...run, status: 'failed', error: `${status}${message}` } : run
+            )));
             showNotification(`${status}${message}`, 'error');
         }
-    }, [count, model, prompt, quality, referenceImages, showNotification, size, t, updateRuns]);
+    }, [showNotification, t, updateRuns]);
+
+    const canSubmit = Boolean(prompt.trim()) && Boolean(model);
+
+    const handleSubmit = useCallback(async () => {
+        if (!canSubmit) return;
+        await runGeneration({
+            prompt: prompt.trim(),
+            model,
+            size,
+            quality,
+            count,
+            sources: referenceImages,
+        });
+    }, [canSubmit, count, model, prompt, quality, referenceImages, runGeneration, size]);
+
+    // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
+    // is the keyboard's Generate button.
+    const handlePromptKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void handleSubmit();
+        }
+    }, [handleSubmit]);
+
+    // A failed run's references only survive as data URLs, so they are read
+    // back into files here; the request itself is the one the card records.
+    const handleRetry = useCallback(async (run: GenerationRun) => {
+        try {
+            const sources = await Promise.all((run.sourceImages ?? []).map(async (src, index) => {
+                const blob = await fetchBlob(src);
+                return { file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }), previewUrl: src };
+            }));
+            await runGeneration({
+                prompt: run.prompt,
+                model: run.model,
+                size: run.size,
+                quality: run.quality,
+                count: run.count ?? 1,
+                sources,
+                runId: run.id,
+            });
+        } catch {
+            showNotification(t('playground.requestFailed', { defaultValue: 'Request failed' }), 'error');
+        }
+    }, [runGeneration, showNotification, t]);
+
+    const handleRemoveRun = useCallback((id: string) => {
+        updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== id));
+    }, [updateRuns]);
 
     // The three ways a reference image gets here, as equals. Drop is not in
     // the list because it has no button — the dashed box itself is the target.
@@ -885,6 +996,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
+                            onKeyDown={handlePromptKeyDown}
                             disabled={noModels}
                             slotProps={{
                                 input: {
@@ -989,12 +1101,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             />
                         </Box>
 
+                        <Tooltip title={t('playground.submitShortcut', { defaultValue: '⌘/Ctrl + Enter to generate' })} placement="top">
+                        <span>
                         <Button
                             variant="contained"
                             size="large"
                             fullWidth
-                            onClick={handleSubmit}
-                            disabled={noModels || !prompt.trim() || !model}
+                            onClick={() => { void handleSubmit(); }}
+                            disabled={noModels || !canSubmit}
                             startIcon={pendingCount > 0
                                 ? <CircularProgress size={18} color="inherit" />
                                 : <AutoAwesome />}
@@ -1014,6 +1128,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     })
                                     : t('playground.generate', { defaultValue: 'Generate' })}
                         </Button>
+                        </span>
+                        </Tooltip>
                     </Stack>
 
                     {/* The results panel takes images too: dropping one here
@@ -1174,6 +1290,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                 height: '100%',
                                                 bgcolor: 'background.paper',
                                                 borderStyle: run.status === 'pending' ? 'dashed' : 'solid',
+                                                borderColor: run.status === 'failed' ? 'error.main' : undefined,
                                                 scrollSnapAlign: 'start',
                                             }}
                                         >
@@ -1220,14 +1337,73 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
                                                 </Stack>
+                                            ) : run.status === 'failed' ? (
+                                                <Stack spacing={1} sx={{ height: '100%', minWidth: 0 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                                        <ErrorOutline color="error" fontSize="small" />
+                                                        <Typography variant="body2" sx={{ fontWeight: 500, flex: 1, minWidth: 0 }}>
+                                                            {t('playground.runFailed', { defaultValue: 'Generation failed' })}
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRemoveRun(run.id)}
+                                                            aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
+                                                            sx={{ mr: -0.5, mt: -0.5 }}
+                                                        >
+                                                            <Close fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: 'error.main',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 3,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                            wordBreak: 'break-word',
+                                                        }}
+                                                    >
+                                                        {run.error}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 3,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        {run.prompt}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{ color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                    >
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                                                    </Typography>
+                                                    <Box sx={{ flex: 1 }} />
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        startIcon={<Refresh fontSize="small" />}
+                                                        onClick={() => { void handleRetry(run); }}
+                                                        sx={{ alignSelf: 'flex-start' }}
+                                                    >
+                                                        {t('playground.retry', { defaultValue: 'Retry' })}
+                                                    </Button>
+                                                </Stack>
                                             ) : (
                                             <Stack spacing={1.25} sx={{ height: '100%' }}>
                                                 <Box sx={{ minWidth: 0 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
                                                         <Typography
                                                             variant="body2"
                                                             sx={{
                                                                 fontWeight: 500,
+                                                                flex: 1,
                                                                 minWidth: 0,
                                                                 display: '-webkit-box',
                                                                 WebkitLineClamp: 2,
@@ -1237,6 +1413,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         >
                                                             {run.prompt}
                                                         </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRemoveRun(run.id)}
+                                                            aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
+                                                            sx={{ mr: -0.75, mt: -0.75, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                                                        >
+                                                            <Close sx={{ fontSize: 16 }} />
+                                                        </IconButton>
                                                     </Box>
                                                     <Typography
                                                         variant="caption"
@@ -1637,7 +1821,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         fullWidth
                         value={prompt}
                         onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={handlePromptKeyDown}
                         placeholder={t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
+                        helperText={t('playground.submitShortcut', { defaultValue: '⌘/Ctrl + Enter to generate' })}
                     />
                 </DialogContent>
                 <DialogActions sx={{ px: 3, py: 2 }}>

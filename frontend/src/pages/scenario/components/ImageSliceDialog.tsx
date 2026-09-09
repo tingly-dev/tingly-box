@@ -655,7 +655,26 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                     borderRadius: '3px',
                                                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.light' },
                                                 }
-                                                : { bgcolor: 'transparent' }),
+                                                : {
+                                                    bgcolor: 'transparent',
+                                                    // A pill at the strip's midpoint says "this edge
+                                                    // drags too"; the strip itself stays invisible
+                                                    // because it is a hit area, not a shape.
+                                                    '&::after': {
+                                                        content: '""',
+                                                        position: 'absolute',
+                                                        left: '50%',
+                                                        top: '50%',
+                                                        transform: 'translate(-50%, -50%)',
+                                                        width: handle.mode === 'n' || handle.mode === 's' ? 22 : 5,
+                                                        height: handle.mode === 'n' || handle.mode === 's' ? 5 : 22,
+                                                        borderRadius: 3,
+                                                        bgcolor: 'common.white',
+                                                        border: '1px solid',
+                                                        borderColor: 'primary.main',
+                                                        boxSizing: 'border-box',
+                                                    },
+                                                }),
                                         }}
                                     />
                                 ))}

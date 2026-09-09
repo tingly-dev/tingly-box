@@ -2409,6 +2409,17 @@ export const handlers = [
         const palette = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
         const promptText = String(body?.prompt ?? '').slice(0, 80).replace(/[<>&"]/g, '')
 
+        // A prompt carrying `[fail]` gets the upstream error a real provider
+        // would return, so the playground's failed-run card is exercisable
+        // against the mock backend too.
+        if (/\[fail\]/i.test(promptText)) {
+            await new Promise((r) => setTimeout(r, 300))
+            return HttpResponse.json(
+                { error: { message: 'mock upstream rejected the request (prompt contains [fail])', type: 'server_error' } },
+                { status: 502 },
+            )
+        }
+
         // A prompt that asks for an NxM grid gets a real grid back, so the
         // playground's slicer is exercisable against the mock backend.
         const sheet = /(\d+)\s*[x×]\s*(\d+)\s+grid/i.exec(promptText)
