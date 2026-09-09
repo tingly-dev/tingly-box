@@ -2413,11 +2413,30 @@ export const handlers = [
         // playground's slicer is exercisable against the mock backend.
         const sheet = /(\d+)\s*[x×]\s*(\d+)\s+grid/i.exec(promptText)
 
+        // A prompt naming one of the fake backgrounds gets that background
+        // painted behind the sheet, so the playground's background cleanup is
+        // exercisable against the mock backend too.
+        const fakeBackground = /checkerboard|checker|transparent/i.test(promptText)
+            ? 'checker'
+            : /green\s*screen|greenscreen/i.test(promptText) ? 'green' : 'none'
+
+        const backgroundMarkup = (): string => {
+            if (fakeBackground === 'green') return '<rect width="100%" height="100%" fill="#00b140"/>'
+            if (fakeBackground === 'checker') {
+                return '<defs><pattern id="tb-checker" width="48" height="48" patternUnits="userSpaceOnUse">'
+                    + '<rect width="48" height="48" fill="#ffffff"/>'
+                    + '<rect width="24" height="24" fill="#cccccc"/>'
+                    + '<rect x="24" y="24" width="24" height="24" fill="#cccccc"/>'
+                    + '</pattern></defs><rect width="100%" height="100%" fill="url(#tb-checker)"/>'
+            }
+            return ''
+        }
+
         const makeSheetSvgDataUrl = (cols: number, rows: number, offset: number): string => {
             const cellW = w / cols
             const cellH = h / rows
             const radius = Math.min(cellW, cellH) * 0.36
-            let body = ''
+            let body = backgroundMarkup()
             for (let row = 0; row < rows; row += 1) {
                 for (let col = 0; col < cols; col += 1) {
                     const idx = row * cols + col

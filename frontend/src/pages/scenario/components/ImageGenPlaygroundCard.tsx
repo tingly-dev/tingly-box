@@ -72,15 +72,43 @@ interface ReferenceImage {
     // back an editable canvas rather than a picture of one. The request still
     // sends `file`; this rides along for the editor only.
     layers?: SketchLayers;
+    // Read once when the image arrives, so the lightbox can name what this is
+    // (`sheet.png · 1024×1024 px`) instead of showing an empty prompt line.
+    width?: number;
+    height?: number;
 }
+
+// Decodes an image just far enough to learn its pixel size. Failure is not
+// worth surfacing — the caption simply drops the dimensions.
+const readImageSize = (src: string): Promise<{ width: number; height: number } | null> => new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => resolve(null);
+    image.src = src;
+});
 
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
 // a new sketch, otherwise the reference image being redrawn.
 type SketchTarget = { index: number | null } | null;
 
+// An image the user brought in to work on rather than to generate from: it
+// lands in the results panel, not in the request. The two destinations are
+// different intents ("edit this with a model" vs "cut this one up"), so they
+// are different drops, each landing where its result shows up.
+interface ImportedImage {
+    id: string;
+    src: string;
+    name: string;
+    bytes: number;
+    width?: number;
+    height?: number;
+    createdAt: number;
+}
+
 interface GenerationRun {
     id: string;
     endpoint: Endpoint;
+    createdAt: number;
     prompt: string;
     model: string;
     size: string;
@@ -110,15 +138,145 @@ interface SelectedImage {
     size: string;
     quality: Quality;
     index: number;
-    // Distinguishes the run's original reference image(s) from its generated
-    // output(s) — same lightbox, different framing ("Original" badge + an
-    // edit affordance for source images that otherwise have no interaction).
-    kind: 'output' | 'source';
+    // Where this image came from — same lightbox, different framing. A run's
+    // output and its `source` originals carry a prompt and a model; a
+    // `reference` waiting in the request and an `import` brought in to work on
+    // carry neither, so those two are titled by their file instead.
+    kind: 'output' | 'source' | 'reference' | 'import';
+    // Set for `reference` and `import`: what to call this image and what it is.
+    label?: string;
+    caption?: string;
 }
 
 // Keep playground output while navigating between pages in the current app session.
 // This deliberately stays in memory: base64 images can quickly exceed sessionStorage quotas.
 let imageGenSessionRuns: GenerationRun[] = [];
+let imageGenSessionImports: ImportedImage[] = [];
+
+const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+
+interface ImportedImageCardProps {
+    item: ImportedImage;
+    onOpen: () => void;
+    onUseAsReference: () => void;
+    onRemove: () => void;
+}
+
+// An imported image sits in the results strip alongside the runs: same card
+// chrome, same zoom-to-work-on-it gesture. Its subtitle says what it is —
+// there is no prompt or model to report, only the file itself.
+const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onUseAsReference, onRemove }) => {
+    const { t } = useTranslation();
+    const dimensions = item.width && item.height ? `${item.width}×${item.height} px` : '';
+    return (
+        <Card
+            data-testid="imagegen-imported-image"
+            variant="outlined"
+            sx={{
+                flex: { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' },
+                height: '100%',
+                bgcolor: 'background.paper',
+                scrollSnapAlign: 'start',
+            }}
+        >
+            <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                <Stack spacing={1.25} sx={{ height: '100%' }}>
+                    <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                            {item.name}
+                        </Typography>
+                        <Typography
+                            variant="caption"
+                            sx={{ display: 'block', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                            {[t('playground.importedBadge', { defaultValue: 'Imported' }), dimensions, formatBytes(item.bytes)]
+                                .filter(Boolean)
+                                .join(' · ')}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ position: 'relative', flex: 1, minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                        <ButtonBase
+                            onClick={onOpen}
+                            aria-label={t('playground.openImported', { defaultValue: 'Open {{name}}', name: item.name })}
+                            sx={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'block',
+                                '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': { opacity: 1 },
+                            }}
+                        >
+                            <Box
+                                component="img"
+                                src={item.src}
+                                alt={item.name}
+                                sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                            />
+                            <Box
+                                className="image-preview-overlay"
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'common.white',
+                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
+                                    opacity: 0,
+                                    transition: 'opacity 0.16s ease-out',
+                                }}
+                            >
+                                <ZoomIn sx={{ fontSize: 30 }} />
+                            </Box>
+                        </ButtonBase>
+                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
+                            <IconButton
+                                size="small"
+                                onClick={onUseAsReference}
+                                aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
+                                sx={{
+                                    position: 'absolute',
+                                    bottom: 8,
+                                    right: 8,
+                                    width: 30,
+                                    height: 30,
+                                    color: 'common.white',
+                                    bgcolor: 'rgba(15, 23, 42, 0.58)',
+                                    backdropFilter: 'blur(4px)',
+                                    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.78)' },
+                                }}
+                            >
+                                <Edit fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <IconButton
+                            size="small"
+                            onClick={onRemove}
+                            aria-label={t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: item.name })}
+                            sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                width: 30,
+                                height: 30,
+                                color: 'common.white',
+                                bgcolor: 'rgba(15, 23, 42, 0.58)',
+                                backdropFilter: 'blur(4px)',
+                                '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.78)' },
+                            }}
+                        >
+                            <Close fontSize="small" />
+                        </IconButton>
+                    </Box>
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+};
 
 interface ImageGenPlaygroundCardProps {
     rules: Rule[];
@@ -147,11 +305,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [count, setCount] = useState(1);
     const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
+    const [imported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
     const historyTrackRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
     const pendingCount = runs.filter((run) => run.status === 'pending').length;
     const { copied: promptCopied, copy: copyPrompt } = useCopyFeedback();
 
@@ -167,7 +327,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             if (track) track.scrollTo({ left: track.scrollWidth, behavior: 'smooth' });
         });
         return () => cancelAnimationFrame(frame);
-    }, [pendingCount, runs.length]);
+    }, [imported.length, pendingCount, runs.length]);
 
     // Appends newly picked/dropped files (image/* only) up to the reference
     // cap, converting each to a data URL up front so thumbnails and the
@@ -177,13 +337,63 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (incoming.length === 0) return;
         const accepted = incoming.slice(0, Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length));
         if (accepted.length === 0) return;
-        const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => ({
-            file,
-            previewUrl: await fileToDataUrl(file),
-            source: 'upload',
-        })));
+        const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => {
+            const previewUrl = await fileToDataUrl(file);
+            return { file, previewUrl, source: 'upload', ...(await readImageSize(previewUrl) ?? {}) };
+        }));
         setReferenceImages((current) => [...current, ...withPreviews].slice(0, MAX_EDIT_REFERENCE_IMAGES));
     }, [referenceImages.length]);
+
+    // Brings images into the results panel. Same decoding as a reference (data
+    // URL up front, so one representation renders everywhere), different
+    // destination: nothing here is sent to a model.
+    const handleImportImages = useCallback(async (files: FileList | File[]) => {
+        const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'));
+        if (incoming.length === 0) return;
+        const items = await Promise.all(incoming.map(async (file): Promise<ImportedImage> => {
+            const src = await fileToDataUrl(file);
+            return {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                src,
+                name: file.name,
+                bytes: file.size,
+                createdAt: Date.now(),
+                ...(await readImageSize(src) ?? {}),
+            };
+        }));
+        imageGenSessionImports = [...imageGenSessionImports, ...items];
+        setImported(imageGenSessionImports);
+    }, []);
+
+    const handleRemoveImport = useCallback((id: string) => {
+        imageGenSessionImports = imageGenSessionImports.filter((item) => item.id !== id);
+        setImported(imageGenSessionImports);
+    }, []);
+
+    // The click-shaped twin of Ctrl+V, aimed at the results panel.
+    const handleImportFromClipboard = useCallback(async () => {
+        const nothingPasted = () => showNotification(
+            t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
+            'info',
+        );
+        try {
+            const items = await navigator.clipboard.read();
+            const files: File[] = [];
+            for (const item of items) {
+                const type = item.types.find((candidate) => candidate.startsWith('image/'));
+                if (!type) continue;
+                const blob = await item.getType(type);
+                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
+            }
+            if (files.length === 0) {
+                nothingPasted();
+                return;
+            }
+            await handleImportImages(files);
+        } catch {
+            nothingPasted();
+        }
+    }, [handleImportImages, showNotification, t]);
 
     const handleRemoveReferenceImage = useCallback((index: number) => {
         setReferenceImages((current) => current.filter((_, i) => i !== index));
@@ -242,7 +452,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         try {
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
-            setReferenceImages([{ file, previewUrl: src, source: 'upload' }]);
+            setReferenceImages([{
+                file,
+                previewUrl: src,
+                source: 'upload',
+                ...(await readImageSize(src) ?? {}),
+            }]);
         } catch {
             showNotification(
                 t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
@@ -255,17 +470,42 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // same list, goes through the same request, and shows up in the run
     // history like any upload. Redrawing replaces the sketch in place so it
     // keeps its position among the other references.
+    // A brought-in image is a first-class image on this panel, not just a
+    // request parameter: it opens in the same lightbox as a result, with the
+    // same download and slicing tools. Its header names the file and its real
+    // pixel size, since there is no prompt or model behind it.
+    const handleOpenReference = useCallback((index: number) => {
+        const ref = referenceImages[index];
+        if (!ref) return;
+        const dimensions = ref.width && ref.height ? `${ref.width}×${ref.height} px` : '';
+        const kilobytes = `${Math.max(1, Math.round(ref.file.size / 1024))} KB`;
+        setSelectedImage({
+            src: ref.previewUrl,
+            prompt: '',
+            model: '',
+            size: '',
+            quality: 'auto',
+            index,
+            kind: 'reference',
+            label: ref.source === 'sketch'
+                ? t('playground.sketch.title', { defaultValue: 'Sketch' })
+                : ref.file.name,
+            caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
+        });
+    }, [referenceImages, t]);
+
     const handleOpenSketch = useCallback((index: number | null) => {
         if (index === null && referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) return;
         setSketchTarget({ index });
     }, [referenceImages.length]);
 
-    const handleSketchSubmit = useCallback((result: SketchResult) => {
+    const handleSketchSubmit = useCallback(async (result: SketchResult) => {
         const sketch: ReferenceImage = {
             file: result.file,
             previewUrl: result.previewUrl,
             source: 'sketch',
             layers: result.layers,
+            ...(await readImageSize(result.previewUrl) ?? {}),
         };
         setReferenceImages((current) => {
             const index = sketchTarget?.index ?? null;
@@ -318,6 +558,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         const generationQuality = quality;
         updateRuns((currentRuns) => [...currentRuns, {
             id: runId,
+            createdAt: Date.now(),
             endpoint,
             prompt: generationPrompt,
             model: generationModel,
@@ -381,6 +622,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         },
     ];
 
+    // One timeline for the results panel: images brought in to work on and
+    // images the model produced, in the order they arrived. Two lists would
+    // make "where did my image go" a question the user has to ask.
+    const timeline = useMemo(() => ([
+        ...imported.map((item) => ({ kind: 'import' as const, at: item.createdAt, item })),
+        ...runs.map((run) => ({ kind: 'run' as const, at: run.createdAt ?? 0, run })),
+    ].sort((a, b) => a.at - b.at)), [imported, runs]);
+
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
         ? 'auto'
@@ -427,7 +676,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
                                     {t('playground.referenceImages', { defaultValue: 'Reference images' })}
                                     {' · '}
-                                    {t('playground.referenceOptional', { defaultValue: 'optional · or drop images here' })}
+                                    {t('playground.referenceOptional', { defaultValue: 'optional · drop images here to generate from them' })}
                                 </Typography>
                                 <Box
                                     onClick={() => referenceFileInputRef.current?.click()}
@@ -479,12 +728,42 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     key={index}
                                                     sx={{ position: 'relative', width: 56, height: 56, borderRadius: 1, overflow: 'hidden', flexShrink: 0 }}
                                                 >
-                                                    <Box
-                                                        component="img"
-                                                        src={ref.previewUrl}
-                                                        alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
-                                                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                                    />
+                                                    <ButtonBase
+                                                        onClick={(event) => { event.stopPropagation(); handleOpenReference(index); }}
+                                                        aria-label={t('playground.openReference', {
+                                                            defaultValue: 'Open reference image {{number}}',
+                                                            number: index + 1,
+                                                        })}
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            display: 'block',
+                                                            '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            component="img"
+                                                            src={ref.previewUrl}
+                                                            alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
+                                                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                        />
+                                                        <Box
+                                                            className="reference-zoom"
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                inset: 0,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                color: 'common.white',
+                                                                bgcolor: 'rgba(15, 23, 42, 0.42)',
+                                                                opacity: 0,
+                                                                transition: 'opacity 0.16s ease-out',
+                                                            }}
+                                                        >
+                                                            <ZoomIn fontSize="small" />
+                                                        </Box>
+                                                    </ButtonBase>
                                                     {ref.source === 'sketch' && (
                                                         <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
                                                             <IconButton
@@ -701,8 +980,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Button>
                     </Stack>
 
+                    {/* The results panel takes images too: dropping one here
+                        says "I want to work on this", which is a different
+                        intent from the reference row's "generate from this" —
+                        so each lands where its outcome shows up. */}
                     <Box
                         data-testid="imagegen-preview-panel"
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => {
+                            event.preventDefault();
+                            if (event.dataTransfer.files?.length) void handleImportImages(event.dataTransfer.files);
+                        }}
                         sx={{
                             minWidth: 0,
                             minHeight: 0,
@@ -713,12 +1001,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             bgcolor: 'action.hover',
                             p: 2,
                             display: 'flex',
-                            alignItems: runs.length === 0 ? 'center' : 'stretch',
-                            justifyContent: runs.length === 0 ? 'center' : 'flex-start',
+                            alignItems: timeline.length === 0 ? 'center' : 'stretch',
+                            justifyContent: timeline.length === 0 ? 'center' : 'flex-start',
                             overflow: 'hidden',
                         }}
                     >
-                        {runs.length === 0 ? (
+                        <input
+                            ref={importFileInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            multiple
+                            hidden
+                            onChange={(event) => {
+                                if (event.target.files?.length) void handleImportImages(event.target.files);
+                                event.target.value = '';
+                            }}
+                        />
+                        {timeline.length === 0 ? (
                             <Stack
                                 spacing={1}
                                 sx={{
@@ -730,19 +1029,39 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Typography variant="subtitle2" sx={{
                                     color: "text.secondary"
                                 }}>
-                                    {t('playground.previewEmpty', { defaultValue: 'Your generated images will appear here' })}
+                                    {t('playground.previewEmpty', { defaultValue: 'Generated and imported images appear here' })}
                                 </Typography>
                                 <Typography variant="caption" sx={{
                                     color: "text.disabled"
                                 }}>
-                                    {t('playground.previewHint', { defaultValue: 'Each generation will be kept for this session.' })}
+                                    {t('playground.previewHint', { defaultValue: 'Drop an image here to work on it without generating anything.' })}
                                 </Typography>
+                                <Stack direction="row" spacing={0.5} sx={{ pt: 0.5 }}>
+                                    <Button
+                                        size="small"
+                                        color="inherit"
+                                        startIcon={<FileUpload fontSize="small" />}
+                                        onClick={() => importFileInputRef.current?.click()}
+                                        sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                        {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        color="inherit"
+                                        startIcon={<ContentPaste fontSize="small" />}
+                                        onClick={() => { void handleImportFromClipboard(); }}
+                                        sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                        {t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                    </Button>
+                                </Stack>
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
                                     <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
-                                        {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
+                                        {t('playground.sessionOutputs', { defaultValue: 'Session images' })}
                                     </Typography>
                                     <Typography
                                         variant="caption"
@@ -752,12 +1071,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             whiteSpace: 'nowrap',
                                         }}
                                     >
-                                        {runs.length === 1
-                                            ? t('playground.runCountOne', { defaultValue: '1 generation' })
-                                            : t('playground.runCount', {
-                                                defaultValue: '{{count}} generations',
-                                                count: runs.length,
-                                            })}
+                                        {[
+                                            runs.length > 0 && (runs.length === 1
+                                                ? t('playground.runCountOne', { defaultValue: '1 generation' })
+                                                : t('playground.runCount', {
+                                                    defaultValue: '{{count}} generations',
+                                                    count: runs.length,
+                                                })),
+                                            imported.length > 0 && t('playground.importCount', {
+                                                defaultValue: '{{count}} imported',
+                                                count: imported.length,
+                                            }),
+                                        ].filter(Boolean).join(' · ')}
                                     </Typography>
                                 </Box>
 
@@ -779,7 +1104,30 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
                                     }}
                                 >
-                                    {runs.map((run) => (
+                                    {timeline.map((entry) => (entry.kind === 'import' ? (
+                                        <ImportedImageCard
+                                            key={entry.item.id}
+                                            item={entry.item}
+                                            onOpen={() => setSelectedImage({
+                                                src: entry.item.src,
+                                                prompt: '',
+                                                model: '',
+                                                size: '',
+                                                quality: 'auto',
+                                                index: 0,
+                                                kind: 'import',
+                                                label: entry.item.name,
+                                                caption: [
+                                                    entry.item.width && entry.item.height
+                                                        ? `${entry.item.width}×${entry.item.height} px`
+                                                        : '',
+                                                    formatBytes(entry.item.bytes),
+                                                ].filter(Boolean).join(' · '),
+                                            })}
+                                            onUseAsReference={() => { void handleUseAsReference(entry.item.src); }}
+                                            onRemove={() => handleRemoveImport(entry.item.id)}
+                                        />
+                                    ) : ((run) => (
                                         <Card
                                             key={run.id}
                                             data-testid="imagegen-generation-run"
@@ -1031,7 +1379,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             )}
                                         </CardContent>
                                         </Card>
-                                    ))}
+                                    ))(entry.run)))}
                                 </Box>
                             </Stack>
                         )}
@@ -1093,7 +1441,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 variant="subtitle1"
                                 sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                             >
-                                {selectedImage?.prompt}
+                                {selectedImage?.label ?? selectedImage?.prompt}
                             </Typography>
                         </Box>
                         <Typography
@@ -1107,10 +1455,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
+                            {selectedImage?.label
+                                ? selectedImage.caption
+                                : `${selectedImage?.model} · ${selectedImage?.size} · ${selectedImage?.quality}`}
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                        {!selectedImage?.label && (
                         <Tooltip
                             title={promptCopied
                                 ? t('playground.promptCopied', { defaultValue: 'Copied' })
@@ -1126,6 +1477,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <ContentCopy fontSize="small" />
                             </IconButton>
                         </Tooltip>
+                        )}
                         <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
                             <IconButton
                                 onClick={() => setSliceTarget(selectedImage)}
@@ -1144,19 +1496,39 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 <Download fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
-                            <IconButton
-                                onClick={() => {
-                                    if (!selectedImage) return;
-                                    void handleUseAsReference(selectedImage.src);
-                                    setSelectedImage(null);
-                                }}
-                                aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
-                                sx={overlayIconSx}
-                            >
-                                <Edit fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
+                        {/* An image that is already a reference has nowhere to
+                            be sent — the one edit it still affords is redrawing
+                            it, and only if it came from the sketch canvas. */}
+                        {selectedImage?.kind === 'reference' ? (
+                            referenceImages[selectedImage.index]?.source === 'sketch' && (
+                                <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
+                                    <IconButton
+                                        onClick={() => {
+                                            handleOpenSketch(selectedImage.index);
+                                            setSelectedImage(null);
+                                        }}
+                                        aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
+                                        sx={overlayIconSx}
+                                    >
+                                        <Create fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )
+                        ) : (
+                            <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
+                                <IconButton
+                                    onClick={() => {
+                                        if (!selectedImage) return;
+                                        void handleUseAsReference(selectedImage.src);
+                                        setSelectedImage(null);
+                                    }}
+                                    aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
+                                    sx={overlayIconSx}
+                                >
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         <IconButton
                             onClick={() => setSelectedImage(null)}
                             aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
@@ -1180,9 +1552,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         <Box
                             component="img"
                             src={selectedImage.src}
-                            alt={selectedImage.kind === 'source'
-                                ? t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 })
-                                : t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })}
+                            alt={selectedImage.label
+                                ?? (selectedImage.kind === 'output'
+                                    ? t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })
+                                    : t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 }))}
                             sx={{
                                 display: 'block',
                                 maxWidth: '100%',
@@ -1196,7 +1569,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <ImageSliceDialog
                 open={sliceTarget !== null}
                 src={sliceTarget?.src ?? null}
-                prompt={sliceTarget?.prompt ?? ''}
+                prompt={sliceTarget?.prompt || sliceTarget?.label || ''}
                 onClose={() => setSliceTarget(null)}
                 showNotification={showNotification}
             />
