@@ -75,20 +75,19 @@ func (ph *ProtocolHandler) respondMCPError(c *gin.Context, err error, msg string
 // SendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
 func SendErrorResponse(c *gin.Context, err error, desc string) {
 
-	// upstreamForwardStatus returns the status code to send to the client when a
-	// non-streaming forward fails. It propagates the upstream provider's HTTP status
-	// when the error carries one (so a 401/429/4xx is not flattened into a 500) and
-	// defaults to 500 Internal Server Error otherwise.
-	statusCode := protocol.UpstreamStatus(err, http.StatusInternalServerError)
+	// Classifies err once for both the status (propagates the upstream
+	// provider's HTTP status when the error carries one, so a 401/429/4xx is
+	// not flattened into a 500) and the message.
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 
 	// c.Error keeps the full raw error for the server-side access log
 	// (internal/middleware/memory_log.go); the JSON body below shows the
 	// client a categorized, non-leaky message instead.
 	asErr := fmt.Errorf("%s: %s", err.Error(), desc)
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(statusCode, ErrorResponse{
+	c.JSON(failure.Status, ErrorResponse{
 		Error: ErrorDetail{
-			Message: fmt.Sprintf("%s: %s", protocol.UpstreamMessage(err), desc),
+			Message: fmt.Sprintf("%s: %s", failure.Message, desc),
 			Type:    "protocol_error",
 			Code:    desc,
 		},

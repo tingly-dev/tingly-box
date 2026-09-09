@@ -2,6 +2,7 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,6 +11,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestBuildErrorEventFromErr verifies it's equivalent to
+// BuildErrorEvent(protocol.UpstreamMessage(err), ...) — the composition it
+// replaces at call sites — for a plain error (protocol.UpstreamMessage's
+// unclassified passthrough case; the SDK-error/transport-error cases are
+// protocol.UpstreamMessage's own responsibility, covered in that package).
+func TestBuildErrorEventFromErr(t *testing.T) {
+	err := errors.New("boom")
+	got := BuildErrorEventFromErr(err, "stream_error", "stream_failed")
+	want := BuildErrorEvent(err.Error(), "stream_error", "stream_failed")
+	assert.Equal(t, want, got)
+}
 
 type recorderFlusher struct {
 	*httptest.ResponseRecorder

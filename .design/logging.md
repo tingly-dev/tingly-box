@@ -1,12 +1,119 @@
-# 日志与上游错误分类
+# 日志系统：架构与上游错误分类
 
 > 适用对象：tingly-box 后端贡献者。
-> 本文档聚焦**日志/报错的内容与严重度**——"这条日志该打什么级别、带什么字段"
-> "返回给下游调用方的错误消息该长什么样"。日志的**架构**（Requests/System 两个
-> 视图、`request_id` 关联、`WriteEntry` 路由）已经在 `.design/logging-redesign.md`
-> 里讲过，本文不重复，只在涉及处引用。
+> 本文档分两部分:**架构**(第 1 节——日志怎么分源、怎么按 `request_id` 关联、
+> 前端怎么展示,**Status: shipped** on `base/logging-system`)和**内容**
+> (第 2 节起——一条日志/一条报错该带什么级别、什么字段、给下游看什么样的
+> 消息)。两部分原本是两篇文档,内容部分是在排查一条难读的日志时顺带做的,
+> 合并到一起以后不用来回跳。
 
 ---
+
+# 第一部分:架构——关联的 Model-Request 追踪
+
+Route 选择:**轻量 logrus 关联**——给请求 context 挂一个 `request_id`,通过既有
+的 `MultiLogger.WriteEntry` hook 把条目路由到专门的 `model_request` sink,不引入
+新的 logging API。
+前端目标:**两个视图(Requests / System)**,smart-routing 折叠进单条请求的
+展开详情里。
+
+## UI
+
+**Requests** ——一行一个请求(scenario、路由到的 model、provider、状态、延迟)。
+Scenario / provider / status 过滤条。自动刷新,固定住的自动滚动。
+
+![Requests list](images/logs-requests.png)
+
+**展开时间线**——一个请求的完整 pipeline:`smartrouting`(rule 匹配)→
+`model_request`(转换阶段)→ `upstream`(provider 调用)→ `http`(access log),
+用 `request_id` 关联:
+
+![Request timeline](images/logs-timeline.png)
+
+**System Logs** ——只有真正的系统级条目(启动、配置、job),带级别过滤 chip:
+
+![System logs](images/logs-system.png)
+
+## 为什么要重做
+
+之前的 Logs 页面把日志拆成三个 tab——**Model / System / Smart**——这个拆分
+适得其反:
+
+- **"Model Requests" 其实不是以 model 为中心的。** 它和 "System Logs" 调用
+  的是同一个 endpoint `/api/v1/system/logs`,唯一区别只是前端一个
+  `pathPrefix="/tingly/"` 的过滤。展示的其实是 HTTP access log(状态/延迟/
+  路径),不是 model 语义。
+- **Protocol 和 client 的日志都漏进了 "System"。** 两个包都直接调用全局
+  `logrus.*`,不带 context,`WriteEntry` 默认把它们归到 `LogSourceSystem`。
+  转换警告、client 错误、重试——全都进错了 tab,和请求本身脱节。
+- **没有关联 id。** 一个请求散落在四个地方,彼此没有任何关联。recording
+  pipeline 的 `RequestID` 是在 emit 时才现生成的,没有真正串联起来。
+
+## 怎么做的
+
+### 核心思路
+
+一个 "model request" 是一条**关联 trace**:一个 `request_id` 贯穿整条 pipeline;
+日志按 **scope + stage** 分类,而不是按传输路径分类。
+
+- scope `model_request` → 所有挂了 `request_id` 的
+- scope `system` → 真正的非请求日志(启动、配置、job)
+- stage ∈ `inbound | routing | transform | upstream`
+
+### 关键实现决策
+
+**`logrus.WithContext(ctx)`,而不是 `obs.LogFromContext(ctx)`。**
+曾经考虑过做一个 `obs.LogFromContext` helper,但因为太具侵入性被否决了——它会
+改变每个调用点的 import 和签名。标准 logrus API 被保留下来:下游代码只是从
+`logrus.Info(...)` 换成 `logrus.WithContext(ctx).Info(...)`。集中的路由逻辑在
+`WriteEntry` 里读 `entry.Context`,取出 `request_id`,把条目路由到
+`model_request` sink。调用点侧零新概念。
+
+**统一的 `loggingRoundTripper`。**
+一个包住每个 provider transport 的 wrapper,每次 upstream 调用打一行 Info——
+provider / proxy / status / latency——而不是每个 client 各写各的。通过请求
+context 关联,让 upstream 结果落进同一条时间线。代理凭证永远不打日志;脱敏
+成 `scheme://***@host`(不是直接砍成 `scheme://host`,那样会让人看不出其实
+配了认证)。`HTTP_PROXY`/`HTTPS_PROXY` 在请求时才 resolve,所以 `direct` 只在
+真的是直连时才会被打出来。
+
+**System 页只展示真正的系统条目。**
+`ReadJSONLogsBySource` 把 System 视图过滤到只剩 `system / action / unknown`
+来源,替换掉之前脆弱的路径前缀匹配。
+
+**共享组件,两个入口。**
+`LogExplorer`(Requests + System 两个 tab)同时被主 Logs 页面和按 scenario 快开
+的对话框复用;对话框传 `lockedScenario` 做预设过滤——不需要特殊 UI。
+
+### 和最初设计的出入
+
+| 设计 | 实际 |
+|---|---|
+| `obs.LogFromContext(ctx)` helper | `logrus.WithContext(ctx)` + `WriteEntry` 里集中路由 |
+| 每个 client 各自 ad-hoc 地把 Debug 提到 Info | 单一的 `loggingRoundTripper` 包住所有 provider transport |
+| `X-Request-Id` 头作为主 ID 来源 | UUID 在中间件里现生成,同时存进 gin context 和 `request.Context()` |
+
+### 和其他可观测性系统的关系
+
+| 系统 | 位置 | 记录什么 | 展示在哪 |
+|---|---|---|---|
+| A. logrus 日志(`pkg/obs.MultiLogger`) | `internal/obs/multi_logger.go` | text/json/memory,按来源分桶 | **Logs 页面** ← 本次重做 |
+| B. 请求录制(`ProtocolRecorder`) | `internal/server/protocol_recording.go` | 原始→转换后的请求/响应、流式 chunk | Prompt recording 页面;按 scenario opt-in |
+| C. 用量统计(`UsageTracker`) | `internal/server/tracking.go` | tokens、provider、model、延迟 | Dashboard / DB |
+
+本次重做修的是 (A)。(A) 的 `request_id` 现在和 (B) 的 `RequestID` 对齐了,为以后
+收敛到单一数据源留了余地。
+
+### 架构层面尚未做的事
+
+- `GetSystemLogStats` 还在读未过滤的数据(`ReadJSONLogs`);应该和
+  `GetSystemLogs` 的来源过滤对齐。
+- `GET /api/v1/requests` 和 `GET /api/v1/requests/:id` 的 `openapi.json` 还没
+  重新生成;前端用的是占位 client。
+
+---
+
+# 第二部分:内容——上游错误分类与消息
 
 ## 0. 一句话模型
 
@@ -22,9 +129,7 @@
   `setProbeUpstreamHeaders`)。
 
 **核心原则：这三者永远不共享同一个字符串。** 把"内部实现细节"和"给用户看的
-错误说明"混在一起,是本文档要修的问题的根源。
-
----
+错误说明"混在一起,是这部分要修的问题的根源。
 
 ## 1. 背景：从一条难读的日志开始
 
@@ -43,8 +148,6 @@
    字段——相当于把网关的内部路由细节,在**每一次报错**时无差别地泄漏出去。
 
 修复思路分两条线,对应下面两节。
-
----
 
 ## 2. 分类：`ClassifyTransportError`
 
@@ -71,33 +174,46 @@ func ClassifyTransportError(err error) (reason TransportFailureReason, ok bool)
 | `ok == false` | 都不匹配——包括 `err == nil`，以及已经是 SDK 类型化错误的情况 |
 
 只返回 `reason`,不返回人类可读消息——消息是 `reason → sentence` 的纯派生
-(`transportFailureMessages` 表,同文件),只有 `UpstreamMessage` 一处真正需要
-那句话,`UpstreamStatus` 和 `logging_roundtripper` 只要 `reason`/`ok`,让它们
-各自去拼消息只会白算一遍还被丢掉。
+(`transportFailureMessages` 表,同文件),只有 `ClassifyUpstreamFailure` 一处
+真正需要那句话,`logging_roundtripper` 只要 `reason`/`ok`,让它也去拼消息只会
+白算一遍还被丢掉。
 
----
-
-## 3. 状态码与消息：`UpstreamStatus` / `UpstreamMessage`
+## 3. 状态码与消息：`ClassifyUpstreamFailure` / `UpstreamStatus` / `UpstreamMessage`
 
 **位置**：`internal/protocol/upstream_error.go`
 
-### `UpstreamStatus(err, fallback) int`
+### `ClassifyUpstreamFailure(err, fallbackStatus) UpstreamFailure`
 
-优先级(先到先得):
+对同一个 `err` **只分类一次**,同时得到状态码和消息:
+
+```go
+type UpstreamFailure struct {
+	Status  int
+	Message string
+}
+func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure
+```
+
+这是主实现——状态码和消息本质上是同一次 `errors.As` 链判断出来的两个投影
+(命中的是 `openai.Error` 还是 `anthropic.Error` 还是传输层失败,决定了这两个
+值该是什么),分两个函数分别判断一遍纯属重复劳动。**任何同时需要状态码和消息
+的调用点,都应该调这个,而不是分别调 `UpstreamStatus` 和 `UpstreamMessage`。**
+现在网关里所有真正走到 upstream 调用、且要回状态码的地方,都已经改成这样(见
+第 6 节的清单)。
+
+状态码优先级(先到先得):
 
 1. SDK 类型化错误自带的真实状态码——`openai.Error.StatusCode` /
    `anthropic.Error.StatusCode` / `genai.APIError.Code`。
 2. `ClassifyTransportError` 命中 → **502 Bad Gateway**(比笼统的 500 准确:
    请求根本没到达 provider,不是网关自己的 bug)。
-3. 都不命中 → `fallback`(调用点几乎总传 `http.StatusInternalServerError`)。
+3. 都不命中 → `fallbackStatus`(调用点几乎总传 `http.StatusInternalServerError`)。
 
 502 同时也在 `internal/protocolserver/failover_dispatch.go:90-98` 的
 `retryableUpstreamStatuses` 里,所以传输层失败依然会触发 priority failover
 换下一个 provider,行为不变。
 
-### `UpstreamMessage(err) string`
-
-给下游调用方看的、**干净且不泄漏内部信息**的一句话:
+消息规则:
 
 - **传输层失败** → `"<reason>: <人类可读句子>"`,例如
   `dns_error: could not resolve the upstream provider's hostname`。不回显
@@ -115,9 +231,23 @@ func ClassifyTransportError(err error) (reason TransportFailureReason, ok bool)
 的 `Error()` 会把**出站请求的完整 URL**打印出来——如果 provider 配置的是自定义
 /内部 API base,这就是一次不必要的内部实现细节泄漏,而且每次报错都会发生,不是
 边缘情况。真正需要看这个 URL 的场景(排查路由是否配对)已经有专门通道,见
-下面第 6 节。
+下面第 7 节。
 
----
+### `UpstreamStatus(err, fallback) int` / `UpstreamMessage(err) string`
+
+`ClassifyUpstreamFailure` 的两个薄封装,分别只取 `.Status` / `.Message`。给只
+需要其中一个的调用点用:
+
+- **只要消息、状态码是硬编码或没有状态码可言**——`respondMCPError`(硬编码
+  500,MCP 循环失败是网关内部问题,没有 upstream 状态可传播)、
+  `FailAttemptSetup`(同样硬编码 500)、mid-stream SSE error 帧(流已经在吐
+  数据了,没有 HTTP status 可改)。这些调 `UpstreamMessage(err)` 即可。
+- 没有调用点是"只要状态码、不要消息"——如果以后出现这种调用点,直接用
+  `UpstreamStatus`,不必强行凑一个 `ClassifyUpstreamFailure` 调用。
+
+新增失败出口时的判断顺序:两个都要 → `ClassifyUpstreamFailure`;只要一个 →
+对应的薄封装;都不需要(纯本地校验错误,从不经过任何 SDK 调用)→ 都不用,见
+第 6 节第 3 条。
 
 ## 4. 日志严重度：`obs.LevelForStatus`
 
@@ -150,51 +280,73 @@ func LevelForStatus(statusCode int) logrus.Level  // >=500 Error, >=400 Warn, �
 (`openai.Error` 等)仍然是 SDK 客户端那一层的职责,`logging_roundtripper`
 在那之前就已经把日志打完了。
 
----
+## 5. SSE mid-stream 错误帧：`BuildErrorEvent` / `BuildErrorEventFromErr`
 
-## 5. 把 `UpstreamMessage` 接到下游响应的每个出口
+**位置**：`internal/protocol/stream/anthropic_helper.go`
 
-`err.Error()` 直接进 client-facing JSON/SSE 是本文档要根治的模式。凡是"报告
-一次失败的上游调用"的出口,现在都过 `protocol.UpstreamMessage(err)`,而不是
-原样 `err.Error()`:
+`BuildErrorEvent(message, errorType, code string) map[string]interface{}` 构造
+Anthropic 的标准 SSE 错误帧形状 `{"type":"error","error":{"message","type",
+"code"}}`。`BuildErrorEventFromErr(err, errorType, code)` 是它的一层薄封装,
+内部调 `protocol.UpstreamMessage(err)` 把 `err` 变成干净的消息——调用点因此
+从 `BuildErrorEvent(protocol.UpstreamMessage(err), ...)` 这种"先跨包调用一次
+再传进另一个包的函数"的写法,简化成一次调用。
 
-| 出口 | 位置 | 场景 |
-|---|---|---|
-| `SendErrorResponse` | `internal/protocolserver/error_response.go:76` | 非流式转发失败的统一出口 |
-| `respondMCPError` | `internal/protocolserver/error_response.go:61` | MCP 工具调用失败 |
-| `FailAttemptSetup` | `internal/protocolserver/failover_dispatch.go:64` | attempt 建立阶段失败（failover 会重试下一档） |
-| `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:70,82` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
-| 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
-| `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_assembly.go` | 上游流没有产出任何内容块 |
-| ~7 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | SSE 已经开始吐帧之后，upstream 流中途失败 |
+**这个 builder 特意留在 `stream` 包,没有挪进 `protocol`**:`{"type":"error",
+"error":{...}}` 是 Anthropic 自己的 wire 格式,不是协议无关的通用概念——
+`protocol` 负责对任意 vendor 分类"发生了什么",`stream` 负责决定每个 vendor
+的 wire 格式怎么把它渲染出来。反例就在旁边:`openai_passthrough.go` 里两处
+OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"` 包装,
+`BuildErrorEvent` 的形状对它们不适用——如果把它挪进 `protocol` 当成"通用错误
+方法",要么被迫塞进一个 OpenAI 用不上的形状,要么 `protocol` 里就得同时长出
+两套形状的 builder,而 `protocol` 本该是 wire-format-agnostic 的。真正需要
+"更多 error 方法"时,加在 `stream` 包(离具体 wire 格式近)比加在 `protocol`
+包更合适。
+
+## 6. 把分类结果接到下游响应的每个出口
+
+`err.Error()` 直接进 client-facing JSON/SSE 是这部分要根治的模式。凡是"报告
+一次失败的上游调用"的出口,现在都用分类结果的 `.Message`(或薄封装
+`UpstreamMessage`),而不是原样 `err.Error()`:
+
+| 出口 | 位置 | 状态码来源 | 场景 |
+|---|---|---|---|
+| `SendErrorResponse` | `internal/protocolserver/error_response.go:76` | `ClassifyUpstreamFailure` | 非流式转发失败的统一出口 |
+| `respondMCPError` | `internal/protocolserver/error_response.go:61` | 硬编码 500 | MCP 工具调用失败 |
+| `FailAttemptSetup` | `internal/protocolserver/failover_dispatch.go:64` | 硬编码 500 | attempt 建立阶段失败（failover 会重试下一档） |
+| `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:84,97` | `ClassifyUpstreamFailure` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
+| 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | `ClassifyUpstreamFailure` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
+| `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_assembly.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
+| ~7 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
 
 其中 Anthropic 形状(`{"type":"error","error":{...}}`)的 5 处 mid-stream 站点
-统一通过已有的 `BuildErrorEvent(message, errorType, code)` 构造 payload
-(`internal/protocol/stream/anthropic_helper.go:28`),而不是各自手写一份相同
-的 map 字面量——这样 SSE error 帧的形状只在一处定义。**注意**：`openai_passthrough.go`
-里两处走的是 OpenAI 原生 chat/responses 的裸 `{"error": {...}}` 形状(没有外层
-`"type":"error"` 包裹),`BuildErrorEvent` 的形状对不上,所以那两处保留手写字面量,
-只换了 message 的来源——**给这类 error 帧加字段前,先确认它是 Anthropic 形状
-还是 OpenAI 形状,两者不能共用一个 builder**。
+统一通过 `BuildErrorEventFromErr(err, errorType, code)` 构造 payload
+(第 5 节),而不是各自手写一份相同的 map 字面量,也不必各自先调
+`protocol.UpstreamMessage(err)` 再传进 `BuildErrorEvent`。**注意**：
+`openai_passthrough.go` 里两处走的是 OpenAI 原生 chat/responses 的裸
+`{"error": {...}}` 形状(没有外层 `"type":"error"` 包裹),这两处保留手写
+字面量,只是把 message 换成 `protocol.UpstreamMessage(err)`——**给这类
+error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两者不能共用
+一个 builder**。
 
 新增失败出口时,检查清单:
 
 1. 这个 `err` 有没有可能是 `openai.Error` / `anthropic.Error` / `genai.APIError`
    或一次真正的传输层失败(DNS/TLS/超时/连接拒绝)？如果有,消息字段用
-   `protocol.UpstreamMessage(err)`,不要用 `err.Error()`。
-2. 这个失败有没有已知的 HTTP 状态码？状态码用 `protocol.UpstreamStatus(err, fallback)`。
+   `protocol.UpstreamMessage(err)`(或 `ClassifyUpstreamFailure(err, ...).Message`),
+   不要用 `err.Error()`。
+2. 这个失败有没有已知的 HTTP 状态码要回?既要状态码又要消息 →
+   `protocol.ClassifyUpstreamFailure(err, fallback)`,一次分类拿两个值,不要
+   分别调 `UpstreamStatus` + `UpstreamMessage`。只要其中一个 → 对应的薄封装。
 3. 纯本地校验错误(读 body 失败、JSON 解析失败、`req.MarshalJSON()` 失败,
-   这些从不经过任何 SDK 调用)不需要也不应该套 `UpstreamMessage`——它对普通
+   这些从不经过任何 SDK 调用)不需要也不应该套上面这套——它对普通
    `errors.New(...)` 是无害的直通,但语义上这类错误压根不是"upstream 失败",
    保持 `err.Error()` 更直接。
 
----
+## 7. 真正想看 upstream URL 时怎么办
 
-## 6. 真正想看 upstream URL 时怎么办
-
-`UpstreamMessage` 默认策略是"藏住 URL"。如果需要确认某次请求实际打到了哪个
-endpoint(排查路由/rule 匹配是否正确),走**专门的调试通道**,而不是从错误消息
-里意外看到:
+`UpstreamMessage`/`ClassifyUpstreamFailure` 默认策略是"藏住 URL"。如果需要
+确认某次请求实际打到了哪个 endpoint(排查路由/rule 匹配是否正确),走**专门的
+调试通道**,而不是从错误消息里意外看到:
 
 请求带上 `X-Tingly-Debug-Routing: 1`,响应会额外带上
 (`internal/protocolserver/protocol_dispatch.go:179-209` `setProbeUpstreamHeaders`):
@@ -209,25 +361,11 @@ endpoint(排查路由/rule 匹配是否正确),走**专门的调试通道**,而�
 这也是为什么剥离 `UpstreamMessage` 里的 URL 不算"丢失排障能力"——真正的排障
 路径本来就没打算走错误消息字符串。
 
----
+## 8. 有意不做的事
 
-## 7. 有意不做的事
-
-- **`UpstreamStatus` 和 `UpstreamMessage` 各自独立跑一遍分类逻辑**,同一个
-  `err` 在两者都被调用的站点(`errors.As` 链 + `ClassifyTransportError`)会
-  走两遍。这是纯错误路径(不是吞吐热路径),两遍的开销是几次 `errors.As`/
-  `errors.Is` 判断,可忽略;把两者合并成一个返回 `(status, message)` 的函数
-  需要改遍所有调用点的取值结构,为了这点开销不值得。如果以后调用点数量继续
-  增长到这两个函数经常成对出现,再考虑合并。
-- **`count_tokens` 端点、纯请求体/参数校验失败**没有接 `UpstreamMessage`——
-  它们从不经过任何 upstream SDK 调用,谈不上"泄漏 upstream URL",套上去只是
-  给普通 `errors.New(...)` 多绕一层无意义的分类判断。只有真正调用了 vendor
-  SDK 的路径才需要这层处理。
-
----
-
-## 8. 相关文档
-
-- `.design/logging-redesign.md` —— 日志的**架构**:Requests/System 两个视图、
-  `request_id` 关联、`stage`/`scope` 分类、`loggingRoundTripper` 的落地位置。
-  本文档只讲**内容**（分类/严重度/消息），架构层面以那篇为准。
+- **`count_tokens` 端点、纯请求体/参数校验失败**没有接这套分类——它们从不
+  经过任何 upstream SDK 调用,谈不上"泄漏 upstream URL",套上去只是给普通
+  `errors.New(...)` 多绕一层无意义的分类判断。只有真正调用了 vendor SDK 的
+  路径才需要这层处理。
+- **没有把 `BuildErrorEvent` 挪进 `protocol` 包**——见第 5 节,这是 wire-format
+  归属问题,不是效率或分类问题。

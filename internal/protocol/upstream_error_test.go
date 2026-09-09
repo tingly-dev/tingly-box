@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -106,5 +108,40 @@ func TestUpstreamStatus_SDKErrorsUnaffectedByURLStripping(t *testing.T) {
 	oaiErr := newOpenAIError(t, 401, `{"code":"invalid_api_key","message":"Incorrect API key provided","param":"","type":"invalid_request_error"}`)
 	if got := UpstreamStatus(oaiErr, http.StatusInternalServerError); got != 401 {
 		t.Errorf("UpstreamStatus() = %d, want 401", got)
+	}
+}
+
+// TestClassifyUpstreamFailure_MatchesIndividualAccessors pins
+// ClassifyUpstreamFailure as the single source of truth: its Status/Message
+// must equal what UpstreamStatus/UpstreamMessage return separately, for
+// every error shape UpstreamStatus/UpstreamMessage handle. Callers needing
+// both should get identical results whether they classify once via this or
+// twice via the two wrappers — only the number of classification passes
+// should differ.
+func TestClassifyUpstreamFailure_MatchesIndividualAccessors(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"openai error", newOpenAIError(t, 429, `{"code":"rate_limit_exceeded","message":"Rate limit reached","param":"","type":"rate_limit_error"}`)},
+		{"anthropic error", newAnthropicError(t, 529, "req_1", "ws_1", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`)},
+		{"transport error", &net.DNSError{Err: "no such host", Name: "api.openai.com", IsNotFound: true}},
+		{"unclassified error", errors.New("boom")},
+		{"nil", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			wantStatus := UpstreamStatus(c.err, http.StatusInternalServerError)
+			wantMessage := UpstreamMessage(c.err)
+
+			got := ClassifyUpstreamFailure(c.err, http.StatusInternalServerError)
+			if got.Status != wantStatus {
+				t.Errorf("ClassifyUpstreamFailure(...).Status = %d, want %d", got.Status, wantStatus)
+			}
+			if got.Message != wantMessage {
+				t.Errorf("ClassifyUpstreamFailure(...).Message = %q, want %q", got.Message, wantMessage)
+			}
+		})
 	}
 }
