@@ -307,7 +307,22 @@ prompt 的图不显示"复制 prompt";已经在参考图行里的那张不显示
 - **取景框四条边有握把。** 边上的拖拽区本来是透明的命中区,用户只看得见四个角;
   现在每条边中点有一个小药丸,说明"边也能拖"。
 
-## 8. 顺带补齐:单张下载
+## 8. 文本文件就是 prompt
+
+prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`、一份 `.txt`、
+一个 JSON/YAML 模板。所以面板多一条规则:**文本文件落在面板的任何地方,都以它的
+内容作为 prompt**——拖到 prompt 框、拖到参考图行、拖到结果区、从剪贴板粘贴一个
+文件,以及 prompt 框和放大编辑器里的「打开文件」按钮。图片仍然走图片的路,
+一次拖放里两种都有就各走各的(`utils/promptFile.ts` 负责分拣和读取)。
+
+- **替换,不追加。** 打开的文件*就是* prompt;把它接在已有文字后面只会留下一堆
+  要清理的东西。替换后有一条带文件名的提示。
+- **判断看扩展名,不只看 MIME。** 多数平台把 `.md`、`.yaml` 交给浏览器时 type 是空的。
+  接受的是"prompt 会住在里面"的纯文本格式:txt / md / mdx / rst / org / json /
+  yaml / toml / csv 等,内容原样使用,不解析。
+- **有上限。** 超过 256 KB 的不是 prompt;空文件和读不出来的各有各的提示,不静默。
+
+## 9. 顺带补齐:单张下载
 
 在此之前 Playground **完全没有下载入口**(只有 copy prompt / use as reference)。
 切片能打包下载而整图不能,是割裂的。lightbox 因此同时补上 `Download`,
@@ -315,7 +330,7 @@ prompt 的图不显示"复制 prompt";已经在参考图行里的那张不显示
 
 ---
 
-## 9. 代码位置
+## 10. 代码位置
 
 | 文件 | 职责 |
 |------|------|
@@ -323,6 +338,7 @@ prompt 的图不显示"复制 prompt";已经在参考图行里的那张不显示
 | `frontend/src/utils/gif.ts` | GIF89a writer:中位切分量化 + LZW + 循环块 |
 | `frontend/src/utils/imageMatte.ts` | 背景检测(棋盘格/绿幕)与清除 |
 | `frontend/src/utils/playgroundSession.ts` | run / 导入图的 IndexedDB 持久化(尽力而为、写入合并) |
+| `frontend/src/utils/promptFile.ts` | 文本文件 → prompt:分拣、读取、上限 |
 | `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug、MIME→扩展名、`fetchBlob` |
 | `frontend/src/utils/imageSlice.ts` | 等分网格几何、图片加载、切片渲染 |
 | `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |

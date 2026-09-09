@@ -25,12 +25,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { parseImageSize } from '@/utils/sketchCanvas';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
@@ -325,6 +326,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const historyTrackRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
+    const promptFileInputRef = useRef<HTMLInputElement>(null);
     const pendingCount = runs.filter((run) => run.status === 'pending').length;
     const { copied: promptCopied, copy: copyPrompt } = useCopyFeedback();
 
@@ -447,22 +449,53 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setReferenceImages((current) => current.filter((_, i) => i !== index));
     }, []);
 
+    // A text file — .txt, .md, a JSON or YAML template — is a prompt kept
+    // outside the browser, and it opens as the prompt wherever on the panel
+    // it lands: the prompt field, the reference row, the results panel, the
+    // clipboard. It replaces what is in the field: the file *is* the prompt,
+    // and appending to whatever was typed would hand back a mess to clean.
+    const handleOpenPromptFile = useCallback(async (file: File) => {
+        const result = await readPromptFile(file);
+        if (result.ok) {
+            setPrompt(result.text);
+            showNotification(t('playground.promptLoaded', { defaultValue: 'Prompt loaded from {{name}}', name: result.name }), 'success');
+            return;
+        }
+        const messages = {
+            'too-large': t('playground.promptFileTooLarge', { defaultValue: '{{name}} is too large to be a prompt', name: result.name }),
+            empty: t('playground.promptFileEmpty', { defaultValue: '{{name}} has no text in it', name: result.name }),
+            unreadable: t('playground.promptFileUnreadable', { defaultValue: 'Could not read {{name}}', name: result.name }),
+        } as const;
+        showNotification(messages[result.reason], 'warning');
+    }, [showNotification, t]);
+
+    // Routes a drop by what was dropped: a text file becomes the prompt, the
+    // images go wherever this drop target sends images.
+    const handleDroppedFiles = useCallback((files: FileList | File[], onImages: (images: File[]) => void) => {
+        const { prompt: promptFile, images } = partitionDroppedFiles(files);
+        if (promptFile) void handleOpenPromptFile(promptFile);
+        if (images.length > 0) onImages(images);
+    }, [handleOpenPromptFile]);
+
     // Pasting an image anywhere on the panel adds it as a reference — the
-    // user doesn't have to find the dropzone first. A paste with no image
-    // (e.g. plain text into the prompt field) is left alone. Scoped to this
-    // card's own DOM subtree via the React synthetic paste event, not a
-    // window-level listener.
+    // user doesn't have to find the dropzone first; a pasted text *file*
+    // opens as the prompt. A paste with no file (plain text into the prompt
+    // field) is left alone. Scoped to this card's own DOM subtree via the
+    // React synthetic paste event, not a window-level listener.
     const handlePaste = useCallback((event: React.ClipboardEvent) => {
         const items = event.clipboardData?.items;
         if (!items) return;
-        const imageFiles = Array.from(items)
-            .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        const files = Array.from(items)
+            .filter((item) => item.kind === 'file')
             .map((item) => item.getAsFile())
             .filter((file): file is File => file !== null);
-        if (imageFiles.length === 0) return;
+        const promptFile = files.find(isPromptFile);
+        const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+        if (!promptFile && imageFiles.length === 0) return;
         event.preventDefault();
-        void handleAddReferenceImages(imageFiles);
-    }, [handleAddReferenceImages]);
+        if (promptFile) void handleOpenPromptFile(promptFile);
+        if (imageFiles.length > 0) void handleAddReferenceImages(imageFiles);
+    }, [handleAddReferenceImages, handleOpenPromptFile]);
 
     // The Paste button is the click-shaped twin of Ctrl+V: it asks the
     // clipboard directly (Chromium-family browsers grant this after a prompt)
@@ -800,7 +833,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     onDrop={(event) => {
                                         event.preventDefault();
                                         if (event.dataTransfer.files?.length) {
-                                            void handleAddReferenceImages(event.dataTransfer.files);
+                                            handleDroppedFiles(event.dataTransfer.files, (images) => { void handleAddReferenceImages(images); });
                                         }
                                     }}
                                     sx={{
@@ -951,6 +984,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     </Typography>
                                 )}
                                 <input
+                                    ref={promptFileInputRef}
+                                    type="file"
+                                    accept=".txt,.text,.md,.markdown,.mdx,.rst,.org,.prompt,.json,.yaml,.yml,.toml,.csv,text/*,application/json"
+                                    hidden
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) void handleOpenPromptFile(file);
+                                        event.target.value = '';
+                                    }}
+                                />
+                                <input
                                     ref={referenceFileInputRef}
                                     type="file"
                                     accept="image/png,image/jpeg,image/webp"
@@ -997,11 +1041,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
                             onKeyDown={handlePromptKeyDown}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDrop={(event) => {
+                                event.preventDefault();
+                                if (event.dataTransfer.files?.length) {
+                                    handleDroppedFiles(event.dataTransfer.files, (images) => { void handleAddReferenceImages(images); });
+                                }
+                            }}
                             disabled={noModels}
                             slotProps={{
                                 input: {
                                     endAdornment: (
-                                        <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5, mr: -0.5 }}>
+                                        <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5, mr: -0.5, gap: 0.25 }}>
+                                            <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => promptFileInputRef.current?.click()}
+                                                    aria-label={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}
+                                                >
+                                                    <Description sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
                                             <Tooltip title={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}>
                                                 <IconButton
                                                     size="small"
@@ -1141,7 +1201,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={(event) => {
                             event.preventDefault();
-                            if (event.dataTransfer.files?.length) void handleImportImages(event.dataTransfer.files);
+                            if (event.dataTransfer.files?.length) {
+                                handleDroppedFiles(event.dataTransfer.files, (images) => { void handleImportImages(images); });
+                            }
                         }}
                         sx={{
                             minWidth: 0,
@@ -1803,6 +1865,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
                         {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
                     </Typography>
+                    <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
+                        <IconButton
+                            onClick={() => promptFileInputRef.current?.click()}
+                            aria-label={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}
+                        >
+                            <Description fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                     <IconButton
                         onClick={() => setPromptEditorOpen(false)}
                         aria-label={t('playground.promptEditorDone', { defaultValue: 'Done' })}
