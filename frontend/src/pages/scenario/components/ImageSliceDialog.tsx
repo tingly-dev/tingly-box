@@ -73,12 +73,20 @@ const DRAG_THRESHOLD = 0.01;
 const NUDGE = 0.01;
 const NUDGE_COARSE = 0.05;
 
-// Which part of the frame a pointer grabbed. 'new' redraws it from scratch.
-type DragMode = 'new' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'se' | 'sw';
+// Which part of the frame a pointer grabbed. There is only ever one frame —
+// it starts as the whole image and is moved and resized from there, never
+// redrawn — so a press inside it moves it and a press on an edge or corner
+// resizes that side.
+type DragMode = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'se' | 'sw';
 
 // Thickness of the invisible strip along each frame edge that drags it.
 const EDGE_GRAB = 12;
 const percent = (value: number): string => `${value * 100}%`;
+// Handles sit *inside* the frame rather than straddling its border: the
+// preview clips to the image (the dimming outside the frame is that clip), so
+// a handle that overhangs the image edge loses half its hit area exactly where
+// the frame starts out — at the image's own corners.
+const INSET_START = 'translate(0, 0)';
 
 // The eight grab targets of the frame: four edges (invisible strips, sized to
 // be hittable) and four corners (visible squares, which are also the keyboard
@@ -97,57 +105,58 @@ const FRAME_HANDLES: FrameHandle[] = [
     {
         mode: 'n', corner: false, cursor: 'ns-resize',
         labelKey: 'playground.slice.frameTop', label: 'Drag the top edge of the frame',
-        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: percent(crop.width), height: EDGE_GRAB, transform: 'translateY(-50%)' }),
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: percent(crop.width), height: EDGE_GRAB }),
     },
     {
         mode: 's', corner: false, cursor: 'ns-resize',
         labelKey: 'playground.slice.frameBottom', label: 'Drag the bottom edge of the frame',
-        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), width: percent(crop.width), height: EDGE_GRAB, transform: 'translateY(-50%)' }),
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), width: percent(crop.width), height: EDGE_GRAB, transform: 'translateY(-100%)' }),
     },
     {
         mode: 'w', corner: false, cursor: 'ew-resize',
         labelKey: 'playground.slice.frameLeft', label: 'Drag the left edge of the frame',
-        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height), transform: 'translateX(-50%)' }),
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height) }),
     },
     {
         mode: 'e', corner: false, cursor: 'ew-resize',
         labelKey: 'playground.slice.frameRight', label: 'Drag the right edge of the frame',
-        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height), transform: 'translateX(-50%)' }),
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height), transform: 'translateX(-100%)' }),
     },
     {
         mode: 'nw', corner: true, cursor: 'nwse-resize',
         labelKey: 'playground.slice.frameTopLeft', label: 'Top-left corner of the frame',
-        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), transform: 'translate(-50%, -50%)' }),
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), transform: INSET_START }),
     },
     {
         mode: 'ne', corner: true, cursor: 'nesw-resize',
         labelKey: 'playground.slice.frameTopRight', label: 'Top-right corner of the frame',
-        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), transform: 'translate(-50%, -50%)' }),
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), transform: 'translate(-100%, 0)' }),
     },
     {
         mode: 'sw', corner: true, cursor: 'nesw-resize',
         labelKey: 'playground.slice.frameBottomLeft', label: 'Bottom-left corner of the frame',
-        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), transform: 'translate(-50%, -50%)' }),
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), transform: 'translate(0, -100%)' }),
     },
     {
         mode: 'se', corner: true, cursor: 'nwse-resize',
         labelKey: 'playground.slice.frameBottomRight', label: 'Bottom-right corner of the frame',
-        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y + crop.height), transform: 'translate(-50%, -50%)' }),
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y + crop.height), transform: 'translate(-100%, -100%)' }),
     },
 ];
 
 const clampFraction = (value: number): number => Math.min(1, Math.max(0, value));
 
 // Applies one drag to the frame the gesture started from. Edges move
-// independently; corners move two at once; 'new' spans start to current.
+// independently, corners move two at once, and 'move' slides the whole frame
+// without resizing it — so its size survives being repositioned.
 const applyDrag = (mode: DragMode, origin: CropRect, startX: number, startY: number, x: number, y: number): CropRect => {
-    if (mode === 'new') {
-        return normalizeCrop({
-            x: Math.min(startX, x),
-            y: Math.min(startY, y),
-            width: Math.abs(x - startX),
-            height: Math.abs(y - startY),
-        });
+    if (mode === 'move') {
+        return {
+            x: Math.min(Math.max(origin.x + (x - startX), 0), 1 - origin.width),
+            y: Math.min(Math.max(origin.y + (y - startY), 0), 1 - origin.height),
+            width: origin.width,
+            height: origin.height,
+        };
     }
     let { x: left, y: top, width, height } = origin;
     const right = left + width;
@@ -511,14 +520,22 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                         {image && (
                             <Box
                                 ref={surfaceRef}
-                                onPointerDown={(event) => beginDrag('new', event)}
+                                onPointerDown={(event) => {
+                                    const box = surfaceRef.current?.getBoundingClientRect();
+                                    if (!box) return;
+                                    const x = (event.clientX - box.left) / box.width;
+                                    const y = (event.clientY - box.top) / box.height;
+                                    const inside = x >= crop.x && x <= crop.x + crop.width
+                                        && y >= crop.y && y <= crop.y + crop.height;
+                                    if (inside) beginDrag('move', event);
+                                }}
                                 sx={{
                                     position: 'relative',
                                     display: 'inline-block',
                                     maxWidth: '100%',
                                     overflow: 'hidden',
                                     touchAction: 'none',
-                                    cursor: 'crosshair',
+                                    cursor: 'move',
                                     // Scoped to exactly the image's own box: a
                                     // checkerboard reads as "this part is
                                     // transparent", so any of it visible outside
@@ -552,7 +569,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     sx={{
                                         position: 'absolute',
                                         boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55)',
-                                        border: '1px dashed rgba(255, 255, 255, 0.9)',
+                                        border: '1px solid rgba(255, 255, 255, 0.9)',
                                         boxSizing: 'border-box',
                                         pointerEvents: 'none',
                                     }}
@@ -575,6 +592,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             position: 'absolute',
                                             boxSizing: 'border-box',
                                             cursor: handle.cursor,
+                                            // Above the tile overlays: they are
+                                            // painted later and would otherwise
+                                            // swallow every grab of the frame.
+                                            zIndex: 2,
                                             ...(handle.corner
                                                 ? {
                                                     width: 14,
@@ -649,7 +670,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                     <Stack spacing={2}>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                             {t('playground.slice.hint', {
-                                defaultValue: 'Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Drag on the image to frame the part that holds the grid, adjust the gap until the outlines sit on the artwork, then click a tile to leave it out.',
+                                defaultValue: 'Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Drag the frame to move it and its corners to resize it, adjust the gap until the outlines sit on the artwork, then click a tile to leave it out.',
                             })}
                         </Typography>
 

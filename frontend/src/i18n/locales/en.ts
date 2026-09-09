@@ -1750,7 +1750,7 @@ export default {
       "action": "Split into tiles",
       "title": "Split into tiles",
       "close": "Close slicer",
-      "hint": "Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Drag on the image to frame the part that holds the grid, adjust the gap until the outlines sit on the artwork, then click a tile to leave it out.",
+      "hint": "Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Drag the frame to move it and its corners to resize it, adjust the gap until the outlines sit on the artwork, then click a tile to leave it out.",
       "rows": "Rows",
       "cols": "Columns",
       "frame": "Frame",

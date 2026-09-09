@@ -25,6 +25,11 @@ export interface BackgroundAnalysis {
 }
 
 export const DEFAULT_TOLERANCE = 0.5;
+// Chroma radius around the key colour, at tolerance 0 and at 1. A flat green
+// screen sits within a few hundredths of its key; a cyan glow or a white arc
+// blended with it is half a unit away, so the whole usable range lives here.
+const CHROMA_LIMIT_MIN = 0.03;
+const CHROMA_LIMIT_RANGE = 0.19;
 
 /** Border ring sampled as "what surrounds the subject", at least 2px wide. */
 const borderWidth = (image: RGBAImage): number => Math.max(
@@ -55,11 +60,15 @@ const isGreenish = (r: number, g: number, b: number): boolean => (
 );
 
 /**
- * The two dominant near-neutral tones of the border, quantised to 8 levels per
- * channel — the checkerboard is exactly two flat greys, so a coarse histogram
- * finds them without being fooled by JPEG ringing.
+ * The dominant border colours, quantised to 8 levels per channel so JPEG
+ * ringing does not split one flat backdrop into a dozen buckets. `accept`
+ * narrows the sample to the kind of colour being looked for.
  */
-const dominantNeutralTones = (image: RGBAImage): { colors: [number, number, number][]; coverage: number } => {
+const dominantBorderColors = (
+    image: RGBAImage,
+    accept: (r: number, g: number, b: number) => boolean,
+    take: number,
+): { colors: [number, number, number][]; coverage: number } => {
     const counts = new Map<number, { count: number; r: number; g: number; b: number }>();
     let sampled = 0;
     forEachBorderPixel(image, (offset) => {
@@ -67,7 +76,7 @@ const dominantNeutralTones = (image: RGBAImage): { colors: [number, number, numb
         const r = image.data[offset];
         const g = image.data[offset + 1];
         const b = image.data[offset + 2];
-        if (image.data[offset + 3] < 128 || !isNeutral(r, g, b)) return;
+        if (image.data[offset + 3] < 128 || !accept(r, g, b)) return;
         const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
         const bucket = counts.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
         bucket.count += 1;
@@ -76,7 +85,7 @@ const dominantNeutralTones = (image: RGBAImage): { colors: [number, number, numb
         bucket.b += b;
         counts.set(key, bucket);
     });
-    const top = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 2);
+    const top = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, take);
     const covered = top.reduce((total, bucket) => total + bucket.count, 0);
     return {
         colors: top.map((bucket) => ([
@@ -87,6 +96,9 @@ const dominantNeutralTones = (image: RGBAImage): { colors: [number, number, numb
         coverage: sampled > 0 ? covered / sampled : 0,
     };
 };
+
+const dominantNeutralTones = (image: RGBAImage) => dominantBorderColors(image, isNeutral, 2);
+const dominantGreen = (image: RGBAImage) => dominantBorderColors(image, isGreenish, 1);
 
 /**
  * A checkerboard is not just two greys — it *alternates*. Counting the tone
@@ -117,7 +129,10 @@ export const analyzeBackground = (image: RGBAImage): BackgroundAnalysis => {
         if (isGreenish(image.data[offset], image.data[offset + 1], image.data[offset + 2])) green += 1;
     });
     if (opaque === 0) return { kind: 'none', colors: [] };
-    if (green / opaque >= 0.6) return { kind: 'green', colors: [] };
+    // The key colour is read off the image, not assumed: everything downstream
+    // measures distance to *this* green rather than "greener than red and
+    // blue", which a white glow painted over a green screen also satisfies.
+    if (green / opaque >= 0.6) return { kind: 'green', colors: dominantGreen(image).colors };
 
     const { colors, coverage } = dominantNeutralTones(image);
     const distinct = colors.length === 2
@@ -130,9 +145,38 @@ export const analyzeBackground = (image: RGBAImage): BackgroundAnalysis => {
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 /**
+ * A pixel's colour with brightness divided out — the (Cb, Cr) chroma of
+ * YCbCr, normalised by luma. This is the quantity a green screen is *for*:
+ * every pixel of the backdrop shares it, whether that corner of the screen is
+ * lit or shadowed, while anything painted on top does not.
+ *
+ * The luma floor keeps near-black pixels from dividing by nothing and landing
+ * on an arbitrary hue; they end up far from any key, which is correct — black
+ * is artwork, not backdrop.
+ */
+const LUMA_FLOOR = 24;
+const normalizedChroma = (r: number, g: number, b: number): [number, number] => {
+    const luma = Math.max(LUMA_FLOOR, 0.299 * r + 0.587 * g + 0.114 * b);
+    return [
+        (-0.169 * r - 0.331 * g + 0.5 * b) / luma,
+        (0.5 * r - 0.419 * g - 0.081 * b) / luma,
+    ];
+};
+
+/**
  * How much a pixel reads as background, 1 = certainly, 0 = certainly not.
- * The band between the two is what gives anti-aliased edges a soft alpha
- * instead of a staircase.
+ * Full transparency inside the inner radius, fading to opaque at twice it —
+ * the band is what gives anti-aliased edges a soft alpha, not a staircase.
+ *
+ * A green screen is keyed the way keying is meant to work: one key colour,
+ * measured in chroma, with a tolerance around it. "Greener than it is red or
+ * blue" is not that test — a white sword arc or a cyan glow drawn over the
+ * screen satisfies it too, which is exactly how a sprite sheet loses its
+ * effects. In chroma those blends sit far from the key and survive, while a
+ * shadowed patch of the same screen still keys out.
+ *
+ * The checkerboard is the opposite case: its two tones are neutral, so they
+ * have no chroma to compare and are matched by plain RGB distance instead.
  */
 const matchScore = (
     kind: Exclude<BackgroundKind, 'none'>,
@@ -142,20 +186,29 @@ const matchScore = (
     g: number,
     b: number,
 ): number => {
-    if (kind === 'green') {
-        const greenness = g - Math.max(r, b);
-        // `cut` is the greenness at which a pixel is fully background; the
-        // 40%..100% band below it is the anti-aliased fringe.
-        const cut = 60 - tolerance * 45;
-        return clamp01((greenness - cut * 0.4) / Math.max(1, cut * 0.6));
-    }
-    const limit = 12 + tolerance * 48;
     let best = Number.POSITIVE_INFINITY;
-    for (const [cr, cg, cb] of colors) {
-        const distance = Math.sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2);
+    if (kind === 'green') {
+        const [cb, cr] = normalizedChroma(r, g, b);
+        for (const key of colors) {
+            const [kb, kr] = normalizedChroma(key[0], key[1], key[2]);
+            const distance = Math.hypot(cb - kb, cr - kr);
+            if (distance < best) best = distance;
+        }
+        const limit = CHROMA_LIMIT_MIN + tolerance * CHROMA_LIMIT_RANGE;
+        return clamp01((limit * 2 - best) / limit);
+    }
+    for (const [kr, kg, kb] of colors) {
+        const distance = Math.sqrt((r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2);
         if (distance < best) best = distance;
     }
-    return clamp01((limit * 2 - best) / Math.max(1, limit));
+    const limit = 16 + tolerance * 96;
+    return clamp01((limit * 2 - best) / limit);
+};
+
+/** Pulls a pixel's green back to what its red and blue can justify. */
+const despill = (data: Uint8ClampedArray, offset: number): void => {
+    const neutralGreen = Math.round((data[offset] + data[offset + 2]) / 2);
+    if (data[offset + 1] > neutralGreen) data[offset + 1] = neutralGreen;
 };
 
 export interface RemoveBackgroundOptions {
@@ -183,8 +236,10 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
     if (options.kind === 'none') return output;
     const kind = options.kind;
     const tolerance = clamp01(options.tolerance ?? DEFAULT_TOLERANCE);
-    const colors = options.colors?.length ? options.colors : dominantNeutralTones(image).colors;
-    if (kind === 'checker' && colors.length === 0) return output;
+    const colors = options.colors?.length
+        ? options.colors
+        : (kind === 'green' ? dominantGreen(image) : dominantNeutralTones(image)).colors;
+    if (colors.length === 0) return output;
 
     const { width, height, data } = output;
     const pixels = width * height;
@@ -205,10 +260,7 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
         const score = matchScore(kind, colors, tolerance, data[offset], data[offset + 1], data[offset + 2]);
         if (score <= 0) return;
         data[offset + 3] = Math.round(data[offset + 3] * (1 - score));
-        if (kind === 'green' && data[offset + 3] > 0) {
-            // Despill: a kept edge pixel still carries the screen's green cast.
-            data[offset + 1] = Math.min(data[offset + 1], Math.round((data[offset] + data[offset + 2]) / 2));
-        }
+        if (kind === 'green' && data[offset + 3] > 0) despill(data, offset);
         stack[top] = index;
         top += 1;
     };
@@ -230,6 +282,23 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
         if (x < width - 1) push(index + 1);
         if (y > 0) push(index - width);
         if (y < height - 1) push(index + width);
+    }
+
+    // A kept pixel that touches cleared background still carries the screen's
+    // colour cast, however tight the key was. One pass over that boundary is
+    // what removes the green rim a distance-based key otherwise leaves.
+    if (kind === 'green') {
+        for (let index = 0; index < pixels; index += 1) {
+            const offset = index * 4;
+            if (data[offset + 3] === 0) continue;
+            const x = index % width;
+            const y = (index - x) / width;
+            const touchesCleared = (x > 0 && data[(index - 1) * 4 + 3] === 0)
+                || (x < width - 1 && data[(index + 1) * 4 + 3] === 0)
+                || (y > 0 && data[(index - width) * 4 + 3] === 0)
+                || (y < height - 1 && data[(index + width) * 4 + 3] === 0);
+            if (touchesCleared) despill(data, offset);
+        }
     }
     return output;
 };

@@ -100,3 +100,66 @@ describe('removeBackground', () => {
         expect(cleaned.data).toEqual(image.data);
     });
 });
+
+describe('a green screen with effects painted over it', () => {
+    // The shape of a sprite sheet that broke the first implementation: the
+    // key is a flat saturated green, and the artwork's glows are blends of
+    // white or cyan *with* that green — greener than they are red or blue,
+    // and so keyed out entirely by a green-dominance test.
+    const KEY: [number, number, number] = [34, 221, 34];
+    const sheet = (): RGBAImage => {
+        const image = blank(80, 80);
+        for (let y = 0; y < 80; y += 1) {
+            for (let x = 0; x < 80; x += 1) paint(image, x, y, [...KEY, 255]);
+        }
+        const fill = (x0: number, y0: number, x1: number, y1: number, rgb: [number, number, number]) => {
+            for (let y = y0; y < y1; y += 1) {
+                for (let x = x0; x < x1; x += 1) paint(image, x, y, [...rgb, 255]);
+            }
+        };
+        fill(30, 30, 50, 50, [24, 24, 32]);        // the character, near black
+        fill(30, 20, 50, 30, [0, 180, 255]);       // a cyan glow
+        fill(50, 30, 62, 50, [150, 230, 180]);     // a white arc blended with the key
+        fill(20, 50, 30, 60, [255, 255, 255]);     // a bright sparkle
+        return image;
+    };
+
+    it('keeps every effect and clears only the key colour', () => {
+        const image = sheet();
+        const analysis = analyzeBackground(image);
+        expect(analysis.kind).toBe('green');
+        expect(analysis.colors[0]).toEqual(KEY);
+
+        const cleaned = removeBackground(image, { kind: 'green', colors: analysis.colors });
+        expect(alphaAt(cleaned, 2, 2)).toBe(0);        // background
+        expect(alphaAt(cleaned, 78, 78)).toBe(0);
+        expect(alphaAt(cleaned, 40, 40)).toBe(255);    // character
+        expect(alphaAt(cleaned, 40, 25)).toBe(255);    // cyan glow
+        expect(alphaAt(cleaned, 55, 40)).toBe(255);    // white arc over green
+        expect(alphaAt(cleaned, 25, 55)).toBe(255);    // sparkle
+    });
+
+    it('keys a shaded patch of the same screen, which is why chroma is the metric', () => {
+        const image = sheet();
+        // Same backdrop, lit at half brightness — a different RGB colour, the
+        // same chroma. A plain RGB distance would leave this behind.
+        for (let y = 60; y < 78; y += 1) {
+            for (let x = 2; x < 20; x += 1) paint(image, x, y, [17, 110, 17, 255]);
+        }
+        const cleaned = removeBackground(image, { kind: 'green', colors: [KEY] });
+        expect(alphaAt(cleaned, 10, 70)).toBe(0);
+    });
+
+    it('despills the boundary so no green rim survives', () => {
+        const image = sheet();
+        // A rim of key-tinted pixels down the character's left side, where
+        // anti-aliasing (or spill) leaves the backdrop's colour on artwork
+        // that the key itself does not reach.
+        for (let y = 30; y < 50; y += 1) paint(image, 29, y, [90, 200, 95, 255]);
+        const cleaned = removeBackground(image, { kind: 'green', colors: [KEY] });
+        const offset = (40 * cleaned.width + 29) * 4;
+        expect(cleaned.data[offset + 1]).toBeLessThanOrEqual(
+            Math.round((cleaned.data[offset] + cleaned.data[offset + 2]) / 2),
+        );
+    });
+});
