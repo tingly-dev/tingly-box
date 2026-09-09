@@ -829,9 +829,33 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         </Select>
                                     </FormControl>
                                     <Box>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                            {t('playground.slice.tolerance', { defaultValue: 'Edge tolerance' })} · {Math.round(tolerance * 100)}%
-                                        </Typography>
+                                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                {t('playground.slice.tolerance', { defaultValue: 'Tolerance' })} · {Math.round(tolerance * 100)}%
+                                            </Typography>
+                                            {/* The key colour itself, because a
+                                                key is "this colour ± a margin"
+                                                and the user cannot judge the
+                                                margin without seeing the
+                                                colour it is around. */}
+                                            {cleanKind === 'green' && detectedColors[0] && (
+                                                <>
+                                                    <Box
+                                                        sx={{
+                                                            width: 12,
+                                                            height: 12,
+                                                            borderRadius: '2px',
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
+                                                            bgcolor: `rgb(${detectedColors[0].join(',')})`,
+                                                        }}
+                                                    />
+                                                    <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
+                                                        {`#${detectedColors[0].map((value) => value.toString(16).padStart(2, '0')).join('')}`}
+                                                    </Typography>
+                                                </>
+                                            )}
+                                        </Stack>
                                         <Slider
                                             size="small"
                                             value={tolerance}
@@ -839,7 +863,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             max={1}
                                             step={0.02}
                                             onChange={(_, value) => setTolerance(value as number)}
-                                            aria-label={t('playground.slice.tolerance', { defaultValue: 'Edge tolerance' })}
+                                            aria-label={t('playground.slice.tolerance', { defaultValue: 'Tolerance' })}
                                         />
                                     </Box>
                                 </Stack>

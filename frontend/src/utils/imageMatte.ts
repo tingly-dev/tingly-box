@@ -26,10 +26,12 @@ export interface BackgroundAnalysis {
 
 export const DEFAULT_TOLERANCE = 0.5;
 // Chroma radius around the key colour, at tolerance 0 and at 1. A flat green
-// screen sits within a few hundredths of its key; a cyan glow or a white arc
-// blended with it is half a unit away, so the whole usable range lives here.
-const CHROMA_LIMIT_MIN = 0.03;
-const CHROMA_LIMIT_RANGE = 0.19;
+// screen sits within a few hundredths of its key, while artwork — even teal or
+// olive artwork — is a third of a unit away or more, so the range stays narrow
+// on purpose: a key is a specific colour plus a margin, and widening it past
+// what the backdrop needs only starts eating the picture.
+const CHROMA_LIMIT_MIN = 0.02;
+const CHROMA_LIMIT_RANGE = 0.10;
 
 /** Border ring sampled as "what surrounds the subject", at least 2px wide. */
 const borderWidth = (image: RGBAImage): number => Math.max(
@@ -205,11 +207,11 @@ const matchScore = (
     return clamp01((limit * 2 - best) / limit);
 };
 
-/** Pulls a pixel's green back to what its red and blue can justify. */
-const despill = (data: Uint8ClampedArray, offset: number): void => {
-    const neutralGreen = Math.round((data[offset] + data[offset + 2]) / 2);
-    if (data[offset + 1] > neutralGreen) data[offset + 1] = neutralGreen;
-};
+// Deliberately absent: despill (pulling the green channel down on kept
+// pixels). Clearing a background must not repaint the artwork — on anything
+// with legitimate greens, teals or cyan glows it discolours every edge it
+// touches, which is indistinguishable from "it deleted my greens". Keying
+// changes alpha only; a rim the key missed is the tolerance's business.
 
 export interface RemoveBackgroundOptions {
     kind: BackgroundKind;
@@ -243,6 +245,27 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
 
     const { width, height, data } = output;
     const pixels = width * height;
+
+    // A green screen is keyed over the WHOLE image, never only the part that
+    // reaches the frame's edge. That is the point of shooting on one: the
+    // subject is chosen not to contain the key colour, so every pixel that
+    // matches it is backdrop — including the green enclosed between an arm and
+    // a body, inside the loop of a sword arc, or behind a strand of hair.
+    // Keying only the connected region is what leaves those pockets behind.
+    if (kind === 'green') {
+        for (let index = 0; index < pixels; index += 1) {
+            const offset = index * 4;
+            if (data[offset + 3] === 0) continue;
+            const score = matchScore(kind, colors, tolerance, data[offset], data[offset + 1], data[offset + 2]);
+            if (score <= 0) continue;
+            data[offset + 3] = Math.round(data[offset + 3] * (1 - score));
+        }
+        return output;
+    }
+
+    // The checkerboard is the opposite case, and stays a flood fill from the
+    // edges: its tones are ordinary greys that the artwork itself uses, so
+    // only the grey actually connected to the border is background (§5.3).
     const visited = new Uint8Array(pixels);
     const stack = new Int32Array(pixels);
     let top = 0;
@@ -260,7 +283,6 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
         const score = matchScore(kind, colors, tolerance, data[offset], data[offset + 1], data[offset + 2]);
         if (score <= 0) return;
         data[offset + 3] = Math.round(data[offset + 3] * (1 - score));
-        if (kind === 'green' && data[offset + 3] > 0) despill(data, offset);
         stack[top] = index;
         top += 1;
     };
@@ -284,21 +306,5 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
         if (y < height - 1) push(index + width);
     }
 
-    // A kept pixel that touches cleared background still carries the screen's
-    // colour cast, however tight the key was. One pass over that boundary is
-    // what removes the green rim a distance-based key otherwise leaves.
-    if (kind === 'green') {
-        for (let index = 0; index < pixels; index += 1) {
-            const offset = index * 4;
-            if (data[offset + 3] === 0) continue;
-            const x = index % width;
-            const y = (index - x) / width;
-            const touchesCleared = (x > 0 && data[(index - 1) * 4 + 3] === 0)
-                || (x < width - 1 && data[(index + 1) * 4 + 3] === 0)
-                || (y > 0 && data[(index - width) * 4 + 3] === 0)
-                || (y < height - 1 && data[(index + width) * 4 + 3] === 0);
-            if (touchesCleared) despill(data, offset);
-        }
-    }
     return output;
 };

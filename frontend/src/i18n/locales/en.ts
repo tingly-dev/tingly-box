@@ -1783,7 +1783,7 @@ export default {
       "cleanKind": "Background to clear",
       "cleanChecker": "Checkerboard",
       "cleanGreen": "Green screen",
-      "tolerance": "Edge tolerance",
+      "tolerance": "Tolerance",
       "animate": "Play the tiles in order",
       "animationAlt": "Animation preview",
       "play": "Play preview",

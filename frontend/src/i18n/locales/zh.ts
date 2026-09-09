@@ -1779,7 +1779,7 @@ export default {
       "cleanKind": "要清除的背景",
       "cleanChecker": "棋盘格",
       "cleanGreen": "绿幕",
-      "tolerance": "边缘容差",
+      "tolerance": "容差",
       "animate": "按顺序播放各格",
       "animationAlt": "动画预览",
       "play": "播放预览",

@@ -150,16 +150,31 @@ describe('a green screen with effects painted over it', () => {
         expect(alphaAt(cleaned, 10, 70)).toBe(0);
     });
 
-    it('despills the boundary so no green rim survives', () => {
+    it('clears the key everywhere, including pockets the artwork encloses', () => {
         const image = sheet();
-        // A rim of key-tinted pixels down the character's left side, where
-        // anti-aliasing (or spill) leaves the backdrop's colour on artwork
-        // that the key itself does not reach.
-        for (let y = 30; y < 50; y += 1) paint(image, 29, y, [90, 200, 95, 255]);
+        // A ring of artwork with the backdrop trapped inside it — between an
+        // arm and a body, inside the loop of a sword arc. Those pixels never
+        // touch the frame's edge, and a key that only follows connected
+        // background leaves every one of them green.
+        for (let y = 8; y < 24; y += 1) {
+            for (let x = 8; x < 24; x += 1) {
+                const onRing = y === 8 || y === 23 || x === 8 || x === 23;
+                if (onRing) paint(image, x, y, [26, 26, 34, 255]);
+            }
+        }
         const cleaned = removeBackground(image, { kind: 'green', colors: [KEY] });
-        const offset = (40 * cleaned.width + 29) * 4;
-        expect(cleaned.data[offset + 1]).toBeLessThanOrEqual(
-            Math.round((cleaned.data[offset] + cleaned.data[offset + 2]) / 2),
-        );
+        expect(alphaAt(cleaned, 16, 16)).toBe(0);   // trapped backdrop
+        expect(alphaAt(cleaned, 8, 16)).toBe(255);  // the ring itself
+    });
+
+    it('changes alpha only — a key must never repaint the artwork', () => {
+        const image = sheet();
+        const before = new Uint8ClampedArray(image.data);
+        const cleaned = removeBackground(image, { kind: 'green', colors: [KEY] });
+        for (let i = 0; i < cleaned.data.length; i += 4) {
+            if (cleaned.data[i + 3] === 0) continue;
+            expect([cleaned.data[i], cleaned.data[i + 1], cleaned.data[i + 2]])
+                .toEqual([before[i], before[i + 1], before[i + 2]]);
+        }
     });
 });
