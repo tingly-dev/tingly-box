@@ -1702,7 +1702,21 @@ export default {
       "use": "Use sketch",
       "update": "Update sketch",
       "failed": "Could not export the sketch",
-      "promptPlaceholder": "Describe what this sketch should become…"
+      "promptPlaceholder": "Describe what this sketch should become…",
+      "pose": {
+        "tool": "Figure",
+        "add": "Add figure",
+        "presets": "Pose",
+        "preset": {
+          "standing": "Standing",
+          "walking": "Walking",
+          "sitting": "Sitting",
+          "armsUp": "Arms up"
+        },
+        "flip": "Mirror figure",
+        "remove": "Remove figure",
+        "hint": "Drag the joints to pose the figure, the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is."
+      }
     },
     "slice": {
       "action": "Split into tiles",

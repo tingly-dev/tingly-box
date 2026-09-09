@@ -15,7 +15,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, Create, DeleteSweep, Eraser, Undo } from '@/components/icons';
+import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Undo } from '@/components/icons';
 import {
     BRUSH_SIZES,
     brushWidthFor,
@@ -30,8 +30,45 @@ import {
     type CanvasDimensions,
     type CanvasPoint,
 } from '@/utils/sketchCanvas';
+import {
+    applyPreset,
+    createFigure,
+    drawFigure,
+    drawFigureHandles,
+    figureBounds,
+    flipFigure,
+    hitTestBody,
+    hitTestJoint,
+    isScaleHandleHit,
+    moveJoint,
+    scaleFigure,
+    translateFigure,
+    type JointKey,
+    type PoseFigure,
+    type PosePresetKey,
+} from '@/utils/poseFigure';
 
-type Tool = 'pen' | 'eraser';
+type Tool = 'pen' | 'eraser' | 'pose';
+
+const PRESET_KEYS: readonly PosePresetKey[] = ['standing', 'walking', 'sitting', 'armsUp'];
+
+// One undo stack for the whole surface. Strokes carry a raster frame, figure
+// edits carry the figure list, clearing carries both — so Ctrl+Z always means
+// "the last thing I did", whichever tool did it.
+interface SketchSnapshot {
+    raster: ImageData | null;
+    figures: PoseFigure[] | null;
+    rasterDirty: boolean;
+}
+
+// `before` is the figure list as it was when the drag started; it only
+// reaches the undo stack once the pointer actually moves, so selecting a
+// figure does not leave an undo step that does nothing.
+type PoseDragBase = { pointerId: number; figureId: string; before: PoseFigure[]; committed: boolean };
+type PoseDrag =
+    | (PoseDragBase & { mode: 'joint'; joint: JointKey })
+    | (PoseDragBase & { mode: 'move'; last: CanvasPoint })
+    | (PoseDragBase & { mode: 'scale'; origin: CanvasPoint; startDistance: number; start: PoseFigure });
 
 export interface SketchResult {
     file: File;
@@ -71,16 +108,23 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     // an `[open]` effect runs. Callback refs re-run the effects once the
     // nodes actually exist.
     const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+    const [overlayEl, setOverlayEl] = useState<HTMLCanvasElement | null>(null);
     const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
-    const historyRef = useRef(new StrokeHistory<ImageData>());
+    const historyRef = useRef(new StrokeHistory<SketchSnapshot>());
     const drawingRef = useRef<{ pointerId: number; last: CanvasPoint } | null>(null);
+    const poseDragRef = useRef<PoseDrag | null>(null);
     const [tool, setTool] = useState<Tool>('pen');
     const [color, setColor] = useState<string>(SKETCH_COLORS[0]);
     const [brush, setBrush] = useState<BrushSizeKey>('medium');
+    // Figures are objects, not pixels, for as long as the dialog is open:
+    // "used" is not "locked" (principle 10) — a pose stays adjustable until
+    // the sketch is submitted, at which point it is baked into the PNG.
+    const [figures, setFigures] = useState<PoseFigure[]>([]);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
     // Two facts the toolbar and the primary action key off: whether there is
     // anything to undo, and whether there is anything on the canvas at all.
     const [canUndo, setCanUndo] = useState(false);
-    const [dirty, setDirty] = useState(false);
+    const [rasterDirty, setRasterDirty] = useState(false);
     const [stageBox, setStageBox] = useState<CanvasDimensions>({ width: 0, height: 0 });
 
     // The size is read once per open: changing Size mid-sketch would have to
@@ -88,6 +132,17 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     // reopening is the honest answer.
     const dims = useMemo(() => parseImageSize(size), [size]);
     const cssSize = useMemo(() => fitWithin(dims, stageBox), [dims, stageBox]);
+    const dirty = rasterDirty || figures.length > 0;
+    const selectedFigure = useMemo(
+        () => figures.find((figure) => figure.id === selectedId) ?? null,
+        [figures, selectedId],
+    );
+
+    // Hit targets and handles are specified in screen pixels and converted to
+    // canvas units, so grabbing a joint feels the same on a 512 and a 1792
+    // canvas.
+    const displayScale = cssSize.width > 0 ? cssSize.width / dims.width : 1;
+    const toCanvasPx = useCallback((screenPx: number) => screenPx / (displayScale || 1), [displayScale]);
 
     const getContext = useCallback(() => canvasEl?.getContext('2d') ?? null, [canvasEl]);
 
@@ -100,7 +155,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     }, [dims]);
 
     // Fresh surface on every open: white background (or the sketch being
-    // re-edited), empty history, pen selected.
+    // re-edited), empty history, no figures, pen selected.
     useEffect(() => {
         if (!open) return;
         const canvas = canvasEl;
@@ -112,8 +167,11 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         paintBackground(ctx);
         historyRef.current.clear();
         drawingRef.current = null;
+        poseDragRef.current = null;
         setCanUndo(false);
-        setDirty(initialImage !== null);
+        setRasterDirty(initialImage !== null);
+        setFigures([]);
+        setSelectedId(null);
         setTool('pen');
         if (initialImage) {
             loadDataUrl(initialImage)
@@ -122,7 +180,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     ctx.drawImage(image, 0, 0, dims.width, dims.height);
                 })
                 .catch(() => {
-                    if (!cancelled) setDirty(false);
+                    if (!cancelled) setRasterDirty(false);
                 });
         }
         return () => { cancelled = true; };
@@ -144,31 +202,112 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         return () => observer.disconnect();
     }, [open, stageEl]);
 
-    const snapshot = useCallback(() => {
+    // The figures live on their own layer above the strokes. Handles are drawn
+    // here and only here: the exported PNG is composited separately, so the
+    // model never receives the blue joint dots.
+    useEffect(() => {
+        if (!open) return;
+        const overlay = overlayEl;
+        const ctx = overlay?.getContext('2d');
+        if (!overlay || !ctx) return;
+        overlay.width = dims.width;
+        overlay.height = dims.height;
+        ctx.clearRect(0, 0, dims.width, dims.height);
+        for (const figure of figures) {
+            drawFigure(ctx, figure, { selected: tool === 'pose' && figure.id === selectedId });
+        }
+        if (tool === 'pose' && selectedFigure) {
+            drawFigureHandles(ctx, selectedFigure, toCanvasPx(7));
+        }
+    }, [open, overlayEl, dims, figures, selectedId, selectedFigure, tool, toCanvasPx]);
+
+    const pushSnapshot = useCallback((snapshot: Partial<SketchSnapshot>) => {
+        historyRef.current.push({
+            raster: snapshot.raster ?? null,
+            figures: snapshot.figures ?? null,
+            rasterDirty,
+        });
+        setCanUndo(true);
+    }, [rasterDirty]);
+
+    const snapshotRaster = useCallback(() => {
         const ctx = getContext();
         if (!ctx) return;
-        historyRef.current.push(ctx.getImageData(0, 0, dims.width, dims.height));
-        setCanUndo(true);
-    }, [dims, getContext]);
+        pushSnapshot({ raster: ctx.getImageData(0, 0, dims.width, dims.height) });
+    }, [dims, getContext, pushSnapshot]);
+
+    const snapshotFigures = useCallback(() => {
+        pushSnapshot({ figures });
+    }, [figures, pushSnapshot]);
 
     const handleUndo = useCallback(() => {
-        const ctx = getContext();
         const frame = historyRef.current.pop();
-        if (!ctx || !frame) return;
-        ctx.putImageData(frame, 0, 0);
+        if (!frame) return;
+        if (frame.raster) {
+            const ctx = getContext();
+            if (ctx) ctx.putImageData(frame.raster, 0, 0);
+        }
+        if (frame.figures) {
+            setFigures(frame.figures);
+            setSelectedId((current) => (frame.figures?.some((figure) => figure.id === current) ? current : null));
+        }
+        setRasterDirty(frame.rasterDirty);
         setCanUndo(historyRef.current.canUndo);
-        // The first frame is always the blank/initial surface, so an empty
-        // history means nothing of the user's is left on the canvas.
-        setDirty(historyRef.current.canUndo || initialImage !== null);
-    }, [getContext, initialImage]);
+    }, [getContext]);
 
     const handleClear = useCallback(() => {
         const ctx = getContext();
         if (!ctx) return;
-        snapshot();
+        pushSnapshot({ raster: ctx.getImageData(0, 0, dims.width, dims.height), figures });
         paintBackground(ctx);
-        setDirty(false);
-    }, [getContext, paintBackground, snapshot]);
+        setFigures([]);
+        setSelectedId(null);
+        setRasterDirty(false);
+    }, [dims, figures, getContext, paintBackground, pushSnapshot]);
+
+    const updateFigure = useCallback((id: string, update: (figure: PoseFigure) => PoseFigure) => {
+        setFigures((current) => current.map((figure) => (figure.id === id ? update(figure) : figure)));
+    }, []);
+
+    // Picking the tool with an empty canvas drops a figure straight onto the
+    // surface: no pose picker standing between the user and the work
+    // (principle 2). Poses are swapped afterwards, in place.
+    const handleAddFigure = useCallback(() => {
+        snapshotFigures();
+        const figure = createFigure('standing', dims);
+        setFigures((current) => [...current, figure]);
+        setSelectedId(figure.id);
+        setTool('pose');
+    }, [dims, snapshotFigures]);
+
+    const handleRemoveFigure = useCallback(() => {
+        if (!selectedFigure) return;
+        snapshotFigures();
+        setFigures((current) => current.filter((figure) => figure.id !== selectedFigure.id));
+        setSelectedId(null);
+    }, [selectedFigure, snapshotFigures]);
+
+    const handleFlipFigure = useCallback(() => {
+        if (!selectedFigure) return;
+        snapshotFigures();
+        updateFigure(selectedFigure.id, flipFigure);
+    }, [selectedFigure, snapshotFigures, updateFigure]);
+
+    const handlePreset = useCallback((preset: PosePresetKey) => {
+        if (!selectedFigure) return;
+        snapshotFigures();
+        updateFigure(selectedFigure.id, (figure) => applyPreset(figure, preset, dims));
+    }, [dims, selectedFigure, snapshotFigures, updateFigure]);
+
+    const handleToolChange = useCallback((next: Tool) => {
+        setTool(next);
+        if (next !== 'pose') return;
+        if (figures.length === 0) {
+            handleAddFigure();
+        } else if (!selectedId) {
+            setSelectedId(figures[figures.length - 1].id);
+        }
+    }, [figures, handleAddFigure, selectedId]);
 
     useEffect(() => {
         if (!open) return;
@@ -176,11 +315,19 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
                 event.preventDefault();
                 handleUndo();
+                return;
+            }
+            if ((event.key === 'Delete' || event.key === 'Backspace') && tool === 'pose' && selectedFigure) {
+                const target = event.target as HTMLElement | null;
+                // Never steal the key from a field the user is typing in.
+                if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
+                event.preventDefault();
+                handleRemoveFigure();
             }
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [open, handleUndo]);
+    }, [open, handleUndo, handleRemoveFigure, selectedFigure, tool]);
 
     const pointFromEvent = useCallback((event: { clientX: number; clientY: number }) => {
         if (!canvasEl) return { x: 0, y: 0 };
@@ -208,7 +355,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         if (!ctx) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
-        snapshot();
+        snapshotRaster();
         const point = pointFromEvent(event);
         applyStrokeStyle(ctx);
         // A tap with no movement still leaves a dot.
@@ -217,8 +364,8 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         ctx.lineTo(point.x + 0.01, point.y + 0.01);
         ctx.stroke();
         drawingRef.current = { pointerId: event.pointerId, last: point };
-        setDirty(true);
-    }, [applyStrokeStyle, getContext, pointFromEvent, snapshot]);
+        setRasterDirty(true);
+    }, [applyStrokeStyle, getContext, pointFromEvent, snapshotRaster]);
 
     const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
         const drawing = drawingRef.current;
@@ -249,26 +396,146 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         }
     }, []);
 
+    // Pose interactions read top-down (the last figure drawn is the one on
+    // top): a joint under the pointer wins, then the selected figure's scale
+    // grip, then the body itself, and an empty spot deselects.
+    const handlePosePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+        if (event.button !== 0 || poseDragRef.current) return;
+        event.preventDefault();
+        const point = pointFromEvent(event);
+        const jointRadius = toCanvasPx(14);
+
+        if (selectedFigure && isScaleHandleHit(selectedFigure, point, toCanvasPx(14))) {
+            const bounds = figureBounds(selectedFigure);
+            const origin = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+            const startDistance = Math.hypot(point.x - origin.x, point.y - origin.y);
+            if (startDistance > 0) {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                poseDragRef.current = {
+                    pointerId: event.pointerId,
+                    mode: 'scale',
+                    figureId: selectedFigure.id,
+                    before: figures,
+                    committed: false,
+                    origin,
+                    startDistance,
+                    start: selectedFigure,
+                };
+                return;
+            }
+        }
+
+        for (let index = figures.length - 1; index >= 0; index -= 1) {
+            const figure = figures[index];
+            const joint = hitTestJoint(figure, point, jointRadius);
+            if (joint) {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setSelectedId(figure.id);
+                poseDragRef.current = {
+                    pointerId: event.pointerId,
+                    mode: 'joint',
+                    figureId: figure.id,
+                    before: figures,
+                    committed: false,
+                    joint,
+                };
+                return;
+            }
+        }
+
+        for (let index = figures.length - 1; index >= 0; index -= 1) {
+            const figure = figures[index];
+            if (hitTestBody(figure, point, toCanvasPx(4))) {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setSelectedId(figure.id);
+                poseDragRef.current = {
+                    pointerId: event.pointerId,
+                    mode: 'move',
+                    figureId: figure.id,
+                    before: figures,
+                    committed: false,
+                    last: point,
+                };
+                return;
+            }
+        }
+
+        setSelectedId(null);
+    }, [figures, pointFromEvent, selectedFigure, toCanvasPx]);
+
+    const handlePosePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+        const drag = poseDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        if (!drag.committed) {
+            drag.committed = true;
+            pushSnapshot({ figures: drag.before });
+        }
+        const point = pointFromEvent(event);
+        if (drag.mode === 'joint') {
+            updateFigure(drag.figureId, (figure) => moveJoint(figure, drag.joint, point));
+            return;
+        }
+        if (drag.mode === 'move') {
+            const dx = point.x - drag.last.x;
+            const dy = point.y - drag.last.y;
+            drag.last = point;
+            updateFigure(drag.figureId, (figure) => translateFigure(figure, dx, dy));
+            return;
+        }
+        const distance = Math.hypot(point.x - drag.origin.x, point.y - drag.origin.y);
+        const factor = distance / drag.startDistance;
+        updateFigure(drag.figureId, () => scaleFigure(drag.start, factor, drag.origin));
+    }, [pointFromEvent, pushSnapshot, updateFigure]);
+
+    const handlePosePointerEnd = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+        const drag = poseDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        poseDragRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+    }, []);
+
     const handleSubmit = useCallback(() => {
         const canvas = canvasEl;
         if (!canvas) return;
-        canvas.toBlob((blob) => {
+        // Composite onto a throwaway canvas so the live surface keeps its
+        // layers: strokes stay strokes, figures stay posable.
+        const output = document.createElement('canvas');
+        output.width = dims.width;
+        output.height = dims.height;
+        const ctx = output.getContext('2d');
+        if (!ctx) {
+            showNotification(t('playground.sketch.failed', { defaultValue: 'Could not export the sketch' }), 'error');
+            return;
+        }
+        ctx.drawImage(canvas, 0, 0);
+        for (const figure of figures) drawFigure(ctx, figure);
+        output.toBlob((blob) => {
             if (!blob) {
                 showNotification(t('playground.sketch.failed', { defaultValue: 'Could not export the sketch' }), 'error');
                 return;
             }
             onSubmit({
                 file: new File([blob], `sketch-${Date.now()}.png`, { type: 'image/png' }),
-                previewUrl: canvas.toDataURL('image/png'),
+                previewUrl: output.toDataURL('image/png'),
             });
         }, 'image/png');
-    }, [canvasEl, onSubmit, showNotification, t]);
+    }, [canvasEl, dims, figures, onSubmit, showNotification, t]);
 
-    const toolLabel = (key: Tool) => (key === 'pen'
-        ? t('playground.sketch.pen', { defaultValue: 'Pen' })
-        : t('playground.sketch.eraser', { defaultValue: 'Eraser' }));
+    const toolLabel = (key: Tool) => {
+        if (key === 'pen') return t('playground.sketch.pen', { defaultValue: 'Pen' });
+        if (key === 'eraser') return t('playground.sketch.eraser', { defaultValue: 'Eraser' });
+        return t('playground.sketch.pose.tool', { defaultValue: 'Figure' });
+    };
     const brushLabel = (key: BrushSizeKey) => t(`playground.sketch.brush.${key}`, {
         defaultValue: key === 'thin' ? 'Thin' : key === 'thick' ? 'Thick' : 'Medium',
+    });
+    const presetLabel = (key: PosePresetKey) => t(`playground.sketch.pose.preset.${key}`, {
+        defaultValue: key === 'standing' ? 'Standing'
+            : key === 'walking' ? 'Walking'
+                : key === 'sitting' ? 'Sitting' : 'Arms up',
     });
 
     return (
@@ -303,7 +570,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                             value={tool}
                             exclusive
                             size="small"
-                            onChange={(_, next: Tool | null) => { if (next) setTool(next); }}
+                            onChange={(_, next: Tool | null) => { if (next) handleToolChange(next); }}
                             aria-label={t('playground.sketch.tool', { defaultValue: 'Tool' })}
                         >
                             <ToggleButton value="pen" aria-label={toolLabel('pen')}>
@@ -312,61 +579,122 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                             <ToggleButton value="eraser" aria-label={toolLabel('eraser')}>
                                 <Tooltip title={toolLabel('eraser')}><Eraser fontSize="small" /></Tooltip>
                             </ToggleButton>
+                            <ToggleButton value="pose" aria-label={toolLabel('pose')}>
+                                <Tooltip title={toolLabel('pose')}><Accessibility fontSize="small" /></Tooltip>
+                            </ToggleButton>
                         </ToggleButtonGroup>
 
-                        <Stack
-                            direction="row"
-                            spacing={0.75}
-                            role="radiogroup"
-                            aria-label={t('playground.sketch.color', { defaultValue: 'Colour' })}
-                            sx={{ alignItems: 'center' }}
-                        >
-                            {SKETCH_COLORS.map((swatch) => {
-                                const selected = tool === 'pen' && swatch === color;
-                                return (
-                                    <ButtonBase
-                                        key={swatch}
-                                        role="radio"
-                                        aria-checked={selected}
-                                        aria-label={swatch}
-                                        onClick={() => { setColor(swatch); setTool('pen'); }}
-                                        sx={{
-                                            width: 24,
-                                            height: 24,
-                                            borderRadius: '50%',
-                                            bgcolor: swatch,
-                                            border: '2px solid',
-                                            borderColor: selected ? 'primary.main' : 'background.paper',
-                                            boxShadow: selected ? '0 0 0 2px rgba(25, 118, 210, 0.35)' : '0 0 0 1px rgba(0,0,0,0.18)',
-                                            transition: 'box-shadow 0.12s ease-out',
-                                        }}
-                                    />
-                                );
-                            })}
-                        </Stack>
+                        {tool === 'pose' ? (
+                            <>
+                                <Tooltip title={t('playground.sketch.pose.add', { defaultValue: 'Add figure' })}>
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleAddFigure}
+                                        aria-label={t('playground.sketch.pose.add', { defaultValue: 'Add figure' })}
+                                    >
+                                        <Add fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                {selectedFigure ? (
+                                    <>
+                                        <Stack
+                                            direction="row"
+                                            spacing={0.5}
+                                            useFlexGap
+                                            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                                            aria-label={t('playground.sketch.pose.presets', { defaultValue: 'Pose' })}
+                                        >
+                                            {PRESET_KEYS.map((preset) => (
+                                                <Button
+                                                    key={preset}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="inherit"
+                                                    onClick={() => handlePreset(preset)}
+                                                    sx={{ textTransform: 'none', py: 0.1, px: 0.9, minWidth: 0, color: 'text.secondary' }}
+                                                >
+                                                    {presetLabel(preset)}
+                                                </Button>
+                                            ))}
+                                        </Stack>
+                                        <Tooltip title={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}>
+                                            <IconButton
+                                                size="small"
+                                                onClick={handleFlipFigure}
+                                                aria-label={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}
+                                            >
+                                                <Flip fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={t('playground.sketch.pose.remove', { defaultValue: 'Remove figure' })}>
+                                            <IconButton
+                                                size="small"
+                                                onClick={handleRemoveFigure}
+                                                aria-label={t('playground.sketch.pose.remove', { defaultValue: 'Remove figure' })}
+                                            >
+                                                <Delete fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </>
+                                ) : null}
+                            </>
+                        ) : (
+                            <>
+                                <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    role="radiogroup"
+                                    aria-label={t('playground.sketch.color', { defaultValue: 'Colour' })}
+                                    sx={{ alignItems: 'center' }}
+                                >
+                                    {SKETCH_COLORS.map((swatch) => {
+                                        const selected = tool === 'pen' && swatch === color;
+                                        return (
+                                            <ButtonBase
+                                                key={swatch}
+                                                role="radio"
+                                                aria-checked={selected}
+                                                aria-label={swatch}
+                                                onClick={() => { setColor(swatch); setTool('pen'); }}
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    borderRadius: '50%',
+                                                    bgcolor: swatch,
+                                                    border: '2px solid',
+                                                    borderColor: selected ? 'primary.main' : 'background.paper',
+                                                    boxShadow: selected ? '0 0 0 2px rgba(25, 118, 210, 0.35)' : '0 0 0 1px rgba(0,0,0,0.18)',
+                                                    transition: 'box-shadow 0.12s ease-out',
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                </Stack>
 
-                        <ToggleButtonGroup
-                            value={brush}
-                            exclusive
-                            size="small"
-                            onChange={(_, next: BrushSizeKey | null) => { if (next) setBrush(next); }}
-                            aria-label={t('playground.sketch.brushSize', { defaultValue: 'Brush size' })}
-                        >
-                            {BRUSH_SIZES.map((option) => (
-                                <ToggleButton key={option.key} value={option.key} aria-label={brushLabel(option.key)}>
-                                    <Tooltip title={brushLabel(option.key)}>
-                                        <Box
-                                            sx={{
-                                                width: 6 + option.width * 0.6,
-                                                height: 6 + option.width * 0.6,
-                                                borderRadius: '50%',
-                                                bgcolor: 'currentColor',
-                                            }}
-                                        />
-                                    </Tooltip>
-                                </ToggleButton>
-                            ))}
-                        </ToggleButtonGroup>
+                                <ToggleButtonGroup
+                                    value={brush}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, next: BrushSizeKey | null) => { if (next) setBrush(next); }}
+                                    aria-label={t('playground.sketch.brushSize', { defaultValue: 'Brush size' })}
+                                >
+                                    {BRUSH_SIZES.map((option) => (
+                                        <ToggleButton key={option.key} value={option.key} aria-label={brushLabel(option.key)}>
+                                            <Tooltip title={brushLabel(option.key)}>
+                                                <Box
+                                                    sx={{
+                                                        width: 6 + option.width * 0.6,
+                                                        height: 6 + option.width * 0.6,
+                                                        borderRadius: '50%',
+                                                        bgcolor: 'currentColor',
+                                                    }}
+                                                />
+                                            </Tooltip>
+                                        </ToggleButton>
+                                    ))}
+                                </ToggleButtonGroup>
+                            </>
+                        )}
 
                         <Box sx={{ flex: 1 }} />
 
@@ -410,33 +738,67 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                         }}
                     >
                         <Box
-                            component="canvas"
-                            ref={setCanvasEl}
-                            role="img"
-                            aria-label={t('playground.sketch.canvasAlt', { defaultValue: 'Sketch canvas' })}
-                            onPointerDown={handlePointerDown}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={handlePointerEnd}
-                            onPointerCancel={handlePointerEnd}
-                            onContextMenu={(event: React.MouseEvent) => event.preventDefault()}
+                            sx={{ position: 'relative', lineHeight: 0 }}
                             style={{ width: cssSize.width, height: cssSize.height }}
-                            sx={{
-                                display: 'block',
-                                bgcolor: SKETCH_BACKGROUND,
-                                boxShadow: 1,
-                                borderRadius: 1,
-                                // Draw, don't scroll: the browser must not steal the gesture.
-                                touchAction: 'none',
-                                cursor: 'crosshair',
-                                userSelect: 'none',
-                            }}
-                        />
+                        >
+                            <Box
+                                component="canvas"
+                                ref={setCanvasEl}
+                                role="img"
+                                aria-label={t('playground.sketch.canvasAlt', { defaultValue: 'Sketch canvas' })}
+                                onPointerDown={handlePointerDown}
+                                onPointerMove={handlePointerMove}
+                                onPointerUp={handlePointerEnd}
+                                onPointerCancel={handlePointerEnd}
+                                onContextMenu={(event: React.MouseEvent) => event.preventDefault()}
+                                style={{ width: cssSize.width, height: cssSize.height }}
+                                sx={{
+                                    display: 'block',
+                                    bgcolor: SKETCH_BACKGROUND,
+                                    boxShadow: 1,
+                                    borderRadius: 1,
+                                    // Draw, don't scroll: the browser must not steal the gesture.
+                                    touchAction: 'none',
+                                    cursor: 'crosshair',
+                                    userSelect: 'none',
+                                }}
+                            />
+                            {/* Figure layer. Transparent to pointers unless the
+                                figure tool is active, so drawing over a pose
+                                needs no mode dance. */}
+                            <Box
+                                component="canvas"
+                                ref={setOverlayEl}
+                                aria-hidden
+                                onPointerDown={handlePosePointerDown}
+                                onPointerMove={handlePosePointerMove}
+                                onPointerUp={handlePosePointerEnd}
+                                onPointerCancel={handlePosePointerEnd}
+                                onContextMenu={(event: React.MouseEvent) => event.preventDefault()}
+                                style={{ width: cssSize.width, height: cssSize.height }}
+                                sx={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    display: 'block',
+                                    borderRadius: 1,
+                                    touchAction: 'none',
+                                    userSelect: 'none',
+                                    pointerEvents: tool === 'pose' ? 'auto' : 'none',
+                                    cursor: tool === 'pose' ? 'move' : 'crosshair',
+                                }}
+                            />
+                        </Box>
                     </Box>
 
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {t('playground.sketch.hint', {
-                            defaultValue: 'A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.',
-                        })}
+                        {figures.length > 0
+                            ? t('playground.sketch.pose.hint', {
+                                defaultValue: 'Drag the joints to pose the figure, the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is.',
+                            })
+                            : t('playground.sketch.hint', {
+                                defaultValue: 'A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.',
+                            })}
                     </Typography>
                 </Stack>
             </DialogContent>

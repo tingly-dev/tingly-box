@@ -1698,7 +1698,21 @@ export default {
       "use": "使用草图",
       "update": "更新草图",
       "failed": "无法导出草图",
-      "promptPlaceholder": "描述这张草图应该变成什么…"
+      "promptPlaceholder": "描述这张草图应该变成什么…",
+      "pose": {
+        "tool": "人形",
+        "add": "添加人形",
+        "presets": "姿势",
+        "preset": {
+          "standing": "站立",
+          "walking": "行走",
+          "sitting": "坐姿",
+          "armsUp": "举手"
+        },
+        "flip": "镜像翻转",
+        "remove": "删除人形",
+        "hint": "拖关节摆姿势，拖身体移动，拖右下角缩放。灰色人偶只是姿势参考，他是谁、穿什么由提示词来说。"
+      }
     },
     "slice": {
       "action": "切分为多张",
