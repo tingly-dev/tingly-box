@@ -75,55 +75,158 @@ export const HEAD_RADIUS_RATIO = 0.07;
 // between the user and the canvas: picking the tool drops the default figure
 // straight onto the surface and the preset row only appears once one is
 // selected, to swap a pose in place.
-export type PosePresetKey = 'standing' | 'walking' | 'sitting' | 'armsUp';
-
-type PresetPoints = Record<JointKey, readonly [number, number]>;
-
-export const POSE_PRESETS: Record<PosePresetKey, PresetPoints> = {
-    standing: {
-        head: [0.50, 0.055], neck: [0.50, 0.145],
-        shoulderL: [0.34, 0.185], shoulderR: [0.66, 0.185],
-        elbowL: [0.28, 0.320], elbowR: [0.72, 0.320],
-        wristL: [0.24, 0.455], wristR: [0.76, 0.455],
-        hip: [0.50, 0.505], hipL: [0.40, 0.525], hipR: [0.60, 0.525],
-        kneeL: [0.40, 0.735], kneeR: [0.60, 0.735],
-        ankleL: [0.40, 0.960], ankleR: [0.60, 0.960],
-    },
-    walking: {
-        head: [0.50, 0.055], neck: [0.50, 0.145],
-        shoulderL: [0.34, 0.185], shoulderR: [0.66, 0.185],
-        elbowL: [0.30, 0.325], elbowR: [0.74, 0.310],
-        wristL: [0.38, 0.440], wristR: [0.80, 0.435],
-        hip: [0.50, 0.505], hipL: [0.42, 0.525], hipR: [0.58, 0.525],
-        kneeL: [0.30, 0.700], kneeR: [0.68, 0.720],
-        ankleL: [0.22, 0.935], ankleR: [0.80, 0.955],
-    },
-    sitting: {
-        head: [0.34, 0.070], neck: [0.36, 0.160],
-        shoulderL: [0.28, 0.200], shoulderR: [0.46, 0.200],
-        elbowL: [0.28, 0.340], elbowR: [0.48, 0.340],
-        wristL: [0.42, 0.450], wristR: [0.60, 0.450],
-        hip: [0.40, 0.565], hipL: [0.34, 0.585], hipR: [0.48, 0.585],
-        kneeL: [0.78, 0.605], kneeR: [0.86, 0.630],
-        ankleL: [0.76, 0.930], ankleR: [0.86, 0.955],
-    },
-    armsUp: {
-        head: [0.50, 0.100], neck: [0.50, 0.190],
-        shoulderL: [0.34, 0.230], shoulderR: [0.66, 0.230],
-        elbowL: [0.26, 0.110], elbowR: [0.74, 0.110],
-        wristL: [0.22, 0.010], wristR: [0.78, 0.010],
-        hip: [0.50, 0.545], hipL: [0.40, 0.565], hipR: [0.60, 0.565],
-        kneeL: [0.40, 0.760], kneeR: [0.60, 0.760],
-        ankleL: [0.40, 0.965], ankleR: [0.60, 0.965],
-    },
-};
-
 // A figure lands at 70% of the canvas height, centred. Big enough to read as
 // the subject, small enough to leave room for the scene around it.
 export const FIGURE_HEIGHT_RATIO = 0.7;
 // Width of the unit box relative to its height. Arms out to the side need
 // more room than a body is wide.
 export const FIGURE_ASPECT = 0.45;
+
+export type PosePresetKey =
+    | 'standing' | 'contrapposto' | 'handsOnHips' | 'armsCrossed' | 'tPose' | 'armsUp'
+    | 'walking' | 'running' | 'jumping' | 'kicking' | 'reaching' | 'bowing'
+    | 'sitting' | 'sittingFloor' | 'kneeling' | 'crouching' | 'lying'
+    | 'wave' | 'pointing' | 'thinking' | 'leaning';
+
+type PresetPoints = Record<JointKey, readonly [number, number]>;
+
+// Poses are declared as bone angles, not as coordinates. Two reasons: a table
+// of thirty joint positions is unreadable and unmaintainable, and — since a
+// drag now rotates bones and never stretches them (see `swingJoint`) — every
+// pose in the library has to be built from the same bone lengths or applying
+// one would silently change the figure's proportions.
+//
+// Angles are degrees for the bone itself, not relative to its parent: 0 points
+// straight down, +90 to the right of the screen, ±180 straight up. `lean` is
+// the odd one out — it tilts the torso's top, so a negative lean leans the
+// body toward the side the limbs are reaching. Reading
+// "the upper arm is at -50" is something you can picture; "the elbow is at
+// (0.28, 0.32)" is not.
+interface PoseSpec {
+    lean?: number;          // torso, from upright
+    headTilt?: number;      // head, relative to the torso
+    shoulderTilt?: number;  // shoulder line, from horizontal
+    hipTilt?: number;
+    arms: { l: readonly [number, number]; r: readonly [number, number] };
+    legs: { l: readonly [number, number]; r: readonly [number, number] };
+}
+
+// One skeleton for every pose, in arbitrary units — the result is normalised.
+const BONE = {
+    torso: 0.36, head: 0.11,
+    shoulderSpan: 0.085, shoulderDrop: 0.035,
+    upperArm: 0.155, foreArm: 0.145,
+    hipSpan: 0.052, hipDrop: 0.022,
+    thigh: 0.235, shin: 0.225,
+} as const;
+
+const rad = (degrees: number) => (degrees * Math.PI) / 180;
+// Down is 0, so a spec reads the way a person describes a limb: "hanging" is 0.
+const along = (degrees: number, length: number): CanvasPoint => ({
+    x: Math.sin(rad(degrees)) * length,
+    y: Math.cos(rad(degrees)) * length,
+});
+const plus = (point: CanvasPoint, delta: CanvasPoint): CanvasPoint => ({ x: point.x + delta.x, y: point.y + delta.y });
+// Rotating one offset, rather than adding two angled vectors: the shoulder and
+// hip stubs have to keep their length when the shoulder or hip line tilts, or
+// the "same bones in every pose" guarantee quietly breaks for tilted poses.
+const turned = (offset: CanvasPoint, degrees: number): CanvasPoint => {
+    const cos = Math.cos(rad(degrees));
+    const sin = Math.sin(rad(degrees));
+    return { x: offset.x * cos - offset.y * sin, y: offset.x * sin + offset.y * cos };
+};
+
+const buildPose = (spec: PoseSpec): PresetPoints => {
+    const lean = spec.lean ?? 0;
+    const hip = { x: 0, y: 0 };
+    const neck = plus(hip, along(lean + 180, BONE.torso));
+    const head = plus(neck, along(lean + (spec.headTilt ?? 0) + 180, BONE.head));
+
+    const shoulderAngle = lean + (spec.shoulderTilt ?? 0);
+    const shoulderL = plus(neck, turned({ x: -BONE.shoulderSpan, y: BONE.shoulderDrop }, shoulderAngle));
+    const shoulderR = plus(neck, turned({ x: BONE.shoulderSpan, y: BONE.shoulderDrop }, shoulderAngle));
+
+    const hipAngle = lean + (spec.hipTilt ?? 0);
+    const hipL = plus(hip, turned({ x: -BONE.hipSpan, y: BONE.hipDrop }, hipAngle));
+    const hipR = plus(hip, turned({ x: BONE.hipSpan, y: BONE.hipDrop }, hipAngle));
+
+    const elbowL = plus(shoulderL, along(spec.arms.l[0], BONE.upperArm));
+    const elbowR = plus(shoulderR, along(spec.arms.r[0], BONE.upperArm));
+    const kneeL = plus(hipL, along(spec.legs.l[0], BONE.thigh));
+    const kneeR = plus(hipR, along(spec.legs.r[0], BONE.thigh));
+
+    const raw: Record<JointKey, CanvasPoint> = {
+        hip, neck, head, shoulderL, shoulderR, hipL, hipR, elbowL, elbowR, kneeL, kneeR,
+        wristL: plus(elbowL, along(spec.arms.l[1], BONE.foreArm)),
+        wristR: plus(elbowR, along(spec.arms.r[1], BONE.foreArm)),
+        ankleL: plus(kneeL, along(spec.legs.l[1], BONE.shin)),
+        ankleR: plus(kneeR, along(spec.legs.r[1], BONE.shin)),
+    };
+
+    // Into the unit box, at one scale shared by every pose — deliberately not
+    // "stretch each pose to fill the box". Same bones, same body: a crouching
+    // figure is genuinely shorter than a standing one, and swapping poses
+    // never resizes the person.
+    const xs = JOINT_KEYS.map((key) => raw[key].x);
+    const ys = JOINT_KEYS.map((key) => raw[key].y);
+    const minY = Math.min(...ys);
+    const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const points = {} as Record<JointKey, readonly [number, number]>;
+    for (const key of JOINT_KEYS) {
+        points[key] = [
+            0.5 + (raw[key].x - midX) / (POSE_SCALE * FIGURE_ASPECT),
+            (raw[key].y - minY) / POSE_SCALE,
+        ];
+    }
+    return points;
+};
+
+// The height an upright figure occupies in raw units: crown to heel with the
+// legs straight. Every pose is divided by this one number.
+const POSE_SCALE = BONE.torso + BONE.head + BONE.hipDrop + BONE.thigh + BONE.shin;
+
+const POSE_SPECS: Record<PosePresetKey, PoseSpec> = {
+    standing: { arms: { l: [-8, -6], r: [8, 6] }, legs: { l: [-3, -2], r: [3, 2] } },
+    contrapposto: {
+        lean: 4, shoulderTilt: -4, hipTilt: 5,
+        arms: { l: [-10, -14], r: [6, 10] }, legs: { l: [-1, 0], r: [9, 4] },
+    },
+    handsOnHips: { arms: { l: [-50, 25], r: [50, -25] }, legs: { l: [-5, -3], r: [5, 3] } },
+    armsCrossed: { arms: { l: [-38, 62], r: [38, -62] }, legs: { l: [-4, -2], r: [4, 2] } },
+    tPose: { arms: { l: [-90, -90], r: [90, 90] }, legs: { l: [-4, -3], r: [4, 3] } },
+    armsUp: { arms: { l: [-168, -178], r: [168, 178] }, legs: { l: [-5, -4], r: [5, 4] } },
+
+    walking: { lean: 2, arms: { l: [20, 15], r: [-20, -14] }, legs: { l: [-25, -12], r: [25, 14] } },
+    running: { lean: -10, arms: { l: [-28, -88], r: [28, 88] }, legs: { l: [-42, -74], r: [38, 24] } },
+    jumping: { arms: { l: [-158, -172], r: [158, 172] }, legs: { l: [-22, -48], r: [22, 48] } },
+    kicking: { lean: 10, arms: { l: [-34, -22], r: [34, 22] }, legs: { l: [-4, -2], r: [72, 62] } },
+    reaching: { lean: -8, headTilt: -6, arms: { l: [-12, -8], r: [122, 132] }, legs: { l: [-6, -3], r: [8, 4] } },
+    bowing: { lean: -46, headTilt: -12, arms: { l: [-6, -4], r: [6, 4] }, legs: { l: [-3, 0], r: [3, 0] } },
+
+    sitting: { lean: 6, arms: { l: [12, 42], r: [16, 46] }, legs: { l: [84, 4], r: [78, 1] } },
+    sittingFloor: { lean: -12, arms: { l: [-26, -10], r: [26, 10] }, legs: { l: [76, 82], r: [70, 76] } },
+    kneeling: { lean: 4, arms: { l: [-14, -8], r: [14, 8] }, legs: { l: [12, 96], r: [74, 8] } },
+    crouching: { lean: -16, arms: { l: [24, 58], r: [28, 62] }, legs: { l: [64, 2], r: [56, -3] } },
+    lying: { lean: 88, arms: { l: [86, 88], r: [94, 96] }, legs: { l: [94, 92], r: [84, 82] } },
+
+    wave: { headTilt: -4, arms: { l: [-8, -6], r: [148, 172] }, legs: { l: [-4, -2], r: [4, 2] } },
+    pointing: { arms: { l: [-10, -8], r: [95, 95] }, legs: { l: [-4, -2], r: [6, 3] } },
+    thinking: { lean: -3, headTilt: 6, arms: { l: [-26, 64], r: [26, -140] }, legs: { l: [-4, -2], r: [4, 2] } },
+    leaning: { lean: -12, arms: { l: [-20, -10], r: [16, 10] }, legs: { l: [-6, 0], r: [11, 6] } },
+};
+
+export const POSE_PRESETS: Record<PosePresetKey, PresetPoints> = Object.fromEntries(
+    (Object.keys(POSE_SPECS) as PosePresetKey[]).map((key) => [key, buildPose(POSE_SPECS[key])]),
+) as Record<PosePresetKey, PresetPoints>;
+
+// Grouped the way someone looks for a pose — by what the body is doing, not by
+// how the data was authored.
+export const POSE_LIBRARY: readonly { group: string; poses: readonly PosePresetKey[] }[] = [
+    { group: 'standing', poses: ['standing', 'contrapposto', 'handsOnHips', 'armsCrossed', 'tPose', 'armsUp'] },
+    { group: 'motion', poses: ['walking', 'running', 'jumping', 'kicking', 'reaching', 'bowing'] },
+    { group: 'seated', poses: ['sitting', 'sittingFloor', 'kneeling', 'crouching', 'lying'] },
+    { group: 'gesture', poses: ['wave', 'pointing', 'thinking', 'leaning'] },
+];
 
 let figureCounter = 0;
 
@@ -208,14 +311,22 @@ export const nextFigureAt = (
 
 // Swaps the pose while keeping the figure where it is and roughly how big it
 // is: re-entry (principle 10) applies inside the dialog too.
+// Matched on the torso bone, not on the bounding box: box height changes with
+// the pose (a crouch is shorter than a stand), so matching boxes would resize
+// the person every time the pose changed.
+const torsoLength = (figure: PoseFigure): number => Math.hypot(
+    figure.joints.neck.x - figure.joints.hip.x,
+    figure.joints.neck.y - figure.joints.hip.y,
+);
+
 export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: CanvasDimensions): PoseFigure => {
     const bounds = figureBounds(figure);
     const fresh = createFigure(preset, dims, {
         x: bounds.x + bounds.width / 2,
         y: bounds.y + bounds.height / 2,
     }, figure.shade);
-    const freshBounds = figureBounds(fresh);
-    const factor = freshBounds.height > 0 ? bounds.height / freshBounds.height : 1;
+    const freshTorso = torsoLength(fresh);
+    const factor = freshTorso > 0 ? torsoLength(figure) / freshTorso : 1;
     return { ...scaleFigure(fresh, factor), id: figure.id };
 };
 

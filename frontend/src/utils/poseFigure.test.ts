@@ -13,6 +13,7 @@ import {
     isScaleHandleHit,
     JOINT_KEYS,
     JOINT_PARENT,
+    POSE_LIBRARY,
     MIN_FIGURE_HEIGHT,
     moveJoint,
     nextFigureAt,
@@ -30,7 +31,7 @@ describe('createFigure', () => {
     it('centres the figure and sizes it to 70% of the canvas height', () => {
         const figure = createFigure('standing', DIMS);
         const bounds = figureBounds(figure);
-        expect(bounds.height).toBeCloseTo(1024 * 0.7 * (0.96 - 0.055), 1);
+        expect(bounds.height).toBeCloseTo(1024 * 0.7, 0);
         expect(bounds.x + bounds.width / 2).toBeCloseTo(512, 0);
         expect(bounds.y + bounds.height / 2).toBeCloseTo(512, 0);
     });
@@ -47,7 +48,7 @@ describe('createFigure', () => {
     });
 
     it('defines every joint for every preset', () => {
-        for (const preset of ['standing', 'walking', 'sitting', 'armsUp'] as const) {
+        for (const preset of POSE_LIBRARY.flatMap((group) => group.poses)) {
             const figure = createFigure(preset, DIMS);
             for (const key of JOINT_KEYS) {
                 expect(Number.isFinite(figure.joints[key].x)).toBe(true);
@@ -64,7 +65,9 @@ describe('applyPreset', () => {
         const after = applyPreset(figure, 'sitting', DIMS);
         const afterBounds = figureBounds(after);
         expect(after.id).toBe(figure.id);
-        expect(afterBounds.height).toBeCloseTo(before.height, 4);
+        // Not the same box — a seated figure is shorter — but the same person:
+        // the torso keeps its length and the figure keeps its place.
+        expect(afterBounds.height).toBeLessThan(before.height);
         expect(afterBounds.x + afterBounds.width / 2).toBeCloseTo(before.x + before.width / 2, 4);
         expect(afterBounds.y + afterBounds.height / 2).toBeCloseTo(before.y + before.height / 2, 4);
         expect(after.joints.kneeL.x).not.toBeCloseTo(figure.joints.kneeL.x, 1);
@@ -362,5 +365,61 @@ describe('the skeleton', () => {
             return parent ? boneLength(figure, key, parent) : 0;
         });
         after.forEach((length, i) => expect(length).toBeCloseTo(before[i], 4));
+    });
+});
+
+describe('the pose library', () => {
+    const everyPose = POSE_LIBRARY.flatMap((group) => group.poses);
+    const boneLengths = (figure: PoseFigure) => JOINT_KEYS.map((key) => {
+        const parent = JOINT_PARENT[key];
+        if (!parent) return 0;
+        return Math.hypot(
+            figure.joints[key].x - figure.joints[parent].x,
+            figure.joints[key].y - figure.joints[parent].y,
+        );
+    });
+
+    it('lists every pose once, in a group', () => {
+        expect(new Set(everyPose).size).toBe(everyPose.length);
+        expect(everyPose.length).toBeGreaterThanOrEqual(20);
+    });
+
+    it('builds every pose from the same bone lengths', () => {
+        // Otherwise applying a pose would silently restretch the figure, which
+        // is exactly what the skeleton exists to prevent.
+        const reference = boneLengths(createFigure('standing', DIMS));
+        for (const pose of everyPose) {
+            boneLengths(createFigure(pose, DIMS)).forEach((length, i) => {
+                expect(length).toBeCloseTo(reference[i], 3);
+            });
+        }
+    });
+
+    it('lets a crouch be shorter than a stand instead of stretching it', () => {
+        const standing = figureBounds(createFigure('standing', DIMS)).height;
+        expect(standing).toBeCloseTo(1024 * 0.7, 0);
+        expect(figureBounds(createFigure('crouching', DIMS)).height).toBeLessThan(standing * 0.92);
+        expect(figureBounds(createFigure('lying', DIMS)).height).toBeLessThan(standing * 0.5);
+    });
+
+    it('stands every pose up except the two that are meant to be horizontal', () => {
+        const horizontal = new Set(['lying', 'bowing']);
+        for (const pose of everyPose) {
+            const figure = createFigure(pose, DIMS);
+            const rise = figure.joints.hip.y - figure.joints.neck.y;
+            const run = Math.abs(figure.joints.neck.x - figure.joints.hip.x);
+            expect(rise > run).toBe(!horizontal.has(pose));
+        }
+    });
+
+    it('swaps a pose without resizing the person', () => {
+        const figure = scaleFigure(createFigure('standing', DIMS), 0.6);
+        const torso = (f: PoseFigure) => Math.hypot(
+            f.joints.neck.x - f.joints.hip.x,
+            f.joints.neck.y - f.joints.hip.y,
+        );
+        for (const pose of everyPose) {
+            expect(torso(applyPreset(figure, pose, DIMS))).toBeCloseTo(torso(figure), 3);
+        }
     });
 });

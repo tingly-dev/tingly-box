@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Undo } from '@/components/icons';
+import PoseLibraryPopover from './PoseLibraryPopover';
 import {
     applyStrokeStyle,
     BRUSH_SIZES,
@@ -60,8 +61,6 @@ export interface SketchLayers {
     // flattened by an older build. Normally null.
     backdrop: string | null;
 }
-
-const PRESET_KEYS: readonly PosePresetKey[] = ['standing', 'walking', 'sitting', 'armsUp'];
 
 // One undo stack for the whole surface: a snapshot of whichever layer the
 // action touched, so Ctrl+Z always means "the last thing I did", whichever
@@ -152,6 +151,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     const [backdrop, setBackdrop] = useState<HTMLImageElement | null>(null);
     const [figures, setFigures] = useState<PoseFigure[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [libraryAnchor, setLibraryAnchor] = useState<HTMLElement | null>(null);
     // Two facts the toolbar and the primary action key off: whether there is
     // anything to undo, and whether there is anything on the canvas at all.
     const [canUndo, setCanUndo] = useState(false);
@@ -356,6 +356,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     }, [selectedFigure, snapshotFigures, updateFigure]);
 
     const handlePreset = useCallback((preset: PosePresetKey) => {
+        setLibraryAnchor(null);
         if (!selectedFigure) return;
         snapshotFigures();
         updateFigure(selectedFigure.id, (figure) => applyPreset(figure, preset, dims));
@@ -596,12 +597,6 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     const brushLabel = (key: BrushSizeKey) => t(`playground.sketch.brush.${key}`, {
         defaultValue: key === 'thin' ? 'Thin' : key === 'thick' ? 'Thick' : 'Medium',
     });
-    const presetLabel = (key: PosePresetKey) => t(`playground.sketch.pose.preset.${key}`, {
-        defaultValue: key === 'standing' ? 'Standing'
-            : key === 'walking' ? 'Walking'
-                : key === 'sitting' ? 'Sitting' : 'Arms up',
-    });
-
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
@@ -661,26 +656,16 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                 </Tooltip>
                                 {selectedFigure ? (
                                     <>
-                                        <Stack
-                                            direction="row"
-                                            spacing={0.5}
-                                            useFlexGap
-                                            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
-                                            aria-label={t('playground.sketch.pose.presets', { defaultValue: 'Pose' })}
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="inherit"
+                                            onClick={(event) => setLibraryAnchor(event.currentTarget)}
+                                            startIcon={<Accessibility fontSize="small" />}
+                                            sx={{ textTransform: 'none', py: 0.1, px: 1, color: 'text.secondary' }}
                                         >
-                                            {PRESET_KEYS.map((preset) => (
-                                                <Button
-                                                    key={preset}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color="inherit"
-                                                    onClick={() => handlePreset(preset)}
-                                                    sx={{ textTransform: 'none', py: 0.1, px: 0.9, minWidth: 0, color: 'text.secondary' }}
-                                                >
-                                                    {presetLabel(preset)}
-                                                </Button>
-                                            ))}
-                                        </Stack>
+                                            {t('playground.sketch.pose.presets', { defaultValue: 'Poses' })}
+                                        </Button>
                                         <Tooltip title={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}>
                                             <IconButton
                                                 size="small"
@@ -876,6 +861,11 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                         : t('playground.sketch.use', { defaultValue: 'Use sketch' })}
                 </Button>
             </DialogActions>
+            <PoseLibraryPopover
+                anchorEl={libraryAnchor}
+                onClose={() => setLibraryAnchor(null)}
+                onPick={handlePreset}
+            />
         </Dialog>
     );
 };

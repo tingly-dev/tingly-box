@@ -1706,12 +1706,35 @@ export default {
       "pose": {
         "tool": "Figure",
         "add": "Add figure",
-        "presets": "Pose",
+        "presets": "Poses",
+        "group": {
+          "standing": "Standing",
+          "motion": "Motion",
+          "seated": "Seated",
+          "gesture": "Gesture"
+        },
         "preset": {
           "standing": "Standing",
+          "contrapposto": "Weight on one leg",
+          "handsOnHips": "Hands on hips",
+          "armsCrossed": "Arms crossed",
+          "tPose": "Arms out",
+          "armsUp": "Arms up",
           "walking": "Walking",
+          "running": "Running",
+          "jumping": "Jumping",
+          "kicking": "Kicking",
+          "reaching": "Reaching",
+          "bowing": "Bowing",
           "sitting": "Sitting",
-          "armsUp": "Arms up"
+          "sittingFloor": "Sitting on the floor",
+          "kneeling": "Kneeling",
+          "crouching": "Crouching",
+          "lying": "Lying down",
+          "wave": "Waving",
+          "pointing": "Pointing",
+          "thinking": "Thinking",
+          "leaning": "Leaning"
         },
         "flip": "Mirror figure",
         "remove": "Remove figure",

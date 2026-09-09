@@ -1716,12 +1716,35 @@ export default {
       "pose": {
         "tool": "Фигура",
         "add": "Добавить фигуру",
-        "presets": "Поза",
+        "presets": "Позы",
+        "group": {
+          "standing": "Стоя",
+          "motion": "Движение",
+          "seated": "Сидя и лёжа",
+          "gesture": "Жесты"
+        },
         "preset": {
           "standing": "Стоя",
+          "contrapposto": "Опора на одну ногу",
+          "handsOnHips": "Руки на поясе",
+          "armsCrossed": "Руки скрещены",
+          "tPose": "Руки в стороны",
+          "armsUp": "Руки вверх",
           "walking": "Шаг",
+          "running": "Бег",
+          "jumping": "Прыжок",
+          "kicking": "Удар ногой",
+          "reaching": "Тянется",
+          "bowing": "Поклон",
           "sitting": "Сидя",
-          "armsUp": "Руки вверх"
+          "sittingFloor": "Сидя на полу",
+          "kneeling": "На одном колене",
+          "crouching": "На корточках",
+          "lying": "Лёжа",
+          "wave": "Машет",
+          "pointing": "Указывает",
+          "thinking": "Задумался",
+          "leaning": "Опирается"
         },
         "flip": "Отразить фигуру",
         "remove": "Удалить фигуру",
