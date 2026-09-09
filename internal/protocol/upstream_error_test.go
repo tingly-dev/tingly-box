@@ -28,13 +28,13 @@ func newOpenAIError(t *testing.T, status int, body string) *openai.Error {
 
 // newAnthropicError mirrors newOpenAIError for anthropic.Error, whose
 // UnmarshalJSON expects the full {"type":"error","error":{...}} envelope.
-func newAnthropicError(t *testing.T, status int, requestID, body string) *anthropic.Error {
+func newAnthropicError(t *testing.T, status int, requestID, workspaceID, body string) *anthropic.Error {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, "https://internal-proxy.example.com/v1/messages?api_key=leak-me", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	anthErr := &anthropic.Error{Request: req, Response: &http.Response{StatusCode: status, Request: req}, StatusCode: status, RequestID: requestID}
+	anthErr := &anthropic.Error{Request: req, Response: &http.Response{StatusCode: status, Request: req}, StatusCode: status, RequestID: requestID, WorkspaceID: workspaceID}
 	if err := anthErr.UnmarshalJSON([]byte(body)); err != nil {
 		t.Fatalf("UnmarshalJSON: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestUpstreamMessage_OpenAIErrorOmitsRequestURL(t *testing.T) {
 }
 
 func TestUpstreamMessage_AnthropicErrorOmitsRequestURL(t *testing.T) {
-	anthErr := newAnthropicError(t, 529, "req_123", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`)
+	anthErr := newAnthropicError(t, 529, "req_123", "ws_456", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`)
 
 	if !strings.Contains(anthErr.Error(), "internal-proxy.example.com") {
 		t.Fatalf("test setup invalid: expected the raw SDK error to contain the request URL, got %q", anthErr.Error())
@@ -75,6 +75,30 @@ func TestUpstreamMessage_AnthropicErrorOmitsRequestURL(t *testing.T) {
 	}
 	if !strings.Contains(got, "req_123") {
 		t.Errorf("UpstreamMessage() dropped the request id, useful for vendor support: %q", got)
+	}
+	// WorkspaceID is a field anthropic.Error's own Error() prints that a
+	// hand-picked reconstruction could silently miss (and once did — see
+	// UpstreamMessage's doc comment); delegating to the SDK's real Error()
+	// on a redacted copy must carry it through automatically.
+	if !strings.Contains(got, "ws_456") {
+		t.Errorf("UpstreamMessage() dropped the workspace id: %q", got)
+	}
+}
+
+// TestUpstreamMessage_MatchesSDKErrorMinusURL pins UpstreamMessage's
+// "delegate to the real Error(), URL redacted" strategy: the result must be
+// byte-for-byte identical to the SDK's own Error() with only the URL
+// swapped out, proving nothing else is dropped or altered.
+func TestUpstreamMessage_MatchesSDKErrorMinusURL(t *testing.T) {
+	anthErr := newAnthropicError(t, 500, "req_789", "ws_012", `{"type":"error","error":{"type":"api_error","message":"Internal server error"}}`)
+
+	original := anthErr.Error()
+	wantURL := anthErr.Request.URL.String()
+	want := strings.Replace(original, `"`+wantURL+`"`, `"REDACTED"`, 1)
+
+	got := UpstreamMessage(anthErr)
+	if got != want {
+		t.Errorf("UpstreamMessage() = %q, want %q (original SDK error: %q)", got, want, original)
 	}
 }
 

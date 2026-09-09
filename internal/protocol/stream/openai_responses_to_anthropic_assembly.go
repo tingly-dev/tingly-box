@@ -161,7 +161,7 @@ func failEmptyAssembly(c *gin.Context, err error, stopReason string) error {
 	}
 	c.JSON(protocol.UpstreamStatus(err, http.StatusBadGateway), protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Upstream returned an empty response: " + err.Error(),
+			Message: "Upstream returned an empty response: " + protocol.UpstreamMessage(err),
 			Type:    "api_error",
 		},
 	})

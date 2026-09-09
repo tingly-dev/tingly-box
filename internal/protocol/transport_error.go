@@ -45,35 +45,36 @@ var transportFailureMessages = map[TransportFailureReason]string{
 // distinctly instead of collapsing into the same undifferentiated 500 as an
 // actual internal bug. ok is false when err doesn't look like a transport
 // failure at all (nil, or already an SDK-typed HTTP error).
-func ClassifyTransportError(err error) (reason TransportFailureReason, message string, ok bool) {
+//
+// Only the reason is returned — callers that need the human-readable sentence
+// look it up via transportFailureMessages, so status-only callers (e.g.
+// UpstreamStatus) don't carry a message they'd just discard.
+func ClassifyTransportError(err error) (reason TransportFailureReason, ok bool) {
 	if err == nil {
-		return "", "", false
+		return "", false
 	}
 
 	switch {
 	case errors.Is(err, context.Canceled):
-		reason = ReasonCanceled
+		return ReasonCanceled, true
 	case errors.Is(err, context.DeadlineExceeded):
-		reason = ReasonTimeout
+		return ReasonTimeout, true
 	case isDNSError(err):
-		reason = ReasonDNS
+		return ReasonDNS, true
 	case errors.Is(err, syscall.ECONNREFUSED):
-		reason = ReasonConnectionRefused
+		return ReasonConnectionRefused, true
 	case isTLSError(err):
-		reason = ReasonTLS
+		return ReasonTLS, true
 	default:
 		var netErr net.Error
 		if !errors.As(err, &netErr) {
-			return "", "", false
+			return "", false
 		}
 		if netErr.Timeout() {
-			reason = ReasonTimeout
-		} else {
-			reason = ReasonNetwork
+			return ReasonTimeout, true
 		}
+		return ReasonNetwork, true
 	}
-
-	return reason, transportFailureMessages[reason], true
 }
 
 func isDNSError(err error) bool {

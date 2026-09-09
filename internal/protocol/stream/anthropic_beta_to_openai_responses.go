@@ -48,7 +48,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 			return conv.Usage(), nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
-		sendResponsesErrorEvent(c, err.Error(), "stream_error")
+		sendResponsesErrorEvent(c, protocol.UpstreamMessage(err), "stream_error")
 		return conv.Usage(), err
 	}
 
