@@ -1689,6 +1689,8 @@ export default {
     "runFailed": "Generation failed",
     "interruptedByReload": "Interrupted by a page reload",
     "retry": "Retry",
+    "cancelRun": "Cancel",
+    "cancelled": "Cancelled",
     "removeRun": "Remove this generation",
     "submitShortcut": "⌘/Ctrl + Enter to generate",
     "closePreview": "Close image preview",

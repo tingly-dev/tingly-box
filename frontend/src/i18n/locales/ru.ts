@@ -1699,6 +1699,8 @@ export default {
     "runFailed": "Генерация не удалась",
     "interruptedByReload": "Прервано перезагрузкой страницы",
     "retry": "Повторить",
+    "cancelRun": "Отменить",
+    "cancelled": "Отменено",
     "removeRun": "Удалить эту генерацию",
     "submitShortcut": "⌘/Ctrl + Enter — сгенерировать",
     "closePreview": "Закрыть предпросмотр изображения",
