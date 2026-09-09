@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+    applyStrokeStyle,
+    renderStroke,
+    renderStrokes,
+    strokeWidthFor,
     BRUSH_SIZES,
+    ERASER_WIDTH_MULTIPLIER,
+    SKETCH_BACKGROUND,
     brushWidthFor,
     DEFAULT_SKETCH_DIMENSIONS,
     fitWithin,
@@ -91,5 +97,73 @@ describe('StrokeHistory', () => {
         history.push(1);
         history.clear();
         expect(history.canUndo).toBe(false);
+    });
+});
+
+// A 2D context stub: the assertions are about what gets asked of canvas, not
+// about pixels, so jsdom's missing canvas implementation is not in the way.
+const fakeContext = () => {
+    const calls: string[] = [];
+    const state: Record<string, unknown> = {};
+    return {
+        calls,
+        state,
+        ctx: {
+            set lineCap(v: string) { state.lineCap = v; },
+            set lineJoin(v: string) { state.lineJoin = v; },
+            set globalCompositeOperation(v: string) { state.composite = v; },
+            set strokeStyle(v: string) { state.strokeStyle = v; },
+            set lineWidth(v: number) { state.lineWidth = v; },
+            beginPath: () => { calls.push('begin'); },
+            moveTo: (x: number, y: number) => { calls.push(`move ${Math.round(x)},${Math.round(y)}`); },
+            lineTo: (x: number, y: number) => { calls.push(`line ${Math.round(x)},${Math.round(y)}`); },
+            stroke: () => { calls.push('stroke'); },
+        } as unknown as CanvasRenderingContext2D,
+    };
+};
+
+const DIMS = { width: 1024, height: 1024 };
+
+describe('strokes as data', () => {
+    it('makes the eraser wider than the pen at the same brush size', () => {
+        const pen = strokeWidthFor({ tool: 'pen', brush: 'medium' }, DIMS);
+        const eraser = strokeWidthFor({ tool: 'eraser', brush: 'medium' }, DIMS);
+        expect(eraser).toBeGreaterThan(pen);
+        expect(eraser / pen).toBeCloseTo(ERASER_WIDTH_MULTIPLIER, 6);
+    });
+
+    it('paints the eraser in the background colour, not the pen colour', () => {
+        const { ctx, state } = fakeContext();
+        applyStrokeStyle(ctx, { tool: 'eraser', color: '#dc2626', brush: 'thin' }, DIMS);
+        expect(state.strokeStyle).toBe(SKETCH_BACKGROUND);
+        applyStrokeStyle(ctx, { tool: 'pen', color: '#dc2626', brush: 'thin' }, DIMS);
+        expect(state.strokeStyle).toBe('#dc2626');
+    });
+
+    it('replays a stroke through every point in order', () => {
+        const { ctx, calls } = fakeContext();
+        renderStroke(ctx, {
+            tool: 'pen',
+            color: '#111827',
+            brush: 'medium',
+            points: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 30, y: 40 }],
+        }, DIMS);
+        expect(calls).toEqual(['begin', 'move 0,0', 'line 10,20', 'line 30,40', 'stroke']);
+    });
+
+    it('leaves a dot for a stroke with a single point', () => {
+        const { ctx, calls } = fakeContext();
+        renderStroke(ctx, { tool: 'pen', color: '#111827', brush: 'thin', points: [{ x: 5, y: 5 }] }, DIMS);
+        expect(calls).toEqual(['begin', 'move 5,5', 'line 5,5', 'stroke']);
+    });
+
+    it('ignores an empty stroke and replays a list in order', () => {
+        const { ctx, calls } = fakeContext();
+        renderStrokes(ctx, [
+            { tool: 'pen', color: '#111827', brush: 'thin', points: [] },
+            { tool: 'pen', color: '#111827', brush: 'thin', points: [{ x: 1, y: 1 }] },
+            { tool: 'eraser', color: '#111827', brush: 'thin', points: [{ x: 2, y: 2 }] },
+        ], DIMS);
+        expect(calls).toEqual(['begin', 'move 1,1', 'line 1,1', 'stroke', 'begin', 'move 2,2', 'line 2,2', 'stroke']);
     });
 });

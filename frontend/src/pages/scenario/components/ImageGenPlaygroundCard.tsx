@@ -26,10 +26,11 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import type { PoseFigure } from '@/utils/poseFigure';
+import type { Stroke } from '@/utils/sketchCanvas';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import ImageSliceDialog from './ImageSliceDialog';
-import SketchCanvasDialog, { type SketchResult } from './SketchCanvasDialog';
+import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
 // Base panel height with the reference-image row in its compact (empty)
@@ -67,15 +68,17 @@ interface ReferenceImage {
     // Where the image came from. A sketch keeps its canvas re-openable (see
     // handleOpenSketch) — "done" is a state, not a lock.
     source: 'upload' | 'sketch';
-    // A sketch also keeps the layers it was flattened from, so re-opening it
-    // gives back a posable figure rather than a picture of one. The request
-    // still sends `file`; this rides along for the editor only.
-    layers?: { strokes: string; figures: PoseFigure[] };
+    // A sketch also keeps the layers it was flattened from — strokes as the
+    // points they were drawn from, figures as joints — so re-opening it gives
+    // back an editable canvas rather than a picture of one. The request still
+    // sends `file`; this rides along for the editor only.
+    layers?: SketchLayers;
 }
 
 // A stable identity for "no figures": the canvas resets its surface when its
 // initial figures change, so this must not be a fresh array per render.
 const EMPTY_FIGURES: PoseFigure[] = [];
+const EMPTY_STROKES: Stroke[] = [];
 
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
 // a new sketch, otherwise the reference image being redrawn.
@@ -268,7 +271,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             file: result.file,
             previewUrl: result.previewUrl,
             source: 'sketch',
-            layers: { strokes: result.strokes, figures: result.figures },
+            layers: result.layers,
         };
         setReferenceImages((current) => {
             const index = sketchTarget?.index ?? null;
@@ -287,9 +290,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const sketchInitial = useMemo(() => {
         const index = sketchTarget?.index;
         const target = index !== null && index !== undefined ? referenceImages[index] : undefined;
-        if (!target) return { image: null, figures: EMPTY_FIGURES };
-        if (target.layers) return { image: target.layers.strokes, figures: target.layers.figures };
-        return { image: target.previewUrl, figures: EMPTY_FIGURES };
+        if (!target) return { image: null, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES };
+        if (target.layers) {
+            return {
+                image: target.layers.backdrop,
+                strokes: target.layers.strokes,
+                figures: target.layers.figures,
+            };
+        }
+        // No layers: a flattened sketch. It still opens, as pixels to keep
+        // drawing on, just not as editable strokes or a posable figure.
+        return { image: target.previewUrl, strokes: EMPTY_STROKES, figures: EMPTY_FIGURES };
     }, [sketchTarget, referenceImages]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
@@ -1206,6 +1217,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 open={sketchTarget !== null}
                 size={size}
                 initialImage={sketchInitial.image}
+                initialStrokes={sketchInitial.strokes}
                 initialFigures={sketchInitial.figures}
                 onClose={() => setSketchTarget(null)}
                 onSubmit={handleSketchSubmit}

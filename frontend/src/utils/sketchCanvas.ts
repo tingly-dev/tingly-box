@@ -112,3 +112,61 @@ export class StrokeHistory<T> {
         this.frames.length = 0;
     }
 }
+
+// --- strokes as data ---------------------------------------------------------
+//
+// A stroke is kept as the points the user drew, not as the pixels it left
+// behind. That is what lets a saved sketch come back editable: undo keeps
+// working across a save, the layer stored next to a reference image is a list
+// rather than a second full-size PNG, and the marks are resolution-independent
+// if the canvas is ever re-rendered at another size.
+
+export type StrokeTool = 'pen' | 'eraser';
+
+export interface Stroke {
+    tool: StrokeTool;
+    // The pen's colour. An eraser paints the background, so it carries the
+    // background colour and this field is only along for the ride.
+    color: string;
+    brush: BrushSizeKey;
+    points: CanvasPoint[];
+}
+
+export const strokeWidthFor = (stroke: Pick<Stroke, 'tool' | 'brush'>, dims: CanvasDimensions): number => {
+    const width = brushWidthFor(stroke.brush, dims);
+    return stroke.tool === 'eraser' ? width * ERASER_WIDTH_MULTIPLIER : width;
+};
+
+// Shared by the live gesture and by replay, so a stroke being drawn and the
+// same stroke redrawn after an undo cannot come out different.
+export const applyStrokeStyle = (
+    ctx: CanvasRenderingContext2D,
+    stroke: Pick<Stroke, 'tool' | 'color' | 'brush'>,
+    dims: CanvasDimensions,
+): void => {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = stroke.tool === 'eraser' ? SKETCH_BACKGROUND : stroke.color;
+    ctx.lineWidth = strokeWidthFor(stroke, dims);
+};
+
+export const renderStroke = (ctx: CanvasRenderingContext2D, stroke: Stroke, dims: CanvasDimensions): void => {
+    if (stroke.points.length === 0) return;
+    applyStrokeStyle(ctx, stroke, dims);
+    const [first, ...rest] = stroke.points;
+    ctx.beginPath();
+    ctx.moveTo(first.x, first.y);
+    // A tap with no movement still has to leave a dot.
+    if (rest.length === 0) ctx.lineTo(first.x + 0.01, first.y + 0.01);
+    for (const point of rest) ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+};
+
+export const renderStrokes = (
+    ctx: CanvasRenderingContext2D,
+    strokes: readonly Stroke[],
+    dims: CanvasDimensions,
+): void => {
+    for (const stroke of strokes) renderStroke(ctx, stroke, dims);
+};

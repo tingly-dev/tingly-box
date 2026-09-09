@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PoseFigure } from './poseFigure';
 import {
     applyPreset,
     createFigure,
@@ -238,7 +239,7 @@ describe('placeNewFigure', () => {
     });
 
     it('never drops a figure on top of one already placed', () => {
-        const figures = [];
+        const figures: PoseFigure[] = [];
         for (let i = 0; i < 6; i += 1) {
             figures.push(createFigure('standing', DIMS, placeNewFigure(figures, DIMS)));
         }
