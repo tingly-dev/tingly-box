@@ -36,31 +36,34 @@ export interface PoseFigure {
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
-// Bones are drawn as round-capped strokes; `width` is a fraction of the
-// figure's current bounding-box height, so a figure keeps its proportions at
-// any scale without storing one.
+// The hit-testing skeleton. The manikin is drawn from `figureParts` further
+// down; these segments are the coarse silhouette used to answer "did the
+// pointer land on the body?", with `width` a fraction of the figure's current
+// bounding-box height so proportions survive scaling.
 interface Bone { from: JointKey; to: JointKey; width: number }
 
 export const BONES: readonly Bone[] = [
     { from: 'neck', to: 'hip', width: 0.105 },
-    { from: 'shoulderL', to: 'shoulderR', width: 0.075 },
-    { from: 'hipL', to: 'hipR', width: 0.075 },
-    { from: 'neck', to: 'shoulderL', width: 0.06 },
-    { from: 'neck', to: 'shoulderR', width: 0.06 },
-    { from: 'hip', to: 'hipL', width: 0.06 },
-    { from: 'hip', to: 'hipR', width: 0.06 },
-    { from: 'shoulderL', to: 'elbowL', width: 0.045 },
-    { from: 'shoulderR', to: 'elbowR', width: 0.045 },
-    { from: 'elbowL', to: 'wristL', width: 0.036 },
-    { from: 'elbowR', to: 'wristR', width: 0.036 },
-    { from: 'hipL', to: 'kneeL', width: 0.062 },
-    { from: 'hipR', to: 'kneeR', width: 0.062 },
-    { from: 'kneeL', to: 'ankleL', width: 0.048 },
-    { from: 'kneeR', to: 'ankleR', width: 0.048 },
-    { from: 'neck', to: 'head', width: 0.04 },
+    { from: 'shoulderL', to: 'shoulderR', width: 0.080 },
+    { from: 'hipL', to: 'hipR', width: 0.082 },
+    { from: 'neck', to: 'shoulderL', width: 0.062 },
+    { from: 'neck', to: 'shoulderR', width: 0.062 },
+    { from: 'hip', to: 'hipL', width: 0.070 },
+    { from: 'hip', to: 'hipR', width: 0.070 },
+    { from: 'shoulderL', to: 'elbowL', width: 0.062 },
+    { from: 'shoulderR', to: 'elbowR', width: 0.062 },
+    { from: 'elbowL', to: 'wristL', width: 0.046 },
+    { from: 'elbowR', to: 'wristR', width: 0.046 },
+    { from: 'hipL', to: 'kneeL', width: 0.086 },
+    { from: 'hipR', to: 'kneeR', width: 0.086 },
+    { from: 'kneeL', to: 'ankleL', width: 0.062 },
+    { from: 'kneeR', to: 'ankleR', width: 0.062 },
+    { from: 'neck', to: 'head', width: 0.042 },
 ];
 
-export const HEAD_RADIUS_RATIO = 0.062;
+// The head's long radius: also the padding that keeps the visual box (and
+// the scale grip on its corner) clear of the silhouette.
+export const HEAD_RADIUS_RATIO = 0.07;
 
 // Presets are normalised into a unit box (x across the figure's width, y from
 // crown to ankles). They are starting points, not a pose picker standing
@@ -268,37 +271,248 @@ export const isScaleHandleHit = (figure: PoseFigure, point: CanvasPoint, radius:
     return Math.hypot(point.x - handle.x, point.y - handle.y) <= radius;
 };
 
-// --- canvas rendering --------------------------------------------------------
+// --- the wooden manikin ------------------------------------------------------
+//
+// Everything below is derived from the fifteen joints; there are no extra
+// handles. The shape follows an artist's wooden manikin rather than a flat
+// pictogram: a peg neck under an egg head, a chest and a pelvis as two
+// separate volumes joined at the waist, visible ball joints, and tapered limb
+// segments. That is not decoration — the chest takes its angle from the
+// shoulder line and the pelvis from the hip line, so dragging one shoulder
+// twists the torso and the figure reads as having a front and a back, which a
+// row of uniform capsules never does.
 
-export const FIGURE_FILL = '#9ca3af';
-export const FIGURE_SELECTED_FILL = '#8b97a8';
+export interface Ellipse { center: CanvasPoint; radiusX: number; radiusY: number; angle: number }
+export interface Segment { from: CanvasPoint; to: CanvasPoint; fromRadius: number; toRadius: number }
+export interface Ball { center: CanvasPoint; radius: number }
+
+export interface FigureParts {
+    head: Ellipse;
+    neck: Segment;
+    spine: Segment;
+    chest: Ellipse;
+    waist: Ball;
+    pelvis: Ellipse;
+    limbs: Segment[];
+    balls: Ball[];
+    hands: Ellipse[];
+    feet: Ellipse[];
+}
+
+const midpoint = (a: CanvasPoint, b: CanvasPoint): CanvasPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+const lerp = (a: CanvasPoint, b: CanvasPoint, t: number): CanvasPoint => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+});
+const angleOf = (a: CanvasPoint, b: CanvasPoint): number => Math.atan2(b.y - a.y, b.x - a.x);
+const spanOf = (a: CanvasPoint, b: CanvasPoint): number => Math.hypot(b.x - a.x, b.y - a.y);
+
+// Radii as fractions of the figure's height, so proportions survive scaling.
+const R = {
+    headLong: 0.070, headWide: 0.056,
+    neck: 0.021,
+    shoulder: 0.034, elbow: 0.026, wrist: 0.019,
+    hipBall: 0.041, knee: 0.033, ankle: 0.023,
+    upperArm: 0.031, foreArm: 0.023, thigh: 0.043, shin: 0.031,
+    handLong: 0.034, handWide: 0.024,
+    footLong: 0.033, footWide: 0.020,
+} as const;
+
+export const figureParts = (figure: PoseFigure): FigureParts => {
+    const joints = figure.joints;
+    const height = Math.max(figureBounds(figure).height, 1);
+    const u = (ratio: number) => height * ratio;
+
+    const shoulderMid = midpoint(joints.shoulderL, joints.shoulderR);
+    const hipMid = midpoint(joints.hipL, joints.hipR);
+    const shoulderSpan = spanOf(joints.shoulderL, joints.shoulderR);
+    const hipSpan = spanOf(joints.hipL, joints.hipR);
+    const torso = Math.max(spanOf(joints.neck, hipMid), 1);
+
+    // Chest and pelvis each take their own angle: the chest from the shoulder
+    // line, the pelvis from the hip line. Twist one and only that volume turns.
+    // Anchored under the shoulders, not on the neck-hip line: the chest turns
+    // with the shoulder line, so its centre has to travel with them or a big
+    // shoulder drag slides the ribcage out from under the neck.
+    const chestCenter = lerp(shoulderMid, hipMid, 0.26);
+    // The pelvis straddles the hip line and the waist ball bridges it to the
+    // chest, the way the two turned halves of a manikin meet at their pin.
+    const pelvisCenter = lerp(joints.neck, hipMid, 1.0);
+    const waistCenter = lerp(joints.neck, hipMid, 0.72);
+
+    const limbs: Segment[] = [
+        { from: joints.shoulderL, to: joints.elbowL, fromRadius: u(R.upperArm), toRadius: u(R.elbow) },
+        { from: joints.shoulderR, to: joints.elbowR, fromRadius: u(R.upperArm), toRadius: u(R.elbow) },
+        { from: joints.elbowL, to: joints.wristL, fromRadius: u(R.foreArm), toRadius: u(R.wrist) },
+        { from: joints.elbowR, to: joints.wristR, fromRadius: u(R.foreArm), toRadius: u(R.wrist) },
+        { from: joints.hipL, to: joints.kneeL, fromRadius: u(R.thigh), toRadius: u(R.knee) },
+        { from: joints.hipR, to: joints.kneeR, fromRadius: u(R.thigh), toRadius: u(R.knee) },
+        { from: joints.kneeL, to: joints.ankleL, fromRadius: u(R.shin), toRadius: u(R.ankle) },
+        { from: joints.kneeR, to: joints.ankleR, fromRadius: u(R.shin), toRadius: u(R.ankle) },
+    ];
+
+    const balls: Ball[] = [
+        { center: joints.shoulderL, radius: u(R.shoulder) },
+        { center: joints.shoulderR, radius: u(R.shoulder) },
+        { center: joints.elbowL, radius: u(R.elbow) },
+        { center: joints.elbowR, radius: u(R.elbow) },
+        { center: joints.hipL, radius: u(R.hipBall) },
+        { center: joints.hipR, radius: u(R.hipBall) },
+        { center: joints.kneeL, radius: u(R.knee) },
+        { center: joints.kneeR, radius: u(R.knee) },
+        { center: joints.ankleL, radius: u(R.ankle) },
+        { center: joints.ankleR, radius: u(R.ankle) },
+    ];
+
+    // A manikin's mitten hand continues the forearm; its block foot sits
+    // across the shin, so a bent leg carries its foot around with it.
+    const hands: Ellipse[] = ([['elbowL', 'wristL'], ['elbowR', 'wristR']] as const).map(([from, to]) => {
+        const direction = angleOf(joints[from], joints[to]);
+        return {
+            center: {
+                x: joints[to].x + Math.cos(direction) * u(R.handLong) * 0.55,
+                y: joints[to].y + Math.sin(direction) * u(R.handLong) * 0.55,
+            },
+            radiusX: u(R.handLong),
+            radiusY: u(R.handWide),
+            angle: direction,
+        };
+    });
+
+    const feet: Ellipse[] = ([['kneeL', 'ankleL'], ['kneeR', 'ankleR']] as const).map(([from, to]) => {
+        const direction = angleOf(joints[from], joints[to]);
+        return {
+            center: {
+                x: joints[to].x + Math.cos(direction) * u(R.footWide) * 0.9,
+                y: joints[to].y + Math.sin(direction) * u(R.footWide) * 0.9,
+            },
+            radiusX: u(R.footLong),
+            radiusY: u(R.footWide),
+            angle: direction + Math.PI / 2,
+        };
+    });
+
+    return {
+        // Drawn under the chest so the figure never comes apart: the chest and
+        // pelvis rotate on their own axes, and a hard shoulder drag would
+        // otherwise swing the ribcage out from under the neck and leave a gap.
+        spine: {
+            from: joints.neck,
+            to: hipMid,
+            fromRadius: u(0.045),
+            toRadius: u(0.055),
+        },
+        head: {
+            center: joints.head,
+            radiusX: u(R.headWide),
+            radiusY: u(R.headLong),
+            angle: angleOf(joints.neck, joints.head) - Math.PI / 2,
+        },
+        neck: {
+            from: joints.neck,
+            to: joints.head,
+            fromRadius: u(R.neck),
+            toRadius: u(R.neck),
+        },
+        chest: {
+            center: chestCenter,
+            // Transverse axis on the shoulder line, long axis down the torso:
+            // drag one shoulder and the chest rotates with it, while the
+            // pelvis keeps the hip line's own angle. That difference is the
+            // twist, and it is the whole reason the torso is two volumes.
+            radiusX: Math.max(shoulderSpan * 0.46, u(0.06)),
+            radiusY: torso * 0.33,
+            angle: angleOf(joints.shoulderL, joints.shoulderR),
+        },
+        waist: { center: waistCenter, radius: torso * 0.085 },
+        pelvis: {
+            center: pelvisCenter,
+            radiusX: Math.max(hipSpan * 0.60, u(0.05)),
+            radiusY: torso * 0.26,
+            angle: angleOf(joints.hipL, joints.hipR),
+        },
+        limbs,
+        balls,
+        hands,
+        feet,
+    };
+};
+
+// Three tones, no gradients: the body, the joint balls a shade darker so the
+// articulation reads, and the head a shade lighter so it does not merge into
+// the chest. Warm neutral rather than wood-brown — the pose is the message,
+// and a literal wood texture invites the model to paint a wooden doll.
+export const FIGURE_FILL = '#b0a89c';
+export const FIGURE_JOINT_FILL = '#958d81';
+export const FIGURE_HEAD_FILL = '#bcb4a8';
+export const FIGURE_SELECTED_FILL = '#a3a8b4';
+export const FIGURE_SELECTED_JOINT_FILL = '#888e9c';
+export const FIGURE_SELECTED_HEAD_FILL = '#aeb3bd';
 const HANDLE_FILL = '#2563eb';
 const HANDLE_STROKE = '#ffffff';
+
+const fillEllipse = (ctx: CanvasRenderingContext2D, ellipse: Ellipse): void => {
+    ctx.beginPath();
+    ctx.ellipse(ellipse.center.x, ellipse.center.y, Math.max(ellipse.radiusX, 0.5), Math.max(ellipse.radiusY, 0.5), ellipse.angle, 0, Math.PI * 2);
+    ctx.fill();
+};
+
+// A tapered capsule: the quad between the two end circles plus the circles
+// themselves. Close enough to a turned wooden limb, and it degrades to a
+// plain capsule when the radii match.
+const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment): void => {
+    const dx = segment.to.x - segment.from.x;
+    const dy = segment.to.y - segment.from.y;
+    const length = Math.hypot(dx, dy);
+    if (length > 1e-6) {
+        const px = -dy / length;
+        const py = dx / length;
+        ctx.beginPath();
+        ctx.moveTo(segment.from.x + px * segment.fromRadius, segment.from.y + py * segment.fromRadius);
+        ctx.lineTo(segment.to.x + px * segment.toRadius, segment.to.y + py * segment.toRadius);
+        ctx.lineTo(segment.to.x - px * segment.toRadius, segment.to.y - py * segment.toRadius);
+        ctx.lineTo(segment.from.x - px * segment.fromRadius, segment.from.y - py * segment.fromRadius);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(segment.from.x, segment.from.y, Math.max(segment.fromRadius, 0.5), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(segment.to.x, segment.to.y, Math.max(segment.toRadius, 0.5), 0, Math.PI * 2);
+    ctx.fill();
+};
 
 export const drawFigure = (
     ctx: CanvasRenderingContext2D,
     figure: PoseFigure,
     options: { selected?: boolean } = {},
 ): void => {
-    const height = figureBounds(figure).height;
+    const parts = figureParts(figure);
+    const selected = options.selected === true;
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = options.selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
-    for (const bone of BONES) {
-        const from = figure.joints[bone.from];
-        const to = figure.joints[bone.to];
-        ctx.lineWidth = Math.max(1, height * bone.width);
+
+    // Body first, joints over it, head last: the drawing order is what makes
+    // the balls read as articulation rather than as lumps under the limbs.
+    ctx.fillStyle = selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
+    fillSegment(ctx, parts.neck);
+    fillSegment(ctx, parts.spine);
+    for (const limb of parts.limbs) fillSegment(ctx, limb);
+    for (const hand of parts.hands) fillEllipse(ctx, hand);
+    for (const foot of parts.feet) fillEllipse(ctx, foot);
+    fillEllipse(ctx, parts.chest);
+    fillEllipse(ctx, parts.pelvis);
+
+    ctx.fillStyle = selected ? FIGURE_SELECTED_JOINT_FILL : FIGURE_JOINT_FILL;
+    for (const ball of [parts.waist, ...parts.balls]) {
         ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
+        ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius, 0.5), 0, Math.PI * 2);
+        ctx.fill();
     }
-    ctx.fillStyle = options.selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
-    ctx.beginPath();
-    ctx.arc(figure.joints.head.x, figure.joints.head.y, Math.max(1, height * HEAD_RADIUS_RATIO), 0, Math.PI * 2);
-    ctx.fill();
+
+    ctx.fillStyle = selected ? FIGURE_SELECTED_HEAD_FILL : FIGURE_HEAD_FILL;
+    fillEllipse(ctx, parts.head);
     ctx.restore();
 };
 

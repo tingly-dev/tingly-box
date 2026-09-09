@@ -4,6 +4,7 @@ import {
     createFigure,
     distanceToSegment,
     figureBounds,
+    figureParts,
     figureVisualBounds,
     flipFigure,
     hitTestBody,
@@ -155,5 +156,66 @@ describe('distanceToSegment', () => {
 
     it('handles a degenerate segment', () => {
         expect(distanceToSegment({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 })).toBeCloseTo(5);
+    });
+});
+
+describe('figureParts', () => {
+    const parts = () => figureParts(createFigure('standing', DIMS));
+
+    it('puts the chest above the pelvis on the torso axis', () => {
+        const figure = createFigure('standing', DIMS);
+        const { chest, pelvis } = figureParts(figure);
+        expect(chest.center.y).toBeLessThan(pelvis.center.y);
+        expect(chest.center.y).toBeGreaterThan(figure.joints.neck.y);
+        expect(pelvis.center.y).toBeGreaterThan(figure.joints.hip.y);
+        expect(chest.radiusY).toBeGreaterThan(pelvis.radiusY);
+    });
+
+    it('angles the chest from the shoulder line, so one shoulder twists the torso', () => {
+        const figure = createFigure('standing', DIMS);
+        const twisted = moveJoint(figure, 'shoulderR', {
+            x: figure.joints.shoulderR.x - 60,
+            y: figure.joints.shoulderR.y + 40,
+        });
+        expect(figureParts(twisted).chest.angle).not.toBeCloseTo(figureParts(figure).chest.angle, 2);
+        expect(figureParts(twisted).chest.radiusX).not.toBeCloseTo(figureParts(figure).chest.radiusX, 1);
+        // ...and the pelvis stays exactly where it was: that difference is the twist.
+        expect(figureParts(twisted).pelvis.angle).toBeCloseTo(figureParts(figure).pelvis.angle, 6);
+        expect(figureParts(twisted).pelvis.center).toEqual(figureParts(figure).pelvis.center);
+    });
+
+    it('tapers every limb from its proximal to its distal end', () => {
+        for (const limb of parts().limbs) {
+            expect(limb.fromRadius).toBeGreaterThan(limb.toRadius);
+        }
+    });
+
+    it('gives the joint balls a descending size down each limb', () => {
+        const [shoulder, , elbow, , hip, , knee, , ankle] = parts().balls;
+        expect(shoulder.radius).toBeGreaterThan(elbow.radius);
+        expect(hip.radius).toBeGreaterThan(knee.radius);
+        expect(knee.radius).toBeGreaterThan(ankle.radius);
+    });
+
+    it('sets the foot across the shin and the hand along the forearm', () => {
+        const figure = createFigure('standing', DIMS);
+        const { feet, hands } = figureParts(figure);
+        const shin = Math.atan2(
+            figure.joints.ankleL.y - figure.joints.kneeL.y,
+            figure.joints.ankleL.x - figure.joints.kneeL.x,
+        );
+        expect(Math.abs(feet[0].angle - shin)).toBeCloseTo(Math.PI / 2, 6);
+        const forearm = Math.atan2(
+            figure.joints.wristL.y - figure.joints.elbowL.y,
+            figure.joints.wristL.x - figure.joints.elbowL.x,
+        );
+        expect(hands[0].angle).toBeCloseTo(forearm, 6);
+    });
+
+    it('scales every part with the figure', () => {
+        const small = figureParts(createFigure('standing', DIMS));
+        const big = figureParts(scaleFigure(createFigure('standing', DIMS), 2));
+        expect(big.head.radiusY).toBeCloseTo(small.head.radiusY * 2, 4);
+        expect(big.limbs[0].fromRadius).toBeCloseTo(small.limbs[0].fromRadius * 2, 4);
     });
 });
