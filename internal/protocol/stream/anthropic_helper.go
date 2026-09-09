@@ -24,35 +24,33 @@ func SendSSErrorEventJSON(c *gin.Context, errorJSON []byte) {
 	c.SSEvent("error", string(errorJSON))
 }
 
-// BuildErrorEvent builds a standard error event map
-func BuildErrorEvent(message, errorType, code string) map[string]interface{} {
+// BuildErrorEvent builds Anthropic's standard stream error event map from
+// err, classified via protocol.UpstreamMessage (SDK errors sanitized of
+// their outbound URL, transport failures given a category). The error
+// "type" is always "stream_error" — every call site across the codebase
+// already passed that same literal, so it's hardcoded rather than threaded
+// through as a parameter nobody varies; code is the one thing that does
+// ("stream_failed", "incomplete_stream", ...). Deliberately kept in this
+// package rather than moved into protocol: {"type":"error","error":{...}}
+// is Anthropic's own wire format, not a protocol-agnostic concept —
+// protocol classifies "what went wrong" for any vendor, stream decides how
+// each vendor's wire format renders it (openai_passthrough.go's two
+// OpenAI-shaped error chunks have no such envelope and don't fit this
+// builder at all, which is the case for keeping shape decisions here).
+func BuildErrorEvent(err error, code string) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "error",
 		"error": map[string]interface{}{
-			"message": message,
-			"type":    errorType,
+			"message": protocol.UpstreamMessage(err),
+			"type":    "stream_error",
 			"code":    code,
 		},
 	}
 }
 
-// BuildErrorEventFromErr is BuildErrorEvent for a Go error instead of an
-// already-built message string: it classifies err via
-// protocol.UpstreamMessage (SDK errors sanitized of their outbound URL,
-// transport failures given a category) before building the event. Deliberately
-// kept in this package rather than moved into protocol: the {"type":"error",
-// "error":{...}} shape is Anthropic's own wire format, not a protocol-agnostic
-// concept — protocol classifies "what went wrong" for any vendor, stream
-// decides how each vendor's wire format renders it (openai_passthrough.go's
-// two OpenAI-shaped error chunks have no such envelope and don't fit this
-// builder at all, which is the case for keeping shape decisions here).
-func BuildErrorEventFromErr(err error, errorType, code string) map[string]interface{} {
-	return BuildErrorEvent(protocol.UpstreamMessage(err), errorType, code)
-}
-
 // MarshalAndSendErrorEvent marshals and sends an error event
-func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
-	errorEvent := BuildErrorEvent(message, errorType, code)
+func MarshalAndSendErrorEvent(c *gin.Context, err error, code string) {
+	errorEvent := BuildErrorEvent(err, code)
 	errorJSON, marshalErr := json.Marshal(errorEvent)
 	if marshalErr != nil {
 		logrus.WithContext(c.Request.Context()).Debugf("Failed to marshal error event: %v", marshalErr)

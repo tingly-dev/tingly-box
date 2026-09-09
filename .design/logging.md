@@ -2,14 +2,15 @@
 
 > 适用对象：tingly-box 后端贡献者。
 > 本文档分两部分:**架构**(第 1 节——日志怎么分源、怎么按 `request_id` 关联、
-> 前端怎么展示,**Status: shipped** on `base/logging-system`)和**内容**
-> (第 2 节起——一条日志/一条报错该带什么级别、什么字段、给下游看什么样的
-> 消息)。两部分原本是两篇文档,内容部分是在排查一条难读的日志时顺带做的,
-> 合并到一起以后不用来回跳。
+> 前端怎么展示)和**内容**(第 2 节起——一条日志/一条报错该带什么级别、什么
+> 字段、给下游看什么样的消息)。两部分原本是两篇文档,内容部分是在排查一条
+> 难读的日志时顺带做的,合并到一起以后不用来回跳。
 
 ---
 
 # 第一部分:架构——关联的 Model-Request 追踪
+
+**Status: shipped** on `base/logging-system`.
 
 Route 选择:**轻量 logrus 关联**——给请求 context 挂一个 `request_id`,通过既有
 的 `MultiLogger.WriteEntry` hook 把条目路由到专门的 `model_request` sink,不引入
@@ -280,16 +281,20 @@ func LevelForStatus(statusCode int) logrus.Level  // >=500 Error, >=400 Warn, �
 (`openai.Error` 等)仍然是 SDK 客户端那一层的职责,`logging_roundtripper`
 在那之前就已经把日志打完了。
 
-## 5. SSE mid-stream 错误帧：`BuildErrorEvent` / `BuildErrorEventFromErr`
+## 5. SSE mid-stream 错误帧：`BuildErrorEvent`
 
 **位置**：`internal/protocol/stream/anthropic_helper.go`
 
-`BuildErrorEvent(message, errorType, code string) map[string]interface{}` 构造
+`BuildErrorEvent(err error, code string) map[string]interface{}` 直接接收
+`err`,内部调 `protocol.UpstreamMessage(err)` 把它变成干净的消息,构造出
 Anthropic 的标准 SSE 错误帧形状 `{"type":"error","error":{"message","type",
-"code"}}`。`BuildErrorEventFromErr(err, errorType, code)` 是它的一层薄封装,
-内部调 `protocol.UpstreamMessage(err)` 把 `err` 变成干净的消息——调用点因此
-从 `BuildErrorEvent(protocol.UpstreamMessage(err), ...)` 这种"先跨包调用一次
-再传进另一个包的函数"的写法,简化成一次调用。
+"code"}}`。**`"type"` 字段固定是 `"stream_error"`,不是参数**——全代码库里
+每一个调用点传的都是这个字面量,曾经的签名 `(message, errorType, code)`
+和更早一版的 `BuildErrorEventFromErr(err, errorType, code)` 都在 `errorType`
+上传了个从没变过的常量;折叠掉以后调用点直接是 `BuildErrorEvent(err,
+"stream_failed")`,不用先跨包调 `protocol.UpstreamMessage(err)` 再传进来,
+也不用记一个额外的 `FromErr` 变体名字。`code` 是唯一真正会变的部分
+(`"stream_failed"` / `"incomplete_stream"`)。
 
 **这个 builder 特意留在 `stream` 包,没有挪进 `protocol`**:`{"type":"error",
 "error":{...}}` 是 Anthropic 自己的 wire 格式,不是协议无关的通用概念——
@@ -316,12 +321,11 @@ OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"`
 | `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:84,97` | `ClassifyUpstreamFailure` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
 | 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | `ClassifyUpstreamFailure` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
 | `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_assembly.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
-| ~7 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
+| ~9 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `anthropic_passthrough.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
 
-其中 Anthropic 形状(`{"type":"error","error":{...}}`)的 5 处 mid-stream 站点
-统一通过 `BuildErrorEventFromErr(err, errorType, code)` 构造 payload
-(第 5 节),而不是各自手写一份相同的 map 字面量,也不必各自先调
-`protocol.UpstreamMessage(err)` 再传进 `BuildErrorEvent`。**注意**：
+其中 Anthropic 形状(`{"type":"error","error":{...}}`)的站点统一通过
+`BuildErrorEvent(err, code)` / `MarshalAndSendErrorEvent(c, err, code)`
+构造 payload(第 5 节),而不是各自手写一份相同的 map 字面量。**注意**：
 `openai_passthrough.go` 里两处走的是 OpenAI 原生 chat/responses 的裸
 `{"error": {...}}` 形状(没有外层 `"type":"error"` 包裹),这两处保留手写
 字面量,只是把 message 换成 `protocol.UpstreamMessage(err)`——**给这类

@@ -12,15 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBuildErrorEventFromErr verifies it's equivalent to
-// BuildErrorEvent(protocol.UpstreamMessage(err), ...) — the composition it
-// replaces at call sites — for a plain error (protocol.UpstreamMessage's
-// unclassified passthrough case; the SDK-error/transport-error cases are
-// protocol.UpstreamMessage's own responsibility, covered in that package).
-func TestBuildErrorEventFromErr(t *testing.T) {
+// TestBuildErrorEvent verifies the event shape and that the "type" field is
+// always "stream_error" (no longer a parameter — every call site across the
+// codebase passed that same literal) while message/code come from err/code.
+// The SDK-error/transport-error classification cases are
+// protocol.UpstreamMessage's own responsibility, covered in that package.
+func TestBuildErrorEvent(t *testing.T) {
 	err := errors.New("boom")
-	got := BuildErrorEventFromErr(err, "stream_error", "stream_failed")
-	want := BuildErrorEvent(err.Error(), "stream_error", "stream_failed")
+	got := BuildErrorEvent(err, "stream_failed")
+	want := map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"message": "boom",
+			"type":    "stream_error",
+			"code":    "stream_failed",
+		},
+	}
 	assert.Equal(t, want, got)
 }
 
