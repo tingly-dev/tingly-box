@@ -1756,7 +1756,23 @@ export default {
       "tile": "第 {{number}} 格",
       "sheetAlt": "待切割的图片",
       "failed": "无法切割这张图片",
-      "loadFailed": "无法读取这张图片的像素。部分 provider 返回的远程 URL 会阻止浏览器读取图像内容。"
+      "loadFailed": "无法读取这张图片的像素。部分 provider 返回的远程 URL 会阻止浏览器读取图像内容。",
+      "cleanBackground": "清除背景",
+      "detectedChecker": "检测到棋盘格——模型用来代替透明的那张“假透明”底。",
+      "detectedGreen": "检测到画面背后是绿幕。",
+      "detectedNone": "没有检测到棋盘格或绿幕；也可以手动指定一种来抠掉。",
+      "cleanKind": "要清除的背景",
+      "cleanChecker": "棋盘格",
+      "cleanGreen": "绿幕",
+      "tolerance": "边缘容差",
+      "animate": "按顺序播放各格",
+      "animationAlt": "动画预览",
+      "play": "播放预览",
+      "pause": "暂停预览",
+      "frameCount": "{{count}} 帧 · {{fps}} fps",
+      "frameDelay": "每帧时长",
+      "downloadGif": "下载 GIF",
+      "gifFailed": "无法生成动画"
     }
   },
   "agentSetup": {

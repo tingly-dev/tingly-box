@@ -1760,7 +1760,23 @@ export default {
       "tile": "Tile {{number}}",
       "sheetAlt": "Image being sliced",
       "failed": "Could not slice this image",
-      "loadFailed": "This image could not be read for slicing. Providers that return a remote URL may block browser access to their pixels."
+      "loadFailed": "This image could not be read for slicing. Providers that return a remote URL may block browser access to their pixels.",
+      "cleanBackground": "Clear the background",
+      "detectedChecker": "Found a checkerboard — the picture a model paints instead of transparency.",
+      "detectedGreen": "Found a green screen behind the artwork.",
+      "detectedNone": "No checkerboard or green screen found; pick one to key it out anyway.",
+      "cleanKind": "Background to clear",
+      "cleanChecker": "Checkerboard",
+      "cleanGreen": "Green screen",
+      "tolerance": "Edge tolerance",
+      "animate": "Play the tiles in order",
+      "animationAlt": "Animation preview",
+      "play": "Play preview",
+      "pause": "Pause preview",
+      "frameCount": "{{count}} frames · {{fps}} fps",
+      "frameDelay": "Frame duration",
+      "downloadGif": "Download GIF",
+      "gifFailed": "Could not build the animation"
     }
   },
   "agentSetup": {

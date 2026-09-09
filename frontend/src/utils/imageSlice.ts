@@ -8,6 +8,14 @@
 // where the cuts land.
 
 import { fetchBlob } from './download';
+import {
+    analyzeBackground,
+    removeBackground,
+    type BackgroundAnalysis,
+    type BackgroundKind,
+    type RGBAImage,
+} from './imageMatte';
+import type { GifFrame } from './gif';
 
 export interface GridSpec {
     rows: number;
@@ -107,27 +115,117 @@ const canvasToBlob = (canvas: HTMLCanvasElement): Promise<Blob> => new Promise((
     }, 'image/png');
 });
 
+const context2d = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('canvas 2d context unavailable');
+    return context;
+};
+
+/** Matte settings carried alongside the cut, when background cleanup is on. */
+export interface MatteSpec {
+    kind: BackgroundKind;
+    tolerance: number;
+    colors?: [number, number, number][];
+}
+
+export interface TileRenderOptions {
+    /** Scales the tile so its longer side matches this many pixels. */
+    exportSize?: number | null;
+    matte?: MatteSpec | null;
+    /** Forces an exact output box — frames of one animation must all match. */
+    box?: { width: number; height: number } | null;
+}
+
+const outputSize = (rect: TileRect, options: TileRenderOptions): { width: number; height: number } => {
+    if (options.box) return options.box;
+    const scale = options.exportSize ? options.exportSize / Math.max(rect.width, rect.height) : 1;
+    return {
+        width: Math.max(1, Math.round(rect.width * scale)),
+        height: Math.max(1, Math.round(rect.height * scale)),
+    };
+};
+
 /**
- * Renders one tile as a PNG. `exportSize`, when set, scales the tile so its
- * longer side matches that many pixels (sticker platforms tend to want 512).
+ * Draws one tile at its output size and applies the matte, if any. The matte
+ * runs here rather than on the whole sheet because a tile's own edge is what
+ * seeds the flood fill: per-tile, the background always reaches the border.
  */
+export const renderTilePixels = (
+    image: HTMLImageElement,
+    rect: TileRect,
+    options: TileRenderOptions = {},
+): RGBAImage => {
+    const { width, height } = outputSize(rect, options);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = context2d(canvas);
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
+    const pixels = context.getImageData(0, 0, width, height);
+    if (!options.matte || options.matte.kind === 'none') return pixels;
+    return removeBackground(pixels, options.matte);
+};
+
+const pixelsToCanvas = (pixels: RGBAImage): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    canvas.width = pixels.width;
+    canvas.height = pixels.height;
+    const context = context2d(canvas);
+    // Filled through createImageData rather than `new ImageData(data, …)`:
+    // the constructor overload insists on a plain ArrayBuffer backing.
+    const target = context.createImageData(pixels.width, pixels.height);
+    target.data.set(pixels.data);
+    context.putImageData(target, 0, 0);
+    return canvas;
+};
+
+/** Renders one tile as a PNG. */
 export const renderTile = async (
     image: HTMLImageElement,
     rect: TileRect,
-    exportSize?: number | null,
-): Promise<Blob> => {
-    const scale = exportSize ? exportSize / Math.max(rect.width, rect.height) : 1;
+    options: TileRenderOptions = {},
+): Promise<Blob> => canvasToBlob(pixelsToCanvas(renderTilePixels(image, rect, options)));
+
+/** A data URL of one tile, for the in-dialog animation preview. */
+export const renderTileDataUrl = (
+    image: HTMLImageElement,
+    rect: TileRect,
+    options: TileRenderOptions = {},
+): string => pixelsToCanvas(renderTilePixels(image, rect, options)).toDataURL('image/png');
+
+/**
+ * Frames for an animation: every tile rendered into one shared box, because a
+ * GIF has a single canvas and rounding leaves tiles a pixel apart.
+ */
+export const renderAnimationFrames = (
+    image: HTMLImageElement,
+    rects: TileRect[],
+    options: TileRenderOptions = {},
+): { width: number; height: number; frames: GifFrame[] } => {
+    if (rects.length === 0) throw new Error('animation needs at least one tile');
+    const box = options.box ?? outputSize(rects[0], options);
+    const frames = rects.map((rect) => ({
+        data: renderTilePixels(image, rect, { ...options, box }).data,
+    }));
+    return { width: box.width, height: box.height, frames };
+};
+
+/** Reads the whole sheet's pixels, to decide what its background is. */
+export const analyzeSheetBackground = (image: HTMLImageElement): BackgroundAnalysis => {
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(rect.width * scale));
-    canvas.height = Math.max(1, Math.round(rect.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('canvas 2d context unavailable');
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(image, rect.x, rect.y, rect.width, rect.height, 0, 0, canvas.width, canvas.height);
-    return canvasToBlob(canvas);
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = context2d(canvas);
+    context.drawImage(image, 0, 0);
+    return analyzeBackground(context.getImageData(0, 0, canvas.width, canvas.height));
 };
 
 export const tileFileName = (stem: string, index: number, total: number): string => {
     const width = String(total).length;
     return `${stem}-${String(index + 1).padStart(width, '0')}.png`;
 };
+
+/** Frame durations offered by the animation controls, in milliseconds. */
+export const FRAME_DELAYS = [80, 120, 200, 320, 500, 800];
+export const DEFAULT_FRAME_DELAY = 200;

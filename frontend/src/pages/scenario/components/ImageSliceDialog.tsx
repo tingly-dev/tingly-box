@@ -19,17 +19,25 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, Download, GridView } from '@/components/icons';
+import { Close, Download, Gif, GridView, Pause, PlayArrow } from '@/components/icons';
 import { createZipBlob } from '@/utils/zip';
 import { downloadBlob, slugify } from '@/utils/download';
+import { encodeGif } from '@/utils/gif';
+import { DEFAULT_TOLERANCE, type BackgroundKind } from '@/utils/imageMatte';
 import {
+    analyzeSheetBackground,
     computeTileRects,
+    DEFAULT_FRAME_DELAY,
     DEFAULT_GRID,
+    FRAME_DELAYS,
     GUTTER_MAX,
     loadImage,
     MARGIN_MAX,
+    renderAnimationFrames,
     renderTile,
+    renderTileDataUrl,
     tileFileName,
+    type MatteSpec,
     type TileRect,
 } from '@/utils/imageSlice';
 
@@ -47,6 +55,13 @@ const CHECKERBOARD_IMAGE = [
     'linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
 ].join(', ');
 const EXPORT_SIZES = [512, 256];
+
+// The animation preview is a thumbnail strip played in place: small enough
+// that re-rendering every frame on each knob change stays instant.
+const PREVIEW_BOX = { width: 128, height: 128 };
+// A GIF of nine 1024px tiles is tens of megabytes; nothing about a sticker
+// animation needs that, and the cap is invisible to the user in practice.
+const GIF_MAX_SIZE = 480;
 
 type LoadState =
     | { status: 'idle' | 'loading' | 'error' }
@@ -80,6 +95,15 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     const [exportSize, setExportSize] = useState<number | null>(null);
     const [excluded, setExcluded] = useState<Set<number>>(new Set());
     const [working, setWorking] = useState(false);
+    // Background cleanup: what the sheet was found to have, whether the user
+    // wants it gone, and how far into the fringe the key reaches.
+    const [detected, setDetected] = useState<BackgroundKind>('none');
+    const [detectedColors, setDetectedColors] = useState<[number, number, number][]>([]);
+    const [cleanKind, setCleanKind] = useState<BackgroundKind>('none');
+    const [tolerance, setTolerance] = useState(DEFAULT_TOLERANCE);
+    const [frameDelay, setFrameDelay] = useState(DEFAULT_FRAME_DELAY);
+    const [playing, setPlaying] = useState(true);
+    const [frame, setFrame] = useState(0);
 
     // Start from a clean grid whenever a new image is opened — the dialog is a
     // per-image work surface, not a sticky global setting.
@@ -91,6 +115,9 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         setGutter(DEFAULT_GRID.gutter);
         setExportSize(null);
         setExcluded(new Set());
+        setTolerance(DEFAULT_TOLERANCE);
+        setFrameDelay(DEFAULT_FRAME_DELAY);
+        setPlaying(true);
     }, [open, src]);
 
     // An exclusion names a tile of one particular grid; re-cutting the image
@@ -126,6 +153,33 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         };
     }, [open, src]);
 
+    // What kind of fake background this sheet has is a property of the image,
+    // so it is read once per image rather than being a question put to the
+    // user. The checkbox below then only has to say yes or no.
+    useEffect(() => {
+        if (!image) {
+            setDetected('none');
+            setDetectedColors([]);
+            setCleanKind('none');
+            return;
+        }
+        try {
+            const analysis = analyzeSheetBackground(image);
+            setDetected(analysis.kind);
+            setDetectedColors(analysis.colors);
+            setCleanKind(analysis.kind);
+        } catch {
+            setDetected('none');
+            setDetectedColors([]);
+            setCleanKind('none');
+        }
+    }, [image]);
+
+    const matte = useMemo<MatteSpec | null>(
+        () => (cleanKind === 'none' ? null : { kind: cleanKind, tolerance, colors: detectedColors }),
+        [cleanKind, detectedColors, tolerance],
+    );
+
     const rects = useMemo(
         () => (image
             ? computeTileRects(image.naturalWidth, image.naturalHeight, { rows, cols, margin, gutter })
@@ -133,6 +187,42 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         [image, rows, cols, margin, gutter],
     );
     const selectedRects = useMemo(() => rects.filter((rect) => !excluded.has(rect.index)), [rects, excluded]);
+
+    // Frames of the animation, in reading order — the order the tiles were
+    // cut in is the order a sheet is meant to be read, so there is no separate
+    // sequencing step to get wrong.
+    const previewFrames = useMemo(() => {
+        if (!image || selectedRects.length === 0) return [];
+        try {
+            return selectedRects.map((rect) => ({
+                index: rect.index,
+                url: renderTileDataUrl(image, rect, { box: PREVIEW_BOX, matte }),
+            }));
+        } catch {
+            return [];
+        }
+    }, [image, matte, selectedRects]);
+
+    // The same rendered tiles, addressed by grid position: with cleanup on
+    // they are laid back over the sheet, because a checkbox whose effect is
+    // only visible in the exported file is a checkbox the user has to guess at.
+    const previewByIndex = useMemo(
+        () => new Map(previewFrames.map((entry) => [entry.index, entry.url])),
+        [previewFrames],
+    );
+
+    useEffect(() => {
+        setFrame(0);
+    }, [previewFrames.length]);
+
+    useEffect(() => {
+        if (!playing || previewFrames.length < 2) return;
+        const timer = window.setInterval(
+            () => setFrame((current) => (current + 1) % previewFrames.length),
+            frameDelay,
+        );
+        return () => window.clearInterval(timer);
+    }, [frameDelay, playing, previewFrames.length]);
 
     const toggleTile = useCallback((index: number) => {
         setExcluded((current) => {
@@ -153,13 +243,14 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         setWorking(true);
         try {
             const nameOf = (rect: TileRect) => tileFileName(stem, rect.index, rects.length);
+            const options = { exportSize, matte };
             if (selectedRects.length === 1) {
-                downloadBlob(await renderTile(image, selectedRects[0], exportSize), nameOf(selectedRects[0]));
+                downloadBlob(await renderTile(image, selectedRects[0], options), nameOf(selectedRects[0]));
                 return;
             }
             const entries = await Promise.all(selectedRects.map(async (rect) => ({
                 name: nameOf(rect),
-                data: new Uint8Array(await (await renderTile(image, rect, exportSize)).arrayBuffer()),
+                data: new Uint8Array(await (await renderTile(image, rect, options)).arrayBuffer()),
             })));
             downloadBlob(createZipBlob(entries), `${stem}-${selectedRects.length}.zip`);
         } catch {
@@ -170,7 +261,33 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         } finally {
             setWorking(false);
         }
-    }, [exportSize, image, rects.length, selectedRects, showNotification, stem, t]);
+    }, [exportSize, image, matte, rects.length, selectedRects, showNotification, stem, t]);
+
+    // The same tiles, in the same order, handed over as one animation instead
+    // of a folder the user would have to assemble somewhere else.
+    const handleDownloadGif = useCallback(async () => {
+        if (!image || selectedRects.length < 2) return;
+        setWorking(true);
+        try {
+            const longest = Math.max(selectedRects[0].width, selectedRects[0].height);
+            const size = Math.min(exportSize ?? longest, GIF_MAX_SIZE);
+            const { width, height, frames } = renderAnimationFrames(image, selectedRects, {
+                exportSize: size,
+                matte,
+            });
+            downloadBlob(
+                encodeGif({ width, height, frames, delayMs: frameDelay }),
+                `${stem}-${selectedRects.length}.gif`,
+            );
+        } catch {
+            showNotification(
+                t('playground.slice.gifFailed', { defaultValue: 'Could not build the animation' }),
+                'error',
+            );
+        } finally {
+            setWorking(false);
+        }
+    }, [exportSize, frameDelay, image, matte, selectedRects, showNotification, stem, t]);
 
     const naturalWidth = image?.naturalWidth ?? 1;
     const naturalHeight = image?.naturalHeight ?? 1;
@@ -246,7 +363,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     component="img"
                                     src={image.src}
                                     alt={t('playground.slice.sheetAlt', { defaultValue: 'Image being sliced' })}
-                                    sx={{ display: 'block', maxWidth: '100%', maxHeight: '60vh' }}
+                                    // Dimmed rather than hidden while cleaning:
+                                    // the margin and gap sliders still need the
+                                    // whole sheet to aim at.
+                                    sx={{ display: 'block', maxWidth: '100%', maxHeight: '60vh', opacity: matte ? 0.15 : 1 }}
                                 />
                                 {rects.map((rect) => {
                                     const isExcluded = excluded.has(rect.index);
@@ -283,7 +403,22 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 transition: 'background-color 0.12s ease-out',
                                                 '&:hover': { bgcolor: isExcluded ? 'rgba(15, 23, 42, 0.42)' : 'rgba(25, 118, 210, 0.16)' },
                                             }}
-                                        />
+                                        >
+                                            {matte && !isExcluded && previewByIndex.has(rect.index) && (
+                                                <Box
+                                                    component="img"
+                                                    src={previewByIndex.get(rect.index)}
+                                                    alt=""
+                                                    sx={{
+                                                        display: 'block',
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'fill',
+                                                        pointerEvents: 'none',
+                                                    }}
+                                                />
+                                            )}
+                                        </Box>
                                     );
                                 })}
                             </Box>
@@ -387,6 +522,75 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             </Select>
                         </FormControl>
 
+                        <Box>
+                            <FormControlLabel
+                                control={(
+                                    <Checkbox
+                                        size="small"
+                                        checked={cleanKind !== 'none'}
+                                        onChange={(event) => setCleanKind(event.target.checked
+                                            ? (detected === 'none' ? 'checker' : detected)
+                                            : 'none')}
+                                    />
+                                )}
+                                label={(
+                                    <Typography variant="body2">
+                                        {t('playground.slice.cleanBackground', { defaultValue: 'Clear the background' })}
+                                    </Typography>
+                                )}
+                            />
+                            {/* The detection is stated as a fact about this
+                                image, so the checkbox stays a yes/no and the
+                                user can tell whether it will find anything. */}
+                            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: -0.5 }}>
+                                {detected === 'checker' && t('playground.slice.detectedChecker', {
+                                    defaultValue: 'Found a checkerboard — the picture a model paints instead of transparency.',
+                                })}
+                                {detected === 'green' && t('playground.slice.detectedGreen', {
+                                    defaultValue: 'Found a green screen behind the artwork.',
+                                })}
+                                {detected === 'none' && t('playground.slice.detectedNone', {
+                                    defaultValue: 'No checkerboard or green screen found; pick one to key it out anyway.',
+                                })}
+                            </Typography>
+                            {cleanKind !== 'none' && (
+                                <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                                    <FormControl size="small" fullWidth>
+                                        <InputLabel id="slice-clean-label">
+                                            {t('playground.slice.cleanKind', { defaultValue: 'Background to clear' })}
+                                        </InputLabel>
+                                        <Select
+                                            labelId="slice-clean-label"
+                                            label={t('playground.slice.cleanKind', { defaultValue: 'Background to clear' })}
+                                            value={cleanKind}
+                                            onChange={(event) => setCleanKind(event.target.value as BackgroundKind)}
+                                        >
+                                            <MenuItem value="checker">
+                                                {t('playground.slice.cleanChecker', { defaultValue: 'Checkerboard' })}
+                                            </MenuItem>
+                                            <MenuItem value="green">
+                                                {t('playground.slice.cleanGreen', { defaultValue: 'Green screen' })}
+                                            </MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                    <Box>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                            {t('playground.slice.tolerance', { defaultValue: 'Edge tolerance' })} · {Math.round(tolerance * 100)}%
+                                        </Typography>
+                                        <Slider
+                                            size="small"
+                                            value={tolerance}
+                                            min={0}
+                                            max={1}
+                                            step={0.02}
+                                            onChange={(_, value) => setTolerance(value as number)}
+                                            aria-label={t('playground.slice.tolerance', { defaultValue: 'Edge tolerance' })}
+                                        />
+                                    </Box>
+                                </Stack>
+                            )}
+                        </Box>
+
                         <FormControlLabel
                             control={(
                                 <Checkbox
@@ -409,12 +613,90 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             )}
                         />
 
+                        {/* The animation is the same cut, read in the same
+                            order — so it lives on this surface as a preview
+                            plus one more download, not behind a mode switch. */}
+                        <Box sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                {t('playground.slice.animate', { defaultValue: 'Play the tiles in order' })}
+                            </Typography>
+                            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                                <Box
+                                    sx={{
+                                        width: 88,
+                                        height: 88,
+                                        flexShrink: 0,
+                                        borderRadius: 1,
+                                        border: 1,
+                                        borderColor: 'divider',
+                                        backgroundImage: CHECKERBOARD_IMAGE,
+                                        backgroundSize: '12px 12px',
+                                        backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {previewFrames.length > 0 && (
+                                        <Box
+                                            component="img"
+                                            src={previewFrames[Math.min(frame, previewFrames.length - 1)].url}
+                                            alt={t('playground.slice.animationAlt', { defaultValue: 'Animation preview' })}
+                                            sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                                        />
+                                    )}
+                                </Box>
+                                <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                        <IconButton
+                                            size="small"
+                                            disabled={previewFrames.length < 2}
+                                            onClick={() => setPlaying((current) => !current)}
+                                            aria-label={playing
+                                                ? t('playground.slice.pause', { defaultValue: 'Pause preview' })
+                                                : t('playground.slice.play', { defaultValue: 'Play preview' })}
+                                        >
+                                            {playing ? <Pause fontSize="small" /> : <PlayArrow fontSize="small" />}
+                                        </IconButton>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                            {t('playground.slice.frameCount', {
+                                                defaultValue: '{{count}} frames · {{fps}} fps',
+                                                count: previewFrames.length,
+                                                fps: Math.round(1000 / frameDelay),
+                                            })}
+                                        </Typography>
+                                    </Stack>
+                                    <FormControl size="small" fullWidth>
+                                        <InputLabel id="slice-delay-label">
+                                            {t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
+                                        </InputLabel>
+                                        <Select
+                                            labelId="slice-delay-label"
+                                            label={t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
+                                            value={frameDelay}
+                                            onChange={(event) => setFrameDelay(Number(event.target.value))}
+                                        >
+                                            {FRAME_DELAYS.map((value) => (
+                                                <MenuItem key={value} value={value}>{value} ms</MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Stack>
+                            </Stack>
+                        </Box>
+
                     </Stack>
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
                 <Button onClick={onClose} color="inherit">
                     {t('playground.slice.cancel', { defaultValue: 'Cancel' })}
+                </Button>
+                <Button
+                    variant="outlined"
+                    startIcon={<Gif />}
+                    disabled={!image || working || selectedRects.length < 2}
+                    onClick={() => void handleDownloadGif()}
+                >
+                    {t('playground.slice.downloadGif', { defaultValue: 'Download GIF' })}
                 </Button>
                 <Button
                     variant="contained"

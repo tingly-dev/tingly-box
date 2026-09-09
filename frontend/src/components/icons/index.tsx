@@ -33,6 +33,8 @@ import {
     IconEyeOff,
     IconTerminal2,
     IconPlayerPlay,
+    IconPlayerPause,
+    IconGif,
     IconWorld,
     IconEdit,
     IconFileDescription,
@@ -196,6 +198,8 @@ export const Launch = tablerMui(IconExternalLink);
 export const ZoomIn = tablerMui(IconZoomIn);
 export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
+export const Pause = tablerMui(IconPlayerPause);
+export const Gif = tablerMui(IconGif);
 export const Filter = tablerMui(IconFilter);
 export const FilterOff = tablerMui(IconFilterOff);
 export const Sort = tablerMui(IconArrowsSort);

@@ -1,7 +1,8 @@
 # Image Slice(生图 Playground 的切分下载)
 
 > 适用对象:tingly-box 前端贡献者。
-> 描述 Image Playground 的后置切分能力:把一张网格图切成单张 PNG 并打包下载。
+> 描述 Image Playground 的后置切分能力:把一张网格图切成单张 PNG 打包下载、
+> 按顺序连成 GIF、并清掉模型画上去的"假透明"背景。
 > 关联文档:`ux-principles.md`(判断标准)、`imageedit.md`(imagegen/edit 网关链路)。
 
 ---
@@ -82,7 +83,93 @@ local file header / central directory / EOCD,文件名带 UTF-8 flag(bit 11),
 
 ---
 
-## 4. 顺带补齐:单张下载
+## 4. 动画:同一刀口,另一件成品
+
+切出来的九格本身就是一个有顺序的序列——贴纸表的阅读顺序就是它的帧顺序。
+所以"连成 GIF"**不是第二个功能,而是同一张工作面上的第二个产物**:
+
+- **没有模式切换。** 对话框里不存在"切图模式 / 动画模式";右栏底部多了一块
+  实时播放的缩略图,底部多了一个 `Download GIF` 按钮(原则 2:能直接进入工作
+  面就不要先选模式)。行列、外边距、间隙、排除某格——全部同时作用于两个产物,
+  排除一格就是删掉一帧。
+- **没有排序控件。** 帧顺序 = 切片顺序 = 阅读顺序。再加一个拖拽排序,是把一个
+  本来没有歧义的东西变成一次必须做的决策。
+- **帧长展示的是具体值**(`200 ms` + 旁边算好的 `9 frames · 5 fps`),而不是
+  "快/中/慢"(原则 5)。
+
+### 4.1 为什么自己写 GIF 编码器(`utils/gif.ts`)
+
+和 `zip.ts` 同一个理由:我们要的是 GIF89a 里**很小的一块**——单一全局调色板、
+整帧写入、LZW、Netscape 循环块——而通用 GIF 库(gif.js 等)体积是它的一个数量级,
+还要拖 worker。实现要点:
+
+- **中位切分量化**:先把像素堆成 5-bit(32768 桶)直方图,再对桶做 median cut,
+  最后每个桶直接映射到调色板下标。量化直方图而不是量化像素,使这一步与图片
+  面积无关;逐像素只剩一次查表。
+- **透明**:GIF 没有半透明,alpha < 128 的像素落到保留的透明索引,disposal 用
+  2(restore to background),否则前一帧会从这一帧的镂空里透出来。
+- **LZW 码宽时序**:字典写满前**提前一码**加宽(`nextCode > 1 << codeSize`),
+  因为解码端永远比编码端慢一个词条——它要等到下一个码到达才能补完当前词条。
+  写成"填满时才加宽"在自测里能自洽地解回来,但真实解码器(Chrome)只会画出
+  头几行就停住。这正是 `gif.test.ts` 里**内置一个最小 GIF 解码器做回环**的
+  原因:header 正确的 GIF 完全可能是解不开的 GIF。
+
+帧尺寸统一由 `renderAnimationFrames` 保证:等分切片因四舍五入会差 1px,而一个
+GIF 只有一块画布。GIF 边长上限 480px——九格 1024 的表连成 GIF 是几十 MB,
+而贴纸动画不需要。
+
+---
+
+## 5. 清背景:模型画上来的"假透明"
+
+要求透明背景时,模型经常返回的是一张**画着透明的图**:灰白棋盘格,或者绿幕。
+两者都离用户真正要的资产只差一步,而且都是机械可逆的——所以 Playground 直接
+把这一步做掉,而不是把人推去图像编辑器。
+
+### 5.1 检测在前,勾选在后
+
+"这张图是什么背景"是**图片自身的属性**,不是该丢给用户的问题。打开对话框时
+`analyzeBackground` 读一遍边缘环:
+
+- 边缘环里 ≥60% 的像素"绿压过红蓝"→ 绿幕;
+- 边缘环由两种接近中性的色调覆盖 ≥75%,且顶行沿 x 方向**交替 ≥4 次**→ 棋盘格。
+
+交替判定是必须的:两个色调不足以说明是棋盘格,一块纯灰底也满足"中性 + 主导",
+而**纯色背景不在这个功能的范围内**——用户要的是把假透明去掉,不是把所有背景
+都抠掉(原则 12:副作用限定在用户要的那件事上)。
+
+于是复选框只需要回答是/否,检测结果作为一句陈述句放在它下面(`Found a
+checkerboard — ...`),用户一眼能判断它会不会找到东西(原则 5、6)。检测不到时
+仍然可以手动指定一种,那个 Select 的默认值就是检测结果。
+
+### 5.2 连通域,而不是全局颜色匹配
+
+清除是**从四边种子出发的洪水填充**,不是"凡是接近背景色的像素都变透明":
+全局匹配会把画面内部每一处同色(眼睛高光、阴影)打成洞,而用户看不出为什么。
+只有真正连到画框边缘的,才是背景。
+
+边缘容差给出 0..1 的软过渡:完全匹配的像素 alpha 归零,过渡带按距离线性降低
+alpha,抗锯齿边缘因此是渐变而不是台阶。绿幕额外做 despill(把保留下来的边缘
+像素的绿压到 `(r+b)/2`),否则主体边上会留一圈绿边。
+
+**已知取舍**:如果画面自身的颜色与背景色**完全相同且与背景连通**(最典型的是
+白色描边贴纸配白/灰棋盘格),它会跟着背景一起被清掉——这与任何魔棒工具的语义
+一致,不是 bug。工作面上直接画出清理后的切片(§5.3)就是为了让这件事**在下载
+之前**被看见。
+
+### 5.3 勾选的效果必须出现在主预览上
+
+只在导出文件里生效的复选框,是一个要靠猜的复选框。勾上"清除背景"后:
+
+- 原图降到 15% 不透明度作为"底稿",行列/边距/间隙滑块仍然有东西可以对齐;
+- 每个未被排除的格子,把**真正会被导出的那张切片**按格子的位置贴回去,
+  下面透出对话框自己的棋盘格底纹。
+
+也就是说,主预览显示的不是"原图加框线",而是"这次下载会得到什么"(原则 11)。
+
+---
+
+## 6. 顺带补齐:单张下载
 
 在此之前 Playground **完全没有下载入口**(只有 copy prompt / use as reference)。
 切片能打包下载而整图不能,是割裂的。lightbox 因此同时补上 `Download`,
@@ -90,16 +177,18 @@ local file header / central directory / EOCD,文件名带 UTF-8 flag(bit 11),
 
 ---
 
-## 5. 代码位置
+## 7. 代码位置
 
 | 文件 | 职责 |
 |------|------|
 | `frontend/src/utils/zip.ts` | store-only ZIP writer + CRC-32 |
+| `frontend/src/utils/gif.ts` | GIF89a writer:中位切分量化 + LZW + 循环块 |
+| `frontend/src/utils/imageMatte.ts` | 背景检测(棋盘格/绿幕)与洪水填充式清除 |
 | `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug、MIME→扩展名、`fetchBlob` |
 | `frontend/src/utils/imageSlice.ts` | 等分网格几何、图片加载、切片渲染 |
 | `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |
 | `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口(仅此,生成侧未改) |
-| `frontend/src/mocks/handlers.ts` | mock 侧识别 prompt 里的 `NxM grid`,返回真实网格图 |
+| `frontend/src/mocks/handlers.ts` | mock 侧识别 prompt 里的 `NxM grid`,以及 `checkerboard` / `green screen`,返回相应的网格图 |
 
 `utils/download.ts` 是独立模块而不是 slicing 的一部分:存盘和 slicing 无关,
 且这段 anchor 舞蹈在仓库里本已被手写过两遍(`rule-card/utils.ts` 的
@@ -110,7 +199,12 @@ local file header / central directory / EOCD,文件名带 UTF-8 flag(bit 11),
 滑块上界与 `computeTileRects` 的 clamp 用的是同一组常量——UI 不可能给出一个
 几何层会悄悄拒绝的值。
 
-几何与打包逻辑是纯函数,单测在 `zip.test.ts` / `imageSlice.test.ts` /
-`download.test.ts`;
+几何、打包、编码、抠图逻辑都是纯函数:单测在 `zip.test.ts` /
+`imageSlice.test.ts` / `download.test.ts` / `gif.test.ts` / `imageMatte.test.ts`。
+`imageMatte` 的测试直接构造 RGBA 缓冲(结构化类型,不依赖 canvas);`gif` 的测试
+自带一个最小解码器,断言"写出去的码流能被解回同样的像素"。
+
 canvas 渲染部分不进 jsdom 单测,靠 `.claude/skills/ui-preview` 的真实浏览器
-链路验证(生成 → 切分 → 解压出 8 张透明 PNG)。
+链路验证(生成棋盘格/绿幕网格图 → 切分 → 勾选清背景 → 下载 GIF → 把 GIF 塞回
+Chrome 渲染,确认背景透明、九帧循环)。GIF 必须用**真实解码器**收尾验证,
+理由见 §4.1。
