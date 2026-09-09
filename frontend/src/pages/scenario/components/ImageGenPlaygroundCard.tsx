@@ -8,10 +8,12 @@ import {
     CardContent,
     CircularProgress,
     Dialog,
+    DialogActions,
     DialogContent,
     DialogTitle,
     FormControl,
     IconButton,
+    InputAdornment,
     InputLabel,
     MenuItem,
     Select,
@@ -23,7 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, Photo, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Download, Edit, FileUpload, GridView, OpenInFull, Photo, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { parseImageSize } from '@/utils/sketchCanvas';
 import { getOpenAIClient } from '@/services/modelApi';
@@ -300,6 +302,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [selectedModel, setSelectedModel] = useState('');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
     const [prompt, setPrompt] = useState('');
+    // The prompt in a dialog-sized editor: the panel's field is one column of a
+    // fixed-height panel, which is the wrong place to read or rework a long one.
+    const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [size, setSize] = useState('1024x1024');
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState(1);
@@ -864,9 +869,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Select>
                         </FormControl>
 
+                        {/* The field takes whatever height the column has left and
+                            scrolls inside its own outline — a fixed row count in a
+                            height-constrained column is how text ends up painted
+                            past the border. */}
                         <TextField
                             multiline
-                            rows={5}
+                            minRows={3}
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
                             placeholder={hasSketchReference
@@ -877,15 +886,42 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             value={prompt}
                             onChange={(event) => setPrompt(event.target.value)}
                             disabled={noModels}
+                            slotProps={{
+                                input: {
+                                    endAdornment: (
+                                        <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5, mr: -0.5 }}>
+                                            <Tooltip title={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}>
+                                                <IconButton
+                                                    size="small"
+                                                    edge="end"
+                                                    onClick={() => setPromptEditorOpen(true)}
+                                                    aria-label={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}
+                                                >
+                                                    <OpenInFull sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </InputAdornment>
+                                    ),
+                                },
+                            }}
                             sx={{
+                                flex: { lg: 1 },
                                 minHeight: 0,
+                                display: 'flex',
                                 '& .MuiInputBase-root': {
+                                    flex: 1,
                                     minHeight: 0,
                                     alignItems: 'flex-start',
-                                    overflow: 'hidden',
                                 },
-                                '& .MuiInputBase-inputMultiline': {
-                                    maxHeight: '100%',
+                                // The textarea autosizes to its content with an inline
+                                // height; inside a fixed-height column it has to be the
+                                // flex item that shrinks and scrolls instead, or it is
+                                // painted straight past the outline.
+                                '& textarea.MuiInputBase-input': {
+                                    flex: 1,
+                                    alignSelf: 'stretch',
+                                    height: { lg: 'auto !important' },
+                                    minHeight: 0,
                                     boxSizing: 'border-box',
                                     overflowY: 'auto !important',
                                     overscrollBehavior: 'contain',
@@ -1573,6 +1609,43 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onClose={() => setSliceTarget(null)}
                 showNotification={showNotification}
             />
+            <Dialog
+                open={promptEditorOpen}
+                onClose={() => setPromptEditorOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
+                        {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
+                    </Typography>
+                    <IconButton
+                        onClick={() => setPromptEditorOpen(false)}
+                        aria-label={t('playground.promptEditorDone', { defaultValue: 'Done' })}
+                    >
+                        <Close />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                    {/* Same state as the panel's field — this is a bigger window
+                        onto the prompt, not a second prompt. */}
+                    <TextField
+                        autoFocus
+                        multiline
+                        minRows={12}
+                        maxRows={28}
+                        fullWidth
+                        value={prompt}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        placeholder={t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2 }}>
+                    <Button variant="contained" onClick={() => setPromptEditorOpen(false)}>
+                        {t('playground.promptEditorDone', { defaultValue: 'Done' })}
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <SketchCanvasDialog
                 open={sketchTarget !== null}
                 size={size}
