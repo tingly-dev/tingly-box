@@ -4,8 +4,8 @@
 //
 // The cut is a plain even grid — deliberately. Models do not place a sheet's
 // cells on an exact lattice, so instead of guessing at content boundaries the
-// user gets two honest knobs (outer margin, gutter) and a live overlay showing
-// where the cuts land.
+// user drags the frame the grid divides and nudges one gutter, with a live
+// overlay showing where every cut lands.
 
 import { fetchBlob } from './download';
 import {
@@ -17,11 +17,24 @@ import {
 } from './imageMatte';
 import type { GifFrame } from './gif';
 
+/**
+ * The part of the image the grid is cut out of, in fractions of the image's
+ * own width/height. Models rarely fill the canvas with the sheet — the useful
+ * region is often off-centre — so the frame is a free rectangle rather than a
+ * symmetric margin.
+ */
+export interface CropRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 export interface GridSpec {
     rows: number;
     cols: number;
-    /** Fraction of the image's shorter side trimmed off each outer edge. */
-    margin: number;
+    /** The region being cut up. Defaults to the whole image. */
+    crop: CropRect;
     /** Fraction of a cell removed as spacing between neighbouring cells. */
     gutter: number;
 }
@@ -36,29 +49,54 @@ export interface TileRect {
     height: number;
 }
 
-// 3x3 is the shape a grid image almost always comes back as. The two maxima
-// are the single source of truth for both the slider bounds and the clamp
-// below, so the UI can never offer a value the geometry would quietly reject.
-export const DEFAULT_GRID: GridSpec = { rows: 3, cols: 3, margin: 0, gutter: 0 };
-export const MARGIN_MAX = 0.2;
+// 3x3 is the shape a grid image almost always comes back as, and the whole
+// image is the frame to start from. The gutter maximum is the single source of
+// truth for both the slider bound and the clamp below, so the UI can never
+// offer a value the geometry would quietly reject.
+export const FULL_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
+export const DEFAULT_GRID: GridSpec = { rows: 3, cols: 3, crop: FULL_CROP, gutter: 0 };
 export const GUTTER_MAX = 0.4;
+/** No edge of the frame may pass another; this is how close they may come. */
+export const CROP_MIN = 0.05;
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
 
 /**
+ * Clamps a frame into the image and keeps it at least `CROP_MIN` on each axis,
+ * so a drag that overshoots (or a stale value) can never produce a grid with
+ * zero-sized cells.
+ */
+export const normalizeCrop = (crop: CropRect | undefined): CropRect => {
+    if (!crop) return FULL_CROP;
+    const x = clamp(crop.x, 0, 1 - CROP_MIN);
+    const y = clamp(crop.y, 0, 1 - CROP_MIN);
+    return {
+        x,
+        y,
+        width: clamp(crop.width, CROP_MIN, 1 - x),
+        height: clamp(crop.height, CROP_MIN, 1 - y),
+    };
+};
+
+export const isFullCrop = (crop: CropRect): boolean => (
+    crop.x <= 0 && crop.y <= 0 && crop.width >= 1 && crop.height >= 1
+);
+
+/**
  * Cut rectangles for an evenly divided grid, in source-image pixels.
  *
- * Margin is measured against the shorter side so a trim stays visually
- * isotropic on non-square sheets; the gutter is taken out of each cell
- * symmetrically (half per side), which keeps every tile the same size.
+ * The grid divides the frame, not the image: everything outside it is left
+ * out entirely. The gutter is taken out of each cell symmetrically (half per
+ * side), which keeps every tile the same size.
  */
 export const computeTileRects = (width: number, height: number, spec: GridSpec): TileRect[] => {
     const rows = Math.max(1, Math.floor(spec.rows));
     const cols = Math.max(1, Math.floor(spec.cols));
-    const base = Math.min(width, height);
-    const margin = clamp(spec.margin, 0, MARGIN_MAX) * base;
-    const innerWidth = Math.max(1, width - margin * 2);
-    const innerHeight = Math.max(1, height - margin * 2);
+    const crop = normalizeCrop(spec.crop);
+    const originX = crop.x * width;
+    const originY = crop.y * height;
+    const innerWidth = Math.max(1, crop.width * width);
+    const innerHeight = Math.max(1, crop.height * height);
     const cellWidth = innerWidth / cols;
     const cellHeight = innerHeight / rows;
     const gutter = clamp(spec.gutter, 0, GUTTER_MAX);
@@ -68,10 +106,10 @@ export const computeTileRects = (width: number, height: number, spec: GridSpec):
     const rects: TileRect[] = [];
     for (let row = 0; row < rows; row += 1) {
         for (let col = 0; col < cols; col += 1) {
-            const x = Math.round(margin + col * cellWidth + insetX);
-            const y = Math.round(margin + row * cellHeight + insetY);
-            const right = Math.round(margin + (col + 1) * cellWidth - insetX);
-            const bottom = Math.round(margin + (row + 1) * cellHeight - insetY);
+            const x = Math.round(originX + col * cellWidth + insetX);
+            const y = Math.round(originY + row * cellHeight + insetY);
+            const right = Math.round(originX + (col + 1) * cellWidth - insetX);
+            const bottom = Math.round(originY + (row + 1) * cellHeight - insetY);
             rects.push({
                 index: row * cols + col,
                 row,

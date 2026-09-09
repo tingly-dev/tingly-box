@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
     Button,
@@ -30,13 +30,16 @@ import {
     DEFAULT_FRAME_DELAY,
     DEFAULT_GRID,
     FRAME_DELAYS,
+    FULL_CROP,
     GUTTER_MAX,
+    isFullCrop,
     loadImage,
-    MARGIN_MAX,
+    normalizeCrop,
     renderAnimationFrames,
     renderTile,
     renderTileDataUrl,
     tileFileName,
+    type CropRect,
     type MatteSpec,
     type TileRect,
 } from '@/utils/imageSlice';
@@ -62,6 +65,99 @@ const PREVIEW_BOX = { width: 128, height: 128 };
 // A GIF of nine 1024px tiles is tens of megabytes; nothing about a sticker
 // animation needs that, and the cap is invisible to the user in practice.
 const GIF_MAX_SIZE = 480;
+
+// Below this, a pointer gesture was a click on a tile rather than a drag that
+// redraws the frame — the two share the same surface on purpose.
+const DRAG_THRESHOLD = 0.01;
+// How far one arrow key nudges a frame corner, as a fraction of the image.
+const NUDGE = 0.01;
+const NUDGE_COARSE = 0.05;
+
+// Which part of the frame a pointer grabbed. 'new' redraws it from scratch.
+type DragMode = 'new' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'se' | 'sw';
+
+// Thickness of the invisible strip along each frame edge that drags it.
+const EDGE_GRAB = 12;
+const percent = (value: number): string => `${value * 100}%`;
+
+// The eight grab targets of the frame: four edges (invisible strips, sized to
+// be hittable) and four corners (visible squares, which are also the keyboard
+// entry point). Positions are computed from the frame so there is one source
+// of truth for where an edge is.
+interface FrameHandle {
+    mode: Exclude<DragMode, 'new'>;
+    corner: boolean;
+    cursor: string;
+    labelKey: string;
+    label: string;
+    position: (crop: { x: number; y: number; width: number; height: number }) => React.CSSProperties;
+}
+
+const FRAME_HANDLES: FrameHandle[] = [
+    {
+        mode: 'n', corner: false, cursor: 'ns-resize',
+        labelKey: 'playground.slice.frameTop', label: 'Drag the top edge of the frame',
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: percent(crop.width), height: EDGE_GRAB, transform: 'translateY(-50%)' }),
+    },
+    {
+        mode: 's', corner: false, cursor: 'ns-resize',
+        labelKey: 'playground.slice.frameBottom', label: 'Drag the bottom edge of the frame',
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), width: percent(crop.width), height: EDGE_GRAB, transform: 'translateY(-50%)' }),
+    },
+    {
+        mode: 'w', corner: false, cursor: 'ew-resize',
+        labelKey: 'playground.slice.frameLeft', label: 'Drag the left edge of the frame',
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height), transform: 'translateX(-50%)' }),
+    },
+    {
+        mode: 'e', corner: false, cursor: 'ew-resize',
+        labelKey: 'playground.slice.frameRight', label: 'Drag the right edge of the frame',
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), width: EDGE_GRAB, height: percent(crop.height), transform: 'translateX(-50%)' }),
+    },
+    {
+        mode: 'nw', corner: true, cursor: 'nwse-resize',
+        labelKey: 'playground.slice.frameTopLeft', label: 'Top-left corner of the frame',
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y), transform: 'translate(-50%, -50%)' }),
+    },
+    {
+        mode: 'ne', corner: true, cursor: 'nesw-resize',
+        labelKey: 'playground.slice.frameTopRight', label: 'Top-right corner of the frame',
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y), transform: 'translate(-50%, -50%)' }),
+    },
+    {
+        mode: 'sw', corner: true, cursor: 'nesw-resize',
+        labelKey: 'playground.slice.frameBottomLeft', label: 'Bottom-left corner of the frame',
+        position: (crop) => ({ left: percent(crop.x), top: percent(crop.y + crop.height), transform: 'translate(-50%, -50%)' }),
+    },
+    {
+        mode: 'se', corner: true, cursor: 'nwse-resize',
+        labelKey: 'playground.slice.frameBottomRight', label: 'Bottom-right corner of the frame',
+        position: (crop) => ({ left: percent(crop.x + crop.width), top: percent(crop.y + crop.height), transform: 'translate(-50%, -50%)' }),
+    },
+];
+
+const clampFraction = (value: number): number => Math.min(1, Math.max(0, value));
+
+// Applies one drag to the frame the gesture started from. Edges move
+// independently; corners move two at once; 'new' spans start to current.
+const applyDrag = (mode: DragMode, origin: CropRect, startX: number, startY: number, x: number, y: number): CropRect => {
+    if (mode === 'new') {
+        return normalizeCrop({
+            x: Math.min(startX, x),
+            y: Math.min(startY, y),
+            width: Math.abs(x - startX),
+            height: Math.abs(y - startY),
+        });
+    }
+    let { x: left, y: top, width, height } = origin;
+    const right = left + width;
+    const bottom = top + height;
+    if (mode.includes('w')) { left = x; width = right - x; }
+    if (mode.includes('e')) { width = x - left; }
+    if (mode.includes('n')) { top = y; height = bottom - y; }
+    if (mode.includes('s')) { height = y - top; }
+    return normalizeCrop({ x: left, y: top, width, height });
+};
 
 type LoadState =
     | { status: 'idle' | 'loading' | 'error' }
@@ -90,7 +186,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     const image = load.status === 'ready' ? load.image : null;
     const [rows, setRows] = useState(DEFAULT_GRID.rows);
     const [cols, setCols] = useState(DEFAULT_GRID.cols);
-    const [margin, setMargin] = useState(DEFAULT_GRID.margin);
+    const [crop, setCrop] = useState<CropRect>(DEFAULT_GRID.crop);
     const [gutter, setGutter] = useState(DEFAULT_GRID.gutter);
     const [exportSize, setExportSize] = useState<number | null>(null);
     const [excluded, setExcluded] = useState<Set<number>>(new Set());
@@ -111,7 +207,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         if (!open) return;
         setRows(DEFAULT_GRID.rows);
         setCols(DEFAULT_GRID.cols);
-        setMargin(DEFAULT_GRID.margin);
+        setCrop(DEFAULT_GRID.crop);
         setGutter(DEFAULT_GRID.gutter);
         setExportSize(null);
         setExcluded(new Set());
@@ -182,11 +278,76 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
 
     const rects = useMemo(
         () => (image
-            ? computeTileRects(image.naturalWidth, image.naturalHeight, { rows, cols, margin, gutter })
+            ? computeTileRects(image.naturalWidth, image.naturalHeight, { rows, cols, crop, gutter })
             : []),
-        [image, rows, cols, margin, gutter],
+        [image, rows, cols, crop, gutter],
     );
     const selectedRects = useMemo(() => rects.filter((rect) => !excluded.has(rect.index)), [rects, excluded]);
+
+    // The frame is dragged on the image itself rather than dialled in on a
+    // slider: what "the useful part of this sheet" means is something the user
+    // can only point at, and a symmetric margin cannot express an off-centre
+    // region at all.
+    const surfaceRef = useRef<HTMLDivElement | null>(null);
+    const dragRef = useRef<{ mode: DragMode; startX: number; startY: number; origin: CropRect; moved: boolean } | null>(null);
+    // A drag that redrew the frame must not also toggle the tile it ended on.
+    const suppressClickRef = useRef(false);
+
+    const beginDrag = useCallback((mode: DragMode, event: React.PointerEvent) => {
+        const box = surfaceRef.current?.getBoundingClientRect();
+        if (!box || box.width === 0 || box.height === 0) return;
+        event.preventDefault();
+        const toFraction = (clientX: number, clientY: number) => ({
+            x: clampFraction((clientX - box.left) / box.width),
+            y: clampFraction((clientY - box.top) / box.height),
+        });
+        const start = toFraction(event.clientX, event.clientY);
+        dragRef.current = { mode, startX: start.x, startY: start.y, origin: crop, moved: false };
+
+        const handleMove = (moveEvent: PointerEvent) => {
+            const drag = dragRef.current;
+            if (!drag) return;
+            const point = toFraction(moveEvent.clientX, moveEvent.clientY);
+            if (!drag.moved
+                && Math.abs(point.x - drag.startX) < DRAG_THRESHOLD
+                && Math.abs(point.y - drag.startY) < DRAG_THRESHOLD) return;
+            drag.moved = true;
+            setCrop(applyDrag(drag.mode, drag.origin, drag.startX, drag.startY, point.x, point.y));
+        };
+        const handleUp = () => {
+            window.removeEventListener('pointermove', handleMove);
+            window.removeEventListener('pointerup', handleUp);
+            suppressClickRef.current = dragRef.current?.moved ?? false;
+            dragRef.current = null;
+        };
+        window.addEventListener('pointermove', handleMove);
+        window.addEventListener('pointerup', handleUp);
+    }, [crop]);
+
+    // Keyboard equivalent of dragging a corner, so the frame is reachable
+    // without a pointer (the slider it replaced was).
+    const nudgeCorner = useCallback((mode: DragMode, event: React.KeyboardEvent) => {
+        const step = event.shiftKey ? NUDGE_COARSE : NUDGE;
+        const delta = { x: 0, y: 0 };
+        if (event.key === 'ArrowLeft') delta.x = -step;
+        else if (event.key === 'ArrowRight') delta.x = step;
+        else if (event.key === 'ArrowUp') delta.y = -step;
+        else if (event.key === 'ArrowDown') delta.y = step;
+        else return;
+        event.preventDefault();
+        setCrop((current) => {
+            const cornerX = mode.includes('w') ? current.x : current.x + current.width;
+            const cornerY = mode.includes('n') ? current.y : current.y + current.height;
+            return applyDrag(
+                mode,
+                current,
+                cornerX,
+                cornerY,
+                clampFraction(cornerX + delta.x),
+                clampFraction(cornerY + delta.y),
+            );
+        });
+    }, []);
 
     // Frames of the animation, in reading order — the order the tiles were
     // cut in is the order a sheet is meant to be read, so there is no separate
@@ -225,6 +386,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     }, [frameDelay, playing, previewFrames.length]);
 
     const toggleTile = useCallback((index: number) => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+        }
         setExcluded((current) => {
             const next = new Set(current);
             if (next.has(index)) next.delete(index);
@@ -345,10 +510,15 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                         )}
                         {image && (
                             <Box
+                                ref={surfaceRef}
+                                onPointerDown={(event) => beginDrag('new', event)}
                                 sx={{
                                     position: 'relative',
                                     display: 'inline-block',
                                     maxWidth: '100%',
+                                    overflow: 'hidden',
+                                    touchAction: 'none',
+                                    cursor: 'crosshair',
                                     // Scoped to exactly the image's own box: a
                                     // checkerboard reads as "this part is
                                     // transparent", so any of it visible outside
@@ -368,6 +538,57 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     // whole sheet to aim at.
                                     sx={{ display: 'block', maxWidth: '100%', maxHeight: '60vh', opacity: matte ? 0.15 : 1 }}
                                 />
+                                {/* Everything outside the frame is dimmed by the
+                                    frame's own huge spread shadow — one element
+                                    instead of four filler rectangles to keep in
+                                    sync. */}
+                                <Box
+                                    style={{
+                                        left: `${crop.x * 100}%`,
+                                        top: `${crop.y * 100}%`,
+                                        width: `${crop.width * 100}%`,
+                                        height: `${crop.height * 100}%`,
+                                    }}
+                                    sx={{
+                                        position: 'absolute',
+                                        boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55)',
+                                        border: '1px dashed rgba(255, 255, 255, 0.9)',
+                                        boxSizing: 'border-box',
+                                        pointerEvents: 'none',
+                                    }}
+                                />
+                                {FRAME_HANDLES.map((handle) => (
+                                    <Box
+                                        key={handle.mode}
+                                        role="button"
+                                        tabIndex={handle.corner ? 0 : -1}
+                                        aria-label={t(handle.labelKey, { defaultValue: handle.label })}
+                                        onPointerDown={(event) => {
+                                            event.stopPropagation();
+                                            beginDrag(handle.mode, event);
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (handle.corner) nudgeCorner(handle.mode, event);
+                                        }}
+                                        style={handle.position(crop)}
+                                        sx={{
+                                            position: 'absolute',
+                                            boxSizing: 'border-box',
+                                            cursor: handle.cursor,
+                                            ...(handle.corner
+                                                ? {
+                                                    width: 14,
+                                                    height: 14,
+                                                    bgcolor: 'common.white',
+                                                    border: '2px solid',
+                                                    borderColor: 'primary.main',
+                                                    borderRadius: '3px',
+                                                    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.light' },
+                                                }
+                                                : { bgcolor: 'transparent' }),
+                                        }}
+                                    />
+                                ))}
                                 {rects.map((rect) => {
                                     const isExcluded = excluded.has(rect.index);
                                     return (
@@ -428,7 +649,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                     <Stack spacing={2}>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                             {t('playground.slice.hint', {
-                                defaultValue: 'Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Adjust the margin and gap until the outlines sit on the artwork, then click a tile to leave it out.',
+                                defaultValue: 'Cuts an evenly divided grid — a sticker sheet, a contact sheet, a spritesheet. Drag on the image to frame the part that holds the grid, adjust the gap until the outlines sit on the artwork, then click a tile to leave it out.',
                             })}
                         </Typography>
 
@@ -465,19 +686,32 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             </FormControl>
                         </Stack>
 
+                        {/* The frame is dragged on the image; this side only
+                            reports where it landed, in the pixels of the source
+                            image, and offers the way back to the whole sheet. */}
                         <Box>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {t('playground.slice.margin', { defaultValue: 'Outer margin' })} · {Math.round(margin * 100)}%
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    {t('playground.slice.frame', { defaultValue: 'Frame' })}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    disabled={isFullCrop(crop)}
+                                    onClick={() => setCrop(FULL_CROP)}
+                                    sx={{ minWidth: 0, px: 0.75, py: 0, fontSize: '0.72rem' }}
+                                >
+                                    {t('playground.slice.frameReset', { defaultValue: 'Whole image' })}
+                                </Button>
+                            </Stack>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                                {t('playground.slice.frameValue', {
+                                    defaultValue: '{{width}}×{{height}} px at {{x}},{{y}}',
+                                    width: Math.round(crop.width * naturalWidth),
+                                    height: Math.round(crop.height * naturalHeight),
+                                    x: Math.round(crop.x * naturalWidth),
+                                    y: Math.round(crop.y * naturalHeight),
+                                })}
                             </Typography>
-                            <Slider
-                                size="small"
-                                value={margin}
-                                min={0}
-                                max={MARGIN_MAX}
-                                step={0.005}
-                                onChange={(_, value) => setMargin(value as number)}
-                                aria-label={t('playground.slice.margin', { defaultValue: 'Outer margin' })}
-                            />
                         </Box>
                         <Box>
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
