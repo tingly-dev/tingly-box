@@ -1702,7 +1702,44 @@ export default {
       "use": "Use sketch",
       "update": "Update sketch",
       "failed": "Could not export the sketch",
-      "promptPlaceholder": "Describe what this sketch should become…"
+      "promptPlaceholder": "Describe what this sketch should become…",
+      "pose": {
+        "tool": "Figure",
+        "add": "Add figure",
+        "presets": "Poses",
+        "group": {
+          "standing": "Standing",
+          "motion": "Motion",
+          "seated": "Seated",
+          "gesture": "Gesture"
+        },
+        "preset": {
+          "standing": "Standing",
+          "contrapposto": "Weight on one leg",
+          "handsOnHips": "Hands on hips",
+          "armsCrossed": "Arms crossed",
+          "tPose": "Arms out",
+          "armsUp": "Arms up",
+          "walking": "Walking",
+          "running": "Running",
+          "jumping": "Jumping",
+          "kicking": "Kicking",
+          "reaching": "Reaching",
+          "bowing": "Bowing",
+          "sitting": "Sitting",
+          "sittingFloor": "Sitting on the floor",
+          "kneeling": "Kneeling",
+          "crouching": "Crouching",
+          "lying": "Lying down",
+          "wave": "Waving",
+          "pointing": "Pointing",
+          "thinking": "Thinking",
+          "leaning": "Leaning"
+        },
+        "flip": "Mirror figure",
+        "remove": "Remove figure",
+        "hint": "Drag a joint and the limb below it follows; hold Alt to move one joint alone. Drag the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is."
+      }
     },
     "slice": {
       "action": "Split into tiles",

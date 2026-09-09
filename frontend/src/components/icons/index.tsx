@@ -115,6 +115,8 @@ import {
     IconFoldUp,
     IconFilter,
     IconFilterOff,
+    IconAccessible,
+    IconFlipHorizontal,
     IconUser,
     IconUsers,
     IconShield,
@@ -291,11 +293,13 @@ export const CheckCircleRounded = tablerMui(IconCircleCheck);
 export const Rule = tablerMui(IconChecklist);
 export const Remove = tablerMui(IconMinus);
 export const HorizontalRule = tablerMui(IconMinus);
+export const Flip = tablerMui(IconFlipHorizontal);
 export const ViewList = tablerMui(IconList);
 export const NearMeOutlined = tablerMui(IconNavigation);
 
 // --- People / identity -------------------------------------------------------
 export const Person = tablerMui(IconUser);
+export const Accessibility = tablerMui(IconAccessible);
 export const AccountCircle = tablerMui(IconUser);
 export const Users = tablerMui(IconUsers);
 

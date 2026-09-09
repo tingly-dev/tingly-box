@@ -89,7 +89,7 @@ export const SKETCH_COLORS = ['#111827', '#dc2626', '#2563eb', '#16a34a', '#f59e
 export class StrokeHistory<T> {
     private readonly frames: T[] = [];
 
-    constructor(private readonly capacity = 30) {}
+    constructor(readonly capacity = 30) {}
 
     get length(): number {
         return this.frames.length;
@@ -112,3 +112,102 @@ export class StrokeHistory<T> {
         this.frames.length = 0;
     }
 }
+
+// --- strokes as data ---------------------------------------------------------
+//
+// A stroke is kept as the points the user drew, not as the pixels it left
+// behind. That is what lets a saved sketch come back editable: undo keeps
+// working across a save, the layer stored next to a reference image is a list
+// rather than a second full-size PNG, and the marks are resolution-independent
+// if the canvas is ever re-rendered at another size.
+
+export type StrokeTool = 'pen' | 'eraser';
+
+export interface Stroke {
+    tool: StrokeTool;
+    // The pen's colour. An eraser paints the background, so it carries the
+    // background colour and this field is only along for the ride.
+    color: string;
+    brush: BrushSizeKey;
+    points: CanvasPoint[];
+}
+
+export const strokeWidthFor = (stroke: Pick<Stroke, 'tool' | 'brush'>, dims: CanvasDimensions): number => {
+    const width = brushWidthFor(stroke.brush, dims);
+    return stroke.tool === 'eraser' ? width * ERASER_WIDTH_MULTIPLIER : width;
+};
+
+// Shared by the live gesture and by replay, so a stroke being drawn and the
+// same stroke redrawn after an undo cannot come out different.
+export const applyStrokeStyle = (
+    ctx: CanvasRenderingContext2D,
+    stroke: Pick<Stroke, 'tool' | 'color' | 'brush'>,
+    dims: CanvasDimensions,
+): void => {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = stroke.tool === 'eraser' ? SKETCH_BACKGROUND : stroke.color;
+    ctx.lineWidth = strokeWidthFor(stroke, dims);
+};
+
+export const renderStroke = (ctx: CanvasRenderingContext2D, stroke: Stroke, dims: CanvasDimensions): void => {
+    const { points } = stroke;
+    if (points.length === 0) return;
+    applyStrokeStyle(ctx, stroke, dims);
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    // A tap with no movement still has to leave a dot.
+    if (points.length === 1) ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+    for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+};
+
+export const renderStrokes = (
+    ctx: CanvasRenderingContext2D,
+    strokes: readonly Stroke[],
+    dims: CanvasDimensions,
+): void => {
+    for (const stroke of strokes) renderStroke(ctx, stroke, dims);
+};
+
+// --- moving a sketch between canvas sizes -----------------------------------
+//
+// Layers are absolute canvas coordinates, so re-opening a saved sketch after
+// the Playground's Size changed would otherwise drop half the drawing off a
+// smaller canvas, or strand it in the corner of a bigger one. The mapping is
+// uniform (never squashed to fit a new aspect: a squashed figure would stop
+// having consistent bone lengths) and centres what it scales.
+
+export interface CanvasTransform { scale: number; dx: number; dy: number }
+
+export const IDENTITY_TRANSFORM: CanvasTransform = { scale: 1, dx: 0, dy: 0 };
+
+// A value predicate, not `t === IDENTITY_TRANSFORM`: a caller should never
+// have to know whether it was handed the shared constant or an equal one.
+export const isIdentityTransform = (transform: CanvasTransform): boolean =>
+    transform.scale === 1 && transform.dx === 0 && transform.dy === 0;
+
+export const fitTransform = (from: CanvasDimensions, to: CanvasDimensions): CanvasTransform => {
+    if (from.width <= 0 || from.height <= 0) return IDENTITY_TRANSFORM;
+    if (from.width === to.width && from.height === to.height) return IDENTITY_TRANSFORM;
+    const scale = Math.min(to.width / from.width, to.height / from.height);
+    return {
+        scale,
+        dx: (to.width - from.width * scale) / 2,
+        dy: (to.height - from.height * scale) / 2,
+    };
+};
+
+export const applyTransform = (point: CanvasPoint, transform: CanvasTransform): CanvasPoint => ({
+    x: point.x * transform.scale + transform.dx,
+    y: point.y * transform.scale + transform.dy,
+});
+
+export const transformStrokes = (strokes: readonly Stroke[], transform: CanvasTransform): Stroke[] => {
+    if (isIdentityTransform(transform)) return strokes as Stroke[];
+    return strokes.map((stroke) => ({
+        ...stroke,
+        points: stroke.points.map((point) => applyTransform(point, transform)),
+    }));
+};

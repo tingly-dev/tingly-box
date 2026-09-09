@@ -1698,7 +1698,44 @@ export default {
       "use": "使用草图",
       "update": "更新草图",
       "failed": "无法导出草图",
-      "promptPlaceholder": "描述这张草图应该变成什么…"
+      "promptPlaceholder": "描述这张草图应该变成什么…",
+      "pose": {
+        "tool": "人形",
+        "add": "添加人形",
+        "presets": "姿势",
+        "group": {
+          "standing": "站姿",
+          "motion": "动作",
+          "seated": "坐卧",
+          "gesture": "手势"
+        },
+        "preset": {
+          "standing": "站立",
+          "contrapposto": "重心在一条腿",
+          "handsOnHips": "叉腰",
+          "armsCrossed": "抱臂",
+          "tPose": "展臂",
+          "armsUp": "举手",
+          "walking": "行走",
+          "running": "奔跑",
+          "jumping": "跳跃",
+          "kicking": "踢腿",
+          "reaching": "伸手够",
+          "bowing": "鞠躬",
+          "sitting": "坐",
+          "sittingFloor": "坐地上",
+          "kneeling": "单膝跪",
+          "crouching": "蹲",
+          "lying": "躺",
+          "wave": "挥手",
+          "pointing": "指",
+          "thinking": "思考",
+          "leaning": "倚靠"
+        },
+        "flip": "镜像翻转",
+        "remove": "删除人形",
+        "hint": "拖一个关节，它下面的肢体跟着走；按住 Alt 只动这一个关节。拖身体移动，拖右下角缩放。灰色人偶只是姿势参考，他是谁、穿什么由提示词来说。"
+      }
     },
     "slice": {
       "action": "切分为多张",
