@@ -441,6 +441,42 @@ const getMockProviderModels = (uuid: string): string[] => {
     return mockVirtualProviders.find((provider) => provider.uuid === uuid)?.vmodel_detail.models ?? []
 }
 
+// Catalog of *addable* provider templates (ConnectProviderDialog's Cloud /
+// Self-hosted / API key providers sections) — distinct from getMockProviders
+// above, which is the *already-connected* provider list. Real data comes
+// from the backend catalog (dozens of entries); this is a small
+// representative slice — one of each region/type — just enough for the
+// picker's every section to have something to show in mock mode.
+const getMockProviderTemplates = () => ({
+    anthropic: {
+        id: 'anthropic', name: 'Anthropic', status: 'active', valid: true,
+        website: 'https://anthropic.com', description: 'Official Anthropic API',
+        api_doc: '', model_doc: '', pricing_doc: '',
+        base_url_anthropic: 'https://api.anthropic.com', api_style: 'anthropic',
+        region: 'global', type: 'official', icon: 'anthropic',
+    },
+    'deepseek-cn': {
+        id: 'deepseek-cn', name: 'DeepSeek (CN)', status: 'active', valid: true,
+        website: 'https://deepseek.com', description: 'DeepSeek mainland China endpoint',
+        api_doc: '', model_doc: '', pricing_doc: '',
+        base_url_openai: 'https://api.deepseek.com', api_style: 'openai',
+        region: 'cn', type: 'official', icon: 'deepseek',
+    },
+    'self-hosted-ollama': {
+        id: 'self-hosted-ollama', name: 'Ollama (local)', status: 'active', valid: true,
+        website: '', description: 'Self-hosted via Ollama',
+        api_doc: '', model_doc: '', pricing_doc: '',
+        base_url_openai: 'http://localhost:11434/v1', api_style: 'openai',
+        region: 'self-hosted', type: 'self-hosted', icon: 'ollama',
+    },
+    'aws-bedrock': {
+        id: 'aws-bedrock', name: 'AWS Bedrock', status: 'active', valid: true,
+        website: 'https://aws.amazon.com/bedrock', description: 'Amazon Bedrock — AWS SigV4 credentials',
+        api_doc: '', model_doc: '', pricing_doc: '',
+        api_style: 'anthropic', auth_type: 'aws_sigv4', type: 'cloud', icon: 'bedrock',
+    },
+})
+
 // ============================================
 // Mock Rules per scenario
 // ============================================
@@ -1944,6 +1980,16 @@ export const handlers = [
                 server_running: true,
                 uptime: 'Mock mode',
             }
+        })
+    }),
+
+    // ============================================
+    // v2 Provider Templates API (catalog for ConnectProviderDialog)
+    // ============================================
+    http.get('/api/v2/provider-templates', () => {
+        return HttpResponse.json({
+            success: true,
+            data: getMockProviderTemplates(),
         })
     }),
 

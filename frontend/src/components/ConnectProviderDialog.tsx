@@ -428,27 +428,6 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                     </>
                 )}
 
-                {filteredCloud.length > 0 && (
-                    <>
-                        <SectionHeader icon={<Cloud fontSize="small"/>} title="Cloud" count={filteredCloud.length} accent="cloud"/>
-                        <CardGrid wide={wide}>
-                            {filteredCloud.map((p) => (
-                                <ProviderCard
-                                    key={`cloud-${p.id}`}
-                                    icon={<ProviderIcon identifier={p.icon || p.id} size={26}/>}
-                                    name={p.alias || p.name}
-                                    meta={p.description || ''}
-                                    badge={cloudBadge}
-                                    website={showDetails ? p.website : undefined}
-                                    apiDoc={showDetails ? p.apiDoc : undefined}
-                                    showDetails={showDetails}
-                                    onClick={() => onSelect({kind: 'cloud', presetId: p.id})}
-                                />
-                            ))}
-                        </CardGrid>
-                    </>
-                )}
-
                 {selfHostedProviders.length > 0 && (
                     <>
                         <SectionHeader icon={<Computer fontSize="small"/>} title="Self-hosted" count={selfHostedProviders.length} accent="local"/>
@@ -464,6 +443,27 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                     apiDoc={showDetails ? p.apiDoc : undefined}
                                     showDetails={showDetails}
                                     onClick={() => onSelect({kind: 'local', provider: p})}
+                                />
+                            ))}
+                        </CardGrid>
+                    </>
+                )}
+
+                {filteredCloud.length > 0 && (
+                    <>
+                        <SectionHeader icon={<Cloud fontSize="small"/>} title="Cloud" count={filteredCloud.length} accent="cloud"/>
+                        <CardGrid wide={wide}>
+                            {filteredCloud.map((p) => (
+                                <ProviderCard
+                                    key={`cloud-${p.id}`}
+                                    icon={<ProviderIcon identifier={p.icon || p.id} size={26}/>}
+                                    name={p.alias || p.name}
+                                    meta={p.description || ''}
+                                    badge={cloudBadge}
+                                    website={showDetails ? p.website : undefined}
+                                    apiDoc={showDetails ? p.apiDoc : undefined}
+                                    showDetails={showDetails}
+                                    onClick={() => onSelect({kind: 'cloud', presetId: p.id})}
                                 />
                             ))}
                         </CardGrid>
