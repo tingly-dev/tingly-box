@@ -25,18 +25,11 @@ func SendSSErrorEventJSON(c *gin.Context, errorJSON []byte) {
 }
 
 // BuildErrorEvent builds Anthropic's standard stream error event map from
-// err, classified via protocol.UpstreamMessage (SDK errors sanitized of
-// their outbound URL, transport failures given a category). The error
-// "type" is always "stream_error" — every call site across the codebase
-// already passed that same literal, so it's hardcoded rather than threaded
-// through as a parameter nobody varies; code is the one thing that does
-// ("stream_failed", "incomplete_stream", ...). Deliberately kept in this
-// package rather than moved into protocol: {"type":"error","error":{...}}
-// is Anthropic's own wire format, not a protocol-agnostic concept —
-// protocol classifies "what went wrong" for any vendor, stream decides how
-// each vendor's wire format renders it (openai_passthrough.go's two
-// OpenAI-shaped error chunks have no such envelope and don't fit this
-// builder at all, which is the case for keeping shape decisions here).
+// err (message via protocol.UpstreamMessage). "type" is always
+// "stream_error" — no call site ever varies it — so it's hardcoded; code is
+// the part that does vary. Kept in this package rather than protocol: this
+// is Anthropic's own wire shape, not a protocol-agnostic one (see
+// .design/logging.md §5).
 func BuildErrorEvent(err error, code string) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "error",
