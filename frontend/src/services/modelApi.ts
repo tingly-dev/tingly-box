@@ -89,5 +89,11 @@ export const getOpenAIClient = async (scenario: string): Promise<OpenAI> => {
         baseURL: `${base}/tingly/${scenario}/v1`,
         apiKey,
         dangerouslyAllowBrowser: true,
+        // Retry and fallback across providers is the gateway's job (its own
+        // SDK clients run with retries off). The browser SDK would otherwise
+        // silently re-send a request that came back 5xx/429 or timed out two
+        // more times, so a failed image run sat as a spinner for three upstream
+        // round-trips before the error reached the page.
+        maxRetries: 0,
     });
 };
