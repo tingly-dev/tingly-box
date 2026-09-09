@@ -70,18 +70,26 @@ type PoseDrag =
     | (PoseDragBase & { mode: 'move'; last: CanvasPoint })
     | (PoseDragBase & { mode: 'scale'; origin: CanvasPoint; startDistance: number; start: PoseFigure });
 
+// What a finished sketch hands back. `file`/`previewUrl` are the composited
+// pixels the model gets; `strokes`/`figures` are the layers it was made of, so
+// re-opening it restores a posable figure instead of a picture of one.
 export interface SketchResult {
     file: File;
     previewUrl: string;
+    strokes: string;
+    figures: PoseFigure[];
 }
 
 interface SketchCanvasDialogProps {
     open: boolean;
     // The Playground's output size ("1024x1024"); the canvas takes its shape.
     size: string;
-    // Re-entry: a previous sketch (data URL) to keep drawing on. `null` opens
-    // a blank canvas.
+    // Re-entry: the stroke layer (data URL) and the figures of a previous
+    // sketch. `null` + an empty list opens a blank canvas. A sketch made
+    // before layers were kept has only flattened pixels: it comes back as
+    // strokes with no figures, which is still drawable, just not posable.
     initialImage: string | null;
+    initialFigures: PoseFigure[];
     onClose: () => void;
     onSubmit: (result: SketchResult) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
@@ -98,6 +106,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     open,
     size,
     initialImage,
+    initialFigures,
     onClose,
     onSubmit,
     showNotification,
@@ -170,9 +179,12 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         poseDragRef.current = null;
         setCanUndo(false);
         setRasterDirty(initialImage !== null);
-        setFigures([]);
-        setSelectedId(null);
-        setTool('pen');
+        setFigures(initialFigures);
+        // Re-opening a sketch that has one figure lands on the figure tool
+        // with that figure selected: the handles are the answer to "is this
+        // still posable?", so they should be on screen before the first click.
+        setSelectedId(initialFigures.length === 1 ? initialFigures[0].id : null);
+        setTool(initialFigures.length > 0 ? 'pose' : 'pen');
         if (initialImage) {
             loadDataUrl(initialImage)
                 .then((image) => {
@@ -184,7 +196,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 });
         }
         return () => { cancelled = true; };
-    }, [open, canvasEl, dims, initialImage, getContext, paintBackground]);
+    }, [open, canvasEl, dims, initialImage, initialFigures, getContext, paintBackground]);
 
     // Track the stage's box so the canvas can be sized to fit it — a fixed
     // pixel size would either overflow phones or leave desktops with a stamp.
@@ -520,6 +532,10 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             onSubmit({
                 file: new File([blob], `sketch-${Date.now()}.png`, { type: 'image/png' }),
                 previewUrl: output.toDataURL('image/png'),
+                // The layers travel with the result: the strokes without the
+                // figures painted over them, plus the figures themselves.
+                strokes: canvas.toDataURL('image/png'),
+                figures,
             });
         }, 'image/png');
     }, [canvasEl, dims, figures, onSubmit, showNotification, t]);
