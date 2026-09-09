@@ -169,7 +169,30 @@ alpha,抗锯齿边缘因此是渐变而不是台阶。绿幕额外做 despill(�
 
 ---
 
-## 6. 顺带补齐:单张下载
+## 6. 工具属于"面板上的图",不属于"生成结果"
+
+最初这些后置工具只挂在 run 的输出上:没生成过的图在这张面板上只是一个 56px 的
+请求参数,点它弹出的是文件选择器——放不大,也用不了下载和切分。而"手上已经有
+一张图,想切开 / 想连成 GIF / 想去掉棋盘格"是一个**完全不需要先生成一次**的诉求。
+
+所以规则改成:**这张面板上的任何一张图都能被打开来加工**。参考图缩略图点开的是
+同一个 lightbox,同一套动作(下载、切分/动画/清背景、草图重画)。
+
+没有为此新开入口,也没有把上传图搬进结果区做成一张"伪 run 卡片":那会让同一张
+图同时活在输入条和历史条里,还要为一张没有 model/size/quality 的卡片编造字段
+(原则 3:一件事只用一个位置表达)。
+
+lightbox 的抬头按图的来源换内容——生成结果显示 prompt + `model · size · quality`,
+带进来的图显示**文件名 + 真实像素尺寸 + 体积**(`sheet.png · 384×384 px · 7 KB`),
+因为后者根本没有 prompt 和模型可言,拿空字符串占位是在假装有(原则 5)。同理,
+"复制 prompt"和"用作参考"对它隐藏:它本来就是参考图。草图则保留"重画"。
+
+"进编辑"本身不需要新做:有参考图的 run 自动走 `/images/edits`,按钮也已经写着
+`Generate from 1 image`。缺的从来只是"这张图在生成之前就该是一等公民"。
+
+---
+
+## 7. 顺带补齐:单张下载
 
 在此之前 Playground **完全没有下载入口**(只有 copy prompt / use as reference)。
 切片能打包下载而整图不能,是割裂的。lightbox 因此同时补上 `Download`,
@@ -177,7 +200,7 @@ alpha,抗锯齿边缘因此是渐变而不是台阶。绿幕额外做 despill(�
 
 ---
 
-## 7. 代码位置
+## 8. 代码位置
 
 | 文件 | 职责 |
 |------|------|
@@ -187,7 +210,7 @@ alpha,抗锯齿边缘因此是渐变而不是台阶。绿幕额外做 despill(�
 | `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug、MIME→扩展名、`fetchBlob` |
 | `frontend/src/utils/imageSlice.ts` | 等分网格几何、图片加载、切片渲染 |
 | `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |
-| `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口(仅此,生成侧未改) |
+| `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口,以及参考图缩略图的打开入口(生成侧未改) |
 | `frontend/src/mocks/handlers.ts` | mock 侧识别 prompt 里的 `NxM grid`,以及 `checkerboard` / `green screen`,返回相应的网格图 |
 
 `utils/download.ts` 是独立模块而不是 slicing 的一部分:存盘和 slicing 无关,
