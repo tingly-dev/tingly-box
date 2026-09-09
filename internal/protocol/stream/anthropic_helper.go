@@ -36,6 +36,20 @@ func BuildErrorEvent(message, errorType, code string) map[string]interface{} {
 	}
 }
 
+// BuildErrorEventFromErr is BuildErrorEvent for a Go error instead of an
+// already-built message string: it classifies err via
+// protocol.UpstreamMessage (SDK errors sanitized of their outbound URL,
+// transport failures given a category) before building the event. Deliberately
+// kept in this package rather than moved into protocol: the {"type":"error",
+// "error":{...}} shape is Anthropic's own wire format, not a protocol-agnostic
+// concept — protocol classifies "what went wrong" for any vendor, stream
+// decides how each vendor's wire format renders it (openai_passthrough.go's
+// two OpenAI-shaped error chunks have no such envelope and don't fit this
+// builder at all, which is the case for keeping shape decisions here).
+func BuildErrorEventFromErr(err error, errorType, code string) map[string]interface{} {
+	return BuildErrorEvent(protocol.UpstreamMessage(err), errorType, code)
+}
+
 // MarshalAndSendErrorEvent marshals and sends an error event
 func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
 	errorEvent := BuildErrorEvent(message, errorType, code)
@@ -69,9 +83,10 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 // flattening every pre-stream failure into a 500.
 func SendStreamingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to create streaming request: " + protocol.UpstreamMessage(err),
+			Message: "Failed to create streaming request: " + failure.Message,
 			Type:    "api_error",
 		},
 	})
@@ -81,9 +96,10 @@ func SendStreamingError(c *gin.Context, err error) {
 // propagating the upstream provider's HTTP status when the error carries one.
 func SendForwardingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to forward request: " + protocol.UpstreamMessage(err),
+			Message: "Failed to forward request: " + failure.Message,
 			Type:    "api_error",
 		},
 	})

@@ -81,7 +81,7 @@ func handleOpenAIToAnthropicBetaStream(
 			SendStreamingError(c, err)
 			return conv.Usage(), err
 		}
-		sendAnthropicStreamEvent(c, "error", BuildErrorEvent(protocol.UpstreamMessage(err), "stream_error", "stream_failed"), nil)
+		sendAnthropicStreamEvent(c, "error", BuildErrorEventFromErr(err, "stream_error", "stream_failed"), nil)
 		return conv.Usage(), err
 	}
 	if streamErr := stream.Err(); streamErr != nil {
