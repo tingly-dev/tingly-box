@@ -3,7 +3,6 @@ package middleware
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -169,7 +168,7 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		}
 
 		// Log with structured fields including error details
-		m.logger.WithFields(fields).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
+		m.logger.WithFields(fields).Log(obs2.LevelForStatus(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
 			method,
 			path,
 			statusCode,
@@ -178,16 +177,6 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 			bodySize,
 		))
 	}
-}
-
-// getLogLevel returns the appropriate log level based on status code
-func getLogLevel(statusCode int) logrus.Level {
-	if statusCode >= http.StatusInternalServerError {
-		return logrus.ErrorLevel
-	} else if statusCode >= http.StatusBadRequest {
-		return logrus.WarnLevel
-	}
-	return logrus.InfoLevel
 }
 
 // GetEntries returns all log entries from memory in chronological order

@@ -149,7 +149,7 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 		logrus.Errorf("Failed to forward embeddings request: %v", err)
 		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
 			Error: ErrorDetail{
-				Message: "Failed to forward request: " + err.Error(),
+				Message: "Failed to forward request: " + protocol.UpstreamMessage(err),
 				Type:    "api_error",
 			},
 		})

@@ -29,7 +29,7 @@ func TestClassifyTransportError(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			reason, msg, ok := ClassifyTransportError(c.err)
+			reason, ok := ClassifyTransportError(c.err)
 			if ok != c.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, c.wantOK)
 			}
@@ -39,7 +39,7 @@ func TestClassifyTransportError(t *testing.T) {
 			if reason != c.wantReason {
 				t.Errorf("reason = %q, want %q", reason, c.wantReason)
 			}
-			if msg == "" {
+			if transportFailureMessages[reason] == "" {
 				t.Errorf("expected a non-empty client-safe message for reason %q", reason)
 			}
 		})

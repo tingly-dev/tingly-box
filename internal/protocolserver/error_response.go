@@ -63,7 +63,7 @@ func (ph *ProtocolHandler) respondMCPError(c *gin.Context, err error, msg string
 	ph.trackUsageFromContext(c, 0, 0, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Message: msg + ": " + err.Error(),
+			Message: msg + ": " + protocol.UpstreamMessage(err),
 			Type:    "api_error",
 		},
 	})

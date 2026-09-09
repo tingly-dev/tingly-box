@@ -1,12 +1,12 @@
 package client
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -86,7 +86,7 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		// field so entries are filterable/greppable without parsing the
 		// message text; the full err still goes out via WithError for the
 		// exact underlying detail.
-		if reason, _, ok := protocol.ClassifyTransportError(err); ok {
+		if reason, ok := protocol.ClassifyTransportError(err); ok {
 			entry = entry.WithField("fail_reason", string(reason))
 		}
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
@@ -97,17 +97,12 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	// this it only ever reaches Info level, indistinguishable from a 200 to
 	// anyone filtering logs by severity. The response body (the actual error
 	// reason) isn't read here — the SDK layer above still owns parsing it
-	// into a typed error — so this only classifies by status.
-	statusEntry := entry.WithField("status", resp.StatusCode)
-	msg := fmt.Sprintf("upstream %d via %s", resp.StatusCode, proxy)
-	switch {
-	case resp.StatusCode >= 500:
-		statusEntry.Error(msg)
-	case resp.StatusCode >= 400:
-		statusEntry.Warn(msg)
-	default:
-		statusEntry.Info(msg)
-	}
+	// into a typed error — so this only classifies by status, the same way
+	// the HTTP access log does (obs.LevelForStatus). Logf defers the
+	// Sprintf until logrus confirms the level is enabled, same as Errorf did
+	// on the branch above.
+	entry.WithField("status", resp.StatusCode).
+		Logf(obs.LevelForStatus(resp.StatusCode), "upstream %d via %s", resp.StatusCode, proxy)
 	return resp, nil
 }
 

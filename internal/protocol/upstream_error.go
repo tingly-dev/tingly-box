@@ -2,8 +2,8 @@ package protocol
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -39,7 +39,7 @@ func UpstreamStatus(err error, fallback int) int {
 		return genaiErr.Code
 	}
 
-	if _, _, ok := ClassifyTransportError(err); ok {
+	if _, ok := ClassifyTransportError(err); ok {
 		return http.StatusBadGateway
 	}
 
@@ -58,9 +58,13 @@ func UpstreamStatus(err error, fallback int) int {
 // also embeds the full outbound request line — method + the exact URL we
 // called upstream (openai-go/internal/apierror/apierror.go, anthropic-sdk-go
 // same) — which leaks our upstream endpoint (a custom/internal API base in
-// particular) to the downstream caller for no reason; this reconstructs the
-// message from the same fields minus that line. genai.APIError's Error()
-// never included the URL, so it passes through unchanged.
+// particular) to the downstream caller for no reason. Rather than hand-picking
+// which fields to re-print (which silently drops whatever the SDK's Error()
+// format adds later — anthropic.Error already prints a WorkspaceID this PR
+// would otherwise have missed), this calls the SDK's own Error() on a copy
+// with the URL blanked out, so it stays byte-for-byte in sync with upstream
+// except for that one line. genai.APIError's Error() never included the URL,
+// so it passes through unchanged.
 func UpstreamMessage(err error) string {
 	if err == nil {
 		return ""
@@ -68,25 +72,32 @@ func UpstreamMessage(err error) string {
 
 	var oaiErr *openai.Error
 	if errors.As(err, &oaiErr) {
-		return statusText(oaiErr.StatusCode) + ": " + oaiErr.RawJSON()
+		redacted := *oaiErr
+		redacted.Request = redactedRequest(oaiErr.Request)
+		return redacted.Error()
 	}
 
 	var anthropicErr *anthropic.Error
 	if errors.As(err, &anthropicErr) {
-		msg := statusText(anthropicErr.StatusCode)
-		if anthropicErr.RequestID != "" {
-			msg += fmt.Sprintf(" (Request-ID: %s)", anthropicErr.RequestID)
-		}
-		return msg + ": " + anthropicErr.RawJSON()
+		redacted := *anthropicErr
+		redacted.Request = redactedRequest(anthropicErr.Request)
+		return redacted.Error()
 	}
 
-	if reason, msg, ok := ClassifyTransportError(err); ok {
-		return string(reason) + ": " + msg
+	if reason, ok := ClassifyTransportError(err); ok {
+		return string(reason) + ": " + transportFailureMessages[reason]
 	}
 
 	return err.Error()
 }
 
-func statusText(code int) string {
-	return fmt.Sprintf("%d %s", code, http.StatusText(code))
+// redactedRequest returns a copy of req (nil-safe) with the URL replaced by a
+// fixed placeholder, keeping the method intact. Used to launder an SDK-typed
+// error's own Error() through unmodified except for the leaked endpoint.
+func redactedRequest(req *http.Request) *http.Request {
+	redacted := &http.Request{URL: &url.URL{Path: "REDACTED"}}
+	if req != nil {
+		redacted.Method = req.Method
+	}
+	return redacted
 }
