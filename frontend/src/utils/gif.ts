@@ -67,62 +67,85 @@ const buildHistogram = (frames: GifFrame[]): Histogram => {
     return { keys, counts, sums };
 };
 
+interface BoxStats {
+    count: number;
+    /** The channel with the widest spread, and how wide it is. */
+    channel: number;
+    range: number;
+}
+
+const boxStats = (box: number[], counts: Uint32Array): BoxStats => {
+    let count = 0;
+    const min = [32, 32, 32];
+    const max = [-1, -1, -1];
+    for (const key of box) {
+        count += counts[key];
+        for (let axis = 0; axis < 3; axis += 1) {
+            const value = bucketChannel(key, axis);
+            if (value < min[axis]) min[axis] = value;
+            if (value > max[axis]) max[axis] = value;
+        }
+    }
+    let channel = 0;
+    let range = -1;
+    for (let axis = 0; axis < 3; axis += 1) {
+        if (max[axis] - min[axis] > range) {
+            range = max[axis] - min[axis];
+            channel = axis;
+        }
+    }
+    return { count, channel, range };
+};
+
 /**
- * Median cut over a 5-bit histogram: split the box holding the most pixels
- * along its widest channel until we run out of palette slots. Quantising the
- * histogram first (rather than the pixels) is what keeps this linear in image
- * size — the cut itself only ever walks 32k buckets.
+ * Median cut over a 5-bit histogram: repeatedly split the box that most
+ * deserves it along its widest channel until the palette is full. Quantising
+ * the histogram first (rather than the pixels) is what keeps this linear in
+ * image size — the cut itself only ever walks 32k buckets.
+ *
+ * Two details that a naive version gets wrong, both of which showed up as
+ * "the GIF's colours are off" on a real sprite sheet:
+ *
+ * - The split must leave both halves non-empty. Splitting at the weighted
+ *   median puts a dominant colour that sorts last in a half of its own only
+ *   if the cut is clamped to [1, n-1]; otherwise the other half is empty, the
+ *   same box is picked again next round, and the palette fills up with empty
+ *   entries while every accent colour is averaged into the dominant one.
+ * - Which box to split is weighted by population *and* spread, not population
+ *   alone. By population, the boxes that never get split are the rare ones —
+ *   red eyes, an orange tassel, a white highlight — which are exactly the
+ *   colours an image is recognised by.
  */
 const medianCut = (histogram: Histogram, maxColors: number): number[][] => {
     const { keys, counts } = histogram;
     if (keys.length === 0) return [];
-    let boxes: number[][] = [keys];
+    const boxes: number[][] = [keys];
     while (boxes.length < maxColors) {
         let target = -1;
-        let targetWeight = 0;
+        let targetStats: BoxStats | null = null;
+        let best = 0;
         boxes.forEach((box, index) => {
             if (box.length < 2) return;
-            const weight = box.reduce((total, key) => total + counts[key], 0);
-            if (weight > targetWeight) {
-                targetWeight = weight;
+            const stats = boxStats(box, counts);
+            const weight = stats.count * (stats.range + 1);
+            if (weight > best) {
+                best = weight;
                 target = index;
+                targetStats = stats;
             }
         });
-        if (target < 0) break;
-        const box = boxes[target];
-        let channel = 0;
-        let widest = -1;
-        for (let axis = 0; axis < 3; axis += 1) {
-            let min = 32;
-            let max = -1;
-            for (const key of box) {
-                const value = bucketChannel(key, axis);
-                if (value < min) min = value;
-                if (value > max) max = value;
-            }
-            if (max - min > widest) {
-                widest = max - min;
-                channel = axis;
-            }
-        }
-        const sorted = [...box].sort((a, b) => bucketChannel(a, channel) - bucketChannel(b, channel));
-        const total = sorted.reduce((sum, key) => sum + counts[key], 0);
+        if (target < 0 || !targetStats) break;
+        const { channel, count: total } = targetStats as BoxStats;
+        const sorted = [...boxes[target]].sort((a, b) => bucketChannel(a, channel) - bucketChannel(b, channel));
         let running = 0;
         let split = 1;
         for (let i = 0; i < sorted.length - 1; i += 1) {
             running += counts[sorted[i]];
-            if (running * 2 >= total) {
-                split = i + 1;
-                break;
-            }
-            split = i + 2;
+            split = i + 1;
+            if (running * 2 >= total) break;
         }
-        boxes = [
-            ...boxes.slice(0, target),
-            sorted.slice(0, split),
-            sorted.slice(split),
-            ...boxes.slice(target + 1),
-        ];
+        split = Math.min(Math.max(split, 1), sorted.length - 1);
+        boxes.splice(target, 1, sorted.slice(0, split), sorted.slice(split));
     }
     return boxes;
 };
