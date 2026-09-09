@@ -295,6 +295,7 @@ export interface FigureParts {
     pelvis: Ellipse;
     limbs: Segment[];
     balls: Ball[];
+    hipBalls: Ball[];
     hands: Ellipse[];
     feet: Ellipse[];
 }
@@ -312,7 +313,7 @@ const R = {
     headLong: 0.070, headWide: 0.056,
     neck: 0.021,
     shoulder: 0.034, elbow: 0.026, wrist: 0.019,
-    hipBall: 0.041, knee: 0.033, ankle: 0.023,
+    hipBall: 0.036, knee: 0.033, ankle: 0.023,
     upperArm: 0.031, foreArm: 0.023, thigh: 0.043, shin: 0.031,
     handLong: 0.034, handWide: 0.024,
     footLong: 0.033, footWide: 0.020,
@@ -337,7 +338,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
     const chestCenter = lerp(shoulderMid, hipMid, 0.26);
     // The pelvis straddles the hip line and the waist ball bridges it to the
     // chest, the way the two turned halves of a manikin meet at their pin.
-    const pelvisCenter = lerp(joints.neck, hipMid, 1.0);
+    const pelvisCenter = lerp(joints.neck, hipMid, 0.96);
     const waistCenter = lerp(joints.neck, hipMid, 0.72);
 
     const limbs: Segment[] = [
@@ -356,8 +357,6 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         { center: joints.shoulderR, radius: u(R.shoulder) },
         { center: joints.elbowL, radius: u(R.elbow) },
         { center: joints.elbowR, radius: u(R.elbow) },
-        { center: joints.hipL, radius: u(R.hipBall) },
-        { center: joints.hipR, radius: u(R.hipBall) },
         { center: joints.kneeL, radius: u(R.knee) },
         { center: joints.kneeR, radius: u(R.knee) },
         { center: joints.ankleL, radius: u(R.ankle) },
@@ -426,13 +425,24 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         },
         waist: { center: waistCenter, radius: torso * 0.085 },
         pelvis: {
+            // Wide enough to reach past the hip balls and short enough to sit
+            // between them: a narrower or taller ellipse hangs below the hips
+            // as a droplet instead of reading as a pelvis.
             center: pelvisCenter,
-            radiusX: Math.max(hipSpan * 0.60, u(0.05)),
-            radiusY: torso * 0.26,
+            radiusX: Math.max(hipSpan * 0.5 + u(R.hipBall) * 0.9, u(0.06)),
+            radiusY: torso * 0.16,
             angle: angleOf(joints.hipL, joints.hipR),
         },
         limbs,
         balls,
+        // Kept apart from the rest because they are drawn *under* the pelvis:
+        // a hip ball on top of the block reads as a buttock, while one behind
+        // it shows only where the thigh comes out, which is what the wooden
+        // joint actually looks like.
+        hipBalls: [
+            { center: joints.hipL, radius: u(R.hipBall) },
+            { center: joints.hipR, radius: u(R.hipBall) },
+        ],
         hands,
         feet,
     };
@@ -440,14 +450,14 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 
 // Three tones, no gradients: the body, the joint balls a shade darker so the
 // articulation reads, and the head a shade lighter so it does not merge into
-// the chest. Warm neutral rather than wood-brown — the pose is the message,
-// and a literal wood texture invites the model to paint a wooden doll.
-export const FIGURE_FILL = '#b0a89c';
-export const FIGURE_JOINT_FILL = '#958d81';
-export const FIGURE_HEAD_FILL = '#bcb4a8';
-export const FIGURE_SELECTED_FILL = '#a3a8b4';
-export const FIGURE_SELECTED_JOINT_FILL = '#888e9c';
-export const FIGURE_SELECTED_HEAD_FILL = '#aeb3bd';
+// the chest. Neutral grey, not wood — the manikin's structure is the message,
+// and a wood colour only invites the model to paint a wooden doll.
+export const FIGURE_FILL = '#aeb2b6';
+export const FIGURE_JOINT_FILL = '#8f9398';
+export const FIGURE_HEAD_FILL = '#b9bdc1';
+export const FIGURE_SELECTED_FILL = '#a2abbd';
+export const FIGURE_SELECTED_JOINT_FILL = '#828da3';
+export const FIGURE_SELECTED_HEAD_FILL = '#adb5c5';
 const HANDLE_FILL = '#2563eb';
 const HANDLE_STROKE = '#ffffff';
 
@@ -501,15 +511,24 @@ export const drawFigure = (
     for (const limb of parts.limbs) fillSegment(ctx, limb);
     for (const hand of parts.hands) fillEllipse(ctx, hand);
     for (const foot of parts.feet) fillEllipse(ctx, foot);
-    fillEllipse(ctx, parts.chest);
-    fillEllipse(ctx, parts.pelvis);
 
-    ctx.fillStyle = selected ? FIGURE_SELECTED_JOINT_FILL : FIGURE_JOINT_FILL;
-    for (const ball of [parts.waist, ...parts.balls]) {
+    const jointFill = selected ? FIGURE_SELECTED_JOINT_FILL : FIGURE_JOINT_FILL;
+    const bodyFill = selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
+    const fillBall = (ball: Ball) => {
         ctx.beginPath();
         ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius, 0.5), 0, Math.PI * 2);
         ctx.fill();
-    }
+    };
+
+    ctx.fillStyle = jointFill;
+    for (const ball of parts.hipBalls) fillBall(ball);
+
+    ctx.fillStyle = bodyFill;
+    fillEllipse(ctx, parts.chest);
+    fillEllipse(ctx, parts.pelvis);
+
+    ctx.fillStyle = jointFill;
+    for (const ball of [parts.waist, ...parts.balls]) fillBall(ball);
 
     ctx.fillStyle = selected ? FIGURE_SELECTED_HEAD_FILL : FIGURE_HEAD_FILL;
     fillEllipse(ctx, parts.head);

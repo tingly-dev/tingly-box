@@ -191,10 +191,20 @@ describe('figureParts', () => {
     });
 
     it('gives the joint balls a descending size down each limb', () => {
-        const [shoulder, , elbow, , hip, , knee, , ankle] = parts().balls;
+        const [shoulder, , elbow, , knee, , ankle] = parts().balls;
         expect(shoulder.radius).toBeGreaterThan(elbow.radius);
-        expect(hip.radius).toBeGreaterThan(knee.radius);
         expect(knee.radius).toBeGreaterThan(ankle.radius);
+    });
+
+    it('keeps the hip balls apart and inside the pelvis block', () => {
+        const { hipBalls, pelvis, balls } = parts();
+        expect(hipBalls).toHaveLength(2);
+        expect(balls.some((ball) => ball.center === hipBalls[0].center)).toBe(false);
+        // Centre well inside the block, with at most a sliver showing where
+        // the thigh comes out.
+        expect(Math.abs(hipBalls[1].center.x - pelvis.center.x)).toBeLessThan(pelvis.radiusX);
+        const reach = Math.abs(hipBalls[1].center.x - pelvis.center.x) + hipBalls[1].radius;
+        expect(reach).toBeLessThanOrEqual(pelvis.radiusX + hipBalls[1].radius * 0.2);
     });
 
     it('sets the foot across the shin and the hand along the forearm', () => {
