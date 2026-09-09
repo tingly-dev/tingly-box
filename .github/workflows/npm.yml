@@ -206,12 +206,17 @@ jobs:
               "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
             code=${body##*$'\n'}
             resp=${body%$'\n'*}
-            if [ "$code" = "200" ]; then
-              echo "✅ $pkg: exchange OK"
-            else
-              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
-              FAIL=1
-            fi
+            # The registry answers 201 Created (not 200) when it mints a token;
+            # accept any 2xx. Never echo the body on success: it carries the token.
+            case "$code" in
+              2??)
+                echo "✅ $pkg: exchange OK (HTTP $code)"
+                ;;
+              *)
+                echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // "(no message)"' 2>/dev/null || echo "(unparseable response)")"
+                FAIL=1
+                ;;
+            esac
           done
           [ "$FAIL" -eq 0 ] || {
             echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
@@ -561,12 +566,17 @@ jobs:
               "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
             code=${body##*$'\n'}
             resp=${body%$'\n'*}
-            if [ "$code" = "200" ]; then
-              echo "✅ $pkg: exchange OK"
-            else
-              echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // .' 2>/dev/null || printf '%s' "$resp")"
-              FAIL=1
-            fi
+            # The registry answers 201 Created (not 200) when it mints a token;
+            # accept any 2xx. Never echo the body on success: it carries the token.
+            case "$code" in
+              2??)
+                echo "✅ $pkg: exchange OK (HTTP $code)"
+                ;;
+              *)
+                echo "❌ $pkg: exchange HTTP $code: $(printf '%s' "$resp" | jq -r '.message // .error // "(no message)"' 2>/dev/null || echo "(unparseable response)")"
+                FAIL=1
+                ;;
+            esac
           done
           [ "$FAIL" -eq 0 ] || {
             echo "The registry has no Trusted Publisher on that package that matches this run AND allows 'npm publish'."
