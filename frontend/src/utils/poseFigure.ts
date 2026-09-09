@@ -219,6 +219,64 @@ export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Can
     return { ...scaleFigure(fresh, factor), id: figure.id };
 };
 
+// --- the skeleton ------------------------------------------------------------
+//
+// Joints are not loose points. Every one hangs off a parent, rooted at the
+// hip, so dragging a shoulder brings the whole arm with it and a limb cannot
+// be stretched into rubber: a drag rotates the bone about its parent and
+// carries everything below it rigidly, which is what the wooden joint does.
+
+export const JOINT_PARENT: Record<JointKey, JointKey | null> = {
+    hip: null,
+    hipL: 'hip', hipR: 'hip', neck: 'hip',
+    kneeL: 'hipL', ankleL: 'kneeL',
+    kneeR: 'hipR', ankleR: 'kneeR',
+    shoulderL: 'neck', shoulderR: 'neck', head: 'neck',
+    elbowL: 'shoulderL', wristL: 'elbowL',
+    elbowR: 'shoulderR', wristR: 'elbowR',
+};
+
+// The joint plus everything hanging off it.
+export const subtreeOf = (key: JointKey): JointKey[] => JOINT_KEYS.filter((candidate) => {
+    let walk: JointKey | null = candidate;
+    while (walk) {
+        if (walk === key) return true;
+        walk = JOINT_PARENT[walk];
+    }
+    return false;
+});
+
+const SUBTREES = Object.fromEntries(JOINT_KEYS.map((key) => [key, subtreeOf(key)])) as Record<JointKey, JointKey[]>;
+
+const rotatePoint = (point: CanvasPoint, pivot: CanvasPoint, angle: number): CanvasPoint => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
+};
+
+// Forward kinematics: swing `key` toward `target` about its parent and take
+// its subtree along. Bone lengths never change, so a figure keeps its
+// proportions however hard it is posed. Dragging the root moves the figure.
+export const swingJoint = (figure: PoseFigure, key: JointKey, target: CanvasPoint): PoseFigure => {
+    const parentKey = JOINT_PARENT[key];
+    if (!parentKey) {
+        return translateFigure(figure, target.x - figure.joints[key].x, target.y - figure.joints[key].y);
+    }
+    const pivot = figure.joints[parentKey];
+    const from = figure.joints[key];
+    const beforeLength = Math.hypot(from.x - pivot.x, from.y - pivot.y);
+    const afterLength = Math.hypot(target.x - pivot.x, target.y - pivot.y);
+    // A pointer sitting exactly on the parent has no direction to give.
+    if (beforeLength < 1e-6 || afterLength < 1e-6) return figure;
+    const delta = Math.atan2(target.y - pivot.y, target.x - pivot.x)
+        - Math.atan2(from.y - pivot.y, from.x - pivot.x);
+    const joints = { ...figure.joints };
+    for (const member of SUBTREES[key]) joints[member] = rotatePoint(joints[member], pivot, delta);
+    return { ...figure, joints };
+};
+
 export const figureBounds = (figure: PoseFigure): Rect => {
     const points = JOINT_KEYS.map((key) => figure.joints[key]);
     const xs = points.map((p) => p.x);
@@ -515,15 +573,18 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 // single blob where they overlap, and the model then has no way to tell how
 // many people are in the frame. Lightness only, so they still read as the same
 // material, and the selected figure keeps its own cool tint on top of this.
-export interface FigureTone { body: string; joint: string; head: string }
+// `rim` is a hairline round the silhouette. Without it a figure dissolves
+// into white paper at its edges and two overlapping figures merge into one
+// shape; with it each body reads as a separate solid object.
+export interface FigureTone { body: string; joint: string; head: string; rim: string }
 
 export const FIGURE_SHADES: readonly FigureTone[] = [
-    { body: '#aeb2b6', joint: '#8f9398', head: '#b9bdc1' },
-    { body: '#8d9298', joint: '#70757b', head: '#9aa0a6' },
-    { body: '#c0c5ca', joint: '#a2a7ad', head: '#ccd0d4' },
+    { body: '#aeb2b6', joint: '#8f9398', head: '#b9bdc1', rim: '#7c8085' },
+    { body: '#8d9298', joint: '#70757b', head: '#9aa0a6', rim: '#5d6268' },
+    { body: '#c0c5ca', joint: '#a2a7ad', head: '#ccd0d4', rim: '#8e9399' },
 ];
 
-export const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5' };
+export const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5', rim: '#6d7789' };
 
 export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
     ? SELECTED_TONE
@@ -531,16 +592,30 @@ export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (se
 const HANDLE_FILL = '#2563eb';
 const HANDLE_STROKE = '#ffffff';
 
-const fillEllipse = (ctx: CanvasRenderingContext2D, ellipse: Ellipse): void => {
+// Every shape is drawn twice: once grown by the rim width in the rim colour,
+// once at its true size in the body colour. Because the first pass is one flat
+// colour, the seams between parts vanish and what is left is a single outline
+// around the whole figure — no silhouette union to compute.
+const fillEllipse = (ctx: CanvasRenderingContext2D, ellipse: Ellipse, grow = 0): void => {
     ctx.beginPath();
-    ctx.ellipse(ellipse.center.x, ellipse.center.y, Math.max(ellipse.radiusX, 0.5), Math.max(ellipse.radiusY, 0.5), ellipse.angle, 0, Math.PI * 2);
+    ctx.ellipse(
+        ellipse.center.x,
+        ellipse.center.y,
+        Math.max(ellipse.radiusX + grow, 0.5),
+        Math.max(ellipse.radiusY + grow, 0.5),
+        ellipse.angle,
+        0,
+        Math.PI * 2,
+    );
     ctx.fill();
 };
 
 // A tapered capsule: the quad between the two end circles plus the circles
 // themselves. Close enough to a turned wooden limb, and it degrades to a
 // plain capsule when the radii match.
-const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment): void => {
+const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment, grow = 0): void => {
+    const fromRadius = segment.fromRadius + grow;
+    const toRadius = segment.toRadius + grow;
     const dx = segment.to.x - segment.from.x;
     const dy = segment.to.y - segment.from.y;
     const length = Math.hypot(dx, dy);
@@ -548,20 +623,22 @@ const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment): void => {
         const px = -dy / length;
         const py = dx / length;
         ctx.beginPath();
-        ctx.moveTo(segment.from.x + px * segment.fromRadius, segment.from.y + py * segment.fromRadius);
-        ctx.lineTo(segment.to.x + px * segment.toRadius, segment.to.y + py * segment.toRadius);
-        ctx.lineTo(segment.to.x - px * segment.toRadius, segment.to.y - py * segment.toRadius);
-        ctx.lineTo(segment.from.x - px * segment.fromRadius, segment.from.y - py * segment.fromRadius);
+        ctx.moveTo(segment.from.x + px * fromRadius, segment.from.y + py * fromRadius);
+        ctx.lineTo(segment.to.x + px * toRadius, segment.to.y + py * toRadius);
+        ctx.lineTo(segment.to.x - px * toRadius, segment.to.y - py * toRadius);
+        ctx.lineTo(segment.from.x - px * fromRadius, segment.from.y - py * fromRadius);
         ctx.closePath();
         ctx.fill();
     }
     ctx.beginPath();
-    ctx.arc(segment.from.x, segment.from.y, Math.max(segment.fromRadius, 0.5), 0, Math.PI * 2);
+    ctx.arc(segment.from.x, segment.from.y, Math.max(fromRadius, 0.5), 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(segment.to.x, segment.to.y, Math.max(segment.toRadius, 0.5), 0, Math.PI * 2);
+    ctx.arc(segment.to.x, segment.to.y, Math.max(toRadius, 0.5), 0, Math.PI * 2);
     ctx.fill();
 };
+
+export const RIM_RATIO = 0.006;
 
 export const drawFigure = (
     ctx: CanvasRenderingContext2D,
@@ -570,23 +647,38 @@ export const drawFigure = (
 ): void => {
     const parts = figureParts(figure);
     const tone = toneFor(figure, options.selected === true);
+    const rim = Math.max(figureBounds(figure).height * RIM_RATIO, 1);
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 
-    // Body first, joints over it, head last: the drawing order is what makes
-    // the balls read as articulation rather than as lumps under the limbs.
+    const fillBall = (ball: Ball, grow = 0) => {
+        ctx.beginPath();
+        ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius + grow, 0.5), 0, Math.PI * 2);
+        ctx.fill();
+    };
+
+    // Pass one: the whole figure grown by the rim, in one flat colour.
+    ctx.fillStyle = tone.rim;
+    fillSegment(ctx, parts.neck, rim);
+    fillSegment(ctx, parts.spine, rim);
+    for (const limb of parts.limbs) fillSegment(ctx, limb, rim);
+    for (const hand of parts.hands) fillEllipse(ctx, hand, rim);
+    for (const foot of parts.feet) fillEllipse(ctx, foot, rim);
+    for (const ball of parts.hipBalls) fillBall(ball, rim);
+    fillEllipse(ctx, parts.chest, rim);
+    fillEllipse(ctx, parts.pelvis, rim);
+    for (const ball of [parts.waist, ...parts.balls]) fillBall(ball, rim);
+    fillEllipse(ctx, parts.head, rim);
+
+    // Pass two, at true size. Body first, joints over it, head last: the
+    // drawing order is what makes the balls read as articulation rather than
+    // as lumps under the limbs.
     ctx.fillStyle = tone.body;
     fillSegment(ctx, parts.neck);
     fillSegment(ctx, parts.spine);
     for (const limb of parts.limbs) fillSegment(ctx, limb);
     for (const hand of parts.hands) fillEllipse(ctx, hand);
     for (const foot of parts.feet) fillEllipse(ctx, foot);
-
-    const fillBall = (ball: Ball) => {
-        ctx.beginPath();
-        ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius, 0.5), 0, Math.PI * 2);
-        ctx.fill();
-    };
 
     ctx.fillStyle = tone.joint;
     for (const ball of parts.hipBalls) fillBall(ball);

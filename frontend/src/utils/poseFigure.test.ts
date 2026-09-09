@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PoseFigure } from './poseFigure';
+import type { JointKey, PoseFigure } from './poseFigure';
 import {
     applyPreset,
     createFigure,
@@ -12,12 +12,15 @@ import {
     hitTestJoint,
     isScaleHandleHit,
     JOINT_KEYS,
+    JOINT_PARENT,
     MIN_FIGURE_HEIGHT,
     moveJoint,
     nextFigureAt,
     placeNewFigure,
     scaleFigure,
     scaleHandlePoint,
+    subtreeOf,
+    swingJoint,
     translateFigure,
 } from './poseFigure';
 
@@ -295,5 +298,69 @@ describe('shades', () => {
     it('carries the shade through preset swaps', () => {
         const figure = createFigure('standing', DIMS, undefined, 2);
         expect(applyPreset(figure, 'walking', DIMS).shade).toBe(2);
+    });
+});
+
+describe('the skeleton', () => {
+    const boneLength = (figure: PoseFigure, a: JointKey, b: JointKey) =>
+        Math.hypot(figure.joints[a].x - figure.joints[b].x, figure.joints[a].y - figure.joints[b].y);
+
+    it('hangs every joint off the hip', () => {
+        expect(subtreeOf('hip')).toHaveLength(JOINT_KEYS.length);
+        expect(subtreeOf('shoulderL').sort()).toEqual(['elbowL', 'shoulderL', 'wristL']);
+        expect(subtreeOf('wristR')).toEqual(['wristR']);
+    });
+
+    it('swings the limb below the joint and keeps every bone length', () => {
+        const figure = createFigure('standing', DIMS);
+        const before = { upper: boneLength(figure, 'shoulderL', 'elbowL'), fore: boneLength(figure, 'elbowL', 'wristL') };
+        const swung = swingJoint(figure, 'elbowL', { x: figure.joints.elbowL.x - 200, y: figure.joints.elbowL.y - 40 });
+        expect(boneLength(swung, 'shoulderL', 'elbowL')).toBeCloseTo(before.upper, 4);
+        expect(boneLength(swung, 'elbowL', 'wristL')).toBeCloseTo(before.fore, 4);
+        // The wrist came along; the shoulder it hangs from did not move.
+        expect(swung.joints.wristL.x).not.toBeCloseTo(figure.joints.wristL.x, 1);
+        expect(swung.joints.shoulderL).toEqual(figure.joints.shoulderL);
+        expect(swung.joints.wristR).toEqual(figure.joints.wristR);
+    });
+
+    it('swings toward the pointer without following it past the bone length', () => {
+        const figure = createFigure('standing', DIMS);
+        const target = { x: figure.joints.shoulderR.x + 400, y: figure.joints.shoulderR.y };
+        const swung = swingJoint(figure, 'elbowR', target);
+        const shoulder = swung.joints.shoulderR;
+        const elbow = swung.joints.elbowR;
+        expect(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x)).toBeCloseTo(0, 6);
+        expect(Math.hypot(elbow.x - shoulder.x, elbow.y - shoulder.y))
+            .toBeCloseTo(boneLength(figure, 'shoulderR', 'elbowR'), 4);
+    });
+
+    it('moves the whole figure when the root is dragged', () => {
+        const figure = createFigure('standing', DIMS);
+        const swung = swingJoint(figure, 'hip', { x: figure.joints.hip.x + 30, y: figure.joints.hip.y - 15 });
+        for (const key of JOINT_KEYS) {
+            expect(swung.joints[key].x).toBeCloseTo(figure.joints[key].x + 30, 4);
+            expect(swung.joints[key].y).toBeCloseTo(figure.joints[key].y - 15, 4);
+        }
+    });
+
+    it('ignores a drag that lands on the parent, which gives no direction', () => {
+        const figure = createFigure('standing', DIMS);
+        expect(swingJoint(figure, 'kneeL', figure.joints.hipL)).toBe(figure);
+    });
+
+    it('leaves proportions intact however far a pose is pushed', () => {
+        let figure = createFigure('standing', DIMS);
+        const before = JOINT_KEYS.map((key) => {
+            const parent = JOINT_PARENT[key];
+            return parent ? boneLength(figure, key, parent) : 0;
+        });
+        for (const key of ['elbowL', 'kneeR', 'shoulderR', 'wristL', 'head'] as JointKey[]) {
+            figure = swingJoint(figure, key, { x: 900, y: 120 });
+        }
+        const after = JOINT_KEYS.map((key) => {
+            const parent = JOINT_PARENT[key];
+            return parent ? boneLength(figure, key, parent) : 0;
+        });
+        after.forEach((length, i) => expect(length).toBeCloseTo(before[i], 4));
     });
 });

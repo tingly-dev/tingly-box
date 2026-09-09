@@ -1715,7 +1715,7 @@ export default {
         },
         "flip": "Mirror figure",
         "remove": "Remove figure",
-        "hint": "Drag the joints to pose the figure, the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is."
+        "hint": "Drag a joint and the limb below it follows; hold Alt to move one joint alone. Drag the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is."
       }
     },
     "slice": {

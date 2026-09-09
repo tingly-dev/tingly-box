@@ -44,6 +44,7 @@ import {
     isScaleHandleHit,
     moveJoint,
     scaleFigure,
+    swingJoint,
     translateFigure,
     type JointKey,
     type PoseFigure,
@@ -78,7 +79,9 @@ interface SketchSnapshot {
 // figure does not leave an undo step that does nothing.
 type PoseDragBase = { pointerId: number; figureId: string; before: PoseFigure[]; committed: boolean };
 type PoseDrag =
-    | (PoseDragBase & { mode: 'joint'; joint: JointKey })
+    // `detached` is the modifier drag: move this one joint and nothing else,
+    // for the rare pose the skeleton will not give you.
+    | (PoseDragBase & { mode: 'joint'; joint: JointKey; detached: boolean })
     | (PoseDragBase & { mode: 'move'; last: CanvasPoint })
     | (PoseDragBase & { mode: 'scale'; origin: CanvasPoint; startDistance: number; start: PoseFigure });
 
@@ -493,6 +496,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     before: figures,
                     committed: false,
                     joint,
+                    detached: event.altKey,
                 };
                 return;
             }
@@ -528,7 +532,9 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         }
         const point = pointFromEvent(event);
         if (drag.mode === 'joint') {
-            updateFigure(drag.figureId, (figure) => moveJoint(figure, drag.joint, point));
+            updateFigure(drag.figureId, (figure) => (drag.detached
+                ? moveJoint(figure, drag.joint, point)
+                : swingJoint(figure, drag.joint, point)));
             return;
         }
         if (drag.mode === 'move') {
@@ -852,7 +858,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {figures.length > 0
                             ? t('playground.sketch.pose.hint', {
-                                defaultValue: 'Drag the joints to pose the figure, the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is.',
+                                defaultValue: 'Drag a joint and the limb below it follows; hold Alt to move one joint alone. Drag the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is.',
                             })
                             : t('playground.sketch.hint', {
                                 defaultValue: 'A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.',
