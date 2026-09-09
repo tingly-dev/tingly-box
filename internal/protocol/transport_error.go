@@ -39,16 +39,12 @@ var transportFailureMessages = map[TransportFailureReason]string{
 }
 
 // ClassifyTransportError inspects err for the transport-level failure shapes
-// produced when a provider call never got as far as an HTTP response. It is
-// what UpstreamStatus and UpstreamMessage fall back to once none of the
-// vendor SDKs' typed HTTP errors match, so a DNS/timeout/TLS failure reads
-// distinctly instead of collapsing into the same undifferentiated 500 as an
-// actual internal bug. ok is false when err doesn't look like a transport
-// failure at all (nil, or already an SDK-typed HTTP error).
-//
-// Only the reason is returned — callers that need the human-readable sentence
-// look it up via transportFailureMessages, so status-only callers (e.g.
-// UpstreamStatus) don't carry a message they'd just discard.
+// produced when a provider call never got as far as an HTTP response.
+// ClassifyUpstreamFailure falls back to this once no vendor SDK's typed HTTP
+// error matches. ok is false when err doesn't look like a transport failure
+// at all (nil, or already an SDK-typed HTTP error). Only the reason is
+// returned; the human-readable sentence lives in transportFailureMessages,
+// looked up by the one caller that needs it.
 func ClassifyTransportError(err error) (reason TransportFailureReason, ok bool) {
 	if err == nil {
 		return "", false

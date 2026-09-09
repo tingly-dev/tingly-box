@@ -10,25 +10,19 @@ import (
 	"google.golang.org/genai"
 )
 
-// UpstreamFailure is the client-facing shape of a failed upstream call: the
-// HTTP status to answer the caller with, and a client-safe description of
-// what happened. It exists because every call site that reports an upstream
-// failure needs both — Status decides the JSON status code, Message fills
-// the body — and building them separately via UpstreamStatus + UpstreamMessage
-// means classifying the same err twice. ClassifyUpstreamFailure does it once.
+// UpstreamFailure is the client-facing status + message for a failed
+// upstream call. See ClassifyUpstreamFailure.
 type UpstreamFailure struct {
 	Status  int
 	Message string
 }
 
-// ClassifyUpstreamFailure classifies err once into the status
-// (UpstreamStatus's rules) and message (UpstreamMessage's rules) a call site
-// needs to report it to a client. Prefer this over calling UpstreamStatus and
-// UpstreamMessage separately when a call site needs both — which is every
-// current call site that has an HTTP status to report at all (the
-// exceptions — respondMCPError, FailAttemptSetup, and the mid-stream SSE
-// error-event sites — only ever need the message: they either hardcode their
-// status or, mid-stream, have none to send).
+// ClassifyUpstreamFailure classifies err once into both the HTTP status to
+// answer the client with and a client-safe message — the status and message
+// rules are documented on UpstreamStatus and UpstreamMessage respectively.
+// Prefer this over calling those two separately when a call site needs both,
+// so err is only classified once (see .design/logging.md §3 for why this
+// exists and which call sites need only one of the two).
 func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 	if err == nil {
 		return UpstreamFailure{Status: fallbackStatus}
@@ -75,47 +69,28 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 	return UpstreamFailure{Status: fallbackStatus, Message: err.Error()}
 }
 
-// UpstreamStatus extracts the HTTP status code that an upstream provider
-// returned, so the gateway can propagate it to the client instead of
-// flattening every forwarding failure into a 500. A thin wrapper over
-// ClassifyUpstreamFailure for call sites that only need the status; prefer
-// ClassifyUpstreamFailure directly when a message is needed too, so err is
-// only classified once.
+// UpstreamStatus extracts the HTTP status an upstream provider returned
+// (openai.Error / anthropic.Error / genai.APIError's own status), so a
+// 401/429/4xx isn't flattened into a generic 500; a transport-level failure
+// (no HTTP response at all) maps to 502; anything else falls back to
+// fallback. A thin wrapper over ClassifyUpstreamFailure.
 func UpstreamStatus(err error, fallback int) int {
 	return ClassifyUpstreamFailure(err, fallback).Status
 }
 
-// UpstreamMessage returns a client-safe description of err.
-//
-// A transport-level failure is described by category instead of the raw Go
-// dial/DNS/TLS error text — long, jargon-heavy, and a server-log detail, not
-// something an API caller needs verbatim.
-//
-// An SDK-typed provider error already carries the provider's own error body,
-// which is genuinely useful to the caller (e.g. "rate_limit_error"), so that
-// part passes through. But openai.Error and anthropic.Error's own Error()
-// also embeds the full outbound request line — method + the exact URL we
-// called upstream (openai-go/internal/apierror/apierror.go, anthropic-sdk-go
-// same) — which leaks our upstream endpoint (a custom/internal API base in
-// particular) to the downstream caller for no reason. Rather than hand-picking
-// which fields to re-print (which silently drops whatever the SDK's Error()
-// format adds later — anthropic.Error already prints a WorkspaceID this PR
-// would otherwise have missed), ClassifyUpstreamFailure calls the SDK's own
-// Error() on a copy with the URL blanked out, so it stays byte-for-byte in
-// sync with upstream except for that one line. genai.APIError's Error()
-// never included the URL, so it passes through unchanged.
-//
-// A thin wrapper over ClassifyUpstreamFailure for call sites that only need
-// the message (no HTTP status to report — a mid-stream SSE error event, or a
-// handler that hardcodes its status); prefer ClassifyUpstreamFailure directly
-// when the status is needed too, so err is only classified once.
+// UpstreamMessage returns a client-safe description of err: a transport
+// failure is described by category, not its raw Go dial/DNS/TLS text; an
+// SDK-typed error is the vendor's own Error() with the outbound request URL
+// redacted (delegating to Error() itself rather than reprinting selected
+// fields keeps every other field — e.g. anthropic.Error's WorkspaceID — in
+// sync with the SDK automatically). A thin wrapper over
+// ClassifyUpstreamFailure.
 func UpstreamMessage(err error) string {
 	return ClassifyUpstreamFailure(err, 0).Message
 }
 
-// redactedRequest returns a copy of req (nil-safe) with the URL replaced by a
-// fixed placeholder, keeping the method intact. Used to launder an SDK-typed
-// error's own Error() through unmodified except for the leaked endpoint.
+// redactedRequest returns a copy of req (nil-safe) with the URL replaced by
+// a fixed placeholder, keeping the method intact.
 func redactedRequest(req *http.Request) *http.Request {
 	redacted := &http.Request{URL: &url.URL{Path: "REDACTED"}}
 	if req != nil {

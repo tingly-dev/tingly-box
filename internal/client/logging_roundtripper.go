@@ -79,28 +79,17 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	entry := logrus.WithContext(req.Context()).WithFields(fields)
 	if err != nil {
-		// A transport-level failure (DNS, TCP connect, TLS, timeout) never
-		// reached the upstream, so err is a raw Go net/url error — usually
-		// readable, but not categorized, which is what makes it slow to
-		// eyeball in a log stream. reason surfaces that category as its own
-		// field so entries are filterable/greppable without parsing the
-		// message text; the full err still goes out via WithError for the
-		// exact underlying detail.
+		// fail_reason categorizes the raw net/url error as its own field so
+		// entries are filterable without parsing the message text.
 		if reason, ok := protocol.ClassifyTransportError(err); ok {
 			entry = entry.WithField("fail_reason", string(reason))
 		}
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
 	}
-	// The provider did respond, so RoundTrip returned no error — but a 4xx/5xx
-	// body is just as much a failure as the transport case above, and without
-	// this it only ever reaches Info level, indistinguishable from a 200 to
-	// anyone filtering logs by severity. The response body (the actual error
-	// reason) isn't read here — the SDK layer above still owns parsing it
-	// into a typed error — so this only classifies by status, the same way
-	// the HTTP access log does (obs.LevelForStatus). Logf defers the
-	// Sprintf until logrus confirms the level is enabled, same as Errorf did
-	// on the branch above.
+	// A 4xx/5xx response is still a failure even though RoundTrip returned
+	// no error; level it the same way the HTTP access log does
+	// (obs.LevelForStatus) instead of always logging at Info.
 	entry.WithField("status", resp.StatusCode).
 		Logf(obs.LevelForStatus(resp.StatusCode), "upstream %d via %s", resp.StatusCode, proxy)
 	return resp, nil
