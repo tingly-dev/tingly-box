@@ -37,8 +37,9 @@ import {
     drawFigureHandles,
     figureBounds,
     flipFigure,
-    hitTestBody,
     hitTestJoint,
+    nextFigureAt,
+    placeNewFigure,
     isScaleHandleHit,
     moveJoint,
     scaleFigure,
@@ -286,11 +287,13 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     // (principle 2). Poses are swapped afterwards, in place.
     const handleAddFigure = useCallback(() => {
         snapshotFigures();
-        const figure = createFigure('standing', dims);
+        // Placed clear of the figures already down, and in the next tone, so
+        // a second figure is visibly a second figure.
+        const figure = createFigure('standing', dims, placeNewFigure(figures, dims), figures.length);
         setFigures((current) => [...current, figure]);
         setSelectedId(figure.id);
         setTool('pose');
-    }, [dims, snapshotFigures]);
+    }, [dims, figures, snapshotFigures]);
 
     const handleRemoveFigure = useCallback(() => {
         if (!selectedFigure) return;
@@ -455,25 +458,25 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             }
         }
 
-        for (let index = figures.length - 1; index >= 0; index -= 1) {
-            const figure = figures[index];
-            if (hitTestBody(figure, point, toCanvasPx(4))) {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                setSelectedId(figure.id);
-                poseDragRef.current = {
-                    pointerId: event.pointerId,
-                    mode: 'move',
-                    figureId: figure.id,
-                    before: figures,
-                    committed: false,
-                    last: point,
-                };
-                return;
-            }
+        // Clicking a pile walks down it rather than always grabbing the top
+        // figure, which would bury everything under it.
+        const body = nextFigureAt(figures, point, selectedId, toCanvasPx(4));
+        if (body) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setSelectedId(body.id);
+            poseDragRef.current = {
+                pointerId: event.pointerId,
+                mode: 'move',
+                figureId: body.id,
+                before: figures,
+                committed: false,
+                last: point,
+            };
+            return;
         }
 
         setSelectedId(null);
-    }, [figures, pointFromEvent, selectedFigure, toCanvasPx]);
+    }, [figures, pointFromEvent, selectedFigure, selectedId, toCanvasPx]);
 
     const handlePosePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
         const drag = poseDragRef.current;

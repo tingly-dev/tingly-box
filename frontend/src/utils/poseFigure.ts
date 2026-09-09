@@ -32,6 +32,11 @@ export const JOINT_KEYS: readonly JointKey[] = [
 export interface PoseFigure {
     id: string;
     joints: Record<JointKey, CanvasPoint>;
+    // Which tone this figure is drawn in. Assigned once, at creation, and
+    // carried in the data: figures in a crowd have to stay told apart, and
+    // colouring by list position would recolour everyone when one is deleted.
+    // Optional so a sketch saved before shades existed still opens.
+    shade?: number;
 }
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -126,6 +131,7 @@ export const createFigure = (
     preset: PosePresetKey,
     dims: CanvasDimensions,
     center?: CanvasPoint,
+    shade = 0,
 ): PoseFigure => {
     const height = Math.min(dims.height * FIGURE_HEIGHT_RATIO, dims.width / FIGURE_ASPECT);
     const width = height * FIGURE_ASPECT;
@@ -138,7 +144,7 @@ export const createFigure = (
         joints[key] = { x: cx + (nx - 0.5) * width, y: cy + (ny - 0.5) * height };
     }
     figureCounter += 1;
-    const figure = { id: `figure-${Date.now()}-${figureCounter}`, joints };
+    const figure = { id: `figure-${Date.now()}-${figureCounter}`, joints, shade };
     // Centre on the joints, not on the nominal unit box: no preset fills the
     // box exactly (a crown sits below its top edge, a seated figure leans to
     // one side), and every later transform pivots on the joint bounds. Making
@@ -148,6 +154,58 @@ export const createFigure = (
     return translateFigure(figure, cx - (bounds.x + bounds.width / 2), cy - (bounds.y + bounds.height / 2));
 };
 
+// Where the next figure should land. Dropping every one at the canvas centre
+// stacks them exactly on top of each other, which looks like nothing happened
+// and leaves the buried figure unreachable. Candidates walk outward from the
+// centre; the first one clear of the figures already placed wins, and when a
+// crowd has taken them all the figure cascades so it is at least grabbable.
+const PLACEMENT_CANDIDATES: readonly (readonly [number, number])[] = [
+    [0.5, 0.5], [0.26, 0.5], [0.74, 0.5], [0.38, 0.44], [0.62, 0.56],
+    [0.14, 0.46], [0.86, 0.54], [0.5, 0.38], [0.5, 0.62],
+];
+
+export const placeNewFigure = (existing: readonly PoseFigure[], dims: CanvasDimensions): CanvasPoint => {
+    const centers = existing.map((figure) => {
+        const bounds = figureBounds(figure);
+        return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    });
+    const clearance = Math.min(dims.width, dims.height) * 0.12;
+    for (const [fx, fy] of PLACEMENT_CANDIDATES) {
+        const candidate = { x: dims.width * fx, y: dims.height * fy };
+        if (centers.every((center) => Math.hypot(center.x - candidate.x, center.y - candidate.y) > clearance)) {
+            return candidate;
+        }
+    }
+    const step = clearance * 0.8;
+    const overflow = existing.length - PLACEMENT_CANDIDATES.length + 1;
+    return {
+        x: Math.min(dims.width * 0.9, dims.width * 0.5 + step * overflow),
+        y: Math.min(dims.height * 0.9, dims.height * 0.5 + step * overflow),
+    };
+};
+
+// Every figure whose body is under the point, bottom of the stack first.
+export const figuresAt = (
+    figures: readonly PoseFigure[],
+    point: CanvasPoint,
+    tolerance = 0,
+): PoseFigure[] => figures.filter((figure) => hitTestBody(figure, point, tolerance));
+
+// Clicking a pile of overlapping figures walks down it instead of always
+// returning the top one, which would leave anything underneath unreachable.
+export const nextFigureAt = (
+    figures: readonly PoseFigure[],
+    point: CanvasPoint,
+    selectedId: string | null,
+    tolerance = 0,
+): PoseFigure | null => {
+    const hits = figuresAt(figures, point, tolerance);
+    if (hits.length === 0) return null;
+    const index = hits.findIndex((figure) => figure.id === selectedId);
+    if (index < 0) return hits[hits.length - 1];
+    return hits[(index + hits.length - 1) % hits.length];
+};
+
 // Swaps the pose while keeping the figure where it is and roughly how big it
 // is: re-entry (principle 10) applies inside the dialog too.
 export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: CanvasDimensions): PoseFigure => {
@@ -155,7 +213,7 @@ export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Can
     const fresh = createFigure(preset, dims, {
         x: bounds.x + bounds.width / 2,
         y: bounds.y + bounds.height / 2,
-    });
+    }, figure.shade);
     const freshBounds = figureBounds(fresh);
     const factor = freshBounds.height > 0 ? bounds.height / freshBounds.height : 1;
     return { ...scaleFigure(fresh, factor), id: figure.id };
@@ -448,16 +506,28 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
     };
 };
 
-// Three tones, no gradients: the body, the joint balls a shade darker so the
-// articulation reads, and the head a shade lighter so it does not merge into
-// the chest. Neutral grey, not wood — the manikin's structure is the message,
-// and a wood colour only invites the model to paint a wooden doll.
-export const FIGURE_FILL = '#aeb2b6';
-export const FIGURE_JOINT_FILL = '#8f9398';
-export const FIGURE_HEAD_FILL = '#b9bdc1';
-export const FIGURE_SELECTED_FILL = '#a2abbd';
-export const FIGURE_SELECTED_JOINT_FILL = '#828da3';
-export const FIGURE_SELECTED_HEAD_FILL = '#adb5c5';
+// Three tones per figure, no gradients: the body, the joint balls a step
+// darker so the articulation reads, and the head a step lighter so it does not
+// merge into the chest. Neutral grey, not wood — the manikin's structure is
+// the message, and a wood colour only invites the model to paint a wooden doll.
+//
+// The three shades exist for crowds: two figures in one grey merge into a
+// single blob where they overlap, and the model then has no way to tell how
+// many people are in the frame. Lightness only, so they still read as the same
+// material, and the selected figure keeps its own cool tint on top of this.
+export interface FigureTone { body: string; joint: string; head: string }
+
+export const FIGURE_SHADES: readonly FigureTone[] = [
+    { body: '#aeb2b6', joint: '#8f9398', head: '#b9bdc1' },
+    { body: '#8d9298', joint: '#70757b', head: '#9aa0a6' },
+    { body: '#c0c5ca', joint: '#a2a7ad', head: '#ccd0d4' },
+];
+
+export const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#828da3', head: '#adb5c5' };
+
+export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
+    ? SELECTED_TONE
+    : FIGURE_SHADES[(figure.shade ?? 0) % FIGURE_SHADES.length]);
 const HANDLE_FILL = '#2563eb';
 const HANDLE_STROKE = '#ffffff';
 
@@ -499,38 +569,36 @@ export const drawFigure = (
     options: { selected?: boolean } = {},
 ): void => {
     const parts = figureParts(figure);
-    const selected = options.selected === true;
+    const tone = toneFor(figure, options.selected === true);
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 
     // Body first, joints over it, head last: the drawing order is what makes
     // the balls read as articulation rather than as lumps under the limbs.
-    ctx.fillStyle = selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
+    ctx.fillStyle = tone.body;
     fillSegment(ctx, parts.neck);
     fillSegment(ctx, parts.spine);
     for (const limb of parts.limbs) fillSegment(ctx, limb);
     for (const hand of parts.hands) fillEllipse(ctx, hand);
     for (const foot of parts.feet) fillEllipse(ctx, foot);
 
-    const jointFill = selected ? FIGURE_SELECTED_JOINT_FILL : FIGURE_JOINT_FILL;
-    const bodyFill = selected ? FIGURE_SELECTED_FILL : FIGURE_FILL;
     const fillBall = (ball: Ball) => {
         ctx.beginPath();
         ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius, 0.5), 0, Math.PI * 2);
         ctx.fill();
     };
 
-    ctx.fillStyle = jointFill;
+    ctx.fillStyle = tone.joint;
     for (const ball of parts.hipBalls) fillBall(ball);
 
-    ctx.fillStyle = bodyFill;
+    ctx.fillStyle = tone.body;
     fillEllipse(ctx, parts.chest);
     fillEllipse(ctx, parts.pelvis);
 
-    ctx.fillStyle = jointFill;
+    ctx.fillStyle = tone.joint;
     for (const ball of [parts.waist, ...parts.balls]) fillBall(ball);
 
-    ctx.fillStyle = selected ? FIGURE_SELECTED_HEAD_FILL : FIGURE_HEAD_FILL;
+    ctx.fillStyle = tone.head;
     fillEllipse(ctx, parts.head);
     ctx.restore();
 };

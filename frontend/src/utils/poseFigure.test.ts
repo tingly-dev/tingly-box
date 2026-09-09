@@ -13,6 +13,8 @@ import {
     JOINT_KEYS,
     MIN_FIGURE_HEIGHT,
     moveJoint,
+    nextFigureAt,
+    placeNewFigure,
     scaleFigure,
     scaleHandlePoint,
     translateFigure,
@@ -227,5 +229,70 @@ describe('figureParts', () => {
         const big = figureParts(scaleFigure(createFigure('standing', DIMS), 2));
         expect(big.head.radiusY).toBeCloseTo(small.head.radiusY * 2, 4);
         expect(big.limbs[0].fromRadius).toBeCloseTo(small.limbs[0].fromRadius * 2, 4);
+    });
+});
+
+describe('placeNewFigure', () => {
+    it('puts the first figure in the middle', () => {
+        expect(placeNewFigure([], DIMS)).toEqual({ x: 512, y: 512 });
+    });
+
+    it('never drops a figure on top of one already placed', () => {
+        const figures = [];
+        for (let i = 0; i < 6; i += 1) {
+            figures.push(createFigure('standing', DIMS, placeNewFigure(figures, DIMS)));
+        }
+        const centers = figures.map((figure) => {
+            const bounds = figureBounds(figure);
+            return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+        });
+        for (let i = 0; i < centers.length; i += 1) {
+            for (let j = i + 1; j < centers.length; j += 1) {
+                expect(Math.hypot(centers[i].x - centers[j].x, centers[i].y - centers[j].y)).toBeGreaterThan(1);
+            }
+        }
+    });
+
+    it('keeps cascading, inside the canvas, once every candidate is taken', () => {
+        const crowd = Array.from({ length: 12 }, (_, i) => createFigure('standing', DIMS, { x: 40 * i, y: 40 * i }));
+        const spot = placeNewFigure(crowd, DIMS);
+        expect(spot.x).toBeGreaterThan(0);
+        expect(spot.x).toBeLessThanOrEqual(DIMS.width);
+        expect(spot.y).toBeLessThanOrEqual(DIMS.height);
+    });
+});
+
+describe('nextFigureAt', () => {
+    const stack = () => {
+        const a = createFigure('standing', DIMS, { x: 500, y: 512 });
+        const b = createFigure('standing', DIMS, { x: 520, y: 512 });
+        return [a, b];
+    };
+
+    it('returns the top figure when nothing is selected', () => {
+        const [a, b] = stack();
+        expect(nextFigureAt([a, b], b.joints.hip, null)?.id).toBe(b.id);
+    });
+
+    it('walks down the pile on repeated clicks and wraps around', () => {
+        const [a, b] = stack();
+        const point = b.joints.hip;
+        const first = nextFigureAt([a, b], point, null);
+        expect(first?.id).toBe(b.id);
+        const second = nextFigureAt([a, b], point, first?.id ?? null);
+        expect(second?.id).toBe(a.id);
+        expect(nextFigureAt([a, b], point, second?.id ?? null)?.id).toBe(b.id);
+    });
+
+    it('returns nothing on empty canvas space', () => {
+        const [a, b] = stack();
+        expect(nextFigureAt([a, b], { x: 5, y: 5 }, null)).toBeNull();
+    });
+});
+
+describe('shades', () => {
+    it('carries the shade through preset swaps', () => {
+        const figure = createFigure('standing', DIMS, undefined, 2);
+        expect(applyPreset(figure, 'walking', DIMS).shade).toBe(2);
     });
 });
