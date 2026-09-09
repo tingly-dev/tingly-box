@@ -16,10 +16,11 @@ import {
     Select,
     Slider,
     Stack,
+    TextField,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, Download, Gif, GridView, Pause, PlayArrow } from '@/components/icons';
+import { Add, Close, Download, Gif, GridView, Pause, PlayArrow, Remove } from '@/components/icons';
 import { createZipBlob } from '@/utils/zip';
 import { downloadBlob, slugify } from '@/utils/download';
 import { encodeGif } from '@/utils/gif';
@@ -44,11 +45,59 @@ import {
     type TileRect,
 } from '@/utils/imageSlice';
 
-// Slicing is only ever useful up to a handful of rows/columns; a bounded
-// select keeps the control honest (concrete values, no free-text validation).
-// 3x3 is the shape a sticker sheet almost always comes back as, so it is the
-// grid the dialog opens on.
-const AXIS_CHOICES = [1, 2, 3, 4, 5, 6];
+// Rows and columns are a number you nudge while watching the overlay, so each
+// is a stepper with a typable field rather than a dropdown that hides the
+// image behind a menu on every change. The cap is generous enough for a
+// spritesheet; 3x3 is the shape a sticker sheet almost always comes back as.
+const AXIS_MAX = 12;
+const clampAxis = (value: number): number => Math.min(AXIS_MAX, Math.max(1, Math.round(value) || 1));
+
+interface AxisStepperProps {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    decreaseLabel: string;
+    increaseLabel: string;
+}
+
+const AxisStepper: React.FC<AxisStepperProps> = ({ label, value, onChange, decreaseLabel, increaseLabel }) => (
+    <Stack direction="row" sx={{ alignItems: 'flex-start', flex: 1, minWidth: 0, '& > .MuiIconButton-root': { mt: 0.25 } }}>
+        <IconButton
+            size="small"
+            onClick={() => onChange(clampAxis(value - 1))}
+            disabled={value <= 1}
+            aria-label={decreaseLabel}
+        >
+            <Remove fontSize="small" />
+        </IconButton>
+        <TextField
+            size="small"
+            helperText={label}
+            value={value}
+            onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next) && next >= 1) onChange(clampAxis(next));
+            }}
+            onKeyDown={(event) => {
+                if (event.key === 'ArrowUp') { event.preventDefault(); onChange(clampAxis(value + 1)); }
+                if (event.key === 'ArrowDown') { event.preventDefault(); onChange(clampAxis(value - 1)); }
+            }}
+            slotProps={{
+                htmlInput: { 'aria-label': label, inputMode: 'numeric', min: 1, max: AXIS_MAX, style: { textAlign: 'center', padding: '6px 4px' } },
+                formHelperText: { sx: { mx: 0, textAlign: 'center', mt: 0.25, lineHeight: 1.2 } },
+            }}
+            sx={{ width: 52, '& .MuiInputBase-root': { px: 0.5 } }}
+        />
+        <IconButton
+            size="small"
+            onClick={() => onChange(clampAxis(value + 1))}
+            disabled={value >= AXIS_MAX}
+            aria-label={increaseLabel}
+        >
+            <Add fontSize="small" />
+        </IconButton>
+    </Stack>
+);
 
 // The conventional "transparent here" checkerboard.
 const CHECKERBOARD_IMAGE = [
@@ -606,7 +655,26 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                     borderRadius: '3px',
                                                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.light' },
                                                 }
-                                                : { bgcolor: 'transparent' }),
+                                                : {
+                                                    bgcolor: 'transparent',
+                                                    // A pill at the strip's midpoint says "this edge
+                                                    // drags too"; the strip itself stays invisible
+                                                    // because it is a hit area, not a shape.
+                                                    '&::after': {
+                                                        content: '""',
+                                                        position: 'absolute',
+                                                        left: '50%',
+                                                        top: '50%',
+                                                        transform: 'translate(-50%, -50%)',
+                                                        width: handle.mode === 'n' || handle.mode === 's' ? 22 : 5,
+                                                        height: handle.mode === 'n' || handle.mode === 's' ? 5 : 22,
+                                                        borderRadius: 3,
+                                                        bgcolor: 'common.white',
+                                                        border: '1px solid',
+                                                        borderColor: 'primary.main',
+                                                        boxSizing: 'border-box',
+                                                    },
+                                                }),
                                         }}
                                     />
                                 ))}
@@ -674,37 +742,22 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             })}
                         </Typography>
 
-                        <Stack direction="row" spacing={1.5}>
-                            <FormControl size="small" fullWidth>
-                                <InputLabel id="slice-rows-label">
-                                    {t('playground.slice.rows', { defaultValue: 'Rows' })}
-                                </InputLabel>
-                                <Select
-                                    labelId="slice-rows-label"
-                                    label={t('playground.slice.rows', { defaultValue: 'Rows' })}
-                                    value={rows}
-                                    onChange={(event) => setRows(Number(event.target.value))}
-                                >
-                                    {AXIS_CHOICES.map((value) => (
-                                        <MenuItem key={value} value={value}>{value}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                            <FormControl size="small" fullWidth>
-                                <InputLabel id="slice-cols-label">
-                                    {t('playground.slice.cols', { defaultValue: 'Columns' })}
-                                </InputLabel>
-                                <Select
-                                    labelId="slice-cols-label"
-                                    label={t('playground.slice.cols', { defaultValue: 'Columns' })}
-                                    value={cols}
-                                    onChange={(event) => setCols(Number(event.target.value))}
-                                >
-                                    {AXIS_CHOICES.map((value) => (
-                                        <MenuItem key={value} value={value}>{value}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                            <AxisStepper
+                                label={t('playground.slice.rows', { defaultValue: 'Rows' })}
+                                value={rows}
+                                onChange={setRows}
+                                decreaseLabel={t('playground.slice.fewerRows', { defaultValue: 'Fewer rows' })}
+                                increaseLabel={t('playground.slice.moreRows', { defaultValue: 'More rows' })}
+                            />
+                            <Typography variant="body2" sx={{ color: 'text.disabled', mt: 1 }}>×</Typography>
+                            <AxisStepper
+                                label={t('playground.slice.cols', { defaultValue: 'Columns' })}
+                                value={cols}
+                                onChange={setCols}
+                                decreaseLabel={t('playground.slice.fewerCols', { defaultValue: 'Fewer columns' })}
+                                increaseLabel={t('playground.slice.moreCols', { defaultValue: 'More columns' })}
+                            />
                         </Stack>
 
                         {/* The frame is dragged on the image; this side only

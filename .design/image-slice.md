@@ -95,6 +95,12 @@ ChatGPT 的"贴纸"功能对用户呈现为一个动作:描述一次,拿到一�
 因为这是用户唯一看不见的后果:1024 的表切 2×2 是 512px、3×3 是 341px、
 4×4 只剩 256px(原则 5:展示具体值)。
 
+### 3.1.2 行列是步进器,不是下拉框
+
+行列是一个**边看覆盖层边拨**的数字:每改一次,用户要看的是框线落在了哪里。
+下拉框每次都把菜单盖在图上,选完才看得见结果;步进器(− / 输入框 / +,支持
+方向键和直接键入,上限 12)让这个循环不离开图面(原则 2)。
+
 ### 3.2 tainted canvas
 
 `loadImage()` 一律走 `fetch(src) → blob → objectURL`,而不是把 provider 的
@@ -279,7 +285,29 @@ prompt 的图不显示"复制 prompt";已经在参考图行里的那张不显示
 
 ---
 
-## 7. 顺带补齐:单张下载
+## 7. 面板上的几件小事
+
+一批各自很小、但每天都会撞上的摩擦,一起处理掉:
+
+- **⌘/Ctrl+Enter 生成。** 面板里的 prompt 框和放大编辑器里都通,Generate 按钮的
+  tooltip 写着这条快捷键——键盘可以做的事,不该只能用鼠标去够。
+- **失败的 run 留在结果条里。** 之前请求报错就把卡片删掉,只剩一条几秒后消失的
+  toast;回头既看不到哪次失败,也看不到为什么。现在它是一张红边卡片:错误原文、
+  当时的 prompt 和参数,以及一个 Retry。Retry 走的是和首次请求同一条 `runGeneration`,
+  不是一份会漂移的复刻;edits 的参考图只以 data URL 留存,重试时再读回 File。
+- **run 可以删。** 导入的图早就有 ✕,生成的 run 没有——一个时间线里两种元素一个能删
+  一个不能,说不通。
+- **刷新不再失忆。** run 和导入图落到 IndexedDB(`utils/playgroundSession.ts`),
+  不用 sessionStorage 是因为几张 1024 的 base64 图就会超过它的配额,而超配额时静默
+  丢掉最新的那次比根本不存更糟。页面回来时仍是 pending 的 run 不可能再完成,
+  于是恢复成"被刷新中断"的失败卡片,而不是一个永远转着的圈。
+  只在内存为空时才从库里读——页面间切换时内存里的副本更新。
+- **「用作参考」是追加。** 参考图行能放 5 张,"这张也要"是常态;满了替换最早的。
+  原来的替换整列会把已有的几张悄悄丢掉。
+- **取景框四条边有握把。** 边上的拖拽区本来是透明的命中区,用户只看得见四个角;
+  现在每条边中点有一个小药丸,说明"边也能拖"。
+
+## 8. 顺带补齐:单张下载
 
 在此之前 Playground **完全没有下载入口**(只有 copy prompt / use as reference)。
 切片能打包下载而整图不能,是割裂的。lightbox 因此同时补上 `Download`,
@@ -287,13 +315,14 @@ prompt 的图不显示"复制 prompt";已经在参考图行里的那张不显示
 
 ---
 
-## 8. 代码位置
+## 9. 代码位置
 
 | 文件 | 职责 |
 |------|------|
 | `frontend/src/utils/zip.ts` | store-only ZIP writer + CRC-32 |
 | `frontend/src/utils/gif.ts` | GIF89a writer:中位切分量化 + LZW + 循环块 |
-| `frontend/src/utils/imageMatte.ts` | 背景检测(棋盘格/绿幕)与洪水填充式清除 |
+| `frontend/src/utils/imageMatte.ts` | 背景检测(棋盘格/绿幕)与清除 |
+| `frontend/src/utils/playgroundSession.ts` | run / 导入图的 IndexedDB 持久化(尽力而为、写入合并) |
 | `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug、MIME→扩展名、`fetchBlob` |
 | `frontend/src/utils/imageSlice.ts` | 等分网格几何、图片加载、切片渲染 |
 | `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |
