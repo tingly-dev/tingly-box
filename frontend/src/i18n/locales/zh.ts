@@ -920,6 +920,27 @@ export default {
       "title": "提供商",
       "description": "浏览目录，或粘贴一段配置片段——剩下的交给我们。"
     },
+    "oauth": {
+      "title": "OAuth 登录",
+      "description": "Claude Code 和 Codex 各自独立的 OAuth 登录引导。",
+      "claudeCode": "Claude Code 引导",
+      "codex": "Codex 引导",
+      "guide": {
+        "title": "{{agent}} OAuth 登录",
+        "intro": "Tingly Box 会用 {{agent}} 官方的 OAuth 登录方式完成授权并保存凭据；{{agent}} 只有在配置指向 Tingly Box 之后，请求才会经过它——这是两个独立的步骤。",
+        "connected": "{{agent}} 账号已连接，继续第 2 步完成配置。",
+        "step1": {
+          "title": "登录 {{agent}}",
+          "description": "授权 Tingly Box 使用你的 {{agent}} 账号登录，方式与官方 CLI 一致。",
+          "action": "连接账号"
+        },
+        "step2": {
+          "title": "让 {{agent}} 指向 Tingly Box",
+          "description": "打开 {{agent}} 的配置页面，按需安装 CLI，并应用让它经由 Tingly Box 路由的配置。",
+          "action": "打开 {{agent}} 配置"
+        }
+      }
+    },
     "routing": {
       "title": "路由与分层指南",
       "description": "回顾直连路由、智能路由和模型分层的工作方式——复用的是其他页面上那份一样的图和步骤。",

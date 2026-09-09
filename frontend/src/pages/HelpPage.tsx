@@ -8,6 +8,7 @@ import { ShortcutCard, shouldShowShortcutCard } from '@/components/ShortcutCard.
 import { ProvidersCard } from '@/components/ProvidersCard.tsx';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
+import { OAuthGuideDialog, type OAuthGuideAgent } from '@/components/oauth/OAuthGuideDialog';
 
 // The Shortcut card spans full width like every other card; only its content
 // is capped, matching System settings cards. ProvidersCard is left uncapped —
@@ -19,7 +20,7 @@ const SHORTCUT_CONTENT_MAX_WIDTH = 720;
 // internally past this height instead of growing the page.
 const PROVIDERS_CONTENT_MAX_HEIGHT = 480;
 
-type HelpSectionId = 'shortcut' | 'providers' | 'routing';
+type HelpSectionId = 'shortcut' | 'providers' | 'oauth' | 'routing';
 
 /**
  * HelpPage — the lightbulb entry in the activity bar, replacing the old
@@ -59,6 +60,8 @@ const HelpPage = () => {
         setEntryGuideOpen(true);
     };
 
+    const [oauthGuideAgent, setOAuthGuideAgent] = useState<OAuthGuideAgent | null>(null);
+
     return (
         <PageLayout loading={false} title={t('help.title')} subtitle={t('help.description')}>
             <CardGrid>
@@ -85,6 +88,23 @@ const HelpPage = () => {
                 </CollapsibleCard>
 
                 <CollapsibleCard
+                    title={t('help.oauth.title')}
+                    description={t('help.oauth.description')}
+                    expanded={expanded.has('oauth')}
+                    onToggle={() => toggle('oauth')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                        <Button variant="outlined" size="small" onClick={() => setOAuthGuideAgent('claude_code')}>
+                            {t('help.oauth.claudeCode')}
+                        </Button>
+                        <Button variant="outlined" size="small" onClick={() => setOAuthGuideAgent('codex')}>
+                            {t('help.oauth.codex')}
+                        </Button>
+                    </Stack>
+                </CollapsibleCard>
+
+                <CollapsibleCard
                     title={t('help.routing.title')}
                     description={t('help.routing.description')}
                     expanded={expanded.has('routing')}
@@ -107,6 +127,13 @@ const HelpPage = () => {
 
             <EntryGuideDialog open={entryGuideOpen} onClose={() => setEntryGuideOpen(false)} mode={entryGuideMode} />
             <TierGuideDialog open={tierGuideOpen} onClose={() => setTierGuideOpen(false)} />
+            {oauthGuideAgent && (
+                <OAuthGuideDialog
+                    open={oauthGuideAgent !== null}
+                    onClose={() => setOAuthGuideAgent(null)}
+                    agent={oauthGuideAgent}
+                />
+            )}
         </PageLayout>
     );
 };

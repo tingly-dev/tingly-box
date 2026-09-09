@@ -919,6 +919,27 @@ export default {
       "title": "Providers",
       "description": "Browse the catalog or paste a config snippet — we'll figure out the rest."
     },
+    "oauth": {
+      "title": "OAuth Sign-in",
+      "description": "Separate walkthroughs for signing Claude Code and Codex in via OAuth.",
+      "claudeCode": "Claude Code Guide",
+      "codex": "Codex Guide",
+      "guide": {
+        "title": "{{agent}} OAuth Sign-in",
+        "intro": "Tingly Box signs in with {{agent}}'s own OAuth login and stores the credential, then {{agent}} routes its requests through Tingly Box once it's pointed here — it's two separate steps.",
+        "connected": "{{agent}} account connected. Continue to step 2 to finish setup.",
+        "step1": {
+          "title": "Sign in with {{agent}}",
+          "description": "Authorize Tingly Box to sign in with your {{agent}} account, the same way the official CLI does.",
+          "action": "Connect Account"
+        },
+        "step2": {
+          "title": "Point {{agent}} at Tingly Box",
+          "description": "Open the {{agent}} setup page to install the CLI (if needed) and apply the config that routes it through Tingly Box.",
+          "action": "Open {{agent}} Setup"
+        }
+      }
+    },
     "routing": {
       "title": "Routing & Tier Guides",
       "description": "Revisit how direct routing, smart routing, and model tiers work — the same diagrams and steps used elsewhere in the product.",
