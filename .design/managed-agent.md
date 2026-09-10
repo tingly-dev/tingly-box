@@ -537,6 +537,28 @@ settings defaultMode > CLI 默认）。
 
 ---
 
+## 13. 测试方案（固化）
+
+**原则：Managed Agent 的任何改动，没有跑过端到端 journey 不算完成。** 手工点一遍不是验证手段——验证由 `internal/managedagent/e2e/` 承担，入口固定为：
+
+```bash
+task test:e2e:agent        # API 级 journey：真服务 + 真 claude CLI + 真 git + 受控模型
+task test:e2e:agent:ui     # 浏览器 journey：构建后的真实 UI（嵌入二进制的那份）+ Playwright
+task test:e2e:agent:all
+```
+
+三层各管一段：
+
+| 层 | 位置 | 管什么 |
+|---|---|---|
+| 单元 | `internal/managedagent/*_test.go`、`agentrun/launcher_test.go`（FakeFactory）、`imbridge/`、`agentboot/claude/` | 每个部件的分支逻辑，快，随 `go test ./...` 跑 |
+| API journey | `internal/managedagent/e2e/` | 用户承诺的完整路径：本地目录就地工作、权限询问/批准/拒绝/bypass、中断后续聊、失败后重试、归档、所有权限模式能启动；`agentrun/full_stack_test.go` 管 git 仓库 clone→push |
+| 浏览器 journey | `e2e/browser_test.go` + `browser/managed_agent.mjs` | 用户真正碰到的东西：选目录对话框 → Start → 详情页看到回答 → 追问 → 点 **Allow** → 看到结果 → Repositories 页列出该目录；每一步截图 |
+
+模型由 `scriptedUpstream` 控制（`Text` / `Bash` 工具调用 / `Status` 错误 / `Delay`），CLI 是真的，所以 CLI 的真实行为会被暴露出来。首轮跑通时就靠它抓到了四个只在部件相遇时才出现的问题：`user` 消息里的 tool_result 从未进时间线（agentboot 解析修复）、`--resume` 一个 CLI 从未落盘的会话（launcher 自动改为新会话重跑）、子 CLI 继承父会话的 `CLAUDE_CODE_SESSION_ID` / entrypoint（agentboot 剥离）、`echo` 被 CLI 自动放行导致权限流程从未被真正测过（journey 改用写命令）。
+
+怎么跑、怎么加、失败了怎么查：`.claude/skills/managed-agent-e2e/SKILL.md`。
+
 ## 12. Session 留存与一致性；clone 还是 worktree
 
 ### 12.1 Claude Code 会话的键是 (config dir, cwd)

@@ -52,6 +52,30 @@ tasks:
   test:e2e:
     cmds:
       - go build ./... && go test -v -tags=e2e ./internal/protocol/transform -run TestE2E
+
+  # Managed Agent journeys: real server + real `claude` CLI + real git, driven
+  # over HTTP the way the web UI and IM drive it. Needs the claude CLI on PATH.
+  # See .claude/skills/managed-agent-e2e/SKILL.md for the plan.
+  test:e2e:agent:
+    summary: Managed Agent API journeys (real claude CLI, scripted model)
+    cmds:
+      - go build ./...
+      - TB_MANAGED_AGENT_E2E=1 go test -count=1 -v -timeout 30m ./internal/managedagent/e2e/ ./internal/managedagent/agentrun/ -run 'Journey|RealCLI|FullStack' -skip 'Journey_Browser'
+
+  # The browser journey drives the built web UI (embedded, as shipped) with
+  # Playwright. Builds the UI first so the test binary embeds a current one.
+  # Screenshots: TB_E2E_OUT (default: a temp dir printed by the test).
+  test:e2e:agent:ui:
+    summary: Managed Agent browser journey (built UI + Playwright + real claude CLI)
+    cmds:
+      - task: web:dist
+      - TB_MANAGED_AGENT_E2E=1 go test -count=1 -v -timeout 30m ./internal/managedagent/e2e/ -run 'Journey_Browser'
+
+  test:e2e:agent:all:
+    summary: All Managed Agent journeys (API + browser)
+    cmds:
+      - task: test:e2e:agent
+      - task: test:e2e:agent:ui
   
   start:
     aliases:
