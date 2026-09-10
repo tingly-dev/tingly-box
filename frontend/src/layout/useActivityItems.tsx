@@ -32,6 +32,7 @@ import {
     AiAgents as IconAiAgents,
     Extension as IconExtension,
     Code as IconCode,
+    TestPipe as IconTestPipe,
 } from '@/components/icons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -186,6 +187,16 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
                     { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
                 ],
+            },
+            // Bench — the customizable end-to-end test workbench
+            // (.design/bench.md). Sits with Usage in the "observe &
+            // verify" domain; a single page, so no sidebar children.
+            {
+                key: 'bench',
+                icon: <IconTestPipe sx={{ fontSize: 22 }} />,
+                label: t('layout.bench', { defaultValue: 'Bench' }),
+                path: '/bench',
+                defaultPath: '/bench',
             },
             ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
