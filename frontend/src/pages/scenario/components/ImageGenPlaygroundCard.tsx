@@ -1295,7 +1295,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
                                         {t('playground.sessionOutputs', { defaultValue: 'Session images' })}
                                     </Typography>
@@ -1305,6 +1305,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             color: "text.secondary",
                                             flexShrink: 0,
                                             whiteSpace: 'nowrap',
+                                            ml: 'auto',
                                         }}
                                     >
                                         {[
@@ -1320,6 +1321,28 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             }),
                                         ].filter(Boolean).join(' · ')}
                                     </Typography>
+                                    {/* The same two ways in as the empty state offers: the
+                                        strip filling up must not take them away. */}
+                                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                        <Button
+                                            size="small"
+                                            color="inherit"
+                                            startIcon={<FileUpload fontSize="small" />}
+                                            onClick={() => importFileInputRef.current?.click()}
+                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                        >
+                                            {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            color="inherit"
+                                            startIcon={<ContentPaste fontSize="small" />}
+                                            onClick={() => { void handleImportFromClipboard(); }}
+                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                        >
+                                            {t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                        </Button>
+                                    </Stack>
                                 </Box>
 
                                 <Box
