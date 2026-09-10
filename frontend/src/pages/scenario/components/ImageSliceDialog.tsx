@@ -1168,16 +1168,24 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 times to be a clip platforms accept, over a
                                 backdrop only when the frames have holes. */}
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: 1.5 }}>
-                                <NumberStepper
-                                    label={t('playground.slice.loops', { defaultValue: 'Video loops' })}
-                                    value={effectiveLoops}
-                                    onChange={setLoops}
-                                    min={1}
-                                    max={MAX_VIDEO_LOOPS}
-                                    width={56}
-                                    decreaseLabel={t('playground.slice.fewerLoops', { defaultValue: 'Fewer loops' })}
-                                    increaseLabel={t('playground.slice.moreLoops', { defaultValue: 'More loops' })}
-                                />
+                                {/* NumberStepper's root is `flex: 1` — right for
+                                    the Rows×Columns pair above, where two
+                                    steppers should share the row evenly, but
+                                    here it would let this lone stepper swallow
+                                    the whole row and strand "= Xs" far to its
+                                    right. Box holds it to its content width. */}
+                                <Box>
+                                    <NumberStepper
+                                        label={t('playground.slice.loops', { defaultValue: 'Video loops' })}
+                                        value={effectiveLoops}
+                                        onChange={setLoops}
+                                        min={1}
+                                        max={MAX_VIDEO_LOOPS}
+                                        width={56}
+                                        decreaseLabel={t('playground.slice.fewerLoops', { defaultValue: 'Fewer loops' })}
+                                        increaseLabel={t('playground.slice.moreLoops', { defaultValue: 'More loops' })}
+                                    />
+                                </Box>
                                 <Typography variant="caption" sx={{ color: 'text.secondary', mt: 1.25, whiteSpace: 'nowrap' }}>
                                     {t('playground.slice.videoLength', {
                                         defaultValue: '= {{seconds}} s',
