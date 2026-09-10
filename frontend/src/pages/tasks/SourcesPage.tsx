@@ -12,7 +12,7 @@ import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DialogHeader from '@/components/DialogHeader';
-import {Add as IconAdd, Delete as IconDelete, Edit as IconEdit, FolderOpen as IconFolder, GitHub as IconRepo} from '@/components/icons';
+import {Add as IconAdd, Edit as IconEdit, FolderOpen as IconFolder, GitHub as IconRepo, LinkOff as IconRemove} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import {agentApi, type AgentSource, type SourceRequest} from '@/services/agentApi';
 
@@ -107,8 +107,8 @@ const SourcesPage = () => {
                         <IconButton size="small" onClick={() => open(s)}><IconEdit fontSize="small" /></IconButton>
                     </Tooltip>
                 )}
-                <Tooltip title={t('common.delete')}>
-                    <IconButton size="small" onClick={() => setDeleting(s)}><IconDelete fontSize="small" /></IconButton>
+                <Tooltip title={t('tasks.sources.remove')}>
+                    <IconButton size="small" onClick={() => setDeleting(s)} aria-label={t('tasks.sources.remove')}><IconRemove fontSize="small" /></IconButton>
                 </Tooltip>
             </Stack>
         </Card>
@@ -197,10 +197,9 @@ const SourcesPage = () => {
 
             <ConfirmDialog
                 open={!!deleting}
-                title={t('tasks.sources.deleteConfirmTitle')}
-                description={t('tasks.sources.deleteConfirm')}
-                confirmLabel={t('common.delete')}
-                confirmColor="error"
+                title={t(deleting?.kind === 'local' ? 'tasks.sources.removeLocalTitle' : 'tasks.sources.deleteConfirmTitle')}
+                description={t(deleting?.kind === 'local' ? 'tasks.sources.removeLocalConfirm' : 'tasks.sources.deleteConfirm')}
+                confirmLabel={t('tasks.sources.remove')}
                 loading={deleteBusy}
                 onClose={() => setDeleting(undefined)}
                 onConfirm={remove}

@@ -229,6 +229,22 @@ func (g *Git) Push(ctx context.Context, dir, branch string, log func(string)) er
 
 // HasUncommitted reports whether the working tree has changes not yet in a
 // commit, so a push can warn instead of silently pushing a stale branch.
+// HasWork reports whether dir holds anything deleting it would lose:
+// uncommitted or untracked files, or commits past baseRef.
+func (g *Git) HasWork(ctx context.Context, dir, baseRef string) (bool, error) {
+	if dirty, err := g.HasUncommitted(ctx, dir); err != nil || dirty {
+		return true, err
+	}
+	if baseRef == "" {
+		return true, nil
+	}
+	out, err := g.run(ctx, dir, nil, "rev-list", "--count", baseRef+"..HEAD")
+	if err != nil {
+		return true, err
+	}
+	return strings.TrimSpace(out) != "0", nil
+}
+
 func (g *Git) HasUncommitted(ctx context.Context, dir string) (bool, error) {
 	out, err := g.run(ctx, dir, nil, "status", "--porcelain")
 	if err != nil {

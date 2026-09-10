@@ -52,13 +52,13 @@ Server logs are noisy under `-v`; filter with `| grep -v 'level='`.
 
 | Test | File | What it proves |
 |---|---|---|
-| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | browse `fs/dirs` → start with `local_path` → answer → diff shows the edit → push refused (in place) → folder is recent + a local source → second task reuses the workspace → non-git folder works with an empty diff → missing folder is 400 |
+| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | allowlist: nothing listable before the folder is handed over (403, top level empty) → start with `local_path` (that is the grant) → answer → diff shows the edit → push refused (in place) → folder is recent + a local source → only it is browsable, its parent stays 403 → second task reuses the workspace → non-git folder works with an empty diff → missing folder is 400 |
 | `TestJourney_PermissionPrompt` | `permission_test.go` | a write command → `approval_request` → `waiting_input` → approve → command ran, output in the log **and** back to the model → deny → nothing ran, model told → `bypassPermissions` → no question → bad mode is 400 |
 | `TestJourney_InterruptThenResume` | `interrupt_test.go` | slow model → interrupt → `idle` (not failed) → next message continues → archive is final |
 | `TestJourney_ArchiveWhileRunning` | `interrupt_test.go` | archive mid-turn stops the CLI and stays archived |
 | `TestJourney_FailureThenRetry` | `failure_test.go` | model 400 → `failed` with the reason → send again → `idle`, error cleared |
 | `TestJourney_AllPermissionModesStart` | `failure_test.go` | every advertised mode starts a turn on the installed CLI |
-| `TestJourney_Browser` | `browser_test.go` + `browser/managed_agent.mjs` | the built UI: pick a folder via the dialog → Start → answer on the detail page → steer → **Allow** a command → result → Repositories page lists the folder. Screenshots per step in `TB_E2E_OUT` |
+| `TestJourney_Browser` | `browser_test.go` + `browser/managed_agent.mjs` | the built UI: type a path in the dialog → told it is outside the allowlist → use it anyway → Start → answer on the detail page → steer → **Allow** a command → result → Repositories page lists the folder → the dialog now browses it (and only it). Screenshots per step in `TB_E2E_OUT` |
 | `TestFullStack_SessionOverHTTP` | `agentrun/full_stack_test.go` | git repository source: clone → answer → resume → diff → push lands the branch on origin → archive |
 | `TestRealCLI_SessionRoundTrip` | `agentrun/real_cli_test.go` | the Launcher alone with the real CLI and the virtual upstream |
 
@@ -92,7 +92,7 @@ Facts that bit us, keep them in mind when scripting:
    is a unit test, not a journey.
 2. Script the model with `upstreamTurn`s; drive only the HTTP API (or the
    UI); assert on events, status, files on disk, and `LastRequestJSON()`.
-3. Add it to the table above and to `.design/managed-agent.md` §13.
+3. Add it to the table above and to `.design/managed-agent.md` §14.
 4. Run the whole set, not just the new one.
 
 ## When a journey fails

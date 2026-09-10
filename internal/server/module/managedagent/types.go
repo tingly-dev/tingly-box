@@ -148,3 +148,11 @@ type EventListResponse struct {
 type WorkspaceListResponse struct {
 	Workspaces []managedagent.Workspace `json:"workspaces"`
 }
+
+// ReclaimWorkspaceRequest is the optional body of POST /agent/workspaces/:id/reclaim.
+type ReclaimWorkspaceRequest struct {
+	// Force discards a checkout that still holds uncommitted or unpushed
+	// work. Without it such a checkout is refused (409): tingly-box never
+	// deletes work on the user's behalf.
+	Force bool `json:"force"`
+}

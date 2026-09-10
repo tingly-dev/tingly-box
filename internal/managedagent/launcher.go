@@ -45,6 +45,10 @@ type Git interface {
 	Push(ctx context.Context, ws *Workspace, log func(line string)) error
 	// IsRepo reports whether the workspace directory is a git work tree.
 	IsRepo(ctx context.Context, ws *Workspace) bool
+	// HasWork reports whether the checkout holds anything that would be
+	// lost by deleting it: uncommitted changes, untracked files, or commits
+	// past BaseRef. Unknown (not a repo, git error) counts as work.
+	HasWork(ctx context.Context, ws *Workspace) (bool, error)
 }
 
 // Diff is a workspace's change summary against its base ref.

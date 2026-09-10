@@ -84,7 +84,13 @@ func (s *Service) ListWorkspaces(ctx context.Context, f WorkspaceFilter) ([]Work
 // ReclaimWorkspace removes a checkout's directory and marks it reclaimed.
 // It refuses while any session in it is still active; sessions are not
 // touched (their log and index remain readable), only the directory goes.
-func (s *Service) ReclaimWorkspace(ctx context.Context, id string) (*Workspace, error) {
+//
+// tingly-box never destroys work on the user's behalf: a checkout that
+// holds uncommitted changes or commits past its base is refused unless
+// force is set — that is the user's explicit decision, taken in the UI
+// after being told what is there. A user's own folder (local source) is
+// never deleted at all; its record is merely retired.
+func (s *Service) ReclaimWorkspace(ctx context.Context, id string, force bool) (*Workspace, error) {
 	ws, err := s.stores.Workspaces.GetWorkspace(ctx, id)
 	if err != nil {
 		return nil, err
@@ -105,8 +111,19 @@ func (s *Service) ReclaimWorkspace(ctx context.Context, id string) (*Workspace, 
 		if ws.Path != "" && ws.Path != filepath.Clean(s.workspacesDir) {
 			logrus.WithField("workspace", ws.ID).Info("managed agent: retiring in-place workspace without deleting it")
 		}
-	} else if err := os.RemoveAll(ws.Path); err != nil {
-		return nil, fmt.Errorf("remove checkout: %w", err)
+	} else {
+		if _, statErr := os.Stat(ws.Path); statErr == nil && !force {
+			work, err := s.hasWork(ctx, ws)
+			if err != nil {
+				return nil, err
+			}
+			if work {
+				return nil, conflict("checkout %s has uncommitted or unpushed work; reclaim with force to discard it", ws.Path)
+			}
+		}
+		if err := os.RemoveAll(ws.Path); err != nil {
+			return nil, fmt.Errorf("remove checkout: %w", err)
+		}
 	}
 	ws.State, ws.LastActiveAt = WorkspaceReclaimed, s.now()
 	if err := s.stores.Workspaces.UpdateWorkspace(ctx, ws); err != nil {
@@ -116,8 +133,9 @@ func (s *Service) ReclaimWorkspace(ctx context.Context, id string) (*Workspace, 
 }
 
 // ReclaimIdleWorkspaces reclaims every ready or failed workspace whose
-// sessions are all inactive and whose last activity is older than ttl.
-// Returns how many were reclaimed.
+// sessions are all inactive, whose last activity is older than ttl, and
+// which holds no work (the sweep never discards anything; a checkout with
+// changes waits for the user). Returns how many were reclaimed.
 func (s *Service) ReclaimIdleWorkspaces(ctx context.Context, ttl time.Duration) (int, error) {
 	all, err := s.stores.Workspaces.ListWorkspaces(ctx, WorkspaceFilter{})
 	if err != nil {
@@ -149,8 +167,12 @@ func (s *Service) ReclaimIdleWorkspaces(ctx context.Context, ttl time.Duration) 
 		if active || !last.Before(cutoff) {
 			continue
 		}
-		if _, err := s.ReclaimWorkspace(ctx, ws.ID); err != nil {
-			logrus.WithError(err).WithField("workspace", ws.ID).Warn("managed agent: reclaim failed")
+		if _, err := s.ReclaimWorkspace(ctx, ws.ID, false); err != nil {
+			if errors.Is(err, ErrConflict) {
+				logrus.WithField("workspace", ws.ID).Info("managed agent: idle checkout kept, it still holds work")
+			} else {
+				logrus.WithError(err).WithField("workspace", ws.ID).Warn("managed agent: reclaim failed")
+			}
 			continue
 		}
 		n++
@@ -200,4 +222,14 @@ func (s *Service) Shutdown(ctx context.Context) {
 			_ = s.launcher.Stop(ctx, active[i].ID)
 		}
 	}
+}
+
+// hasWork asks the Git seam whether deleting the checkout would lose
+// anything; with no Git configured the answer is "unknown", which counts
+// as work.
+func (s *Service) hasWork(ctx context.Context, ws *Workspace) (bool, error) {
+	if s.git == nil {
+		return true, nil
+	}
+	return s.git.HasWork(ctx, ws)
 }

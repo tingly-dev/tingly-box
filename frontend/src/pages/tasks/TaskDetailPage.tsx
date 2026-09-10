@@ -12,7 +12,7 @@ import {
 import {PageLayout} from '@/components/PageLayout';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import {ArrowBack, Block as IconStop, Delete as IconArchive, Send as IconSend} from '@/components/icons';
+import {Archive as IconArchive, ArrowBack, Block as IconStop, Send as IconSend} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import {agentApi, isActiveStatus, type PermissionMode} from '@/services/agentApi';
 import EventTimeline, {type PendingRequest} from './EventTimeline';

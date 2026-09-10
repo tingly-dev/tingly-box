@@ -74,7 +74,8 @@ func TestReclaimWorkspaces(t *testing.T) {
 	ctx := context.Background()
 	_, stores := NewMemStores()
 	root := t.TempDir()
-	svc := NewService(Config{Stores: stores, WorkspacesDir: root})
+	git := &fakeGit{}
+	svc := NewService(Config{Stores: stores, Git: git, WorkspacesDir: root})
 	now := time.Now()
 	svc.now = func() time.Time { return now }
 	_ = svc.EnsureDefaults(ctx)
@@ -90,7 +91,7 @@ func TestReclaimWorkspaces(t *testing.T) {
 		os.WriteFile(filepath.Join(ws.Path, "f"), []byte("x"), 0o644)
 	}
 	// Reclaiming a workspace with an active session is refused.
-	if _, err := svc.ReclaimWorkspace(ctx, live.WorkspaceID); !errors.Is(err, ErrConflict) {
+	if _, err := svc.ReclaimWorkspace(ctx, live.WorkspaceID, false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("want ErrConflict, got %v", err)
 	}
 	// Archive the old one and age it past the TTL.
@@ -109,6 +110,32 @@ func TestReclaimWorkspaces(t *testing.T) {
 	}
 	if _, err := os.Stat(oldWS.Path); !os.IsNotExist(err) {
 		t.Fatal("old checkout directory should be gone")
+	}
+
+	// A checkout that holds work is never swept, and a plain reclaim is
+	// refused; only an explicit force discards it.
+	dirty, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "dirty"})
+	dws, _ := svc.GetWorkspace(ctx, dirty.WorkspaceID)
+	dws.State = WorkspaceReady
+	_ = stores.Workspaces.UpdateWorkspace(ctx, dws)
+	os.MkdirAll(dws.Path, 0o755)
+	_, _ = svc.Archive(ctx, dirty.ID)
+	git.work = true
+	svc.now = func() time.Time { return now.Add(3 * DefaultWorkspaceTTL) }
+	if n, err := svc.ReclaimIdleWorkspaces(ctx, DefaultWorkspaceTTL); err != nil || n != 0 {
+		t.Fatalf("sweep must keep a checkout with work: n=%d err=%v", n, err)
+	}
+	if _, err := svc.ReclaimWorkspace(ctx, dws.ID, false); !errors.Is(err, ErrConflict) {
+		t.Fatalf("reclaim with work: want ErrConflict, got %v", err)
+	}
+	if _, err := os.Stat(dws.Path); err != nil {
+		t.Fatal("checkout with work must still exist")
+	}
+	if _, err := svc.ReclaimWorkspace(ctx, dws.ID, true); err != nil {
+		t.Fatalf("forced reclaim: %v", err)
+	}
+	if _, err := os.Stat(dws.Path); !os.IsNotExist(err) {
+		t.Fatal("forced reclaim should remove the checkout")
 	}
 	liveWS, _ := svc.GetWorkspace(ctx, live.WorkspaceID)
 	if liveWS.State != WorkspaceReady {

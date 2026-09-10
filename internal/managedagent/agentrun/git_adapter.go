@@ -30,3 +30,10 @@ func (a GitAdapter) Push(ctx context.Context, ws *managedagent.Workspace, log fu
 func (a GitAdapter) IsRepo(ctx context.Context, ws *managedagent.Workspace) bool {
 	return a.Git.IsRepo(ctx, ws.Path)
 }
+
+func (a GitAdapter) HasWork(ctx context.Context, ws *managedagent.Workspace) (bool, error) {
+	if !a.Git.IsRepo(ctx, ws.Path) {
+		return true, nil
+	}
+	return a.Git.HasWork(ctx, ws.Path, ws.BaseRef)
+}

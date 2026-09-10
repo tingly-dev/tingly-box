@@ -521,11 +521,11 @@ settings defaultMode > CLI 默认）。
 
 | 面 | 设计 |
 |---|---|
-| 提交框 "Where" | 一个 Select，两组：**Folders on this machine**（最近用过的目录 + "Browse for a folder…"）和 **Repositories (cloned)**；默认选中最近用过的目录 |
-| 目录选择器 | `FolderPickerDialog`：最近目录 chips（来自 tasks 里的 local source + Claude Code `~/.claude/projects` 记录）、路径输入（回车打开）、面包屑目录浏览（跳过隐藏目录，标出 git 仓库） |
-| API | `POST /agent/sessions` 接受 `local_path`（服务端 find-or-create 一个 `local` source，用户无感）；`GET /agent/fs/dirs?path=`（空 = home，仅绝对路径）；`GET /agent/fs/recent` |
+| 提交框 "Where" | 一个 Select，两组：**Folders on this machine**（你添加过的目录 + "Browse for a folder…"）和 **Repositories (cloned)**；默认选中最近添加的目录 |
+| 目录选择器 | `FolderPickerDialog`，**白名单浏览**：顶层是"你添加的目录"（= local source 列表），只能向下进入其子目录；输入一个白名单之外的绝对路径会被告知"未添加"，但"使用"它就是添加动作。不读 Claude Code 的项目历史，不列 home |
+| API | `POST /agent/sessions` 接受 `local_path`（服务端 find-or-create 一个 `local` source，这就是白名单授权）；`GET /agent/fs/dirs?path=`（空 = 白名单本身；白名单之内列子目录；之外 403）；`GET /agent/fs/recent`（= 白名单） |
 | Repositories 页 | 顶部仍是 git 仓库；底部 "Folders used directly" 只列出用过的目录，仅可从列表移除，不再有"添加本地目录"的入口 |
-| 权限 | `fs/dirs` 只列目录、不读文件；这是宿主上跑 tb 的用户本来就能看到的东西，且需 UserAuth |
+| 权限 | 用户提供的目录才能被列举，没提供的一律不可见（用户原话："我提供的你才能访问"）；只列目录名、不读文件；需 UserAuth |
 
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
@@ -537,7 +537,18 @@ settings defaultMode > CLI 默认）。
 
 ---
 
-## 13. 测试方案（固化）
+## 13. 数据安全：tb 从不替用户真正删除
+
+| 动作 | 实际发生的事 | UI |
+|---|---|---|
+| 归档 session | 停掉进程、状态置 archived；日志、workspace、分支全部保留 | 归档图标（`Archive`），不是垃圾桶 |
+| 从列表移除本地目录 | 只删 source 记录（收回白名单授权）；目录一字不动 | `LinkOff` 图标，文案"从列表移除"，确认框明说目录原样保留 |
+| 移除 git 仓库来源 | 只删记录；已有 checkout 不删；有活动任务时拒绝 | 同上 |
+| 自动回收闲置 workspace | 只删**没有任何产出**的 tb 自建 clone（无未提交改动、无 base 之外的提交）；有产出的一直保留 | 无 |
+| 手动回收 workspace | 有产出时 409，必须 `force: true`（用户在被告知内容后的明确决定）；用户自己的目录永远不删 | P0 未提供入口 |
+| 目录浏览 | 白名单：只列用户提交过的目录及其子目录；空路径列白名单本身；其他路径 403 | 选择器顶层是"你添加的目录" |
+
+## 14. 测试方案（固化）
 
 **原则：Managed Agent 的任何改动，没有跑过端到端 journey 不算完成。** 手工点一遍不是验证手段——验证由 `internal/managedagent/e2e/` 承担，入口固定为：
 
@@ -558,6 +569,8 @@ task test:e2e:agent:all
 模型由 `scriptedUpstream` 控制（`Text` / `Bash` 工具调用 / `Status` 错误 / `Delay`），CLI 是真的，所以 CLI 的真实行为会被暴露出来。首轮跑通时就靠它抓到了四个只在部件相遇时才出现的问题：`user` 消息里的 tool_result 从未进时间线（agentboot 解析修复）、`--resume` 一个 CLI 从未落盘的会话（launcher 自动改为新会话重跑）、子 CLI 继承父会话的 `CLAUDE_CODE_SESSION_ID` / entrypoint（agentboot 剥离）、`echo` 被 CLI 自动放行导致权限流程从未被真正测过（journey 改用写命令）。
 
 怎么跑、怎么加、失败了怎么查：`.claude/skills/managed-agent-e2e/SKILL.md`。
+
+目录白名单与"不替用户删除"（§13）也在 journey 里有断言：`TestJourney_LocalFolderInPlace` 断言未提交目录 403、提交后仅该目录可浏览、父目录仍 403；`TestReclaimWorkspaces`（单元）断言有产出的 checkout 不被清扫、需 force。
 
 ## 12. Session 留存与一致性；clone 还是 worktree
 
