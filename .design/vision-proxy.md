@@ -442,7 +442,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
-| **描述缓存**(§10) | LRU 淘汰最久未用;`get` 命中前移;`put` 更新已存在 key 不增条目;不同 service / 不同 session 同图片内容不互相命中;base64 与 URL 两种 key 不冲突;同 session 同图第二次命中不再调 vision;不同 session 各自独立调用;历史图片命中缓存后拿到真实描述而非固定 marker;失败描述不写入缓存(下次仍重试);换模型不复用旧模型的描述 |
+| **描述缓存**(§10) | LRU 淘汰最久未用;`get` 命中前移;`put` 更新已存在 key 不增条目;不同 service / 不同 session 同图片内容不互相命中;base64 与 URL 两种 key 不冲突;同 session 同图第二次命中不再调 vision;不同 session 各自独立调用;历史图片命中缓存后拿到真实描述而非固定 marker;失败描述不写入正缓存,TTL 内不重试不占名额、TTL 后重试并缓存恢复结果;上限 1 且最新图永远失败时,第二轮名额落到更旧的图;换模型不复用旧模型的描述 |
 
 ---
 
@@ -543,7 +543,7 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 1. **任何位置的图片先查缓存**——命中直接替换,不占名额。
 2. **未命中的图按消息顺序收集,然后逆序**(`boundNewestFirst`),最新
    的排在最前;取前 N 张调 vision 描述,**成功后写入缓存**(失败 /
-   fail-strip 结果绝不写入缓存)。fan-out 也按这个顺序派发:当前轮的图
+   fail-strip 结果只进短 TTL 的内存负缓存,见 §10.4)。fan-out 也按这个顺序派发:当前轮的图
    最先发出,请求 ctx 被截断时最后受影响的才是它。
 3. **超出 N 的图打 `imageOverLimitText`**,本轮不调 vision。
 
@@ -573,10 +573,14 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 - 持久层在每个网关实例自己的 `tingly.db` 里,多实例之间不共享。
 - 前缀仍会在这几种情况下断一次:切换 vision service(key 里的
   provider+model 变了,属有意为之)、描述失败(fail-strip 结果不入
-  缓存,下一轮重新占一个名额描述,文本随之变化)、持久层触顶后淘汰
+  缓存,TTL 过后重新占一个名额描述,文本随之变化)、持久层触顶后淘汰
   掉了行。
-- 一张永远描述失败的图(格式不支持等)会每轮占用一个名额重试,直到
-  被更新的图挤出名额。目前未做失败的负缓存。
+- 描述失败走**纯内存、短 TTL 的负缓存**(`describeFailureTTL` = 10 分
+  钟,不落盘):TTL 内该图直接打 `imageUnavailableText`,不重试、不占
+  名额。理由是永久失败的图(死链、上游必拒的字节)若每轮重试,会每轮
+  占满名额,把它后面所有更旧的图饿死;而暂时性失败(限流、网络)在
+  TTL 过后自然重试。TTL 是这两类无法区分的失败之间的折中,不解析上游
+  错误码。重启后全部重新尝试一次。
 - URL 图片以 URL 文本为身份。每次请求都变化的 URL(带轮换签名 / 过期
   时间的预签名链接)每轮都是一张"新图",会被重新描述;不做 query 剥离,
   因为无法区分哪些参数是签名、哪些是图片本身的一部分。

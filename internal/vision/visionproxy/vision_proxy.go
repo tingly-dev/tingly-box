@@ -296,8 +296,9 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 // goroutines as well as in-flight upstream calls. A successful description
 // is written to cache before splicing so the next occurrence of the same
 // (session, service, image) key — retry, failover, repeated tool call — can
-// skip the upstream call entirely; fail-strip results are never cached (see
-// FR5 in the spec: a transient failure must not be remembered as permanent).
+// skip the upstream call entirely; fail-strip results go to the short-lived
+// negative cache instead (never the durable tier) so a transient failure
+// is retried soon and a permanent one stops taking a slot every turn.
 func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbalance.Service, cache *describeCache, refs []imageRef) {
 	sem := make(chan struct{}, describeConcurrency)
 	var wg sync.WaitGroup
@@ -310,6 +311,8 @@ func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbala
 			text := p.safeDescribe(ctx, usable, r)
 			if text != imageUnavailableText {
 				cache.put(r.cacheKey, text)
+			} else {
+				cache.markFailed(r.cacheKey)
 			}
 			r.splice(text)
 		}()
@@ -376,10 +379,17 @@ func truncateForLog(s string, max int) string {
 
 // spliceOrCollect is the single decision point for what happens to an image
 // block during the walk: a cache hit is spliced in immediately, no upstream
-// call; a miss is appended to refs for Process to bound and describe.
+// call; a recent failure is fail-stripped immediately, no retry; any other
+// miss is appended to refs for Process to bound and describe.
 func spliceOrCollect(cache *describeCache, refs []imageRef, ref imageRef) []imageRef {
 	if text, ok := cache.get(ref.cacheKey); ok {
 		ref.splice(text)
+		return refs
+	}
+	// A describe that failed within describeFailureTTL is stripped without
+	// a retry and without taking a describe slot; see describe_cache.go.
+	if cache.recentlyFailed(ref.cacheKey) {
+		ref.splice(imageUnavailableText)
 		return refs
 	}
 	return append(refs, ref)

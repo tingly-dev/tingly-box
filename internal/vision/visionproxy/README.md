@@ -82,8 +82,12 @@ replacement text:
 Every image occurrence, wherever it sits, checks the cache first
 (`spliceOrCollect`): a hit splices the cached text immediately and never
 consumes a describe slot; a miss is collected for the bounded describe
-step above. Only
-successful describe calls are written back; fail-strip results never are.
+step above. Only successful describe calls are written back. A failed
+describe goes to a memory-only negative cache (`describeFailureTTL`, 10
+minutes): within it the image is fail-stripped without a retry and without
+a describe slot, so a permanently failing image cannot hold a slot every
+turn and starve the older images behind it; after it a transient failure
+gets its retry. Nothing negative is ever persisted.
 Session is part of the key so a description is only ever reused within the
 same conversation; the session component is `source:value`, deliberately
 without the client-IP backup so a network change mid-conversation keeps
@@ -255,10 +259,12 @@ deliver images this way. Unknown request shapes are left alone (no-op).
   processor contract, including the `TestVisionProxy_Cache_*` cases for
   session/model isolation, historical-hit-uses-real-description, and
   failed-describe-not-cached, and the `TestVisionProxy_DescribeLimit_*`
-  cases pinning newest-first ordering with limit 1 on every shape.
+  cases pinning newest-first ordering with limit 1 on every shape, and the
+  negative-cache case (stripped within the TTL, retried and cached after).
 - `vision_describe_limit_test.go` — convergence: three uncached images
   with limit 1 are fully cached after three turns, the fourth costs nothing
-  and is byte-identical; cache hits do not consume slots; env parsing.
+  and is byte-identical; cache hits do not consume slots; a failed newest
+  image does not hold the slot on the next turn; env parsing.
 - `vision_trailing_system_test.go` — the Claude Code message shape (trailing
   system message after the tool result): the turn in flight is described,
   and with limit 1 it wins the slot over an older image.

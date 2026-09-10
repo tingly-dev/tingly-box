@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -933,13 +934,17 @@ func TestVisionProxy_Cache_HistoricalImageHitsCache_UsesRealDescription(t *testi
 	require.NotContains(t, text, imageOverLimitText, "cache hit never counts against the limit")
 }
 
-// A failed describe call must never be cached — a transient upstream failure
-// must not permanently strip a describable image (FR5 in the spec).
-func TestVisionProxy_Cache_FailedDescribeIsNotCached(t *testing.T) {
+// A failed describe is never cached as a description: it goes to the
+// short-lived negative cache, so within describeFailureTTL the image is
+// fail-stripped without a retry (and without holding a describe slot), and
+// once the TTL passes a transient failure gets its retry and recovers.
+func TestVisionProxy_Cache_FailedDescribe_NegativeCachedThenRetried(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("", "recovered description")
 	fake.failCall(0, errors.New("upstream timeout"))
 	p := mkProcessor(t, fake, prov)
+	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	p.cache.now = func() time.Time { return now }
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 	session := typ.SessionID{Value: "session-a"}
 
@@ -948,10 +953,23 @@ func TestVisionProxy_Cache_FailedDescribeIsNotCached(t *testing.T) {
 	require.Equal(t, 1, fake.callCount())
 	require.Contains(t, collectText(req1), "vision proxy failed")
 
+	// Within the TTL: stripped again, no upstream call.
+	now = now.Add(describeFailureTTL / 2)
 	req2 := betaReqWithImages("describe", tinyPNGBase64)
 	require.NoError(t, p.Process(context.Background(), req2, svcs, session))
-	require.Equal(t, 2, fake.callCount(), "failed describe was not cached; second occurrence retries for real")
-	require.Contains(t, collectText(req2), "recovered description")
+	require.Equal(t, 1, fake.callCount(), "recent failure is remembered; no retry yet")
+	require.Contains(t, collectText(req2), "vision proxy failed")
+
+	// Past the TTL: retried for real, and the recovery is cached.
+	now = now.Add(describeFailureTTL)
+	req3 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req3, svcs, session))
+	require.Equal(t, 2, fake.callCount(), "failure expired; second occurrence retries for real")
+	require.Contains(t, collectText(req3), "recovered description")
+
+	req4 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req4, svcs, session))
+	require.Equal(t, 2, fake.callCount(), "recovered description is cached")
 }
 
 // Switching the vision service (different model, same provider) for the same

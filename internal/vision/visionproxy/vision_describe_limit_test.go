@@ -2,6 +2,7 @@ package visionproxy
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -170,4 +171,38 @@ func TestVisionProxy_NoUsableService_StripsAllUniformly(t *testing.T) {
 	text := collectText(req)
 	require.NotContains(t, text, imageOverLimitText, "nothing is deferred when nothing can be described")
 	require.Equal(t, 3, strings.Count(text, imageUnavailableText), "every image is fail-stripped")
+}
+
+// TestVisionProxy_DescribeLimit_FailedImageDoesNotHoldSlot is the starvation
+// case the negative cache exists for: with one slot and a newest image that
+// always fails, the older image would never be reached. After the first
+// failure the newest is fail-stripped from the negative cache and the slot
+// goes to the older one.
+func TestVisionProxy_DescribeLimit_FailedImageDoesNotHoldSlot(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("", "desc old")
+	fake.failCall(0, errors.New("dead link"))
+	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	history := func() *anthropic.BetaMessageNewParams {
+		return betaReqWithMessages(
+			betaMessage(anthropic.BetaMessageParamRoleUser, "t1", imgOld),
+			betaMessage(anthropic.BetaMessageParamRoleUser, "t2", imgNew),
+		)
+	}
+
+	reqA := history()
+	require.NoError(t, p.Process(context.Background(), reqA, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "the newest takes the slot and fails")
+	require.Contains(t, blockText(reqA.Messages[1]), imageUnavailableText)
+	require.Contains(t, blockText(reqA.Messages[0]), imageOverLimitText)
+
+	reqB := history()
+	require.NoError(t, p.Process(context.Background(), reqB, svcs, session))
+	require.Equal(t, 2, fake.callCount(), "the failed newest no longer holds the slot; the older is described")
+	require.Contains(t, blockText(reqB.Messages[1]), imageUnavailableText)
+	require.Contains(t, blockText(reqB.Messages[0]), "desc old")
 }

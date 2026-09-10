@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sync"
+	"time"
 )
 
 // defaultDescribeCacheCapacity bounds the number of cached descriptions kept
@@ -76,7 +77,30 @@ type describeCache struct {
 	ll       *list.List // front = most recently used
 	items    map[visionCacheKey]*list.Element
 	store    DescribeStore // nil = memory-only
+
+	// failed is the negative cache: keys whose last describe failed, with
+	// the time it failed. Memory-only and short-lived (describeFailureTTL)
+	// on purpose — see recentlyFailed.
+	failed map[visionCacheKey]time.Time
+	now    func() time.Time
 }
+
+// describeFailureTTL is how long a failed describe is remembered. Within
+// it the image is fail-stripped without an upstream call and without
+// taking a describe slot. The value is a compromise between two failure
+// kinds this code cannot tell apart: a transient one (rate limit, network,
+// upstream timeout) should retry soon — the TTL bounds how long the image
+// stays stripped once the upstream recovers; a permanent one (dead URL,
+// rejected bytes) would otherwise retry every turn and, worse, hold a
+// describe slot every turn, starving every older image behind it. The
+// negative cache is never persisted: after a restart everything gets a
+// fresh attempt.
+const describeFailureTTL = 10 * time.Minute
+
+// describeFailureCapacity bounds the negative cache; when exceeded, expired
+// entries are dropped and, if still over, the whole map is reset — losing
+// negative entries only costs retries.
+const describeFailureCapacity = 1000
 
 type describeCacheEntry struct {
 	key  visionCacheKey
@@ -99,7 +123,49 @@ func newDescribeCacheWithStore(capacity int, store DescribeStore) *describeCache
 		ll:       list.New(),
 		items:    make(map[visionCacheKey]*list.Element),
 		store:    store,
+		failed:   make(map[visionCacheKey]time.Time),
+		now:      time.Now,
 	}
+}
+
+// recentlyFailed reports whether key failed to describe within
+// describeFailureTTL. Expired entries are removed on the way.
+func (c *describeCache) recentlyFailed(key visionCacheKey) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	at, ok := c.failed[key]
+	if !ok {
+		return false
+	}
+	if c.now().Sub(at) >= describeFailureTTL {
+		delete(c.failed, key)
+		return false
+	}
+	return true
+}
+
+// markFailed records a failed describe for key.
+func (c *describeCache) markFailed(key visionCacheKey) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.now()
+	if len(c.failed) >= describeFailureCapacity {
+		for k, at := range c.failed {
+			if now.Sub(at) >= describeFailureTTL {
+				delete(c.failed, k)
+			}
+		}
+		if len(c.failed) >= describeFailureCapacity {
+			c.failed = make(map[visionCacheKey]time.Time)
+		}
+	}
+	c.failed[key] = now
 }
 
 // get looks up key: memory first (marking it most-recently-used on a hit),
@@ -143,6 +209,9 @@ func (c *describeCache) put(key visionCacheKey, text string) {
 	if c == nil {
 		return
 	}
+	c.mu.Lock()
+	delete(c.failed, key)
+	c.mu.Unlock()
 	c.putMemory(key, text)
 	if c.store != nil {
 		c.store.Put(key, text)
