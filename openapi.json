@@ -9836,6 +9836,18 @@
             "type": "boolean",
             "description": "Field direct"
           },
+          "flags": {
+            "type": "object",
+            "description": "Field flags",
+            "additionalProperties": {}
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "message": {
             "type": "string",
             "description": "Field message"
@@ -9864,6 +9876,11 @@
             "type": "string",
             "description": "Field request_protocol",
             "example": "anthropic_v1"
+          },
+          "routing": {
+            "type": "string",
+            "description": "Field routing",
+            "example": "pinned"
           },
           "rule_uuid": {
             "type": "string",

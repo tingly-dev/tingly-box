@@ -23,6 +23,7 @@ package probe
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -304,6 +305,53 @@ type E2ERequest struct {
 	// scenario's protocol family.
 	Request         json.RawMessage `json:"request,omitempty" swaggertype:"object"`
 	RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty" example:"anthropic_v1"`
+
+	// Flags is a per-request rule-flag overlay (Bench page). Only the keys
+	// present are applied; each replaces the value resolved from rule +
+	// scenario inheritance for this one request, and nothing is persisted.
+	// Keys and value types are validated against typ.RuleFlagRegistry().
+	// Through-TB only: flags are TB middleware, so a direct probe cannot
+	// carry them (rejected, never silently ignored). Travels to the loopback
+	// handler in the X-Tingly-Probe-Flags header.
+	Flags typ.FlagOverlay `json:"flags,omitempty" swaggertype:"object"`
+
+	// Headers sets or overrides HTTP headers on the outgoing probe request
+	// (an empty value removes the header). Applied by a probe-only round
+	// tripper after the SDK built the request, so it wins over the SDK's
+	// own headers and the probe pins; the rendered cURL applies the same.
+	Headers map[string]string `json:"headers,omitempty"`
+
+	// Routing picks how a rule target enters TB. "" / "natural" (default)
+	// sends only the rule's request model to the scenario endpoint and lets
+	// TB match the rule exactly as it would for a real client — the full
+	// production chain; the Journey reports which rule actually matched,
+	// which may differ from the one picked. "pinned" forces the chosen rule
+	// via X-Tingly-Probe-Rule (skipping rule matching, everything else is
+	// production) — for testing a rule whose request model collides with
+	// another rule's, or one that is not active. Rule targets only; provider
+	// targets are pinned by definition (X-Tingly-Probe-Service).
+	Routing ProbeRouting `json:"routing,omitempty" example:"pinned"`
+}
+
+// ProbeRouting selects how a rule target enters TB (see E2ERequest.Routing).
+type ProbeRouting string
+
+const (
+	// RoutingNatural lets TB match the rule from the request model, as for real traffic (default).
+	RoutingNatural ProbeRouting = "natural"
+	// RoutingPinned forces the chosen rule via X-Tingly-Probe-Rule.
+	RoutingPinned ProbeRouting = "pinned"
+)
+
+// Pinned reports whether the rule target should be forced rather than matched.
+func (r ProbeRouting) Pinned() bool { return r == RoutingPinned }
+
+// Customized reports whether the request departs from the plain fixture
+// shape (raw request, flag overlay, header overrides). Such probes are never
+// served from the endpoint capability cache — the whole point of customizing
+// a probe is to watch what that exact request does.
+func (req *E2ERequest) Customized() bool {
+	return req.HasRawRequest() || len(req.Flags) > 0 || len(req.Headers) > 0
 }
 
 // HasRawRequest reports whether the probe sends a caller-supplied request
@@ -445,6 +493,34 @@ func ValidateE2ERequest(req *E2ERequest) error {
 	case "", VisionNone, VisonUser, VisionTool:
 	default:
 		return &ValidationError{Field: "vision", Message: "vision must be 'none', 'user', or 'tool'"}
+	}
+
+	// Flags are TB middleware behaviour; a direct probe bypasses exactly the
+	// layer they act in. Silently ignoring them would report "tested" for
+	// something that never ran — the worst kind of false success.
+	if len(req.Flags) > 0 {
+		if req.Direct {
+			return &ValidationError{Field: "flags", Message: "flags are TB middleware and cannot apply to a direct probe; switch scope to through-TB"}
+		}
+		if err := typ.ValidateFlagOverlay(req.Flags); err != nil {
+			return &ValidationError{Field: "flags", Message: err.Error()}
+		}
+	}
+
+	for name := range req.Headers {
+		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, ": \t\r\n") {
+			return &ValidationError{Field: "headers", Message: fmt.Sprintf("%q is not a valid header name", name)}
+		}
+	}
+
+	switch req.Routing {
+	case "", RoutingNatural:
+	case RoutingPinned:
+		if req.TargetType != E2ETargetRule {
+			return &ValidationError{Field: "routing", Message: "pinned routing only applies to rule targets (a provider target is pinned by definition)"}
+		}
+	default:
+		return &ValidationError{Field: "routing", Message: "routing must be 'natural' or 'pinned'"}
 	}
 
 	// A raw client request replaces the fixture; the fixture knobs and the
