@@ -1685,6 +1685,8 @@ export default {
     "runFailed": "生成失败",
     "interruptedByReload": "页面刷新时被中断",
     "retry": "重试",
+    "cancelRun": "取消",
+    "cancelled": "已取消",
     "removeRun": "移除这次生成",
     "submitShortcut": "⌘/Ctrl + Enter 直接生成",
     "closePreview": "关闭图像预览",

@@ -2466,6 +2466,12 @@ export const handlers = [
             )
         }
 
+        // A prompt carrying `[slow]` answers after 30s, so the pending card's
+        // Cancel button is exercisable against the mock backend too.
+        if (/\[slow\]/i.test(promptText)) {
+            await new Promise((r) => setTimeout(r, 30_000))
+        }
+
         // A prompt that asks for an NxM grid gets a real grid back, so the
         // playground's slicer is exercisable against the mock backend.
         const sheet = /(\d+)\s*[x×]\s*(\d+)\s+grid/i.exec(promptText)

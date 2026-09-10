@@ -329,6 +329,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const promptFileInputRef = useRef<HTMLInputElement>(null);
     const pendingCount = runs.filter((run) => run.status === 'pending').length;
     const { copied: promptCopied, copy: copyPrompt } = useCopyFeedback();
+    // The in-flight request behind each pending card, so its Cancel button
+    // can abort the fetch instead of leaving the user to wait out the
+    // gateway's timeout on a provider that has stopped answering.
+    const inFlightRef = useRef(new Map<string, AbortController>());
 
     const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
         const nextRuns = updater(imageGenSessionRuns);
@@ -666,6 +670,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         updateRuns((currentRuns) => (currentRuns.some((run) => run.id === runId)
             ? currentRuns.map((run) => (run.id === runId ? { ...pendingRun, createdAt: run.createdAt } : run))
             : [...currentRuns, pendingRun]));
+        const controller = new AbortController();
+        inFlightRef.current.set(runId, controller);
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const editFiles = request.sources.map((ref) => ref.file);
@@ -677,27 +683,43 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality as any,
-                })
+                }, { signal: controller.signal })
                 : await client.images.generate({
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality,
-                });
+                }, { signal: controller.signal });
             const images = response.data ?? [];
             updateRuns((currentRuns) => currentRuns.map((run) => (
                 run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
             )));
         } catch (error: any) {
+            if (controller.signal.aborted) {
+                // The user asked for this; the card records it so the request
+                // is still there to retry, and no toast second-guesses them.
+                updateRuns((currentRuns) => currentRuns.map((run) => (
+                    run.id === runId
+                        ? { ...run, status: 'failed', error: t('playground.cancelled', { defaultValue: 'Cancelled' }) }
+                        : run
+                )));
+                return;
+            }
             const status = error?.status ? `${error.status}: ` : '';
             const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
             updateRuns((currentRuns) => currentRuns.map((run) => (
                 run.id === runId ? { ...run, status: 'failed', error: `${status}${message}` } : run
             )));
             showNotification(`${status}${message}`, 'error');
+        } finally {
+            inFlightRef.current.delete(runId);
         }
     }, [showNotification, t, updateRuns]);
+
+    const handleCancelRun = useCallback((id: string) => {
+        inFlightRef.current.get(id)?.abort();
+    }, []);
 
     const canSubmit = Boolean(prompt.trim()) && Boolean(model);
 
@@ -1398,6 +1420,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     >
                                                         {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="inherit"
+                                                        startIcon={<Close fontSize="small" />}
+                                                        onClick={() => handleCancelRun(run.id)}
+                                                        data-testid="imagegen-cancel-run"
+                                                    >
+                                                        {t('playground.cancelRun', { defaultValue: 'Cancel' })}
+                                                    </Button>
                                                 </Stack>
                                             ) : run.status === 'failed' ? (
                                                 <Stack spacing={1} sx={{ height: '100%', minWidth: 0 }}>
