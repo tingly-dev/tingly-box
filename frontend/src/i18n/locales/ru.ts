@@ -1821,7 +1821,19 @@ export default {
       "frameCount": "{{count}} кадров · {{fps}} fps",
       "frameDelay": "Длительность кадра",
       "downloadGif": "Скачать GIF",
-      "gifFailed": "Не удалось собрать анимацию"
+      "gifFailed": "Не удалось собрать анимацию",
+      "shorterFrame": "Короче кадры",
+      "longerFrame": "Длиннее кадры",
+      "loops": "Повторы видео",
+      "fewerLoops": "Меньше повторов",
+      "moreLoops": "Больше повторов",
+      "videoLength": "= {{seconds}} с",
+      "videoBackground": "Фон видео",
+      "downloadMp4": "Скачать MP4",
+      "downloadWebm": "Скачать WebM",
+      "videoFailed": "Не удалось собрать видео",
+      "videoUnsupported": "Этот браузер не умеет кодировать видео. Chrome, Edge, Safari 16.4+ и Firefox 130+ умеют.",
+      "videoWebmOnly": "В этом браузере нет кодировщика H.264, поэтому файл будет WebM — воспроизводится в браузерах, но некоторые мессенджеры его не принимают."
     }
   },
   "agentSetup": {

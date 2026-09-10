@@ -1807,7 +1807,19 @@ export default {
       "frameCount": "{{count}} 帧 · {{fps}} fps",
       "frameDelay": "每帧时长",
       "downloadGif": "下载 GIF",
-      "gifFailed": "无法生成动画"
+      "gifFailed": "无法生成动画",
+      "shorterFrame": "缩短每帧",
+      "longerFrame": "延长每帧",
+      "loops": "视频循环次数",
+      "fewerLoops": "减少循环",
+      "moreLoops": "增加循环",
+      "videoLength": "= {{seconds}} 秒",
+      "videoBackground": "视频底色",
+      "downloadMp4": "下载 MP4",
+      "downloadWebm": "下载 WebM",
+      "videoFailed": "无法生成视频",
+      "videoUnsupported": "当前浏览器无法编码视频。Chrome、Edge、Safari 16.4+ 和 Firefox 130+ 可以。",
+      "videoWebmOnly": "当前浏览器没有 H.264 编码器,只能导出 WebM——浏览器里能播放,但部分聊天应用不接受。"
     }
   },
   "agentSetup": {

@@ -1811,7 +1811,19 @@ export default {
       "frameCount": "{{count}} frames · {{fps}} fps",
       "frameDelay": "Frame duration",
       "downloadGif": "Download GIF",
-      "gifFailed": "Could not build the animation"
+      "gifFailed": "Could not build the animation",
+      "shorterFrame": "Shorter frames",
+      "longerFrame": "Longer frames",
+      "loops": "Video loops",
+      "fewerLoops": "Fewer loops",
+      "moreLoops": "More loops",
+      "videoLength": "= {{seconds}} s",
+      "videoBackground": "Video backdrop",
+      "downloadMp4": "Download MP4",
+      "downloadWebm": "Download WebM",
+      "videoFailed": "Could not build the video",
+      "videoUnsupported": "This browser cannot encode video. Chrome, Edge, Safari 16.4+ and Firefox 130+ can.",
+      "videoWebmOnly": "This browser has no H.264 encoder, so the file will be a WebM — playable in browsers, but some chat apps refuse it."
     }
   },
   "agentSetup": {

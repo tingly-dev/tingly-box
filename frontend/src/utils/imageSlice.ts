@@ -249,14 +249,27 @@ export const renderAnimationFrames = (
     return { width: box.width, height: box.height, frames };
 };
 
-/** Reads the whole sheet's pixels, to decide what its background is. */
-export const analyzeSheetBackground = (image: HTMLImageElement): BackgroundAnalysis => {
+export interface SheetAnalysis extends BackgroundAnalysis {
+    /** Whether any pixel is see-through — a video export then needs a backdrop. */
+    hasAlpha: boolean;
+}
+
+/** Reads the whole sheet's pixels once, for its background and its alpha. */
+export const analyzeSheetBackground = (image: HTMLImageElement): SheetAnalysis => {
     const canvas = document.createElement('canvas');
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
     const context = context2d(canvas);
     context.drawImage(image, 0, 0);
-    return analyzeBackground(context.getImageData(0, 0, canvas.width, canvas.height));
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    return { ...analyzeBackground(pixels), hasAlpha: imageHasAlpha(pixels.data) };
+};
+
+export const imageHasAlpha = (data: Uint8ClampedArray): boolean => {
+    for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < 255) return true;
+    }
+    return false;
 };
 
 export const tileFileName = (stem: string, index: number, total: number): string => {
@@ -264,6 +277,16 @@ export const tileFileName = (stem: string, index: number, total: number): string
     return `${stem}-${String(index + 1).padStart(width, '0')}.png`;
 };
 
-/** Frame durations offered by the animation controls, in milliseconds. */
-export const FRAME_DELAYS = [80, 120, 200, 320, 500, 800];
+// Frame duration is typed or stepped in milliseconds rather than picked from
+// a list. GIF stores it in hundredths of a second, so it snaps to 10 ms; the
+// floor is what browsers still honour (they clamp anything faster), and the
+// ceiling is long enough for a slideshow.
+export const FRAME_DELAY_MIN = 20;
+export const FRAME_DELAY_MAX = 5000;
+export const FRAME_DELAY_STEP = 10;
 export const DEFAULT_FRAME_DELAY = 200;
+export const clampFrameDelay = (value: number): number => {
+    if (!Number.isFinite(value)) return DEFAULT_FRAME_DELAY;
+    const snapped = Math.round(value / FRAME_DELAY_STEP) * FRAME_DELAY_STEP;
+    return Math.min(FRAME_DELAY_MAX, Math.max(FRAME_DELAY_MIN, snapped));
+};
