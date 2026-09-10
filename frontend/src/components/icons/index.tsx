@@ -19,6 +19,7 @@
 import {
     IconInfoCircle,
     IconRefresh,
+    IconTestPipe,
     IconX,
     IconTrash,
     IconTrashX,
@@ -200,6 +201,8 @@ export const Launch = tablerMui(IconExternalLink);
 export const ZoomIn = tablerMui(IconZoomIn);
 export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
+// Bench (test workbench) (IconFlask is already taken by VModel + Experimental).
+export const TestPipe = tablerMui(IconTestPipe);
 export const Pause = tablerMui(IconPlayerPause);
 export const OpenInFull = tablerMui(IconArrowsMaximize);
 export const Gif = tablerMui(IconGif);

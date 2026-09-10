@@ -66,7 +66,19 @@ export interface ProbeRequest {
     // scenario's protocol family.
     request?: Record<string, unknown>;
     request_protocol?: ProbeProtocol;
+
+    // ── Bench ──────────────────────────────────────────────────────
+    // Per-request rule-flag overlay (registry keys → values). Only keys
+    // present are applied; through-TB only. Nothing is persisted.
+    flags?: Record<string, unknown>;
+    // Header set/override; empty value removes the header.
+    headers?: Record<string, string>;
+    // Rule targets: 'natural' (default) lets TB match the rule from the
+    // request model as for real traffic; 'pinned' forces the chosen rule.
+    routing?: ProbeRouting;
 }
+
+export type ProbeRouting = 'natural' | 'pinned';
 
 export interface ProbeToolCall {
     id: string;
