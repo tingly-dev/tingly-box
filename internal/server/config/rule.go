@@ -659,7 +659,7 @@ func (c *Config) validateRuleServices(rule typ.Rule, existing *typ.Rule) error {
 // converge on the point-set form.
 func validateAndNormalizeRuleRecording(rule *typ.Rule) error {
 	if !typ.IsValidRecordingMode(rule.Flags.Recording) {
-		return fmt.Errorf("invalid recording value: %s (must be empty or a comma-separated set of capture points client_request/upstream_request/upstream_response/client_response)", rule.Flags.Recording)
+		return fmt.Errorf("invalid recording value: %s (must be empty or a comma-separated set of capture points client_request/upstream_request/upstream_response/final_response)", rule.Flags.Recording)
 	}
 	rule.Flags.Recording = string(typ.ParseRecordingMode(rule.Flags.Recording))
 	return nil

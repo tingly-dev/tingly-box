@@ -20,8 +20,8 @@ const (
 	// configs and tests still pass them; they normalize to point sets at the
 	// recorder boundary (typ.ParseRecordingMode).
 	RecordModeRequestOnly           RecordMode = "request"                 // → upstream_request
-	RecordModeRequestResponse       RecordMode = "request_response"        // → upstream_request,client_response
-	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // → client_request,upstream_request,client_response
+	RecordModeRequestResponse       RecordMode = "request_response"        // → upstream_request,final_response
+	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // → client_request,upstream_request,final_response
 )
 
 // RecordRequest represents the HTTP request details. Kept for callers that
