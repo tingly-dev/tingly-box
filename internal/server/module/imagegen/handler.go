@@ -19,14 +19,14 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-// GetOutputDir handles GET /api/v1/imagegen/output-dir: reports the
-// directory generated/edited images are persisted to
-// (~/.tingly-box/image/YYYYMMDD/*.png, see persistImages). Read-only and
-// side-effect-free — this server never reaches into the local OS to open a
-// file manager window; the path is handed to the frontend so the user can
-// navigate there themselves, which also works whenever the browser isn't on
-// the same machine as this server.
-func (h *Handler) GetOutputDir(c *gin.Context) {
+// GetInfo handles GET /api/v1/imagegen/info: reports read-only facts about
+// the imagegen scenario, currently just the directory generated/edited
+// images are persisted to (~/.tingly-box/image/YYYYMMDD/*.png, see
+// persistImages). Side-effect-free — this server never reaches into the
+// local OS to open a file manager window; the path is handed to the
+// frontend so the user can navigate there themselves, which also works
+// whenever the browser isn't on the same machine as this server.
+func (h *Handler) GetInfo(c *gin.Context) {
 	dir := constant.GetImageDir(constant.GetTinglyConfDir())
-	c.JSON(http.StatusOK, OutputDirResponse{Success: true, Path: dir})
+	c.JSON(http.StatusOK, ImageGenInfoResponse{Success: true, OutputDir: dir})
 }

@@ -2166,10 +2166,10 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: rules })
     }),
 
-    // Where generated images are persisted on disk — shown, never opened, by
-    // the Image Playground header (see UseImageGenPage/ImageGenPlaygroundCard).
-    http.get('/api/v1/imagegen/output-dir', () => {
-        return HttpResponse.json({ success: true, path: '/home/demo/.tingly-box/image' })
+    // Read-only imagegen scenario info — shown, never opened, by the Image
+    // Playground header (see UseImageGenPage/ImageGenPlaygroundCard).
+    http.get('/api/v1/imagegen/info', () => {
+        return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
     }),
 
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)

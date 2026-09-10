@@ -2761,21 +2761,21 @@
         }
       }
     },
-    "/api/v1/imagegen/output-dir": {
+    "/api/v1/imagegen/info": {
       "get": {
         "tags": [
           "imagegen"
         ],
-        "summary": "Get the local path generated/edited images are persisted to",
-        "description": "Get the local path generated/edited images are persisted to",
-        "operationId": "apiV1ImagegenOutput-dirGet",
+        "summary": "Get read-only info about the imagegen scenario, including the local output directory",
+        "description": "Get read-only info about the imagegen scenario, including the local output directory",
+        "operationId": "apiV1ImagegenInfoGet",
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OutputDirResponse"
+                  "$ref": "#/components/schemas/ImageGenInfoResponse"
                 }
               }
             }
@@ -10901,6 +10901,25 @@
           }
         }
       },
+      "ImageGenInfoResponse": {
+        "type": "object",
+        "properties": {
+          "output_dir": {
+            "type": "string",
+            "description": "Field output_dir",
+            "example": "/home/user/.tingly-box/image"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "output_dir"
+        ]
+      },
       "ImportOpenAISessionsRequest": {
         "type": "object",
         "properties": {
@@ -12665,25 +12684,6 @@
           "configJson",
           "scriptWindows",
           "scriptUnix"
-        ]
-      },
-      "OutputDirResponse": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "Field path",
-            "example": "/home/user/.tingly-box/image"
-          },
-          "success": {
-            "type": "boolean",
-            "description": "Field success",
-            "example": true
-          }
-        },
-        "required": [
-          "success",
-          "path"
         ]
       },
       "PairingCodeResponse": {

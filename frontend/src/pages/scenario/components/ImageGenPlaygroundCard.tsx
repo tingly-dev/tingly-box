@@ -331,8 +331,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [outputDir, setOutputDir] = useState('');
     useEffect(() => {
         let cancelled = false;
-        void api.getImageGenOutputDir().then((result) => {
-            if (!cancelled && result?.success) setOutputDir(result.path ?? '');
+        void api.getImageGenInfo().then((result) => {
+            if (!cancelled && result?.success) setOutputDir(result.output_dir ?? '');
         });
         return () => { cancelled = true; };
     }, []);

@@ -4,9 +4,9 @@ import "github.com/tingly-dev/tingly-box/swagger"
 
 // RegisterRoutes registers the imagegen control-plane routes.
 func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
-	// GET /imagegen/output-dir - Report the generated-image output directory path
-	router.GET("/imagegen/output-dir", handler.GetOutputDir,
+	// GET /imagegen/info - Report read-only imagegen scenario info (output directory, ...)
+	router.GET("/imagegen/info", handler.GetInfo,
 		swagger.WithTags("imagegen"),
-		swagger.WithDescription("Get the local path generated/edited images are persisted to"),
-		swagger.WithResponseModel(OutputDirResponse{}))
+		swagger.WithDescription("Get read-only info about the imagegen scenario, including the local output directory"),
+		swagger.WithResponseModel(ImageGenInfoResponse{}))
 }
