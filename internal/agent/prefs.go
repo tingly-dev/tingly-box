@@ -67,6 +67,13 @@ type ClaudeCodePrefs struct {
 	McpToolTimeout            string `json:"MCP_TOOL_TIMEOUT,omitempty"`
 	MaxMcpOutputTokens        string `json:"MAX_MCP_OUTPUT_TOKENS,omitempty"`
 
+	// Subagent concurrency — how many Task-tool subagents Claude Code runs at
+	// once and how it handles ones that run long or stall.
+	ClaudeCodeMaxActiveTasks           string `json:"CLAUDE_CODE_MAX_ACTIVE_TASKS,omitempty"`
+	ClaudeCodeMaxLongRunningTaskTimeMs string `json:"CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS,omitempty"`
+	ClaudeAutoBackgroundTasks          string `json:"CLAUDE_AUTO_BACKGROUND_TASKS,omitempty"`
+	ClaudeAsyncAgentStallTimeoutMs     string `json:"CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS,omitempty"`
+
 	// Auto-compact settings — control context window compaction
 	ClaudeCodeAutoCompactWindow  string `json:"CLAUDE_CODE_AUTO_COMPACT_WINDOW,omitempty"`
 	ClaudeAutocompactPctOverride string `json:"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,omitempty"`

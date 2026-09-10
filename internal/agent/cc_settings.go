@@ -171,7 +171,8 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 	snapshot.Exists = true
 	var raw struct {
 		Env                   map[string]any  `json:"env"`
-		DefaultMode           string          `json:"defaultMode"`
+		DefaultMode           string          `json:"defaultMode"` // legacy location, pre-dates the permissions.defaultMode move
+		Permissions           json.RawMessage `json:"permissions"`
 		StatusLine            json.RawMessage `json:"statusLine"`
 		ShowThinkingSummaries *bool           `json:"showThinkingSummaries"`
 	}
@@ -183,7 +184,22 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 			snapshot.Env[key] = text
 		}
 	}
+	// Claude Code's settings-reference documents defaultMode as nested under
+	// "permissions"; prefer it and fall back to the legacy top-level key for
+	// files written before the move. Permissions is decoded loosely (not into
+	// the snapshot's top-level struct) so a hand-edited or third-party file
+	// with a malformed "permissions" value (e.g. an array) doesn't fail the
+	// whole read — it just falls back to the legacy key, like before this key
+	// was modeled at all.
 	snapshot.DefaultMode = raw.DefaultMode
+	if len(raw.Permissions) > 0 {
+		var permissions struct {
+			DefaultMode string `json:"defaultMode"`
+		}
+		if err := json.Unmarshal(raw.Permissions, &permissions); err == nil && permissions.DefaultMode != "" {
+			snapshot.DefaultMode = permissions.DefaultMode
+		}
+	}
 	snapshot.StatusLine = len(raw.StatusLine) > 0 && string(raw.StatusLine) != "null"
 	snapshot.ShowThinkingSummaries = raw.ShowThinkingSummaries
 	return snapshot, nil
