@@ -23,7 +23,7 @@ interface UnifiedCardProps {
   titleHeadingLevel?: 1 | 2 | 3 | 4 | 5 | 6;
   /** Space between the header and body; defaults to the standard 2-unit gap. */
   titleMarginBottom?: number | string;
-  subtitle?: string;
+  subtitle?: string | ReactNode;
   children: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'full' | 'header' | 'footer';
   variant?: 'default' | 'outlined' | 'elevated';
@@ -211,7 +211,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
                 {rightAction}
               </Box>
             </Box>
-            {subtitle && (
+            {subtitle && (typeof subtitle === 'string' || typeof subtitle === 'number' ? (
               <Typography
                 variant="body2"
                 sx={{
@@ -227,7 +227,21 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
               >
                 {subtitle}
               </Typography>
-            )}
+            ) : (
+              // A ReactNode subtitle (e.g. a path with a copy button) renders
+              // as a div, not the <p> above — a <p> cannot contain block-level
+              // children like a Stack without an invalid-HTML nesting warning.
+              <Box
+                sx={{
+                  typography: 'body2',
+                  color: 'text.secondary',
+                  maxWidth: '800px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {subtitle}
+              </Box>
+            ))}
           </Box>
         )}
         {message && (

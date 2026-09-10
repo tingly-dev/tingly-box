@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
@@ -249,6 +250,11 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Scenario Management - register from scenario module
 	scenarioHandler := scenario.NewHandler(s.config, s)
 	scenario.RegisterRoutes(apiV1, scenarioHandler)
+
+	// Image generation output directory (authenticated) - lets the frontend
+	// show the user where generated images are saved (~/.tingly-box/image).
+	imagegenHandler := imagegen.NewHandler()
+	imagegen.RegisterRoutes(apiV1, imagegenHandler)
 
 	// Guardrails Management
 	apiV1.GET("/guardrails/config", s.guardrailsHandler.GetGuardrailsConfig,

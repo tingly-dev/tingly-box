@@ -1805,6 +1805,28 @@
         }
       }
     },
+    "/api/v1/config/claude/env": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get the environment variables for routing Claude Code CLI through the tingly-box gateway",
+        "description": "Get the environment variables for routing Claude Code CLI through the tingly-box gateway",
+        "operationId": "apiV1ConfigClaudeEnvGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeEnvResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/codex": {
       "get": {
         "tags": [
@@ -2732,6 +2754,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imagegen/output-dir": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Get the local path generated/edited images are persisted to",
+        "description": "Get the local path generated/edited images are persisted to",
+        "operationId": "apiV1ImagegenOutput-dirGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputDirResponse"
                 }
               }
             }
@@ -8777,6 +8821,29 @@
           "bot_running"
         ]
       },
+      "ClaudeCodeEnvResponse": {
+        "type": "object",
+        "properties": {
+          "env": {
+            "type": "array",
+            "description": "Field env",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
@@ -8808,9 +8875,17 @@
             "type": "string",
             "description": "Field BASH_MAX_TIMEOUT_MS"
           },
+          "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS": {
+            "type": "string",
+            "description": "Field CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS"
+          },
           "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": {
             "type": "string",
             "description": "Field CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
+          },
+          "CLAUDE_AUTO_BACKGROUND_TASKS": {
+            "type": "string",
+            "description": "Field CLAUDE_AUTO_BACKGROUND_TASKS"
           },
           "CLAUDE_CODE_AUTO_COMPACT_WINDOW": {
             "type": "string",
@@ -8819,6 +8894,14 @@
           "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": {
             "type": "string",
             "description": "Field CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+          },
+          "CLAUDE_CODE_MAX_ACTIVE_TASKS": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_MAX_ACTIVE_TASKS"
+          },
+          "CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS"
           },
           "CLAUDE_CODE_MAX_OUTPUT_TOKENS": {
             "type": "string",
@@ -12582,6 +12665,25 @@
           "configJson",
           "scriptWindows",
           "scriptUnix"
+        ]
+      },
+      "OutputDirResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path",
+            "example": "/home/user/.tingly-box/image"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "path"
         ]
       },
       "PairingCodeResponse": {
@@ -17450,6 +17552,10 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "imagegen",
+      "description": "Operations related to imagegen"
     },
     {
       "name": "imbot-admin",

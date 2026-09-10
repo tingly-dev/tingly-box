@@ -566,6 +566,12 @@ export const api = {
             body: name ? {name} : {},
         })),
 
+    // Where generated/edited images are persisted on disk (~/.tingly-box/image).
+    // Read-only — the frontend shows this path for the user to navigate to
+    // themselves; this server never reaches into the local OS to open it.
+    getImageGenOutputDir: async (): Promise<any> =>
+        controlApi((client, headers) => client.GET('/api/v1/imagegen/output-dir', {headers})),
+
     healthCheck: async (): Promise<boolean> => {
         try {
             const client = await getClient();

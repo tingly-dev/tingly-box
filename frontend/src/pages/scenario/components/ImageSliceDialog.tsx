@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
     Button,
+    ButtonBase,
     Checkbox,
     CircularProgress,
     Dialog,
@@ -21,7 +22,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove } from '@/components/icons';
+import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove, ZoomIn } from '@/components/icons';
 import { createZipBlob } from '@/utils/zip';
 import { downloadBlob, slugify } from '@/utils/download';
 import { encodeGif } from '@/utils/gif';
@@ -35,6 +36,7 @@ import {
     type VideoTarget,
 } from '@/utils/video';
 import { DEFAULT_TOLERANCE, type BackgroundKind } from '@/utils/imageMatte';
+import { loadSliceParams, saveSliceParams } from '@/utils/sliceParamsStore';
 import {
     analyzeSheetBackground,
     clampFrameDelay,
@@ -144,8 +146,11 @@ const CHECKERBOARD_IMAGE = [
 const EXPORT_SIZES = [512, 256];
 
 // The animation preview is a thumbnail strip played in place: small enough
-// that re-rendering every frame on each knob change stays instant.
-const PREVIEW_BOX = { width: 128, height: 128 };
+// that re-rendering every frame on each knob change stays instant. A longer-
+// side cap, not a fixed box — a forced square box would stretch every
+// non-square tile, which is exactly what the GIF/video export must not do
+// either (see renderAnimationFrames' own box, computed from the real tiles).
+const PREVIEW_SIZE = 128;
 // A GIF of nine 1024px tiles is tens of megabytes; nothing about a sticker
 // animation needs that, and the cap is invisible to the user in practice.
 const GIF_MAX_SIZE = 480;
@@ -296,6 +301,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     const [frameDelay, setFrameDelay] = useState(DEFAULT_FRAME_DELAY);
     const [playing, setPlaying] = useState(true);
     const [frame, setFrame] = useState(0);
+    // The 88px strip is too small to judge the animation by; zoom opens the
+    // same live frame (still advancing on the same timer) at a size actually
+    // worth looking at.
+    const [previewZoomOpen, setPreviewZoomOpen] = useState(false);
     // Video: how many times the sequence plays (null = as many as it takes to
     // clear the minimum length), and what shows through where the tiles are
     // transparent, since MP4 has no alpha.
@@ -306,20 +315,31 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     // encode video at all.
     const [videoTarget, setVideoTarget] = useState<VideoTarget | null | undefined>(undefined);
 
-    // Start from a clean grid whenever a new image is opened — the dialog is a
-    // per-image work surface, not a sticky global setting.
+    // Resume this exact image's last grid/frame if it has one, otherwise start
+    // clean. Background cleanup and tolerance are not restored — those are
+    // auto-detected per image a few lines down, so there is nothing to resume.
     useEffect(() => {
         if (!open) return;
-        setRows(DEFAULT_GRID.rows);
-        setCols(DEFAULT_GRID.cols);
-        setCrop(DEFAULT_GRID.crop);
-        setGutter(DEFAULT_GRID.gutter);
-        setExportSize(null);
+        const saved = src ? loadSliceParams(src) : null;
+        setRows(saved?.rows ?? DEFAULT_GRID.rows);
+        setCols(saved?.cols ?? DEFAULT_GRID.cols);
+        setCrop(saved?.crop ?? DEFAULT_GRID.crop);
+        setGutter(saved?.gutter ?? DEFAULT_GRID.gutter);
+        setExportSize(saved?.exportSize ?? null);
         setExcluded(new Set());
         setTolerance(DEFAULT_TOLERANCE);
-        setFrameDelay(DEFAULT_FRAME_DELAY);
+        setFrameDelay(saved?.frameDelay ?? DEFAULT_FRAME_DELAY);
         setPlaying(true);
     }, [open, src]);
+
+    // Keeps the resumable grid/frame current as the user adjusts it. Runs
+    // right after the effect above applies a just-restored (or default)
+    // value too — that write is a no-op, not a loop, since it saves back the
+    // same value it just read.
+    useEffect(() => {
+        if (!open || !src) return;
+        saveSliceParams(src, { rows, cols, crop, gutter, exportSize, frameDelay });
+    }, [open, src, rows, cols, crop, gutter, exportSize, frameDelay]);
 
     // An exclusion names a tile of one particular grid; re-cutting the image
     // renumbers every tile, so carrying the old indices over would silently
@@ -477,7 +497,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         try {
             return selectedRects.map((rect) => ({
                 index: rect.index,
-                url: renderTileDataUrl(image, rect, { box: PREVIEW_BOX, matte }),
+                url: renderTileDataUrl(image, rect, { exportSize: PREVIEW_SIZE, matte }),
             }));
         } catch {
             return [];
@@ -1061,7 +1081,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 {t('playground.slice.animate', { defaultValue: 'Play the tiles in order' })}
                             </Typography>
                             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                                <Box
+                                <ButtonBase
+                                    disabled={previewFrames.length === 0}
+                                    onClick={() => setPreviewZoomOpen(true)}
+                                    aria-label={t('playground.slice.zoomAnimation', { defaultValue: 'Enlarge the animation preview' })}
                                     sx={{
                                         width: 88,
                                         height: 88,
@@ -1073,17 +1096,38 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         backgroundSize: '12px 12px',
                                         backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
                                         overflow: 'hidden',
+                                        position: 'relative',
+                                        display: 'block',
+                                        '&:hover .slice-preview-zoom, &:focus-visible .slice-preview-zoom': { opacity: 1 },
                                     }}
                                 >
                                     {previewFrames.length > 0 && (
-                                        <Box
-                                            component="img"
-                                            src={previewFrames[Math.min(frame, previewFrames.length - 1)].url}
-                                            alt={t('playground.slice.animationAlt', { defaultValue: 'Animation preview' })}
-                                            sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                                        />
+                                        <>
+                                            <Box
+                                                component="img"
+                                                src={previewFrames[Math.min(frame, previewFrames.length - 1)].url}
+                                                alt={t('playground.slice.animationAlt', { defaultValue: 'Animation preview' })}
+                                                sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                                            />
+                                            <Box
+                                                className="slice-preview-zoom"
+                                                sx={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: 'common.white',
+                                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
+                                                    opacity: 0,
+                                                    transition: 'opacity 0.16s ease-out',
+                                                }}
+                                            >
+                                                <ZoomIn sx={{ fontSize: 22 }} />
+                                            </Box>
+                                        </>
                                     )}
-                                </Box>
+                                </ButtonBase>
                                 <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
                                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                         <IconButton
@@ -1170,6 +1214,47 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                     </Stack>
                 </Box>
             </DialogContent>
+            {/* Same live frame as the 88px strip — just big enough to actually
+                judge the animation by. Closing returns to the slicer, which
+                kept running underneath. */}
+            <Dialog open={previewZoomOpen} onClose={() => setPreviewZoomOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+                    <Typography variant="subtitle1" component="span" sx={{ flex: 1 }}>
+                        {t('playground.slice.animate', { defaultValue: 'Play the tiles in order' })}
+                    </Typography>
+                    <IconButton
+                        onClick={() => setPreviewZoomOpen(false)}
+                        aria-label={t('playground.slice.close', { defaultValue: 'Close slicer' })}
+                    >
+                        <Close />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ display: 'flex', justifyContent: 'center', pb: 3 }}>
+                    <Box
+                        sx={{
+                            width: '100%',
+                            maxWidth: 420,
+                            aspectRatio: '1 / 1',
+                            borderRadius: 1,
+                            border: 1,
+                            borderColor: 'divider',
+                            backgroundImage: CHECKERBOARD_IMAGE,
+                            backgroundSize: '16px 16px',
+                            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {previewFrames.length > 0 && (
+                            <Box
+                                component="img"
+                                src={previewFrames[Math.min(frame, previewFrames.length - 1)].url}
+                                alt={t('playground.slice.animationAlt', { defaultValue: 'Animation preview' })}
+                                sx={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                            />
+                        )}
+                    </Box>
+                </DialogContent>
+            </Dialog>
             <DialogActions sx={{ px: 3, py: 2 }}>
                 <Button onClick={onClose} color="inherit">
                     {t('playground.slice.cancel', { defaultValue: 'Cancel' })}
