@@ -207,6 +207,11 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions[constant.ExtensionMCP] = value
+	case constant.ExtensionManagedAgent:
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions[constant.ExtensionManagedAgent] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}
