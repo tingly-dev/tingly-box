@@ -249,7 +249,7 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
 	case constant.FlagRecordingV2:
 		if !typ.IsValidRecordingMode(value) {
-			return fmt.Errorf("invalid recording_v2 value: %s (must be empty, a comma-separated set of capture points client_request/upstream_request/upstream_response/client_response, or a legacy mode request/request_response/staged_request_response)", value)
+			return fmt.Errorf("invalid recording_v2 value: %s (must be empty, a comma-separated set of capture points client_request/upstream_request/upstream_response/final_response, or a legacy mode request/request_response/staged_request_response)", value)
 		}
 		// Store normalized: legacy enum values become point sets so the config
 		// converges on the point-set form as flags are touched.

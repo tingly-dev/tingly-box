@@ -10,19 +10,20 @@ import "strings"
 //	client_request    — inbound request as the client sent it (pre-transform)
 //	upstream_request  — outbound request dispatched to the provider (post-transform)
 //	upstream_response — provider's raw response (wire level; capture lands with the wire recorder, .design/recording.md Phase 3)
-//	client_response   — response as returned to the client
+//	final_response    — the response as sent back to the client (the gateway's own response, not something the client produced —
+//	                     named "final" rather than "client_response" so it doesn't read as symmetric with client_request)
 type RecordingPoint string
 
 const (
 	RecordClientRequest    RecordingPoint = "client_request"
 	RecordUpstreamRequest  RecordingPoint = "upstream_request"
 	RecordUpstreamResponse RecordingPoint = "upstream_response"
-	RecordClientResponse   RecordingPoint = "client_response"
+	RecordFinalResponse    RecordingPoint = "final_response"
 )
 
 // AllRecordingPoints lists the capture points in canonical (pipeline) order.
 func AllRecordingPoints() []RecordingPoint {
-	return []RecordingPoint{RecordClientRequest, RecordUpstreamRequest, RecordUpstreamResponse, RecordClientResponse}
+	return []RecordingPoint{RecordClientRequest, RecordUpstreamRequest, RecordUpstreamResponse, RecordFinalResponse}
 }
 
 // RecordingMode is a comma-separated set of RecordingPoints. "" means
@@ -37,20 +38,20 @@ const (
 	// Legacy enum values from the pre point-set model. Kept for stored-config
 	// compat and the ParseRecordingMode mapping; new writes use point sets.
 	RecordingModeRequestOnly           RecordingMode = "request"                 // → upstream_request
-	RecordingModeRequestResponse       RecordingMode = "request_response"        // → upstream_request,client_response
-	RecordingModeStagedRequestResponse RecordingMode = "staged_request_response" // → client_request,upstream_request,client_response
+	RecordingModeRequestResponse       RecordingMode = "request_response"        // → upstream_request,final_response
+	RecordingModeStagedRequestResponse RecordingMode = "staged_request_response" // → client_request,upstream_request,final_response
 )
 
 // legacyRecordingModes maps the pre point-set enum values onto point sets.
 var legacyRecordingModes = map[string][]RecordingPoint{
 	string(RecordingModeRequestOnly):           {RecordUpstreamRequest},
-	string(RecordingModeRequestResponse):       {RecordUpstreamRequest, RecordClientResponse},
-	string(RecordingModeStagedRequestResponse): {RecordClientRequest, RecordUpstreamRequest, RecordClientResponse},
+	string(RecordingModeRequestResponse):       {RecordUpstreamRequest, RecordFinalResponse},
+	string(RecordingModeStagedRequestResponse): {RecordClientRequest, RecordUpstreamRequest, RecordFinalResponse},
 }
 
 func isKnownRecordingPoint(p RecordingPoint) bool {
 	switch p {
-	case RecordClientRequest, RecordUpstreamRequest, RecordUpstreamResponse, RecordClientResponse:
+	case RecordClientRequest, RecordUpstreamRequest, RecordUpstreamResponse, RecordFinalResponse:
 		return true
 	}
 	return false

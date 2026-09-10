@@ -12,10 +12,10 @@ func TestParseRecordingMode(t *testing.T) {
 		{"garbage", RecordingModeDisabled},
 		// Legacy enum values expand to their point sets.
 		{"request", "upstream_request"},
-		{"request_response", "upstream_request,client_response"},
-		{"staged_request_response", "client_request,upstream_request,client_response"},
+		{"request_response", "upstream_request,final_response"},
+		{"staged_request_response", "client_request,upstream_request,final_response"},
 		// Point sets normalize: dedupe, canonical pipeline order, unknown dropped.
-		{"client_response,client_request", "client_request,client_response"},
+		{"final_response,client_request", "client_request,final_response"},
 		{"upstream_request,upstream_request", "upstream_request"},
 		{"client_request, upstream_response ,nope", "client_request,upstream_response"},
 		// Legacy value mixed with points unions.
@@ -30,8 +30,8 @@ func TestParseRecordingMode(t *testing.T) {
 
 func TestRecordingModeHas(t *testing.T) {
 	m := RecordingMode("staged_request_response") // legacy value, un-normalized
-	if !m.Has(RecordClientRequest) || !m.Has(RecordUpstreamRequest) || !m.Has(RecordClientResponse) {
-		t.Errorf("legacy staged mode should select client_request+upstream_request+client_response, got %q", ParseRecordingMode(string(m)))
+	if !m.Has(RecordClientRequest) || !m.Has(RecordUpstreamRequest) || !m.Has(RecordFinalResponse) {
+		t.Errorf("legacy staged mode should select client_request+upstream_request+final_response, got %q", ParseRecordingMode(string(m)))
 	}
 	if m.Has(RecordUpstreamResponse) {
 		t.Error("legacy staged mode must not select upstream_response")
@@ -43,8 +43,8 @@ func TestRecordingModeHas(t *testing.T) {
 
 func TestIsValidRecordingMode(t *testing.T) {
 	for _, ok := range []string{"", "request", "request_response", "staged_request_response",
-		"client_request", "client_request,upstream_request,upstream_response,client_response",
-		"request,client_response"} {
+		"client_request", "client_request,upstream_request,upstream_response,final_response",
+		"request,final_response"} {
 		if !IsValidRecordingMode(ok) {
 			t.Errorf("IsValidRecordingMode(%q) = false, want true", ok)
 		}
@@ -61,7 +61,7 @@ func TestEffectiveRecording(t *testing.T) {
 	ruleOff := &Rule{}
 	ruleOn := &Rule{Flags: RuleFlags{Recording: "client_request"}}
 
-	if got := EffectiveRecording(ruleOff, scenario); got != "upstream_request,client_response" {
+	if got := EffectiveRecording(ruleOff, scenario); got != "upstream_request,final_response" {
 		t.Errorf("scenario default should apply when rule unset, got %q", got)
 	}
 	if got := EffectiveRecording(ruleOn, scenario); got != "client_request" {
@@ -70,7 +70,7 @@ func TestEffectiveRecording(t *testing.T) {
 	if got := EffectiveRecording(ruleOff, nil); got != RecordingModeDisabled {
 		t.Errorf("no rule value, no scenario → disabled, got %q", got)
 	}
-	if got := EffectiveRecording(nil, scenario); got != "upstream_request,client_response" {
+	if got := EffectiveRecording(nil, scenario); got != "upstream_request,final_response" {
 		t.Errorf("nil rule should fall back to scenario, got %q", got)
 	}
 }

@@ -228,11 +228,11 @@ func RuleFlagRegistry() []FlagSpec {
 				// Response-side points are part of the value domain
 				// (typ.RecordingPoint) but intentionally NOT offered yet — no
 				// dead toggles (.design/recording.md §3.5):
-				//   - client_response (final response): capture quality is not
-				//     good enough (streaming relies on assembly/synthesis
-				//     fallbacks); its emit is paused until the response path is
-				//     reworked (Phase 4 EventTap).
-				//     {Value: string(RecordClientResponse), Label: "Client response (final)"},
+				//   - final_response (the response sent back to the client):
+				//     capture quality is not good enough (streaming relies on
+				//     assembly/synthesis fallbacks); its emit is paused until
+				//     the response path is reworked (Phase 4 EventTap).
+				//     {Value: string(RecordFinalResponse), Label: "Final response"},
 				//   - upstream_response (provider raw response): nothing
 				//     captures it until the wire-level recorder lands (Phase 3).
 				//     {Value: string(RecordUpstreamResponse), Label: "Upstream response (provider)"},

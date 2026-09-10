@@ -279,7 +279,7 @@ type RuleFlags struct {
 	// Recording selects which capture points along the pipeline are recorded
 	// for requests matched by this rule: a comma-separated set of
 	// RecordingPoint values (client_request / upstream_request /
-	// upstream_response / client_response). Empty inherits the scenario-level
+	// upstream_response / final_response). Empty inherits the scenario-level
 	// recording_v2 default; a non-empty rule value overrides it (see
 	// EffectiveRecording).
 	Recording string `json:"recording,omitempty" yaml:"recording,omitempty"`

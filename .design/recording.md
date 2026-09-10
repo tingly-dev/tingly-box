@@ -169,11 +169,19 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 | `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + StagePre |
 | `upstream_request` | 出站请求 | 发往 provider 的最终请求(transform 后) | ✅ StagePost |
 | `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现,Phase 3 wire recorder 落地时开放——不上死开关) |
-| `client_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
+| `final_response` | 最终返回 | 返回给 client 的响应 | ⏸ **暂停**:采集质量不达标(流式靠组装/合成兜底),emit 与 UI 选项均已注释(recorder.go / flag_registry.go / RecordingV2Control),响应路径重做(Phase 4 EventTap)后恢复。值域与内部采集(SetAssembledResponse)保留;存量选了该点位的配置只落 request 点位,行为有测试钉死 |
 
 > **当前支持面 = 两个 request 点位。** 响应侧(服务返回 + 最终返回)整体
 > 暂停,待 Phase 3(wire)/ Phase 4(EventTap)分别恢复;暂停以注释形式
 > 保留代码位置,恢复时取消注释即可。
+
+> **命名:`final_response` 而非 `client_response`。** `client_request` 里
+> "client" 是来源(客户端发出的请求);若照抄成 `client_response`,"client"
+> 就变成了目的地(发给客户端的响应)——同一前缀在请求/响应两侧含义相反,
+> 读起来像是"客户端产生的响应"。`upstream_response` 不受影响,因为
+> "upstream 的响应"本来就是来源性描述。改用 `final_response` 对齐已经在
+> 用的 `obs.Record.FinalResponse` / json key `final_response`,也对齐这里
+> 一直沿用的"最终返回"人话说法。
 
 - **旧值兼容**:`request` → 出站;`request_response` → 出站+最终;
   `staged_request_response` → 入站+出站+最终。`typ.ParseRecordingMode`
@@ -261,7 +269,7 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
   hooks,client 层再录 wire 响应会重复;倾向 client 层只录 wire
   **请求**(即 `upstream_request` 补 header / `upstream_response` 新增),
   最终返回仍归 chain 级 hooks,直到 obs Phase 2 的 EventTap 统一。
-- **OpenAI 纯透传流式的 `client_response` 质量**(新):该路径无 chunk
+- **OpenAI 纯透传流式的 `final_response` 质量**(新):该路径无 chunk
   tap,final 由 writer 状态合成(仅 status/headers);补 tap 归入
   Phase 4(EventTap)。
 
