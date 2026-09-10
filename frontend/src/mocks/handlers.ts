@@ -2166,6 +2166,12 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: rules })
     }),
 
+    // Read-only imagegen scenario info — shown, never opened, by the Image
+    // Playground header (see UseImageGenPage/ImageGenPlaygroundCard).
+    http.get('/api/v1/imagegen/info', () => {
+        return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
+    }),
+
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)
     http.get('/api/v1/scenario/:scenario', ({ params }) => {
         const { scenario } = params as { scenario: string }

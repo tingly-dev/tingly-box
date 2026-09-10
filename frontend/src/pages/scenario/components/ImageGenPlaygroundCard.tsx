@@ -25,9 +25,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
+import { CopyIconButton } from '@/components/CopyIconButton';
 import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { fontMono } from '@/theme/fonts';
 import { parseImageSize } from '@/utils/sketchCanvas';
+import { api } from '@/services/api';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
@@ -323,6 +326,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
+    // Where generated images land on disk — read-only, shown so the user can
+    // navigate there themselves; this page never opens it for them.
+    const [outputDir, setOutputDir] = useState('');
+    useEffect(() => {
+        let cancelled = false;
+        void api.getImageGenInfo().then((result) => {
+            if (!cancelled && result?.success) setOutputDir(result.output_dir ?? '');
+        });
+        return () => { cancelled = true; };
+    }, []);
     const historyTrackRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
@@ -811,6 +824,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <UnifiedCard
                 size="full"
                 title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
+                subtitle={outputDir ? (
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Box component="span">
+                            {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
+                        </Box>
+                        <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
+                            {outputDir}
+                        </Box>
+                        <CopyIconButton
+                            value={outputDir}
+                            label={t('common.copy', { defaultValue: 'Copy' })}
+                            copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
+                            iconSize={14}
+                            sx={{ p: 0.25 }}
+                        />
+                    </Stack>
+                ) : undefined}
             >
                 <Box
                     onPaste={handlePaste}
