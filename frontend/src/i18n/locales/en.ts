@@ -871,11 +871,11 @@ export default {
     },
     "sources": {
       "title": "Repositories",
-      "subtitle": "Git repositories the agent can be pointed at. Cloning, fetching and pushing happen on this machine with its git credentials; the agent never sees them.",
+      "subtitle": "Git repositories to clone for the agent, or local folders it works in directly. Cloning, fetching and pushing happen on this machine with its git credentials; the agent never sees them.",
       "add": "Add repository",
       "edit": "Edit repository",
       "name": "Name",
-      "url": "Git URL",
+      "url": "Git URL or folder path",
       "urlHelp": "https://…, git@host:org/repo.git, or an absolute folder path to work in place",
       "kindLocal": "Local folder",
       "kindGit": "Git",

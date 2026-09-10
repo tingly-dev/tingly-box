@@ -872,11 +872,11 @@ export default {
     },
     "sources": {
       "title": "仓库",
-      "subtitle": "agent 可以处理的 git 仓库。clone、fetch、push 都在这台机器上用它的 git 凭证完成，agent 看不到凭证。",
+      "subtitle": "给 agent clone 的 git 仓库，或让它直接在里面工作的本地目录。clone、fetch、push 都在这台机器上用它的 git 凭证完成，agent 看不到凭证。",
       "add": "添加仓库",
       "edit": "编辑仓库",
       "name": "名称",
-      "url": "Git 地址",
+      "url": "Git 地址或目录路径",
       "urlHelp": "https://…、git@host:org/repo.git，或一个本地目录的绝对路径（就地工作）",
       "kindLocal": "本地目录",
       "kindGit": "Git",
