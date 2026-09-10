@@ -91,6 +91,24 @@ Consequences:
 | **Frontend speaks the same JSON** | The TS interface uses env names as keys (`prefs.ANTHROPIC_DEFAULT_SONNET_MODEL`). What the form edits is exactly what gets POST'd is exactly what lands in settings.json. |
 | **1M suffix is just text** | `[1m]` is a substring of the model ID. The UI toggles append/strip; the backend never special-cases it. The gateway handles the suffix at routing time. |
 
+### 3.1 `defaultMode` lives under `permissions`, not top-level
+
+`defaultMode` isn't part of the `ClaudeCodePrefs`/`env` wire-shape trick above
+— it's a separate top-level `settings.json` key, threaded through
+`WithDefaultMode`/`buildClaudeSettings` (`apply_config_claude.go`, and its
+intentionally-duplicated copy in `ai/agent/apply_support.go`). Claude Code's
+own settings-reference documents this key as **`permissions.defaultMode`**,
+nested — an older, flatter layout (bare top-level `defaultMode`) is what this
+codebase originally wrote and is what some installed CLI versions may still
+only read. `buildClaudeSettings` therefore writes **both**: the canonical
+`permissions.defaultMode` and a mirrored top-level `defaultMode`, so the
+setting takes effect regardless of which layout the installed CLI expects.
+`readClaudeCodeSettings` (`internal/agent/cc_settings.go`) reads `permissions.
+defaultMode` first and falls back to the legacy top-level key only when the
+nested one is absent — so a hand-edited or externally-written file that only
+sets one of the two still round-trips correctly through the Quick Config and
+Profile Overrides forms.
+
 ---
 
 ## 4. UI structure

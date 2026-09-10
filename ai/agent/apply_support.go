@@ -314,7 +314,16 @@ func buildClaudeSettings(base []byte, env map[string]string, applyOpts *applyOpt
 	existingConfig["env"] = envInterface
 
 	if applyOpts.defaultMode != "" {
+		// Mirrors internal/server/config/apply_config_claude.go: Claude Code's
+		// settings-reference documents this key as nested under "permissions";
+		// the legacy top-level key is also written for older CLI installs.
 		existingConfig["defaultMode"] = applyOpts.defaultMode
+		permissions, _ := existingConfig["permissions"].(map[string]interface{})
+		if permissions == nil {
+			permissions = map[string]interface{}{}
+		}
+		permissions["defaultMode"] = applyOpts.defaultMode
+		existingConfig["permissions"] = permissions
 	}
 	maps.Copy(existingConfig, applyOpts.extras)
 

@@ -40,6 +40,11 @@ export interface ClaudeCodePrefs {
     MCP_TOOL_TIMEOUT?: string;
     MAX_MCP_OUTPUT_TOKENS?: string;
 
+    CLAUDE_CODE_MAX_ACTIVE_TASKS?: string;
+    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS?: string;
+    CLAUDE_AUTO_BACKGROUND_TASKS?: string;
+    CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS?: string;
+
     CLAUDE_CODE_AUTO_COMPACT_WINDOW?: string;
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE?: string;
 
@@ -111,6 +116,11 @@ export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     { envName: 'MCP_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    // Subagent concurrency (commonly adjusted - the Task-tool parallelism knob)
+    { envName: 'CLAUDE_CODE_MAX_ACTIVE_TASKS', group: 'limits', kind: 'int', unit: 'tasks', advanced: false },
+    { envName: 'CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'CLAUDE_AUTO_BACKGROUND_TASKS', group: 'switches', kind: 'bool', advanced: true },
     // Auto-compact (commonly adjusted - not advanced)
     { envName: 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', group: 'model', kind: 'int', unit: 'tokens', advanced: false },
     { envName: 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', group: 'model', kind: 'int', unit: '%', advanced: false },
@@ -218,6 +228,29 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         purpose: 'MCP 工具单次返回内容的 token 上限',
         tooltip: '官方默认 8192。超过会被截断。',
         placeholder: '8192',
+    },
+    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
+        label: '子 Agent 并发数',
+        purpose: '通过 Task 工具同时运行的子 Agent 数量上限',
+        tooltip: '官方默认 1（不并发）。超出上限的任务会被放到后台排队。调高可以让多个子 Agent 同时跑长任务。',
+        placeholder: '1',
+    },
+    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
+        label: '子 Agent 转后台阈值',
+        purpose: '单个长任务运行多久后被自动放入后台',
+        tooltip: '官方默认 120000（2 分钟）。超过这个时长的子 Agent 会被自动转入后台运行，释放并发名额。',
+        placeholder: '120000',
+    },
+    CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
+        label: '子 Agent 卡死超时',
+        purpose: '子 Agent 多久没有进展就判定为卡死并终止',
+        tooltip: '官方默认 600000（10 分钟）。计时器在每次收到流式进展事件时重置；超时会中止该子 Agent 并把卡死信息报告给主对话。',
+        placeholder: '600000',
+    },
+    CLAUDE_AUTO_BACKGROUND_TASKS: {
+        label: '自动后台化子 Agent',
+        purpose: '强制开启长任务自动转后台',
+        tooltip: '开启后，运行约 2 分钟以上的子 Agent 会被强制自动转入后台执行。',
     },
     CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
         label: '自动压缩窗口',
@@ -355,6 +388,29 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         tooltip: 'Anthropic default is 8192. Anything larger is truncated.',
         placeholder: '8192',
     },
+    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
+        label: 'Subagent concurrency',
+        purpose: 'Max number of Task-tool subagents running at once',
+        tooltip: 'Anthropic default is 1 (no concurrency). Tasks beyond the limit are parked in the background until a slot frees up. Raise this to let multiple subagents run long tasks in parallel.',
+        placeholder: '1',
+    },
+    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
+        label: 'Subagent backgrounding threshold',
+        purpose: 'How long a single subagent task runs before it is parked in the background',
+        tooltip: 'Anthropic default is 120000 (2 min). A subagent past this duration is automatically moved to the background, freeing its concurrency slot.',
+        placeholder: '120000',
+    },
+    CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
+        label: 'Subagent stall timeout',
+        purpose: 'How long a subagent can go without progress before it is aborted',
+        tooltip: 'Anthropic default is 600000 (10 min). The timer resets on every streaming progress event; a stall past this window aborts the subagent and reports it to the parent conversation.',
+        placeholder: '600000',
+    },
+    CLAUDE_AUTO_BACKGROUND_TASKS: {
+        label: 'Force auto-background subagents',
+        purpose: 'Force-enable automatic backgrounding of long-running subagents',
+        tooltip: 'When on, subagents running for roughly 2+ minutes are automatically moved to the background.',
+    },
     CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
         label: 'Auto-compact window',
         purpose: 'Target window size for context auto-compaction',
@@ -491,6 +547,29 @@ const FIELDS_TEXT_RU: FieldTextMap = {
         tooltip: 'Значение Anthropic по умолчанию — 8192. Всё сверх этого обрезается.',
         placeholder: '8192',
     },
+    CLAUDE_CODE_MAX_ACTIVE_TASKS: {
+        label: 'Параллелизм субагентов',
+        purpose: 'Максимум одновременно работающих субагентов инструмента Task',
+        tooltip: 'Значение Anthropic по умолчанию — 1 (без параллелизма). Задачи сверх лимита ждут в фоне. Увеличьте, чтобы несколько субагентов выполняли длинные задачи одновременно.',
+        placeholder: '1',
+    },
+    CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS: {
+        label: 'Порог ухода субагента в фон',
+        purpose: 'Через сколько времени одна долгая задача субагента уходит в фон',
+        tooltip: 'Значение Anthropic по умолчанию — 120000 (2 мин). Субагент, превысивший это время, автоматически переводится в фон, освобождая слот параллелизма.',
+        placeholder: '120000',
+    },
+    CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS: {
+        label: 'Таймаут зависания субагента',
+        purpose: 'Сколько времени субагент может не показывать прогресс, прежде чем будет прерван',
+        tooltip: 'Значение Anthropic по умолчанию — 600000 (10 мин). Таймер сбрасывается при каждом событии прогресса; при превышении субагент прерывается, и это сообщается в основной диалог.',
+        placeholder: '600000',
+    },
+    CLAUDE_AUTO_BACKGROUND_TASKS: {
+        label: 'Принудительный автофон субагентов',
+        purpose: 'Принудительно включить автоматический перевод долгих субагентов в фон',
+        tooltip: 'При включении субагенты, работающие примерно от 2 минут, автоматически переводятся в фон.',
+    },
     CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
         label: 'Окно автосжатия',
         purpose: 'Целевой размер окна при автоматическом сжатии контекста',
@@ -603,15 +682,15 @@ export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<AppLanguage, Record<ClaudeCod
 const DEFAULT_MODE_SECTION_TEXT: Record<AppLanguage, SectionText> = {
     zh: {
         title: '默认权限模式',
-        hint: '写入 settings.json 的 defaultMode；tb 推荐 acceptEdits。',
+        hint: '写入 settings.json 的 permissions.defaultMode（同时兼容旧版 Claude Code 读取的顶层 defaultMode）；tb 推荐 acceptEdits。',
     },
     en: {
         title: 'Default permission mode',
-        hint: 'Writes defaultMode in settings.json; tb recommends acceptEdits.',
+        hint: 'Writes permissions.defaultMode in settings.json (also mirrored to the legacy top-level defaultMode for older Claude Code installs); tb recommends acceptEdits.',
     },
     ru: {
         title: 'Режим прав по умолчанию',
-        hint: 'Записывает defaultMode в settings.json; tb рекомендует acceptEdits.',
+        hint: 'Записывает permissions.defaultMode в settings.json (дублируется в устаревший defaultMode верхнего уровня для старых версий Claude Code); tb рекомендует acceptEdits.',
     },
 };
 
@@ -1079,7 +1158,7 @@ const DefaultModeSection: React.FC<{
             hint={meta.hint}
             label={t('claudeCode.defaultModeLabel')}
             tooltip={`${selectedText.label}: ${selectedText.description}`}
-            settingsKey="defaultMode"
+            settingsKey="permissions.defaultMode"
             control={
                 <FormControl size="small" sx={{ width: 360 }}>
                     <Select

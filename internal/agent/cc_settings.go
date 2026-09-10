@@ -170,8 +170,11 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 	}
 	snapshot.Exists = true
 	var raw struct {
-		Env                   map[string]any  `json:"env"`
-		DefaultMode           string          `json:"defaultMode"`
+		Env         map[string]any `json:"env"`
+		DefaultMode string         `json:"defaultMode"` // legacy location, pre-dates the permissions.defaultMode move
+		Permissions struct {
+			DefaultMode string `json:"defaultMode"`
+		} `json:"permissions"`
 		StatusLine            json.RawMessage `json:"statusLine"`
 		ShowThinkingSummaries *bool           `json:"showThinkingSummaries"`
 	}
@@ -183,7 +186,13 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 			snapshot.Env[key] = text
 		}
 	}
-	snapshot.DefaultMode = raw.DefaultMode
+	// Claude Code's settings-reference documents defaultMode as nested under
+	// "permissions"; prefer it and fall back to the legacy top-level key for
+	// files written before the move.
+	snapshot.DefaultMode = raw.Permissions.DefaultMode
+	if snapshot.DefaultMode == "" {
+		snapshot.DefaultMode = raw.DefaultMode
+	}
 	snapshot.StatusLine = len(raw.StatusLine) > 0 && string(raw.StatusLine) != "null"
 	snapshot.ShowThinkingSummaries = raw.ShowThinkingSummaries
 	return snapshot, nil

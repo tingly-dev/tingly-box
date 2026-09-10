@@ -45,7 +45,18 @@ func buildClaudeSettings(base []byte, env map[string]string, applyOpts *applyOpt
 	existingConfig["env"] = envInterface
 
 	if applyOpts.defaultMode != "" {
+		// Claude Code's settings-reference documents this key as nested under
+		// "permissions" (see .design/claude-code-config.md). The legacy
+		// top-level key is also written so the setting still takes effect on
+		// older CLI installs that predate the move; readClaudeCodeSettings
+		// prefers the nested value when both are present.
 		existingConfig["defaultMode"] = applyOpts.defaultMode
+		permissions, _ := existingConfig["permissions"].(map[string]interface{})
+		if permissions == nil {
+			permissions = map[string]interface{}{}
+		}
+		permissions["defaultMode"] = applyOpts.defaultMode
+		existingConfig["permissions"] = permissions
 	}
 	if applyOpts.showThinkingSummaries != nil {
 		existingConfig["showThinkingSummaries"] = *applyOpts.showThinkingSummaries

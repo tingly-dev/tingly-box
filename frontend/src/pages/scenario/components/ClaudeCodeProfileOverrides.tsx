@@ -377,6 +377,10 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         );
     };
 
+    // 'defaultMode' is a display-only key for this override row; the actual
+    // settings.json location is nested under "permissions" (with a legacy
+    // top-level mirror for older Claude Code installs) — see prefs.go.
+    const fieldBadge = (key: OverrideKey) => key === 'defaultMode' ? 'permissions.defaultMode' : key;
     const fieldLabel = (key: OverrideKey) => key === 'defaultMode' ? text.permissionMode : fieldText[key].label;
     const fieldPurpose = (key: OverrideKey) => key === 'defaultMode' ? text.permissionPurpose : fieldText[key].purpose;
     const fieldGroup = (key: OverrideKey) => {
@@ -480,7 +484,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                                             <InfoOutlined sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                                         </Tooltip>
                                     </Box>
-                                    <Box component="span" sx={{ ...CLAUDE_CONFIG_KEY_SX, display: 'inline-block', mt: 0.5 }}>{key}</Box>
+                                    <Box component="span" sx={{ ...CLAUDE_CONFIG_KEY_SX, display: 'inline-block', mt: 0.5 }}>{fieldBadge(key)}</Box>
                                 </Box>
                                 <Box
                                     sx={{
@@ -565,7 +569,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                                         }}
                                     >
                                         <Typography variant="body2" sx={{ flex: 1, minWidth: 0, fontWeight: 500 }}>{fieldLabel(key)}</Typography>
-                                        <Box component="span" sx={{ ...CLAUDE_CONFIG_KEY_SX, flexShrink: 1 }}>{key}</Box>
+                                        <Box component="span" sx={{ ...CLAUDE_CONFIG_KEY_SX, flexShrink: 1 }}>{fieldBadge(key)}</Box>
                                     </ButtonBase>
                                 ))}
                             </Box>

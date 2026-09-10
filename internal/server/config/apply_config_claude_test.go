@@ -29,7 +29,11 @@ func TestApplyClaudeSettings_DefaultMode(t *testing.T) {
 		t.Fatalf("unmarshal settings: %v", err)
 	}
 	if settings["defaultMode"] != "acceptEdits" {
-		t.Fatalf("defaultMode = %v, want acceptEdits", settings["defaultMode"])
+		t.Fatalf("legacy top-level defaultMode = %v, want acceptEdits", settings["defaultMode"])
+	}
+	permissions, ok := settings["permissions"].(map[string]interface{})
+	if !ok || permissions["defaultMode"] != "acceptEdits" {
+		t.Fatalf("permissions.defaultMode = %v, want acceptEdits", settings["permissions"])
 	}
 }
 

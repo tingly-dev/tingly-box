@@ -200,6 +200,26 @@ func TestReadClaudeCodeSettings_RestoresAppliedState(t *testing.T) {
 	}
 }
 
+// Claude Code's settings-reference moved defaultMode under "permissions".
+// tb writes both locations (see buildClaudeSettings), so a file it wrote
+// itself carries both; the nested value must win in case they ever diverge
+// (e.g. a hand-edit of the legacy key).
+func TestReadClaudeCodeSettings_PermissionsDefaultModeTakesPriorityOverLegacy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	writeTestFile(t, path, `{
+		"defaultMode": "plan",
+		"permissions": {"defaultMode": "acceptEdits"}
+	}`)
+
+	snapshot, err := readClaudeCodeSettings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.DefaultMode != "acceptEdits" {
+		t.Errorf("DefaultMode = %q, want acceptEdits (permissions.defaultMode should win)", snapshot.DefaultMode)
+	}
+}
+
 func TestResolveCCProfileSettings_InheritsThenAppliesOverrides(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -459,8 +479,9 @@ func TestBuildCCProfileSettings_ReusesUnchangedAtomicArtifacts(t *testing.T) {
 	}
 
 	settings := readJSONMap(t, settingsPath)
-	if settings["defaultMode"] != "acceptEdits" {
-		t.Errorf("defaultMode = %v, want acceptEdits", settings["defaultMode"])
+	permissions, ok := settings["permissions"].(map[string]interface{})
+	if !ok || permissions["defaultMode"] != "acceptEdits" {
+		t.Errorf("permissions.defaultMode = %v, want acceptEdits", settings["permissions"])
 	}
 	envJSON, ok := settings["env"].(map[string]any)
 	if !ok || envJSON["TINGLY_TEST"] != "yes" {
