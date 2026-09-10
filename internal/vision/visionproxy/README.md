@@ -68,16 +68,15 @@ position only ranks misses, it never decides whether an image is eligible.
 
 ### Describe cache
 
-`describe_cache.go` is a two-tier cache from
-`(session, provider, model, image-content-hash)` to the already-formatted
-replacement text:
-
-- a fixed-capacity in-memory LRU (2000 entries) — the hot tier every lookup
-  hits first;
-- `describe_store.go` — a durable tier in tingly's shared SQLite database
-  (`vision_descriptions` table), consulted on a memory miss and written
-  through on every put. A store hit is promoted into memory so the same
-  historical image never touches the database again on later turns.
+`describe_cache.go` maps `(session, provider, model, image-content-hash)`
+to the already-formatted replacement text. It has a single positive tier,
+a `DescribeStore`: `describe_store.go` in production — tingly's shared
+SQLite database, `vision_descriptions` table — and a bounded in-process
+map for tests and for the no-database fallback. There is deliberately no
+in-memory LRU in front of it: a SQLite point lookup on the unique index
+costs tens of microseconds, less than hashing one image's base64, and a
+second tier bought that speed with two sources of truth and promotion /
+write-through logic to keep them aligned.
 
 Every image occurrence, wherever it sits, checks the cache first
 (`spliceOrCollect`): a hit splices the cached text immediately and never
@@ -93,7 +92,7 @@ same conversation; the session component is `source:value`, deliberately
 without the client-IP backup so a network change mid-conversation keeps
 hitting. See `.design/vision-proxy.md` §10 for the full rationale.
 
-The durable tier is what keeps the downstream prompt prefix stable across
+The store is what keeps the downstream prompt prefix stable across
 a gateway restart: a conversation carrying a dozen screenshots would
 otherwise re-describe all of them — with a dozen freshly worded texts — on
 its first request after the restart. There is no age limit — a paid-for
@@ -101,7 +100,7 @@ description is kept for as long as the table is under its ceiling of
 100000 rows, beyond which the least recently used rows go first; the check
 runs at boot and then at most hourly from the write path. The
 store is wired at server boot from the StoreManager's connection; if that
-is unavailable the cache silently degrades to memory-only.
+is unavailable the cache falls back to the process-local map.
 
 ### Process pipeline
 
@@ -247,14 +246,15 @@ deliver images this way. Unknown request shapes are left alone (no-op).
   `NewProcessor`, fixture builders) reused by this package's own tests and by
   other packages' tests that exercise `Service.Apply` through the real
   handler call order.
-- `describe_cache_test.go` — LRU mechanics in isolation (eviction, update,
-  key isolation across service/session, nil/zero-capacity no-op behavior).
-- `describe_store_test.go` — the durable tier: round-trip and upsert,
+- `describe_cache_test.go` — key mechanics in isolation (update, isolation
+  across service/session, b64/url namespaces, nil-cache no-op) and the
+  fallback map's capacity reset.
+- `describe_store_test.go` — the SQLite store: round-trip and upsert,
   session/service isolation, survive-a-restart (fresh cache over the same
-  database hits with zero vision calls and byte-identical text), memory
-  eviction falling back to the store, no-age-limit and size-ceiling
-  pruning, `last_used_at` touch throttling, and the IP-independent session
-  scope.
+  database hits with zero vision calls and byte-identical text),
+  no-age-limit and size-ceiling pruning, `last_used_at` touch throttling,
+  empty-service-key lookups skipping the store, and the IP-independent
+  session scope.
 - `vision_proxy_test.go` / `vision_proxy_regression_test.go` — the
   processor contract, including the `TestVisionProxy_Cache_*` cases for
   session/model isolation, historical-hit-uses-real-description, and
@@ -276,7 +276,7 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 - Deduplicating identical images within one request (each occurrence still
   gets its own describe call the first time it's seen — the cache only
   helps across separate `Process` calls, not within one).
-- Cross-instance cache sharing (the durable tier lives in each gateway's
+- Cross-instance cache sharing (the store lives in each gateway's
   own `tingly.db`; two gateway instances do not see each other's
   descriptions — see `.design/vision-proxy.md` §10).
 - Coalescing two concurrent requests that carry the same new image. This

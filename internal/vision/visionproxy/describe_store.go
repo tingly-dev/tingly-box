@@ -11,13 +11,14 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// DescribeStore is the durable tier behind describeCache. The in-memory LRU
-// is only a hot front: every entry it holds is also here, so a process
-// restart (or an LRU eviction) costs a row lookup, not a vision call.
+// DescribeStore is where describeCache keeps descriptions: the SQLite
+// implementation below in production, so a process restart costs a row
+// lookup rather than a vision call; memoryDescribeStore for tests and as
+// the no-database fallback.
 //
 // Implementations must be safe for concurrent use. Errors are never
-// surfaced to the request path — a broken store degrades the cache to
-// memory-only, it never fails a request.
+// surfaced to the request path — a failing read is a miss and a failing
+// write is dropped; the request itself never fails.
 type DescribeStore interface {
 	// Get returns the replacement text for key, if any.
 	Get(key visionCacheKey) (string, bool)

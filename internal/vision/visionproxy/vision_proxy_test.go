@@ -112,10 +112,9 @@ func mkProcessor(t *testing.T, vc VisionClient, providers ...*typ.Provider) *Vis
 	return &VisionProxyProcessor{
 		Client:   vc,
 		Resolver: newFakeProviderResolver(providers...),
-		// Fresh, small cache per test — isolates it from both other tests
-		// and the shared defaultDescribeCache, so a hit in one test can
-		// never mask a describe call another test asserts on.
-		cache: newDescribeCache(defaultDescribeCacheCapacity),
+		// Fresh memory-only cache per test, so a hit in one test can never
+		// mask a describe call another test asserts on.
+		cache: newDescribeCache(nil),
 	}
 }
 

@@ -54,10 +54,10 @@ func testService() *Service {
 		Client:   echoingVisionClient{},
 		Resolver: alwaysResolvingProvider{},
 		// Isolated per-call cache: several of these tests reuse the same
-		// fixture image + provider/model pair, and sharing
-		// defaultDescribeCache across them would let one test's cache
-		// entry silently substitute for another's live describe call.
-		cache: newDescribeCache(defaultDescribeCacheCapacity),
+		// fixture image + provider/model pair, and sharing a cache across
+		// them would let one test's entry silently substitute for
+		// another's live describe call.
+		cache: newDescribeCache(nil),
 	})
 }
 

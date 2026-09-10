@@ -18,13 +18,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// defaultDescribeCache is the process-wide describe cache used by
-// VisionProxyProcessor when none is explicitly injected. Sharing one
-// instance across all processors (rule-level and scenario-level both funnel
-// through the same processor anyway, see .design/vision-proxy.md §4.1) keeps
-// the capacity bound global instead of accidentally per-processor.
-var defaultDescribeCache = newDescribeCache(defaultDescribeCacheCapacity)
-
 // providerResolver is the subset of routing.ProviderResolver this package
 // needs. Defined locally so this package does not depend on
 // internal/server/routing.
@@ -44,11 +37,11 @@ type VisionProxyProcessor struct {
 
 	// cache maps (session, vision service, image content) to the
 	// already-formatted replacement text — see describe_cache.go. Left nil
-	// by zero-value construction (as most existing tests do) falls back to
-	// defaultDescribeCache via the cache() accessor, so callers that build a
-	// VisionProxyProcessor{} literal directly still get caching without
-	// having to know about it.
-	cache *describeCache
+	// by zero-value construction, describeCacheFor lazily builds a
+	// process-local one so a bare VisionProxyProcessor{} literal still
+	// caches for its own lifetime.
+	cache     *describeCache
+	cacheOnce sync.Once
 
 	// describeLimit caps cache-missing images described per request; zero
 	// means describeLimitFor's env/default resolution. Tests set it to pin
@@ -56,14 +49,15 @@ type VisionProxyProcessor struct {
 	describeLimit int
 }
 
-// describeCacheFor returns the cache this processor should use: an
-// explicitly injected one (tests can set a small/fresh instance to isolate
-// cases), or the shared process-wide default.
+// describeCacheFor returns the processor's cache, building a memory-only
+// one on first use if none was injected.
 func (p *VisionProxyProcessor) describeCacheFor() *describeCache {
-	if p.cache != nil {
-		return p.cache
-	}
-	return defaultDescribeCache
+	p.cacheOnce.Do(func() {
+		if p.cache == nil {
+			p.cache = newDescribeCache(nil)
+		}
+	})
+	return p.cache
 }
 
 // imageUnavailableText replaces an image when the vision proxy itself fails

@@ -28,13 +28,13 @@ func NewService(p *VisionProxyProcessor) *Service {
 // NewServiceFromPool builds a Service backed by the production vision client,
 // dispatching describe calls through the shared ClientPool. Called once
 // during server boot after the ClientPool and config (provider resolver) are
-// constructed. store is the durable tier of the describe cache (see
-// describe_store.go); nil keeps the cache memory-only.
+// constructed. store backs the describe cache (see describe_store.go); nil
+// falls back to a process-local map.
 func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver, store DescribeStore) *Service {
 	return NewService(&VisionProxyProcessor{
 		Client:   NewPoolVisionClient(pool, resolver),
 		Resolver: resolver,
-		cache:    newDescribeCacheWithStore(defaultDescribeCacheCapacity, store),
+		cache:    newDescribeCache(store),
 	})
 }
 

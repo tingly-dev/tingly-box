@@ -34,14 +34,13 @@ func (StubResolver) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 // NewProcessor builds a visionproxy.VisionProxyProcessor wired to the stub
 // client/resolver above, echoing "<desc> via <model>" for every described image.
-// Gets its own describe cache (rather than falling back to
-// defaultDescribeCache) so callers building several stub processors in the
-// same test binary don't silently share cached descriptions across them.
+// Gets its own memory-only describe cache so callers building several stub
+// processors in the same test binary don't share cached descriptions.
 func NewProcessor() *VisionProxyProcessor {
 	return &VisionProxyProcessor{
 		Client:   StubVisionClient{Desc: "desc"},
 		Resolver: StubResolver{},
-		cache:    newDescribeCache(defaultDescribeCacheCapacity),
+		cache:    newDescribeCache(nil),
 	}
 }
 

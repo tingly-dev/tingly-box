@@ -1,34 +1,26 @@
 package visionproxy
 
 import (
-	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
 	"sync"
 	"time"
 )
 
-// defaultDescribeCacheCapacity bounds the number of cached descriptions kept
-// in memory across all sessions. Values are small (a formatted description
-// string), so this bounds entry count rather than raw bytes — see
-// .design/vision-proxy.md §10 for the sizing rationale. No env override
-// (YAGNI): raise this const directly if a real workload needs more headroom.
-const defaultDescribeCacheCapacity = 2000
-
 // visionCacheKey identifies one (session, vision service, image content)
 // triple. All three dimensions matter independently:
 //   - session: the same bytes are only treated as "the same image" within one
 //     session — a different session (different user/conversation, or even a
 //     coincidental byte match) must never reuse another session's
-//     description. See the spec's §1 for why this beats a pure
-//     content-addressed global cache.
+//     description. See .design/vision-proxy.md §10.2 for why this beats a
+//     pure content-addressed global cache.
 //   - provider+model: switching the configured vision service must silently
 //     invalidate old descriptions rather than serve a different model's
 //     answer under the new model's name. provider is the provider UUID
 //     (loadbalance.Service.Provider / providerResolver.GetProviderByUUID),
 //     not the provider's display name.
 //   - content: which image, identified by hashBase64Image (base64 sources)
-//     or the remote URL itself (URL sources).
+//     or hashURLImage (URL sources).
 type visionCacheKey struct {
 	session  string
 	provider string
@@ -59,25 +51,22 @@ func hashURLImage(remoteURL string) string {
 	return "url:" + hex.EncodeToString(h[:])
 }
 
-// describeCache is a two-tier cache from visionCacheKey to the
-// already-formatted replacement text:
+// describeCache maps visionCacheKey to the already-formatted replacement
+// text. It has a single positive tier, a DescribeStore — SQLite in
+// production (describe_store.go), a bounded map for tests and for the
+// no-database fallback — plus a small memory-only negative cache.
 //
-//   - a fixed-capacity in-memory LRU, the hot tier every lookup hits first;
-//   - an optional DescribeStore (SQLite, see describe_store.go), the durable
-//     tier consulted on a memory miss and written through on every put.
-//
-// The store is what makes prefix stability survive a restart: a session
-// with a dozen screenshots must not re-describe all of them — and hand the
-// downstream model a dozen freshly worded (hence different) descriptions —
-// just because tingly-box was restarted or the LRU turned over. With no
-// store the cache degrades to memory-only, which is what tests use.
+// There is deliberately no in-memory LRU in front of the store. A request
+// looks up every image its conversation carries, but a SQLite point
+// lookup on the unique index costs tens of microseconds, less than hashing
+// one image's base64, and far below the downstream model's latency. What
+// a second tier bought in speed it cost in two sources of truth, promotion
+// and write-through logic, and a third capacity number to explain; the
+// store is the one place a description lives.
 type describeCache struct {
-	mu       sync.Mutex
-	capacity int
-	ll       *list.List // front = most recently used
-	items    map[visionCacheKey]*list.Element
-	store    DescribeStore // nil = memory-only
+	store DescribeStore
 
+	mu sync.Mutex
 	// failed is the negative cache: keys whose last describe failed, with
 	// the time it failed. Memory-only and short-lived (describeFailureTTL)
 	// on purpose — see recentlyFailed.
@@ -102,30 +91,40 @@ const describeFailureTTL = 10 * time.Minute
 // negative entries only costs retries.
 const describeFailureCapacity = 1000
 
-type describeCacheEntry struct {
-	key  visionCacheKey
-	text string
-}
-
-// newDescribeCache builds a memory-only LRU cache bounded to capacity
-// entries. A non-positive capacity makes the memory tier always miss and
-// never retain (degrades to "no cache" rather than panicking or growing
-// unbounded).
-func newDescribeCache(capacity int) *describeCache {
-	return newDescribeCacheWithStore(capacity, nil)
-}
-
-// newDescribeCacheWithStore builds the two-tier cache: the memory LRU in
-// front of store. A nil store is memory-only.
-func newDescribeCacheWithStore(capacity int, store DescribeStore) *describeCache {
-	return &describeCache{
-		capacity: capacity,
-		ll:       list.New(),
-		items:    make(map[visionCacheKey]*list.Element),
-		store:    store,
-		failed:   make(map[visionCacheKey]time.Time),
-		now:      time.Now,
+// newDescribeCache builds a cache over store. A nil store falls back to a
+// bounded in-process map (newMemoryDescribeStore): descriptions then last
+// only for the process, which is what tests want and what production gets
+// only if the database is unavailable at boot.
+func newDescribeCache(store DescribeStore) *describeCache {
+	if store == nil {
+		store = newMemoryDescribeStore()
 	}
+	return &describeCache{
+		store:  store,
+		failed: make(map[visionCacheKey]time.Time),
+		now:    time.Now,
+	}
+}
+
+// get looks key up in the store. Nothing is ever written under an empty
+// service key (no usable service means no describe, hence no put), so
+// that case is a miss without a round trip.
+func (c *describeCache) get(key visionCacheKey) (string, bool) {
+	if c == nil || key.provider == "" && key.model == "" {
+		return "", false
+	}
+	return c.store.Get(key)
+}
+
+// put writes key to the store and forgets any recorded failure for it.
+func (c *describeCache) put(key visionCacheKey, text string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	delete(c.failed, key)
+	c.mu.Unlock()
+	c.store.Put(key, text)
 }
 
 // recentlyFailed reports whether key failed to describe within
@@ -168,76 +167,34 @@ func (c *describeCache) markFailed(key visionCacheKey) {
 	c.failed[key] = now
 }
 
-// get looks up key: memory first (marking it most-recently-used on a hit),
-// then the store. A store hit is promoted into memory so the next lookup —
-// the same historical image on the next turn — never touches the database.
-func (c *describeCache) get(key visionCacheKey) (string, bool) {
-	if c == nil {
-		return "", false
-	}
-	if text, ok := c.getMemory(key); ok {
-		return text, true
-	}
-	// Nothing is ever written under an empty service key (no usable
-	// service means no describe, hence no put), so skip the store round
-	// trip rather than issue one guaranteed-miss SELECT per image.
-	if c.store == nil || key.provider == "" && key.model == "" {
-		return "", false
-	}
-	text, ok := c.store.Get(key)
-	if !ok {
-		return "", false
-	}
-	c.putMemory(key, text)
-	return text, true
+// memoryDescribeStoreCapacity bounds the fallback map; past it the map is
+// reset rather than evicted by recency — the fallback is not meant to
+// carry a real workload, only to keep the proxy correct without a database.
+const memoryDescribeStoreCapacity = 10000
+
+// memoryDescribeStore is the in-process DescribeStore used by tests and as
+// the fallback when no database is available.
+type memoryDescribeStore struct {
+	mu    sync.Mutex
+	items map[visionCacheKey]string
 }
 
-func (c *describeCache) getMemory(key visionCacheKey) (string, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	el, ok := c.items[key]
-	if !ok {
-		return "", false
-	}
-	c.ll.MoveToFront(el)
-	return el.Value.(*describeCacheEntry).text, true
+func newMemoryDescribeStore() *memoryDescribeStore {
+	return &memoryDescribeStore{items: make(map[visionCacheKey]string)}
 }
 
-// put writes key through both tiers: memory (evicting the least-recently-
-// used entry if over capacity) and, when configured, the store.
-func (c *describeCache) put(key visionCacheKey, text string) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	delete(c.failed, key)
-	c.mu.Unlock()
-	c.putMemory(key, text)
-	if c.store != nil {
-		c.store.Put(key, text)
-	}
+func (s *memoryDescribeStore) Get(key visionCacheKey) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	text, ok := s.items[key]
+	return text, ok
 }
 
-// putMemory inserts or updates key in the memory tier only. A non-positive
-// capacity makes this a no-op.
-func (c *describeCache) putMemory(key visionCacheKey, text string) {
-	if c.capacity <= 0 {
-		return
+func (s *memoryDescribeStore) Put(key visionCacheKey, text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.items[key]; !exists && len(s.items) >= memoryDescribeStoreCapacity {
+		s.items = make(map[visionCacheKey]string)
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if el, ok := c.items[key]; ok {
-		el.Value.(*describeCacheEntry).text = text
-		c.ll.MoveToFront(el)
-		return
-	}
-	el := c.ll.PushFront(&describeCacheEntry{key: key, text: text})
-	c.items[key] = el
-	if c.ll.Len() > c.capacity {
-		oldest := c.ll.Back()
-		if oldest != nil {
-			c.ll.Remove(oldest)
-			delete(c.items, oldest.Value.(*describeCacheEntry).key)
-		}
-	}
+	s.items[key] = text
 }

@@ -408,7 +408,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 |------|------|
 | 处理器实现(图描述、改写) | `internal/vision/visionproxy/vision_proxy.go` |
 | Service 封装(`Resolve` + `Apply`) | `internal/vision/visionproxy/service.go` |
-| **描述缓存**(内存 LRU + SQLite 持久层,§10) | `internal/vision/visionproxy/describe_cache.go` / `describe_store.go` |
+| **描述缓存**(SQLite 单层 + 内存负缓存,§10) | `internal/vision/visionproxy/describe_cache.go` / `describe_store.go` |
 | smart routing 处理器接口 / `ProcessorContext`(vision proxy 已不用,给其它 op 用) | `internal/routing/smartrouting/processor.go` |
 | **统一入口 helper**(`applyVisionProxy`) | `internal/protocolserver/protocol_handler.go`(`internal/server/server.go` 上还留一份同名死代码,见 §4.1) |
 | 构造 + 注入(`NewServiceFromPool`) | `internal/server/server.go`(构造)→ `ProtocolHandlerDeps.VisionProxyService`(注入) |
@@ -442,7 +442,7 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
-| **描述缓存**(§10) | LRU 淘汰最久未用;`get` 命中前移;`put` 更新已存在 key 不增条目;不同 service / 不同 session 同图片内容不互相命中;base64 与 URL 两种 key 不冲突;同 session 同图第二次命中不再调 vision;不同 session 各自独立调用;历史图片命中缓存后拿到真实描述而非固定 marker;失败描述不写入正缓存,TTL 内不重试不占名额、TTL 后重试并缓存恢复结果;上限 1 且最新图永远失败时,第二轮名额落到更旧的图;换模型不复用旧模型的描述 |
+| **描述缓存**(§10) | `put` 覆盖已存在 key;不同 service / 不同 session 同图片内容不互相命中;base64 与 URL 两种 key 不冲突;同 session 同图第二次命中不再调 vision;不同 session 各自独立调用;历史图片命中缓存后拿到真实描述而非固定 marker;失败描述不写入正缓存,TTL 内不重试不占名额、TTL 后重试并缓存恢复结果;上限 1 且最新图永远失败时,第二轮名额落到更旧的图;换模型不复用旧模型的描述 |
 
 ---
 
@@ -458,9 +458,9 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 - **视觉模型输出非确定**——同一张图两次描述的文本大概率不同,拼进请求
   后会打断下游 provider 的 prompt 前缀缓存命中。
 
-### 10.2 方案:按 `(session, service, image)` 寻址的两级缓存
+### 10.2 方案:按 `(session, service, image)` 寻址的 SQLite 缓存
 
-`internal/vision/visionproxy/describe_cache.go` 是一个两级缓存,key 是:
+`internal/vision/visionproxy/describe_cache.go` 的 key 是:
 
 ```go
 type visionCacheKey struct {
@@ -471,25 +471,24 @@ type visionCacheKey struct {
 }
 ```
 
-两级分别是:
+正缓存只有**一层**:`DescribeStore` 接口,生产上是 SQLite
+(`describe_store.go`,`vision_descriptions` 表),测试和无库兜底用一个
+带上限的进程内 map。value 只存**拼好的替换文本**,不存图片字节——占用
+只随条目数和描述文本长度增长,与图片大小无关。
 
-1. **内存 LRU**(热层)——定容量 `defaultDescribeCacheCapacity`(2000),
-   每次查询先走这里;
-2. **SQLite 持久层**(`describe_store.go`,`vision_descriptions` 表)——
-   内存未命中时查它,每次写入都同步写穿。持久层命中后会提升回内存,
-   所以同一张历史图片在后续轮次里不会再碰数据库。
+**为什么要落盘**:本节要解决的核心是"历史图片每轮拿到和上一轮完全相同
+的文本",前缀缓存才能稳。只在内存里的话,这个稳定性只在进程存活期内成
+立——tb 一重启,一个带十几张截图的会话在下一个请求里要把十几张图**全
+部重新描述**,成本大,而且下游看到的是十几段措辞全新的文本,前缀整段作
+废。落盘之后,重启只是一次行查询的代价,替换文本字节级一致。
 
-value 只存**拼好的替换文本**,不存图片字节——占用只随条目数和描述文本
-长度增长,与图片大小无关。
+**为什么不在库前面再放一层内存 LRU**:早期版本有过。每个请求确实要对
+会话里所有图查一次,但 SQLite 在唯一索引上的点查是几十微秒,比对同一
+张图的 base64 算 sha256 还便宜,相对下游模型的秒级延迟不可见。而两级
+带来的是两个事实源、提升 / 写穿逻辑和第三个容量数字,审计时已经因此出
+过细节问题。单一事实源更值。
 
-**为什么要持久层**:本节要解决的核心是"历史图片每轮拿到和上一轮完全相
-同的文本",前缀缓存才能稳。只有内存层时,这个稳定性只在缓存条目存活期
-内成立——tb 一重启(或 LRU 被挤掉),一个带十几张截图的会话在下一个请
-求里要把十几张图**全部重新描述**,成本大,而且下游看到的是十几段措辞全
-新的文本,前缀整段作废。落盘之后,重启只是一次行查询的代价,替换文本字
-节级一致。
-
-持久层**不按时间过期**:一行只有几百字节,而一段已经付过费的描述,所属
+库**不按时间过期**:一行只有几百字节,而一段已经付过费的描述,所属
 会话回来得越久越值钱,按年龄删掉恰恰扔掉了这一节要的前缀稳定性。唯一的
 兜底是总量上限 100000 行,超出时先删最久未用的,正常使用碰不到。这条规
 则在启动时跑一次,之后从写路径上最多每小时跑一次。`Get` 命中时会更新
@@ -501,15 +500,15 @@ value 只存**拼好的替换文本**,不存图片字节——占用只随条目
 网络继续同一个会话,不该让已经付过费的描述全部失效。所以取
 `<source>:<value>`。
 
-**降级**:持久层从 `StoreManager` 的共享连接上打开(`server.go` 的
-`newVisionDescribeStore`);拿不到连接或迁移失败只打日志,缓存退化为纯
-内存,不阻塞启动。持久层任何读写错误也只记日志,当作未命中/未写入,绝
-不让请求失败。
+**降级**:库从 `StoreManager` 的共享连接上打开(`server.go` 的
+`newVisionDescribeStore`);拿不到连接或迁移失败只打日志,退化为进程内
+map,不阻塞启动。库的任何读写错误也只记日志,当作未命中/未写入,绝不
+让请求失败。
 
 **为什么 key 里有 session,而不是纯按图片内容全局寻址**:讨论中发现
 "同一段字节"不等于"同一次提问该复用同一个答案"——视觉模型这次描述得不
 好,用户重发同一张图本来还有机会拿到更好的答案,纯全局缓存会把这个坏
-描述钉死到被 LRU 淘汰为止;两个不相关会话恰好发了内容相同的图片
+描述钉死;两个不相关会话恰好发了内容相同的图片
 (占位图、测试图)也不该互相复用描述。把 `typ.SessionID`(复用
 `routing.ResolveSessionID` 已有的 `metadata.user_id` > `X-Tingly-Session-ID`
 header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这个会
@@ -570,11 +569,11 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
   底用 client IP——同一 NAT 后的不同用户会被分到同一个"session 桶"。这
   是 `typ.SessionID` / `routing.ResolveSessionID` 本身既有的权衡(LB
   affinity 已经在承担同样的代价),缓存层如实继承,不重新设计。
-- 持久层在每个网关实例自己的 `tingly.db` 里,多实例之间不共享。
+- 缓存在每个网关实例自己的 `tingly.db` 里,多实例之间不共享。
 - 前缀仍会在这几种情况下断一次:切换 vision service(key 里的
   provider+model 变了,属有意为之)、描述失败(fail-strip 结果不入
-  缓存,TTL 过后重新占一个名额描述,文本随之变化)、持久层触顶后淘汰
-  掉了行。
+  缓存,TTL 过后重新占一个名额描述,文本随之变化)、库触顶后淘汰掉了
+  行。
 - 描述失败走**纯内存、短 TTL 的负缓存**(`describeFailureTTL` = 10 分
   钟,不落盘):TTL 内该图直接打 `imageUnavailableText`,不重试、不占
   名额。理由是永久失败的图(死链、上游必拒的字节)若每轮重试,会每轮

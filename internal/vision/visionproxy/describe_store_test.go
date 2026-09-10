@@ -78,35 +78,14 @@ func TestDescribeCache_SurvivesRestart(t *testing.T) {
 	conn := openTestDB(t)
 	key := visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:abc"}
 
-	first := newDescribeCacheWithStore(10, newTestStore(t, conn))
+	first := newDescribeCache(newTestStore(t, conn))
 	first.put(key, "described once")
 
-	// "Restart": a new memory tier, a new store handle, same database.
-	second := newDescribeCacheWithStore(10, newTestStore(t, conn))
+	// "Restart": a new cache, a new store handle, same database.
+	second := newDescribeCache(newTestStore(t, conn))
 	text, ok := second.get(key)
-	require.True(t, ok, "must hit the durable tier after restart")
+	require.True(t, ok, "must hit the store after restart")
 	require.Equal(t, "described once", text)
-
-	// The store hit was promoted: a memory-only view of `second` now hits
-	// too, so the next turn never touches the database for this image.
-	text, ok = second.getMemory(key)
-	require.True(t, ok)
-	require.Equal(t, "described once", text)
-}
-
-func TestDescribeCache_MemoryEvictionFallsBackToStore(t *testing.T) {
-	store := newTestStore(t, openTestDB(t))
-	c := newDescribeCacheWithStore(1, store)
-	k1 := visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:1"}
-	k2 := visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:2"}
-	c.put(k1, "one")
-	c.put(k2, "two") // evicts k1 from the memory tier
-
-	_, ok := c.getMemory(k1)
-	require.False(t, ok, "k1 should have been evicted from memory")
-	text, ok := c.get(k1)
-	require.True(t, ok, "k1 must still be served from the store")
-	require.Equal(t, "one", text)
 }
 
 // TestDescribeStore_NoAgeLimit pins the retention decision: a row is kept
@@ -191,14 +170,14 @@ func TestVisionProxy_Cache_RestartDoesNotRedescribe(t *testing.T) {
 
 	fake1 := newFakeVisionClient("a V-tail aircraft")
 	p1 := mkProcessor(t, fake1, prov)
-	p1.cache = newDescribeCacheWithStore(defaultDescribeCacheCapacity, newTestStore(t, conn))
+	p1.cache = newDescribeCache(newTestStore(t, conn))
 	req1 := betaReqWithImages("what is this?", tinyPNGBase64)
 	require.NoError(t, p1.Process(context.Background(), req1, svcs, session))
 	require.Equal(t, 1, fake1.callCount())
 
 	fake2 := newFakeVisionClient("a totally different wording")
 	p2 := mkProcessor(t, fake2, prov)
-	p2.cache = newDescribeCacheWithStore(defaultDescribeCacheCapacity, newTestStore(t, conn))
+	p2.cache = newDescribeCache(newTestStore(t, conn))
 	req2 := betaReqWithImages("what is this?", tinyPNGBase64)
 	require.NoError(t, p2.Process(context.Background(), req2, svcs, session))
 	require.Equal(t, 0, fake2.callCount(), "after restart the image must come from the store")
@@ -210,7 +189,7 @@ func TestVisionProxy_Cache_RestartDoesNotRedescribe(t *testing.T) {
 // under an empty service key, so a lookup must not cost a SELECT.
 func TestDescribeCache_EmptyServiceKeySkipsStore(t *testing.T) {
 	store := &countingStore{}
-	c := newDescribeCacheWithStore(10, store)
+	c := newDescribeCache(store)
 	_, ok := c.get(visionCacheKey{session: "user:s1", content: "b64:1"})
 	require.False(t, ok)
 	require.Equal(t, 0, store.gets, "no service → no store round trip")
