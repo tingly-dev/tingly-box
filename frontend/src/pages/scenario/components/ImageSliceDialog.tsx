@@ -1080,6 +1080,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                 {t('playground.slice.animate', { defaultValue: 'Play the tiles in order' })}
                             </Typography>
+
+                            {/* Row 1: the preview itself — the thumbnail plus
+                                its own play/pause and frame count, nothing
+                                that edits a value. */}
                             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                                 <ButtonBase
                                     disabled={previewFrames.length === 0}
@@ -1128,52 +1132,57 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         </>
                                     )}
                                 </ButtonBase>
-                                <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                        <IconButton
-                                            size="small"
-                                            disabled={previewFrames.length < 2}
-                                            onClick={() => setPlaying((current) => !current)}
-                                            aria-label={playing
-                                                ? t('playground.slice.pause', { defaultValue: 'Pause preview' })
-                                                : t('playground.slice.play', { defaultValue: 'Play preview' })}
-                                        >
-                                            {playing ? <Pause fontSize="small" /> : <PlayArrow fontSize="small" />}
-                                        </IconButton>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                            {t('playground.slice.frameCount', {
-                                                defaultValue: '{{count}} frames · {{fps}} fps',
-                                                count: previewFrames.length,
-                                                fps: Math.round(1000 / frameDelay),
-                                            })}
-                                        </Typography>
-                                    </Stack>
-                                    <NumberStepper
-                                        label={t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
-                                        value={frameDelay}
-                                        onChange={setFrameDelay}
-                                        min={FRAME_DELAY_MIN}
-                                        max={FRAME_DELAY_MAX}
-                                        step={FRAME_DELAY_STEP}
-                                        clamp={clampFrameDelay}
-                                        unit="ms"
-                                        width={96}
-                                        decreaseLabel={t('playground.slice.shorterFrame', { defaultValue: 'Shorter frames' })}
-                                        increaseLabel={t('playground.slice.longerFrame', { defaultValue: 'Longer frames' })}
-                                    />
+                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                    <IconButton
+                                        size="small"
+                                        disabled={previewFrames.length < 2}
+                                        onClick={() => setPlaying((current) => !current)}
+                                        aria-label={playing
+                                            ? t('playground.slice.pause', { defaultValue: 'Pause preview' })
+                                            : t('playground.slice.play', { defaultValue: 'Play preview' })}
+                                    >
+                                        {playing ? <Pause fontSize="small" /> : <PlayArrow fontSize="small" />}
+                                    </IconButton>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                        {t('playground.slice.frameCount', {
+                                            defaultValue: '{{count}} frames · {{fps}} fps',
+                                            count: previewFrames.length,
+                                            fps: Math.round(1000 / frameDelay),
+                                        })}
+                                    </Typography>
                                 </Stack>
                             </Stack>
 
-                            {/* The video is the same loop again, played enough
-                                times to be a clip platforms accept, over a
-                                backdrop only when the frames have holes. */}
+                            {/* Row 2: GIF timing — the one knob that shapes
+                                the GIF export (and, downstream, how long a
+                                loop of video plays). Full width of its own
+                                row: NumberStepper's root is flex:1, which
+                                is exactly what a lone stepper should do when
+                                it has the row to itself. */}
+                            <Box sx={{ mt: 1.5 }}>
+                                <NumberStepper
+                                    label={t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
+                                    value={frameDelay}
+                                    onChange={setFrameDelay}
+                                    min={FRAME_DELAY_MIN}
+                                    max={FRAME_DELAY_MAX}
+                                    step={FRAME_DELAY_STEP}
+                                    clamp={clampFrameDelay}
+                                    unit="ms"
+                                    width={96}
+                                    decreaseLabel={t('playground.slice.shorterFrame', { defaultValue: 'Shorter frames' })}
+                                    increaseLabel={t('playground.slice.longerFrame', { defaultValue: 'Longer frames' })}
+                                />
+                            </Box>
+
+                            {/* Row 3: video-only controls — loop count (a GIF
+                                already loops forever; MP4 does not, so this is
+                                the one knob video adds), the length that
+                                implies, and a backdrop when frames have holes. */}
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: 1.5 }}>
-                                {/* NumberStepper's root is `flex: 1` — right for
-                                    the Rows×Columns pair above, where two
-                                    steppers should share the row evenly, but
-                                    here it would let this lone stepper swallow
-                                    the whole row and strand "= Xs" far to its
-                                    right. Box holds it to its content width. */}
+                                {/* Boxed so NumberStepper's flex:1 sizes it to
+                                    its content instead of swallowing the row
+                                    and stranding the seconds note beside it. */}
                                 <Box>
                                     <NumberStepper
                                         label={t('playground.slice.loops', { defaultValue: 'Video loops' })}
