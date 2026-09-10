@@ -2344,6 +2344,21 @@ export const handlers = [
         return new HttpResponse(null, { status: 204 })
     }),
 
+    http.get('/api/v1/agent/fs/recent', () => HttpResponse.json({ folders: [
+        { path: '/home/me/code/playground', name: 'playground', is_repo: true, source: 'tasks' },
+        { path: '/home/me/code/tingly-box', name: 'tingly-box', is_repo: true, source: 'claude_code' },
+        { path: '/home/me/notes', name: 'notes', is_repo: false, source: 'claude_code' },
+    ] })),
+    http.get('/api/v1/agent/fs/dirs', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') || '/home/me'
+        const tree: Record<string, string[]> = {
+            '/home/me': ['code', 'notes', 'Downloads'],
+            '/home/me/code': ['playground', 'tingly-box', 'website'],
+        }
+        const entries = (tree[path] ?? []).map((name) => ({ name, path: `${path}/${name}`, is_repo: name === 'playground' || name === 'tingly-box' || name === 'website' }))
+        const parent = path === '/' ? '' : path.replace(/\/[^/]+$/, '') || '/'
+        return HttpResponse.json({ path, parent, is_repo: false, entries })
+    }),
     http.get('/api/v1/agent/environments', () => HttpResponse.json({ environments: mockAgentEnvironments, supported_runtimes: ['local'], permission_modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.post('/api/v1/agent/environments', async ({ request }) => {
         const body = await request.json() as any
@@ -2378,7 +2393,24 @@ export const handlers = [
     http.post('/api/v1/agent/sessions', async ({ request }) => {
         const body = await request.json() as any
         if (!body.prompt) return HttpResponse.json({ error: { message: 'prompt is required: validation' } }, { status: 400 })
-        const row = newMockAgentSession(body.source_id, body.environment_id, body.prompt, { permission_mode: body.permission_mode || '' })
+        let sourceId = body.source_id
+        if (body.local_path) {
+            let src = mockAgentSources.find((s) => s.kind === 'local' && s.url === body.local_path)
+            if (!src) {
+                src = { id: `src-${Date.now()}`, name: body.local_path.split('/').pop(), kind: 'local', url: body.local_path, default_branch: '', credential_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+                mockAgentSources.push(src)
+            }
+            sourceId = src.id
+        }
+        const row = newMockAgentSession(sourceId, body.environment_id, body.prompt, { permission_mode: body.permission_mode || '' })
+        if (body.local_path) {
+            row.workspace.path = body.local_path
+            row.workspace.agent_cwd = body.local_path
+            row.workspace.branch = ''
+            row.workspace.base_ref = 'HEAD'
+            row.workspace.state = 'ready'
+            row.session.artifact.branch = ''
+        }
         scriptMockAgentSession(row)
         return HttpResponse.json({ session: row.session, workspace: row.workspace }, { status: 201 })
     }),

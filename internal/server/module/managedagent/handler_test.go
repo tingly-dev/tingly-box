@@ -127,6 +127,36 @@ func TestSessionFlow(t *testing.T) {
 	}
 }
 
+func TestLocalFolderEndpoints(t *testing.T) {
+	engine, h := newTestRouter(t)
+	dir := t.TempDir()
+	h.WithRecentProjects(func(context.Context) ([]string, error) { return []string{dir}, nil })
+
+	var listing managedagent.DirListing
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs?path="+dir, "", &listing); rec.Code != 200 || listing.Path != dir {
+		t.Fatalf("browse: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs?path=nope", "", nil); rec.Code != 400 {
+		t.Fatalf("browse relative: %d", rec.Code)
+	}
+	var recent RecentFoldersResponse
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/recent", "", &recent); rec.Code != 200 || len(recent.Folders) != 1 || recent.Folders[0].Source != "claude_code" {
+		t.Fatalf("recent: %d %s", rec.Code, rec.Body)
+	}
+	// Start a task straight from a folder: no source step in between.
+	var detail SessionDetail
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"local_path":"`+dir+`","prompt":"go"}`, &detail); rec.Code != 201 {
+		t.Fatalf("create from local_path: %d %s", rec.Code, rec.Body)
+	}
+	if detail.Workspace == nil || detail.Workspace.Path != dir || detail.Workspace.Branch != "" {
+		t.Fatalf("in-place workspace expected: %+v", detail.Workspace)
+	}
+	do(t, engine, http.MethodGet, "/api/v1/agent/fs/recent", "", &recent)
+	if len(recent.Folders) != 1 || recent.Folders[0].Source != "tasks" {
+		t.Fatalf("recent after use should be the task folder once: %+v", recent.Folders)
+	}
+}
+
 func TestEventsStream(t *testing.T) {
 	engine, _ := newTestRouter(t)
 	var src managedagent.Source

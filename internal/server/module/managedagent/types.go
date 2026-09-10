@@ -67,6 +67,14 @@ type CreateSessionRequest struct {
 	Title         string `json:"title"`
 	// PermissionMode overrides the environment's default; empty inherits.
 	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
+	// LocalPath starts the task directly in a folder on this host (in
+	// place); the local source behind it is created on first use.
+	LocalPath string `json:"local_path"`
+}
+
+// RecentFoldersResponse lists folders the user has worked in before.
+type RecentFoldersResponse struct {
+	Folders []managedagent.RecentFolder `json:"folders"`
 }
 
 // SetPermissionModeRequest changes an active session's mode from the next turn.

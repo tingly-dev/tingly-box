@@ -517,6 +517,16 @@ settings defaultMode > CLI 默认）。
 | 运行时 | 只允许 local 环境；docker 环境下拒绝（目录在宿主上，容器里挂载是 P1 的事） |
 | 与 @cc 的关系 | 这就是 @cc 今天"本机目录"用法的托管版，§7 里说的合流路径从这里开始 |
 
+**直接选目录（同日补充）**：本机目录不是"要先登记的 repo"，而是**直接使用**的东西，所以入口不再走 Repositories 页：
+
+| 面 | 设计 |
+|---|---|
+| 提交框 "Where" | 一个 Select，两组：**Folders on this machine**（最近用过的目录 + "Browse for a folder…"）和 **Repositories (cloned)**；默认选中最近用过的目录 |
+| 目录选择器 | `FolderPickerDialog`：最近目录 chips（来自 tasks 里的 local source + Claude Code `~/.claude/projects` 记录）、路径输入（回车打开）、面包屑目录浏览（跳过隐藏目录，标出 git 仓库） |
+| API | `POST /agent/sessions` 接受 `local_path`（服务端 find-or-create 一个 `local` source，用户无感）；`GET /agent/fs/dirs?path=`（空 = home，仅绝对路径）；`GET /agent/fs/recent` |
+| Repositories 页 | 顶部仍是 git 仓库；底部 "Folders used directly" 只列出用过的目录，仅可从列表移除，不再有"添加本地目录"的入口 |
+| 权限 | `fs/dirs` 只列目录、不读文件；这是宿主上跑 tb 的用户本来就能看到的东西，且需 UserAuth |
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

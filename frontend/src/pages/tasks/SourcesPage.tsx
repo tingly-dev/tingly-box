@@ -75,6 +75,45 @@ const SourcesPage = () => {
         load();
     };
 
+    const repos = sources.filter((s) => s.kind !== 'local');
+    const locals = sources.filter((s) => s.kind === 'local');
+
+    const renderCard = (s: AgentSource) => (
+        <Card key={s.id} variant="outlined" sx={{p: {xs: 1.5, sm: 2}}}>
+            <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
+                <Stack sx={{flex: 1, minWidth: 0}}>
+                    <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                        <Typography variant="subtitle1" sx={{fontWeight: 600}}>{s.name}</Typography>
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={s.kind === 'local' ? <IconFolder /> : <IconRepo />}
+                            label={s.kind === 'local' ? t('tasks.sources.kindLocal') : t('tasks.sources.kindGit')}
+                        />
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
+                        {s.url}
+                    </Typography>
+                    {s.kind === 'local' ? (
+                        <Typography variant="caption" color="text.secondary">{t('tasks.sources.inPlaceNote')}</Typography>
+                    ) : (
+                        <Typography variant="caption" color="text.secondary">
+                            {t('tasks.sources.defaultBranch')}: {s.default_branch}
+                        </Typography>
+                    )}
+                </Stack>
+                {s.kind !== 'local' && (
+                    <Tooltip title={t('common.edit')}>
+                        <IconButton size="small" onClick={() => open(s)}><IconEdit fontSize="small" /></IconButton>
+                    </Tooltip>
+                )}
+                <Tooltip title={t('common.delete')}>
+                    <IconButton size="small" onClick={() => setDeleting(s)}><IconDelete fontSize="small" /></IconButton>
+                </Tooltip>
+            </Stack>
+        </Card>
+    );
+
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
@@ -88,7 +127,7 @@ const SourcesPage = () => {
                         </Button>
                     }
                 />
-                {sources.length === 0 ? (
+                {repos.length === 0 ? (
                     <EmptyState
                         compact
                         icon={<IconRepo />}
@@ -97,40 +136,16 @@ const SourcesPage = () => {
                         primaryAction={{label: t('tasks.sources.add'), onClick: () => open(null), icon: <IconAdd />}}
                     />
                 ) : (
+                    <Stack spacing={1.25}>{repos.map(renderCard)}</Stack>
+                )}
+
+                {/* Folders used directly are not repositories; they are listed
+                    here only so they can be removed from the recent list. */}
+                {locals.length > 0 && (
                     <Stack spacing={1.25}>
-                        {sources.map((s) => (
-                            <Card key={s.id} variant="outlined" sx={{p: {xs: 1.5, sm: 2}}}>
-                                <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
-                                    <Stack sx={{flex: 1, minWidth: 0}}>
-                                        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-                                            <Typography variant="subtitle1" sx={{fontWeight: 600}}>{s.name}</Typography>
-                                            <Chip
-                                                size="small"
-                                                variant="outlined"
-                                                icon={s.kind === 'local' ? <IconFolder /> : <IconRepo />}
-                                                label={s.kind === 'local' ? t('tasks.sources.kindLocal') : t('tasks.sources.kindGit')}
-                                            />
-                                        </Stack>
-                                        <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
-                                            {s.url}
-                                        </Typography>
-                                        {s.kind === 'local' ? (
-                                            <Typography variant="caption" color="text.secondary">{t('tasks.sources.inPlaceNote')}</Typography>
-                                        ) : (
-                                            <Typography variant="caption" color="text.secondary">
-                                                {t('tasks.sources.defaultBranch')}: {s.default_branch}
-                                            </Typography>
-                                        )}
-                                    </Stack>
-                                    <Tooltip title={t('common.edit')}>
-                                        <IconButton size="small" onClick={() => open(s)}><IconEdit fontSize="small" /></IconButton>
-                                    </Tooltip>
-                                    <Tooltip title={t('common.delete')}>
-                                        <IconButton size="small" onClick={() => setDeleting(s)}><IconDelete fontSize="small" /></IconButton>
-                                    </Tooltip>
-                                </Stack>
-                            </Card>
-                        ))}
+                        <Typography variant="overline" color="text.secondary">{t('tasks.sources.localSection')}</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('tasks.sources.localSectionHint')}</Typography>
+                        {locals.map(renderCard)}
                     </Stack>
                 )}
             </Stack>

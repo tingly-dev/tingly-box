@@ -310,3 +310,73 @@ func TestLocalDirectorySource_WorksInPlace(t *testing.T) {
 		t.Fatalf("local dir in docker env must be rejected, got %v", err)
 	}
 }
+
+func TestCreateSession_LocalPathIsDirect(t *testing.T) {
+	ctx := context.Background()
+	_, stores := NewMemStores()
+	svc := NewService(Config{Stores: stores, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	dir := t.TempDir()
+
+	a, err := svc.CreateSession(ctx, CreateSessionInput{LocalPath: dir, Prompt: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.CreateSession(ctx, CreateSessionInput{LocalPath: dir + string(filepath.Separator), Prompt: "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.WorkspaceID != b.WorkspaceID {
+		t.Fatal("the same folder must map to one workspace")
+	}
+	sources, _ := svc.ListSources(ctx)
+	if len(sources) != 1 || sources[0].Kind != SourceKindLocal || sources[0].URL != dir {
+		t.Fatalf("exactly one local source expected: %+v", sources)
+	}
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{LocalPath: "relative/dir", Prompt: "x"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("relative local_path must be rejected, got %v", err)
+	}
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{Prompt: "x"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("no target must be rejected, got %v", err)
+	}
+
+	// Recent folders: the local source first, then Claude Code's projects
+	// that still exist, deduplicated.
+	other := t.TempDir()
+	recent := func(context.Context) ([]string, error) { return []string{dir, other, "/definitely/gone"}, nil }
+	folders, err := svc.RecentFolders(ctx, recent, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(folders) != 2 || folders[0].Path != dir || folders[0].Source != "tasks" || folders[1].Path != other || folders[1].Source != "claude_code" {
+		t.Fatalf("recent folders = %+v", folders)
+	}
+}
+
+func TestBrowse(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "b-repo", ".git"), 0o755)
+	os.MkdirAll(filepath.Join(root, "A-plain"), 0o755)
+	os.MkdirAll(filepath.Join(root, ".hidden"), 0o755)
+	os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644)
+
+	l, err := Browse(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Path != root || l.Parent != filepath.Dir(root) || len(l.Entries) != 2 {
+		t.Fatalf("listing = %+v", l)
+	}
+	if l.Entries[0].Name != "A-plain" || l.Entries[1].Name != "b-repo" || !l.Entries[1].IsRepo || l.Entries[0].IsRepo {
+		t.Fatalf("entries = %+v", l.Entries)
+	}
+	if _, err := Browse("relative"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("relative path: want ErrValidation, got %v", err)
+	}
+	if _, err := Browse(filepath.Join(root, "file.txt")); !errors.Is(err, ErrValidation) {
+		t.Fatalf("file path: want ErrValidation, got %v", err)
+	}
+	if home, err := Browse(""); err != nil || !filepath.IsAbs(home.Path) {
+		t.Fatalf("empty path must list home: %+v %v", home, err)
+	}
+}

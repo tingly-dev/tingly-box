@@ -8,7 +8,7 @@
 // change, not a page change.
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Chip, FormControl, InputLabel, ListItemText, MenuItem, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
+import {Chip, FormControl, InputLabel, ListItemText, MenuItem, OutlinedInput, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
 import {formatDistanceToNowStrict} from 'date-fns';
 import {agentApi, isActiveStatus, type AgentEvent, type AgentSession, type AgentWorkspace, type PermissionMode} from '@/services/agentApi';
 
@@ -147,10 +147,10 @@ export const PermissionModeSelect = ({value, onChange, inheritHint, disabled, si
     const {t} = useTranslation();
     return (
         <FormControl size={size} disabled={disabled} sx={sx}>
-            <InputLabel id="permission-mode">{t('tasks.mode.label')}</InputLabel>
+            <InputLabel id="permission-mode" shrink>{t('tasks.mode.label')}</InputLabel>
             <Select
                 labelId="permission-mode"
-                label={t('tasks.mode.label')}
+                input={<OutlinedInput notched label={t('tasks.mode.label')} />}
                 value={value ?? ''}
                 displayEmpty
                 onChange={(e) => onChange(e.target.value as PermissionMode)}

@@ -16,6 +16,9 @@ import (
 // Handler adapts managedagent.Service to gin. It holds no state of its own.
 type Handler struct {
 	svc *managedagent.Service
+	// recent supplies Claude Code's remembered projects for the folder
+	// picker; nil means only local sources are listed.
+	recent managedagent.RecentProjectsFunc
 	// ssePoll is how often the event stream re-reads the store while no new
 	// events arrive. A later step replaces polling with a launcher-fed
 	// broadcast; the wire format does not change.
@@ -25,6 +28,33 @@ type Handler struct {
 // NewHandler builds a Handler over a Service.
 func NewHandler(svc *managedagent.Service) *Handler {
 	return &Handler{svc: svc, ssePoll: time.Second}
+}
+
+// WithRecentProjects wires Claude Code's project history into the folder
+// picker.
+func (h *Handler) WithRecentProjects(fn managedagent.RecentProjectsFunc) *Handler {
+	h.recent = fn
+	return h
+}
+
+// ---------- host folders ----------
+
+func (h *Handler) BrowseDirs(c *gin.Context) {
+	listing, err := managedagent.Browse(c.Query("path"))
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, listing)
+}
+
+func (h *Handler) RecentFolders(c *gin.Context) {
+	folders, err := h.svc.RecentFolders(c.Request.Context(), h.recent, 30)
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, RecentFoldersResponse{Folders: folders})
 }
 
 // sendError maps the domain's sentinel errors to HTTP statuses.
@@ -264,7 +294,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	sess, err := h.svc.CreateSession(c.Request.Context(), managedagent.CreateSessionInput{
 		SourceID: req.SourceID, EnvironmentID: req.EnvironmentID, WorkspaceID: req.WorkspaceID,
 		BaseRef: req.BaseRef, Prompt: req.Prompt, Title: req.Title, CreatedBy: "web",
-		PermissionMode: req.PermissionMode,
+		PermissionMode: req.PermissionMode, LocalPath: req.LocalPath,
 	})
 	if err != nil {
 		sendError(c, err)

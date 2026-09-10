@@ -788,8 +788,12 @@ export default {
       "bypassPermissionsHelp": "Everything is approved automatically; the log still shows what ran"
     },
     "title": "Tasks",
-    "subtitle": "Hand a repository and a prompt to the agent. It works in its own checkout; you steer from here or from IM and get a branch back.",
+    "subtitle": "Point the agent at a folder on this machine or a repository, give it a prompt, and steer from here or from IM. Repositories get their own checkout and a branch back; folders are worked in place.",
     "composer": {
+      "target": "Where",
+      "folders": "Folders on this machine",
+      "browseFolder": "Browse for a folder…",
+      "repositories": "Repositories (cloned)",
       "prompt": "What should the agent do?",
       "promptPlaceholder": "e.g. Add input validation to the signup form and cover it with tests",
       "repository": "Repository",
@@ -869,6 +873,16 @@ export default {
       "inPlaceNote": "This task edits your folder directly; commit and push from there yourself.",
       "notFound": "Task not found"
     },
+    "folder": {
+      "title": "Pick a folder",
+      "recent": "Worked in before",
+      "path": "Folder path",
+      "pathHelp": "Absolute path on the machine running Tingly Box. Enter to open it.",
+      "up": "Up",
+      "empty": "No sub-folders",
+      "gitRepo": "git repository",
+      "use": "Use this folder"
+    },
     "sources": {
       "title": "Repositories",
       "subtitle": "Git repositories to clone for the agent, or local folders it works in directly. Cloning, fetching and pushing happen on this machine with its git credentials; the agent never sees them.",
@@ -881,6 +895,8 @@ export default {
       "kindGit": "Git",
       "inPlaceNote": "The agent works in this folder in place — no clone, no branch.",
       "inPlaceHint": "An absolute path is used in place: the agent edits this folder directly, nothing is cloned and nothing is pushed. To work on a copy of a local repository, use a file:// URL instead.",
+      "localSection": "Folders used directly",
+      "localSectionHint": "Folders you started tasks in. The agent works in them in place; removing one only clears it from the list.",
       "defaultBranch": "Default branch",
       "empty": "No repositories yet",
       "emptyHint": "Add the repository you want the agent to work on.",

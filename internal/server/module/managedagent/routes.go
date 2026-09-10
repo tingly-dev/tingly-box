@@ -55,6 +55,17 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 		swagger.WithTags(tag),
 		swagger.WithDescription("Delete a non-default environment that has no live workspaces"))
 
+	// Host folders — for picking a local directory to work in directly.
+	group.GET("/agent/fs/dirs", h.BrowseDirs,
+		swagger.WithTags(tag),
+		swagger.WithDescription("List sub-directories of a folder on this host (home when path is empty); directories only"),
+		swagger.WithQuery("path", "string", "Absolute directory path; empty for the home directory"),
+		swagger.WithResponseModel(managedagent.DirListing{}))
+	group.GET("/agent/fs/recent", h.RecentFolders,
+		swagger.WithTags(tag),
+		swagger.WithDescription("Folders worked in before: local task folders and Claude Code's recent projects"),
+		swagger.WithResponseModel(RecentFoldersResponse{}))
+
 	// Workspaces
 	group.GET("/agent/workspaces", h.ListWorkspaces,
 		swagger.WithTags(tag),

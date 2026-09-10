@@ -222,6 +222,61 @@
         }
       }
     },
+    "/api/v1/agent/fs/dirs": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List sub-directories of a folder on this host (home when path is empty); directories only",
+        "description": "List sub-directories of a folder on this host (home when path is empty); directories only",
+        "operationId": "apiV1AgentFsDirsGet",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute directory path; empty for the home directory",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirListing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/fs/recent": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Folders worked in before: local task folders and Claude Code's recent projects",
+        "description": "Folders worked in before: local task folders and Claude Code's recent projects",
+        "operationId": "apiV1AgentFsRecentGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentFoldersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agent/sessions": {
       "get": {
         "tags": [
@@ -10329,6 +10384,10 @@
             "type": "string",
             "description": "Field environment_id"
           },
+          "local_path": {
+            "type": "string",
+            "description": "Field local_path"
+          },
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
@@ -10357,7 +10416,8 @@
           "base_ref",
           "prompt",
           "title",
-          "permission_mode"
+          "permission_mode",
+          "local_path"
         ]
       },
       "CurlData": {
@@ -10627,6 +10687,57 @@
           "stat",
           "patch",
           "truncated"
+        ]
+      },
+      "DirEntry": {
+        "type": "object",
+        "properties": {
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "is_repo"
+        ]
+      },
+      "DirListing": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/DirEntry"
+            }
+          },
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Field parent"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "is_repo",
+          "entries"
         ]
       },
       "DirectChat": {
@@ -14931,6 +15042,48 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "RecentFolder": {
+        "type": "object",
+        "properties": {
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "is_repo",
+          "source"
+        ]
+      },
+      "RecentFoldersResponse": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "description": "Field folders",
+            "items": {
+              "$ref": "#/components/schemas/RecentFolder"
+            }
+          }
+        },
+        "required": [
+          "folders"
         ]
       },
       "RefreshSkillLocationResponse": {

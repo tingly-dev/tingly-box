@@ -114,6 +114,25 @@ func (s *Service) UpdateSource(ctx context.Context, id string, in SourceInput) (
 	return src, nil
 }
 
+// localSource returns the local Source for a directory, creating it on
+// first use. Matching is on the cleaned absolute path.
+func (s *Service) localSource(ctx context.Context, path string) (*Source, error) {
+	if !filepath.IsAbs(strings.TrimSpace(path)) {
+		return nil, invalid("local_path must be an absolute directory path")
+	}
+	clean := filepath.Clean(strings.TrimSpace(path))
+	all, err := s.stores.Sources.ListSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range all {
+		if all[i].Kind == SourceKindLocal && all[i].URL == clean {
+			return &all[i], nil
+		}
+	}
+	return s.CreateSource(ctx, SourceInput{URL: clean})
+}
+
 // DeleteSource refuses while any non-reclaimed workspace still references
 // the source: the checkout on disk would otherwise be orphaned with no way
 // back to its remote.
@@ -369,6 +388,10 @@ type CreateSessionInput struct {
 	CreatedBy     string
 	// PermissionMode overrides the environment's default; empty inherits.
 	PermissionMode PermissionMode
+	// LocalPath starts a task directly in a directory on this host. The
+	// matching local Source is found or created behind the scenes: the
+	// user picks a folder, never "registers a repository".
+	LocalPath string
 }
 
 func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Session, error) {
@@ -401,13 +424,15 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}
 
 	var src *Source
-	if ws != nil {
+	switch {
+	case ws != nil:
 		src, err = s.stores.Sources.GetSource(ctx, ws.SourceID)
-	} else {
-		if in.SourceID == "" {
-			return nil, invalid("source_id or workspace_id is required")
-		}
+	case strings.TrimSpace(in.LocalPath) != "":
+		src, err = s.localSource(ctx, in.LocalPath)
+	case in.SourceID != "":
 		src, err = s.stores.Sources.GetSource(ctx, in.SourceID)
+	default:
+		return nil, invalid("source_id, local_path or workspace_id is required")
 	}
 	if err != nil {
 		return nil, err

@@ -789,8 +789,12 @@ export default {
       "bypassPermissionsHelp": "所有调用自动批准，日志仍会记录执行了什么"
     },
     "title": "任务",
-    "subtitle": "把仓库和一句任务交给 agent。它在独立的 checkout 里工作，你在这里或 IM 里随时插话，最后拿到一个分支。",
+    "subtitle": "选一个本机目录或仓库，给 agent 一句任务，在这里或 IM 里随时插话。仓库会有独立 checkout 并最后拿到一个分支；本机目录则就地工作。",
     "composer": {
+      "target": "在哪里",
+      "folders": "本机目录",
+      "browseFolder": "浏览选择目录…",
+      "repositories": "仓库（clone）",
       "prompt": "让 agent 做什么？",
       "promptPlaceholder": "例如：给注册表单加输入校验并补测试",
       "repository": "仓库",
@@ -870,6 +874,16 @@ export default {
       "inPlaceNote": "这个任务直接修改你的目录；提交和推送请在该目录里自己完成。",
       "notFound": "任务不存在"
     },
+    "folder": {
+      "title": "选择目录",
+      "recent": "用过的目录",
+      "path": "目录路径",
+      "pathHelp": "运行 Tingly Box 那台机器上的绝对路径，回车打开。",
+      "up": "上一级",
+      "empty": "没有子目录",
+      "gitRepo": "git 仓库",
+      "use": "使用此文件夹"
+    },
     "sources": {
       "title": "仓库",
       "subtitle": "给 agent clone 的 git 仓库，或让它直接在里面工作的本地目录。clone、fetch、push 都在这台机器上用它的 git 凭证完成，agent 看不到凭证。",
@@ -882,6 +896,8 @@ export default {
       "kindGit": "Git",
       "inPlaceNote": "agent 直接在这个目录里工作，不 clone、不建分支。",
       "inPlaceHint": "绝对路径表示就地工作：agent 直接修改这个目录，不 clone，也不推送。想在本地仓库的副本上工作，请改用 file:// 地址。",
+      "localSection": "直接使用的目录",
+      "localSectionHint": "你在这些目录里开过任务。agent 就地工作；移除只是从列表里去掉。",
       "defaultBranch": "默认分支",
       "empty": "还没有仓库",
       "emptyHint": "添加你想让 agent 处理的仓库。",

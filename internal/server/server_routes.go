@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -207,7 +208,13 @@ func (s *Server) UseManagedAgentEndpoints() {
 	manager := swagger.NewRouteManager(s.engine)
 	api := manager.NewGroup("api", "v1", "")
 	api.Router.Use(s.getUserAuthMiddleware())
-	managedagentmodule.RegisterRoutes(api, managedagentmodule.NewHandler(svc))
+	handler := managedagentmodule.NewHandler(svc)
+	if history, herr := claude.NewService(agentboot.DefaultConfig()); herr == nil {
+		handler.WithRecentProjects(history.ListProjects)
+	} else {
+		logrus.WithError(herr).Warn("managed agent: Claude Code project history unavailable for the folder picker")
+	}
+	managedagentmodule.RegisterRoutes(api, handler)
 }
 
 // managedAgentTurnTimeout bounds one agent turn. Coding tasks run far longer

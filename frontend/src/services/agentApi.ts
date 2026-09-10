@@ -14,6 +14,8 @@ export type AgentEvent = Schemas['Event'];
 export type AgentDiff = Schemas['Diff'];
 export type SessionDetail = Schemas['SessionDetail'];
 export type SessionListItem = Schemas['SessionListItem'];
+export type DirListing = Schemas['DirListing'];
+export type RecentFolder = Schemas['RecentFolder'];
 export type SourceRequest = Schemas['SourceRequest'];
 export type EnvironmentRequest = Schemas['EnvironmentRequest'];
 export type CreateSessionRequest = Schemas['CreateSessionRequest'];
@@ -83,6 +85,12 @@ export const agentApi = {
         call<unknown>((c, headers) => c.DELETE('/api/v1/agent/environments/{environment_id}', {
             headers, params: {path: {environment_id: id}},
         })),
+
+    // ---- host folders (pick a directory to work in directly)
+    browseDirs: (path: string) =>
+        call<DirListing>((c, headers) => c.GET('/api/v1/agent/fs/dirs', {headers, params: {query: {path}}})),
+    recentFolders: () =>
+        call<{folders: RecentFolder[]}>((c, headers) => c.GET('/api/v1/agent/fs/recent', {headers})),
 
     // ---- sessions
     listSessions: (query: {active?: boolean; workspace_id?: string; limit?: number} = {}) =>
