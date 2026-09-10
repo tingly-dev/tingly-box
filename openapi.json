@@ -227,14 +227,14 @@
         "tags": [
           "agent"
         ],
-        "summary": "List sub-directories of a folder on this host (home when path is empty); directories only",
-        "description": "List sub-directories of a folder on this host (home when path is empty); directories only",
+        "summary": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
+        "description": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
         "operationId": "apiV1AgentFsDirsGet",
         "parameters": [
           {
             "name": "path",
             "in": "query",
-            "description": "Absolute directory path; empty for the home directory",
+            "description": "Absolute directory path inside an added folder; empty for the list of added folders",
             "required": false,
             "schema": {
               "type": "string"
@@ -934,8 +934,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Remove a checkout's directory; refused while a session in it is active. Session logs are kept.",
-        "description": "Remove a checkout's directory; refused while a session in it is active. Session logs are kept.",
+        "summary": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
+        "description": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
         "operationId": "apiV1AgentWorkspacesWorkspace_idReclaimPost",
         "parameters": [
           {
@@ -948,6 +948,17 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReclaimWorkspaceRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -15058,17 +15069,12 @@
           "path": {
             "type": "string",
             "description": "Field path"
-          },
-          "source": {
-            "type": "string",
-            "description": "Field source"
           }
         },
         "required": [
           "path",
           "name",
-          "is_repo",
-          "source"
+          "is_repo"
         ]
       },
       "RecentFoldersResponse": {
@@ -15084,6 +15090,18 @@
         },
         "required": [
           "folders"
+        ]
+      },
+      "ReclaimWorkspaceRequest": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "Field force"
+          }
+        },
+        "required": [
+          "force"
         ]
       },
       "RefreshSkillLocationResponse": {

@@ -16,9 +16,6 @@ import (
 // Handler adapts managedagent.Service to gin. It holds no state of its own.
 type Handler struct {
 	svc *managedagent.Service
-	// recent supplies Claude Code's remembered projects for the folder
-	// picker; nil means only local sources are listed.
-	recent managedagent.RecentProjectsFunc
 	// ssePoll is how often the event stream re-reads the store while no new
 	// events arrive. A later step replaces polling with a launcher-fed
 	// broadcast; the wire format does not change.
@@ -30,17 +27,10 @@ func NewHandler(svc *managedagent.Service) *Handler {
 	return &Handler{svc: svc, ssePoll: time.Second}
 }
 
-// WithRecentProjects wires Claude Code's project history into the folder
-// picker.
-func (h *Handler) WithRecentProjects(fn managedagent.RecentProjectsFunc) *Handler {
-	h.recent = fn
-	return h
-}
-
 // ---------- host folders ----------
 
 func (h *Handler) BrowseDirs(c *gin.Context) {
-	listing, err := managedagent.Browse(c.Query("path"))
+	listing, err := h.svc.Browse(c.Request.Context(), c.Query("path"))
 	if err != nil {
 		sendError(c, err)
 		return
@@ -49,7 +39,7 @@ func (h *Handler) BrowseDirs(c *gin.Context) {
 }
 
 func (h *Handler) RecentFolders(c *gin.Context) {
-	folders, err := h.svc.RecentFolders(c.Request.Context(), h.recent, 30)
+	folders, err := h.svc.RecentFolders(c.Request.Context(), 100)
 	if err != nil {
 		sendError(c, err)
 		return
@@ -57,8 +47,18 @@ func (h *Handler) RecentFolders(c *gin.Context) {
 	c.JSON(http.StatusOK, RecentFoldersResponse{Folders: folders})
 }
 
-// sendError maps the domain's sentinel errors to HTTP statuses.
+// sendError maps the domain's sentinel errors to HTTP statuses. The
+// sentinel's own text (": validation", ": forbidden", …) is dropped from the
+// message: the status already says it, and people read these in the UI.
 func sendError(c *gin.Context, err error) {
+	for _, sentinel := range []error{managedagent.ErrNotFound, managedagent.ErrValidation, managedagent.ErrConflict, managedagent.ErrForbidden} {
+		if errors.Is(err, sentinel) {
+			if msg := strings.TrimSuffix(err.Error(), ": "+sentinel.Error()); msg != err.Error() {
+				err = &httpErr{msg: msg, cause: err}
+			}
+			break
+		}
+	}
 	switch {
 	case errors.Is(err, managedagent.ErrNotFound):
 		apierr.Send(c, http.StatusNotFound, err, "not_found_error")
@@ -66,6 +66,8 @@ func sendError(c *gin.Context, err error) {
 		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
 	case errors.Is(err, managedagent.ErrConflict):
 		apierr.Send(c, http.StatusConflict, err, "conflict_error")
+	case errors.Is(err, managedagent.ErrForbidden):
+		apierr.Send(c, http.StatusForbidden, err, "permission_error")
 	default:
 		apierr.Send(c, http.StatusInternalServerError, err, "api_error")
 	}
@@ -426,7 +428,14 @@ func (h *Handler) ReclaimWorkspace(c *gin.Context) {
 	if !ok {
 		return
 	}
-	ws, err := h.svc.ReclaimWorkspace(c.Request.Context(), id)
+	var req ReclaimWorkspaceRequest
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+			return
+		}
+	}
+	ws, err := h.svc.ReclaimWorkspace(c.Request.Context(), id, req.Force)
 	if err != nil {
 		sendError(c, err)
 		return
@@ -528,3 +537,12 @@ func (h *Handler) streamEvents(c *gin.Context, sessionID string, after int64) {
 		}
 	}
 }
+
+// httpErr carries a cleaned message while keeping errors.Is on the cause.
+type httpErr struct {
+	msg   string
+	cause error
+}
+
+func (e *httpErr) Error() string { return e.msg }
+func (e *httpErr) Unwrap() error { return e.cause }

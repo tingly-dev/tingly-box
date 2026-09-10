@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -209,11 +208,6 @@ func (s *Server) UseManagedAgentEndpoints() {
 	api := manager.NewGroup("api", "v1", "")
 	api.Router.Use(s.getUserAuthMiddleware())
 	handler := managedagentmodule.NewHandler(svc)
-	if history, herr := claude.NewService(agentboot.DefaultConfig()); herr == nil {
-		handler.WithRecentProjects(history.ListProjects)
-	} else {
-		logrus.WithError(herr).Warn("managed agent: Claude Code project history unavailable for the folder picker")
-	}
 	managedagentmodule.RegisterRoutes(api, handler)
 }
 

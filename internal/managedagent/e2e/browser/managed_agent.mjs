@@ -35,7 +35,9 @@ await ctx.addInitScript(([token]) => {
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+// Browser network logs ('Failed to load resource … 403') are not page errors: a 403 from
+// fs/dirs is the allowlist doing its job. Real console errors still fail the run.
+page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
 
 let step = 0;
 const shot = async (name) => { step++; await page.screenshot({ path: path.join(OUT, `${String(step).padStart(2, '0')}-${name}.png`), fullPage: true }); };
@@ -54,8 +56,9 @@ try {
   await page.getByRole('option', { name: /Browse for a folder/ }).click();
   await page.getByLabel('Folder path').fill(FOLDER);
   await page.getByLabel('Folder path').press('Enter');
-  await page.waitForTimeout(500);
-  await shot('folder-picker');
+  // Not handed over yet: the allowlist refuses to list it, and says so; using it as typed is what adds it.
+  await expectText('is not inside a folder you have added', 10_000);
+  await shot('folder-picker-outside-allowlist');
   await page.getByRole('button', { name: 'Use this folder' }).click();
   await expectText(path.basename(FOLDER), 10_000);
 
@@ -78,11 +81,19 @@ try {
   await expectText('browser-marker');
   await shot('after-approval');
 
-  // 4. The folder now shows under "Folders used directly".
+  // 4. The folder now shows under "Folders used directly", and the picker can browse it (and only it).
   await page.goto(BASE + '/tasks/sources', { waitUntil: 'networkidle' });
   await expectText('Folders used directly', 30_000);
   await expectText(FOLDER, 10_000);
   await shot('sources');
+  await page.goto(BASE + '/tasks', { waitUntil: 'networkidle' });
+  await page.getByRole('combobox').first().click();
+  await page.getByRole('option', { name: /Browse for a folder/ }).click();
+  await expectText('Folders you added', 10_000);
+  await page.getByRole('button', { name: path.basename(FOLDER) }).first().click();
+  await expectText('No sub-folders', 10_000);
+  await shot('folder-picker-inside-allowlist');
+  await page.keyboard.press('Escape');
 } catch (e) {
   await fail(String(e && e.stack || e));
 }

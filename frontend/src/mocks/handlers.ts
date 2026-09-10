@@ -2345,19 +2345,27 @@ export const handlers = [
     }),
 
     http.get('/api/v1/agent/fs/recent', () => HttpResponse.json({ folders: [
-        { path: '/home/me/code/playground', name: 'playground', is_repo: true, source: 'tasks' },
-        { path: '/home/me/code/tingly-box', name: 'tingly-box', is_repo: true, source: 'claude_code' },
-        { path: '/home/me/notes', name: 'notes', is_repo: false, source: 'claude_code' },
+        { path: '/home/me/code/playground', name: 'playground', is_repo: true },
+        { path: '/home/me/code/tingly-box', name: 'tingly-box', is_repo: true },
+        { path: '/home/me/notes', name: 'notes', is_repo: false },
     ] })),
+    // Allowlist browsing: the top level is the added folders; anything outside them is 403.
     http.get('/api/v1/agent/fs/dirs', ({ request }) => {
-        const path = new URL(request.url).searchParams.get('path') || '/home/me'
-        const tree: Record<string, string[]> = {
-            '/home/me': ['code', 'notes', 'Downloads'],
-            '/home/me/code': ['playground', 'tingly-box', 'website'],
+        const path = new URL(request.url).searchParams.get('path') || ''
+        const roots = ['/home/me/code/playground', '/home/me/code/tingly-box', '/home/me/notes']
+        if (path === '') {
+            return HttpResponse.json({ path: '', is_repo: false, entries: roots.map((p) => ({ name: p.split('/').pop(), path: p, is_repo: p !== '/home/me/notes' })) })
         }
-        const entries = (tree[path] ?? []).map((name) => ({ name, path: `${path}/${name}`, is_repo: name === 'playground' || name === 'tingly-box' || name === 'website' }))
-        const parent = path === '/' ? '' : path.replace(/\/[^/]+$/, '') || '/'
-        return HttpResponse.json({ path, parent, is_repo: false, entries })
+        const root = roots.find((r) => path === r || path.startsWith(r + '/'))
+        if (!root) {
+            return HttpResponse.json({ error: { message: `${path} is not inside a folder you have added; use it as typed to add it`, type: 'permission_error' } }, { status: 403 })
+        }
+        const tree: Record<string, string[]> = {
+            '/home/me/code/playground': ['src', 'docs'],
+            '/home/me/code/tingly-box': ['frontend', 'internal', 'cli'],
+        }
+        const entries = (tree[path] ?? []).map((name) => ({ name, path: `${path}/${name}`, is_repo: false }))
+        return HttpResponse.json({ path, parent: path === root ? '' : path.replace(/\/[^/]+$/, ''), is_repo: path === root && root !== '/home/me/notes', entries })
     }),
     http.get('/api/v1/agent/environments', () => HttpResponse.json({ environments: mockAgentEnvironments, supported_runtimes: ['local'], permission_modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.post('/api/v1/agent/environments', async ({ request }) => {

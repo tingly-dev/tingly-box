@@ -22,22 +22,16 @@ func TestJourney_LocalFolderInPlace(t *testing.T) {
 	s := bootStack(t, nil)
 	dir := newGitDir(t, "playground")
 
-	// The picker can see the folder and knows it is a repo.
+	// Allowlist: nothing handed over yet, so nothing can be listed — not
+	// the folder, not its parent, not the top level.
 	var listing managedagent.DirListing
-	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs?path="+filepath.Dir(dir), nil, &listing); code != 200 {
-		t.Fatalf("browse: %d", code)
+	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs", nil, &listing); code != 200 || len(listing.Entries) != 0 {
+		t.Fatalf("top level before adding: %d %+v", code, listing)
 	}
-	var seen bool
-	for _, e := range listing.Entries {
-		if e.Path == dir {
-			seen = true
-			if !e.IsRepo {
-				t.Fatalf("browse: %s not flagged as repo", dir)
-			}
+	for _, p := range []string{dir, filepath.Dir(dir)} {
+		if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs?path="+p, nil, nil); code != 403 {
+			t.Fatalf("browse %s before adding: want 403, got %d", p, code)
 		}
-	}
-	if !seen {
-		t.Fatalf("browse: %s missing from %+v", dir, listing.Entries)
 	}
 	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs?path=relative/path", nil, nil); code != 400 {
 		t.Fatalf("browse relative path: want 400, got %d", code)
@@ -80,8 +74,18 @@ func TestJourney_LocalFolderInPlace(t *testing.T) {
 	if code := s.do(http.MethodGet, "/api/v1/agent/fs/recent", nil, &recent); code != 200 {
 		t.Fatalf("recent: %d", code)
 	}
-	if len(recent.Folders) == 0 || recent.Folders[0].Path != dir || recent.Folders[0].Source != "tasks" {
+	if len(recent.Folders) != 1 || recent.Folders[0].Path != dir || !recent.Folders[0].IsRepo {
 		t.Fatalf("recent folders: %+v", recent.Folders)
+	}
+	// Submitting the folder opened it — and only it — for browsing.
+	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs?path="+dir, nil, &listing); code != 200 || listing.Path != dir || !listing.IsRepo || listing.Parent != "" {
+		t.Fatalf("browse after adding: %d %+v", code, listing)
+	}
+	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs?path="+filepath.Dir(dir), nil, nil); code != 403 {
+		t.Fatalf("parent must stay closed: %d", code)
+	}
+	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs", nil, &listing); code != 200 || len(listing.Entries) != 1 || listing.Entries[0].Path != dir {
+		t.Fatalf("top level after adding: %d %+v", code, listing)
 	}
 	var sources struct {
 		Sources []managedagent.Source `json:"sources"`

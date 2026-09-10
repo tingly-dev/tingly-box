@@ -58,8 +58,8 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 	// Host folders — for picking a local directory to work in directly.
 	group.GET("/agent/fs/dirs", h.BrowseDirs,
 		swagger.WithTags(tag),
-		swagger.WithDescription("List sub-directories of a folder on this host (home when path is empty); directories only"),
-		swagger.WithQuery("path", "string", "Absolute directory path; empty for the home directory"),
+		swagger.WithDescription("List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403"),
+		swagger.WithQuery("path", "string", "Absolute directory path inside an added folder; empty for the list of added folders"),
 		swagger.WithResponseModel(managedagent.DirListing{}))
 	group.GET("/agent/fs/recent", h.RecentFolders,
 		swagger.WithTags(tag),
@@ -76,7 +76,8 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 		swagger.WithResponseModel(WorkspaceListResponse{}))
 	group.POST("/agent/workspaces/:workspace_id/reclaim", h.ReclaimWorkspace,
 		swagger.WithTags(tag),
-		swagger.WithDescription("Remove a checkout's directory; refused while a session in it is active. Session logs are kept."),
+		swagger.WithDescription("Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted."),
+		swagger.WithRequestModel(ReclaimWorkspaceRequest{}),
 		swagger.WithResponseModel(managedagent.Workspace{}))
 
 	// Sessions

@@ -236,7 +236,10 @@ func TestFailedSessionCanRetryWhenWorkspaceReady(t *testing.T) {
 
 // fakeGit is the Git seam for service tests: a plain directory is not a
 // repo; push records the call.
-type fakeGit struct{ pushed int }
+type fakeGit struct {
+	pushed int
+	work   bool // what HasWork answers
+}
 
 func (g *fakeGit) Diff(context.Context, *Workspace) (*Diff, error) {
 	return &Diff{ChangedFiles: 2, Stat: "x | 2"}, nil
@@ -246,6 +249,7 @@ func (g *fakeGit) IsRepo(_ context.Context, ws *Workspace) bool {
 	_, err := os.Stat(filepath.Join(ws.Path, ".git"))
 	return err == nil
 }
+func (g *fakeGit) HasWork(context.Context, *Workspace) (bool, error) { return g.work, nil }
 
 func TestLocalDirectorySource_WorksInPlace(t *testing.T) {
 	ctx := context.Background()
@@ -296,7 +300,7 @@ func TestLocalDirectorySource_WorksInPlace(t *testing.T) {
 	if n, _ := svc.ReclaimIdleWorkspaces(ctx, DefaultWorkspaceTTL); n != 0 {
 		t.Fatalf("sweep must skip in-place workspaces, reclaimed %d", n)
 	}
-	if _, err := svc.ReclaimWorkspace(ctx, ws.ID); err != nil {
+	if _, err := svc.ReclaimWorkspace(ctx, ws.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(dir); err != nil {
@@ -340,15 +344,13 @@ func TestCreateSession_LocalPathIsDirect(t *testing.T) {
 		t.Fatalf("no target must be rejected, got %v", err)
 	}
 
-	// Recent folders: the local source first, then Claude Code's projects
-	// that still exist, deduplicated.
-	other := t.TempDir()
-	recent := func(context.Context) ([]string, error) { return []string{dir, other, "/definitely/gone"}, nil }
-	folders, err := svc.RecentFolders(ctx, recent, 10)
+	// Recent folders are exactly the folders handed to tingly-box: nothing
+	// is inferred from the host.
+	folders, err := svc.RecentFolders(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(folders) != 2 || folders[0].Path != dir || folders[0].Source != "tasks" || folders[1].Path != other || folders[1].Source != "claude_code" {
+	if len(folders) != 1 || folders[0].Path != dir {
 		t.Fatalf("recent folders = %+v", folders)
 	}
 }
@@ -359,24 +361,63 @@ func TestBrowse(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "A-plain"), 0o755)
 	os.MkdirAll(filepath.Join(root, ".hidden"), 0o755)
 	os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644)
+	roots := []string{root}
 
-	l, err := Browse(root)
+	// The top level is the allowlist itself.
+	top, err := Browse("", roots)
+	if err != nil || top.Path != "" || len(top.Entries) != 1 || top.Entries[0].Path != root {
+		t.Fatalf("top = %+v %v", top, err)
+	}
+	l, err := Browse(root, roots)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l.Path != root || l.Parent != filepath.Dir(root) || len(l.Entries) != 2 {
+	if l.Path != root || l.Parent != "" || len(l.Entries) != 2 {
 		t.Fatalf("listing = %+v", l)
 	}
 	if l.Entries[0].Name != "A-plain" || l.Entries[1].Name != "b-repo" || !l.Entries[1].IsRepo || l.Entries[0].IsRepo {
 		t.Fatalf("entries = %+v", l.Entries)
 	}
-	if _, err := Browse("relative"); !errors.Is(err, ErrValidation) {
+	// Inside a root: parent is set, bounded at the root.
+	sub, err := Browse(filepath.Join(root, "A-plain"), roots)
+	if err != nil || sub.Parent != root {
+		t.Fatalf("sub = %+v %v", sub, err)
+	}
+	// Outside the allowlist: refused, whether it exists or not.
+	for _, p := range []string{filepath.Dir(root), t.TempDir(), root + "-sibling", "/"} {
+		if _, err := Browse(p, roots); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("%s: want ErrForbidden, got %v", p, err)
+		}
+	}
+	if _, err := Browse("relative", roots); !errors.Is(err, ErrValidation) {
 		t.Fatalf("relative path: want ErrValidation, got %v", err)
 	}
-	if _, err := Browse(filepath.Join(root, "file.txt")); !errors.Is(err, ErrValidation) {
+	if _, err := Browse(filepath.Join(root, "file.txt"), roots); !errors.Is(err, ErrValidation) {
 		t.Fatalf("file path: want ErrValidation, got %v", err)
 	}
-	if home, err := Browse(""); err != nil || !filepath.IsAbs(home.Path) {
-		t.Fatalf("empty path must list home: %+v %v", home, err)
+	if _, err := Browse("", nil); err != nil {
+		t.Fatalf("empty allowlist must list nothing, not fail: %v", err)
+	}
+}
+
+func TestServiceBrowse_AllowlistIsTheLocalSources(t *testing.T) {
+	svc, _ := newTestService(t)
+	dir := t.TempDir()
+	ctx := context.Background()
+	if _, err := svc.Browse(ctx, dir); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("before adding: want ErrForbidden, got %v", err)
+	}
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{LocalPath: dir, Prompt: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := svc.Browse(ctx, dir); err != nil || l.Path != dir {
+		t.Fatalf("after adding: %+v %v", l, err)
+	}
+	if _, err := svc.Browse(ctx, filepath.Dir(dir)); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("parent of an added folder must stay closed, got %v", err)
+	}
+	folders, err := svc.RecentFolders(ctx, 0)
+	if err != nil || len(folders) != 1 || folders[0].Path != dir {
+		t.Fatalf("recent = %+v %v", folders, err)
 	}
 }

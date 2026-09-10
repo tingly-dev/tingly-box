@@ -90,7 +90,7 @@ const TasksPage = () => {
         setPickerOpen(false);
         setTarget(FOLDER_PREFIX + path);
         if (!folders.some((f) => f.path === path)) {
-            setFolders([{path, name: path.split(/[\\/]/).filter(Boolean).pop() ?? path, is_repo: false, source: 'tasks'}, ...folders]);
+            setFolders([{path, name: path.split(/[\\/]/).filter(Boolean).pop() ?? path, is_repo: false}, ...folders]);
         }
     };
 
