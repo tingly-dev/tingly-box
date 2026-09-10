@@ -153,7 +153,7 @@ const TasksPage = () => {
                                     renderValue={(v) => {
                                         if (v.startsWith(FOLDER_PREFIX)) {
                                             const p = v.slice(FOLDER_PREFIX.length);
-                                            return folders.find((f) => f.path === p)?.name ?? p;
+                                            return folders.find((f) => f.path === p)?.name ?? (p.split(/[\\/]/).filter(Boolean).pop() || p);
                                         }
                                         const src = sources.find((s) => SOURCE_PREFIX + s.id === v);
                                         return src ? src.name : v;

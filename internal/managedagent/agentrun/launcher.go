@@ -384,8 +384,18 @@ func (l *Launcher) provision(ctx context.Context, r managedagent.Run) error {
 	return nil
 }
 
+// noConversationMarker is what the CLI answers to --resume when the session
+// file was never written: the previous turn died (interrupt, crash) before
+// the CLI persisted anything. There is nothing to resume, so the turn is
+// re-run once on a fresh Claude session id.
+const noConversationMarker = "No conversation found with session ID"
+
 // turn executes one prompt and consumes its event stream.
 func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt string) {
+	l.runTurn(ctx, rn, r, prompt, true)
+}
+
+func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, prompt string, mayRestart bool) {
 	sess, err := l.cfg.Stores.Sessions.GetSession(ctx, r.Session.ID)
 	if err != nil {
 		l.log.WithError(err).Warn("session vanished before turn")
@@ -500,6 +510,17 @@ func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt
 	// context: the run's may already be cancelled by Stop.
 	fin := context.Background()
 	usage, resultErr := foldResult(res)
+	if resume && mayRestart && ctx.Err() == nil && strings.Contains(resultErr, noConversationMarker) {
+		l.append(fin, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventSystem,
+			Text: "claude code session " + sess.CCSessionID + " was never saved (the previous turn ended before its first reply); starting a fresh one"})
+		if cur, gerr := l.cfg.Stores.Sessions.GetSession(fin, r.Session.ID); gerr == nil {
+			cur.CCSessionID = ""
+			if uerr := l.cfg.Stores.Sessions.UpdateSession(fin, cur); uerr == nil {
+				l.runTurn(ctx, rn, r, prompt, false)
+				return
+			}
+		}
+	}
 	if resultErr != "" {
 		l.append(fin, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventError, Text: resultErr})
 	}
