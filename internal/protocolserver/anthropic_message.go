@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -177,12 +178,14 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 	// Get or create the recorder for dual-stage recording. The body is the
 	// pristine request as received (post-vision-proxy, pre-pre-chain); the
 	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
-	if scenarioConfig.IsRecordingEnable() {
+	// Enablement is the effective capture-point selection: the rule's recording
+	// flag overrides the scenario-level recording_v2 default.
+	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")
 		}
-		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, ph.getScenarioRecordMode(scenarioType), bs)
+		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, obs.RecordMode(recMode), bs)
 	}
 
 	// Snapshot a pristine template only when failover is possible; the single
@@ -302,13 +305,15 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	// attempt by the failover loop (UpdateTrackingForFailover).
 	SetTrackingContext(c, rule, provider, requestModel, responseModel, isStreaming)
 
-	// Get or create the recorder for dual-stage recording (pristine request body).
-	if scenarioConfig.IsRecordingEnable() {
+	// Get or create the recorder for dual-stage recording (pristine request
+	// body). Enablement is the effective capture-point selection: the rule's
+	// recording flag overrides the scenario-level recording_v2 default.
+	if recMode := typ.EffectiveRecording(rule, scenarioConfig); recMode.Enabled() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")
 		}
-		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, ph.getScenarioRecordMode(scenarioType), bs)
+		ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, obs.RecordMode(recMode), bs)
 	}
 
 	// Snapshot a pristine template only when failover is possible.

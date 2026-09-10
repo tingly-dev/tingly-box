@@ -95,23 +95,28 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 
 	rec := records[0]
 	assert.Equal(t, string(scenario), rec.Scenario)
-	require.NotNil(t, rec.FinalResponse, "FinalResponse must be populated by AttachRecorderHooks")
-	body := rec.FinalResponse.Body
-	require.NotNil(t, body, "FinalResponse.Body must contain the assembled message")
 
-	assert.Equal(t, "msg_e2e", body["id"], "assembled message id must reach the recording")
-	assert.Equal(t, "actual-stream-model", body["model"],
-		"AttachRecorderHooks must override the recorded body's model to actualModel")
-	assert.Equal(t, "end_turn", body["stop_reason"])
-
-	content, ok := body["content"].([]interface{})
-	require.True(t, ok)
-	require.Len(t, content, 1)
-	block, ok := content[0].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "streamed reply", block["text"], "stream deltas must be assembled by HandleContext.streamAssembler")
-
-	usage, ok := body["usage"].(map[string]interface{})
-	require.True(t, ok)
-	assert.EqualValues(t, 17, usage["output_tokens"], "usage from message_delta must propagate via assembler internal tracking")
+	// Response-side recording is paused: emit's FinalResponse branch is
+	// commented out (recorder.go / .design/recording.md §3.5). The stream
+	// assembly machinery (AttachRecorderHooks) still runs and fills the
+	// recorder internally — restore the assertions below when the response
+	// path is reworked and the emit branch is un-commented (Phase 4):
+	//
+	//	require.NotNil(t, rec.FinalResponse, "FinalResponse must be populated by AttachRecorderHooks")
+	//	body := rec.FinalResponse.Body
+	//	require.NotNil(t, body, "FinalResponse.Body must contain the assembled message")
+	//	assert.Equal(t, "msg_e2e", body["id"], "assembled message id must reach the recording")
+	//	assert.Equal(t, "actual-stream-model", body["model"],
+	//		"AttachRecorderHooks must override the recorded body's model to actualModel")
+	//	assert.Equal(t, "end_turn", body["stop_reason"])
+	//	content, ok := body["content"].([]interface{})
+	//	require.True(t, ok)
+	//	require.Len(t, content, 1)
+	//	block, ok := content[0].(map[string]interface{})
+	//	require.True(t, ok)
+	//	assert.Equal(t, "streamed reply", block["text"], "stream deltas must be assembled by HandleContext.streamAssembler")
+	//	usage, ok := body["usage"].(map[string]interface{})
+	//	require.True(t, ok)
+	//	assert.EqualValues(t, 17, usage["output_tokens"], "usage from message_delta must propagate via assembler internal tracking")
+	assert.Nil(t, rec.FinalResponse, "response-side recording is paused — FinalResponse must not be emitted")
 }

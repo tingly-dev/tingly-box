@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 
-	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	servertransform "github.com/tingly-dev/tingly-box/internal/protocolserver/transform"
@@ -206,22 +205,16 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
 	recorder := recording.FromGin(c)
 
-	recordMode := ph.getScenarioRecordMode(scenarioType)
-	shouldRecord := recorder != nil
-
 	var transforms []transform.Transform
-
-	requestRecordingEnabled := recordMode == obs.RecordModeRequestOnly ||
-		recordMode == obs.RecordModeRequestResponse ||
-		recordMode == obs.RecordModeStagedRequestResponse
 
 	// preBase slot: rule transforms that act on the inbound request shape, before
 	// any protocol conversion (and before recording, so the type-switch in each
 	// transform sees what the client actually sent).
 	transforms = append(transforms, preBase...)
 
-	// 1. Pre-transform recording (if request recording is enabled)
-	if shouldRecord && requestRecordingEnabled {
+	// 1. Pre-transform recording — snapshots the inbound (client) request.
+	// Gated on the recorder's own capture-point selection (nil-safe).
+	if recorder.Wants(typ.RecordClientRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePre))
 	}
 
@@ -240,9 +233,9 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 
 	transforms = append(transforms, vendorTransformShared)
 
-	// 4. Post-transform recording (if request recording is enabled). Runs last so
-	// it snapshots the truly-final request dispatched to the provider.
-	if shouldRecord && requestRecordingEnabled {
+	// 4. Post-transform recording — snapshots the outbound (upstream) request.
+	// Runs last so it captures the truly-final request dispatched to the provider.
+	if recorder.Wants(typ.RecordUpstreamRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePost))
 	}
 
