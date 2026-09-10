@@ -136,7 +136,7 @@ const TasksPage = () => {
                                             <MenuItem key={s.id} value={s.id}>
                                                 {s.name}
                                                 <Typography component="span" variant="caption" color="text.secondary" sx={{ml: 1}}>
-                                                    {s.default_branch}
+                                                    {s.kind === 'local' ? s.url : s.default_branch}
                                                 </Typography>
                                             </MenuItem>
                                         ))}

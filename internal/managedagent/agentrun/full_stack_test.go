@@ -116,7 +116,7 @@ func TestFullStack_SessionOverHTTP(t *testing.T) {
 
 	origin := newOriginRepo(t)
 	var src managedagent.Source
-	if code := api.do(http.MethodPost, "/api/v1/agent/sources", map[string]any{"url": origin}, &src); code != 201 {
+	if code := api.do(http.MethodPost, "/api/v1/agent/sources", map[string]any{"url": "file://" + origin}, &src); code != 201 {
 		t.Fatalf("create source: %d", code)
 	}
 

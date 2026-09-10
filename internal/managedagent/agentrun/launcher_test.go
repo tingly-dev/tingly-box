@@ -99,7 +99,7 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 	if err := svc.EnsureDefaults(ctx); err != nil {
 		t.Fatal(err)
 	}
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "do the thing"})
 	if err != nil {
 		t.Fatal(err)
@@ -319,7 +319,7 @@ func newLiveSession(t *testing.T) (*managedagent.Service, *Launcher, *managedage
 	}
 	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: t.TempDir()})
 	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "work"})
 	if err != nil {
 		t.Fatal(err)
@@ -408,7 +408,7 @@ func TestLauncher_BypassPermissionsAutoApproves(t *testing.T) {
 	launcher, _ := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
 	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
 	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{
 		SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionBypassPermissions,
 	})
@@ -480,7 +480,7 @@ func TestLauncher_CLIStderrReachesSessionError(t *testing.T) {
 	}
 	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
 	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: newOrigin(t)})
+	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + newOrigin(t)})
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionAuto})
 	if err != nil {
 		t.Fatal(err)
@@ -500,4 +500,49 @@ func TestLauncher_CLIStderrReachesSessionError(t *testing.T) {
 	if err := svc.SendMessage(ctx, sess.ID, "retry"); err != nil {
 		t.Fatalf("retry after failure: %v", err)
 	}
+}
+
+func TestLauncher_LocalDirectoryRunsInPlace(t *testing.T) {
+	ctx := context.Background()
+	factory := process.NewFakeFactory()
+	handles := make(chan *process.FakeHandle, 2)
+	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
+	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
+		stdins.track(h)
+		handles <- h
+	}
+	_, stores := managedagent.NewMemStores()
+	git := &gitrepo.Git{MirrorsDir: filepath.Join(t.TempDir(), "mirrors")}
+	launcher, _ := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: t.TempDir()})
+	_ = svc.EnsureDefaults(ctx)
+	dir := t.TempDir()
+	src, err := svc.CreateSource(ctx, managedagent.SourceInput{URL: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var h *process.FakeHandle
+	select {
+	case h = <-handles:
+	case <-time.After(10 * time.Second):
+		t.Fatal("agent never started")
+	}
+	if h.Spec().WorkDir != dir {
+		t.Fatalf("agent must run in the user's directory: %q", h.Spec().WorkDir)
+	}
+	if _, err := os.Stat(git.MirrorsDir); err == nil {
+		t.Fatal("no mirror must be created for an in-place directory")
+	}
+	events, _ := svc.ListEvents(ctx, sess.ID, 0, 0)
+	for _, e := range events {
+		if e.Kind == managedagent.EventSystem && strings.Contains(e.Text, "provisioning") {
+			t.Fatalf("no provisioning for an in-place directory: %+v", e)
+		}
+	}
+	h.FinishOutput()
+	h.SignalExit(nil)
 }

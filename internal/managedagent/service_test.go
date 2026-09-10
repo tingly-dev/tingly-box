@@ -3,8 +3,11 @@ package managedagent
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestService(t *testing.T) (*Service, *MemStores) {
@@ -45,8 +48,12 @@ func TestSource_ValidationAndDefaults(t *testing.T) {
 	if _, err := svc.CreateSource(ctx, SourceInput{URL: "git@github.com:org/repo.git"}); err != nil {
 		t.Fatalf("scp-like url rejected: %v", err)
 	}
-	if _, err := svc.CreateSource(ctx, SourceInput{URL: "/srv/git/repo.git"}); err != nil {
-		t.Fatalf("local path rejected: %v", err)
+	if _, err := svc.CreateSource(ctx, SourceInput{URL: "/definitely/not/here"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("missing local directory must be rejected, got %v", err)
+	}
+	local, err := svc.CreateSource(ctx, SourceInput{URL: t.TempDir()})
+	if err != nil || local.Kind != SourceKindLocal || local.DefaultBranch != "" {
+		t.Fatalf("local directory source: %+v, %v", local, err)
 	}
 }
 
@@ -224,5 +231,82 @@ func TestFailedSessionCanRetryWhenWorkspaceReady(t *testing.T) {
 	}
 	if err := svc.SendMessage(ctx, sess.ID, "again"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("archived stays closed, got %v", err)
+	}
+}
+
+// fakeGit is the Git seam for service tests: a plain directory is not a
+// repo; push records the call.
+type fakeGit struct{ pushed int }
+
+func (g *fakeGit) Diff(context.Context, *Workspace) (*Diff, error) {
+	return &Diff{ChangedFiles: 2, Stat: "x | 2"}, nil
+}
+func (g *fakeGit) Push(context.Context, *Workspace, func(string)) error { g.pushed++; return nil }
+func (g *fakeGit) IsRepo(_ context.Context, ws *Workspace) bool {
+	_, err := os.Stat(filepath.Join(ws.Path, ".git"))
+	return err == nil
+}
+
+func TestLocalDirectorySource_WorksInPlace(t *testing.T) {
+	ctx := context.Background()
+	_, stores := NewMemStores()
+	root := t.TempDir()
+	git := &fakeGit{}
+	svc := NewService(Config{Stores: stores, Git: git, WorkspacesDir: filepath.Join(root, "workspaces")})
+	_ = svc.EnsureDefaults(ctx)
+	dir := filepath.Join(root, "myproject")
+	os.MkdirAll(dir, 0o755)
+
+	src, err := svc.CreateSource(ctx, SourceInput{URL: dir})
+	if err != nil || src.Kind != SourceKindLocal || src.Name != "myproject" {
+		t.Fatalf("source = %+v, %v", src, err)
+	}
+	first, err := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, _ := svc.GetWorkspace(ctx, first.WorkspaceID)
+	if ws.Path != dir || ws.AgentCwd != dir || ws.State != WorkspaceReady || ws.Branch != "" || ws.BaseRef != "HEAD" {
+		t.Fatalf("in-place workspace = %+v", ws)
+	}
+	// The same directory is the same workspace, and the next session resumes it.
+	first.CCSessionID = "cc-1"
+	_ = stores.Sessions.UpdateSession(ctx, first)
+	second, _ := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, Prompt: "b"})
+	if second.WorkspaceID != ws.ID || second.CCSessionID != "cc-1" {
+		t.Fatalf("second session must reuse the workspace and resume: %+v", second)
+	}
+	// Not a git repo → empty diff, no error; push is refused in place.
+	d, err := svc.Diff(ctx, second.ID)
+	if err != nil || d.ChangedFiles != 0 {
+		t.Fatalf("diff on plain dir = %+v, %v", d, err)
+	}
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	if d, _ := svc.Diff(ctx, second.ID); d.ChangedFiles != 2 {
+		t.Fatalf("diff on repo dir = %+v", d)
+	}
+	if _, err := svc.Push(ctx, second.ID); !errors.Is(err, ErrConflict) || git.pushed != 0 {
+		t.Fatalf("push in place must be refused, got %v", err)
+	}
+	// Reclaim never deletes a user's directory, and the sweep skips it.
+	for _, id := range []string{first.ID, second.ID} {
+		_, _ = svc.Archive(ctx, id)
+	}
+	svc.now = func() time.Time { return time.Now().Add(30 * 24 * time.Hour) }
+	if n, _ := svc.ReclaimIdleWorkspaces(ctx, DefaultWorkspaceTTL); n != 0 {
+		t.Fatalf("sweep must skip in-place workspaces, reclaimed %d", n)
+	}
+	if _, err := svc.ReclaimWorkspace(ctx, ws.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatal("user directory must survive reclaim")
+	}
+	// A local directory cannot run in a non-local environment.
+	SupportedRuntimes[RuntimeDocker] = true
+	defer delete(SupportedRuntimes, RuntimeDocker)
+	docker, _ := svc.CreateEnvironment(ctx, EnvironmentInput{Name: "box", Runtime: RuntimeDocker, Image: "x"})
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{SourceID: src.ID, EnvironmentID: docker.ID, Prompt: "c"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("local dir in docker env must be rejected, got %v", err)
 	}
 }

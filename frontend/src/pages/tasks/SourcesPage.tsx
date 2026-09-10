@@ -5,18 +5,21 @@
 import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
-    Button, Card, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
+    Button, Card, Chip, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DialogHeader from '@/components/DialogHeader';
-import {Add as IconAdd, Delete as IconDelete, Edit as IconEdit, GitHub as IconRepo} from '@/components/icons';
+import {Add as IconAdd, Delete as IconDelete, Edit as IconEdit, FolderOpen as IconFolder, GitHub as IconRepo} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import {agentApi, type AgentSource, type SourceRequest} from '@/services/agentApi';
 
 const emptyForm: SourceRequest = {name: '', url: '', default_branch: '', credential_id: ''};
+
+// Mirrors the backend rule: an absolute path is a local directory source.
+const isAbsolutePath = (v: string): boolean => /^(\/|[A-Za-z]:[\\/])/.test(v.trim());
 
 const SourcesPage = () => {
     const {t} = useTranslation();
@@ -99,13 +102,25 @@ const SourcesPage = () => {
                             <Card key={s.id} variant="outlined" sx={{p: {xs: 1.5, sm: 2}}}>
                                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                                     <Stack sx={{flex: 1, minWidth: 0}}>
-                                        <Typography variant="subtitle1" sx={{fontWeight: 600}}>{s.name}</Typography>
+                                        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                                            <Typography variant="subtitle1" sx={{fontWeight: 600}}>{s.name}</Typography>
+                                            <Chip
+                                                size="small"
+                                                variant="outlined"
+                                                icon={s.kind === 'local' ? <IconFolder /> : <IconRepo />}
+                                                label={s.kind === 'local' ? t('tasks.sources.kindLocal') : t('tasks.sources.kindGit')}
+                                            />
+                                        </Stack>
                                         <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
                                             {s.url}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            {t('tasks.sources.defaultBranch')}: {s.default_branch}
-                                        </Typography>
+                                        {s.kind === 'local' ? (
+                                            <Typography variant="caption" color="text.secondary">{t('tasks.sources.inPlaceNote')}</Typography>
+                                        ) : (
+                                            <Typography variant="caption" color="text.secondary">
+                                                {t('tasks.sources.defaultBranch')}: {s.default_branch}
+                                            </Typography>
+                                        )}
                                     </Stack>
                                     <Tooltip title={t('common.edit')}>
                                         <IconButton size="small" onClick={() => open(s)}><IconEdit fontSize="small" /></IconButton>
@@ -143,13 +158,20 @@ const SourcesPage = () => {
                             onChange={(e) => setForm({...form, name: e.target.value})}
                             fullWidth
                         />
-                        <TextField
-                            label={t('tasks.sources.defaultBranch')}
-                            placeholder="main"
-                            value={form.default_branch}
-                            onChange={(e) => setForm({...form, default_branch: e.target.value})}
-                            fullWidth
-                        />
+                        {/* An absolute path means "work in this directory in place":
+                            there is no clone and no branch, so the field disappears. */}
+                        {!isAbsolutePath(form.url) && (
+                            <TextField
+                                label={t('tasks.sources.defaultBranch')}
+                                placeholder="main"
+                                value={form.default_branch}
+                                onChange={(e) => setForm({...form, default_branch: e.target.value})}
+                                fullWidth
+                            />
+                        )}
+                        {isAbsolutePath(form.url) && (
+                            <Typography variant="body2" color="text.secondary">{t('tasks.sources.inPlaceHint')}</Typography>
+                        )}
                     </Stack>
                 </DialogContent>
                 <DialogActions>

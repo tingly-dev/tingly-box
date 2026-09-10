@@ -93,7 +93,7 @@ func TestRealCLI_SessionRoundTrip(t *testing.T) {
 	if err := svc.EnsureDefaults(ctx); err != nil {
 		t.Fatal(err)
 	}
-	src, err := svc.CreateSource(ctx, managedagent.SourceInput{URL: origin})
+	src, err := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
 	if err != nil {
 		t.Fatal(err)
 	}

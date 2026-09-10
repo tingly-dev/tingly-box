@@ -43,6 +43,8 @@ type Response struct {
 type Git interface {
 	Diff(ctx context.Context, ws *Workspace) (*Diff, error)
 	Push(ctx context.Context, ws *Workspace, log func(line string)) error
+	// IsRepo reports whether the workspace directory is a git work tree.
+	IsRepo(ctx context.Context, ws *Workspace) bool
 }
 
 // Diff is a workspace's change summary against its base ref.

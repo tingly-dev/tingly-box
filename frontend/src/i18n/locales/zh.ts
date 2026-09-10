@@ -866,6 +866,8 @@ export default {
       "waiting": "agent 在等你回答上面的问题。",
       "idle": "agent 完成了本轮。发送后续指令，或推送分支。",
       "retryHint": "修正原因（例如在上方切换权限模式），再发一条消息即可在同一个 checkout 里重试。",
+      "inPlace": "就地（无分支）",
+      "inPlaceNote": "这个任务直接修改你的目录；提交和推送请在该目录里自己完成。",
       "notFound": "任务不存在"
     },
     "sources": {
@@ -875,7 +877,11 @@ export default {
       "edit": "编辑仓库",
       "name": "名称",
       "url": "Git 地址",
-      "urlHelp": "https://…、git@host:org/repo.git，或本地路径",
+      "urlHelp": "https://…、git@host:org/repo.git，或一个本地目录的绝对路径（就地工作）",
+      "kindLocal": "本地目录",
+      "kindGit": "Git",
+      "inPlaceNote": "agent 直接在这个目录里工作，不 clone、不建分支。",
+      "inPlaceHint": "绝对路径表示就地工作：agent 直接修改这个目录，不 clone，也不推送。想在本地仓库的副本上工作，请改用 file:// 地址。",
       "defaultBranch": "默认分支",
       "empty": "还没有仓库",
       "emptyHint": "添加你想让 agent 处理的仓库。",

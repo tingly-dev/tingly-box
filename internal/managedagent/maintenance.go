@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -98,10 +99,14 @@ func (s *Service) ReclaimWorkspace(ctx context.Context, id string) (*Workspace, 
 	if len(live) > 0 {
 		return nil, conflict("workspace has %d active session(s); archive them first", len(live))
 	}
-	if ws.Path != "" {
-		if err := os.RemoveAll(ws.Path); err != nil {
-			return nil, fmt.Errorf("remove checkout: %w", err)
+	if !s.ownsPath(ws) {
+		// A user's own directory (local source) is never deleted; the
+		// workspace record is simply retired.
+		if ws.Path != "" && ws.Path != filepath.Clean(s.workspacesDir) {
+			logrus.WithField("workspace", ws.ID).Info("managed agent: retiring in-place workspace without deleting it")
 		}
+	} else if err := os.RemoveAll(ws.Path); err != nil {
+		return nil, fmt.Errorf("remove checkout: %w", err)
 	}
 	ws.State, ws.LastActiveAt = WorkspaceReclaimed, s.now()
 	if err := s.stores.Workspaces.UpdateWorkspace(ctx, ws); err != nil {
@@ -122,7 +127,7 @@ func (s *Service) ReclaimIdleWorkspaces(ctx context.Context, ttl time.Duration) 
 	n := 0
 	for i := range all {
 		ws := &all[i]
-		if ws.State == WorkspaceReclaimed || ws.State == WorkspaceProvisioning {
+		if ws.State == WorkspaceReclaimed || ws.State == WorkspaceProvisioning || !s.ownsPath(ws) {
 			continue
 		}
 		// A workspace's activity is its sessions' activity.

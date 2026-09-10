@@ -22,6 +22,9 @@ const ChangesPanel = ({session, workspace, onPushed, onError}: Props) => {
     const [pushing, setPushing] = useState(false);
 
     const ready = workspace?.state === 'ready';
+    // No branch means the agent works in the user's own directory: there
+    // is nothing for tb to push.
+    const inPlace = ready && !workspace?.branch;
 
     const load = useCallback(async () => {
         if (!ready) return;
@@ -47,14 +50,14 @@ const ChangesPanel = ({session, workspace, onPushed, onError}: Props) => {
         onPushed(res.data.session);
     };
 
-    const canPush = ready && session.status !== 'running' && (diff?.changed_files ?? 0) > 0;
+    const canPush = ready && !inPlace && session.status !== 'running' && (diff?.changed_files ?? 0) > 0;
 
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
                 <Typography variant="overline" color="text.secondary">{t('tasks.list.branch')}</Typography>
                 <Typography variant="body2" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
-                    {workspace?.branch ?? session.artifact?.branch ?? '—'}
+                    {inPlace ? t('tasks.detail.inPlace') : (workspace?.branch || session.artifact?.branch || '—')}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5}}>
                     {session.artifact?.pushed && <Chip size="small" color="success" variant="outlined" label={t('tasks.detail.pushed')} />}
@@ -67,18 +70,23 @@ const ChangesPanel = ({session, workspace, onPushed, onError}: Props) => {
             </Stack>
 
             <Stack direction={{xs: 'column', sm: 'row'}} spacing={1}>
-                <Button
-                    variant="contained"
-                    startIcon={pushing ? <CircularProgress size={16} color="inherit" /> : <IconUpload />}
-                    disabled={!canPush || pushing}
-                    onClick={push}
-                >
-                    {pushing ? t('tasks.detail.pushing') : t('tasks.detail.push')}
-                </Button>
+                {!inPlace && (
+                    <Button
+                        variant="contained"
+                        startIcon={pushing ? <CircularProgress size={16} color="inherit" /> : <IconUpload />}
+                        disabled={!canPush || pushing}
+                        onClick={push}
+                    >
+                        {pushing ? t('tasks.detail.pushing') : t('tasks.detail.push')}
+                    </Button>
+                )}
                 <Button variant="outlined" startIcon={<IconRefresh />} disabled={!ready || loading} onClick={load}>
                     {t('tasks.detail.refreshDiff')}
                 </Button>
             </Stack>
+            {inPlace && (
+                <Typography variant="caption" color="text.secondary">{t('tasks.detail.inPlaceNote')}</Typography>
+            )}
             {session.artifact?.pushed && !session.artifact?.pr_url && (
                 <Typography variant="caption" color="text.secondary">{t('tasks.detail.noPROnBranch')}</Typography>
             )}

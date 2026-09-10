@@ -504,6 +504,19 @@ settings defaultMode > CLI 默认）。
 | 不探测 CLI 版本 | 老 CLI 不支持某模式就让它报错：CLI 的 stderr 尾部（agentboot 新增 `ExecutionOptions.Stderr` 按执行捕获）附在 `session.error` 上，失败的 session 只要 checkout 还在就可以换模式再发一条消息重试（`canRetry`） |
 | 守卫 | agentboot 会静默丢弃它不认识的 `--permission-mode`，`modes_test.go` 保证我们提供的每个模式都在它的转发集合里 |
 
+### P0-h 本地目录 Source（2026-09-10）
+
+`SourceKind = local`：填一个宿主上的绝对路径，agent **就地**工作。
+
+| 规则 | 说明 |
+|---|---|
+| 识别 | 绝对路径 ⇒ `local`（不加类型选择器，ux §2）；想要本地仓库的**副本**用 `file://`（仍走 clone） |
+| workspace | 目录本身：`Path = AgentCwd = 路径`，`State = ready`，`Branch = ""`，`BaseRef = HEAD`；同一目录只有一个 workspace，新 session 复用并 `--resume` |
+| 不做的事 | 不 clone、不建分支、不 push（`Push` 409）；不是 git 仓库时 `Diff` 返回空而不是报错 |
+| 安全 | `ownsPath`：只有 `workspacesDir` 之下的目录才会被 `RemoveAll`；就地 workspace 的回收只退休记录，扫描直接跳过 |
+| 运行时 | 只允许 local 环境；docker 环境下拒绝（目录在宿主上，容器里挂载是 P1 的事） |
+| 与 @cc 的关系 | 这就是 @cc 今天"本机目录"用法的托管版，§7 里说的合流路径从这里开始 |
+
 ### 为 docker 预留了什么（P1 时应当只需要加，不需要改）
 
 1. `Environment.Runtime` 枚举与 docker 字段（image / setup_script / network / resources / secret_refs）已建模、已持久化、已在 API schema 中；`SupportedRuntimes` 是唯一开关——P1 把 `RuntimeDocker` 置 true 并补 `applyEnvironmentInput` 里已经写好的 docker 校验分支。

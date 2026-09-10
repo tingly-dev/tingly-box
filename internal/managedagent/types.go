@@ -7,11 +7,18 @@ import (
 
 // ---------- Source ----------
 
-// SourceKind is where code comes from. Only git exists today; the field is
-// stored so a local-directory source can be added without a migration.
+// SourceKind is where code comes from.
 type SourceKind string
 
-const SourceKindGit SourceKind = "git"
+const (
+	// SourceKindGit is a repository URL: each workspace is a fresh clone.
+	SourceKindGit SourceKind = "git"
+	// SourceKindLocal is a directory on this host: the agent works in it
+	// in place — no clone, no branch, no push. One workspace per source,
+	// reused by every session, so Claude Code sessions resume naturally.
+	// Only the local runtime can serve it.
+	SourceKindLocal SourceKind = "local"
+)
 
 // Source is a repository the agent can be pointed at. The credential is a
 // reference into the secret store, never the secret itself, so a Source can be

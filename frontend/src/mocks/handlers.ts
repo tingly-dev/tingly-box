@@ -1606,6 +1606,7 @@ const defaultMockTeamID = '00000000-0000-0000-0000-000000000001'
 let mockAgentSources: any[] = [
     { id: 'src-tb', name: 'tingly-box', kind: 'git', url: 'https://github.com/tingly-dev/tingly-box.git', default_branch: 'main', credential_id: '', created_at: '2026-09-01T08:00:00Z', updated_at: '2026-09-01T08:00:00Z' },
     { id: 'src-web', name: 'website', kind: 'git', url: 'git@github.com:tingly-dev/website.git', default_branch: 'main', credential_id: '', created_at: '2026-09-02T08:00:00Z', updated_at: '2026-09-02T08:00:00Z' },
+    { id: 'src-local', name: 'playground', kind: 'local', url: '/home/me/code/playground', default_branch: '', credential_id: '', created_at: '2026-09-03T08:00:00Z', updated_at: '2026-09-03T08:00:00Z' },
 ]
 let mockAgentEnvironments: any[] = [
     { id: '00000000-0000-0000-0000-00000000a001', name: 'Local', runtime: 'local', is_default: true, env: {}, cc_profile: '', created_at: '2026-09-01T08:00:00Z', updated_at: '2026-09-01T08:00:00Z' },
@@ -2320,9 +2321,10 @@ export const handlers = [
     http.post('/api/v1/agent/sources', async ({ request }) => {
         const body = await request.json() as any
         if (!body.url) return HttpResponse.json({ error: { message: 'url is required: validation', type: 'invalid_request_error' } }, { status: 400 })
+        const local = /^\//.test(body.url)
         const src = {
-            id: `src-${Date.now()}`, name: body.name || body.url.split('/').pop().replace(/\.git$/, ''), kind: 'git',
-            url: body.url, default_branch: body.default_branch || 'main', credential_id: '',
+            id: `src-${Date.now()}`, name: body.name || body.url.split('/').pop().replace(/\.git$/, ''), kind: local ? 'local' : 'git',
+            url: body.url, default_branch: local ? '' : (body.default_branch || 'main'), credential_id: '',
             created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         }
         mockAgentSources.push(src)

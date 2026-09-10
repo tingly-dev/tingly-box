@@ -865,6 +865,8 @@ export default {
       "waiting": "The agent is waiting for your answer above.",
       "idle": "The agent finished its turn. Send a follow-up or push the branch.",
       "retryHint": "Fix the cause (for example switch the permissions mode above) and send a message to retry in the same checkout.",
+      "inPlace": "In place (no branch)",
+      "inPlaceNote": "This task edits your folder directly; commit and push from there yourself.",
       "notFound": "Task not found"
     },
     "sources": {
@@ -874,7 +876,11 @@ export default {
       "edit": "Edit repository",
       "name": "Name",
       "url": "Git URL",
-      "urlHelp": "https://…, git@host:org/repo.git, or a local path",
+      "urlHelp": "https://…, git@host:org/repo.git, or an absolute folder path to work in place",
+      "kindLocal": "Local folder",
+      "kindGit": "Git",
+      "inPlaceNote": "The agent works in this folder in place — no clone, no branch.",
+      "inPlaceHint": "An absolute path is used in place: the agent edits this folder directly, nothing is cloned and nothing is pushed. To work on a copy of a local repository, use a file:// URL instead.",
       "defaultBranch": "Default branch",
       "empty": "No repositories yet",
       "emptyHint": "Add the repository you want the agent to work on.",

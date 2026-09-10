@@ -237,6 +237,12 @@ func (g *Git) HasUncommitted(ctx context.Context, dir string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// IsRepo reports whether dir is inside a git work tree.
+func (g *Git) IsRepo(ctx context.Context, dir string) bool {
+	out, err := g.run(ctx, dir, nil, "rev-parse", "--is-inside-work-tree")
+	return err == nil && strings.TrimSpace(out) == "true"
+}
+
 // Head returns the current commit of a workspace.
 func (g *Git) Head(ctx context.Context, dir string) (string, error) {
 	out, err := g.run(ctx, dir, nil, "rev-parse", "HEAD")

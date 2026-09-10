@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -137,8 +138,29 @@ func applySourceInput(src *Source, in SourceInput) error {
 	if in.URL == "" {
 		return invalid("url is required")
 	}
+	// An absolute path is a local directory to work in, in place. A copy of
+	// a local repository is still reachable through file://.
+	if filepath.IsAbs(in.URL) {
+		dir := filepath.Clean(in.URL)
+		info, err := os.Stat(dir)
+		if err != nil {
+			return invalid("directory %q: %v", dir, err)
+		}
+		if !info.IsDir() {
+			return invalid("%q is not a directory", dir)
+		}
+		if in.Name == "" {
+			in.Name = filepath.Base(dir)
+		}
+		src.Kind = SourceKindLocal
+		src.Name = in.Name
+		src.URL = dir
+		src.DefaultBranch = ""
+		src.CredentialID = ""
+		return nil
+	}
 	if !looksLikeGitURL(in.URL) {
-		return invalid("url %q is not a git URL", in.URL)
+		return invalid("url %q is not a git URL or an absolute directory path", in.URL)
 	}
 	if in.Name == "" {
 		in.Name = repoNameFromURL(in.URL)
@@ -146,6 +168,7 @@ func applySourceInput(src *Source, in SourceInput) error {
 	if in.DefaultBranch == "" {
 		in.DefaultBranch = "main"
 	}
+	src.Kind = SourceKindGit
 	src.Name = in.Name
 	src.URL = in.URL
 	src.DefaultBranch = in.DefaultBranch
@@ -159,10 +182,9 @@ func looksLikeGitURL(raw string) bool {
 	if scpLikeGitURL.MatchString(raw) {
 		return true
 	}
-	// A local repository (absolute path or file://) is a valid git remote:
-	// git clones it like any other, and it is how tests and a future
-	// local-directory source reach the same code path.
-	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "file://") {
+	// file:// is a local repository cloned like any other remote (an
+	// absolute path, by contrast, is a SourceKindLocal directory).
+	if strings.HasPrefix(raw, "file://") {
 		return true
 	}
 	u, err := url.Parse(raw)
@@ -406,6 +428,36 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}
 
 	now := s.now()
+	if ws == nil && src.Kind == SourceKindLocal {
+		if env.Runtime != RuntimeLocal {
+			return nil, invalid("a local directory can only run in a local environment")
+		}
+		// One workspace per local directory: the directory IS the workspace.
+		existing, err := s.stores.Workspaces.ListWorkspaces(ctx, WorkspaceFilter{SourceID: src.ID, State: WorkspaceReady})
+		if err != nil {
+			return nil, err
+		}
+		if len(existing) > 0 {
+			ws = &existing[0]
+			// Resume the directory's most recent Claude Code session.
+			in.WorkspaceID = ws.ID
+		} else {
+			ws = &Workspace{
+				ID:            uuid.NewString(),
+				SourceID:      src.ID,
+				EnvironmentID: env.ID,
+				Path:          src.URL,
+				AgentCwd:      src.URL,
+				BaseRef:       "HEAD",
+				State:         WorkspaceReady,
+				CreatedAt:     now,
+				LastActiveAt:  now,
+			}
+			if err := s.stores.Workspaces.CreateWorkspace(ctx, ws); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if ws == nil {
 		baseRef := strings.TrimSpace(in.BaseRef)
 		if baseRef == "" {
@@ -660,6 +712,10 @@ func (s *Service) Diff(ctx context.Context, sessionID string) (*Diff, error) {
 	if ws.State != WorkspaceReady {
 		return nil, conflict("workspace is %s", ws.State)
 	}
+	if !s.ownsPath(ws) && !s.git.IsRepo(ctx, ws) {
+		// A plain directory has no baseline to diff against.
+		return &Diff{}, nil
+	}
 	d, err := s.git.Diff(ctx, ws)
 	if err != nil {
 		return nil, err
@@ -686,6 +742,9 @@ func (s *Service) Push(ctx context.Context, sessionID string) (*Session, error) 
 	if ws.State != WorkspaceReady {
 		return nil, conflict("workspace is %s", ws.State)
 	}
+	if !s.ownsPath(ws) {
+		return nil, conflict("this task works in place in %s; commit and push from that checkout yourself", ws.Path)
+	}
 	if sess.Status == SessionRunning {
 		return nil, conflict("session is running; interrupt it or wait for the turn to finish before pushing")
 	}
@@ -705,6 +764,17 @@ func (s *Service) Push(ctx context.Context, sessionID string) (*Session, error) 
 	}
 	logLine("pushed " + ws.Branch)
 	return sess, nil
+}
+
+// ownsPath reports whether a workspace's directory was created by tb (under
+// the workspaces dir) and may therefore be deleted, as opposed to a user's
+// own directory the agent works in in place.
+func (s *Service) ownsPath(ws *Workspace) bool {
+	if ws == nil || ws.Path == "" || s.workspacesDir == "" {
+		return false
+	}
+	rel, err := filepath.Rel(s.workspacesDir, ws.Path)
+	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
 }
 
 func (s *Service) sessionWorkspace(ctx context.Context, sessionID string) (*Session, *Workspace, error) {

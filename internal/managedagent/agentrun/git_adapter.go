@@ -26,3 +26,7 @@ func (a GitAdapter) Diff(ctx context.Context, ws *managedagent.Workspace) (*mana
 func (a GitAdapter) Push(ctx context.Context, ws *managedagent.Workspace, log func(string)) error {
 	return a.Git.Push(ctx, ws.Path, ws.Branch, log)
 }
+
+func (a GitAdapter) IsRepo(ctx context.Context, ws *managedagent.Workspace) bool {
+	return a.Git.IsRepo(ctx, ws.Path)
+}
