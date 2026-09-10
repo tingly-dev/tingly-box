@@ -220,6 +220,26 @@ func TestReadClaudeCodeSettings_PermissionsDefaultModeTakesPriorityOverLegacy(t 
 	}
 }
 
+// A malformed "permissions" value (e.g. hand-edited into the wrong shape)
+// must not fail the whole settings read — it should just fall back to the
+// legacy top-level defaultMode, same as before permissions.defaultMode was
+// modeled at all.
+func TestReadClaudeCodeSettings_MalformedPermissionsFallsBackToLegacy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	writeTestFile(t, path, `{
+		"defaultMode": "plan",
+		"permissions": ["not", "an", "object"]
+	}`)
+
+	snapshot, err := readClaudeCodeSettings(path)
+	if err != nil {
+		t.Fatalf("readClaudeCodeSettings should tolerate a malformed permissions value, got: %v", err)
+	}
+	if snapshot.DefaultMode != "plan" {
+		t.Errorf("DefaultMode = %q, want plan (fallback to legacy top-level key)", snapshot.DefaultMode)
+	}
+}
+
 func TestResolveCCProfileSettings_InheritsThenAppliesOverrides(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
