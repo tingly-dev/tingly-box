@@ -17,20 +17,33 @@ import {
     Slider,
     Stack,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Add, Close, Download, Gif, GridView, Pause, PlayArrow, Remove } from '@/components/icons';
+import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove } from '@/components/icons';
 import { createZipBlob } from '@/utils/zip';
 import { downloadBlob, slugify } from '@/utils/download';
 import { encodeGif } from '@/utils/gif';
+import {
+    encodeVideo,
+    evenSize,
+    MAX_VIDEO_LOOPS,
+    planVideoLoops,
+    probeVideoTarget,
+    videoFileName,
+    type VideoTarget,
+} from '@/utils/video';
 import { DEFAULT_TOLERANCE, type BackgroundKind } from '@/utils/imageMatte';
 import {
     analyzeSheetBackground,
+    clampFrameDelay,
     computeTileRects,
     DEFAULT_FRAME_DELAY,
     DEFAULT_GRID,
-    FRAME_DELAYS,
+    FRAME_DELAY_MAX,
+    FRAME_DELAY_MIN,
+    FRAME_DELAY_STEP,
     FULL_CROP,
     GUTTER_MAX,
     isFullCrop,
@@ -45,59 +58,81 @@ import {
     type TileRect,
 } from '@/utils/imageSlice';
 
-// Rows and columns are a number you nudge while watching the overlay, so each
-// is a stepper with a typable field rather than a dropdown that hides the
-// image behind a menu on every change. The cap is generous enough for a
-// spritesheet; 3x3 is the shape a sticker sheet almost always comes back as.
+// Rows, columns, frame duration and loop count are all numbers you nudge
+// while watching the result, so each is a stepper with a typable field rather
+// than a dropdown that hides the image behind a menu on every change. The
+// grid cap is generous enough for a spritesheet; 3x3 is the shape a sticker
+// sheet almost always comes back as.
 const AXIS_MAX = 12;
-const clampAxis = (value: number): number => Math.min(AXIS_MAX, Math.max(1, Math.round(value) || 1));
 
-interface AxisStepperProps {
+interface NumberStepperProps {
     label: string;
     value: number;
     onChange: (value: number) => void;
     decreaseLabel: string;
     increaseLabel: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    /** Snaps a typed or stepped value; defaults to rounding within [min, max]. */
+    clamp?: (value: number) => number;
+    /** Unit shown after the field, e.g. `ms`. */
+    unit?: string;
+    width?: number;
 }
 
-const AxisStepper: React.FC<AxisStepperProps> = ({ label, value, onChange, decreaseLabel, increaseLabel }) => (
-    <Stack direction="row" sx={{ alignItems: 'flex-start', flex: 1, minWidth: 0, '& > .MuiIconButton-root': { mt: 0.25 } }}>
-        <IconButton
-            size="small"
-            onClick={() => onChange(clampAxis(value - 1))}
-            disabled={value <= 1}
-            aria-label={decreaseLabel}
-        >
-            <Remove fontSize="small" />
-        </IconButton>
-        <TextField
-            size="small"
-            helperText={label}
-            value={value}
-            onChange={(event) => {
-                const next = Number(event.target.value);
-                if (Number.isFinite(next) && next >= 1) onChange(clampAxis(next));
-            }}
-            onKeyDown={(event) => {
-                if (event.key === 'ArrowUp') { event.preventDefault(); onChange(clampAxis(value + 1)); }
-                if (event.key === 'ArrowDown') { event.preventDefault(); onChange(clampAxis(value - 1)); }
-            }}
-            slotProps={{
-                htmlInput: { 'aria-label': label, inputMode: 'numeric', min: 1, max: AXIS_MAX, style: { textAlign: 'center', padding: '6px 4px' } },
-                formHelperText: { sx: { mx: 0, textAlign: 'center', mt: 0.25, lineHeight: 1.2 } },
-            }}
-            sx={{ width: 52, '& .MuiInputBase-root': { px: 0.5 } }}
-        />
-        <IconButton
-            size="small"
-            onClick={() => onChange(clampAxis(value + 1))}
-            disabled={value >= AXIS_MAX}
-            aria-label={increaseLabel}
-        >
-            <Add fontSize="small" />
-        </IconButton>
-    </Stack>
-);
+const NumberStepper: React.FC<NumberStepperProps> = ({
+    label, value, onChange, decreaseLabel, increaseLabel,
+    min = 1, max = AXIS_MAX, step = 1, clamp, unit, width = 52,
+}) => {
+    const snap = clamp ?? ((next: number) => Math.min(max, Math.max(min, Math.round(next) || min)));
+    // Typing is free-form until the field loses focus: snapping on every
+    // keystroke would turn "12" into "20" the moment "1" is typed.
+    const [draft, setDraft] = useState<string | null>(null);
+    const commit = (text: string) => {
+        setDraft(null);
+        const next = Number(text);
+        if (Number.isFinite(next) && text.trim() !== '') onChange(snap(next));
+    };
+    return (
+        <Stack direction="row" sx={{ alignItems: 'flex-start', flex: 1, minWidth: 0, '& > .MuiIconButton-root': { mt: 0.25 } }}>
+            <IconButton
+                size="small"
+                onClick={() => onChange(snap(value - step))}
+                disabled={value <= min}
+                aria-label={decreaseLabel}
+            >
+                <Remove fontSize="small" />
+            </IconButton>
+            <TextField
+                size="small"
+                helperText={label}
+                value={draft ?? value}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={(event) => commit(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); commit((event.target as HTMLInputElement).value); }
+                    if (event.key === 'ArrowUp') { event.preventDefault(); setDraft(null); onChange(snap(value + step)); }
+                    if (event.key === 'ArrowDown') { event.preventDefault(); setDraft(null); onChange(snap(value - step)); }
+                }}
+                slotProps={{
+                    htmlInput: { 'aria-label': label, inputMode: 'numeric', min, max, style: { textAlign: 'center', padding: '6px 4px' } },
+                    input: unit ? { endAdornment: <Typography variant="caption" sx={{ color: 'text.secondary', pr: 0.5 }}>{unit}</Typography> } : undefined,
+                    formHelperText: { sx: { mx: 0, textAlign: 'center', mt: 0.25, lineHeight: 1.2 } },
+                }}
+                sx={{ width, '& .MuiInputBase-root': { px: 0.5 } }}
+            />
+            <IconButton
+                size="small"
+                onClick={() => onChange(snap(value + step))}
+                disabled={value >= max}
+                aria-label={increaseLabel}
+            >
+                <Add fontSize="small" />
+            </IconButton>
+        </Stack>
+    );
+};
 
 // The conventional "transparent here" checkerboard.
 const CHECKERBOARD_IMAGE = [
@@ -114,6 +149,9 @@ const PREVIEW_BOX = { width: 128, height: 128 };
 // A GIF of nine 1024px tiles is tens of megabytes; nothing about a sticker
 // animation needs that, and the cap is invisible to the user in practice.
 const GIF_MAX_SIZE = 480;
+// Video does not share that cap: H.264 keeps a 1024px loop to a few hundred KB.
+const VIDEO_MAX_SIZE = 1024;
+const DEFAULT_VIDEO_BACKGROUND = '#ffffff';
 
 // Below this, a pointer gesture was a click on a tile rather than a drag that
 // redraws the frame — the two share the same surface on purpose.
@@ -258,6 +296,15 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     const [frameDelay, setFrameDelay] = useState(DEFAULT_FRAME_DELAY);
     const [playing, setPlaying] = useState(true);
     const [frame, setFrame] = useState(0);
+    // Video: how many times the sequence plays (null = as many as it takes to
+    // clear the minimum length), and what shows through where the tiles are
+    // transparent, since MP4 has no alpha.
+    const [loops, setLoops] = useState<number | null>(null);
+    const [videoBackground, setVideoBackground] = useState(DEFAULT_VIDEO_BACKGROUND);
+    const [sheetHasAlpha, setSheetHasAlpha] = useState(false);
+    // undefined while the browser is still being asked; null when it cannot
+    // encode video at all.
+    const [videoTarget, setVideoTarget] = useState<VideoTarget | null | undefined>(undefined);
 
     // Start from a clean grid whenever a new image is opened — the dialog is a
     // per-image work surface, not a sticky global setting.
@@ -322,12 +369,27 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
             setDetected(analysis.kind);
             setDetectedColors(analysis.colors);
             setCleanKind(analysis.kind);
+            setSheetHasAlpha(analysis.hasAlpha);
         } catch {
             setDetected('none');
             setDetectedColors([]);
             setCleanKind('none');
+            setSheetHasAlpha(false);
         }
     }, [image]);
+
+    // Whether this browser can produce a video, and which kind, is a property
+    // of the browser — asked once per open, so the button can say "MP4" or
+    // "WebM" (or explain itself when disabled) before anyone clicks it.
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        setVideoTarget(undefined);
+        probeVideoTarget({ width: VIDEO_MAX_SIZE, height: VIDEO_MAX_SIZE })
+            .then((target) => { if (!cancelled) setVideoTarget(target); })
+            .catch(() => { if (!cancelled) setVideoTarget(null); });
+        return () => { cancelled = true; };
+    }, [open]);
 
     const matte = useMemo<MatteSpec | null>(
         () => (cleanKind === 'none' ? null : { kind: cleanKind, tolerance, colors: detectedColors }),
@@ -511,6 +573,52 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
             setWorking(false);
         }
     }, [exportSize, frameDelay, image, matte, selectedRects, showNotification, stem, t]);
+
+    // Video has a backdrop only when something would otherwise be see-through:
+    // a matte always leaves holes, and a PNG may have arrived with them.
+    const videoNeedsBackground = Boolean(matte) || sheetHasAlpha;
+    const effectiveLoops = loops ?? planVideoLoops(selectedRects.length, frameDelay);
+    const videoSeconds = (effectiveLoops * selectedRects.length * frameDelay) / 1000;
+
+    // Same frames again, boxed as the one format every chat app and platform
+    // forwards untouched. MP4 wants even dimensions, so the box is padded by
+    // a pixel where needed rather than cropped.
+    const handleDownloadVideo = useCallback(async () => {
+        if (!image || !videoTarget || selectedRects.length < 2) return;
+        setWorking(true);
+        try {
+            const longest = Math.max(selectedRects[0].width, selectedRects[0].height);
+            const size = Math.min(exportSize ?? longest, VIDEO_MAX_SIZE);
+            const scale = size / longest;
+            const box = evenSize({
+                width: Math.max(1, Math.round(selectedRects[0].width * scale)),
+                height: Math.max(1, Math.round(selectedRects[0].height * scale)),
+            });
+            const { width, height, frames } = renderAnimationFrames(image, selectedRects, { box, matte });
+            downloadBlob(
+                await encodeVideo({
+                    width,
+                    height,
+                    frames,
+                    delayMs: frameDelay,
+                    loops: effectiveLoops,
+                    background: videoNeedsBackground ? videoBackground : DEFAULT_VIDEO_BACKGROUND,
+                    target: videoTarget,
+                }),
+                videoFileName(stem, selectedRects.length, videoTarget),
+            );
+        } catch {
+            showNotification(
+                t('playground.slice.videoFailed', { defaultValue: 'Could not build the video' }),
+                'error',
+            );
+        } finally {
+            setWorking(false);
+        }
+    }, [
+        effectiveLoops, exportSize, frameDelay, image, matte, selectedRects, showNotification, stem, t,
+        videoBackground, videoNeedsBackground, videoTarget,
+    ]);
 
     const naturalWidth = image?.naturalWidth ?? 1;
     const naturalHeight = image?.naturalHeight ?? 1;
@@ -743,7 +851,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                         </Typography>
 
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-                            <AxisStepper
+                            <NumberStepper
                                 label={t('playground.slice.rows', { defaultValue: 'Rows' })}
                                 value={rows}
                                 onChange={setRows}
@@ -751,7 +859,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                 increaseLabel={t('playground.slice.moreRows', { defaultValue: 'More rows' })}
                             />
                             <Typography variant="body2" sx={{ color: 'text.disabled', mt: 1 }}>×</Typography>
-                            <AxisStepper
+                            <NumberStepper
                                 label={t('playground.slice.cols', { defaultValue: 'Columns' })}
                                 value={cols}
                                 onChange={setCols}
@@ -996,22 +1104,66 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             })}
                                         </Typography>
                                     </Stack>
-                                    <FormControl size="small" fullWidth>
-                                        <InputLabel id="slice-delay-label">
-                                            {t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
-                                        </InputLabel>
-                                        <Select
-                                            labelId="slice-delay-label"
-                                            label={t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
-                                            value={frameDelay}
-                                            onChange={(event) => setFrameDelay(Number(event.target.value))}
-                                        >
-                                            {FRAME_DELAYS.map((value) => (
-                                                <MenuItem key={value} value={value}>{value} ms</MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
+                                    <NumberStepper
+                                        label={t('playground.slice.frameDelay', { defaultValue: 'Frame duration' })}
+                                        value={frameDelay}
+                                        onChange={setFrameDelay}
+                                        min={FRAME_DELAY_MIN}
+                                        max={FRAME_DELAY_MAX}
+                                        step={FRAME_DELAY_STEP}
+                                        clamp={clampFrameDelay}
+                                        unit="ms"
+                                        width={96}
+                                        decreaseLabel={t('playground.slice.shorterFrame', { defaultValue: 'Shorter frames' })}
+                                        increaseLabel={t('playground.slice.longerFrame', { defaultValue: 'Longer frames' })}
+                                    />
                                 </Stack>
+                            </Stack>
+
+                            {/* The video is the same loop again, played enough
+                                times to be a clip platforms accept, over a
+                                backdrop only when the frames have holes. */}
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: 1.5 }}>
+                                <NumberStepper
+                                    label={t('playground.slice.loops', { defaultValue: 'Video loops' })}
+                                    value={effectiveLoops}
+                                    onChange={setLoops}
+                                    min={1}
+                                    max={MAX_VIDEO_LOOPS}
+                                    width={56}
+                                    decreaseLabel={t('playground.slice.fewerLoops', { defaultValue: 'Fewer loops' })}
+                                    increaseLabel={t('playground.slice.moreLoops', { defaultValue: 'More loops' })}
+                                />
+                                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 1.25, whiteSpace: 'nowrap' }}>
+                                    {t('playground.slice.videoLength', {
+                                        defaultValue: '= {{seconds}} s',
+                                        seconds: videoSeconds.toFixed(1),
+                                    })}
+                                </Typography>
+                                {videoNeedsBackground && (
+                                    <Stack sx={{ alignItems: 'center', ml: 'auto !important' }}>
+                                        <Box
+                                            component="input"
+                                            type="color"
+                                            value={videoBackground}
+                                            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setVideoBackground(event.target.value)}
+                                            aria-label={t('playground.slice.videoBackground', { defaultValue: 'Video backdrop' })}
+                                            sx={{
+                                                width: 40,
+                                                height: 34,
+                                                p: 0.25,
+                                                border: 1,
+                                                borderColor: 'divider',
+                                                borderRadius: 1,
+                                                bgcolor: 'transparent',
+                                                cursor: 'pointer',
+                                            }}
+                                        />
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.25, lineHeight: 1.2 }}>
+                                            {t('playground.slice.videoBackground', { defaultValue: 'Video backdrop' })}
+                                        </Typography>
+                                    </Stack>
+                                )}
                             </Stack>
                         </Box>
 
@@ -1030,6 +1182,30 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                 >
                     {t('playground.slice.downloadGif', { defaultValue: 'Download GIF' })}
                 </Button>
+                <Tooltip
+                    title={videoTarget === null
+                        ? t('playground.slice.videoUnsupported', {
+                            defaultValue: 'This browser cannot encode video. Chrome, Edge, Safari 16.4+ and Firefox 130+ can.',
+                        })
+                        : videoTarget?.container === 'webm'
+                            ? t('playground.slice.videoWebmOnly', {
+                                defaultValue: 'This browser has no H.264 encoder, so the file will be a WebM — playable in browsers, but some chat apps refuse it.',
+                            })
+                            : ''}
+                >
+                    <span>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Movie />}
+                            disabled={!image || working || selectedRects.length < 2 || !videoTarget}
+                            onClick={() => void handleDownloadVideo()}
+                        >
+                            {videoTarget?.container === 'webm'
+                                ? t('playground.slice.downloadWebm', { defaultValue: 'Download WebM' })
+                                : t('playground.slice.downloadMp4', { defaultValue: 'Download MP4' })}
+                        </Button>
+                    </span>
+                </Tooltip>
                 <Button
                     variant="contained"
                     startIcon={working ? <CircularProgress size={16} color="inherit" /> : <Download />}

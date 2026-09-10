@@ -158,6 +158,50 @@ local file header / central directory / EOCD,文件名带 UTF-8 flag(bit 11),
 GIF 只有一块画布。GIF 边长上限 480px——九格 1024 的表连成 GIF 是几十 MB,
 而贴纸动画不需要。
 
+### 4.2 帧长是一个可输入的数字,不是一份预设列表
+
+第一版的帧长是一个下拉框,六档固定值(80…800 ms)。它把"这段动画多快"变成了
+"这六个里选哪个",而用户手里往往有一个具体的数:平台要求 12 fps、原素材是
+每帧 150 ms。现在它是和行列同一种控件——步进器 + 可直接键入的输入框
+(`utils/imageSlice.ts` 的 `clampFrameDelay`):
+
+- 范围 20…5000 ms,步进 10 ms。10 是 GIF 能存的最小单位(百分之一秒),所以
+  键入 155 会落到 160,而不是让 GIF 悄悄存成别的值;
+- 输入框在失焦 / 回车时才吸附,否则输入 "12" 的第一个字符就会被夹成 20;
+- 旁边的 `9 frames · 6 fps` 仍然是同一个值的另一种读法(原则 5)。
+
+`NumberStepper` 因此从行列专用的 `AxisStepper` 泛化而来:min / max / step /
+clamp / 单位后缀都是参数,行列、帧长、视频循环次数三处共用一个控件。
+
+### 4.3 视频:同一组帧,第三件成品(`utils/video.ts`)
+
+GIF 是浏览器自己能造出来的东西,也是聊天软件和社交平台会重压、限体积、
+甚至拒收的东西。**H.264 MP4 是所有平台原样转发的那一种**,所以同一组帧再多
+一个出口:`Download MP4`。
+
+- **编码交给浏览器,封装交给库。** H.264 由 WebCodecs 的 `VideoEncoder` 编,
+  MP4 / WebM 封装用 `mediabunny`(`mp4-muxer` 的继任者)。这里**不**沿用
+  `gif.ts` / `zip.ts` 自写的先例:MP4 的 box 结构不是任何规范里"小的那一半",
+  而 mediabunny 顺带解决了编码器探测、时间戳和 `moov` 前置。它按需 `import()`,
+  只在第一次导出视频时进包。
+- **能力是浏览器的属性,先问再画按钮。** 打开对话框时 `probeVideoTarget` 问一次:
+  有 H.264 → 按钮写 `Download MP4`;只有 VP9/VP8 → 按钮写 `Download WebM`,
+  tooltip 说明部分聊天应用不收;连 WebCodecs 都没有 → 按钮禁用,tooltip 列出
+  能用的浏览器。点了才失败是最差的失败方式(原则 7:诊断要走真实路径)。
+  注意 Playwright 自带的开源 Chromium **没有 H.264 编码器**,`ui-preview` 沙盒里
+  只能验证到 WebM;MP4 成品必须在正式 Chrome / Edge / Safari 上收尾。
+- **`moov` 在前**(`fastStart: 'in-memory'`):不少平台上传时先读文件头,`moov`
+  在尾部的文件会被先转码或者直接拒收。
+- **时长:循环到能被当成一段视频。** 九帧 200 ms 只有 1.8 秒,平台对亚秒级视频
+  不友好。`planVideoLoops` 取能超过 3 秒的最小循环次数作为默认,用户可以改,
+  旁边永远显示算出来的具体秒数(`= 5.4 s`),而不是"短 / 中 / 长"(原则 5)。
+- **透明:视频没有 alpha。** 清背景之后的镂空、或原本就带 alpha 的 PNG,导出视频时
+  要铺一个底色。底色选择器**只在帧里确实有透明时出现**(`analyzeSheetBackground`
+  顺带返回 `hasAlpha`),不透明的图不需要看到它(原则 9)。默认白色。
+- **偶数尺寸。** yuv420 要求宽高为偶数,`evenSize` 把 341 补到 342——多一像素
+  的底色,而不是裁掉一像素的画面。
+- **分辨率上限 1024**,不沿用 GIF 的 480:H.264 把一个 1024 的循环压在几百 KB。
+
 ---
 
 ## 5. 清背景:模型画上来的"假透明"
@@ -336,6 +380,7 @@ prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`
 |------|------|
 | `frontend/src/utils/zip.ts` | store-only ZIP writer + CRC-32 |
 | `frontend/src/utils/gif.ts` | GIF89a writer:中位切分量化 + LZW + 循环块 |
+| `frontend/src/utils/video.ts` | MP4 / WebM 导出:WebCodecs 编码 + `mediabunny` 封装,能力探测、循环数、偶数尺寸 |
 | `frontend/src/utils/imageMatte.ts` | 背景检测(棋盘格/绿幕)与清除 |
 | `frontend/src/utils/playgroundSession.ts` | run / 导入图的 IndexedDB 持久化(尽力而为、写入合并) |
 | `frontend/src/utils/promptFile.ts` | 文本文件 → prompt:分拣、读取、上限 |
@@ -355,7 +400,8 @@ prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`
 常量——UI 不可能给出一个几何层会悄悄拒绝的值。
 
 几何、打包、编码、抠图逻辑都是纯函数:单测在 `zip.test.ts` /
-`imageSlice.test.ts` / `download.test.ts` / `gif.test.ts` / `imageMatte.test.ts`。
+`imageSlice.test.ts` / `download.test.ts` / `gif.test.ts` / `imageMatte.test.ts` /
+`video.test.ts`(视频只测循环规划、偶数尺寸、文件名——编码本身要浏览器)。
 `imageMatte` 的测试直接构造 RGBA 缓冲(结构化类型,不依赖 canvas);`gif` 的测试
 自带一个最小解码器,断言"写出去的码流能被解回同样的像素"。
 

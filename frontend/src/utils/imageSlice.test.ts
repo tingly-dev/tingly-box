@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { computeTileRects, FULL_CROP, normalizeCrop, tileFileName } from './imageSlice';
+import {
+    clampFrameDelay,
+    computeTileRects,
+    DEFAULT_FRAME_DELAY,
+    FRAME_DELAY_MAX,
+    FRAME_DELAY_MIN,
+    FULL_CROP,
+    imageHasAlpha,
+    normalizeCrop,
+    tileFileName,
+} from './imageSlice';
 
 describe('computeTileRects', () => {
     it('divides an image into rows x cols tiles covering the whole frame', () => {
@@ -74,5 +84,22 @@ describe('tileFileName', () => {
         expect(tileFileName('cat', 0, 9)).toBe('cat-1.png');
         expect(tileFileName('cat', 9, 16)).toBe('cat-10.png');
         expect(tileFileName('cat', 0, 16)).toBe('cat-01.png');
+    });
+});
+
+describe('clampFrameDelay', () => {
+    it('snaps to the 10 ms a GIF can store and stays inside the range', () => {
+        expect(clampFrameDelay(123)).toBe(120);
+        expect(clampFrameDelay(125)).toBe(130);
+        expect(clampFrameDelay(1)).toBe(FRAME_DELAY_MIN);
+        expect(clampFrameDelay(99999)).toBe(FRAME_DELAY_MAX);
+        expect(clampFrameDelay(Number.NaN)).toBe(DEFAULT_FRAME_DELAY);
+    });
+});
+
+describe('imageHasAlpha', () => {
+    it('spots a single see-through pixel', () => {
+        expect(imageHasAlpha(new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255]))).toBe(false);
+        expect(imageHasAlpha(new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 254]))).toBe(true);
     });
 });

@@ -36,6 +36,7 @@ import {
     IconPlayerPause,
     IconArrowsMaximize,
     IconGif,
+    IconMovie,
     IconWorld,
     IconEdit,
     IconFileDescription,
@@ -202,6 +203,7 @@ export const PlayArrow = tablerMui(IconPlayerPlay);
 export const Pause = tablerMui(IconPlayerPause);
 export const OpenInFull = tablerMui(IconArrowsMaximize);
 export const Gif = tablerMui(IconGif);
+export const Movie = tablerMui(IconMovie);
 export const Filter = tablerMui(IconFilter);
 export const FilterOff = tablerMui(IconFilterOff);
 export const Sort = tablerMui(IconArrowsSort);
