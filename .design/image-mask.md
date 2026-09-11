@@ -119,6 +119,54 @@ reference image",这正是当初要为 edit 另开 endpoint 的理由。但公�
 客户端执行的 `image_gen.imagegen`。所以这条路是**我们的用法**,不是 Codex CLI 的
 用法——它能不能成立只能由实验回答,不能从 codex 源码推出来。
 
+再补一条把未知收窄的证据:**codex 自己大量往 `/codex/responses` 发 `input_image`
+内容项**(用户贴图、`view_image` 工具输出、动态工具的图片返回,见
+`codex-rs/protocol/src/models.rs` 的 `ContentItem::InputImage` 与它的十几处构造点)。
+所以"这个 endpoint 收不到图片"在协议层面已经不成立;`imageedit.md` §1 那句断言
+即便当初观察属实,也只可能是**hosted tool 与 input_image 的组合**没打通,而不是
+整个 Responses 面收不到参考图。实验因此从"能不能挂图"收窄成"hosted tool 认不认
+`action: edit` + `input_image_mask`"。
+
+### 2.3 三条出图面的能力对照
+
+| | OpenAI 兼容 `/v1/images/edits` | Codex 原生 `codex/images/edits` | Responses hosted `image_generation` |
+|---|---|---|---|
+| 编码 | multipart(SDK)/ JSON(我们的便捷编码) | JSON | JSON(SSE 响应) |
+| 参考图 | `image` 可多张 | `images[].image_url`,≤5 | 消息里的 `input_image` 内容项 |
+| **mask** | **`mask` 字段 ✓** | **✗ 协议无此字段** | **`input_image_mask{image_url\|file_id}` ✓** |
+| 相关旋钮 | `input_fidelity`、`background`、`size`、`quality` | `background`、`size`、`quality`、`n` | `action: generate\|edit\|auto`、`input_fidelity`、`background`、`moderation` |
+| Codex CLI 自己用不用 | — | **用**(`ImagesClient::edit`) | **不用**,且断言不挂(`responses_lite.rs`) |
+| 我们现在的代码 | `OpenAIClient.ImagesEdit` 原样透传 | `CodexClient.ImagesEdit` 丢弃 mask | `CodexClient.ImagesGenerate` 建了 tool,没填 mask、没挂参考图 |
+| mask 可行性 | 已通,零后端改动 | 不可能(除非上游加字段) | **未验证,值得实验** |
+
+### 2.4 方案矩阵
+
+| 方案 | 覆盖面 | 改动量 | 依赖 | 结论 |
+|------|--------|--------|------|------|
+| **A. 前端 mask → multipart** | OpenAI 及一切兼容上游 | 前端 2 个新文件 + 约 60 行(§6.1),后端 **0** | 无 | **主线,先做** |
+| **B. JSON 便捷编码补 `mask`** | 程序化调用方 | 后端约 15 行 + 单测(`parseImageEditJSON`) | 无 | 顺手做,补对称性 |
+| **C. Codex 带 mask 时明确报错** | Codex | 后端约 5 行 + 单测(`buildCodexImageEditRequest`) | 无 | 与 A 同批;D 若成立则退成兜底 |
+| **D. Codex 走 Responses + `input_image_mask`** | Codex 订阅 | 后端较大:`ImagesEdit` 在 mask 存在时分流到 Responses、把参考图作为 `input_image` 挂进消息、填 `InputImageMask`、复用已有的 `parseImageGenerationStream` | **实验 E1/E2 通过** | 实验说了算,不提前投入 |
+
+A/B/C 三条互不依赖,可以一次做完;D 是独立的后续,它落地后 C 的报错只在 D 也失败时
+才触发。**不做的**:按 provider 能力在前端隐藏 mask 入口(违反 `imageedit.md` §6 的
+"provider 能力是网关的事"),以及把带 mask 的请求静默降级成整图 edit。
+
+### 2.5 实验(D 的前置)
+
+跑法沿用现成的 opt-in e2e 模式:`internal/client/codex_e2e_test.go` 靠
+`CODEX_ACCESS_TOKEN` / `CODEX_ACCOUNT_ID` 决定跑还是 skip,直接复用 `CodexClient`
+的 transport,OAuth、header、path 重写全部免费。
+
+| 步 | 问题 | 请求 | 通过判据 | 不通过的含义 |
+|----|------|------|----------|--------------|
+| **E1** | hosted tool 能不能拿消息里的参考图改图(先不管 mask) | `/codex/responses`:消息含 `input_image` + "把 X 换成 Y",tool `image_generation` 带 `action: edit` | 回来的 `image_generation_call` 结果明显基于那张参考图,而不是凭空新生成 | `imageedit.md` §1 的断言成立 → **D 死**,C 是终局 |
+| **E2** | 它认不认 `input_image_mask` | E1 的请求 + `input_image_mask.image_url`(base64 PNG) | 只有涂过的区域变,其余像素基本不动 | 后端忽略 mask → D 退化成"另一种整图 edit",不如原生 edits,**不值得做** |
+| **E3** | 值不值得切 | 同一 prompt/图,D 与原生 edits 对照 | 边缘、保真、耗时可接受 | 质量明显更差 → 保留原生 edits 做无 mask 路径,D 只在有 mask 时启用 |
+
+三步都只发请求、不改产品代码。E1 失败就把结论写回 §2.2,省得下次再猜一遍;E1/E2
+通过再评估 D 的实现成本。
+
 ---
 
 ## 3. 核心决策
