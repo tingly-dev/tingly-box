@@ -530,3 +530,68 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # GitHub never starts workflow runs for events that a workflow creates with
+  # its own GITHUB_TOKEN, so the release published above does not fire the
+  # `release: published` trigger in npm.yml. Dispatch it explicitly instead.
+  # Nothing gets published by this: the npm run stops at the `production`
+  # environment approval gate before the first `npm publish`. This only
+  # removes the manual "Run workflow" step, not the human approval.
+  trigger-npm-publish:
+    needs: [setup, github-release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && needs.github-release.result == 'success'
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch NPX publish workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
+        run: |
+          # Same inference npm.yml applies on a release event: stable → latest,
+          # pre-release (v1.2.3-rc1) → rc.
+          VERSION="${RELEASE_TAG#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            NPM_TAG=rc
+          else
+            NPM_TAG=latest
+          fi
+
+          echo "Dispatching npm.yml for $RELEASE_TAG (npm dist-tag: $NPM_TAG)"
+          gh workflow run npm.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$RELEASE_TAG" \
+            -f tag="$RELEASE_TAG" \
+            -f npm_tag="$NPM_TAG" \
+            -f publish_cli=true \
+            -f publish_gui=false \
+            -f build_docker=true
+
+          # Best effort: link the dispatched run so approvers can find it from here.
+          RUN_URL=""
+          for _ in 1 2 3 4 5 6; do
+            sleep 5
+            RUN_URL="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow npm.yml \
+              --event workflow_dispatch --branch "$RELEASE_TAG" --limit 1 \
+              --json url -q '.[0].url' 2>/dev/null || true)"
+            [ -n "$RUN_URL" ] && break
+          done
+
+          {
+            echo "## 📦 NPX publish dispatched"
+            echo ""
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Release | \`$RELEASE_TAG\` |"
+            echo "| npm dist-tag | \`$NPM_TAG\` |"
+            echo "| Publish | cli=true, gui=false, docker=true |"
+            if [ -n "$RUN_URL" ]; then
+              echo "| Run | $RUN_URL |"
+            else
+              echo "| Run | see the [NPX Package Publish workflow](https://github.com/$GITHUB_REPOSITORY/actions/workflows/npm.yml) |"
+            fi
+            echo ""
+            echo "The run waits for approval of the \`production\` environment before publishing."
+          } >> "$GITHUB_STEP_SUMMARY"

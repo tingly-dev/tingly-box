@@ -6,7 +6,10 @@ again.
 ## Architecture today
 
 Packages under `build/npx/`, published by `.github/workflows/npm.yml` on
-each GitHub release:
+each GitHub release (dispatched by the `trigger-npm-publish` job at the end of
+`release.yml`, since a release created with `GITHUB_TOKEN` does not fire the
+`release: published` event; the run then waits for the `production`
+environment approval):
 
 - **`tingly-box`** — thin shim (`bin.js` + `package.json`, ~1.4 MB published
   after esbuild bundling). It declares one `optionalDependency` per platform
