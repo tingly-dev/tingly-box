@@ -1,6 +1,7 @@
 package agentboot
 
 import (
+	"io"
 	"time"
 )
 
@@ -70,6 +71,10 @@ type ExecutionOptions struct {
 	// PermissionPromptTool specifies the tool for permission prompts (e.g., "stdio")
 	// When set to "stdio", permission requests are sent via stdin/stdout for callback handling
 	PermissionPromptTool string
+
+	// Stderr, if set, receives the agent process's stderr for this execution
+	// (see process.LaunchSpec.Stderr). nil keeps the factory default.
+	Stderr io.Writer
 
 	// Store, if set, receives session lifecycle events driven by the runner.
 	// When non-nil and SessionID is non-empty the runner calls:

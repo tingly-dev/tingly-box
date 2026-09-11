@@ -3,7 +3,9 @@ package claude
 import (
 	"encoding/json"
 	"maps"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
@@ -67,9 +69,12 @@ func (a *MessageAccumulator) AddEvent(event protocol.Event) ([]Message, bool, bo
 		}
 
 	case SDKUserMessage:
-		if msg := a.parseUserMessage(event); msg != nil {
+		for _, msg := range a.parseUserMessages(event) {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
+			if tr, ok := msg.(*ToolResultMessage); ok {
+				a.completePendingToolUse(tr)
+			}
 		}
 
 	case SDKToolUseMessage:
@@ -237,16 +242,86 @@ func (a *MessageAccumulator) parseAssistantMessage(event protocol.Event) *Assist
 	return &msg
 }
 
-// parseUserMessage parses a user message from an event
-func (a *MessageAccumulator) parseUserMessage(event protocol.Event) *UserMessage {
-	var msg UserMessage
-	if err := unmarshalEvent(event, &msg); err != nil {
+// parseUserMessages parses a user event. The CLI emits two shapes: the
+// plain {"message": "<text>"} and the SDK {"message": {"role": "user",
+// "content": ...}} whose content blocks carry the tool_result answers to
+// earlier tool_use calls. Tool results are returned as ToolResultMessages so
+// consumers see them exactly as they would a standalone tool_result event.
+func (a *MessageAccumulator) parseUserMessages(event protocol.Event) []Message {
+	var raw struct {
+		Type            string          `json:"type"`
+		Message         json.RawMessage `json:"message"`
+		ParentToolUseID *string         `json:"parent_tool_use_id,omitempty"`
+		SessionID       string          `json:"session_id,omitempty"`
+		Timestamp       time.Time       `json:"timestamp,omitempty"`
+	}
+	if err := unmarshalEvent(event, &raw); err != nil {
 		return nil
 	}
-	if msg.SessionID != "" && a.sessionID == "" {
-		a.sessionID = msg.SessionID
+	if raw.SessionID != "" && a.sessionID == "" {
+		a.sessionID = raw.SessionID
 	}
-	return &msg
+	base := &UserMessage{Type: raw.Type, ParentToolUseID: raw.ParentToolUseID, SessionID: raw.SessionID, Timestamp: raw.Timestamp}
+
+	var text string
+	if json.Unmarshal(raw.Message, &text) == nil {
+		base.Message = text
+		return []Message{base}
+	}
+	var obj struct {
+		Content json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal(raw.Message, &obj) != nil || len(obj.Content) == 0 {
+		return []Message{base}
+	}
+	if json.Unmarshal(obj.Content, &text) == nil {
+		base.Message = text
+		return []Message{base}
+	}
+	var blocks []json.RawMessage
+	if json.Unmarshal(obj.Content, &blocks) != nil {
+		return []Message{base}
+	}
+	var results []Message
+	var texts []string
+	for _, b := range blocks {
+		var probe struct {
+			Type      string          `json:"type"`
+			Text      string          `json:"text"`
+			ToolUseID string          `json:"tool_use_id"`
+			IsError   bool            `json:"is_error"`
+			Content   json.RawMessage `json:"content"`
+		}
+		if json.Unmarshal(b, &probe) != nil {
+			continue
+		}
+		switch probe.Type {
+		case ContentBlockTypeText:
+			texts = append(texts, probe.Text)
+		case ContentBlockTypeToolResult:
+			tr := &ToolResultMessage{Type: SDKToolResultMessage, ToolUseID: probe.ToolUseID, IsError: probe.IsError,
+				SessionID: raw.SessionID, Timestamp: raw.Timestamp}
+			var out string
+			if json.Unmarshal(probe.Content, &out) == nil {
+				tr.Output = out
+			} else {
+				var parts []json.RawMessage
+				if json.Unmarshal(probe.Content, &parts) == nil {
+					for _, part := range parts {
+						if cb, err := UnmarshalContentBlock(part); err == nil {
+							tr.Content = append(tr.Content, cb)
+						}
+					}
+				}
+			}
+			results = append(results, tr)
+		}
+	}
+	if len(texts) == 0 {
+		return results
+	}
+	base.Message = strings.Join(texts, "\n")
+	return append([]Message{base}, results...)
 }
 
 // parseToolUseMessage parses a tool_use message from an event

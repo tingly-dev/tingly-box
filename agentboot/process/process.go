@@ -30,6 +30,13 @@ type LaunchSpec struct {
 	// InitialInput optionally feeds bootstrap messages to stdin after start.
 	// It is consumed by the Runner, not the process Factory.
 	InitialInput <-chan any
+
+	// Stderr, if non-nil, receives this launch's stderr stream instead of
+	// the factory-wide default. Callers use it to keep an agent's own
+	// diagnostics (an argument rejected by the CLI, an auth failure printed
+	// before any protocol output) attached to the execution that produced
+	// them.
+	Stderr io.Writer
 }
 
 // BuildCmd converts the specification into an exec.Cmd.
