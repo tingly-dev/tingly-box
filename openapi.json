@@ -14065,6 +14065,10 @@
             "type": "boolean",
             "description": "Field claude_code_compat"
           },
+          "claude_code_version": {
+            "type": "string",
+            "description": "Field claude_code_version"
+          },
           "claude_org_id": {
             "type": "string",
             "description": "Field claude_org_id"
@@ -14335,6 +14339,10 @@
           "claude_code_compat": {
             "type": "boolean",
             "description": "Field claude_code_compat"
+          },
+          "claude_code_version": {
+            "type": "string",
+            "description": "Field claude_code_version"
           },
           "custom_user_agent": {
             "type": "string",

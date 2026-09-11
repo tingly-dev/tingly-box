@@ -1,7 +1,5 @@
 package typ
 
-import "github.com/tingly-dev/tingly-box/internal/constant"
-
 // FlagValueType describes how a rule flag is represented in storage and UI.
 type FlagValueType string
 
@@ -93,7 +91,7 @@ type FlagSpec struct {
 // Label is a human-friendly name; Value is the literal User-Agent header.
 func DefaultUserAgents() []FlagOption {
 	return []FlagOption{
-		{Label: "Claude Code (CLI)", Value: constant.ClaudeCodeUserAgent()},
+		{Label: "Claude Code (CLI)", Value: "claude-cli/2.1.86 (external, cli)"},
 		{Label: "Codex CLI", Value: "codex_cli_rs/0.20.0"},
 		{Label: "OpenClaw", Value: "openclaw/1.0.0"},
 		{Label: "Hermes", Value: "hermes-agent/1.0.0"},
@@ -256,6 +254,19 @@ func RuleFlagRegistry() []FlagSpec {
 			Suggestions: []FlagOption{
 				// Sentinel preset — see typ.ClaudeOrgIDAuto.
 				{Label: "Login organization (from OAuth)", Value: ClaudeOrgIDAuto},
+			},
+		},
+		{
+			Key:             "claude_code_version",
+			Label:           "Claude Code version",
+			Description:     "Which Claude Code release the Claude OAuth chain impersonates upstream: User-Agent and SDK headers, anthropic-beta composition, the x-anthropic-billing-header block (including the cch body hash) and metadata.user_id. \"Legacy\" keeps the historical 2.1.86 emulation exactly as before. \"2.1.258\" reproduces the native 2.1.258 client, which Anthropic requires once it rejects older versions (claude_code_version_too_old). Can be set scenario-wide; the rule value wins. Claude OAuth providers only; other providers ignore it.",
+			Type:            FlagTypeEnum,
+			Category:        FlagCategoryRequestAnthropic,
+			Shared:          true,
+			InheritanceMode: "override",
+			Options: []FlagOption{
+				{Value: ClaudeCodeVersionLegacy, Label: "Legacy (2.1.86 emulation)"},
+				{Value: ClaudeCodeVersion2_1_258, Label: "2.1.258 (native client)"},
 			},
 		},
 		{

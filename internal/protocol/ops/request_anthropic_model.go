@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"slices"
@@ -8,18 +9,14 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol/catalog"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ClaudeCodeVersion is the impersonated Claude Code release; the single
-// source is constant.ClaudeCodeVersion (shared with the User-Agent).
-const ClaudeCodeVersion = constant.ClaudeCodeVersion
+const ClaudeCodeVersion = "2.1.86"
 
 // FingerprintSalt is the salt used in computeFingerprint.
-// IMPORTANT: Must stay in sync with Claude Code's FINGERPRINT_SALT constant
-// (unchanged from 2.1.86 through 2.1.258).
+// IMPORTANT: Must stay in sync with Claude Code's FINGERPRINT_SALT constant.
 const FingerprintSalt = "59cf53e54c78"
 
 // anthropicModelThinkingCaps resolves a model's thinking dialect support from
@@ -272,18 +269,29 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 	if req == nil {
 		return req
 	}
+	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
+		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
+		return applyNativeClaudeCodeIdentityV1(req, extra, v)
+	}
 
 	firstUserMsg := extractFirstUserMessageText(req.Messages)
 	ccVersion := computeCCVersion(firstUserMsg)
-	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		// Rebuild in place: version/entrypoint/cch are ours, per-session
-		// fields the client attached (subagent, workload, ...) are kept.
-		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ccVersion, GenHex5())
+	if len(req.System) > 0 {
+		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
+			req.System[0].Text = text
+		} else {
+			req.System = append(
+				[]anthropic.TextBlockParam{
+					{Text: text},
+				},
+				req.System...,
+			)
+		}
 	} else {
-		req.System = append(
-			[]anthropic.TextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}},
-			req.System...,
-		)
+		req.System = append(req.System, anthropic.TextBlockParam{
+			Text: text,
+		})
 	}
 	if req.Metadata.UserID.Valid() {
 		m := ParseMetadataUserID(req.Metadata.UserID.String())
@@ -318,18 +326,29 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 	if req == nil {
 		return req
 	}
+	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
+		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
+		return applyNativeClaudeCodeIdentityBeta(req, extra, v)
+	}
 
 	firstBetaUserMsg := extractFirstBetaUserMessageText(req.Messages)
 	ccVersion := computeCCVersion(firstBetaUserMsg)
-	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		// Rebuild in place: version/entrypoint/cch are ours, per-session
-		// fields the client attached (subagent, workload, ...) are kept.
-		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
+	text := fmt.Sprintf("x-anthropic-billing-header: cc_version=%s; cc_entrypoint=cli; cch=%s;", ccVersion, GenHex5())
+	if len(req.System) > 0 {
+		if strings.Contains(req.System[0].Text, "x-anthropic-billing-header") {
+			req.System[0].Text = text
+		} else {
+			req.System = append(
+				[]anthropic.BetaTextBlockParam{
+					{Text: text},
+				},
+				req.System...,
+			)
+		}
 	} else {
-		req.System = append(
-			[]anthropic.BetaTextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}},
-			req.System...,
-		)
+		req.System = append(req.System, anthropic.BetaTextBlockParam{
+			Text: text,
+		})
 	}
 	if req.Metadata.UserID.Valid() {
 		m := ParseMetadataUserID(req.Metadata.UserID.String())
@@ -348,11 +367,19 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 	return req
 }
 
+func GenHex5() string {
+	// 5 hex chars = 20 bits
+	b := make([]byte, 3)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "cc000"
+	}
+	val := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
+	return fmt.Sprintf("%05x", val%(1<<20))
+}
+
 // computeFingerprint computes 3-char hex fingerprint matching Claude Code's algorithm:
 // SHA256(SALT + msg[4] + msg[7] + msg[20] + version)[:3]
-//
-// Verified against a live 2.1.258 capture: prompt "say hi" → chars "h00" →
-// cc_version=2.1.258.8ee (see .design/claude-code-client-compat.md §4.2).
 func computeFingerprint(messageText, version string) string {
 	indices := []int{4, 7, 20}
 	chars := make([]byte, 0, 3)
@@ -375,67 +402,30 @@ func computeCCVersion(messageText string) string {
 	return fmt.Sprintf("%s.%s", ClaudeCodeVersion, fingerprint)
 }
 
-// systemReminderPrefix opens the <system-reminder> blocks Claude Code attaches
-// to a user turn (skills list, agent types, current date, ...). Inside the CLI
-// those are separate "meta" messages; on the wire they are folded into the
-// same user message ahead of the prompt the person typed.
-const systemReminderPrefix = "<system-reminder>"
-
-// isSystemReminderText reports whether a text block is one of Claude Code's
-// injected <system-reminder> blocks rather than the user's own prompt.
-func isSystemReminderText(text string) bool {
-	return strings.HasPrefix(strings.TrimLeft(text, " \t\r\n"), systemReminderPrefix)
-}
-
-// extractFirstUserMessageText returns the text Claude Code fingerprints for
-// cc_version: the first *non-meta* user message. 2.1.258 attaches
-// <system-reminder> blocks as meta messages, so on the wire the fingerprinted
-// text is the first text block of the first user message that is not a
-// system reminder (2.1.86 still hashed the reminder itself; a 2.1.258 capture
-// of "say hi" fingerprints to 8ee only with the prompt text). A user message
-// made only of reminders is skipped; a message with no text at all yields "".
+// extractFirstUserMessageText extracts the text content of the first user message.
+// Returns empty string if not found.
 func extractFirstUserMessageText(messages []anthropic.MessageParam) string {
 	for _, msg := range messages {
-		if msg.Role != "user" {
-			continue
-		}
-		reminderOnly := false
-		for _, block := range msg.Content {
-			if block.OfText == nil {
-				continue
+		if msg.Role == "user" {
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					return block.OfText.Text
+				}
 			}
-			if isSystemReminderText(block.OfText.Text) {
-				reminderOnly = true
-				continue
-			}
-			return block.OfText.Text
-		}
-		if !reminderOnly {
-			return ""
 		}
 	}
 	return ""
 }
 
-// extractFirstBetaUserMessageText is the beta-API twin of extractFirstUserMessageText.
+// extractFirstBetaUserMessageText extracts the text content of the first user message (beta API).
 func extractFirstBetaUserMessageText(messages []anthropic.BetaMessageParam) string {
 	for _, msg := range messages {
-		if msg.Role != "user" {
-			continue
-		}
-		reminderOnly := false
-		for _, block := range msg.Content {
-			if block.OfText == nil {
-				continue
+		if msg.Role == "user" {
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					return block.OfText.Text
+				}
 			}
-			if isSystemReminderText(block.OfText.Text) {
-				reminderOnly = true
-				continue
-			}
-			return block.OfText.Text
-		}
-		if !reminderOnly {
-			return ""
 		}
 	}
 	return ""

@@ -91,6 +91,7 @@ export interface RuleFlagsApi {
     clean_header?: boolean;
     context_1m?: boolean;
     claude_org_id?: string;
+    claude_code_version?: string;
     extra_headers?: Record<string, string>;
 }
 

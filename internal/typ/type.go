@@ -195,6 +195,10 @@ type ScenarioFlags struct {
 	// list (a non-standard extension); this flag normalizes them so third-party
 	// providers that reject that role do not error out.
 	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty" yaml:"claude_code_compat,omitempty"`
+
+	// ClaudeCodeVersion is the scenario-wide default for
+	// RuleFlags.ClaudeCodeVersion (the rule value wins when non-empty).
+	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
 }
 
 // RuleFlags represents per-rule feature flags.
@@ -292,6 +296,32 @@ type RuleFlags struct {
 	// entitlements (e.g. Cyber Verification) rely on. Any other value sends
 	// that organization id verbatim.
 	ClaudeOrgID string `json:"claude_org_id,omitempty" yaml:"claude_org_id,omitempty"`
+
+	// ClaudeCodeVersion selects which Claude Code release the Claude OAuth
+	// chain impersonates upstream (User-Agent and SDK headers, anthropic-beta
+	// composition, the x-anthropic-billing-header block including its cch
+	// body hash, metadata.user_id). Empty (default) keeps the historical
+	// 2.1.86 emulation byte-for-byte; ClaudeCodeVersion2_1_258 switches to
+	// the native-client profile. A version string rather than a bool so the
+	// next release can be added and rolled out the same way — see
+	// .design/claude-code-client-compat.md.
+	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
+}
+
+// Claude Code versions selectable through the claude_code_version flag.
+const (
+	// ClaudeCodeVersionLegacy is the default: the 2.1.86 emulation that
+	// predates the flag.
+	ClaudeCodeVersionLegacy = ""
+	// ClaudeCodeVersion2_1_258 reproduces the native 2.1.258 client.
+	ClaudeCodeVersion2_1_258 = "2.1.258"
+)
+
+// ClaudeCodeVersionEnabled reports whether v selects a non-legacy Claude Code
+// profile the chain knows how to reproduce. Unknown values fall back to the
+// legacy behavior rather than a half-applied profile.
+func ClaudeCodeVersionEnabled(v string) bool {
+	return v == ClaudeCodeVersion2_1_258
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being
