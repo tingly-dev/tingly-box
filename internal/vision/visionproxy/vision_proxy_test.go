@@ -553,7 +553,7 @@ func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.
 	require.Contains(t, collectText(req), "vision proxy failed", "fail-strip marker present")
 }
 
-// Every latest-message image gets its own describe call and is replaced.
+// Every distinct image gets its own describe call and is replaced.
 // Descriptions are assigned by fakeVisionClient arrival order, which is
 // nondeterministic under the concurrent fan-out — positional mapping is
 // covered by TestVisionProxy_ConcurrentDescribe_MappingPreserved instead.
@@ -562,7 +562,7 @@ func TestVisionProxy_MultipleImages_AllReplaced(t *testing.T) {
 	fake := newFakeVisionClient("first description", "second description", "third description")
 	p := mkProcessor(t, fake, prov)
 
-	req := betaReqWithImages("compare these", tinyPNGBase64, tinyPNGBase64, tinyPNGBase64)
+	req := betaReqWithImages("compare these", imgOld, imgMid, imgNew)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
@@ -671,10 +671,10 @@ func TestVisionProxy_DescribeLimit_NewestFirst(t *testing.T) {
 	p.describeLimit = 1
 
 	req := betaReqWithMessages(
-		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", imgOld),
 		betaMessage(anthropic.BetaMessageParamRoleAssistant, "previous reply", ""),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", tinyPNGBase64),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", imgMid),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", imgNew),
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
@@ -711,8 +711,8 @@ func TestVisionProxy_DescribeLimit_V1AndOpenAI(t *testing.T) {
 		p.describeLimit = 1
 
 		req := v1ReqWithMessages(
-			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
-			v1Message(anthropic.MessageParamRoleUser, "current", tinyPNGBase64),
+			v1Message(anthropic.MessageParamRoleUser, "old turn", imgOld),
+			v1Message(anthropic.MessageParamRoleUser, "current", imgNew),
 		)
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
@@ -732,8 +732,8 @@ func TestVisionProxy_DescribeLimit_V1AndOpenAI(t *testing.T) {
 		req := &openai.ChatCompletionNewParams{
 			Model: openai.ChatModel("gpt-4o"),
 			Messages: []openai.ChatCompletionMessageParamUnion{
-				openaiUserMessageWithImage("old turn", tinyPNGBase64),
-				openaiUserMessageWithImage("current", tinyPNGBase64),
+				openaiUserMessageWithImage("old turn", imgOld),
+				openaiUserMessageWithImage("current", imgNew),
 			},
 		}
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
@@ -813,9 +813,9 @@ func TestVisionProxy_Responses_DescribeLimit(t *testing.T) {
 	p.describeLimit = 1
 
 	req := responsesReqWithItems(
-		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", tinyPNGBase64),
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", imgOld),
 		responsesMessageItem(responses.EasyInputMessageRoleAssistant, "previous reply", ""),
-		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", tinyPNGBase64),
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", imgNew),
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 

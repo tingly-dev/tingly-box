@@ -69,7 +69,9 @@ position only ranks misses, it never decides whether an image is eligible.
 ### Describe cache
 
 `describe_cache.go` maps `(session, provider, model, image-content-hash)`
-to the already-formatted replacement text. It has a single positive tier,
+to the already-formatted replacement text (content is xxhash64 + length of
+the base64 text or the URL — a cryptographic digest cost a 30-screenshot
+session a quarter second per turn). It has a single positive tier,
 a `DescribeStore`: `describe_store.go` in production — tingly's shared
 SQLite database, `vision_descriptions` table — and a bounded in-process
 map for tests and for the no-database fallback. There is deliberately no
@@ -108,8 +110,9 @@ Processing is three-phase: a **collect** walk that, for every image in
 message order, checks the cache first — a hit splices the cached text
 immediately; a miss is gathered as an `imageRef` (source + splice-back
 callback) — then a **bound** step (`boundNewestFirst`) that reverses the
-refs to newest-first, keeps the first `describeLimit` and splices the
-deferral marker into the rest, and finally a **describe** fan-out that
+refs to newest-first, folds repeated images into one ref (one describe,
+spliced into every position), keeps the first `describeLimit` and splices
+the deferral marker into the rest, and finally a **describe** fan-out that
 resolves each kept ref, newest first, via the vision
 upstream — concurrently, with `describeConcurrency` (4) bounding both live
 goroutines and in-flight upstream calls (the semaphore is acquired before
@@ -117,7 +120,9 @@ each goroutine spawns). Each ref splices into its own distinct block slot,
 so the concurrent writes need no locking. A panic in the describe path is
 recovered per-image and collapses to the fail-strip marker — the goroutines
 run outside the HTTP handler's recovery middleware, so containment lives
-here. A successful describe result is written to the cache before splicing.
+here. Each upstream call is bounded by `TINGLY_VISION_DESCRIBE_TIMEOUT`
+(default 60s); a timeout is a failure like any other. A successful describe
+result is written to the cache before splicing.
 
 ```
 req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
@@ -268,14 +273,16 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 - `vision_trailing_system_test.go` — the Claude Code message shape (trailing
   system message after the tool result): the turn in flight is described,
   and with limit 1 it wins the slot over an older image.
+- `vision_scenario_test.go` — the verification matrix of
+  `.design/vision-proxy.md` §11, driven through `Service.Apply` with Claude
+  Code's real multi-turn shape: tool loop, restart, model switch, proxy
+  enabled mid-conversation, upstream outage and recovery, duplicate
+  screenshot, permanently bad image.
 - `vision_proxy_e2e_test.go` (build tag `e2e`) drives a real deployment;
   requires `TINGLY_API_KEY`, see the file header for details.
 
 ## Out of scope (today)
 
-- Deduplicating identical images within one request (each occurrence still
-  gets its own describe call the first time it's seen — the cache only
-  helps across separate `Process` calls, not within one).
 - Cross-instance cache sharing (the store lives in each gateway's
   own `tingly.db`; two gateway instances do not see each other's
   descriptions — see `.design/vision-proxy.md` §10).

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -47,6 +48,10 @@ type VisionProxyProcessor struct {
 	// means describeLimitFor's env/default resolution. Tests set it to pin
 	// the newest-first ordering with a small value.
 	describeLimit int
+
+	// describeTimeout bounds one upstream call; zero means
+	// describeTimeoutFor's env/default resolution.
+	describeTimeout time.Duration
 }
 
 // describeCacheFor returns the processor's cache, building a memory-only
@@ -90,6 +95,37 @@ const defaultDescribeLimit = 8
 // TINGLY_VISION_MAX_TOKENS: an operator on a fast, cheap vision model can
 // raise it to converge faster; one on a slow model can lower it.
 const describeLimitEnv = "TINGLY_VISION_DESCRIBE_LIMIT"
+
+// defaultDescribeTimeout bounds one vision upstream call. Without it a
+// describe runs on the caller's request context alone, so a vision model
+// that hangs holds the whole request until the client gives up. A timeout
+// is a failure like any other: fail-strip now, negative-cached for
+// describeFailureTTL, retried after. Vision models answer in seconds;
+// reasoning models can take tens of seconds on a large screenshot, so the
+// default leaves room for those.
+const defaultDescribeTimeout = 60 * time.Second
+
+// describeTimeoutEnv overrides defaultDescribeTimeout, as a Go duration
+// ("90s", "2m") or a bare number of seconds.
+const describeTimeoutEnv = "TINGLY_VISION_DESCRIBE_TIMEOUT"
+
+// describeTimeoutFor resolves the per-call timeout: the processor's explicit
+// value (tests), else the environment, else the default.
+func (p *VisionProxyProcessor) describeTimeoutFor() time.Duration {
+	if p.describeTimeout > 0 {
+		return p.describeTimeout
+	}
+	if raw := strings.TrimSpace(os.Getenv(describeTimeoutEnv)); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+		logrus.Warnf("vision proxy: ignoring invalid %s=%q", describeTimeoutEnv, raw)
+	}
+	return defaultDescribeTimeout
+}
 
 // describeLimitFor resolves the per-request describe limit: the processor's
 // explicit value (tests), else the environment, else the default.
@@ -251,15 +287,23 @@ func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []
 }
 
 // boundNewestFirst ranks the cache misses a walk collected (in message
-// order, oldest first) so the newest come first, then splits them at
-// limit: keep is the newest `limit` refs in newest-first order, deferred
-// is everything older. Position is the only ranking signal — no message
-// is inspected for role or content — so the rule is the same for every
-// protocol shape.
+// order, oldest first) so the newest come first, folds repeated images
+// into one ref, then splits at limit: keep is the newest `limit` distinct
+// images in newest-first order, deferred is everything older. Position is
+// the only ranking signal — no message is inspected for role or content —
+// so the rule is the same for every protocol shape.
+//
+// Folding matters for more than cost. The same screenshot can sit in two
+// tool results of one request; described twice it would get two different
+// texts, only one of which the cache keeps, so the other position's text
+// would change on the next turn. One describe, spliced into every
+// position, keeps them identical now and later. A folded image ranks at
+// its newest occurrence and takes one slot.
 func boundNewestFirst(refs []imageRef, limit int) (keep, deferred []imageRef) {
 	for i, j := 0, len(refs)-1; i < j; i, j = i+1, j-1 {
 		refs[i], refs[j] = refs[j], refs[i]
 	}
+	refs = foldDuplicates(refs)
 	if limit < 0 {
 		limit = 0
 	}
@@ -267,6 +311,23 @@ func boundNewestFirst(refs []imageRef, limit int) (keep, deferred []imageRef) {
 		return refs, nil
 	}
 	return refs[:limit], refs[limit:]
+}
+
+// foldDuplicates merges refs that share a cache key into the first one
+// seen, whose splice then writes the text into every merged position.
+func foldDuplicates(refs []imageRef) []imageRef {
+	first := make(map[visionCacheKey]int, len(refs))
+	out := refs[:0]
+	for _, r := range refs {
+		if i, seen := first[r.cacheKey]; seen {
+			prev, dup := out[i].splice, r.splice
+			out[i].splice = func(text string) { prev(text); dup(text) }
+			continue
+		}
+		first[r.cacheKey] = len(out)
+		out = append(out, r)
+	}
+	return out
 }
 
 func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service) *loadbalance.Service {
@@ -303,9 +364,16 @@ func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbala
 			defer wg.Done()
 			defer func() { <-sem }()
 			text := p.safeDescribe(ctx, usable, r)
-			if text != imageUnavailableText {
+			switch {
+			case text != imageUnavailableText:
 				cache.put(r.cacheKey, text)
-			} else {
+			case ctx.Err() == nil:
+				// Only a failure of the describe itself (upstream error,
+				// empty answer, per-call timeout) is remembered. If the
+				// caller's request context is gone — the user aborted, the
+				// client retried — the image was never given a fair try,
+				// and remembering it would tell the resend, for the next
+				// describeFailureTTL, that the proxy failed when it did not.
 				cache.markFailed(r.cacheKey)
 			}
 			r.splice(text)
@@ -314,11 +382,14 @@ func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbala
 	wg.Wait()
 }
 
-// safeDescribe is describe plus panic containment. It runs on goroutines
+// safeDescribe is describe plus the per-call timeout and panic containment.
+// It runs on goroutines
 // describeAll spawns, outside the HTTP handler's recovery middleware — a
 // panicking vision client (SDK edge case, malformed upstream stream) must
 // fail-strip one image, not crash the process.
 func (p *VisionProxyProcessor) safeDescribe(ctx context.Context, usable *loadbalance.Service, r imageRef) (text string) {
+	ctx, cancel := context.WithTimeout(ctx, p.describeTimeoutFor())
+	defer cancel()
 	defer func() {
 		if rec := recover(); rec != nil {
 			logrus.WithContext(ctx).WithField("component", "vision_proxy").

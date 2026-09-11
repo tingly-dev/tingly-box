@@ -43,9 +43,8 @@ const (
 	describeStorePruneEvery = time.Hour
 	// describeStoreTouchEvery throttles last_used_at bumps on Get: a session
 	// with dozens of historical images would otherwise issue dozens of
-	// UPDATEs per request just to say "still here". Once an entry is
-	// promoted into the memory tier the store is not consulted again anyway,
-	// so this only matters right after a restart or an eviction.
+	// UPDATEs per request just to say "still here". last_used_at only
+	// orders the size-ceiling eviction, so hour granularity is plenty.
 	describeStoreTouchEvery = time.Hour
 )
 
@@ -87,6 +86,7 @@ func NewSQLiteDescribeStore(db *gorm.DB) (DescribeStore, error) {
 		return nil, fmt.Errorf("vision describe store: migrate: %w", err)
 	}
 	s := &sqliteDescribeStore{db: db, now: time.Now}
+	s.lastPrune = s.now()
 	s.prune()
 	return s, nil
 }
@@ -131,7 +131,7 @@ func (s *sqliteDescribeStore) Put(key visionCacheKey, text string) {
 	}).Create(&rec).Error
 	if err != nil {
 		logrus.WithError(err).WithField("component", "vision_proxy").
-			Warn("vision proxy: describe store write failed; entry is memory-only")
+			Warn("vision proxy: describe store write failed; description dropped, image will be re-described")
 		return
 	}
 	s.maybePrune(now)

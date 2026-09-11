@@ -1,10 +1,11 @@
 package visionproxy
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // visionCacheKey identifies one (session, vision service, image content)
@@ -30,13 +31,25 @@ type visionCacheKey struct {
 
 // hashBase64Image derives the content component of a cache key for a
 // base64-encoded image. It hashes the base64 text directly (no decode) —
-// cheap, and two occurrences of the same base64-encoded image always hash
-// identically regardless of what else changes around them. mediaType is
-// folded into the hash so a (byte-identical-but-differently-labeled) source
-// cannot collide with a different declared media type.
+// two occurrences of the same base64-encoded image always hash identically
+// regardless of what else changes around them. mediaType is folded in so a
+// byte-identical-but-differently-labeled source cannot collide with a
+// different declared media type.
+//
+// The hash is xxhash64 plus the length, not a cryptographic digest. Every
+// image a conversation carries is hashed on every request, and a 2 MB
+// screenshot costs ~8 ms under SHA-256 versus well under 1 ms here — a
+// 30-screenshot session was paying a quarter second per turn just to look
+// itself up. Keys are scoped per session and per service, so the space a
+// collision would have to happen in is a few dozen images; 64 bits plus
+// the exact length is ample for that, and no adversary gains anything by
+// forging a collision against their own session.
 func hashBase64Image(mediaType, b64 string) string {
-	h := sha256.Sum256([]byte(mediaType + "\x00" + b64))
-	return "b64:" + hex.EncodeToString(h[:])
+	h := xxhash.New()
+	_, _ = h.WriteString(mediaType)
+	_, _ = h.Write([]byte{0})
+	_, _ = h.WriteString(b64)
+	return fmt.Sprintf("b64:%016x-%d", h.Sum64(), len(b64))
 }
 
 // hashURLImage derives the content component of a cache key for a
@@ -47,8 +60,7 @@ func hashBase64Image(mediaType, b64 string) string {
 // (rotating signature or expiry in the query string) is a new image every
 // time, and is re-described — see .design/vision-proxy.md §10.4.
 func hashURLImage(remoteURL string) string {
-	h := sha256.Sum256([]byte(remoteURL))
-	return "url:" + hex.EncodeToString(h[:])
+	return fmt.Sprintf("url:%016x-%d", xxhash.Sum64String(remoteURL), len(remoteURL))
 }
 
 // describeCache maps visionCacheKey to the already-formatted replacement

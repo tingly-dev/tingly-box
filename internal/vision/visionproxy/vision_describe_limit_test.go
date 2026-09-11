@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/require"
@@ -107,7 +109,7 @@ func TestBoundNewestFirst(t *testing.T) {
 	mk := func(names ...string) []imageRef {
 		out := make([]imageRef, 0, len(names))
 		for _, n := range names {
-			out = append(out, imageRef{b64: n, splice: func(string) {}})
+			out = append(out, imageRef{b64: n, cacheKey: visionCacheKey{content: n}, splice: func(string) {}})
 		}
 		return out
 	}
@@ -205,4 +207,119 @@ func TestVisionProxy_DescribeLimit_FailedImageDoesNotHoldSlot(t *testing.T) {
 	require.Equal(t, 2, fake.callCount(), "the failed newest no longer holds the slot; the older is described")
 	require.Contains(t, blockText(reqB.Messages[1]), imageUnavailableText)
 	require.Contains(t, blockText(reqB.Messages[0]), "desc old")
+}
+
+// TestVisionProxy_DuplicateImageInOneRequest_DescribedOnce: the same bytes
+// in two positions of one request are described once and both positions
+// get the identical text — so neither changes on the next turn.
+func TestVisionProxy_DuplicateImageInOneRequest_DescribedOnce(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("the one description")
+	p := mkProcessor(t, fake, prov)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	req := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "screenshot A", imgNew),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "same screenshot again", imgNew),
+	)
+	require.NoError(t, p.Process(context.Background(), req, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "one describe for one distinct image")
+	require.Equal(t, 0, countImages(req))
+	require.Equal(t, blockText(req.Messages[0]), strings.Replace(blockText(req.Messages[1]), "same screenshot again", "screenshot A", 1),
+		"both positions carry the identical replacement text")
+
+	// Next turn: both positions hit the cache, nothing changes.
+	again := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "screenshot A", imgNew),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "same screenshot again", imgNew),
+	)
+	require.NoError(t, p.Process(context.Background(), again, svcs, session))
+	require.Equal(t, 1, fake.callCount())
+	require.Equal(t, collectText(req), collectText(again))
+}
+
+// TestVisionProxy_DescribeTimeout_StripsAndNegativeCaches: a hung vision
+// upstream is cut off at the per-call timeout, the image is fail-stripped,
+// and the failure is remembered so the next turn does not wait again.
+func TestVisionProxy_DescribeTimeout_StripsAndNegativeCaches(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	hung := &hangingVisionClient{}
+	p := mkProcessor(t, hung, prov)
+	p.describeTimeout = 20 * time.Millisecond
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	req := betaReqWithImages("describe", imgNew)
+	start := time.Now()
+	require.NoError(t, p.Process(context.Background(), req, svcs, session))
+	require.Less(t, time.Since(start), 2*time.Second, "the request must not wait on the hung upstream")
+	require.Equal(t, 1, hung.calls())
+	require.Contains(t, collectText(req), imageUnavailableText)
+
+	again := betaReqWithImages("describe", imgNew)
+	require.NoError(t, p.Process(context.Background(), again, svcs, session))
+	require.Equal(t, 1, hung.calls(), "timed-out image is negative-cached; no second wait")
+}
+
+// hangingVisionClient blocks until the context is cancelled.
+type hangingVisionClient struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (h *hangingVisionClient) Describe(ctx context.Context, _ *loadbalance.Service, _, _, _ string) (string, error) {
+	h.mu.Lock()
+	h.n++
+	h.mu.Unlock()
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (h *hangingVisionClient) calls() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.n
+}
+
+func TestDescribeTimeoutFor(t *testing.T) {
+	p := &VisionProxyProcessor{}
+	t.Setenv(describeTimeoutEnv, "")
+	require.Equal(t, defaultDescribeTimeout, p.describeTimeoutFor())
+	t.Setenv(describeTimeoutEnv, "90s")
+	require.Equal(t, 90*time.Second, p.describeTimeoutFor())
+	t.Setenv(describeTimeoutEnv, "45")
+	require.Equal(t, 45*time.Second, p.describeTimeoutFor(), "a bare number is seconds")
+	for _, bad := range []string{"nonsense", "0", "-5s"} {
+		t.Setenv(describeTimeoutEnv, bad)
+		require.Equal(t, defaultDescribeTimeout, p.describeTimeoutFor(), "bad value %q must fall back", bad)
+	}
+	p.describeTimeout = time.Second
+	require.Equal(t, time.Second, p.describeTimeoutFor(), "an explicit processor value wins")
+}
+
+// TestVisionProxy_CallerCancel_IsNotNegativeCached: a describe cut short by
+// the caller's own context (user abort, client retry) is not a failure of
+// the image, so the resend must try upstream again instead of reporting a
+// proxy error for the TTL.
+func TestVisionProxy_CallerCancel_IsNotNegativeCached(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	hung := &hangingVisionClient{}
+	p := mkProcessor(t, hung, prov)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
+	req := betaReqWithImages("describe", imgNew)
+	require.NoError(t, p.Process(ctx, req, svcs, session))
+	require.Equal(t, 1, hung.calls())
+	require.Contains(t, collectText(req), imageUnavailableText, "this request still strips the image")
+
+	// The resend, with a live context, goes upstream again.
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	go func() { time.Sleep(20 * time.Millisecond); cancel2() }()
+	again := betaReqWithImages("describe", imgNew)
+	require.NoError(t, p.Process(ctx2, again, svcs, session))
+	require.Equal(t, 2, hung.calls(), "a caller-cancelled describe is not remembered as a failure")
 }

@@ -467,7 +467,7 @@ type visionCacheKey struct {
     session  string // sessionScope(typ.SessionID) = "<source>:<value>"
     provider string // loadbalance.Service.Provider —— provider UUID,不是名字
     model    string
-    content  string // "b64:"+sha256(mediaType+base64) 或 "url:"+sha256(remoteURL)
+    content  string // "b64:"+xxhash64(mediaType+base64)+"-"+len 或 "url:"+xxhash64(url)+"-"+len
 }
 ```
 
@@ -484,7 +484,7 @@ type visionCacheKey struct {
 
 **为什么不在库前面再放一层内存 LRU**:早期版本有过。每个请求确实要对
 会话里所有图查一次,但 SQLite 在唯一索引上的点查是几十微秒,比对同一
-张图的 base64 算 sha256 还便宜,相对下游模型的秒级延迟不可见。而两级
+张图的 base64 算哈希还便宜,相对下游模型的秒级延迟不可见。而两级
 带来的是两个事实源、提升 / 写穿逻辑和第三个容量数字,审计时已经因此出
 过细节问题。单一事实源更值。
 
@@ -540,11 +540,17 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 接受。所以取有界版本:
 
 1. **任何位置的图片先查缓存**——命中直接替换,不占名额。
-2. **未命中的图按消息顺序收集,然后逆序**(`boundNewestFirst`),最新
-   的排在最前;取前 N 张调 vision 描述,**成功后写入缓存**(失败 /
-   fail-strip 结果只进短 TTL 的内存负缓存,见 §10.4)。fan-out 也按这个顺序派发:当前轮的图
-   最先发出,请求 ctx 被截断时最后受影响的才是它。
+2. **未命中的图按消息顺序收集,然后逆序、折叠**(`boundNewestFirst`):
+   最新的排在最前;同一张图在一个请求里出现多次只算一张(`foldDuplicates`,
+   描述一次拼到所有位置——否则两处会拿到两段不同文本,而缓存只留一
+   份,下一轮另一处必然变);取前 N 张调 vision 描述,**成功后写入缓存**
+   (失败 / fail-strip 结果只进短 TTL 的内存负缓存,见 §10.4)。fan-out
+   也按这个顺序派发:当前轮的图最先发出,请求 ctx 被截断时最后受影响
+   的才是它。
 3. **超出 N 的图打 `imageOverLimitText`**,本轮不调 vision。
+4. **每次 describe 有独立超时**(`defaultDescribeTimeout` = 60s,
+   `TINGLY_VISION_DESCRIBE_TIMEOUT` 可覆盖)。此前只有请求 ctx,vision
+   模型卡住会拖住整个请求直到客户端放弃。超时按失败处理,进负缓存。
 
 因为描述过的图从此命中缓存、不占名额,每一轮的名额都自然落到"下一批
 最旧的未命中"上,几轮之后整个历史都进缓存——**有界版本在多轮之后收
@@ -556,6 +562,11 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 `latestImageAnchor` 及四个 `collect*` 里的 `lastIdx` / `isLast` 随之
 删除;`collect*` 只剩"遍历、查缓存、未命中就收集",名额裁剪集中在
 `Process` 一处。
+
+**哈希用 xxhash64 + 长度,不用 sha256**:每张历史图每轮都要算一次,
+2MB 的 base64 用 sha256 约 8ms,30 张截图的会话每轮白付四分之一秒;
+xxhash 快一个数量级。key 已按 session 和 service 分区,碰撞要在几十张
+图的空间里发生,64 位加精确长度绰绰有余,且伪造碰撞只影响自己的会话。
 
 `VisionProxyProcessor.Process` 因此多了一个 `sessionID typ.SessionID`
 入参;调用方(`applyVisionProxy`,§4.2 提到的钩子位置)在调用前用
@@ -590,3 +601,43 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
   意不做 singleflight 合并**:并发请求各自拿到一份独立描述,保留了视觉
   模型输出的多样性;缓存只负责让同一会话的后续轮次稳定在最终写入的那
   一份上。
+
+---
+
+## 11. 验证场景
+
+这是 vision proxy 在真实使用中要成立的场景清单,每一行对应
+`internal/vision/visionproxy/vision_scenario_test.go` 里的一个测试。测试
+通过 `Service.Apply`(含 rule/scenario 解析)驱动,请求用 Claude Code 真
+实的消息形状(prompt / system-reminder / assistant tool_use / user
+tool_result+image / 尾部 system-reminder),fake vision 客户端每次返回不
+同措辞,所以任何一次重描都会以文本变化暴露出来。改动缓存或名额逻辑时
+先跑这组;新增场景先加行再加测试。
+
+| # | 场景 | 期望 | 测试 |
+|---|------|------|------|
+| S1 | 工具循环:每轮多一张截图 | 每张图整个会话只描述一次;历史图片的文本与首次描述时字节一致 | `TestScenario_ToolLoop_HistoryTextIsStable` |
+| S2 | 网关重启 | 新进程、同一个 tingly.db,下一轮零次 vision 调用,文本字节一致 | `TestScenario_Restart_NoRedescribe` |
+| S3 | 中途切换 vision 模型 | 旧模型的描述一律不复用;按上限每轮从新到旧重描,全部重描后稳定 | `TestScenario_ModelSwitch_ReconvergesBounded` |
+| S4 | 会话进行到一半才开启 proxy | 每轮描述上限张最新的,其余打暂缓 marker;ceil(N/上限) 轮后收敛,之后零调用 | `TestScenario_EnabledMidConversation_Converges` |
+| S5 | vision 上游故障后恢复 | 故障期 marker 恒定、TTL 内不重试;TTL 后重试一次,恢复后的文本稳定 | `TestScenario_UpstreamOutage_ThenRecovery` |
+| S6 | 同一张截图在一个请求里出现两次 | 只描述一次,两处文本相同,下一轮不变 | `TestScenario_SameScreenshotTwice_OneDescribe` |
+| S7 | 历史里有一张永远描述失败的图 | 它占一次名额后进负缓存,下一轮名额落到它后面的图 | `TestScenario_PermanentlyBadImage_DoesNotStarveHistory` |
+
+以下场景经分析不需要专门处理,记录结论以免重复讨论:
+
+| 场景 | 结论 |
+|------|------|
+| Claude Code `/compact` | 历史图片随摘要消失,剩下的都是新图,按常规路径处理 |
+| Claude Code `/resume` | `metadata.user_id` 里的 session 不变,继续命中 |
+| fork 出新会话 | 新 session,按 S4 收敛 |
+| Codex / OpenCode | header 带 session_id,与 Claude Code 等价 |
+| 无 session 的 OpenAI 客户端 | IP 兜底,同 NAT 共桶;既有权衡,见 §10.4 |
+| imbot 驱动的 agent | 经 agentboot 启动 Claude Code,走 S1 路径 |
+| 一条消息里超过上限张图 | 最新的上限张描述,其余暂缓,按 S4 收敛 |
+| provider 被删或停用 | 全部统一 fail-strip,marker 恒定,不进名额裁剪 |
+| vision 上游卡住 | per-describe 超时(§10.3 第 4 条)兜底,按 S5 处理 |
+| 配置热重载 | 新建 Service,负缓存清空,库不变 |
+| 多实例 | 各自的 tingly.db,不共享,见 §10.4 |
+| 表触顶 10 万行 | 最久未用先删,见 §10.2 |
+| 预签名 URL 每轮变化 | 每轮视为新图,见 §10.4 |

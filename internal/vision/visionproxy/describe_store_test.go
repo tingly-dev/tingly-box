@@ -185,6 +185,21 @@ func TestVisionProxy_Cache_RestartDoesNotRedescribe(t *testing.T) {
 		"the replacement text must be byte-identical across the restart")
 }
 
+// TestDescribeStore_BootPruneArmsThrottle: the boot-time prune counts as
+// the first prune, so the first Put of the process does not run it again.
+func TestDescribeStore_BootPruneArmsThrottle(t *testing.T) {
+	store := newTestStore(t, openTestDB(t))
+	require.False(t, store.lastPrune.IsZero(), "constructor must stamp lastPrune")
+	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	store.now = func() time.Time { return now }
+	store.lastPrune = now
+	store.Put(visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:1"}, "x")
+	require.Equal(t, now, store.lastPrune, "a Put within the window must not re-prune")
+	now = now.Add(describeStorePruneEvery)
+	store.Put(visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:2"}, "y")
+	require.Equal(t, now, store.lastPrune, "a Put past the window prunes and re-arms")
+}
+
 // TestDescribeCache_EmptyServiceKeySkipsStore: nothing is ever written
 // under an empty service key, so a lookup must not cost a SELECT.
 func TestDescribeCache_EmptyServiceKeySkipsStore(t *testing.T) {

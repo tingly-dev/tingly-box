@@ -102,7 +102,7 @@ func TestVisionProxy_Beta_TrailingSystem_LimitPrefersCurrentTurn(t *testing.T) {
 		Role: anthropic.BetaMessageParamRoleUser,
 		Content: []anthropic.BetaContentBlockParamUnion{
 			anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-				Data:      tinyPNGBase64,
+				Data:      imgOld, // distinct bytes: the same image would fold into one describe
 				MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
 			}),
 		},
