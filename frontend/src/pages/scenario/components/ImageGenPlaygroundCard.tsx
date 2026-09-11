@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Brush, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
 import { parseImageSize } from '@/utils/sketchCanvas';
@@ -36,6 +36,7 @@ import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
+import MaskEditorDialog, { type MaskResult } from './MaskEditorDialog';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -83,6 +84,13 @@ interface ReferenceImage {
     // (`sheet.png · 1024×1024 px`) instead of showing an empty prompt line.
     width?: number;
     height?: number;
+    // The region of THIS image the model may repaint. An attribute of the
+    // image, not a mode and not a fourth kind of reference: it means nothing
+    // away from the pixels it was painted on, so it travels with them and is
+    // dropped when they are. Only the first reference can carry one — the API
+    // applies a mask to the first image — which is why the entry point only
+    // grows on that thumbnail. See .design/image-mask.md.
+    mask?: MaskResult;
 }
 
 // Decodes an image just far enough to learn its pixel size. Failure is not
@@ -125,6 +133,12 @@ interface GenerationRun {
     // display alongside the output — the "what did I ask for" half of the
     // history card (only set when the run went through `edits`).
     sourceImages?: string[];
+    // The mask the request carried, if any. It turns the endpoint line into
+    // `images/edits · mask`, so someone about to call the API from their own
+    // code sees which field produced this result — and it is the file itself
+    // rather than a flag so a retry sends the same request instead of quietly
+    // repainting the whole image.
+    maskFile?: File;
     // How many images the run asked for — kept so a failed run can be retried
     // with exactly the request it made.
     count?: number;
@@ -326,6 +340,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
+    // Which reference image's mask editor is open. An index rather than a
+    // boolean: the mask belongs to one specific image, and saying which one is
+    // the whole point.
+    const [maskTarget, setMaskTarget] = useState<number | null>(null);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
     const [outputDir, setOutputDir] = useState('');
@@ -634,6 +652,26 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     }, [sketchTarget, referenceImages, size]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
+    const handleMaskSubmit = useCallback((result: MaskResult) => {
+        setReferenceImages((current) => current.map((ref, i) => (i === maskTarget ? { ...ref, mask: result } : ref)));
+        setMaskTarget(null);
+    }, [maskTarget]);
+
+    // Removing the mask is removing a region, not the image: the reference
+    // stays and the next run repaints all of it.
+    const handleRemoveMask = useCallback((index: number) => {
+        setReferenceImages((current) => current.map((ref, i) => (i === index ? { ...ref, mask: undefined } : ref)));
+    }, []);
+
+    // Memoised for the same reason the sketch's is: the canvas resets when
+    // this changes, and a new object per render would wipe live strokes.
+    const maskInitial = useMemo(
+        () => (maskTarget !== null ? referenceImages[maskTarget]?.mask?.layers ?? null : null),
+        [maskTarget, referenceImages],
+    );
+    const maskedReference = maskTarget !== null ? referenceImages[maskTarget] : undefined;
+    const hasMaskedReference = referenceImages[0]?.mask !== undefined;
+
     // Hands the finished pixels over, not a notification that they exist.
     const handleDownload = useCallback(async (image: SelectedImage) => {
         try {
@@ -652,7 +690,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         size: string;
         quality: Quality;
         count: number;
-        sources: { file: File; previewUrl: string }[];
+        sources: { file: File; previewUrl: string; mask?: { file: File } }[];
         // Set when re-running a failed run: its card flips back to pending
         // instead of a second card appearing.
         runId?: string;
@@ -678,6 +716,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
+            maskFile: request.sources[0]?.mask?.file,
             status: 'pending',
         };
         updateRuns((currentRuns) => (currentRuns.some((run) => run.id === runId)
@@ -688,9 +727,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const editFiles = request.sources.map((ref) => ref.file);
+            // The mask belongs to the first reference because that is the one
+            // the API applies it to; nothing here chooses which image it is.
+            const mask = request.sources[0]?.mask?.file;
             const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
+                    ...(mask ? { mask } : {}),
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
@@ -763,7 +806,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         try {
             const sources = await Promise.all((run.sourceImages ?? []).map(async (src, index) => {
                 const blob = await fetchBlob(src);
-                return { file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }), previewUrl: src };
+                return {
+                    file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }),
+                    previewUrl: src,
+                    // The mask goes back with the image it was painted on, or
+                    // the retry would be a different request than the one that
+                    // failed — a full repaint the user never asked for.
+                    ...(index === 0 && run.maskFile ? { mask: { file: run.maskFile } } : {}),
+                };
             }));
             await runGeneration({
                 prompt: run.prompt,
@@ -948,6 +998,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
                                                             sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                         />
+                                                        {ref.mask ? (
+                                                            <Box
+                                                                component="img"
+                                                                src={ref.mask.previewUrl}
+                                                                alt=""
+                                                                aria-hidden
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    inset: 0,
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    objectFit: 'cover',
+                                                                    opacity: 0.55,
+                                                                    pointerEvents: 'none',
+                                                                }}
+                                                            />
+                                                        ) : null}
                                                         <Box
                                                             className="reference-zoom"
                                                             sx={{
@@ -965,6 +1032,37 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             <ZoomIn fontSize="small" />
                                                         </Box>
                                                     </ButtonBase>
+                                                    {/* Only the first reference gets this: the API
+                                                        applies a mask to the first image, so an entry
+                                                        point anywhere else would promise something the
+                                                        wire cannot deliver. */}
+                                                    {index === 0 && (
+                                                        <Tooltip
+                                                            title={ref.mask
+                                                                ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
+                                                                : t('playground.mask.addAction', { defaultValue: 'Mask an area to change' })}
+                                                        >
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={(event) => { event.stopPropagation(); setMaskTarget(index); }}
+                                                                aria-label={ref.mask
+                                                                    ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
+                                                                    : t('playground.mask.addAction', { defaultValue: 'Mask an area to change' })}
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    bottom: 2,
+                                                                    left: 2,
+                                                                    width: 20,
+                                                                    height: 20,
+                                                                    bgcolor: ref.mask ? 'primary.main' : 'rgba(15, 23, 42, 0.7)',
+                                                                    color: 'common.white',
+                                                                    '&:hover': { bgcolor: ref.mask ? 'primary.dark' : 'rgba(15, 23, 42, 0.9)' },
+                                                                }}
+                                                            >
+                                                                <Brush sx={{ fontSize: 13 }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
                                                     {ref.source === 'sketch' && (
                                                         <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
                                                             <IconButton
@@ -1029,10 +1127,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 </Box>
                                 {referenceImages.length > 0 && (
                                     <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
-                                        {t('playground.referenceHint', {
-                                            defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
-                                            max: MAX_EDIT_REFERENCE_IMAGES,
-                                        })}
+                                        {hasMaskedReference
+                                            ? t('playground.mask.referenceHint', {
+                                                defaultValue: 'The tinted area of the first image is what the model may change · sent via images/edits',
+                                            })
+                                            : t('playground.referenceHint', {
+                                                defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
+                                                max: MAX_EDIT_REFERENCE_IMAGES,
+                                            })}
                                     </Typography>
                                 )}
                                 <input
@@ -1085,7 +1187,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             minRows={3}
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
-                            placeholder={hasSketchReference
+                            placeholder={hasMaskedReference
+                                ? t('playground.mask.promptPlaceholder', { defaultValue: 'Describe what should appear in the painted area…' })
+                                : hasSketchReference
                                 ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
                                 : referenceImages.length > 0
                                     ? t('playground.referencePromptPlaceholder', { defaultValue: 'Describe what to make from these images…' })
@@ -1471,7 +1575,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.maskFile ? ' · mask' : ''}
                                                     </Typography>
                                                     <Button
                                                         size="small"
@@ -1529,7 +1633,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         variant="caption"
                                                         sx={{ color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                                     >
-                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.maskFile ? ' · mask' : ''}
                                                     </Typography>
                                                     <Box sx={{ flex: 1 }} />
                                                     <Button
@@ -1579,7 +1683,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                             whiteSpace: 'nowrap',
                                                         }}
                                                     >
-                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                                                        {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.maskFile ? ' · mask' : ''}
                                                     </Typography>
                                                     {run.sourceImages && run.sourceImages.length > 0 && (
                                                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, overflowX: 'auto' }}>
@@ -1987,6 +2091,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+            <MaskEditorDialog
+                open={maskTarget !== null}
+                imageUrl={maskedReference?.previewUrl ?? null}
+                imageName={maskedReference?.file.name}
+                initial={maskInitial}
+                onClose={() => setMaskTarget(null)}
+                onSubmit={handleMaskSubmit}
+                onRemove={maskedReference?.mask
+                    ? () => { if (maskTarget !== null) handleRemoveMask(maskTarget); setMaskTarget(null); }
+                    : undefined}
+                showNotification={showNotification}
+            />
             <SketchCanvasDialog
                 open={sketchTarget !== null}
                 size={size}
