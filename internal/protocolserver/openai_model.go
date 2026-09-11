@@ -71,9 +71,11 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 		// Get timestamp from provider's LastUpdated field
 		var created int64
 		services := rule.GetServices()
-		providerDesc := make([]string, 0, len(services))
 
-		// Track provider for template lookup
+		// Track provider for template lookup only — the backing provider's
+		// identity is intentionally not disclosed in the response, since
+		// /v1/models is consumed by external clients and must not leak
+		// upstream vendor identity.
 		var primaryProvider *typ.Provider
 
 		for i := range services {
@@ -89,24 +91,19 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 					if primaryProvider == nil {
 						primaryProvider = provider
 					}
-					providerDesc = append(providerDesc, provider.Name)
 					// Parse LastUpdated timestamp if available
 					if provider.LastUpdated != "" {
 						if t, err := time.Parse(time.RFC3339, provider.LastUpdated); err == nil {
 							created = t.Unix()
 						}
 					}
-				} else {
-					providerDesc = append(providerDesc, svc.Provider)
 				}
 			}
 		}
 
-		// Build owned_by field
+		// owned_by is always "tingly-box" — never disclose the upstream
+		// provider name here.
 		ownedBy := "tingly-box"
-		if len(providerDesc) > 0 {
-			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
-		}
 
 		// Get model description from template if available
 		var description string

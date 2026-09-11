@@ -1,7 +1,6 @@
 package protocolserver
 
 import (
-	"fmt"
 	"net/http"
 	"sort"
 
@@ -119,29 +118,23 @@ func (ph *ProtocolHandler) anthropicListModelsWithScenario(c *gin.Context, scena
 			continue
 		}
 
-		// Build display name with provider info
+		// Display name is the request model name only — the backing
+		// provider is intentionally not disclosed here, since /v1/models is
+		// consumed by external clients and must not leak upstream vendor
+		// identity.
 		displayName := rule.RequestModel
 		services := rule.GetServices()
 
-		// Track provider for template lookup
+		// Track provider for template lookup only (not exposed in the response).
 		var primaryProvider *typ.Provider
 
-		if len(services) > 0 {
-			providerNames := make([]string, 0, len(services))
-			for i := range services {
-				svc := services[i]
-				if svc.Active {
-					provider, err := cfg.GetProviderByUUID(svc.Provider)
-					if err == nil {
-						if primaryProvider == nil {
-							primaryProvider = provider
-						}
-						providerNames = append(providerNames, provider.Name)
-					}
+		for i := range services {
+			svc := services[i]
+			if svc.Active && primaryProvider == nil {
+				provider, err := cfg.GetProviderByUUID(svc.Provider)
+				if err == nil {
+					primaryProvider = provider
 				}
-			}
-			if len(providerNames) > 0 {
-				displayName += fmt.Sprintf(" (via %v)", providerNames)
 			}
 		}
 
