@@ -40,6 +40,10 @@ type probeParams struct {
 	Tool     bool // true → attach probe tools + auto tool_choice (tool mode)
 	Thinking ThinkingLevel
 	Vision   VisionChannel // user/tool → attach the canonical vision fixture turn
+	// Raw is the caller's own request (E2ERequest.Request), already decoded
+	// with the SDK type of its protocol; nil = build the fixture. The
+	// builders only fill what the target decides on top of it.
+	Raw any
 }
 
 // thinkingEnabled reports whether the probe should enable extended thinking.
@@ -145,6 +149,16 @@ func toolCallsFromAnthropic(content []anthropic.ContentBlockUnion) []ToolCall {
 // probe. Shared by the probe helper and the cURL builder so the constructed
 // request cannot drift between the two paths.
 func buildOpenAIChatParams(p probeParams) openai.ChatCompletionNewParams {
+	if raw, ok := p.Raw.(*openai.ChatCompletionNewParams); ok {
+		// The caller's request, verbatim; the target decides the model and
+		// the Stream axis whether usage rides on the stream.
+		params := *raw
+		params.Model = p.Model
+		if p.Stream {
+			params.StreamOptions.IncludeUsage = openai.Opt(true)
+		}
+		return params
+	}
 	params := openai.ChatCompletionNewParams{
 		Model:    p.Model,
 		Messages: buildOpenAIChatVisionMessages(p),
@@ -263,6 +277,11 @@ func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, p pro
 // buildOpenAIResponsesParams assembles the Responses API request params for a
 // probe. Shared by the probe helper and the cURL builder.
 func buildOpenAIResponsesParams(p probeParams) responses.ResponseNewParams {
+	if raw, ok := p.Raw.(*responses.ResponseNewParams); ok {
+		params := *raw
+		params.Model = shared.ResponsesModel(p.Model)
+		return params
+	}
 	params := responses.ResponseNewParams{
 		Model: p.Model,
 		Input: responses.ResponseNewParamsInputUnion{
@@ -385,6 +404,17 @@ func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, 
 // probe. Shared by the probe helper and the cURL builder. The SDK adds the
 // "stream": true member itself at request time (WithJSONSet).
 func buildAnthropicMessageParams(p probeParams, isClaudeCodeProvider bool) *anthropic.MessageNewParams {
+	if raw, ok := p.Raw.(*anthropic.MessageNewParams); ok {
+		params := *raw
+		params.Model = anthropic.Model(p.Model)
+		if params.MaxTokens == 0 {
+			params.MaxTokens = 1024
+		}
+		if isClaudeCodeProvider {
+			params.System = append([]anthropic.TextBlockParam{{Text: client.ClaudeCodeSystemHeader}}, params.System...)
+		}
+		return &params
+	}
 	var system []anthropic.TextBlockParam
 	if !p.Vision.Enabled() {
 		// Echo instruction only for non-vision probes — the vision fixture

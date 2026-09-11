@@ -46,15 +46,8 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 		return nil, err
 	}
 
-	stream, tool := req.ResolveAxes()
-	params := probeParams{
-		Model:    model,
-		Message:  E2EMessage(tool, req.Message),
-		Stream:   stream,
-		Tool:     tool,
-		Thinking: req.Thinking,
-		Vision:   req.Vision,
-	}
+	stream, _ := req.ResolveAxes()
+	params := req.probeParams(model)
 
 	// resolveTargetToProviderModel has already applied the protocol override
 	// to the provider (loopback synthetic carries the client style; direct
