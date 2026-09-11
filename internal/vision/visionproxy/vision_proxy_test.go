@@ -661,16 +661,14 @@ func TestVisionProxy_EmptyDescription_StripImageWithUnavailableMarker(t *testing
 		"empty upstream response treated as fail-strip")
 }
 
-// TestVisionProxy_HistoricalImages_StrippedWithoutDescribe verifies the
-// two-responsibility split: images in the LAST message go through the
-// vision upstream; images in older messages are replaced with a fixed
-// historical marker without any describe call. Calling Describe on every
-// historical image would be cost-prohibitive and is unnecessary because
-// the model rarely needs to reason about images outside the current turn.
-func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
+// TestVisionProxy_DescribeLimit_NewestFirst pins the bounded contract: cache
+// misses are described newest first, up to the per-request limit; older
+// misses get the deferral marker without any describe call this turn.
+func TestVisionProxy_DescribeLimit_NewestFirst(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("latest description")
 	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
 
 	req := betaReqWithMessages(
 		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", tinyPNGBase64),
@@ -682,22 +680,35 @@ func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 1, fake.callCount(),
-		"only the LAST message's image triggers a describe call; historical images are stripped without upstream cost")
+		"with limit 1 only the newest miss is described; older misses are deferred without upstream cost")
 	require.Equal(t, 0, countImages(req), "all images removed from the request")
 
-	text := collectText(req)
-	require.Contains(t, text, "latest description", "latest image was described")
-	// Historical images get the fixed omitted marker, not the description text.
-	require.Contains(t, text, "omitted from history", "historical images carry the omitted marker")
+	// The newest message got the description; both older ones the marker.
+	require.Contains(t, blockText(req.Messages[3]), "latest description")
+	require.Contains(t, blockText(req.Messages[2]), imageOverLimitText)
+	require.Contains(t, blockText(req.Messages[0]), imageOverLimitText)
 }
 
-// TestVisionProxy_HistoricalImages_V1AndOpenAI covers v1 and OpenAI request
-// shapes with the same split contract.
-func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
+// blockText concatenates the text blocks of one Beta message.
+func blockText(m anthropic.BetaMessageParam) string {
+	var sb strings.Builder
+	for _, b := range m.Content {
+		if b.OfText != nil {
+			sb.WriteString(b.OfText.Text)
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
+// TestVisionProxy_DescribeLimit_V1AndOpenAI covers v1 and OpenAI request
+// shapes with the same bounded, newest-first contract.
+func TestVisionProxy_DescribeLimit_V1AndOpenAI(t *testing.T) {
 	t.Run("v1", func(t *testing.T) {
 		prov := mkProvider("anthropic-v1")
 		fake := newFakeVisionClient("v1 latest desc")
 		p := mkProcessor(t, fake, prov)
+		p.describeLimit = 1
 
 		req := v1ReqWithMessages(
 			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
@@ -706,16 +717,17 @@ func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
 		require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
-		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
 		require.Contains(t, text, "v1 latest desc")
-		require.Contains(t, text, "omitted from history")
+		require.Contains(t, text, imageOverLimitText)
 	})
 	t.Run("openai", func(t *testing.T) {
 		prov := mkProvider("openai-vision")
 		fake := newFakeVisionClient("openai latest desc")
 		p := mkProcessor(t, fake, prov)
+		p.describeLimit = 1
 
 		req := &openai.ChatCompletionNewParams{
 			Model: openai.ChatModel("gpt-4o"),
@@ -727,11 +739,11 @@ func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
 		require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
-		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
 		require.Contains(t, text, "openai latest desc")
-		require.Contains(t, text, "omitted from history")
+		require.Contains(t, text, imageOverLimitText)
 	})
 }
 
@@ -791,14 +803,14 @@ func TestVisionProxy_Responses_InputMessageVariant(t *testing.T) {
 	require.Contains(t, collectText(req), "a chart with three bars")
 }
 
-// TestVisionProxy_Responses_HistoricalImagesStripped enforces the same
-// "describe latest, marker for history" split that the Anthropic /
-// Chat paths implement. Without this, a multi-turn Responses request
-// would re-describe every prior image — prohibitively expensive.
-func TestVisionProxy_Responses_HistoricalImagesStripped(t *testing.T) {
+// TestVisionProxy_Responses_DescribeLimit enforces the same bounded,
+// newest-first contract on the Responses path that the Anthropic / Chat
+// paths implement.
+func TestVisionProxy_Responses_DescribeLimit(t *testing.T) {
 	prov := mkProvider("openai-vision")
 	fake := newFakeVisionClient("latest description")
 	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
 
 	req := responsesReqWithItems(
 		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", tinyPNGBase64),
@@ -808,13 +820,12 @@ func TestVisionProxy_Responses_HistoricalImagesStripped(t *testing.T) {
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
-	require.Equal(t, 1, fake.callCount(),
-		"only the LAST item's image triggers a describe call; historical images use the marker")
+	require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 	require.Equal(t, 0, countImages(req))
 
 	text := collectText(req)
 	require.Contains(t, text, "latest description")
-	require.Contains(t, text, "omitted from history")
+	require.Contains(t, text, imageOverLimitText)
 }
 
 // TestVisionProxy_Responses_MarshalNoImageURL is a serialization-level
@@ -891,7 +902,7 @@ func TestVisionProxy_Cache_DifferentSession_DoesNotShareCache(t *testing.T) {
 // A historical image whose content was already described earlier in the
 // SAME session (e.g. it was the latest message last turn, now pushed into
 // history by a new turn) gets the real cached description spliced in,
-// instead of the generic "omitted from history" marker — no extra describe
+// instead of the deferral marker — no extra describe
 // call is made for it either way.
 func TestVisionProxy_Cache_HistoricalImageHitsCache_UsesRealDescription(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
@@ -919,7 +930,7 @@ func TestVisionProxy_Cache_HistoricalImageHitsCache_UsesRealDescription(t *testi
 	require.Equal(t, 1, fake.callCount(), "historical image was served from cache, not re-described")
 	text := collectText(turn2)
 	require.Contains(t, text, "a mountain landscape", "cached real description used for the historical image")
-	require.NotContains(t, text, "omitted from history", "cache hit bypasses the generic historical marker")
+	require.NotContains(t, text, imageOverLimitText, "cache hit never counts against the limit")
 }
 
 // A failed describe call must never be cached — a transient upstream failure

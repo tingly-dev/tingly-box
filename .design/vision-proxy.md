@@ -176,13 +176,16 @@ provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqPara
 `RegisterProcessor`/`LookupProcessor`;该注册表本身还在给其它 op 用,
 只是 `proxy_vision` 这一项已经从里面删掉了,见 §7)。
 
-处理器原地改写请求里的 image block:
-- 命中描述缓存的 image(不分最新/历史)→ 直接换成缓存里的真实描述,
-  不调 vision(§10)
-- 未命中缓存 + 最新一条消息里的 image → 调上游 vision 模型描述,成功
-  则写入缓存
-- 未命中缓存 + 历史消息里的 image → 打 `imageHistoricalText` marker
-  (**不调** vision)
+处理器原地改写请求里的 image block,**不再判定"最新一条消息"是哪条**
+(§10.3 记录了为什么去掉):
+- 命中描述缓存的 image(任何位置)→ 直接换成缓存里的真实描述,不调
+  vision(§10)
+- 未命中缓存的 image → 按位置**从新到旧**排队,前 N 张调上游 vision 模
+  型描述,成功则写入缓存;N 是每请求描述上限(`defaultDescribeLimit`
+  = 8,可用 `TINGLY_VISION_DESCRIBE_LIMIT` 覆盖)
+- 超出上限的 image → 打 `imageOverLimitText` marker(**不调** vision)。
+  这是"本轮暂缓",不是"永远省略":下一轮更新的图已进缓存、不占名额,
+  名额就轮到它
 - 失败兜底(无可用 service / 上游报错 / 空响应)→ 打
   `imageUnavailableText` marker,**不写入缓存**。marker 文案是**显式的
   错误报告**(说明是 proxy 侧故障、图片被网关移除,并提示模型告知用户),
@@ -434,7 +437,8 @@ rule 内其他 op AND 组合形成"带条件的 vision proxy",但实际业务里
 | 单次 Process 不变量 | 两者都配时 Process 也只调一次(用 rule 的 service) |
 | `parseScenarioVisionService` | nil/缺键/结构错/缺 provider/缺 model/空串 → nil;provider+model 齐备 → active service |
 | 处理器四种请求形态 | Beta / V1 Anthropic、OpenAI ChatCompletion、OpenAI Responses 各覆盖 |
-| **tool_result 嵌套 image** | Beta + V1 各一例:tool_result 内的 image 最后一条消息会描述、历史消息只打 marker(不调 vision);OpenAI tool message 内嵌图片同样覆盖 |
+| **tool_result 嵌套 image** | Beta + V1 各一例:tool_result 内的 image 无论在哪条消息都按缓存未命中描述;OpenAI tool message 内嵌图片同样覆盖 |
+| **每请求描述上限**(§10.3) | `boundNewestFirst` 逆序 + 裁剪(保留项为最新优先、超出项为更旧);上限 1 时只描述最新未命中、更旧的打 marker(Beta / V1 / OpenAI / Responses 各一例,含 Claude Code 尾部 system 消息形态);三张未命中、上限 1 → 三轮收敛到全部缓存,第四轮零调用且文本字节一致;缓存命中不占名额;env 解析(空/非法/显式值/processor 值优先) |
 | smart routing 残留 | `LookupProcessor(PositionProxyVision, OpProxyVisionEnabled)` 不再可达;catalog 新建 smart rule 时无 `proxy_vision` 选项;老配置带该 op → unmatched,不报错 |
 | Flag registry 暴露 | `GET /rule/flags/registry` 返回的 `vision_proxy_service` 项 type=`service_ref` |
 | 类型反序列化 | `Rule.Flags.VisionProxyService` 从 JSON 圆环(marshal → unmarshal)保持一致 |
@@ -463,7 +467,7 @@ type visionCacheKey struct {
     session  string // sessionScope(typ.SessionID) = "<source>:<value>"
     provider string // loadbalance.Service.Provider —— provider UUID,不是名字
     model    string
-    content  string // "b64:"+sha256(mediaType+base64) 或 "url:"+remoteURL
+    content  string // "b64:"+sha256(mediaType+base64) 或 "url:"+sha256(remoteURL)
 }
 ```
 
@@ -517,19 +521,42 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 模型后同一张图会静默复用旧模型的描述,而且这个"没生效"完全无感知。带
 上之后,换模型 = 自动、免费地让相关缓存失效,不需要额外监听配置变更。
 
-### 10.3 对 §4.3 处理流程的改动
+### 10.3 对 §4.3 处理流程的改动:去掉"最新消息"判定,改为有界、从新到旧
 
-统一了"最新 / 历史"两条路径的入口决策(`spliceOrCollect`):
+早期规则是"最新一条消息里的图描述、历史消息里的图打 marker"。有了缓存
+之后重新审视,这条规则有两个问题:
 
-1. **任何位置的图片先查缓存**——命中就直接替换成真实描述,不再区分
-   最新/历史。这是相对 §4.3 原描述的行为升级:历史图片如果在同一
-   session 内命中过缓存(比如上一轮它是最新消息、被真实描述过),这一
-   轮会拿到真实描述,而不是固定的 `imageHistoricalText` marker。
-2. **未命中 + 历史消息** → 行为不变,仍退回固定 marker,不为了填缓存
-   而额外调视觉模型(成本控制不变)。
-3. **未命中 + 最新消息** → 照旧调用视觉模型描述,**成功后写入缓存**
-   (失败 / fail-strip 结果绝不写入缓存,避免把临时故障永久记成"这张
-   图没法描述")。
+1. **历史图片一旦未命中就永远是 marker**。它之后每一轮都是历史消息,
+   永远不会再成为"最新",永远没机会写入缓存。切换 vision 模型
+   (key 里的 provider+model 变了)、上一轮描述失败、会话中途才开启
+   proxy、从别的实例迁移过来、触顶淘汰——任何一种都让那些图从此对模
+   型不可见。
+2. **"最新消息是哪条"本身是位置启发式**。Claude Code 会在 tool_result
+   后面再追加一条 system 消息(#1640 修的就是这个),OpenAI 的 tool
+   消息、Responses 的多种 item 形态,每种协议都要单独维护"什么算能带
+   图的消息"。
+
+理想状态当然是**全量替换**:模型看到的每张图都是真描述。但一个已经带
+几十张截图的长会话在开启 proxy 的第一个请求就全描述,成本和延迟都不可
+接受。所以取有界版本:
+
+1. **任何位置的图片先查缓存**——命中直接替换,不占名额。
+2. **未命中的图按消息顺序收集,然后逆序**(`boundNewestFirst`),最新
+   的排在最前;取前 N 张调 vision 描述,**成功后写入缓存**(失败 /
+   fail-strip 结果绝不写入缓存)。fan-out 也按这个顺序派发:当前轮的图
+   最先发出,请求 ctx 被截断时最后受影响的才是它。
+3. **超出 N 的图打 `imageOverLimitText`**,本轮不调 vision。
+
+因为描述过的图从此命中缓存、不占名额,每一轮的名额都自然落到"下一批
+最旧的未命中"上,几轮之后整个历史都进缓存——**有界版本在多轮之后收
+敛到全量**,而单次请求的成本和延迟始终有上界。这就是"可用、一致、有
+界"三者同时成立的方式,剩下的只是 N 取多大:默认 8,配合
+`describeConcurrency` = 4 最多两轮上游往返;`TINGLY_VISION_DESCRIBE_LIMIT`
+可按 vision 模型快慢调整。
+
+`latestImageAnchor` 及四个 `collect*` 里的 `lastIdx` / `isLast` 随之
+删除;`collect*` 只剩"遍历、查缓存、未命中就收集",名额裁剪集中在
+`Process` 一处。
 
 `VisionProxyProcessor.Process` 因此多了一个 `sessionID typ.SessionID`
 入参;调用方(`applyVisionProxy`,§4.2 提到的钩子位置)在调用前用
@@ -546,7 +573,16 @@ header > client IP 兜底)纳入 key 后,缓存回答的问题变成"这是**这
 - 持久层在每个网关实例自己的 `tingly.db` 里,多实例之间不共享。
 - 前缀仍会在这几种情况下断一次:切换 vision service(key 里的
   provider+model 变了,属有意为之)、描述失败(fail-strip 结果不入
-  缓存,下一轮变成历史 marker)、持久层触顶后淘汰掉了行。
+  缓存,下一轮重新占一个名额描述,文本随之变化)、持久层触顶后淘汰
+  掉了行。
+- 一张永远描述失败的图(格式不支持等)会每轮占用一个名额重试,直到
+  被更新的图挤出名额。目前未做失败的负缓存。
+- URL 图片以 URL 文本为身份。每次请求都变化的 URL(带轮换签名 / 过期
+  时间的预签名链接)每轮都是一张"新图",会被重新描述;不做 query 剥离,
+  因为无法区分哪些参数是签名、哪些是图片本身的一部分。
+- 没有可用 vision service 时,所有未命中的图统一打 `imageUnavailableText`,
+  不进入名额裁剪:此时"超出名额"和"失败"是同一个状态,分成两种 marker
+  只会误导下游模型以为前者下一轮会好。
 - 两个并发请求同时带一张新图时都会各描述一次,后写者覆盖缓存。**有
   意不做 singleflight 合并**:并发请求各自拿到一份独立描述,保留了视觉
   模型输出的多样性;缓存只负责让同一会话的后续轮次稳定在最终写入的那

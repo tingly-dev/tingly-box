@@ -47,10 +47,15 @@ func hashBase64Image(mediaType, b64 string) string {
 }
 
 // hashURLImage derives the content component of a cache key for a
-// remote-URL image. The URL is already a compact, stable content identifier,
-// so it is used as-is (prefixed to keep the b64/url namespaces disjoint).
+// remote-URL image. The URL is hashed rather than stored verbatim so the
+// key column stays fixed-width whatever the URL's length (a presigned URL
+// can run to kilobytes), with a prefix keeping the b64/url namespaces
+// disjoint. The URL text is the identity: a URL that changes per request
+// (rotating signature or expiry in the query string) is a new image every
+// time, and is re-described — see .design/vision-proxy.md §10.4.
 func hashURLImage(remoteURL string) string {
-	return "url:" + remoteURL
+	h := sha256.Sum256([]byte(remoteURL))
+	return "url:" + hex.EncodeToString(h[:])
 }
 
 // describeCache is a two-tier cache from visionCacheKey to the
@@ -107,7 +112,10 @@ func (c *describeCache) get(key visionCacheKey) (string, bool) {
 	if text, ok := c.getMemory(key); ok {
 		return text, true
 	}
-	if c.store == nil {
+	// Nothing is ever written under an empty service key (no usable
+	// service means no describe, hence no put), so skip the store round
+	// trip rather than issue one guaranteed-miss SELECT per image.
+	if c.store == nil || key.provider == "" && key.model == "" {
 		return "", false
 	}
 	text, ok := c.store.Get(key)

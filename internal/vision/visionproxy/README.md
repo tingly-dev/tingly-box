@@ -45,21 +45,26 @@ a second rule.
 Replaces every image content block in the request with a text block.
 Enabling vision proxy implies the fallback (downstream) model does not
 support images, so EVERY image block must be removed from the serialized
-request. But describing every image in the conversation history through
-the vision upstream would be wasteful — older images are rarely the
-subject of the current question. The processor therefore has two distinct
-responsibilities:
+request. Ideally every image gets a real description; but describing an
+unbounded number of them in one request (a long conversation that just
+had the proxy enabled, a switched vision model) is neither affordable nor
+fast. The processor therefore works bounded, newest first, and converges
+to full coverage over turns:
 
-1. **Describe the latest message's images.** Each image in the LAST
-   message of `req.Messages` is sent to the vision upstream (unless the
-   describe cache already has an answer for it — see below); the
-   description is spliced in as a text block. This is the actual cost
-   center.
-2. **Strip historical images.** Every image in messages BEFORE the last
-   one is replaced with a fixed text marker (`[image: (omitted from
-   history)]`) — no vision call is made — **unless** the describe cache
-   already has a real description for it (e.g. it was the latest message
-   last turn), in which case the real description is used instead.
+1. **Cache hits are free.** Any image whose `(session, service, content)`
+   key is already cached gets the cached text spliced in, wherever it sits.
+2. **Misses are described newest first, up to a per-request limit.**
+   `defaultDescribeLimit` (8, `TINGLY_VISION_DESCRIBE_LIMIT`) misses are
+   sent to the vision upstream and, on success, cached. This is the cost
+   center, and it is bounded.
+3. **Misses beyond the limit are deferred.** They get the marker
+   `[image: (not yet described: over this request's vision describe
+   limit)]` — no vision call this turn. Because described images are
+   cached and no longer consume slots, each following turn spends its
+   slots on the next-oldest misses until the whole history is covered.
+
+There is deliberately no "which message is the latest" test any more:
+position only ranks misses, it never decides whether an image is eligible.
 
 ### Describe cache
 
@@ -74,9 +79,10 @@ replacement text:
   through on every put. A store hit is promoted into memory so the same
   historical image never touches the database again on later turns.
 
-Every image occurrence — latest or historical — checks the cache first
-(`spliceOrCollect`): a hit splices the cached text immediately, no upstream
-call either way; a miss falls through to the two behaviors above. Only
+Every image occurrence, wherever it sits, checks the cache first
+(`spliceOrCollect`): a hit splices the cached text immediately and never
+consumes a describe slot; a miss is collected for the bounded describe
+step above. Only
 successful describe calls are written back; fail-strip results never are.
 Session is part of the key so a description is only ever reused within the
 same conversation; the session component is `source:value`, deliberately
@@ -95,11 +101,13 @@ is unavailable the cache silently degrades to memory-only.
 
 ### Process pipeline
 
-Processing is two-phase: a **collect** walk that, for every image, checks
-the cache first — a hit splices the cached text immediately regardless of
-position; a historical miss strips with the fixed marker; a latest-message
-miss is gathered as an `imageRef` (source + splice-back callback) — then a
-**describe** fan-out that resolves each gathered ref via the vision
+Processing is three-phase: a **collect** walk that, for every image in
+message order, checks the cache first — a hit splices the cached text
+immediately; a miss is gathered as an `imageRef` (source + splice-back
+callback) — then a **bound** step (`boundNewestFirst`) that reverses the
+refs to newest-first, keeps the first `describeLimit` and splices the
+deferral marker into the rest, and finally a **describe** fan-out that
+resolves each kept ref, newest first, via the vision
 upstream — concurrently, with `describeConcurrency` (4) bounding both live
 goroutines and in-flight upstream calls (the semaphore is acquired before
 each goroutine spawns). Each ref splices into its own distinct block slot,
@@ -113,25 +121,27 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
 
   messages: [
     { role: user,
-      content: [ "earlier turn", <OfImage A> ] },           ◄── historical
+      content: [ "earlier turn", <OfImage A> ] },           ◄── older miss
     { role: assistant, content: [ "previous reply" ] },
     { role: user,
       content: [
         { OfText:  "What's in this picture?" },
-        { OfImage: B }                                       ◄── latest target
+        { OfImage: B }                                       ◄── newest miss
       ] } ]
        │
        │ Phase 1 — collect<Protocol>(req, session, usable, cache):
-       │   for each image block (any message index):
+       │   for each image block, in message order:
        │     key := newVisionCacheKey(session, usable, mediaType, b64, remoteURL)
        │     if cache.get(key) hits:
        │       splice the cached text in immediately — done, no ref, no call
-       │     else if i < lastIdx (historical):
-       │       replace OfImage blocks with
-       │         { OfText: "[image: (omitted from history)]" }
-       │       (no Describe call — no upstream cost for historical images)
-       │     else (latest message):
+       │     else:
        │       collect imageRef{source, cacheKey: key, splice}
+       │
+       │ Phase 2 — bound (boundNewestFirst):
+       │   reverse refs to newest-first; keep the first describeLimit,
+       │   splice imageOverLimitText into the rest — no Describe call
+       │   (with limit 1 here: A is deferred, B is described)
+       │   kept refs stay newest-first, so B is dispatched first
        │   extractImageSource → (mediaType, b64Data, remoteURL)
        │     - Beta:   img.Source.OfBase64 | img.Source.OfURL
        │     - V1:     img.Source.OfBase64 | img.Source.OfURL
@@ -166,7 +176,7 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
   messages: [
     { role: user,
       content: [ "earlier turn",
-                 { OfText: "[image: (omitted from history)]" } ] },
+                 { OfText: "[image: (not yet described: over this request's vision describe limit)]" } ] },
     { role: assistant, content: [ "previous reply" ] },
     { role: user,
       content: [
@@ -179,12 +189,11 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
 
 ### Fail-strip semantics
 
-For images in the LAST message the block is removed **regardless of
+For every image sent upstream the block is removed **regardless of
 outcome** — success, error, or empty response — so the downstream
-text-only model never receives unsupported content. Historical images
-follow a separate path: they are never sent to the vision upstream, so
-fail-strip does not apply; they receive the omitted marker unless the
-describe cache already has a real description for them.
+text-only model never receives unsupported content. Images deferred by
+the describe limit are never sent upstream, so fail-strip does not apply;
+they receive the deferral marker.
 
 ```
                           ┌──────────────────────────────────────────────┐
@@ -199,33 +208,30 @@ describe cache already has a real description for them.
   Describe() panics       │ recovered in safeDescribe        │  unavail   │
   success                 │ desc non-empty (→ cached)         │  [image: …]│
                           ├──────────────────────────────────┴───────────┤
-  historical image, miss  │ messages[i] where i < lastIdx    │  historic │
-                          │ (lastIdx = latest image-bearing) │            │
-                          │ (no Describe call)               │            │
+  miss beyond the limit   │ older than the newest describeLimit│ deferred │
+                          │ misses (no Describe call)        │            │
                           └──────────────────────────────────┴───────────┘
   unavail  = "[image error: the vision proxy failed to describe this image, …]"
              (explicit proxy-side error report — see imageUnavailableText)
-  historic = "[image: (omitted from history)]"
+  deferred = "[image: (not yet described: over this request's vision describe limit)]"
 ```
 
 ### Protocol coverage
 
 | Request shape                              | Image block source                             | Notes                                  |
 |--------------------------------------------|--------------------------------------------------|----------------------------------------|
-| `*anthropic.BetaMessageNewParams`          | `BetaImageBlockParam.Source` (Base64 \| URL)   | latest user message described; older stripped |
-| `*anthropic.MessageNewParams`              | `ImageBlockParam.Source` (Base64 \| URL)       | latest user message described; older stripped |
-| `*openai.ChatCompletionNewParams`          | `user.content[].OfImageURL.ImageURL.URL` (`OfUser` and `OfTool` messages) | latest user/tool message described; older stripped |
-| `*responses.ResponseNewParams`             | `input[].content[].OfInputImage`               | latest user item described; older stripped    |
+| `*anthropic.BetaMessageNewParams`          | `BetaImageBlockParam.Source` (Base64 \| URL)   | top-level and `tool_result` images     |
+| `*anthropic.MessageNewParams`              | `ImageBlockParam.Source` (Base64 \| URL)       | top-level and `tool_result` images     |
+| `*openai.ChatCompletionNewParams`          | `user.content[].OfImageURL.ImageURL.URL` (`OfUser` and `OfTool` messages) | user and tool messages |
+| `*responses.ResponseNewParams`             | `input[].content[].OfInputImage`               | user message / input-message items     |
 
-`lastIdx` is the index of the latest message that can carry an image from the
-caller — **not** simply `len(messages)-1`. Clients append trailing messages
-that are not part of the turn: Claude Code emits a `<system-reminder>` as its
-own system-role message after every tool result, so the request answering a
-tool call arrives as `user / system / assistant(tool_use) /
-user(tool_result+image) / system`. Anchoring on the final message would make
-the image of the turn in flight test as history and replace it with the
-`omitted from history` marker, so the caller would answer about an image no
-model ever saw. See `latestImageAnchor`.
+Every shape is walked in message order and misses are ranked by that order
+alone. Trailing messages that cannot carry an image — Claude Code emits a
+`<system-reminder>` as its own system-role message after every tool
+result, so a request answering a tool call arrives as `user / system /
+assistant(tool_use) / user(tool_result+image) / system` — no longer matter:
+an earlier design anchored a "latest message" test on them (#1640) and
+that test is gone, since position never decides eligibility any more.
 
 Images nested inside `tool_result` content blocks are also walked (Beta and
 v1 shapes) — tool-returning agents (screenshot / read-image / MCP tools)
@@ -248,7 +254,14 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 - `vision_proxy_test.go` / `vision_proxy_regression_test.go` — the
   processor contract, including the `TestVisionProxy_Cache_*` cases for
   session/model isolation, historical-hit-uses-real-description, and
-  failed-describe-not-cached.
+  failed-describe-not-cached, and the `TestVisionProxy_DescribeLimit_*`
+  cases pinning newest-first ordering with limit 1 on every shape.
+- `vision_describe_limit_test.go` — convergence: three uncached images
+  with limit 1 are fully cached after three turns, the fourth costs nothing
+  and is byte-identical; cache hits do not consume slots; env parsing.
+- `vision_trailing_system_test.go` — the Claude Code message shape (trailing
+  system message after the tool result): the turn in flight is described,
+  and with limit 1 it wins the slot over an older image.
 - `vision_proxy_e2e_test.go` (build tag `e2e`) drives a real deployment;
   requires `TINGLY_API_KEY`, see the file header for details.
 

@@ -89,9 +89,11 @@ func TestVisionProxy_AnthropicV1_ToolResultImage_Described(t *testing.T) {
 	require.Contains(t, collectText(req), "a cat photo")
 }
 
-// Historical images inside a tool_result must still be stripped (with the
-// fixed marker, no vision call), exactly like top-level historical images.
-func TestVisionProxy_AnthropicBeta_HistoricalToolResultImage_StrippedNoCall(t *testing.T) {
+// An image inside a historical tool_result is described like any other
+// cache miss within the per-request limit — position no longer decides,
+// only the limit does — so a text-only latest turn still gets the earlier
+// screenshot described rather than elided.
+func TestVisionProxy_AnthropicBeta_HistoricalToolResultImage_Described(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("LATEST")
 	p := mkProcessor(t, fake, prov)
@@ -131,7 +133,8 @@ func TestVisionProxy_AnthropicBeta_HistoricalToolResultImage_StrippedNoCall(t *t
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
-	require.Equal(t, 0, fake.callCount(), "no vision call for historical images")
+	require.Equal(t, 1, fake.callCount(), "the historical tool_result image is a cache miss within the limit")
 	require.Equal(t, 0, countImages(req))
-	require.True(t, strings.Contains(collectText(req), imageHistoricalText), "historical marker present")
+	require.Contains(t, collectText(req), "LATEST")
+	require.False(t, strings.Contains(collectText(req), imageOverLimitText), "nothing was deferred")
 }

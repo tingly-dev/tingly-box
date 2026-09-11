@@ -97,8 +97,8 @@ func TestDescribeCache_SurvivesRestart(t *testing.T) {
 func TestDescribeCache_MemoryEvictionFallsBackToStore(t *testing.T) {
 	store := newTestStore(t, openTestDB(t))
 	c := newDescribeCacheWithStore(1, store)
-	k1 := visionCacheKey{session: "user:s1", content: "b64:1"}
-	k2 := visionCacheKey{session: "user:s1", content: "b64:2"}
+	k1 := visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:1"}
+	k2 := visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:2"}
 	c.put(k1, "one")
 	c.put(k2, "two") // evicts k1 from the memory tier
 
@@ -205,6 +205,23 @@ func TestVisionProxy_Cache_RestartDoesNotRedescribe(t *testing.T) {
 	require.Equal(t, req1.Messages[0].Content[1].OfText.Text, req2.Messages[0].Content[1].OfText.Text,
 		"the replacement text must be byte-identical across the restart")
 }
+
+// TestDescribeCache_EmptyServiceKeySkipsStore: nothing is ever written
+// under an empty service key, so a lookup must not cost a SELECT.
+func TestDescribeCache_EmptyServiceKeySkipsStore(t *testing.T) {
+	store := &countingStore{}
+	c := newDescribeCacheWithStore(10, store)
+	_, ok := c.get(visionCacheKey{session: "user:s1", content: "b64:1"})
+	require.False(t, ok)
+	require.Equal(t, 0, store.gets, "no service → no store round trip")
+	_, _ = c.get(visionCacheKey{session: "user:s1", provider: "p1", model: "m1", content: "b64:1"})
+	require.Equal(t, 1, store.gets)
+}
+
+type countingStore struct{ gets int }
+
+func (s *countingStore) Get(visionCacheKey) (string, bool) { s.gets++; return "", false }
+func (s *countingStore) Put(visionCacheKey, string)        {}
 
 func TestSessionScope_IgnoresIPBackup(t *testing.T) {
 	home := typ.SessionID{Source: typ.SessionSourceUser, Value: "session-a", IPBackup: "10.0.0.2"}

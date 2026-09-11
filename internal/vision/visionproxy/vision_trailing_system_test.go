@@ -64,7 +64,8 @@ func claudeCodeShapedBeta(b64 string) *anthropic.BetaMessageNewParams {
 // TestVisionProxy_Beta_TrailingSystemMessage_StillDescribesCurrentTurn is the
 // regression guard for the failure this fix addresses: Claude Code's image
 // never reached any model because a trailing system message made the image
-// test as history and it was replaced with the "omitted from history" marker.
+// test as history and it was replaced with the history marker (since replaced
+// by the per-request describe limit, which ranks images by position only).
 func TestVisionProxy_Beta_TrailingSystemMessage_StillDescribesCurrentTurn(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("a V-tail aircraft, registration N40J")
@@ -81,17 +82,19 @@ func TestVisionProxy_Beta_TrailingSystemMessage_StillDescribesCurrentTurn(t *tes
 
 	text := collectText(req)
 	require.Contains(t, text, "registration N40J")
-	require.NotContains(t, text, "omitted from history",
+	require.NotContains(t, text, imageOverLimitText,
 		"a trailing system message must not turn the current turn into history")
 }
 
-// TestVisionProxy_Beta_TrailingSystem_KeepsRealHistoryElided confirms the fix
-// moves the anchor without disabling it: an image from an earlier user turn is
-// still replaced with the cheap marker rather than sent upstream.
-func TestVisionProxy_Beta_TrailingSystem_KeepsRealHistoryElided(t *testing.T) {
+// TestVisionProxy_Beta_TrailingSystem_LimitPrefersCurrentTurn confirms the
+// describe limit ranks by position independent of trailing system messages:
+// with one slot, the image of the turn in flight wins it and the image from
+// an earlier user turn is deferred with the marker rather than sent upstream.
+func TestVisionProxy_Beta_TrailingSystem_LimitPrefersCurrentTurn(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("latest description")
 	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
 
 	req := claudeCodeShapedBeta(tinyPNGBase64)
 	// Splice a genuinely historical image in as the opening user turn.
@@ -109,12 +112,12 @@ func TestVisionProxy_Beta_TrailingSystem_KeepsRealHistoryElided(t *testing.T) {
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "trailing-system-test"}))
 
-	require.Equal(t, 1, fake.callCount(), "only the current turn is described")
+	require.Equal(t, 1, fake.callCount(), "one slot: only the current turn is described")
 	require.Equal(t, 0, countImages(req))
 
 	text := collectText(req)
 	require.Contains(t, text, "latest description")
-	require.Contains(t, text, "omitted from history", "the older image stays elided")
+	require.Contains(t, text, imageOverLimitText, "the older image is deferred")
 }
 
 // TestVisionProxy_OpenAI_TrailingSystemMessage covers the same client shape on
@@ -154,15 +157,4 @@ func TestVisionProxy_OpenAI_TrailingSystemMessage(t *testing.T) {
 		"a trailing system message must not elide the user's image")
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "chat latest desc")
-}
-
-// TestLatestImageAnchor_FallsBackWhenNothingQualifies pins the guard that keeps
-// prior behaviour for message lists with no image-bearing role at all.
-func TestLatestImageAnchor_FallsBackWhenNothingQualifies(t *testing.T) {
-	require.Equal(t, 2, latestImageAnchor(3, func(int) bool { return false }),
-		"no qualifying message keeps the anchor at len-1")
-	require.Equal(t, -1, latestImageAnchor(0, func(int) bool { return false }),
-		"an empty list yields the empty-slice anchor")
-	require.Equal(t, 1, latestImageAnchor(4, func(i int) bool { return i == 1 }),
-		"the last qualifying index wins over later non-qualifying ones")
 }
