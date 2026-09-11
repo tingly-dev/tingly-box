@@ -8,6 +8,15 @@ run-name: >-
   docker=${{ github.event.inputs.build_docker || 'true' }}]
   by @${{ github.actor }}
 
+# Triggers:
+#   - release: published — fires only for releases created by a person or an
+#     app token. Releases cut by release.yml use GITHUB_TOKEN, and GitHub does
+#     not start workflow runs for events created with that token, so a tag
+#     push reaches this workflow via the `trigger-npm-publish` job in
+#     release.yml, which dispatches it with the inputs below (npm_tag inferred
+#     from the version). Either way the run parks at the `production`
+#     environment approval before anything is published.
+#   - workflow_dispatch — manual (re-)publish against any existing release.
 on:
   release:
     types: [published]

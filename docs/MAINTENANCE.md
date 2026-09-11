@@ -167,11 +167,23 @@ If a release introduces issues:
 
 After a GitHub Release is created, publish NPX packages to npm for easy installation.
 
-### Workflow: gh-npx-publish.yml
+### Workflow: npm.yml
 
-This is a manual workflow that publishes npm packages based on an existing GitHub Release.
+Publishes npm packages based on an existing GitHub Release.
 
-### Steps to Publish NPX Packages
+For a tag push (`v*`), you do not start it by hand: the last job of
+`release.yml` (`trigger-npm-publish`) dispatches it as soon as the GitHub
+Release is created, with `publish_cli=true`, `publish_gui=false`,
+`build_docker=true` and the npm dist-tag inferred from the version
+(`v1.2.3` → `latest`, `v1.2.3-rc1` → `rc`). The run then waits at the
+`production` environment approval gate — approving it is the only manual step
+left. (The explicit dispatch is needed because releases created with the
+workflow's `GITHUB_TOKEN` do not fire the `release: published` trigger.)
+
+Run it manually only to re-publish, to publish the GUI package, or to override
+the defaults:
+
+### Steps to Publish NPX Packages Manually
 
 1. **Navigate to Actions tab** in GitHub
 2. **Select "NPX Package Publish from GitHub Release"** workflow
@@ -180,13 +192,15 @@ This is a manual workflow that publishes npm packages based on an existing GitHu
 
    | Input | Description | Example |
    |-------|-------------|---------|
-   | `release_tag` | GitHub Release tag to download assets from | `v0.20260403.2230-hotfix` |
-   | `npx_version` | NPX package version (defaults to tag without `v`) | `0.20260403.2230-hotfix` |
+   | `tag` | GitHub Release tag to download assets from | `v0.20260403.2230-hotfix` |
+   | `npm_tag` | npm dist-tag (`latest` / `rc`) | `rc` |
    | `publish_cli` | Publish the CLI package (`tingly-box`) and its platform packages | `true` |
    | `publish_gui` | Publish GUI package (`tingly-box-gui`) | `false` |
+   | `build_docker` | Build and push the Docker NPX image after the CLI publish | `true` |
 
-5. **Important**: The `release_tag` must match an existing GitHub Release tag
-6. **The `npx_version`** should match the `release_tag` (without the `v` prefix) for consistency
+5. **Important**: The `tag` must match an existing GitHub Release tag; the npm
+   version is always the tag without the `v` prefix
+6. **Approve** the `production` deployment when the run pauses on it
 
 ### Published Packages
 
