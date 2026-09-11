@@ -73,6 +73,52 @@ POST /tingly/imagegen/v1/images/edits
 重新核对成本很低(上面四行 grep),Codex 哪天加上 `mask`,`buildCodexImageEditRequest`
 里就是多一个字段 + 去掉那处报错。
 
+#### 核过的一个猜想:mask 会不会混在 `images` 数组里传?
+
+**没有证据,判定为否。**`ImageUrl` 的结构体只有 `image_url: String` 一个字段,没有
+类型、角色、顺序约定可以把其中一张标成 mask;`images` 数组的每一项都来自用户给的
+路径或会话里最近的图片(`request_for_call_args`);工具描述(`imagegen_description.md`)
+通篇讲的是"改哪张图",一个字都没提区域或蒙版。也就是说:客户端没有把 mask 藏进去的
+地方,模型也没有被告知可以这么做。
+
+这个猜想指向的**技术**是真的存在的,只是叫另一个名字:把"要改的区域"画在参考图上
+(圈出来/压暗)让模型自己读——visual prompting。它对任何支持 edits 的 provider 都
+成立,但它是 prompt 层的示意,不是 alpha 通道的硬约束:模型可能连那个圈一起画进
+结果里。它正是 `sketch-canvas.md` §6 里"在已有图片上标注"那条,见 §7 的降级路径。
+
+### 2.2 Codex 上仍然存在的一条路:Responses 的 `input_image_mask`
+
+原生 `images/edits` 没有 mask,但那不是 Codex 订阅唯一的出图面。**Responses API 的
+hosted `image_generation` 工具带一个 `input_image_mask`**(SDK 里确有其物:
+`responses.ToolImageGenerationParam.InputImageMask`,内含 `image_url`(base64)或
+`file_id`,注释写的就是 "Optional mask for inpainting"),同一个工具上还有
+`action: generate | edit | auto` 和 `input_fidelity`。
+
+而我们的 `CodexClient.ImagesGenerate` **已经在走这条面**——
+`buildImageGenerationResponsesRequest` 现在就在构造这个 tool,只是没有填
+`InputImageMask`。所以"Codex 能不能做局部重绘"这个问题没有关闭,它变成了一个
+可以做实验的具体问题,而不是一个协议事实。
+
+挡在前面的未知只有一个:`imageedit.md` §1 断言"Responses surface 无法给该 tool 挂
+reference image",这正是当初要为 edit 另开 endpoint 的理由。但公开 Responses API
+的官方改图姿势恰恰是"消息里放 `input_image` + 工具 `action: edit`",所以这条断言
+要么是 ChatGPT backend 的特殊限制,要么是当时的一个未验证假设。**它是这条路上唯一
+需要先回答的问题。**
+
+实验(不改产品代码就能做,建议在打开这条路之前先跑):
+
+1. 对 `chatgpt.com/backend-api/codex/responses` 发一个 hosted `image_generation`
+   请求,消息内容里带一张 `input_image`,工具设 `action: edit`,看后端接不接。
+2. 接的话,同一请求加上 `input_image_mask.image_url`,看局部重绘是否真的只改
+   涂过的区域。
+3. 两步都过 → Codex 分支的 mask 从"报错"变成"换一条面走";任一步不过 →
+   §3.10 的明确报错就是终局,并把失败结论写回这里,省得下次再猜一遍。
+
+注意:codex-rs 自己**故意不挂** hosted `image_generation` 工具
+(`core/tests/suite/responses_lite.rs` 直接断言它不在工具列表里),它走的是自己
+客户端执行的 `image_gen.imagegen`。所以这条路是**我们的用法**,不是 Codex CLI 的
+用法——它能不能成立只能由实验回答,不能从 codex 源码推出来。
+
 ---
 
 ## 3. 核心决策
@@ -247,6 +293,12 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 
 ## 7. 未做 / 后续
 
+- **降级路径:标注式 mask(visual prompting)**。provider 收不到 alpha mask 时
+  (Codex,以及 §2.2 的实验若不通过),把要改的区域直接画在参考图上仍然能给模型
+  一个指向。它与本功能共用同一块涂层数据,导出时不是抽 alpha 而是把涂过的区域
+  压暗/描边合成进图片。**不做进第一版**:它的成功率取决于模型,而且有"圈被画进
+  结果里"的失败模式,先把真 mask 这条做扎实,再决定要不要给不支持的 provider 补
+  这个替身。
 - **outpainting(向外扩画布)**:同一个 `mask` 机制,但需要一套"把原图放进更大画布
   并选择扩展方向"的 UI,是另一个功能。
 - **魔棒 / 自动分割**:SAM 之类能在浏览器里跑,挡在前面的是几 MB 模型怎么带——与
