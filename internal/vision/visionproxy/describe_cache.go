@@ -53,16 +53,24 @@ func hashURLImage(remoteURL string) string {
 	return "url:" + remoteURL
 }
 
-// describeCache is a fixed-capacity, in-memory LRU cache from
-// visionCacheKey to the already-formatted replacement text. It is
-// process-local, not persisted, and not shared across instances — the cache
-// exists purely to avoid re-describing byte-identical images within one
-// session during this process's lifetime.
+// describeCache is a two-tier cache from visionCacheKey to the
+// already-formatted replacement text:
+//
+//   - a fixed-capacity in-memory LRU, the hot tier every lookup hits first;
+//   - an optional DescribeStore (SQLite, see describe_store.go), the durable
+//     tier consulted on a memory miss and written through on every put.
+//
+// The store is what makes prefix stability survive a restart: a session
+// with a dozen screenshots must not re-describe all of them — and hand the
+// downstream model a dozen freshly worded (hence different) descriptions —
+// just because tingly-box was restarted or the LRU turned over. With no
+// store the cache degrades to memory-only, which is what tests use.
 type describeCache struct {
 	mu       sync.Mutex
 	capacity int
 	ll       *list.List // front = most recently used
 	items    map[visionCacheKey]*list.Element
+	store    DescribeStore // nil = memory-only
 }
 
 type describeCacheEntry struct {
@@ -70,22 +78,47 @@ type describeCacheEntry struct {
 	text string
 }
 
-// newDescribeCache builds an LRU cache bounded to capacity entries. A
-// non-positive capacity makes get always miss and put a no-op (degrades to
-// "no cache" rather than panicking or growing unbounded).
+// newDescribeCache builds a memory-only LRU cache bounded to capacity
+// entries. A non-positive capacity makes the memory tier always miss and
+// never retain (degrades to "no cache" rather than panicking or growing
+// unbounded).
 func newDescribeCache(capacity int) *describeCache {
+	return newDescribeCacheWithStore(capacity, nil)
+}
+
+// newDescribeCacheWithStore builds the two-tier cache: the memory LRU in
+// front of store. A nil store is memory-only.
+func newDescribeCacheWithStore(capacity int, store DescribeStore) *describeCache {
 	return &describeCache{
 		capacity: capacity,
 		ll:       list.New(),
 		items:    make(map[visionCacheKey]*list.Element),
+		store:    store,
 	}
 }
 
-// get looks up key, marking it most-recently-used on a hit.
+// get looks up key: memory first (marking it most-recently-used on a hit),
+// then the store. A store hit is promoted into memory so the next lookup —
+// the same historical image on the next turn — never touches the database.
 func (c *describeCache) get(key visionCacheKey) (string, bool) {
 	if c == nil {
 		return "", false
 	}
+	if text, ok := c.getMemory(key); ok {
+		return text, true
+	}
+	if c.store == nil {
+		return "", false
+	}
+	text, ok := c.store.Get(key)
+	if !ok {
+		return "", false
+	}
+	c.putMemory(key, text)
+	return text, true
+}
+
+func (c *describeCache) getMemory(key visionCacheKey) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el, ok := c.items[key]
@@ -96,11 +129,22 @@ func (c *describeCache) get(key visionCacheKey) (string, bool) {
 	return el.Value.(*describeCacheEntry).text, true
 }
 
-// put inserts or updates key, evicting the least-recently-used entry if the
-// cache is over capacity afterward. A nil cache or non-positive capacity
-// makes this a no-op.
+// put writes key through both tiers: memory (evicting the least-recently-
+// used entry if over capacity) and, when configured, the store.
 func (c *describeCache) put(key visionCacheKey, text string) {
-	if c == nil || c.capacity <= 0 {
+	if c == nil {
+		return
+	}
+	c.putMemory(key, text)
+	if c.store != nil {
+		c.store.Put(key, text)
+	}
+}
+
+// putMemory inserts or updates key in the memory tier only. A non-positive
+// capacity makes this a no-op.
+func (c *describeCache) putMemory(key visionCacheKey, text string) {
+	if c.capacity <= 0 {
 		return
 	}
 	c.mu.Lock()

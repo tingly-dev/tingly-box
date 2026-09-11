@@ -63,15 +63,35 @@ responsibilities:
 
 ### Describe cache
 
-`describe_cache.go` is a fixed-capacity, process-local LRU cache from
+`describe_cache.go` is a two-tier cache from
 `(session, provider, model, image-content-hash)` to the already-formatted
-replacement text. Every image occurrence — latest or historical — checks
-this cache first (`spliceOrCollect`): a hit splices the cached text
-immediately, no upstream call either way; a miss falls through to the two
-behaviors above. Only successful describe calls are written back; fail-strip
-results never are. Session is part of the key so a description is only ever
-reused within the same conversation — see `.design/vision-proxy.md` §10 for
-the full rationale (why session, why provider+model, known limitations).
+replacement text:
+
+- a fixed-capacity in-memory LRU (2000 entries) — the hot tier every lookup
+  hits first;
+- `describe_store.go` — a durable tier in tingly's shared SQLite database
+  (`vision_descriptions` table), consulted on a memory miss and written
+  through on every put. A store hit is promoted into memory so the same
+  historical image never touches the database again on later turns.
+
+Every image occurrence — latest or historical — checks the cache first
+(`spliceOrCollect`): a hit splices the cached text immediately, no upstream
+call either way; a miss falls through to the two behaviors above. Only
+successful describe calls are written back; fail-strip results never are.
+Session is part of the key so a description is only ever reused within the
+same conversation; the session component is `source:value`, deliberately
+without the client-IP backup so a network change mid-conversation keeps
+hitting. See `.design/vision-proxy.md` §10 for the full rationale.
+
+The durable tier is what keeps the downstream prompt prefix stable across
+a gateway restart: a conversation carrying a dozen screenshots would
+otherwise re-describe all of them — with a dozen freshly worded texts — on
+its first request after the restart. There is no age limit — a paid-for
+description is kept for as long as the table is under its ceiling of
+100000 rows, beyond which the least recently used rows go first; the check
+runs at boot and then at most hourly from the write path. The
+store is wired at server boot from the StoreManager's connection; if that
+is unavailable the cache silently degrades to memory-only.
 
 ### Process pipeline
 
@@ -219,6 +239,12 @@ deliver images this way. Unknown request shapes are left alone (no-op).
   handler call order.
 - `describe_cache_test.go` — LRU mechanics in isolation (eviction, update,
   key isolation across service/session, nil/zero-capacity no-op behavior).
+- `describe_store_test.go` — the durable tier: round-trip and upsert,
+  session/service isolation, survive-a-restart (fresh cache over the same
+  database hits with zero vision calls and byte-identical text), memory
+  eviction falling back to the store, no-age-limit and size-ceiling
+  pruning, `last_used_at` touch throttling, and the IP-independent session
+  scope.
 - `vision_proxy_test.go` / `vision_proxy_regression_test.go` — the
   processor contract, including the `TestVisionProxy_Cache_*` cases for
   session/model isolation, historical-hit-uses-real-description, and
@@ -231,5 +257,10 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 - Deduplicating identical images within one request (each occurrence still
   gets its own describe call the first time it's seen — the cache only
   helps across separate `Process` calls, not within one).
-- Cross-process / cross-instance cache sharing (the describe cache is
-  in-memory, per gateway process — see `.design/vision-proxy.md` §10).
+- Cross-instance cache sharing (the durable tier lives in each gateway's
+  own `tingly.db`; two gateway instances do not see each other's
+  descriptions — see `.design/vision-proxy.md` §10).
+- Coalescing two concurrent requests that carry the same new image. This
+  is deliberate, not a gap: both describe, each gets its own independent
+  description (keeping the vision model's output diversity), and the later
+  write is what later turns of the session settle on.

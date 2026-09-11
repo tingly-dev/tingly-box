@@ -123,6 +123,16 @@ type imageRef struct {
 	splice    func(text string)
 }
 
+// sessionScope is the session component of a cache key. It is the resolved
+// (source, value) pair and deliberately NOT typ.SessionID.String(): that
+// form also carries the client IP as a backup field, and a laptop that
+// changes networks mid-conversation must keep hitting the descriptions it
+// already paid for. Now that entries outlive the process (describe_store.go)
+// the key has to be stable across everything but the conversation itself.
+func sessionScope(id typ.SessionID) string {
+	return string(id.Source) + ":" + id.Value
+}
+
 // newVisionCacheKey builds the cache key for one image occurrence. provider
 // and model come from usable (nil when no vision service is configured —
 // still a valid, if useless, key: without a service nothing ever gets
@@ -174,7 +184,7 @@ func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []
 	// built during the walk need the same (session, service) pair.
 	usable := p.pickUsableService(services)
 	cache := p.describeCacheFor()
-	session := sessionID.String()
+	session := sessionScope(sessionID)
 
 	// Phase 1 — walk the request: images whose cache key already has a
 	// description get it spliced in immediately; historical images that

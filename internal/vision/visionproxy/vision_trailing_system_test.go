@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // claudeCodeShapedBeta reproduces the message list Claude Code actually sends
@@ -72,7 +73,7 @@ func TestVisionProxy_Beta_TrailingSystemMessage_StillDescribesCurrentTurn(t *tes
 	req := claudeCodeShapedBeta(tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "trailing-system-test"}))
 
 	require.Equal(t, 1, fake.callCount(),
 		"the image of the turn in flight must be described, not elided as history")
@@ -106,7 +107,7 @@ func TestVisionProxy_Beta_TrailingSystem_KeepsRealHistoryElided(t *testing.T) {
 	req.Messages = append([]anthropic.BetaMessageParam{historical}, req.Messages...)
 
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "trailing-system-test"}))
 
 	require.Equal(t, 1, fake.callCount(), "only the current turn is described")
 	require.Equal(t, 0, countImages(req))
@@ -147,7 +148,7 @@ func TestVisionProxy_OpenAI_TrailingSystemMessage(t *testing.T) {
 	}
 
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "trailing-system-test"}))
 
 	require.Equal(t, 1, fake.callCount(),
 		"a trailing system message must not elide the user's image")
