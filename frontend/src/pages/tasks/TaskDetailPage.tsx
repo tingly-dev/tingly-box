@@ -1,7 +1,8 @@
-// One task, laid out like a chat: a slim top bar (what task, where, what
-// state), the conversation in a readable column, and the composer pinned
-// to the bottom of the scroll area. The changes live in a side panel that
-// opens on demand (always on desktop when there are changes); on a phone
+// One task, laid out like a chat and built like one: the page is a fixed
+// frame the height of the viewport — top bar at the top, composer at the
+// bottom — and only the conversation between them scrolls. Nothing floats
+// or follows the content. The changes live in a side panel with its own
+// scroll (open by itself on desktop once there are changes); on a phone
 // it slides in as a drawer, so the two things a person does from a phone —
 // answer a question, send one more instruction — never leave the screen.
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -26,6 +27,11 @@ import {PERMISSION_MODES, permissionModeKey, relativeTime, shortId, StatusChip, 
 
 const COLUMN = 860;
 const PANEL = 400;
+// The layout's scroll container is 100vh tall with its own padding
+// (mobileContentSx: 72px top on phones for the app bar, 24px otherwise,
+// 24px bottom); the frame fills exactly what is left so nothing outside
+// it ever scrolls.
+const FRAME_HEIGHT = {xs: 'calc(100vh - 96px)', md: 'calc(100vh - 48px)'};
 
 const TaskDetailPage = () => {
     const {sessionId} = useParams<{sessionId: string}>();
@@ -137,11 +143,7 @@ const TaskDetailPage = () => {
         <Stack
             direction="row"
             spacing={1}
-            sx={{
-                alignItems: 'center', minWidth: 0, position: 'sticky', top: {xs: -72, md: -24}, zIndex: 3,
-                mx: {xs: -2, md: -3}, px: {xs: 2, md: 3}, py: 1, bgcolor: 'background.default',
-                borderBottom: '1px solid', borderColor: 'divider',
-            }}
+            sx={{alignItems: 'center', minWidth: 0, flexShrink: 0, pb: 1, borderBottom: '1px solid', borderColor: 'divider'}}
         >
             <IconButton size="small" onClick={() => navigate('/tasks')} aria-label={t('tasks.detail.back')}>
                 <ArrowBack fontSize="small" />
@@ -190,7 +192,7 @@ const TaskDetailPage = () => {
     );
 
     const composer = showComposer && session && (
-        <Box sx={{position: 'sticky', bottom: {xs: -24, md: -24}, pt: 1.5, pb: {xs: 3, md: 3}, mb: {xs: -3, md: -3}, bgcolor: 'background.default', zIndex: 2}}>
+        <Box sx={{flexShrink: 0, pt: 1.5, width: '100%', maxWidth: COLUMN, mx: 'auto'}}>
             <Paper
                 variant="outlined"
                 sx={{borderRadius: 3, px: 1.5, pt: 1.25, pb: 1, boxShadow: (th) => th.shadows[1], '&:focus-within': {borderColor: 'primary.main'}}}
@@ -253,7 +255,7 @@ const TaskDetailPage = () => {
     );
 
     const conversation = session && (
-        <Stack spacing={2} sx={{py: 2, flex: 1}}>
+        <Stack spacing={2} sx={{py: 2, maxWidth: COLUMN, mx: 'auto', width: '100%'}}>
             {session.status === 'failed' && (
                 <Alert severity="error" variant="outlined">
                     {t('tasks.detail.failed')}{session.error ? `: ${session.error}` : ''}
@@ -305,15 +307,18 @@ const TaskDetailPage = () => {
     return (
         <PageLayout loading={loading && !session}>
             {session && (
-                <Box sx={{display: 'flex', flexDirection: 'column', minHeight: '100%'}}>
+                <Box sx={{height: FRAME_HEIGHT, display: 'flex', flexDirection: 'column', minHeight: 0}}>
                     {topBar}
-                    <Box sx={{display: 'flex', gap: 3, alignItems: 'stretch', flex: 1, minWidth: 0}}>
-                        <Box sx={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', maxWidth: COLUMN, mx: 'auto', width: '100%'}}>
-                            {conversation}
+                    <Box sx={{display: 'flex', gap: 3, flex: 1, minHeight: 0, minWidth: 0}}>
+                        {/* Conversation column: the scroll box, then the composer, fixed. */}
+                        <Box sx={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0}}>
+                            <Box sx={{flex: 1, minHeight: 0, overflowY: 'auto', pr: 0.5}}>
+                                {conversation}
+                            </Box>
                             {composer}
                         </Box>
                         {!isPhone && panelOpen && (
-                            <Box sx={{width: PANEL, flexShrink: 0, position: 'sticky', top: 64, alignSelf: 'flex-start', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', pt: 2}}>
+                            <Box sx={{width: PANEL, flexShrink: 0, minHeight: 0, overflowY: 'auto', pt: 2}}>
                                 <Paper variant="outlined" sx={{p: 2, borderRadius: 2}}>{panel}</Paper>
                             </Box>
                         )}
