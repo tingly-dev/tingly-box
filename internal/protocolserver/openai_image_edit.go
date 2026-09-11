@@ -265,9 +265,11 @@ func readMultipartFile(fh *multipart.FileHeader) ([]byte, error) {
 }
 
 // imageEditJSONRequest is the JSON mirror of the multipart edit form. Image
-// carries one or more inline images (data URL or bare base64).
+// carries one or more inline images (data URL or bare base64); Mask carries
+// one the same way.
 type imageEditJSONRequest struct {
 	Image             imageEditJSONImages `json:"image"`
+	Mask              string              `json:"mask,omitempty"`
 	Prompt            string              `json:"prompt"`
 	Model             string              `json:"model"`
 	N                 *int64              `json:"n,omitempty"`
@@ -344,6 +346,20 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 		} else {
 			req.Image.OfFileArray = append(req.Image.OfFileArray, file)
 		}
+	}
+
+	// The mask is inlined exactly like the images. The multipart form has
+	// carried one all along; leaving it out of this encoding was an asymmetry,
+	// not a decision.
+	if strings.TrimSpace(jsonReq.Mask) != "" {
+		data, contentType, err := decodeInlineImage(jsonReq.Mask)
+		if err != nil {
+			return nil, fmt.Errorf("invalid mask: %s", err.Error())
+		}
+		if contentType == "" {
+			contentType = "image/png"
+		}
+		req.Mask = openai.File(bytes.NewReader(data), "mask"+extensionForImageContentType(contentType), contentType)
 	}
 
 	return req, nil
