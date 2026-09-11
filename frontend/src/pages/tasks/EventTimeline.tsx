@@ -12,7 +12,7 @@ import {alpha} from '@mui/material/styles';
 import CodeBlock from '@/components/CodeBlock';
 import {
     AutoAwesome as IconAgent, Build as IconTool, ChevronRight, Code as IconCode, Description as IconFile,
-    ExpandMore, Search as IconSearch, Terminal as IconTerminal, Warning as IconWarning,
+    ExpandMore, Psychology as IconThinking, Search as IconSearch, Terminal as IconTerminal, Warning as IconWarning,
 } from '@/components/icons';
 import type {AgentEvent} from '@/services/agentApi';
 
@@ -115,7 +115,43 @@ const AgentTurn = ({children}: {children: React.ReactNode}) => (
 interface ToolCall {
     use: AgentEvent;
     result?: AgentEvent;
+    // A thinking block rides in the activity block as a foldable row too.
+    thinking?: boolean;
 }
+
+const ThinkingRow = ({event}: {event: AgentEvent}) => {
+    const {t} = useTranslation();
+    const [open, setOpen] = useState(false);
+    const text = event.text ?? '';
+    const preview = text.replace(/\s+/g, ' ').trim();
+    return (
+        <Box>
+            <Stack
+                direction="row"
+                spacing={1}
+                onClick={() => setOpen((v) => !v)}
+                sx={{alignItems: 'center', py: 0.5, px: 1, borderRadius: 1, minWidth: 0, cursor: 'pointer', '&:hover': {bgcolor: 'action.hover'}}}
+            >
+                <Box sx={{fontSize: 15, display: 'flex', color: 'text.secondary', flexShrink: 0}}><IconThinking fontSize="inherit" /></Box>
+                <Typography variant="caption" sx={{fontWeight: 600, flexShrink: 0, color: 'text.secondary'}}>{t('tasks.detail.thinking')}</Typography>
+                {!open && (
+                    <Typography variant="caption" color="text.disabled" sx={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: 'italic'}}>
+                        {preview}
+                    </Typography>
+                )}
+                {open && <Box sx={{flex: 1}} />}
+                <Box sx={{display: 'flex', color: 'text.disabled', fontSize: 16, flexShrink: 0}}>
+                    {open ? <ExpandMore fontSize="inherit" /> : <ChevronRight fontSize="inherit" />}
+                </Box>
+            </Stack>
+            <Collapse in={open} unmountOnExit>
+                <Typography variant="body2" color="text.secondary" sx={{pl: 4, pr: 1, pb: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontStyle: 'italic'}}>
+                    {text}
+                </Typography>
+            </Collapse>
+        </Box>
+    );
+};
 
 const ToolRow = ({call}: {call: ToolCall}) => {
     const {t} = useTranslation();
@@ -181,7 +217,7 @@ const ToolRow = ({call}: {call: ToolCall}) => {
 const ActivityGroup = ({calls}: {calls: ToolCall[]}) => (
     <Box sx={{pl: {xs: 0, sm: 4.5}, pr: {xs: 0, sm: 6}}}>
         <Paper variant="outlined" sx={{py: 0.5, px: 0.5, borderRadius: 2, bgcolor: 'background.default'}}>
-            {calls.map((c) => <ToolRow key={c.use.seq} call={c} />)}
+            {calls.map((c) => (c.thinking ? <ThinkingRow key={c.use.seq} event={c.use} /> : <ToolRow key={c.use.seq} call={c} />))}
         </Paper>
     </Box>
 );
@@ -306,6 +342,13 @@ const toBlocks = (events: AgentEvent[]): {blocks: Block[]; responses: Map<string
             case 'assistant_message':
                 blocks.push({kind: 'agent', event: e});
                 break;
+            case 'thinking': {
+                const row: ToolCall = {use: e, thinking: true};
+                const l = last();
+                if (l && l.kind === 'activity') l.calls.push(row);
+                else blocks.push({kind: 'activity', calls: [row]});
+                break;
+            }
             case 'tool_use': {
                 const call: ToolCall = {use: e};
                 if (e.request_id) openCalls.set(e.request_id, call);

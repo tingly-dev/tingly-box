@@ -136,6 +136,15 @@ func (b *Bridge) notify(e managedagent.Event, event string) {
 	}
 	ws, _ := b.svc.GetWorkspace(ctx, sess.WorkspaceID)
 	title, body := render(event, sess, ws)
+	if event == EventFinished {
+		// Like the @cc bridge: the agent's last words, with the turn's
+		// activity folded into one line under them.
+		if events, err := b.svc.ListEvents(ctx, sess.ID, 0, 0); err == nil {
+			if summary := turnSummary(events); summary != "" {
+				body = summary + "\n" + body
+			}
+		}
+	}
 	ch := ev.Meta["__channel"].(channelT)
 	target := ev.Meta["__target"].(targetT)
 	if err := b.rt.Notify(ctx, ch, target, interaction.Notification{Title: title, Body: body,
@@ -274,4 +283,40 @@ func briefInput(input any) string {
 		return string(raw[:297]) + "…"
 	}
 	return string(raw)
+}
+
+// turnSummary renders the last turn as IM shows it: the final assistant
+// message (trimmed) and, folded under it, how many tool calls it took.
+// The full transcript stays in the web UI.
+func turnSummary(events []managedagent.Event) string {
+	start := 0
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Kind == managedagent.EventUserMessage {
+			start = i
+			break
+		}
+	}
+	var last string
+	tools := 0
+	for _, e := range events[start:] {
+		switch e.Kind {
+		case managedagent.EventAssistantMessage:
+			last = e.Text
+		case managedagent.EventToolUse:
+			tools++
+		}
+	}
+	const max = 1200
+	if len(last) > max {
+		last = last[:max] + "…"
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(last))
+	if tools > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "(%d tool call(s) this turn)", tools)
+	}
+	return b.String()
 }

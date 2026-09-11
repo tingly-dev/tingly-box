@@ -1672,6 +1672,7 @@ const scriptMockAgentSession = (row: any) => {
         row.session.cc_session_id = 'c0ffee00-1234-4abc-9def-000000000001'
     })
     t(2200, () => {
+        pushMockAgentEvent(row, 'thinking', 'The user wants validation on the signup form. I should read the form first, then check which helpers already exist before adding new ones.')
         pushMockAgentEvent(row, 'assistant_message', 'Let me look at the signup form and the existing validation helpers first.')
         pushMockAgentEvent(row, 'tool_use', 'Read', 'tu-0', { file_path: 'frontend/src/pages/SignupForm.tsx' })
         pushMockAgentEvent(row, 'tool_result', 'export const SignupForm = () => { … }', 'tu-0', { is_error: false })

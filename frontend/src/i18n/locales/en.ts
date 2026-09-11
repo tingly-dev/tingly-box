@@ -865,6 +865,7 @@ export default {
       "toolUse": "Tool: {{name}}",
       "toolResult": "Result",
       "toolPending": "running…",
+      "thinking": "Thinking",
       "working": "Working…",
       "waitingShort": "Answer the question above first",
       "enterHint": "Enter to send · Shift+Enter for a new line",

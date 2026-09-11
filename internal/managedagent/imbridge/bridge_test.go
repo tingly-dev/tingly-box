@@ -141,11 +141,16 @@ func TestBridge_NotifiesAndAnswersApproval(t *testing.T) {
 	sess.Status = managedagent.SessionIdle
 	sess.Artifact.Changed = 3
 	_ = stores.Sessions.UpdateSession(ctx, sess)
+	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventToolUse, Text: "Bash", RequestID: "tu-9"})
+	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventAssistantMessage, Text: "Tests pass; validation added."})
 	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventStatus, Text: "idle"})
+	// The notification carries the agent's last words and the folded
+	// activity, then the change count.
 	waitFor(t, "finished notification", func() bool {
 		ch.mu.Lock()
 		defer ch.mu.Unlock()
-		return len(ch.sent) == 2 && strings.Contains(ch.sent[1].Body, "3 changed file")
+		return len(ch.sent) == 2 && strings.Contains(ch.sent[1].Body, "3 changed file") &&
+			strings.Contains(ch.sent[1].Body, "Tests pass; validation added.") && strings.Contains(ch.sent[1].Body, "tool call")
 	})
 	// An interrupted turn is not a finish.
 	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventStatus, Text: "idle: interrupted"})

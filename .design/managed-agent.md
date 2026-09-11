@@ -559,6 +559,12 @@ settings defaultMode > CLI 默认）。
 | 对话渲染（`EventTimeline`） | 用户消息右侧气泡；agent 文本左侧无框，带火花标记，``` 代码块渲染成代码；工具调用折成"活动块"——每个调用一行（图标 + 工具名 + 命令/文件），点一下展开输出；权限询问是带琥珀左边线的卡片，Allow/Deny 在卡片上，回答后留下 Allowed/Denied 标记；只保留"被你停止 / 失败"两种分隔标记，running/idle 不进对话流；provisioning 的 system 行折成一行"N setup steps" |
 | 不再有 | 页面标题和副标题、卡片套卡片、"显示工具活动"总开关、状态分隔线噪音、右栏常驻元信息 |
 
+## 17. 一轮对话的全部过程都在记录里（2026-09-11）
+
+CLI 的 stream-json 把一次 API 响应的每个 content block 作为独立的 `assistant` 事件发出（thinking / text / tool_use 各一条，同一个 message id）。转换器逐条记录：中间的 text 是 `assistant_message`，`tool_use`/`tool_result` 成对，新增 `thinking` 事件（可见推理，redacted 的不记）。`TestJourney_TurnDetailsRecorded` 用脚本化上游发一条含 thinking + text + tool_use 的消息，断言六个事件按顺序都在。
+
+展示：web 时间线里 thinking 和工具调用一起折在"活动块"里，一行一条，点开看全文；IM 的 finished 通知按 @cc 的样子给"最后一句话 + (N 次工具调用) + 改动数"，全文留在 web。
+
 ## 15. 分阶段：本地目录优先（2026-09-11）
 
 用户的判断：仓库 clone → 分支 → push 那条路现在不必做完，先把"本地目录 + 就地工作"跑稳，界面也只围绕这一条路。不是丢弃，是拆分：

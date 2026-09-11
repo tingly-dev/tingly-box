@@ -79,6 +79,11 @@ func (c *converter) assistant(m *claude.AssistantMessage) []managedagent.Event {
 	}
 	for _, block := range m.Message.Content {
 		switch block.Type {
+		case claude.ContentBlockTypeThinking:
+			flush()
+			if t := strings.TrimSpace(block.Thinking); t != "" {
+				out = append(out, c.ev(managedagent.EventThinking, t, "", nil))
+			}
 		case claude.ContentBlockTypeText:
 			if text.Len() > 0 {
 				text.WriteString("\n")

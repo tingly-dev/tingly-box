@@ -306,11 +306,32 @@ func newOriginRepo(t *testing.T) string {
 // ─── scripted upstream ──────────────────────────────────────────────────
 
 // upstreamTurn is what the scripted upstream answers to one request.
+// Text / Bash are the one-block shorthands; Blocks scripts a full message
+// (thinking, text, tool_use in any order) the way a real model answers.
 type upstreamTurn struct {
-	Text   string        // plain assistant text (end_turn)
-	Bash   string        // when set, a Bash tool_use with this command
-	Status int           // when >= 400, an error response with this status
-	Delay  time.Duration // sleep before answering (interruptible)
+	Text   string          // plain assistant text (end_turn)
+	Bash   string          // when set, a Bash tool_use with this command
+	Blocks []upstreamBlock // when set, wins over Text / Bash
+	Status int             // when >= 400, an error response with this status
+	Delay  time.Duration   // sleep before answering (interruptible)
+}
+
+// upstreamBlock is one content block of a scripted message; exactly one
+// field is set.
+type upstreamBlock struct {
+	Thinking string
+	Text     string
+	Bash     string
+}
+
+func (tn upstreamTurn) contentBlocks() []upstreamBlock {
+	if len(tn.Blocks) > 0 {
+		return tn.Blocks
+	}
+	if tn.Bash != "" {
+		return []upstreamBlock{{Bash: tn.Bash}}
+	}
+	return []upstreamBlock{{Text: tn.Text}}
 }
 
 // scriptedUpstream speaks just enough of the Anthropic Messages API for the
@@ -410,13 +431,23 @@ func (u *scriptedUpstream) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tn upstreamTurn) blocks() ([]map[string]any, string) {
-	if tn.Bash != "" {
-		return []map[string]any{{
-			"type": "tool_use", "id": "toolu_scripted_1", "name": "Bash",
-			"input": map[string]any{"command": tn.Bash, "description": "scripted"},
-		}}, "tool_use"
+	var out []map[string]any
+	stop := "end_turn"
+	for i, b := range tn.contentBlocks() {
+		switch {
+		case b.Thinking != "":
+			out = append(out, map[string]any{"type": "thinking", "thinking": b.Thinking, "signature": "sig"})
+		case b.Bash != "":
+			stop = "tool_use"
+			out = append(out, map[string]any{
+				"type": "tool_use", "id": fmt.Sprintf("toolu_scripted_%d", i+1), "name": "Bash",
+				"input": map[string]any{"command": b.Bash, "description": "scripted"},
+			})
+		default:
+			out = append(out, map[string]any{"type": "text", "text": b.Text})
+		}
 	}
-	return []map[string]any{{"type": "text", "text": tn.Text}}, "end_turn"
+	return out, stop
 }
 
 func (tn upstreamTurn) message() map[string]any {
@@ -438,24 +469,33 @@ func (tn upstreamTurn) sse() []string {
 		"id": "msg_scripted", "type": "message", "role": "assistant", "model": "claude-scripted",
 		"content": []any{}, "stop_reason": nil, "usage": map[string]any{"input_tokens": 12, "output_tokens": 0},
 	}})...)
-	if tn.Bash != "" {
-		input, _ := json.Marshal(map[string]any{"command": tn.Bash, "description": "scripted"})
-		out = append(out, ev("content_block_start", map[string]any{"type": "content_block_start", "index": 0,
-			"content_block": map[string]any{"type": "tool_use", "id": "toolu_scripted_1", "name": "Bash", "input": map[string]any{}}})...)
-		out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0,
-			"delta": map[string]any{"type": "input_json_delta", "partial_json": string(input)}})...)
-		out = append(out, ev("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})...)
-		out = append(out, ev("message_delta", map[string]any{"type": "message_delta",
-			"delta": map[string]any{"stop_reason": "tool_use", "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 7}})...)
-	} else {
-		out = append(out, ev("content_block_start", map[string]any{"type": "content_block_start", "index": 0,
-			"content_block": map[string]any{"type": "text", "text": ""}})...)
-		out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0,
-			"delta": map[string]any{"type": "text_delta", "text": tn.Text}})...)
-		out = append(out, ev("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})...)
-		out = append(out, ev("message_delta", map[string]any{"type": "message_delta",
-			"delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 7}})...)
+	stop := "end_turn"
+	for i, b := range tn.contentBlocks() {
+		switch {
+		case b.Thinking != "":
+			out = append(out, ev("content_block_start", map[string]any{"type": "content_block_start", "index": i,
+				"content_block": map[string]any{"type": "thinking", "thinking": "", "signature": ""}})...)
+			out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": i,
+				"delta": map[string]any{"type": "thinking_delta", "thinking": b.Thinking}})...)
+			out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": i,
+				"delta": map[string]any{"type": "signature_delta", "signature": "sig"}})...)
+		case b.Bash != "":
+			stop = "tool_use"
+			input, _ := json.Marshal(map[string]any{"command": b.Bash, "description": "scripted"})
+			out = append(out, ev("content_block_start", map[string]any{"type": "content_block_start", "index": i,
+				"content_block": map[string]any{"type": "tool_use", "id": fmt.Sprintf("toolu_scripted_%d", i+1), "name": "Bash", "input": map[string]any{}}})...)
+			out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": i,
+				"delta": map[string]any{"type": "input_json_delta", "partial_json": string(input)}})...)
+		default:
+			out = append(out, ev("content_block_start", map[string]any{"type": "content_block_start", "index": i,
+				"content_block": map[string]any{"type": "text", "text": ""}})...)
+			out = append(out, ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": i,
+				"delta": map[string]any{"type": "text_delta", "text": b.Text}})...)
+		}
+		out = append(out, ev("content_block_stop", map[string]any{"type": "content_block_stop", "index": i})...)
 	}
+	out = append(out, ev("message_delta", map[string]any{"type": "message_delta",
+		"delta": map[string]any{"stop_reason": stop, "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 7}})...)
 	out = append(out, ev("message_stop", map[string]any{"type": "message_stop"})...)
 	return out
 }

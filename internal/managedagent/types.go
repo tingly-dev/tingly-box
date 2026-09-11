@@ -244,6 +244,9 @@ type EventKind string
 const (
 	EventUserMessage      EventKind = "user_message"
 	EventAssistantMessage EventKind = "assistant_message"
+	// EventThinking is the model's visible reasoning before it acts; kept
+	// so the transcript shows the whole turn, folded in the UI.
+	EventThinking         EventKind = "thinking"
 	EventToolUse          EventKind = "tool_use"
 	EventToolResult       EventKind = "tool_result"
 	EventApprovalRequest  EventKind = "approval_request"

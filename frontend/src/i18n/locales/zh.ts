@@ -866,6 +866,7 @@ export default {
       "toolUse": "工具：{{name}}",
       "toolResult": "结果",
       "toolPending": "运行中…",
+      "thinking": "思考",
       "working": "工作中…",
       "waitingShort": "先回答上面的问题",
       "enterHint": "Enter 发送 · Shift+Enter 换行",

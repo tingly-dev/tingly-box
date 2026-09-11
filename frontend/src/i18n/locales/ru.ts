@@ -865,6 +865,7 @@ export default {
       "toolUse": "Инструмент: {{name}}",
       "toolResult": "Результат",
       "toolPending": "выполняется…",
+      "thinking": "Размышление",
       "working": "Работает…",
       "waitingShort": "Сначала ответьте на вопрос выше",
       "enterHint": "Enter — отправить · Shift+Enter — новая строка",
