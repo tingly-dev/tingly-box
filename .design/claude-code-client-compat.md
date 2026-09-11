@@ -14,19 +14,42 @@
 
 | 项目 | 2.1.86（旧实现） | 2.1.258（当前） | 代码位置 |
 |---|---|---|---|
-| 版本单一来源 | 散落在 3 处字面量 | `constant.ClaudeCodeVersion` | `internal/constant/claude_code.go` |
-| `User-Agent` | `claude-cli/2.1.86 (external, cli)` | `claude-cli/2.1.258 (external, cli)` | `constant.ClaudeCodeUserAgent()` |
-| `X-Stainless-Package-Version` | `0.74.0` | `0.112.1` | `claude_round_tripper.go` |
+| 版本选择 | 硬编码 2.1.86 | `claude_code_version` rule flag（§0.1），默认 Legacy | `typ.ClaudeCodeVersion2_1_258`、`internal/client/claude_version.go` |
+| `User-Agent` | `claude-cli/2.1.86 (external, cli)` | `claude-cli/2.1.258 (external, cli)` | `client.nativeClaudeCLIUserAgent` |
+| `X-Stainless-Package-Version` | `0.74.0` | `0.112.1` | `claude_version.go` |
 | `X-Stainless-Runtime-Version` | `v24.3.0` | `v26.3.0`（Bun 1.4.1 原生二进制） | 同上 |
 | `X-Stainless-OS` / `-Arch` | Go 的 `linux`/`amd64`（❌ 与真实客户端不一致） | SDK 映射名 `Linux`/`x64`、`MacOS`/`arm64` | `stainlessOSName` / `stainlessArchName` |
 | `x-stainless-helper-method: stream` | 发送（❌ 真实客户端从不发） | 不发送 | — |
 | `anthropic-beta` | 固定字符串（含已废弃的 `token-efficient-tools-2026-03-28`） | 按 model + 请求体 + 入站白名单**逐请求合成**，按官方 push 顺序输出 | `internal/client/claude_betas.go` |
 | billing header `cch` | 每请求随机 5 hex（❌ 官方是请求体的 xxHash64） | JS 层占位 `cch=00000;`，网络层按官方算法改写为 `xxHash64_zig(body′, seed) & 0xFFFFF`；保留入站的 `cc_workload / cc_is_subagent / cc_prev_req / cc_prompt_id` | `internal/client/claude_cch.go`（哈希）+ `internal/protocol/ops/claude_code_billing_header.go`（占位） |
-| fingerprint 输入文本 | 首条 user 消息的第一个 text block | 跳过 `<system-reminder>` 块后的第一个 text block（2.1.258 把 reminder 变成了 meta 消息） | `ops.extractFirstUserMessageText` |
-| `metadata.user_id` | `{device_id, account_uuid, session_id}` | 同上 + 透传 `parent_session_id`（子 agent） | `ops.MetadataUserID` |
+| fingerprint 输入文本 | 首条 user 消息的第一个 text block | 跳过 `<system-reminder>` 块后的第一个 text block（2.1.258 把 reminder 变成了 meta 消息） | `ops.extractFirstUserPromptText` |
+| `metadata.user_id` | `{device_id, account_uuid, session_id}` | 同上 + 透传 `parent_session_id`（子 agent） | `ops.nativeMetadataUserID`（`claude_code_billing_header.go`） |
 | 子 agent 头 | 无 | 透传 `x-claude-code-agent-id` / `x-claude-code-parent-agent-id` | `typ.ClaudeCodeClientHints` |
 | System preamble | `You are Claude Code, Anthropic's official CLI for Claude.` | 不变 | `client.ClaudeCodeSystemHeader` |
 | 地理位置隐写（`Today’s` / `2026/09/02`） | 有 normalizer | 两个版本的 bundle 里都**没找到**相关代码；normalizer 保留 | `transform_clean_header.go` |
+
+### 0.1 上线方式：`claude_code_version` rule flag，默认关闭
+
+这套模拟一旦生效是破坏性的（改 UA、beta、billing header、metadata），所以全部行为都挂在一个新的 rule flag
+`claude_code_version` 后面，按**版本**而不是开关切换：
+
+| 值 | 行为 |
+|---|---|
+| `""`（默认，"Legacy"） | 与 flag 出现之前**逐字节相同**的 2.1.86 模拟：`claude_round_tripper.go` 的常量、静态 beta 串、随机 `cch`、旧 fingerprint 输入、`\u003c` 转义都原样保留 |
+| `2.1.258` | 本文描述的原生客户端 profile |
+
+- flag 定义在 `typ.RuleFlags.ClaudeCodeVersion`（registry：`claude_code_version`，enum，`request_anthropic` 分类），
+  也可在 scenario 级设置（`ScenarioFlags.ClaudeCodeVersion`，rule 值优先），方便对整个 `claude_code` scenario 一次切换。
+- 只对 Claude OAuth provider 链路生效；未知值当作 Legacy，绝不会出现"半套 profile"。
+- 数据流：`ResolveRuleFlagsWithScenario` 合并 → `RulePreVendorTransforms` 挂 `ClaudeCodeVersionTransform` 把版本写进
+  chain `Extra` → `ops.ApplyAnthropic*MetadataTransform` 在函数开头按 `ClaudeCodeVersionFromExtra` 分派到
+  `applyNativeClaudeCodeIdentity*`（旧路径一行未动）→ `NewClaudeClient` 用 `claudeCodeNative(ctx)` 决定是否叠加
+  `claude_version.go` 的 header/beta/cch 覆盖层。
+- 未来 Anthropic 再抬版本时：新增一个枚举值和一个 profile，旧 profile 保留，用户可逐个 rule 迁移、随时回退。
+- 回归护栏：`TestClaudeClient_LegacyProfileUnchanged`、`TestApplyAnthropicBetaMetadataTransform_LegacyUnchanged`
+  和 harness 的 `claude_code_version` case（同一请求分别走 Legacy 与 2.1.258，逐项断言上游 wire）。
+- 与 flag 无关、始终生效的唯一改动：`transform/vendor.go::isClaudeCodeBackend`——Claude OAuth issuer 挂在非
+  `api.anthropic.com` host 上时也做 identity 注入（此前这种配置会因缺 metadata 在 `Guard` 里 panic）。
 
 触发事件：用户在真实使用中收到
 
@@ -49,9 +72,9 @@ Claude OAuth 链路（`ClientPool.GetAnthropicClient` → `NewClaudeClient`）�
 
 | 用户术语 | 具体内容 | 产生位置 |
 |---|---|---|
-| **client header** | `User-Agent`、`x-app`、`X-Claude-Code-Session-Id`、`X-Stainless-*`、`anthropic-beta`、`anthropic-version`、`anthropic-dangerous-direct-browser-access`、`accept`、子 agent 头 | `internal/client/claude_client.go`（`applyClaudeCodeHeaders` + `perRequestOptions`）、`claude_betas.go` |
+| **client header** | `User-Agent`、`x-app`、`X-Claude-Code-Session-Id`、`X-Stainless-*`、`anthropic-beta`、`anthropic-version`、`anthropic-dangerous-direct-browser-access`、`accept`、子 agent 头 | `internal/client/claude_client.go`（`applyClaudeCodeHeaders`，Legacy）+ `claude_version.go`（2.1.258 覆盖层）、`claude_betas.go` |
 | **system header** | `system[0]` 的 `x-anthropic-billing-header: ...` 文本块；`system[1]` 的身份 preamble | `internal/protocol/ops/request_anthropic_model.go`（`ApplyAnthropic*MetadataTransform`）、`claude_code_billing_header.go` |
-| **meta data** | `metadata.user_id` 的 JSON 串 | `internal/protocol/ops/metadata_user_id.go` |
+| **meta data** | `metadata.user_id` 的 JSON 串 | Legacy：`internal/protocol/ops/metadata_user_id.go`；2.1.258：`claude_code_billing_header.go::buildNativeMetadataUserID` |
 | **clean header** | 转发到**非** Claude OAuth provider 时剥掉 billing header / 隐写标记 / preamble | `internal/protocolserver/transform/transform_clean_header.go`；flag 解析见 `rule_flags.go`（Claude OAuth provider 上自动关闭） |
 
 ---
@@ -421,23 +444,22 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 | wire 元素 | 生成/处理位置 | 关键符号 |
 |---|---|---|
-| 版本 | `internal/constant/claude_code.go` | `ClaudeCodeVersion`、`ClaudeCodeUserAgent()` |
-| UA / stainless / x-app / 固定头 | `internal/client/claude_round_tripper.go`、`claude_client.go::applyClaudeCodeHeaders` | `claudeCLIUserAgent`、`stainless*`、`stainlessOSName/ArchName` |
+| 版本 / 开关 | `internal/typ/type.go`、`flag_registry.go`（`claude_code_version`）；`protocolserver/rule_flags.go`（scenario 继承 + `ClaudeCodeVersionTransform` 挂载） | `typ.ClaudeCodeVersion2_1_258`、`typ.ClaudeCodeVersionEnabled` |
+| UA / stainless / x-app / 固定头 | Legacy：`internal/client/claude_round_tripper.go` + `claude_client.go::applyClaudeCodeHeaders`（未改）；2.1.258 覆盖层：`claude_version.go::applyNativeClaudeCodeHeaders` | `nativeClaudeCLIUserAgent`、`nativeStainless*`、`stainlessOSName/ArchName` |
 | `anthropic-beta` | `internal/client/claude_betas.go` | `composeClaudeCodeBetas`、`claudeCodeBetaEmissionOrder`、`claudeCodeClientReplayableBetas`、`*ClaudeBetaSignals` |
-| 逐请求头（session id / beta / agent id） | `claude_client.go::perRequestOptions`（Guard / GuardBeta 调用） | `sanitizeClaudeHeaderValue` |
-| count_tokens beta 子集 | `claude_client.go::countTokensClient` | `filterClaudeCodeCountTokensBetas` |
+| 逐请求头（beta / agent id / cch 中间件） | `claude_version.go::nativeRequestOptions`（Guard / GuardBeta 在 `c.native` 时追加） | `sanitizeClaudeHeaderValue` |
+| count_tokens beta 子集 | `claude_version.go::nativeCountTokensClient` | `filterClaudeCodeCountTokensBetas` |
 | 入站 hint 采集 | `internal/protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
-| billing header | `internal/protocol/ops/claude_code_billing_header.go`；注入点 `request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform`（由 `transform/vendor.go::isClaudeCodeBackend` 门控：host 为 `api.anthropic.com`/`claude.ai`，**或** provider 是 Claude Code OAuth issuer——中继/自建 host 也要重签，否则 `ClaudeClient.Guard` 会因缺 metadata 而 panic） | `BuildClaudeCodeBillingHeader`、`IsBillingHeaderText`、`computeCCVersion`、`extractFirstUserMessageText` |
-| metadata | `internal/protocol/ops/metadata_user_id.go` | `MetadataUserID.ParentSessionID` |
-| clean header | `internal/protocolserver/transform/transform_clean_header.go` | 复用 `ops.IsBillingHeaderText` |
-| UA 预设 | `internal/typ/flag_registry.go::DefaultUserAgents`、`frontend/src/mocks/handlers.ts` | 由 `constant` 派生 |
+| billing header + metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头按 `ClaudeCodeVersionFromExtra` 分派（Legacy 路径原样）；调用方 `transform/vendor.go::isClaudeCodeBackend`（host 为 `api.anthropic.com`/`claude.ai`，**或** provider 是 Claude Code OAuth issuer） | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`computeCCVersionFor`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
+| clean header | `internal/protocolserver/transform/transform_clean_header.go`（未改） | — |
+| UA 预设 | `internal/typ/flag_registry.go::DefaultUserAgents`（未改，仍是 2.1.86 字面量；它只是 `custom_user_agent` 的快选建议，与本 flag 无关） | — |
 
 测试：`internal/client/claude_betas_test.go`（含 httptest wire 级断言）、`claude_round_tripper_test.go`、
-`internal/protocol/ops/claude_code_billing_header_test.go`（含抓包 fingerprint `8ee`）、`metadata_user_id_parent_test.go`、
+`internal/protocol/ops/claude_code_billing_header_test.go`（含抓包 fingerprint `8ee`、Legacy 路径回归）、
 `internal/protocolserver/claude_code_hints_test.go`、`internal/protocol/transform/vendor_claude_relay_test.go`；
-**端到端**：`internal/protocoltest/claude_code_identity_test.go` 让一个 Claude Code 形态的请求走完真实网关
-（claude_code scenario → Claude OAuth provider → 虚拟上游），逐项断言上游收到的 UA / beta / 子 agent 头 /
-billing header / metadata。升版后先跑它。
+**端到端**：`internal/protocoltest/flags.go` 的 `claude_code_version` case 让同一个 Claude Code 形态的请求分别以 Legacy 与
+2.1.258 走完真实网关（claude_code scenario → Claude OAuth provider → 虚拟上游），逐项断言上游收到的 UA / beta /
+子 agent 头 / billing header / metadata。升版后先跑它。
 
 ---
 
@@ -477,7 +499,8 @@ billing header / metadata。升版后先跑它。
    - `"x-app":` 处的默认头 → 新增头是否需要透传。
 3. 用 §2.4 抓包（API key + OAuth token 各一次，`env -i`），把 `anthropic-beta` 原文和 `cc_version` 写进测试
    （`TestComposeClaudeCodeBetas_*Capture`、`TestComputeFingerprint_MatchesLiveCapture`；注意 `-p` 与交互式差一个 `redact-thinking`）。
-4. 改 `constant.ClaudeCodeVersion`，跑 `go test ./internal/client/ ./internal/protocol/ops/ ./internal/protocolserver/... ./internal/protocol/transform/`。
+4. 在 `typ` 新增版本常量与 registry 枚举值，在 `claude_version.go` 新增 profile（不要改旧 profile），跑
+   `go test ./internal/client/ ./internal/protocol/... ./internal/protocolserver/... ./internal/protocoltest/`；`task codegen` 刷新 openapi/前端类型。
 5. 更新本文 §0 表格与 §3 的抓包实例。
 
 ---

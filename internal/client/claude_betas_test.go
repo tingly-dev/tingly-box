@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -184,8 +186,13 @@ func newCapturingAnthropicServer(t *testing.T, capture *http.Header) *httptest.S
 	}))
 }
 
+// newTestClaudeClient builds a Claude OAuth client with the native profile
+// selected (claude_code_version=2.1.258); rule flags already on ctx are kept.
 func newTestClaudeClient(t *testing.T, ctx context.Context, apiBase string) *ClaudeClient {
 	t.Helper()
+	flags := typ.GetRuleFlags(ctx)
+	flags.ClaudeCodeVersion = typ.ClaudeCodeVersion2_1_258
+	ctx = typ.WithRuleFlags(ctx, flags)
 	provider := &typ.Provider{
 		Name:     "test-claude",
 		APIBase:  apiBase,
@@ -249,8 +256,8 @@ func TestClaudeClient_WireHeaders(t *testing.T) {
 	assert.Equal(t, "js", captured.Get("X-Stainless-Lang"))
 	assert.Equal(t, "0", captured.Get("X-Stainless-Retry-Count"))
 	assert.Equal(t, "600", captured.Get("X-Stainless-Timeout"))
-	assert.Equal(t, stainlessOS(), captured.Get("X-Stainless-Os"))
-	assert.Equal(t, stainlessArch(), captured.Get("X-Stainless-Arch"))
+	assert.Equal(t, stainlessOSName(runtime.GOOS), captured.Get("X-Stainless-Os"))
+	assert.Equal(t, stainlessArchName(runtime.GOARCH), captured.Get("X-Stainless-Arch"))
 	assert.Empty(t, captured.Get("X-Stainless-Helper-Method"), "the CLI does not use the .stream() helper")
 	assert.Equal(t, "agent-7", captured.Get("X-Claude-Code-Agent-Id"))
 	assert.Equal(t, "agent-main", captured.Get("X-Claude-Code-Parent-Agent-Id"))
@@ -292,4 +299,51 @@ func TestClaudeClient_CountTokensBetaSubset(t *testing.T) {
 	betas := captured.Values("Anthropic-Beta")
 	require.Len(t, betas, 1)
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27", betas[0])
+}
+
+// With claude_code_version unset the chain must be byte-for-byte the legacy
+// 2.1.86 emulation: pinned UA and SDK triple, the helper-method header, the
+// static beta list, the cch placeholder untouched and Go's HTML-safe JSON
+// escaping still on the wire.
+func TestClaudeClient_LegacyProfileUnchanged(t *testing.T) {
+	var captured http.Header
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Header.Clone()
+		body, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-4-6",
+			"content": []map[string]any{{"type": "text", "text": "hi"}}, "stop_reason": "end_turn",
+			"usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer srv.Close()
+
+	ctx := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{AgentID: "agent-7"})
+	provider := &typ.Provider{
+		Name: "legacy", APIBase: srv.URL, AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "sk-ant-oat01-testtoken"},
+	}
+	c, err := NewClaudeClient(ctx, provider, "claude-sonnet-4-6", typ.SessionID{Value: "sess"})
+	require.NoError(t, err)
+	require.False(t, c.native)
+
+	req := betaRequestWithMetadata()
+	req.System = []anthropic.BetaTextBlockParam{
+		{Text: "x-anthropic-billing-header: cc_version=2.1.86.abc; cc_entrypoint=cli; cch=00000;"},
+		{Text: "<system-reminder>x</system-reminder>"},
+	}
+	_, err = c.BetaMessagesNew(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, claudeCLIUserAgent, captured.Get("User-Agent"))
+	assert.Equal(t, "claude-cli/2.1.86 (external, cli)", captured.Get("User-Agent"))
+	assert.Equal(t, stainlessHelperMethod, captured.Get("X-Stainless-Helper-Method"))
+	assert.Equal(t, stainlessPackageVersion, captured.Get("X-Stainless-Package-Version"))
+	assert.Equal(t, stainlessRuntimeVersion, captured.Get("X-Stainless-Runtime-Version"))
+	assert.Equal(t, anthropicBeta, captured.Get("Anthropic-Beta"))
+	assert.Empty(t, captured.Get("X-Claude-Code-Agent-Id"))
+	assert.Contains(t, string(body), "cch=00000;", "legacy chain does not hash cch")
+	assert.Contains(t, string(body), `\u003csystem-reminder\u003e`, "legacy chain keeps Go's JSON escaping")
 }

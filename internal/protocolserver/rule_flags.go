@@ -73,6 +73,11 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
 	}
+	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
+		// Hands the selected profile to the vendor transform's Claude Code
+		// identity rewrite (ops.ClaudeCodeVersionFromExtra).
+		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))
+	}
 	return preVendor
 }
 
@@ -137,6 +142,12 @@ func ResolveRuleFlagsWithScenario(
 		// scenario-wide default.
 		if flags.CustomUserAgent == "" && scenarioConfig.Flags.CustomUserAgent != "" {
 			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
+		}
+
+		// Inject scenario-level ClaudeCodeVersion if rule hasn't set one
+		// explicitly (same override semantics as CustomUserAgent).
+		if flags.ClaudeCodeVersion == "" && scenarioConfig.Flags.ClaudeCodeVersion != "" {
+			flags.ClaudeCodeVersion = scenarioConfig.Flags.ClaudeCodeVersion
 		}
 
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
