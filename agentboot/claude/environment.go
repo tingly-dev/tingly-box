@@ -16,7 +16,6 @@ const (
 	EnvNodePath    = "NODE_PATH"
 	EnvBunVersions = "BUN_VERSIONS"
 	EnvBunInstall  = "BUN_INSTALL"
-
 )
 
 // GetCleanEnv returns a clean environment for running Claude CLI.
@@ -54,6 +53,10 @@ func (d *CLIDiscovery) buildCleanEnv(ctx context.Context) ([]string, error) {
 		// Skip Bun-specific paths that might interfere
 		if strings.HasPrefix(e, EnvBunVersions+"=") ||
 			strings.HasPrefix(e, EnvBunInstall+"=") {
+			continue
+		}
+
+		if isInheritedSessionIdentity(e) {
 			continue
 		}
 
@@ -127,4 +130,59 @@ func MergeEnv(base []string, custom []string) []string {
 	}
 
 	return result
+}
+
+// inheritedSessionIdentityKeys are variables a running Claude Code session
+// exports to describe ITSELF: that it is a remote / host-managed session and
+// which identity it authenticates with. When the host running agentboot is
+// itself inside such a session (a `tb start` from a Claude Code terminal, a
+// Claude Code remote container), a child `claude` inheriting them adopts the
+// parent's provider and credentials and silently ignores the routing it was
+// launched with (ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN, --settings).
+//
+// Only identity is dropped. User configuration that legitimately lives in
+// the shell (CLAUDE_CONFIG_DIR, CLAUDE_CODE_MAX_OUTPUT_TOKENS, ...) passes
+// through unchanged.
+var inheritedSessionIdentityKeys = map[string]bool{
+	"CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": true,
+	"CLAUDE_CODE_REMOTE":                   true,
+	"CLAUDE_SESSION_INGRESS_TOKEN_FILE":    true,
+	"SESSION_INGRESS_URL":                  true,
+	// The parent's own session: a child that inherits CLAUDE_CODE_SESSION_ID
+	// writes into the parent's transcript, and CLAUDECODE / the entrypoint
+	// make it behave as a nested session of the parent's kind.
+	"CLAUDE_CODE_SESSION_ID":                        true,
+	"CLAUDE_CODE_CHILD_SESSION":                     true,
+	"CLAUDE_CODE_ENTRYPOINT":                        true,
+	"CLAUDECODE":                                    true,
+	"CLAUDE_PID":                                    true,
+	"CLAUDE_CODE_ACCOUNT_UUID":                      true,
+	"CLAUDE_CODE_ORGANIZATION_UUID":                 true,
+	"CLAUDE_CODE_USER_EMAIL":                        true,
+	"CLAUDE_CODE_HOLD_UNANSWERED_PARKED_PERMISSION": true,
+}
+
+// Prefixes that only a running session exports about itself.
+var inheritedSessionIdentityPrefixes = []string{
+	"CLAUDE_CODE_REMOTE_",
+	"CLAUDE_CODE_MESSAGING_",
+	"CLAUDE_SESSION_INGRESS_",
+}
+
+// isInheritedSessionIdentity reports whether a KEY=VALUE entry names the
+// parent session's identity rather than user configuration.
+func isInheritedSessionIdentity(kv string) bool {
+	key := kv
+	if i := strings.IndexByte(kv, '='); i >= 0 {
+		key = kv[:i]
+	}
+	if inheritedSessionIdentityKeys[key] {
+		return true
+	}
+	for _, p := range inheritedSessionIdentityPrefixes {
+		if strings.HasPrefix(key, p) {
+			return true
+		}
+	}
+	return false
 }

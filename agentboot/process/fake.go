@@ -48,13 +48,13 @@ func (f *FakeFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, error
 	stdoutR, stdoutW := io.Pipe()
 
 	h := &FakeHandle{
-		StdinR:    stdinR,
-		stdinW:    stdinW,
-		stdoutR:   stdoutR,
-		stdoutW:   stdoutW,
-		done:      make(chan struct{}),
-		exitErr:   nil,
-		spec:      spec,
+		StdinR:  stdinR,
+		stdinW:  stdinW,
+		stdoutR: stdoutR,
+		stdoutW: stdoutW,
+		done:    make(chan struct{}),
+		exitErr: nil,
+		spec:    spec,
 	}
 
 	f.mu.Lock()

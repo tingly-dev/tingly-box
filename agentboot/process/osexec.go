@@ -26,7 +26,10 @@ func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, err
 		return nil, fmt.Errorf("empty launch command")
 	}
 	cmd := spec.BuildCmd(ctx)
-	cmd.Stderr = f.Stderr
+	cmd.Stderr = spec.Stderr
+	if cmd.Stderr == nil {
+		cmd.Stderr = f.Stderr
+	}
 	if cmd.Stderr == nil {
 		cmd.Stderr = os.Stderr
 	}

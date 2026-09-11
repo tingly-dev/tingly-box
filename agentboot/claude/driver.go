@@ -170,6 +170,7 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 		Env:          env,
 		WorkDir:      workDir,
 		InitialInput: initialInput,
+		Stderr:       opts.Stderr,
 	}, nil
 }
 
