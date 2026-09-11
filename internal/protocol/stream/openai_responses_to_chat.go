@@ -36,7 +36,7 @@ func HandleResponsesToOpenAIChatStream(
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
 		} else {
-			sendOpenAIStreamError(c, err.Error(), "stream_error")
+			sendOpenAIStreamError(c, protocol.UpstreamMessage(err), "stream_error")
 		}
 		return conv.Usage(), err
 	}

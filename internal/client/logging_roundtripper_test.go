@@ -1,6 +1,7 @@
 package client
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -118,6 +119,106 @@ func TestLoggingRoundTripper_ProviderProxyTakesPrecedence(t *testing.T) {
 
 	if lrt.proxy != "http://provider-proxy.example.com:8080" {
 		t.Errorf("expected provider proxy, got %q", lrt.proxy)
+	}
+}
+
+// TestLoggingRoundTripper_TransportFailureAddsFailReason verifies that a
+// transport-level failure (here: DNS) gets a categorized `fail_reason` log
+// field alongside the raw error, instead of only the opaque error string.
+func TestLoggingRoundTripper_TransportFailureAddsFailReason(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no such host", Name: "api.example.com", IsNotFound: true}
+
+	hook := &captureFieldsHook{}
+	logrus.AddHook(hook)
+	t.Cleanup(func() {
+		logrus.StandardLogger().ReplaceHooks(logrus.LevelHooks{})
+	})
+
+	fn := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, dnsErr
+	})
+	lrt := &loggingRoundTripper{
+		inner:    &fn,
+		provider: &typ.Provider{Name: "test"},
+		proxy:    "direct",
+	}
+
+	req, _ := http.NewRequest("GET", "http://api.example.com/", nil)
+	if _, err := lrt.RoundTrip(req); err == nil {
+		t.Fatal("expected RoundTrip to return the transport error")
+	}
+
+	if len(hook.entries) == 0 {
+		t.Fatal("no log entry captured")
+	}
+	got, ok := hook.entries[len(hook.entries)-1]["fail_reason"]
+	if !ok {
+		t.Fatal("expected fail_reason field on the failed-call log entry")
+	}
+	if got != "dns_error" {
+		t.Errorf("fail_reason = %v, want dns_error", got)
+	}
+}
+
+// captureFieldsHook records every logrus entry's full field set and level.
+type captureFieldsHook struct {
+	entries []logrus.Fields
+	levels  []logrus.Level
+}
+
+func (h *captureFieldsHook) Levels() []logrus.Level { return logrus.AllLevels }
+func (h *captureFieldsHook) Fire(e *logrus.Entry) error {
+	h.entries = append(h.entries, e.Data)
+	h.levels = append(h.levels, e.Level)
+	return nil
+}
+
+// TestLoggingRoundTripper_HTTPStatusSetsLogLevel verifies that a provider
+// response (RoundTrip returns err == nil) is logged at a severity matching
+// its status code, not always Info — otherwise a 500 from the provider is
+// indistinguishable from a 200 to anyone filtering logs by level.
+func TestLoggingRoundTripper_HTTPStatusSetsLogLevel(t *testing.T) {
+	cases := []struct {
+		status    int
+		wantLevel logrus.Level
+	}{
+		{200, logrus.InfoLevel},
+		{404, logrus.WarnLevel},
+		{429, logrus.WarnLevel},
+		{500, logrus.ErrorLevel},
+		{503, logrus.ErrorLevel},
+	}
+
+	for _, c := range cases {
+		t.Run(http.StatusText(c.status), func(t *testing.T) {
+			hook := &captureFieldsHook{}
+			logrus.AddHook(hook)
+			t.Cleanup(func() {
+				logrus.StandardLogger().ReplaceHooks(logrus.LevelHooks{})
+			})
+
+			fn := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: c.status, Body: http.NoBody}, nil
+			})
+			lrt := &loggingRoundTripper{
+				inner:    &fn,
+				provider: &typ.Provider{Name: "test"},
+				proxy:    "direct",
+			}
+
+			req, _ := http.NewRequest("GET", "http://api.example.com/", nil)
+			if _, err := lrt.RoundTrip(req); err != nil {
+				t.Fatalf("RoundTrip: %v", err)
+			}
+
+			if len(hook.levels) == 0 {
+				t.Fatal("no log entry captured")
+			}
+			gotLevel := hook.levels[len(hook.levels)-1]
+			if gotLevel != c.wantLevel {
+				t.Errorf("status %d logged at %v, want %v", c.status, gotLevel, c.wantLevel)
+			}
+		})
 	}
 }
 

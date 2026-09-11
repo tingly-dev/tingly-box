@@ -159,9 +159,10 @@ func failEmptyAssembly(c *gin.Context, err error, stopReason string) error {
 	if err == nil {
 		err = fmt.Errorf("upstream responses stream produced no content blocks (stop_reason=%q)", stopReason)
 	}
-	c.JSON(protocol.UpstreamStatus(err, http.StatusBadGateway), protocol.ErrorResponse{
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusBadGateway)
+	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Upstream returned an empty response: " + err.Error(),
+			Message: "Upstream returned an empty response: " + failure.Message,
 			Type:    "api_error",
 		},
 	})
