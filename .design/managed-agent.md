@@ -521,7 +521,7 @@ settings defaultMode > CLI 默认）。
 
 | 面 | 设计 |
 |---|---|
-| 提交框 "Where" | 一个 Select，两组：**Folders on this machine**（你添加过的目录 + "Browse for a folder…"）和 **Repositories (cloned)**；默认选中最近添加的目录 |
+| 提交框 "Folder" | 一个 Select：你添加过的目录 + "Add a folder…"；默认选中最近添加的目录（仓库分组按 §15 暂存） |
 | 目录选择器 | `FolderPickerDialog`，**白名单浏览**：顶层是"你添加的目录"（= local source 列表），只能向下进入其子目录；输入一个白名单之外的绝对路径会被告知"未添加"，但"使用"它就是添加动作。不读 Claude Code 的项目历史，不列 home |
 | API | `POST /agent/sessions` 接受 `local_path`（服务端 find-or-create 一个 `local` source，这就是白名单授权）；`GET /agent/fs/dirs?path=`（空 = 白名单本身；白名单之内列子目录；之外 403）；`GET /agent/fs/recent`（= 白名单） |
 | Repositories 页 | 顶部仍是 git 仓库；底部 "Folders used directly" 只列出用过的目录，仅可从列表移除，不再有"添加本地目录"的入口 |
@@ -547,6 +547,19 @@ settings defaultMode > CLI 默认）。
 | 自动回收闲置 workspace | 只删**没有任何产出**的 tb 自建 clone（无未提交改动、无 base 之外的提交）；有产出的一直保留 | 无 |
 | 手动回收 workspace | 有产出时 409，必须 `force: true`（用户在被告知内容后的明确决定）；用户自己的目录永远不删 | P0 未提供入口 |
 | 目录浏览 | 白名单：只列用户提交过的目录及其子目录；空路径列白名单本身；其他路径 403 | 选择器顶层是"你添加的目录" |
+
+## 15. 分阶段：本地目录优先（2026-09-11）
+
+用户的判断：仓库 clone → 分支 → push 那条路现在不必做完，先把"本地目录 + 就地工作"跑稳，界面也只围绕这一条路。不是丢弃，是拆分：
+
+| | 现在（界面暴露） | 暂存（代码保留、API 可用、界面不进导航） |
+|---|---|---|
+| 导航 | Tasks、**Folders**（白名单页：添加/移除目录） | Repositories（`/tasks/sources`，只能直接输 URL 到达）、Environments（`/tasks/environments`） |
+| 提交框 | "Folder" 一个下拉：已添加目录 + "Add a folder…"；权限模式 | 仓库分组、环境选择（只有一个 local 环境时本来就隐藏） |
+| 详情页 | 目录路径、改动列表、Refresh、归档、追问/批准 | 分支名、Push、PR 链接（`ChangesPanel` 里按 `workspace.branch` 判断，就地任务不渲染） |
+| 后端 | 全部保留，`TestFullStack_SessionOverHTTP` 继续守住 git 仓库那条路 | — |
+
+回到仓库阶段时要做的只是把导航项和提交框分组放回来，加上凭证/推送（§9 待决策）。
 
 ## 14. 测试方案（固化）
 

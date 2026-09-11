@@ -5,7 +5,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {
-    Box, Button, Card, CardActionArea, Chip, CircularProgress, FormControl, InputLabel, ListSubheader, MenuItem,
+    Box, Button, Card, CardActionArea, Chip, CircularProgress, FormControl, InputLabel, MenuItem,
     Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
@@ -15,12 +15,12 @@ import {FolderOpen as IconFolder, PlayArrow as IconPlay, Terminal as IconTermina
 import FolderPickerDialog from './FolderPickerDialog';
 import {useNotify} from '@/hooks/useNotify';
 import {
-    agentApi, isActiveStatus, type AgentEnvironment, type AgentSource, type PermissionMode, type RecentFolder, type SessionListItem,
+    agentApi, isActiveStatus, type AgentEnvironment, type PermissionMode, type RecentFolder, type SessionListItem,
 } from '@/services/agentApi';
 
-// The composer's target is one of two things on separate axes: a folder on
-// this host the agent works in directly, or a registered repository it
-// clones. Encoded as one select value so there is no mode picker.
+// The composer's target is a folder on this host the agent works in
+// directly. (A registered repository it clones is the parked next phase; the
+// value is prefixed so both can share one select without a mode picker.)
 const FOLDER_PREFIX = 'folder:';
 const SOURCE_PREFIX = 'source:';
 const BROWSE = '__browse__';
@@ -31,7 +31,6 @@ const TasksPage = () => {
     const navigate = useNavigate();
     const notify = useNotify();
 
-    const [sources, setSources] = useState<AgentSource[]>([]);
     const [environments, setEnvironments] = useState<AgentEnvironment[]>([]);
     const [sessions, setSessions] = useState<SessionListItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,13 +46,11 @@ const TasksPage = () => {
     const [starting, setStarting] = useState(false);
 
     const load = useCallback(async () => {
-        const [src, env, list, recent] = await Promise.all([
-            agentApi.listSources(),
+        const [env, list, recent] = await Promise.all([
             agentApi.listEnvironments(),
             agentApi.listSessions(filter === 'active' ? {active: true} : {}),
             agentApi.recentFolders(),
         ]);
-        if (src.ok) setSources((src.data.sources ?? []).filter((s) => s.kind !== 'local'));
         if (recent.ok) setFolders(recent.data.folders ?? []);
         if (env.ok) setEnvironments(env.data.environments ?? []);
         if (list.ok) setSessions(list.data.sessions ?? []);
@@ -73,13 +70,11 @@ const TasksPage = () => {
         return () => clearInterval(timer);
     }, [sessions, load]);
 
-    // Smart defaults: the most recent folder, else the first repository; the
-    // default environment.
+    // Smart defaults: the most recent folder; the default environment.
     useEffect(() => {
         if (target) return;
         if (folders.length > 0) setTarget(FOLDER_PREFIX + folders[0].path);
-        else if (sources.length > 0) setTarget(SOURCE_PREFIX + sources[0].id);
-    }, [folders, sources, target]);
+    }, [folders, target]);
     useEffect(() => {
         if (!environmentId && environments.length > 0) {
             setEnvironmentId((environments.find((e) => e.is_default) ?? environments[0]).id);
@@ -155,11 +150,9 @@ const TasksPage = () => {
                                             const p = v.slice(FOLDER_PREFIX.length);
                                             return folders.find((f) => f.path === p)?.name ?? (p.split(/[\\/]/).filter(Boolean).pop() || p);
                                         }
-                                        const src = sources.find((s) => SOURCE_PREFIX + s.id === v);
-                                        return src ? src.name : v;
+                                        return v;
                                     }}
                                 >
-                                    <ListSubheader>{t('tasks.composer.folders')}</ListSubheader>
                                     {folders.map((f) => (
                                         <MenuItem key={f.path} value={FOLDER_PREFIX + f.path}>
                                             <Stack sx={{minWidth: 0}}>
@@ -172,15 +165,6 @@ const TasksPage = () => {
                                         <IconFolder fontSize="small" sx={{mr: 1}} />
                                         {t('tasks.composer.browseFolder')}
                                     </MenuItem>
-                                    {sources.length > 0 && <ListSubheader>{t('tasks.composer.repositories')}</ListSubheader>}
-                                    {sources.map((s) => (
-                                        <MenuItem key={s.id} value={SOURCE_PREFIX + s.id}>
-                                            {s.name}
-                                            <Typography component="span" variant="caption" color="text.secondary" sx={{ml: 1}}>
-                                                {s.default_branch}
-                                            </Typography>
-                                        </MenuItem>
-                                    ))}
                                 </Select>
                             </FormControl>
                             {/* Environment only becomes a choice once there is more

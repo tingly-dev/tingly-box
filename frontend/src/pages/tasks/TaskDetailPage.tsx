@@ -232,8 +232,12 @@ const TaskDetailPage = () => {
             />
             <Divider />
             <Stack spacing={0.5}>
-                <Typography variant="overline" color="text.secondary">{t('tasks.detail.checkout')}</Typography>
-                <Typography variant="caption" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>{workspace?.path ?? '—'}</Typography>
+                {workspace?.branch && (
+                    <>
+                        <Typography variant="overline" color="text.secondary">{t('tasks.detail.checkout')}</Typography>
+                        <Typography variant="caption" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>{workspace.path}</Typography>
+                    </>
+                )}
                 {session.cc_session_id && (
                     <>
                         <Typography variant="overline" color="text.secondary">{t('tasks.detail.claudeSession')}</Typography>

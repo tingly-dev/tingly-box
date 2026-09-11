@@ -112,6 +112,7 @@ export default {
     "remoteControl": "远程控制",
     "tasks": "任务",
     "taskSources": "仓库",
+    "taskFolders": "目录",
     "taskEnvironments": "环境",
     "notify": "IM 通知",
     "bots": "机器人",
@@ -789,11 +790,11 @@ export default {
       "bypassPermissionsHelp": "所有调用自动批准，日志仍会记录执行了什么"
     },
     "title": "任务",
-    "subtitle": "选一个本机目录或仓库，给 agent 一句任务，在这里或 IM 里随时插话。仓库会有独立 checkout 并最后拿到一个分支；本机目录则就地工作。",
+    "subtitle": "选一个本机目录，告诉 agent 要做什么，在这里或 IM 里随时插话。它直接在目录里工作，改动随时可以在这里查看。",
     "composer": {
-      "target": "在哪里",
+      "target": "目录",
       "folders": "本机目录",
-      "browseFolder": "浏览选择目录…",
+      "browseFolder": "添加目录…",
       "repositories": "仓库（clone）",
       "prompt": "让 agent 做什么？",
       "promptPlaceholder": "例如：给注册表单加输入校验并补测试",
@@ -806,7 +807,7 @@ export default {
     },
     "list": {
       "empty": "还没有任务",
-      "emptyHint": "在上面描述一个任务，agent 会在仓库的全新 checkout 里开始。",
+      "emptyHint": "选一个目录，描述任务，agent 就在里面开始工作。",
       "active": "进行中",
       "all": "全部",
       "branch": "分支",
@@ -868,9 +869,10 @@ export default {
       "failed": "这个任务失败了",
       "running": "agent 正在工作…",
       "waiting": "agent 在等你回答上面的问题。",
-      "idle": "agent 完成了本轮。发送后续指令，或推送分支。",
+      "idle": "agent 完成了本轮。准备好了就继续追问。",
       "retryHint": "修正原因（例如在上方切换权限模式），再发一条消息即可在同一个 checkout 里重试。",
       "inPlace": "就地（无分支）",
+      "folder": "目录",
       "inPlaceNote": "这个任务直接修改你的目录；提交和推送请在该目录里自己完成。",
       "notFound": "任务不存在"
     },
@@ -884,6 +886,17 @@ export default {
       "empty": "没有子目录",
       "gitRepo": "git 仓库",
       "use": "使用此文件夹"
+    },
+    "folders": {
+      "title": "目录",
+      "subtitle": "本机上允许 agent 工作的目录。只有在这里添加过、或在其中开过任务的目录才能被列出；agent 就地修改，Tingly Box 永远不会删除其中的任何内容。",
+      "add": "添加目录",
+      "addHelp": "运行 Tingly Box 那台机器上的绝对路径。添加后 agent 可以在里面工作，选择器也可以浏览它的子目录。",
+      "empty": "还没有目录",
+      "emptyHint": "添加你想让 agent 工作的目录。",
+      "inPlace": "agent 就地在这个目录里工作——不 clone、不建分支、不删除。",
+      "added": "已添加目录",
+      "removed": "已从列表移除"
     },
     "sources": {
       "title": "仓库",

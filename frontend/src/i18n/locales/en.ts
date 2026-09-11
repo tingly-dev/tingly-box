@@ -111,6 +111,7 @@ export default {
     "remoteControl": "Remote Control",
     "tasks": "Tasks",
     "taskSources": "Repositories",
+    "taskFolders": "Folders",
     "taskEnvironments": "Environments",
     "notify": "IM Notify",
     "bots": "Bots",
@@ -788,11 +789,11 @@ export default {
       "bypassPermissionsHelp": "Everything is approved automatically; the log still shows what ran"
     },
     "title": "Tasks",
-    "subtitle": "Point the agent at a folder on this machine or a repository, give it a prompt, and steer from here or from IM. Repositories get their own checkout and a branch back; folders are worked in place.",
+    "subtitle": "Pick a folder on this machine, tell the agent what to do, and steer it from here or from IM. It works in the folder directly; you review the changes as they land.",
     "composer": {
-      "target": "Where",
+      "target": "Folder",
       "folders": "Folders on this machine",
-      "browseFolder": "Browse for a folder…",
+      "browseFolder": "Add a folder…",
       "repositories": "Repositories (cloned)",
       "prompt": "What should the agent do?",
       "promptPlaceholder": "e.g. Add input validation to the signup form and cover it with tests",
@@ -805,7 +806,7 @@ export default {
     },
     "list": {
       "empty": "No tasks yet",
-      "emptyHint": "Describe a task above and the agent starts in a fresh checkout of the repository.",
+      "emptyHint": "Pick a folder, describe the task, and the agent starts working in it.",
       "active": "Active",
       "all": "All",
       "branch": "Branch",
@@ -867,9 +868,10 @@ export default {
       "failed": "This task failed",
       "running": "The agent is working…",
       "waiting": "The agent is waiting for your answer above.",
-      "idle": "The agent finished its turn. Send a follow-up or push the branch.",
+      "idle": "The agent finished its turn. Send a follow-up when you are ready.",
       "retryHint": "Fix the cause (for example switch the permissions mode above) and send a message to retry in the same checkout.",
       "inPlace": "In place (no branch)",
+      "folder": "Folder",
       "inPlaceNote": "This task edits your folder directly; commit and push from there yourself.",
       "notFound": "Task not found"
     },
@@ -883,6 +885,17 @@ export default {
       "empty": "No sub-folders",
       "gitRepo": "git repository",
       "use": "Use this folder"
+    },
+    "folders": {
+      "title": "Folders",
+      "subtitle": "Folders on this machine the agent may work in. Only folders you add here, or start a task in, can be listed; the agent edits them in place and Tingly Box never deletes anything in them.",
+      "add": "Add folder",
+      "addHelp": "Absolute path on the machine running Tingly Box. Adding it lets the agent work there and lets the picker browse inside it.",
+      "empty": "No folders yet",
+      "emptyHint": "Add the folder you want the agent to work in.",
+      "inPlace": "The agent works in this folder in place — no clone, no branch, nothing deleted.",
+      "added": "Folder added",
+      "removed": "Folder removed from the list"
     },
     "sources": {
       "title": "Repositories",

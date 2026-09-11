@@ -1,3 +1,7 @@
+// PARKED until the repository phase (.design/managed-agent.md §15): not in
+// the rail, reachable only by URL (/tasks/sources). The local-folder flow
+// ships first; this page returns once clone → branch → push is validated.
+//
 // Repositories the agent can be pointed at. Credentials are deliberately
 // not a field yet: cloning and pushing use this machine's git configuration
 // (.design/managed-agent.md §5.3); a source-bound credential comes with the

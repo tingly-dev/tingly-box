@@ -53,7 +53,7 @@ try {
   await expectText('What should the agent do?', 30_000);
   await shot('composer');
   await page.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: /Browse for a folder/ }).click();
+  await page.getByRole('option', { name: /Add a folder/ }).click();
   await page.getByLabel('Folder path').fill(FOLDER);
   await page.getByLabel('Folder path').press('Enter');
   // Not handed over yet: the allowlist refuses to list it, and says so; using it as typed is what adds it.
@@ -81,14 +81,14 @@ try {
   await expectText('browser-marker');
   await shot('after-approval');
 
-  // 4. The folder now shows under "Folders used directly", and the picker can browse it (and only it).
-  await page.goto(BASE + '/tasks/sources', { waitUntil: 'networkidle' });
-  await expectText('Folders used directly', 30_000);
-  await expectText(FOLDER, 10_000);
-  await shot('sources');
+  // 4. The folder is now on the Folders page (the allowlist), and the picker can browse it (and only it).
+  await page.goto(BASE + '/tasks/folders', { waitUntil: 'networkidle' });
+  await expectText(FOLDER, 30_000);
+  await expectText('works in this folder in place', 10_000);
+  await shot('folders');
   await page.goto(BASE + '/tasks', { waitUntil: 'networkidle' });
   await page.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: /Browse for a folder/ }).click();
+  await page.getByRole('option', { name: /Add a folder/ }).click();
   await expectText('Folders you added', 10_000);
   await page.getByRole('button', { name: path.basename(FOLDER) }).first().click();
   await expectText('No sub-folders', 10_000);

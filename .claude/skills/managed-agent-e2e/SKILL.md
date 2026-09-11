@@ -58,7 +58,7 @@ Server logs are noisy under `-v`; filter with `| grep -v 'level='`.
 | `TestJourney_ArchiveWhileRunning` | `interrupt_test.go` | archive mid-turn stops the CLI and stays archived |
 | `TestJourney_FailureThenRetry` | `failure_test.go` | model 400 → `failed` with the reason → send again → `idle`, error cleared |
 | `TestJourney_AllPermissionModesStart` | `failure_test.go` | every advertised mode starts a turn on the installed CLI |
-| `TestJourney_Browser` | `browser_test.go` + `browser/managed_agent.mjs` | the built UI: type a path in the dialog → told it is outside the allowlist → use it anyway → Start → answer on the detail page → steer → **Allow** a command → result → Repositories page lists the folder → the dialog now browses it (and only it). Screenshots per step in `TB_E2E_OUT` |
+| `TestJourney_Browser` | `browser_test.go` + `browser/managed_agent.mjs` | the built UI: type a path in the dialog → told it is outside the allowlist → use it anyway → Start → answer on the detail page → steer → **Allow** a command → result → Folders page lists the folder → the dialog now browses it (and only it). Screenshots per step in `TB_E2E_OUT` |
 | `TestFullStack_SessionOverHTTP` | `agentrun/full_stack_test.go` | git repository source: clone → answer → resume → diff → push lands the branch on origin → archive |
 | `TestRealCLI_SessionRoundTrip` | `agentrun/real_cli_test.go` | the Launcher alone with the real CLI and the virtual upstream |
 

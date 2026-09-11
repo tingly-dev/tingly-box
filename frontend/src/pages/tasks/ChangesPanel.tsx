@@ -55,9 +55,9 @@ const ChangesPanel = ({session, workspace, onPushed, onError}: Props) => {
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
-                <Typography variant="overline" color="text.secondary">{t('tasks.list.branch')}</Typography>
+                <Typography variant="overline" color="text.secondary">{inPlace ? t('tasks.detail.folder') : t('tasks.list.branch')}</Typography>
                 <Typography variant="body2" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
-                    {inPlace ? t('tasks.detail.inPlace') : (workspace?.branch || session.artifact?.branch || '—')}
+                    {inPlace ? workspace?.path : (workspace?.branch || session.artifact?.branch || '—')}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5}}>
                     {session.artifact?.pushed && <Chip size="small" color="success" variant="outlined" label={t('tasks.detail.pushed')} />}

@@ -15,6 +15,7 @@ import {
     Robot as IconRobot,
     Terminal as IconTerminal,
     GitHub as IconGitHub,
+    FolderOpen as IconFolderOpen,
     Computer as IconComputer,
     tablerMui,
     Bell as IconBell,
@@ -229,10 +230,12 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.tasks'),
                 defaultPath: '/tasks',
                 children: [
-                    { path: '/tasks', label: t('layout.tasks'), icon: <IconTasks sx={{ fontSize: 20 }} />, match: (p) => p === '/tasks' || (p.startsWith('/tasks/') && !p.startsWith('/tasks/sources') && !p.startsWith('/tasks/environments')) },
+                    { path: '/tasks', label: t('layout.tasks'), icon: <IconTasks sx={{ fontSize: 20 }} />, match: (p) => p === '/tasks' || (p.startsWith('/tasks/') && !p.startsWith('/tasks/folders') && !p.startsWith('/tasks/sources') && !p.startsWith('/tasks/environments')) },
                     { type: 'divider' },
-                    { path: '/tasks/sources', label: t('layout.taskSources'), icon: <IconGitHub sx={{ fontSize: 20 }} /> },
-                    { path: '/tasks/environments', label: t('layout.taskEnvironments'), icon: <IconComputer sx={{ fontSize: 20 }} /> },
+                    // Local-first: only Folders in the rail. Repositories and
+                    // Environments stay routed (/tasks/sources, /tasks/environments)
+                    // but hidden until their phase (.design/managed-agent.md §15).
+                    { path: '/tasks/folders', label: t('layout.taskFolders'), icon: <IconFolderOpen sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
