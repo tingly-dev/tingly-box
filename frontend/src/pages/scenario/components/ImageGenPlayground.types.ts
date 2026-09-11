@@ -4,6 +4,19 @@
 // overview doesn't have to import the panel to know what a run is. The logic
 // over these shapes lives next door in imageGenSession.ts.
 
+import type { MaskLayers } from '@tingly/vision';
+
+// The region of a reference image the model may repaint, as the request needs
+// it and as the editor needs it back. `file` is the alpha PNG that goes on the
+// wire beside the image; `previewUrl` tints that region for the thumbnail;
+// `layers` are the strokes it was painted from, so a mask that has been applied
+// can still be edited rather than only looked at.
+export interface ReferenceMask {
+    file: File;
+    previewUrl: string;
+    layers: MaskLayers;
+}
+
 // Which gateway endpoint a run went through. Not a user choice: derived from
 // whether the run had reference images. Shown on the history card so API users
 // learn which endpoint does what they just did.
@@ -41,6 +54,12 @@ export interface GenerationRun {
     // alongside the output — the "what did I ask for" half of the history card
     // (only set when the run went through `edits`).
     sourceImages?: string[];
+    // The mask the request carried, if any. It turns the endpoint line into
+    // `images/edits · mask`, so someone about to call the API from their own
+    // code sees which field produced this result — and it is the whole mask
+    // rather than a flag so retrying, or putting the request back in the panel,
+    // gets the same region back instead of quietly repainting everything.
+    mask?: ReferenceMask;
     // How many images the run asked for — kept so a failed run can be retried
     // with exactly the request it made.
     count?: number;

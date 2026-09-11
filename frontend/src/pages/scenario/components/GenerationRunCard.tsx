@@ -150,7 +150,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
                         </Typography>
                         <RunSourceStrip
                             sources={run.sourceImages ?? []}
@@ -209,7 +209,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                             variant="caption"
                             sx={{ color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
-                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
                         </Typography>
                         {/* Retrying blind is not retrying: the images the failed
                             request was built from stay on the card, openable in
@@ -262,7 +262,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                     whiteSpace: 'nowrap',
                                 }}
                             >
-                                {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
+                                {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
                             </Typography>
                             <RunSourceStrip
                                 sources={run.sourceImages ?? []}

@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
+import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
+import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
@@ -29,6 +30,14 @@ export interface ReferenceImage {
     // (`sheet.png · 1024×1024 px`) instead of showing an empty prompt line.
     width?: number;
     height?: number;
+    // The region of THIS image the model may repaint. An attribute of the
+    // image, not a mode and not a fourth kind of reference: it means nothing
+    // away from the pixels it was painted on, so it travels with them, follows
+    // them when the row is reordered, and is dropped when they are. Only the
+    // first image's mask is sent — the API applies a mask to the first image —
+    // which the row says out loud when one has been dragged off the front.
+    // See .design/image-mask.md.
+    mask?: ReferenceMask;
 }
 
 interface ReferenceThumbProps {
@@ -39,6 +48,7 @@ interface ReferenceThumbProps {
     dragOver: boolean;
     onOpen: () => void;
     onEditSketch: () => void;
+    onEditMask: () => void;
     onRemove: () => void;
     onReorder: (from: number, to: number) => void;
     onMoveByKey: (event: React.KeyboardEvent, index: number) => void;
@@ -62,6 +72,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
     dragOver,
     onOpen,
     onEditSketch,
+    onEditMask,
     onRemove,
     onReorder,
     onMoveByKey,
@@ -139,10 +150,62 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     decoding="async"
                     sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
+                {image.mask ? (
+                    <Box
+                        component="img"
+                        src={image.mask.previewUrl}
+                        alt=""
+                        aria-hidden
+                        sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            // Dimmed once this image is no longer the one the
+                            // mask is sent with: the tint still says the work
+                            // was not lost, but it stops looking live.
+                            opacity: index === 0 ? 0.55 : 0.25,
+                            pointerEvents: 'none',
+                        }}
+                    />
+                ) : null}
                 <Box className="reference-zoom" sx={zoomScrimSx}>
                     <ZoomIn fontSize="small" />
                 </Box>
             </ButtonBase>
+            {/* Painting a mask starts on the first image, because that is the
+                one the API applies it to. A mask that is already painted keeps
+                its button wherever the image is dragged, so it can still be
+                edited or removed from the slot it landed in. */}
+            {(index === 0 || image.mask) && (
+                <Tooltip
+                    title={image.mask
+                        ? (index === 0
+                            ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
+                            : t('playground.mask.inactive', { defaultValue: 'Only the first image\u2019s mask is sent — drag this one to the front to use it' }))
+                        : t('playground.mask.addAction', { defaultValue: 'Mask an area to change' })}
+                >
+                    <IconButton
+                        size="small"
+                        onClick={(event) => { event.stopPropagation(); onEditMask(); }}
+                        aria-label={image.mask
+                            ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
+                            : t('playground.mask.addAction', { defaultValue: 'Mask an area to change' })}
+                        sx={{
+                            ...overlayActionSx(20),
+                            position: 'absolute',
+                            bottom: 2,
+                            left: 2,
+                            ...(image.mask && index === 0
+                                ? { bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }
+                                : {}),
+                        }}
+                    >
+                        <Brush sx={{ fontSize: 13 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
             {image.source === 'sketch' && (
                 <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
                     <IconButton
@@ -178,6 +241,7 @@ interface ReferenceImagesRowProps {
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
     onEditSketch: (index: number | null) => void;
+    onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onReorder: (from: number, to: number) => void;
     onMoveByKey: (event: React.KeyboardEvent, index: number) => void;
@@ -200,6 +264,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     promptFileInputRef,
     onOpenReference,
     onEditSketch,
+    onEditMask,
     onRemoveReference,
     onReorder,
     onMoveByKey,
@@ -212,6 +277,11 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
 }) => {
     const { t } = useTranslation();
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
+    // Two different facts: the first image carries a mask (it will be sent),
+    // or some other image does (it will not, and the row has to say so rather
+    // than let the tint imply otherwise).
+    const hasMaskedReference = referenceImages[0]?.mask !== undefined;
+    const hasStrandedMask = !hasMaskedReference && referenceImages.some((ref) => ref.mask !== undefined);
     // The three ways a reference image gets here, as equals. Drop is not in
     // the list because it has no button — the dashed box itself is the target.
     const referenceSources = [
@@ -295,6 +365,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                 dragOver={dragOverReference === index}
                                 onOpen={() => onOpenReference(index)}
                                 onEditSketch={() => onEditSketch(index)}
+                                onEditMask={() => onEditMask(index)}
                                 onRemove={() => onRemoveReference(index)}
                                 onReorder={onReorder}
                                 onMoveByKey={onMoveByKey}
@@ -329,9 +400,18 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             {referenceImages.length > 0 && (
                 <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
                     {[
-                        t('playground.referenceHint', {
-                            defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
-                            max: MAX_EDIT_REFERENCE_IMAGES,
+                        hasMaskedReference
+                            ? t('playground.mask.referenceHint', {
+                                defaultValue: 'The tinted area of the first image is what the model may change · sent via images/edits',
+                            })
+                            : t('playground.referenceHint', {
+                                defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
+                                max: MAX_EDIT_REFERENCE_IMAGES,
+                            }),
+                        // A mask dragged off the front is still painted but no
+                        // longer sent, and silence would read as "applied".
+                        hasStrandedMask && t('playground.mask.strandedHint', {
+                            defaultValue: 'only the first image\u2019s mask is sent',
                         }),
                         // Order is only worth mentioning once there is an order.
                         referenceImages.length > 1 && t('playground.referenceReorderHint', {

@@ -6,7 +6,8 @@
 > 关联文档:`ux-principles.md`(判断标准)、`imageedit.md`(edit 网关链路)、
 > `sketch-canvas.md`(同一面板的画布输入)、`image-slice.md`(同一面板的后置切分)。
 >
-> **状态:设计,未实现。** 本文先把"是什么 / 怎么进 / 怎么交互 / 隔离边界"定下来。
+> **状态:前端已实现(方案 A);Codex 走 Responses 的那条(方案 D)按实验性实现,
+> 待真实订阅验证。见 §8。**
 
 ---
 
@@ -354,3 +355,60 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 - **羽化边缘**:等实际用下来确认模型的接缝确实差,再做。
 - **每张参考图各自的 mask**:wire 不支持,除非上游改。
 - **参考图重排**:重排落地时再定 mask 的跟随规则(§3.2)。
+
+---
+
+## 8. 实现状态与怎么测
+
+### 8.1 已落地
+
+| 部分 | 位置 | 说明 |
+|------|------|------|
+| mask 合成 / 反转 / 导出(纯逻辑 + 单测) | `frontend/src/utils/maskCanvas.ts`(+ `.test.ts`) | 涂 = 改,导出时反转成 alpha 0;反转档由同一份笔画换个方向合成 |
+| 编辑器 | `frontend/src/pages/scenario/components/MaskEditorDialog.tsx` | 笔 / 橡皮 / 粗细 / Invert / Clear / Undo;画布取参考图原始像素;透明底,橡皮走 `destination-out` |
+| 面板接线 | `ImageGenPlaygroundCard.tsx` | 首图缩略图上的 Mask 按钮与角标、prompt 提示语切换、`images.edit({ mask })`、历史卡片 `images/edits · mask`、重试带回同一个 mask |
+| JSON 便捷编码补 `mask` | `internal/protocolserver/openai_image_edit.go` | 与 multipart 对齐,同样只收 data URL / 裸 base64 |
+| Codex:带 mask 改走 Responses | `internal/client/codex_images_responses.go`(新) | 参考图作为 `input_image` 进消息,mask 作为工具的 `input_image_mask`,`action: edit`;响应解析复用 generation 那条 |
+| Codex 原生端点遇到 mask | `internal/client/codex_images.go` | 明确报错,不再 debug 丢弃 |
+
+单测:`maskCanvas.test.ts`(合成方向,用记录型 ctx 断言每一笔的 composite)、
+`codex_images_responses_test.go`(路由决策 + 请求构造)、`openai_image_edit_test.go`
+(JSON mask)。画布交互按惯例走真实浏览器验证:加图 → 涂 → 反转 → Apply → 缩略图
+角标 → 重开笔画还在。
+
+### 8.2 路由开关
+
+```
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=            # 不设:有 mask 走 Responses,没 mask 走原生
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses   # E1/E3:无 mask 也走 Responses
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=native      # 钉死原生(带 mask 时明确报错)
+```
+
+不设即产品行为:只有 mask 这一个功能性理由会离开已验证的原生端点。实验结束后这个
+变量应该消失。
+
+### 8.3 怎么测
+
+E1(hosted tool 认不认参考图,先不带 mask):
+
+```bash
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses tingly-box serve
+curl -s http://127.0.0.1:PORT/tingly/imagegen/v1/images/edits \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"image":"data:image/png;base64,...","prompt":"把沙发换成绿色天鹅绒","model":"<codex model>"}'
+```
+
+E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里多带一个
+`"mask":"data:image/png;base64,..."`。判据是**只有涂过的区域变**。
+
+三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认;E2 不过(mask 被忽略)→
+退回原生 + §3.10 的报错;E1 不过 → `imageedit.md` §1 的断言成立,写回 §2.2 结案。
+
+链路在日志里:`[Codex] Using Responses image_generation tool for image edit
+(experimental), model: ..., mask: true`。
+
+### 8.4 仍未做
+
+- 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
+- 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
+- §7 的羽化 / 自动分割 / outpainting 全部未动。

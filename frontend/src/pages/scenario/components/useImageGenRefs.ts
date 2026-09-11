@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob, parseImageSize } from '@tingly/vision';
 import { addReferences, reorderReferences } from './imageGenSession';
+import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 
@@ -48,6 +49,10 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     const [draggingReference, setDraggingReference] = useState<number | null>(null);
     const [dragOverReference, setDragOverReference] = useState<number | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
+    // Which reference image's mask editor is open. An index rather than a
+    // boolean: a mask belongs to one specific image, and saying which one is
+    // the whole point.
+    const [maskTarget, setMaskTarget] = useState<number | null>(null);
 
     // Appends newly picked/dropped files (image/* only) up to the reference
     // cap, converting each to a data URL up front so thumbnails and the
@@ -189,6 +194,28 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     }, [sketchTarget, referenceImages, size]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
+    const handleMaskSubmit = useCallback((result: ReferenceMask) => {
+        setReferenceImages((current) => current.map((ref, i) => (i === maskTarget ? { ...ref, mask: result } : ref)));
+        setMaskTarget(null);
+    }, [maskTarget]);
+
+    // Removing the mask removes a region, not the image: the reference stays
+    // and the next run repaints all of it.
+    const handleRemoveMask = useCallback((index: number) => {
+        setReferenceImages((current) => current.map((ref, i) => (i === index ? { ...ref, mask: undefined } : ref)));
+    }, []);
+
+    // Memoised for the same reason the sketch's is: the canvas resets when this
+    // changes, and a new object per render would wipe live strokes.
+    const maskInitial = useMemo(
+        () => (maskTarget !== null ? referenceImages[maskTarget]?.mask?.layers ?? null : null),
+        [maskTarget, referenceImages],
+    );
+    const maskedReference = maskTarget !== null ? referenceImages[maskTarget] : undefined;
+    // Only the first image's mask is sent, so only that one changes what the
+    // prompt is being asked to describe.
+    const hasMaskedReference = referenceImages[0]?.mask !== undefined;
+
     return {
         referenceImages,
         setReferenceImages,
@@ -207,5 +234,12 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         handleSketchSubmit,
         sketchInitial,
         hasSketchReference,
+        maskTarget,
+        setMaskTarget,
+        handleMaskSubmit,
+        handleRemoveMask,
+        maskInitial,
+        maskedReference,
+        hasMaskedReference,
     };
 };
