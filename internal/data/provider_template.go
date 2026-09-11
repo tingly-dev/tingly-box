@@ -127,7 +127,8 @@ type ProviderTemplate struct {
 	// OpenAIEndpointMode declares which OpenAI endpoints providers instantiated
 	// from this template expose. Plain string at this layer; cast to the typed
 	// ai.OpenAIEndpointMode when assigned to a Provider. Values: "" (Chat,
-	// default), "responses" (Codex-style), "both" (OpenAI proper).
+	// default), "responses" (Codex-style), "both" (OpenAI proper),
+	// "per_model" (a relay whose models differ, e.g. OpenCode Zen).
 	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
 }
 

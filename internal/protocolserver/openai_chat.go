@@ -164,7 +164,7 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 	}
 
 	// Snapshot a pristine template only when failover is possible.
-	multi := len(rule.GetActiveServices()) > 1
+	multi := DispatchMayRetry(rule, provider, actualModel)
 	var template []byte
 	if multi {
 		bs, err := req.MarshalJSON()
@@ -226,7 +226,7 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	case protocol.APIStyleOpenAI:
 		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
 		tempFlags := ResolveRuleFlags(c, rule)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
+		resolvedTarget, routeErr := ResolveOpenAIEndpointForRequest(c, provider, actualModel, tempFlags, IncomingAPIChat)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

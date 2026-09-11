@@ -246,6 +246,21 @@ const (
 	// client's incoming API so native semantics (reasoning blocks,
 	// previous_response_id continuity, etc.) survive the round trip.
 	EndpointModeBoth OpenAIEndpointMode = "both"
+
+	// EndpointModePerModel means the upstream exposes both endpoints but each
+	// model answers on only one of them — a relay whose catalog mixes vendors
+	// (OpenCode Zen: most models on Chat, a few only on Responses). It is not
+	// EndpointModeBoth: "both" says one model can be reached either way, so
+	// mirroring the client's protocol is always safe, while here mirroring is
+	// a coin flip.
+	//
+	// Which model needs which endpoint cannot be declared statically — the
+	// catalog is codenamed and rotates — so this mode, and only this mode,
+	// enables the learning fallback in the dispatch loop: start on Chat, and
+	// on a format rejection retry once on Responses and remember the answer.
+	// Every other mode stays fully deterministic, with no extra round-trip
+	// ever.
+	EndpointModePerModel OpenAIEndpointMode = "per_model"
 )
 
 // OpenAIEndpointModeForIssuer returns the OpenAIEndpointMode that an OAuth
