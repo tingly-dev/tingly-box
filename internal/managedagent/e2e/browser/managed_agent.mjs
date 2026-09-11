@@ -52,8 +52,8 @@ try {
   await page.goto(BASE + '/tasks', { waitUntil: 'networkidle' });
   await expectText('What should the agent do?', 30_000);
   await shot('composer');
-  await page.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: /Add a folder/ }).click();
+  await page.getByRole('button', { name: /Choose a folder|Folders you added/ }).first().click();
+  await page.getByRole('menuitem', { name: /Add a folder/ }).click();
   await page.getByLabel('Folder path').fill(FOLDER);
   await page.getByLabel('Folder path').press('Enter');
   // Not handed over yet: the allowlist refuses to list it, and says so; using it as typed is what adds it.
@@ -73,7 +73,7 @@ try {
 
   // 3. Steer: the model asks to run a command; approve it from the UI.
   await page.getByPlaceholder('Send a follow-up…').fill('now create the marker file');
-  await page.getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expectText('Needs your input');
   await shot('approval-pending');
   await page.getByRole('button', { name: 'Allow' }).click();
@@ -87,8 +87,8 @@ try {
   await expectText('works in this folder in place', 10_000);
   await shot('folders');
   await page.goto(BASE + '/tasks', { waitUntil: 'networkidle' });
-  await page.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: /Add a folder/ }).click();
+  await page.getByRole('button', { name: path.basename(FOLDER) }).first().click();
+  await page.getByRole('menuitem', { name: /Add a folder/ }).click();
   await expectText('Folders you added', 10_000);
   await page.getByRole('button', { name: path.basename(FOLDER) }).first().click();
   await expectText('No sub-folders', 10_000);

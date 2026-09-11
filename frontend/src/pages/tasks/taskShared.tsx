@@ -8,7 +8,7 @@
 // change, not a page change.
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Chip, FormControl, InputLabel, ListItemText, MenuItem, OutlinedInput, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
+import {Box, Chip, CircularProgress, FormControl, InputLabel, ListItemText, MenuItem, OutlinedInput, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
 import {formatDistanceToNowStrict} from 'date-fns';
 import {agentApi, isActiveStatus, type AgentEvent, type AgentSession, type AgentWorkspace, type PermissionMode} from '@/services/agentApi';
 
@@ -30,6 +30,21 @@ export const StatusChip = ({status, size = 'small'}: {status: string; size?: Chi
             color={STATUS_COLOR[status] ?? 'default'}
             variant={status === 'running' || status === 'waiting_input' ? 'filled' : 'outlined'}
             label={t(`tasks.status.${status}`, {defaultValue: status})}
+        />
+    );
+};
+
+// A 10px status mark for list rows: a spinner while the agent works, a
+// coloured dot otherwise. Colour carries the same meaning as StatusChip.
+export const StatusDot = ({status}: {status: string}) => {
+    if (status === 'running' || status === 'queued') return <CircularProgress size={10} thickness={6} sx={{flexShrink: 0}} />;
+    const color = STATUS_COLOR[status] ?? 'default';
+    return (
+        <Box
+            sx={(theme) => ({
+                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                bgcolor: color === 'default' ? theme.palette.text.disabled : theme.palette[color].main,
+            })}
         />
     );
 };

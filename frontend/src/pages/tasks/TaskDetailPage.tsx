@@ -1,23 +1,31 @@
-// One task: the conversation on the left, the artifact (branch, changes,
-// actions) on the right. On a phone the two become tabs and the composer
-// sticks to the bottom, because the two things a person does from a phone
-// are answer an approval and send one more instruction.
-import {useCallback, useMemo, useState} from 'react';
+// One task, laid out like a chat: a slim top bar (what task, where, what
+// state), the conversation in a readable column, and the composer pinned
+// to the bottom of the scroll area. The changes live in a side panel that
+// opens on demand (always on desktop when there are changes); on a phone
+// it slides in as a drawer, so the two things a person does from a phone —
+// answer a question, send one more instruction — never leave the screen.
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
 import {
-    Alert, Box, Button, Card, Chip, CircularProgress, Divider, IconButton, ListItemText, Menu, MenuItem, Stack, Tab, Tabs,
-    TextField, Tooltip, Typography, useMediaQuery, useTheme,
+    Alert, Badge, Box, Chip, CircularProgress, Divider, Drawer, IconButton, InputBase, ListItemText, Menu, MenuItem,
+    Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import {Archive as IconArchive, ArrowBack, Block as IconStop, Send as IconSend} from '@/components/icons';
+import {
+    Archive as IconArchive, ArrowBack, Block as IconStop, Close as IconClose, CompareArrows as IconChanges,
+    FolderOpen as IconFolder, KeyboardArrowDown as IconCaret, Send as IconSend, Shield as IconShield,
+} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import {agentApi, isActiveStatus, type PermissionMode} from '@/services/agentApi';
 import EventTimeline, {type PendingRequest} from './EventTimeline';
 import ChangesPanel from './ChangesPanel';
 import {PERMISSION_MODES, permissionModeKey, relativeTime, shortId, StatusChip, useSessionPoll} from './taskShared';
+
+const COLUMN = 860;
+const PANEL = 400;
 
 const TaskDetailPage = () => {
     const {sessionId} = useParams<{sessionId: string}>();
@@ -28,12 +36,27 @@ const TaskDetailPage = () => {
     const isPhone = useMediaQuery(theme.breakpoints.down('md'));
 
     const {session, workspace, events, loading, notFound, refresh, setSession} = useSessionPoll(sessionId);
-    const [tab, setTab] = useState<'conversation' | 'changes'>('conversation');
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const [archiveOpen, setArchiveOpen] = useState(false);
     const [archiving, setArchiving] = useState(false);
     const [modeAnchor, setModeAnchor] = useState<HTMLElement | null>(null);
+    const [panelChoice, setPanelChoice] = useState<boolean>();
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const lastCount = useRef(0);
+
+    const changed = session?.artifact?.changed_files ?? 0;
+    // Desktop: open by itself once there is something to look at; the user's
+    // own toggle wins after that. Phone: closed until asked.
+    const panelOpen = panelChoice ?? (!isPhone && changed > 0);
+
+    // Follow the conversation as it grows, the way a chat does.
+    useEffect(() => {
+        if (events.length > lastCount.current) {
+            lastCount.current = events.length;
+            bottomRef.current?.scrollIntoView({block: 'end', behavior: 'smooth'});
+        }
+    }, [events.length]);
 
     const changeMode = async (mode: PermissionMode) => {
         setModeAnchor(null);
@@ -47,8 +70,6 @@ const TaskDetailPage = () => {
         await refresh();
     };
 
-    // A request is pending while the session waits and no response event
-    // has followed it in the log.
     const pending = useMemo<PendingRequest[]>(() => {
         if (session?.status !== 'waiting_input') return [];
         const answered = new Set(events.filter((e) => e.kind === 'approval_response' || e.kind === 'ask_response').map((e) => e.request_id));
@@ -99,127 +120,158 @@ const TaskDetailPage = () => {
     if (notFound) {
         return (
             <PageLayout loading={false}>
-                <EmptyState
-                    title={t('tasks.detail.notFound')}
-                    primaryAction={{label: t('tasks.detail.back'), onClick: () => navigate('/tasks')}}
-                />
+                <EmptyState title={t('tasks.detail.notFound')} primaryAction={{label: t('tasks.detail.back'), onClick: () => navigate('/tasks')}} />
             </PageLayout>
         );
     }
 
     const active = isActiveStatus(session?.status);
-    // A failed turn is retried by changing what caused it (often the
-    // permission mode) and sending again, as long as the checkout exists.
+    const working = session?.status === 'running' || session?.status === 'queued';
     const retryable = session?.status === 'failed' && workspace?.state === 'ready';
     const canSteer = (active && session?.status !== 'waiting_input') || retryable;
-    const hint = session?.status === 'waiting_input'
-        ? t('tasks.detail.waiting')
-        : session?.status === 'running' || session?.status === 'queued'
-            ? t('tasks.detail.running')
-            : session?.status === 'idle'
-                ? t('tasks.detail.idle')
-                : undefined;
+    const showComposer = !!session && session.status !== 'archived' && (active || retryable);
+    const folderName = workspace?.path ? workspace.path.split(/[\\/]/).filter(Boolean).pop() : undefined;
+    const modeKey = permissionModeKey(session?.permission_mode);
 
-    const header = session && (
-        <Stack spacing={1}>
-            <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
-                <IconButton size="small" onClick={() => navigate('/tasks')} aria-label={t('tasks.detail.back')}>
-                    <ArrowBack fontSize="small" />
-                </IconButton>
-                <Typography variant="h6" sx={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+    const topBar = session && (
+        <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+                alignItems: 'center', minWidth: 0, position: 'sticky', top: {xs: -72, md: -24}, zIndex: 3,
+                mx: {xs: -2, md: -3}, px: {xs: 2, md: 3}, py: 1, bgcolor: 'background.default',
+                borderBottom: '1px solid', borderColor: 'divider',
+            }}
+        >
+            <IconButton size="small" onClick={() => navigate('/tasks')} aria-label={t('tasks.detail.back')}>
+                <ArrowBack fontSize="small" />
+            </IconButton>
+            <Stack sx={{flex: 1, minWidth: 0}}>
+                <Typography variant="subtitle1" sx={{fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
                     {session.title || session.prompt}
                 </Typography>
-                <StatusChip status={session.status} />
+                <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
+                    {folderName && (
+                        <Tooltip title={workspace?.path ?? ''}>
+                            <Typography variant="caption" color="text.secondary" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0}}>
+                                <IconFolder sx={{fontSize: 14}} />
+                                <Box component="span" sx={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{folderName}</Box>
+                            </Typography>
+                        </Tooltip>
+                    )}
+                    <Typography variant="caption" color="text.disabled" sx={{whiteSpace: 'nowrap'}}>{relativeTime(session.last_active_at)}</Typography>
+                    {!isPhone && session.usage && (session.usage.input_tokens > 0 || session.usage.output_tokens > 0) && (
+                        <Typography variant="caption" color="text.disabled" sx={{whiteSpace: 'nowrap'}}>
+                            · {t('tasks.detail.tokens', {input: session.usage.input_tokens, output: session.usage.output_tokens})}
+                            {session.usage.cost > 0 && ` · ${t('tasks.detail.cost', {cost: session.usage.cost.toFixed(3)})}`}
+                        </Typography>
+                    )}
+                </Stack>
             </Stack>
-            <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, pl: {xs: 0, sm: 5}}}>
-                <Typography variant="caption" color="text.secondary">{relativeTime(session.last_active_at)}</Typography>
-                {/* The mode is a concrete value, editable in place while the
-                    session is active; a change takes effect from the next turn. */}
-                <Tooltip title={t(`tasks.mode.${permissionModeKey(session.permission_mode)}Help`)}>
-                    <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`${t('tasks.mode.label')}: ${t(`tasks.mode.${permissionModeKey(session.permission_mode)}`)}`}
-                        onClick={active || retryable ? (e) => setModeAnchor(e.currentTarget) : undefined}
-                    />
+            <StatusChip status={session.status} />
+            <Tooltip title={t('tasks.detail.changes')}>
+                <IconButton size="small" color={panelOpen ? 'primary' : 'default'} onClick={() => setPanelChoice(!panelOpen)} aria-label={t('tasks.detail.changes')}>
+                    <Badge badgeContent={changed || undefined} color="primary" max={99}>
+                        <IconChanges fontSize="small" />
+                    </Badge>
+                </IconButton>
+            </Tooltip>
+            {(session.status === 'running' || session.status === 'waiting_input') && (
+                <Tooltip title={t('tasks.detail.interrupt')}>
+                    <IconButton size="small" onClick={interrupt} aria-label={t('tasks.detail.interrupt')}><IconStop fontSize="small" /></IconButton>
                 </Tooltip>
-                <Menu open={!!modeAnchor} anchorEl={modeAnchor} onClose={() => setModeAnchor(null)}>
-                    {PERMISSION_MODES.map((m) => {
-                        const key = permissionModeKey(m);
-                        return (
-                            <MenuItem key={key} selected={(session.permission_mode ?? '') === m} onClick={() => changeMode(m)}>
-                                <ListItemText primary={t(`tasks.mode.${key}`)} secondary={t(`tasks.mode.${key}Help`)} />
-                            </MenuItem>
-                        );
-                    })}
-                </Menu>
-                {session.usage && (session.usage.input_tokens > 0 || session.usage.output_tokens > 0) && (
-                    <Typography variant="caption" color="text.secondary">
-                        · {t('tasks.detail.tokens', {input: session.usage.input_tokens, output: session.usage.output_tokens})}
-                        {session.usage.cost > 0 && ` · ${t('tasks.detail.cost', {cost: session.usage.cost.toFixed(3)})}`}
-                    </Typography>
-                )}
-                <Box sx={{flex: 1}} />
-                {(session.status === 'running' || session.status === 'waiting_input') && (
-                    <Tooltip title={t('tasks.detail.interrupt')}>
-                        <IconButton size="small" onClick={interrupt}><IconStop fontSize="small" /></IconButton>
-                    </Tooltip>
-                )}
-                {session.status !== 'archived' && (
-                    <Tooltip title={t('tasks.detail.archive')}>
-                        <IconButton size="small" onClick={() => setArchiveOpen(true)}><IconArchive fontSize="small" /></IconButton>
-                    </Tooltip>
-                )}
-            </Stack>
+            )}
+            {session.status !== 'archived' && (
+                <Tooltip title={t('tasks.detail.archive')}>
+                    <IconButton size="small" onClick={() => setArchiveOpen(true)} aria-label={t('tasks.detail.archive')}><IconArchive fontSize="small" /></IconButton>
+                </Tooltip>
+            )}
         </Stack>
     );
 
-    const composer = session && session.status !== 'archived' && (active || retryable) && (
-        <Stack direction="row" spacing={1} sx={{alignItems: 'flex-end'}}>
-            <TextField
-                fullWidth
-                size="small"
-                multiline
-                maxRows={5}
-                placeholder={t('tasks.detail.steerPlaceholder')}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                disabled={!active && !retryable}
-                onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && text.trim()) send();
-                }}
-            />
-            <Button
-                variant="contained"
-                onClick={send}
-                disabled={!canSteer || !text.trim() || sending}
-                startIcon={sending ? <CircularProgress size={16} color="inherit" /> : <IconSend />}
-                sx={{whiteSpace: 'nowrap'}}
+    const composer = showComposer && session && (
+        <Box sx={{position: 'sticky', bottom: {xs: -24, md: -24}, pt: 1.5, pb: {xs: 3, md: 3}, mb: {xs: -3, md: -3}, bgcolor: 'background.default', zIndex: 2}}>
+            <Paper
+                variant="outlined"
+                sx={{borderRadius: 3, px: 1.5, pt: 1.25, pb: 1, boxShadow: (th) => th.shadows[1], '&:focus-within': {borderColor: 'primary.main'}}}
             >
-                {t('tasks.detail.send')}
-            </Button>
-        </Stack>
+                <InputBase
+                    fullWidth
+                    multiline
+                    maxRows={6}
+                    placeholder={session.status === 'waiting_input' ? t('tasks.detail.waitingShort') : t('tasks.detail.steerPlaceholder')}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    disabled={!canSteer}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            if (text.trim() && canSteer && !sending) send();
+                        }
+                    }}
+                    sx={{px: 0.5, fontSize: 14, lineHeight: 1.6}}
+                />
+                <Stack direction="row" spacing={1} sx={{alignItems: 'center', pt: 0.75}}>
+                    <Tooltip title={t(`tasks.mode.${modeKey}Help`)}>
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={<IconShield />}
+                            deleteIcon={<IconCaret />}
+                            onDelete={(e) => setModeAnchor(e.currentTarget.parentElement)}
+                            onClick={(e) => setModeAnchor(e.currentTarget)}
+                            label={t(`tasks.mode.${modeKey}`)}
+                        />
+                    </Tooltip>
+                    <Menu open={!!modeAnchor} anchorEl={modeAnchor} onClose={() => setModeAnchor(null)}>
+                        {PERMISSION_MODES.map((m) => {
+                            const key = permissionModeKey(m);
+                            return (
+                                <MenuItem key={key} selected={(session.permission_mode ?? '') === m} onClick={() => changeMode(m)}>
+                                    <ListItemText primary={t(`tasks.mode.${key}`)} secondary={t(`tasks.mode.${key}Help`)} />
+                                </MenuItem>
+                            );
+                        })}
+                    </Menu>
+                    <Typography variant="caption" color="text.disabled" sx={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: {xs: 'none', sm: 'block'}}}>
+                        {working ? t('tasks.detail.working') : session.status === 'waiting_input' ? t('tasks.detail.waiting') : t('tasks.detail.enterHint')}
+                    </Typography>
+                    <Box sx={{flex: {xs: 1, sm: 0}}} />
+                    <IconButton
+                        color="primary"
+                        size="small"
+                        onClick={send}
+                        disabled={!canSteer || !text.trim() || sending}
+                        aria-label={t('tasks.detail.send')}
+                        sx={{bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': {bgcolor: 'primary.dark'}, '&.Mui-disabled': {bgcolor: 'action.disabledBackground', color: 'action.disabled'}}}
+                    >
+                        {sending ? <CircularProgress size={16} color="inherit" /> : <IconSend fontSize="small" />}
+                    </IconButton>
+                </Stack>
+            </Paper>
+        </Box>
     );
 
     const conversation = session && (
-        <Stack spacing={1.5}>
+        <Stack spacing={2} sx={{py: 2, flex: 1}}>
             {session.status === 'failed' && (
-                <Alert severity="error">
+                <Alert severity="error" variant="outlined">
                     {t('tasks.detail.failed')}{session.error ? `: ${session.error}` : ''}
                     {retryable && <Typography variant="body2" sx={{mt: 0.5}}>{t('tasks.detail.retryHint')}</Typography>}
                 </Alert>
             )}
             <EventTimeline events={events} pending={pending} onRespond={respond} />
-            {hint && (
-                <Typography variant="caption" color="text.secondary" sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                    {(session.status === 'running' || session.status === 'queued') && <CircularProgress size={12} />}
-                    {hint}
-                </Typography>
+            {working && (
+                <Stack direction="row" spacing={1} sx={{alignItems: 'center', pl: {xs: 0, sm: 4.5}}}>
+                    <CircularProgress size={12} />
+                    <Typography variant="caption" color="text.secondary">{t('tasks.detail.working')}</Typography>
+                </Stack>
             )}
+            <div ref={bottomRef} />
         </Stack>
     );
 
-    const changes = session && (
+    const panel = session && (
         <Stack spacing={2}>
             <ChangesPanel
                 session={session}
@@ -253,33 +305,29 @@ const TaskDetailPage = () => {
     return (
         <PageLayout loading={loading && !session}>
             {session && (
-                <Stack spacing={2} sx={{height: '100%'}}>
-                    {header}
-                    {isPhone ? (
-                        <>
-                            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth">
-                                <Tab value="conversation" label={t('tasks.detail.conversation')} />
-                                <Tab value="changes" label={`${t('tasks.detail.changes')}${(session.artifact?.changed_files ?? 0) > 0 ? ` (${session.artifact.changed_files})` : ''}`} />
-                            </Tabs>
-                            <Box sx={{pb: composer ? 10 : 0}}>
-                                {tab === 'conversation' ? conversation : changes}
-                            </Box>
-                            {composer && tab === 'conversation' && (
-                                <Box sx={{position: 'fixed', left: 0, right: 0, bottom: 0, p: 1.5, bgcolor: 'background.paper', borderTop: '1px solid', borderColor: 'divider', zIndex: 2}}>
-                                    {composer}
-                                </Box>
-                            )}
-                        </>
-                    ) : (
-                        <Box sx={{display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 400px)', gap: 3, alignItems: 'start'}}>
-                            <Stack spacing={2}>
-                                <Card variant="outlined" sx={{p: 2}}>{conversation}</Card>
-                                {composer}
-                            </Stack>
-                            <Card variant="outlined" sx={{p: 2, position: 'sticky', top: 16}}>{changes}</Card>
+                <Box sx={{display: 'flex', flexDirection: 'column', minHeight: '100%'}}>
+                    {topBar}
+                    <Box sx={{display: 'flex', gap: 3, alignItems: 'stretch', flex: 1, minWidth: 0}}>
+                        <Box sx={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', maxWidth: COLUMN, mx: 'auto', width: '100%'}}>
+                            {conversation}
+                            {composer}
                         </Box>
+                        {!isPhone && panelOpen && (
+                            <Box sx={{width: PANEL, flexShrink: 0, position: 'sticky', top: 64, alignSelf: 'flex-start', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', pt: 2}}>
+                                <Paper variant="outlined" sx={{p: 2, borderRadius: 2}}>{panel}</Paper>
+                            </Box>
+                        )}
+                    </Box>
+                    {isPhone && (
+                        <Drawer anchor="right" open={panelOpen} onClose={() => setPanelChoice(false)} slotProps={{paper: {sx: {width: 'min(100vw, 420px)', p: 2}}}}>
+                            <Stack direction="row" sx={{alignItems: 'center', mb: 1}}>
+                                <Typography variant="subtitle1" sx={{flex: 1, fontWeight: 600}}>{t('tasks.detail.changes')}</Typography>
+                                <IconButton size="small" onClick={() => setPanelChoice(false)} aria-label={t('common.close')}><IconClose fontSize="small" /></IconButton>
+                            </Stack>
+                            {panel}
+                        </Drawer>
                     )}
-                </Stack>
+                </Box>
             )}
             <ConfirmDialog
                 open={archiveOpen}
