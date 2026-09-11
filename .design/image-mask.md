@@ -55,6 +55,24 @@ POST /tingly/imagegen/v1/images/edits
 > 未在本环境编译验证:`frontend/node_modules` 未安装。openai-js v6 的
 > `ImageEditParams.mask?: Uploadable` 需要在实现时确认一次字段名。
 
+### 2.1 Codex 原生协议核对:确认不支持 mask
+
+不是从文档推的,是读的源码(openai/codex,`fc948f8`,2026-09-11):
+
+| 事实 | 出处 |
+|------|------|
+| `ImageEditRequest` 的字段只有 `images / prompt / background / model / n / quality / size`——**没有 mask** | `codex-rs/codex-api/src/images.rs` |
+| edit 就是把这个结构体整个 `to_value` 成 JSON body POST 到 `images/edits`,没有别处再塞字段 | `codex-rs/codex-api/src/endpoint/images.rs` |
+| 模型能填的工具参数只有 `prompt / referenced_image_paths / num_last_images_to_include`,连区域概念都没有 | `codex-rs/ext/image-generation/src/tool.rs`(`ImagegenArgs`) |
+| 整个 `codex-rs` 里与图像相关的 `mask` 一个都没有(grep 命中的全是 `CollaborationModeMask` 之类的同名无关物) | 全仓 grep |
+
+所以"Codex 支持了就跟着加"这条路**现在走不通**:不是我们没接,是那条 wire 上
+没有这个字段。这把 §3.10 从"可选的礼貌"变成了唯一正确的做法——mask 在 Codex
+上不可能生效,静默丢弃就是让用户拿到一个无法解释的结果。
+
+重新核对成本很低(上面四行 grep),Codex 哪天加上 `mask`,`buildCodexImageEditRequest`
+里就是多一个字段 + 去掉那处报错。
+
 ---
 
 ## 3. 核心决策
@@ -148,8 +166,10 @@ run 上记一个 `maskUsed: boolean`,元信息行写 `images/edits · mask`,sour
 
 前端**不做任何 provider 判断**(沿用 `imageedit.md` §6)。但网关侧现在的行为是
 `CodexClient` 把 mask 丢掉、只打一行 debug log——用户涂了一块,拿回来的是整张
-重画,而且没有任何地方告诉他为什么。这与"不允许把 edit 静默降级成 generation"
-是同一条原则,建议改成明确报错(§6.2)。
+重画,而且没有任何地方告诉他为什么。Codex 原生协议确认没有 mask 字段(§2.1),
+所以这里没有"接上去"的选项,只有"说清楚"。这与"不允许把 edit 静默降级成
+generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确报错**(§6.2),
+而不是退化成一次用户没要求的整图重画。
 
 ---
 
@@ -211,7 +231,7 @@ run 上记一个 `maskUsed: boolean`,元信息行写 `images/edits · mask`,sour
 | 改动 | 理由 |
 |------|------|
 | `parseImageEditJSON` 补 `mask` 字段(data URL / 裸 base64,复用 `decodeInlineImage`) | multipart 支持而 JSON 不支持是不对称,不是设计 |
-| `CodexClient.ImagesEdit` 遇到 mask 明确报错,而不是 debug 丢弃 | §3.10;静默丢弃让用户拿到一个无法解释的结果 |
+| `CodexClient.ImagesEdit` 遇到 mask 明确报错,而不是 debug 丢弃 | §3.10;原生协议没有这个字段(§2.1),静默丢弃让用户拿到一次他没要求的整图重画 |
 
 两者都不阻塞前端:OpenAI 兼容上游走的是 multipart + `OpenAIClient`,已经是通的。
 
