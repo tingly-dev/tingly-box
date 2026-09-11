@@ -14,6 +14,10 @@ import {
     SettingsRemote as IconDeviceRemote,
     Robot as IconRobot,
     Terminal as IconTerminal,
+    GitHub as IconGitHub,
+    FolderOpen as IconFolderOpen,
+    Computer as IconComputer,
+    tablerMui,
     Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
@@ -33,6 +37,7 @@ import {
     Extension as IconExtension,
     Code as IconCode,
 } from '@/components/icons';
+import { IconListCheck } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
@@ -40,9 +45,11 @@ import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 
+const IconTasks = tablerMui(IconListCheck);
+
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableManagedAgent } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
@@ -213,6 +220,24 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
+            // Tasks — managed agent sessions. Its own rail rather than a row under
+            // Remote: the subject there is the bot, here it is the task
+            // (.design/managed-agent.md §6.2). Full edition only — it runs the
+            // Claude Code CLI on the host.
+            ...(isFullEdition && enableManagedAgent ? [{
+                key: 'tasks' as const,
+                icon: <IconTasks sx={{ fontSize: 22 }} />,
+                label: t('layout.tasks'),
+                defaultPath: '/tasks',
+                children: [
+                    { path: '/tasks', label: t('layout.tasks'), icon: <IconTasks sx={{ fontSize: 20 }} />, match: (p) => p === '/tasks' || (p.startsWith('/tasks/') && !p.startsWith('/tasks/folders') && !p.startsWith('/tasks/sources') && !p.startsWith('/tasks/environments')) },
+                    { type: 'divider' },
+                    // Local-first: only Folders in the rail. Repositories and
+                    // Environments stay routed (/tasks/sources, /tasks/environments)
+                    // but hidden until their phase (.design/managed-agent.md §15).
+                    { path: '/tasks/folders', label: t('layout.taskFolders'), icon: <IconFolderOpen sx={{ fontSize: 20 }} /> },
+                ] as NavItem[],
+            }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
                 icon: <IconShield sx={{ fontSize: 22 }} />,
@@ -278,5 +303,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableManagedAgent, profiles, teams, botSummary, hiddenScenarios]);
 }

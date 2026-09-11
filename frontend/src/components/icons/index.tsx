@@ -17,6 +17,8 @@
  * inherited from MUI's SvgIcon (see ./tablerMui).
  */
 import {
+    IconArchive,
+    IconLinkOff,
     IconInfoCircle,
     IconRefresh,
     IconX,
@@ -182,6 +184,10 @@ export const AddCircleOutline = tablerMui(IconCirclePlus);
 export const Close = tablerMui(IconX);
 export const Cancel = tablerMui(IconCircleX);
 export const Delete = tablerMui(IconTrash);
+// Archive is not deletion: nothing is removed, the thing is put away.
+export const Archive = tablerMui(IconArchive);
+// Remove a link/entry from a list without touching what it points at.
+export const LinkOff = tablerMui(IconLinkOff);
 export const DeleteSweep = tablerMui(IconTrashX);
 export const Edit = tablerMui(IconEdit);
 export const Search = tablerMui(IconSearch);

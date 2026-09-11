@@ -63,6 +63,916 @@
         }
       }
     },
+    "/api/v1/agent/environments": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List environments (default first) and the runtimes available today",
+        "description": "List environments (default first) and the runtimes available today",
+        "operationId": "apiV1AgentEnvironmentsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Create an environment",
+        "description": "Create an environment",
+        "operationId": "apiV1AgentEnvironmentsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/environments/{environment_id}": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Get an environment",
+        "description": "Get an environment",
+        "operationId": "apiV1AgentEnvironmentsEnvironment_idGet",
+        "parameters": [
+          {
+            "name": "environment_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Update an environment",
+        "description": "Update an environment",
+        "operationId": "apiV1AgentEnvironmentsEnvironment_idPut",
+        "parameters": [
+          {
+            "name": "environment_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Delete a non-default environment that has no live workspaces",
+        "description": "Delete a non-default environment that has no live workspaces",
+        "operationId": "apiV1AgentEnvironmentsEnvironment_idDelete",
+        "parameters": [
+          {
+            "name": "environment_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/fs/dirs": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
+        "description": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
+        "operationId": "apiV1AgentFsDirsGet",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute directory path inside an added folder; empty for the list of added folders",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirListing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/fs/recent": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Folders worked in before: local task folders and Claude Code's recent projects",
+        "description": "Folders worked in before: local task folders and Claude Code's recent projects",
+        "operationId": "apiV1AgentFsRecentGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentFoldersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List sessions, most recently active first",
+        "description": "List sessions, most recently active first",
+        "operationId": "apiV1AgentSessionsGet",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Query parameter workspace_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Query parameter status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Query parameter active",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Query parameter limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Open a session: materialise a workspace from a source (or reuse one) and queue the prompt",
+        "description": "Open a session: materialise a workspace from a source (or reuse one) and queue the prompt",
+        "operationId": "apiV1AgentSessionsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Get a session with its workspace",
+        "description": "Get a session with its workspace",
+        "operationId": "apiV1AgentSessionsSession_idGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/archive": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "End a session; its branch and log are kept",
+        "description": "End a session; its branch and log are kept",
+        "operationId": "apiV1AgentSessionsSession_idArchivePost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/diff": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
+        "description": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
+        "operationId": "apiV1AgentSessionsSession_idDiffGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/events": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Page a session's event log (JSON), or stream it with Accept: text/event-stream",
+        "description": "Page a session's event log (JSON), or stream it with Accept: text/event-stream",
+        "operationId": "apiV1AgentSessionsSession_idEventsGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Query parameter after",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Query parameter limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/interrupt": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Stop the current turn; the session stays resumable",
+        "description": "Stop the current turn; the session stays resumable",
+        "operationId": "apiV1AgentSessionsSession_idInterruptPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/messages": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Append a user message (steer the agent)",
+        "description": "Append a user message (steer the agent)",
+        "operationId": "apiV1AgentSessionsSession_idMessagesPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/permission-mode": {
+      "put": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Change an active session's Claude Code permission mode; applies from the next turn",
+        "description": "Change an active session's Claude Code permission mode; applies from the next turn",
+        "operationId": "apiV1AgentSessionsSession_idPermission-modePut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/push": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
+        "description": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
+        "operationId": "apiV1AgentSessionsSession_idPushPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sessions/{session_id}/respond": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Answer a pending approval or ask request",
+        "description": "Answer a pending approval or ask request",
+        "operationId": "apiV1AgentSessionsSession_idRespondPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sources": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List git sources the agent can work on",
+        "description": "List git sources the agent can work on",
+        "operationId": "apiV1AgentSourcesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Add a git source",
+        "description": "Add a git source",
+        "operationId": "apiV1AgentSourcesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Source"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/sources/{source_id}": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Get a source",
+        "description": "Get a source",
+        "operationId": "apiV1AgentSourcesSource_idGet",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Source"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Update a source",
+        "description": "Update a source",
+        "operationId": "apiV1AgentSourcesSource_idPut",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Source"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Delete a source that has no live workspaces",
+        "description": "Delete a source that has no live workspaces",
+        "operationId": "apiV1AgentSourcesSource_idDelete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/workspaces": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List checkouts, most recently active first",
+        "description": "List checkouts, most recently active first",
+        "operationId": "apiV1AgentWorkspacesGet",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "query",
+            "description": "Filter by source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Filter by environment",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state: provisioning | ready | failed | reclaimed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/workspaces/{workspace_id}/reclaim": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
+        "description": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
+        "operationId": "apiV1AgentWorkspacesWorkspace_idReclaimPost",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReclaimWorkspaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/model-token/reset": {
       "post": {
         "tags": [
@@ -8428,6 +9338,32 @@
           "message"
         ]
       },
+      "Artifact": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "changed_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field changed_files"
+          },
+          "pr_url": {
+            "type": "string",
+            "description": "Field pr_url"
+          },
+          "pushed": {
+            "type": "boolean",
+            "description": "Field pushed"
+          }
+        },
+        "required": [
+          "pushed",
+          "changed_files"
+        ]
+      },
       "AuthorizationDecision": {
         "type": "object",
         "properties": {
@@ -9448,6 +10384,53 @@
           "smart_enabled"
         ]
       },
+      "CreateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "base_ref": {
+            "type": "string",
+            "description": "Field base_ref"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "Field environment_id"
+          },
+          "local_path": {
+            "type": "string",
+            "description": "Field local_path"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Field prompt"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Field workspace_id"
+          }
+        },
+        "required": [
+          "source_id",
+          "environment_id",
+          "workspace_id",
+          "base_ref",
+          "prompt",
+          "title",
+          "permission_mode",
+          "local_path"
+        ]
+      },
       "CurlData": {
         "type": "object",
         "properties": {
@@ -9680,6 +10663,92 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "Diff": {
+        "type": "object",
+        "properties": {
+          "changed_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field changed_files"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "stat": {
+            "type": "string",
+            "description": "Field stat"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          },
+          "untracked": {
+            "type": "array",
+            "description": "Field untracked",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "changed_files",
+          "stat",
+          "patch",
+          "truncated"
+        ]
+      },
+      "DirEntry": {
+        "type": "object",
+        "properties": {
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "is_repo"
+        ]
+      },
+      "DirListing": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/DirEntry"
+            }
+          },
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Field parent"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "is_repo",
+          "entries"
         ]
       },
       "DirectChat": {
@@ -10083,6 +11152,175 @@
           "verdict"
         ]
       },
+      "Environment": {
+        "type": "object",
+        "properties": {
+          "cc_profile": {
+            "type": "string",
+            "description": "Field cc_profile"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "env": {
+            "type": "object",
+            "description": "Field env",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "image": {
+            "type": "string",
+            "description": "Field image"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Field is_default"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "network": {
+            "type": "string",
+            "description": "Field network"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/Resources"
+          },
+          "runtime": {
+            "type": "string",
+            "description": "Field runtime"
+          },
+          "secret_refs": {
+            "type": "array",
+            "description": "Field secret_refs",
+            "items": {
+              "type": "string"
+            }
+          },
+          "setup_script": {
+            "type": "string",
+            "description": "Field setup_script"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "runtime",
+          "is_default",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "EnvironmentListResponse": {
+        "type": "object",
+        "properties": {
+          "environments": {
+            "type": "array",
+            "description": "Field environments",
+            "items": {
+              "$ref": "#/components/schemas/Environment"
+            }
+          },
+          "permission_modes": {
+            "type": "array",
+            "description": "Field permission_modes",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supported_runtimes": {
+            "type": "array",
+            "description": "Field supported_runtimes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "environments",
+          "supported_runtimes",
+          "permission_modes"
+        ]
+      },
+      "EnvironmentRequest": {
+        "type": "object",
+        "properties": {
+          "cc_profile": {
+            "type": "string",
+            "description": "Field cc_profile"
+          },
+          "env": {
+            "type": "object",
+            "description": "Field env",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "image": {
+            "type": "string",
+            "description": "Field image"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "network": {
+            "type": "string",
+            "description": "Field network"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/Resources"
+          },
+          "runtime": {
+            "type": "string",
+            "description": "Field runtime"
+          },
+          "secret_refs": {
+            "type": "array",
+            "description": "Field secret_refs",
+            "items": {
+              "type": "string"
+            }
+          },
+          "setup_script": {
+            "type": "string",
+            "description": "Field setup_script"
+          }
+        },
+        "required": [
+          "name",
+          "runtime",
+          "image",
+          "setup_script",
+          "env",
+          "secret_refs",
+          "network",
+          "resources",
+          "cc_profile",
+          "permission_mode"
+        ]
+      },
       "ErrorDetail": {
         "type": "object",
         "properties": {
@@ -10097,6 +11335,86 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field at"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "payload": {
+            "description": "Field payload"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field seq"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Field session_id"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          }
+        },
+        "required": [
+          "seq",
+          "session_id",
+          "kind",
+          "at"
+        ]
+      },
+      "EventListQuery": {
+        "type": "object",
+        "properties": {
+          "After": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field After"
+          },
+          "Limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field Limit"
+          }
+        },
+        "required": [
+          "After",
+          "Limit"
+        ]
+      },
+      "EventListResponse": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "description": "Field events",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "next": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field next"
+          }
+        },
+        "required": [
+          "events",
+          "next"
         ]
       },
       "ExecuteToolRequest": {
@@ -13737,6 +15055,55 @@
           "success"
         ]
       },
+      "RecentFolder": {
+        "type": "object",
+        "properties": {
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "is_repo"
+        ]
+      },
+      "RecentFoldersResponse": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "description": "Field folders",
+            "items": {
+              "$ref": "#/components/schemas/RecentFolder"
+            }
+          }
+        },
+        "required": [
+          "folders"
+        ]
+      },
+      "ReclaimWorkspaceRequest": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "Field force"
+          }
+        },
+        "required": [
+          "force"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -13797,6 +15164,48 @@
             }
           }
         }
+      },
+      "Resources": {
+        "type": "object",
+        "properties": {
+          "cpu": {
+            "type": "number",
+            "format": "double",
+            "description": "Field cpu"
+          },
+          "disk_mb": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field disk_mb"
+          },
+          "memory_mb": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field memory_mb"
+          }
+        }
+      },
+      "RespondRequest": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Field approved"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          }
+        },
+        "required": [
+          "request_id",
+          "approved",
+          "answer"
+        ]
       },
       "RestoreConfigResponse": {
         "type": "object",
@@ -14619,6 +16028,18 @@
           }
         }
       },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "ServerActionResponse": {
         "type": "object",
         "properties": {
@@ -14680,6 +16101,167 @@
           "weight",
           "active",
           "time_window"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/Artifact"
+          },
+          "cc_session_id": {
+            "type": "string",
+            "description": "Field cc_session_id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Field created_by"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field finished_at"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "last_active_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_active_at"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Field prompt"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Field workspace_id"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "workspace_id",
+          "status",
+          "prompt",
+          "created_by",
+          "usage",
+          "artifact",
+          "created_at",
+          "last_active_at"
+        ]
+      },
+      "SessionDetail": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        },
+        "required": [
+          "session"
+        ]
+      },
+      "SessionListItem": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceRef"
+          }
+        },
+        "required": [
+          "session"
+        ]
+      },
+      "SessionListQuery": {
+        "type": "object",
+        "properties": {
+          "Active": {
+            "type": "boolean",
+            "description": "Field Active"
+          },
+          "Limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field Limit"
+          },
+          "Status": {
+            "type": "string",
+            "description": "Field Status"
+          },
+          "WorkspaceID": {
+            "type": "string",
+            "description": "Field WorkspaceID"
+          }
+        },
+        "required": [
+          "WorkspaceID",
+          "Status",
+          "Active",
+          "Limit"
+        ]
+      },
+      "SessionListResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "description": "Field sessions",
+            "items": {
+              "$ref": "#/components/schemas/SessionListItem"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
+      "SetPermissionModeRequest": {
+        "type": "object",
+        "properties": {
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          }
+        },
+        "required": [
+          "permission_mode"
         ]
       },
       "Settings": {
@@ -15095,6 +16677,113 @@
           "description",
           "ops",
           "services"
+        ]
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "credential_id": {
+            "type": "string",
+            "description": "Field credential_id"
+          },
+          "default_branch": {
+            "type": "string",
+            "description": "Field default_branch"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "url",
+          "default_branch",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "SourceListResponse": {
+        "type": "object",
+        "properties": {
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        },
+        "required": [
+          "sources"
+        ]
+      },
+      "SourceRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "SourceRequest": {
+        "type": "object",
+        "properties": {
+          "credential_id": {
+            "type": "string",
+            "description": "Field credential_id"
+          },
+          "default_branch": {
+            "type": "string",
+            "description": "Field default_branch"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "default_branch",
+          "credential_id"
         ]
       },
       "StatusResponse": {
@@ -16192,6 +17881,37 @@
           "data"
         ]
       },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "cache_read_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_read_tokens"
+          },
+          "cost": {
+            "type": "number",
+            "format": "double",
+            "description": "Field cost"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field input_tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field output_tokens"
+          }
+        },
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cost"
+        ]
+      },
       "UsageAccount": {
         "type": "object",
         "properties": {
@@ -16682,6 +18402,88 @@
         "required": [
           "provider",
           "model"
+        ]
+      },
+      "Workspace": {
+        "type": "object",
+        "properties": {
+          "agent_cwd": {
+            "type": "string",
+            "description": "Field agent_cwd"
+          },
+          "base_ref": {
+            "type": "string",
+            "description": "Field base_ref"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "container_id": {
+            "type": "string",
+            "description": "Field container_id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "Field environment_id"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "last_active_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_active_at"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "environment_id",
+          "path",
+          "agent_cwd",
+          "base_ref",
+          "branch",
+          "state",
+          "created_at",
+          "last_active_at"
+        ]
+      },
+      "WorkspaceListResponse": {
+        "type": "object",
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "description": "Field workspaces",
+            "items": {
+              "$ref": "#/components/schemas/Workspace"
+            }
+          }
+        },
+        "required": [
+          "workspaces"
         ]
       },
       "errorDetail": {
@@ -17512,6 +19314,10 @@
     {
       "name": "actions",
       "description": "Operations related to actions"
+    },
+    {
+      "name": "agent",
+      "description": "Operations related to agent"
     },
     {
       "name": "auth",

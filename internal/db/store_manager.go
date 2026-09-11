@@ -39,6 +39,7 @@ type storeSet struct {
 	remoteChatStore    *RemoteChatStore
 	remoteSessionStore *RemoteSessionStore
 	botAccessStore     *BotAccessStore
+	managedAgentStore  *ManagedAgentStore
 }
 
 // initialized reports, per health-report name, whether each store is set.
@@ -57,6 +58,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"remoteChats":    s.remoteChatStore != nil,
 		"remoteSessions": s.remoteSessionStore != nil,
 		"botAccess":      s.botAccessStore != nil,
+		"managedAgent":   s.managedAgentStore != nil,
 	}
 }
 
@@ -207,6 +209,14 @@ func (sm *StoreManager) initRemoteStores() error {
 	sm.remoteSessionStore = NewRemoteSessionStore(sm.db, transcript)
 	sm.botAccessStore = NewBotAccessStore(sm.db)
 
+	// Managed agent sessions (.design/managed-agent.md): index tables only;
+	// per-session event logs are files, like the remote transcripts above.
+	managedAgent, err := NewManagedAgentStore(sm.db)
+	if err != nil {
+		return err
+	}
+	sm.managedAgentStore = managedAgent
+
 	// Migrating here, rather than from whichever feature happens to construct
 	// a store first, is what makes every entry point — server, standalone CLI
 	// bot, `remote pair revoke` — see the same migrated data.
@@ -215,6 +225,13 @@ func (sm *StoreManager) initRemoteStores() error {
 		logrus.WithError(err).Error("Failed to import legacy remote JSON stores; leaving files in place")
 	}
 	return nil
+}
+
+// ManagedAgent returns the managed agent index store (thread-safe).
+func (sm *StoreManager) ManagedAgent() *ManagedAgentStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.managedAgentStore
 }
 
 // BotAccess returns the final-state Bot Capability and access-policy store.

@@ -27,6 +27,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -89,6 +90,11 @@ type Server struct {
 	channelRegistry     *channel.Registry
 	interactionRegistry *interaction.Registry[interaction.Result]
 	scenarioRegistry    *scenario.Registry
+
+	// Managed agent sessions (.design/managed-agent.md): the Service and the
+	// event bus the IM bridge subscribes to once the bot runtime exists.
+	managedAgent    *managedagent.Service
+	managedAgentBus *managedagent.EventBus
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *tokenrefresh.OAuthRefresher

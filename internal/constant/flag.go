@@ -36,4 +36,7 @@ const (
 	ExtensionMCP                = "mcp"
 	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
+	// ExtensionManagedAgent gates the Tasks rail (managed agent sessions,
+	// .design/managed-agent.md) in the web UI.
+	ExtensionManagedAgent = "managed_agent"
 )
