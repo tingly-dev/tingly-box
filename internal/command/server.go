@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pkg/browser"
@@ -532,8 +533,12 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		return nil
 	}
 
-	// Check if port is available (AFTER checking if our server is already running)
-	if !network.IsPortAvailable(port) {
+	// Check if port is available (AFTER checking if our server is already running).
+	// A short bounded wait (rather than a single instant check) tolerates the
+	// moment right after a just-stopped previous server's process exits, when
+	// the OS may not have released the socket yet — this matters for
+	// `restart`, which stops the old server and immediately reuses its port.
+	if err := network.WaitForPortAvailable(port, 3*time.Second); err != nil {
 		return fmt.Errorf("port %d is already in use by another process", port)
 	}
 
@@ -618,6 +623,18 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		serverErr <- serverManager.Start()
 	}()
 
+	// stopAndUnlock stops the server — including its HTTP listener — BEFORE
+	// releasing the lock/port file. IsLocked()/GetRuntimeServerPort() are how
+	// other CLI invocations (notably `restart`, which reuses this port) tell
+	// whether the server is actually still holding the port; releasing the
+	// lock first made them report "stopped" while the old listener was still
+	// bound, racing `restart`'s immediate re-bind attempt.
+	stopAndUnlock := func() error {
+		stopErr := serverManager.Stop()
+		fileLock.Unlock()
+		return stopErr
+	}
+
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
 	case err := <-serverErr:
@@ -626,13 +643,9 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
-		// Release lock on shutdown (also removes the runtime port file)
-		fileLock.Unlock()
-		return serverManager.Stop()
+		return stopAndUnlock()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		// Release lock on shutdown (also removes the runtime port file)
-		fileLock.Unlock()
-		return serverManager.Stop()
+		return stopAndUnlock()
 	}
 }

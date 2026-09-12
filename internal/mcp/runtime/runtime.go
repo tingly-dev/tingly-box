@@ -29,6 +29,7 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
+	closed            bool // set once Close() begins; blocks creating new sources
 	virtualRegistry   *coretool.VirtualToolRegistry
 	sessionStore      *SessionStore
 	sweeper           *time.Ticker
@@ -74,34 +75,84 @@ func (r *Runtime) SetClientPool(cp *client.ClientPool) {
 }
 
 // Close releases all MCP sessions and tool source connections.
+//
+// Each stdio source's Disconnect can itself take a few seconds (the
+// underlying SDK closes stdin, waits, then escalates through SIGTERM and
+// SIGKILL before giving up — see the CommandTransport.TerminateDuration set
+// in session.go) and does not honor ctx. Disconnecting sources one at a time
+// under a single 5s budget — the previous behavior — meant that budget was
+// only ever enforced for the first source; every source after it added its
+// own wait on top, so a handful of slow MCP servers turned every
+// `restart`/`stop` into a multi-second-to-multi-minute hang depending on
+// source count. Disconnecting them concurrently keeps the wall-clock cost
+// bounded to the single shared timeout no matter how many sources are
+// configured; any source still hung past the deadline is force-killed
+// directly (see ForceKill) rather than left to finish in a background
+// goroutine that the exiting process would likely outlive.
 func (r *Runtime) Close() {
 	if r == nil {
 		return
 	}
 
-	// Close all active tool sources
-	if r.activeSources != nil {
-		if r.sweeper != nil {
-			r.sweeper.Stop()
-		}
-		r.sourcesMu.Lock()
-		defer r.sourcesMu.Unlock()
+	if r.sweeper != nil {
+		r.sweeper.Stop()
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	// closed must be set in the same critical section as the snapshot, and
+	// getOrCreateSource must check it before ever adding to activeSources —
+	// otherwise a source connected concurrently (the HTTP server is still up
+	// until well after this returns) would land in the fresh empty map,
+	// never appear in `sources` below, and leak its subprocess with
+	// certainty instead of merely racing the shutdown deadline.
+	r.sourcesMu.Lock()
+	r.closed = true
+	sources := r.activeSources
+	r.activeSources = make(map[string]ToolSource)
+	r.sourcesMu.Unlock()
 
-		for sourceID, source := range r.activeSources {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for sourceID, source := range sources {
+		wg.Add(1)
+		go func(sourceID string, source ToolSource) {
+			defer wg.Done()
 			if err := source.Disconnect(ctx); err != nil {
 				logrus.WithField("source", sourceID).WithError(err).
 					Warn("mcp: failed to disconnect source during close")
 			}
-		}
-		r.activeSources = make(map[string]ToolSource)
+		}(sourceID, source)
+	}
+	if r.sc != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.sc.closeAll()
+		}()
 	}
 
-	// Close all sessions
-	if r.sc != nil {
-		r.sc.closeAll()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		// The process this Runtime lives in typically exits right after
+		// Close() returns (see ServerManager.Stop), which would kill the
+		// goroutines above — and the subprocesses they're waiting on —
+		// before the SDK's own SIGTERM/SIGKILL escalation gets to run. Force
+		// kill directly so a hung MCP subprocess can't outlive the process
+		// that's supposed to be tearing it down.
+		logrus.Warn("mcp: timed out waiting for MCP sources to disconnect; force killing remaining subprocesses")
+		for _, source := range sources {
+			if killable, ok := source.(interface{ ForceKill() }); ok {
+				killable.ForceKill()
+			}
+		}
 	}
 }
 
@@ -333,6 +384,10 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 	// Slow path: create new source
 	r.sourcesMu.Lock()
 	defer r.sourcesMu.Unlock()
+
+	if r.closed {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp runtime is shutting down"}
+	}
 
 	// Double-check
 	source = r.activeSources[sourceID]

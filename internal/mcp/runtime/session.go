@@ -21,7 +21,19 @@ type sourceSession struct {
 	sourceID string
 	client   *mcp.Client
 	session  *mcp.ClientSession
+	cmd      *exec.Cmd // set for stdio transport only
 	mu       sync.RWMutex
+}
+
+// getCmd returns the stdio subprocess handle, or nil for other transports.
+// Callers needing lock-free access after the fact (see StdioToolSource's
+// killCmd) should copy the result rather than call this repeatedly — cmd
+// never changes for the lifetime of a session, so one read right after
+// getOrCreate returns is enough.
+func (ss *sourceSession) getCmd() *exec.Cmd {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	return ss.cmd
 }
 
 // listTools returns the list of tools from the SDK session.
@@ -122,15 +134,22 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 	logrus.Debugf("mcp: creating transport for source=%s transport=%s", source.ID, transport)
 
 	var t mcp.Transport
+	var stdioCmd *exec.Cmd
 	switch transport {
 	case "stdio":
 		cmd, cmdErr := buildCommand(ctx, source)
 		if cmdErr != nil {
 			return nil, nil, cmdErr
 		}
+		stdioCmd = cmd
 		t = &mcp.CommandTransport{
-			Command:           cmd,
-			TerminateDuration: 5 * time.Second,
+			Command: cmd,
+			// Runtime.Close() bounds the whole disconnect at 5s and force-
+			// kills whatever's left; a subprocess that would exit cleanly
+			// on SIGTERM should get the chance to before that backstop
+			// fires, so the SDK's own idle-wait-then-SIGTERM-then-wait
+			// escalation needs to fit well inside that outer budget.
+			TerminateDuration: 2 * time.Second,
 		}
 	case "http":
 		if strings.TrimSpace(source.Endpoint) == "" {
@@ -174,6 +193,7 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 	ss.mu.Lock()
 	ss.client = client
 	ss.session = session
+	ss.cmd = stdioCmd
 	ss.mu.Unlock()
 
 	logrus.Debugf("mcp: session created for source=%s transport=%s", source.ID, transport)
