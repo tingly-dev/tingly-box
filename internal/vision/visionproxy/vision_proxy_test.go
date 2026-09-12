@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -111,6 +112,9 @@ func mkProcessor(t *testing.T, vc VisionClient, providers ...*typ.Provider) *Vis
 	return &VisionProxyProcessor{
 		Client:   vc,
 		Resolver: newFakeProviderResolver(providers...),
+		// Fresh memory-only cache per test, so a hit in one test can never
+		// mask a describe call another test asserts on.
+		cache: newDescribeCache(nil),
 	}
 }
 
@@ -486,7 +490,7 @@ func TestVisionProxy_AnthropicBeta_SuccessReplacesImageWithDescription(t *testin
 	req := betaReqWithImages("What's in the picture?", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 1, fake.callCount(), "vision client called once")
 	require.Equal(t, 0, countImages(req), "no image blocks remain")
 	require.Contains(t, collectText(req), "a red apple on a white plate", "description spliced into text")
@@ -500,7 +504,7 @@ func TestVisionProxy_AnthropicV1_Success(t *testing.T) {
 	req := v1ReqWithImage("describe", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a blue sky")
 }
@@ -513,7 +517,7 @@ func TestVisionProxy_OpenAI_Success(t *testing.T) {
 	req := openaiReqWithImage("what is this?", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a cat sitting on a mat")
 }
@@ -530,7 +534,7 @@ func TestVisionProxy_OpenAI_ToolMessageImage_Replaced(t *testing.T) {
 	req := openaiReqWithToolImage("what color is this?", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req), "tool-channel image must not reach the provider")
 	require.Contains(t, collectText(req), "a solid red square")
 }
@@ -544,12 +548,12 @@ func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.
 	req := betaReqWithImages("describe", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs), "Process must not surface the upstream error — fail-strip semantics")
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}), "Process must not surface the upstream error — fail-strip semantics")
 	require.Equal(t, 0, countImages(req), "image stripped despite upstream failure")
-	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
+	require.Contains(t, collectText(req), "vision proxy failed", "fail-strip marker present")
 }
 
-// Every latest-message image gets its own describe call and is replaced.
+// Every distinct image gets its own describe call and is replaced.
 // Descriptions are assigned by fakeVisionClient arrival order, which is
 // nondeterministic under the concurrent fan-out — positional mapping is
 // covered by TestVisionProxy_ConcurrentDescribe_MappingPreserved instead.
@@ -558,10 +562,10 @@ func TestVisionProxy_MultipleImages_AllReplaced(t *testing.T) {
 	fake := newFakeVisionClient("first description", "second description", "third description")
 	p := mkProcessor(t, fake, prov)
 
-	req := betaReqWithImages("compare these", tinyPNGBase64, tinyPNGBase64, tinyPNGBase64)
+	req := betaReqWithImages("compare these", imgOld, imgMid, imgNew)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 3, fake.callCount(), "one describe call per image")
 	require.Equal(t, 0, countImages(req))
 	text := collectText(req)
@@ -588,9 +592,9 @@ func TestVisionProxy_DescribePanic_FailStrips(t *testing.T) {
 	req := betaReqWithImages("describe", tinyPNGBase64, tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req), "images stripped despite panicking client")
-	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
+	require.Contains(t, collectText(req), "vision proxy failed", "fail-strip marker present")
 }
 
 // echoPayloadClient derives the description from the image payload itself,
@@ -617,7 +621,7 @@ func TestVisionProxy_ConcurrentDescribe_MappingPreserved(t *testing.T) {
 	req := betaReqWithImages("compare all of these", payloads...)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
 
 	text := collectText(req)
@@ -638,7 +642,7 @@ func TestVisionProxy_NoImages_NoOp(t *testing.T) {
 	req := betaReqWithImages("just text") // no image args
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, fake.callCount(), "no images → no vision calls")
 	require.Equal(t, 0, countImages(req))
 }
@@ -651,83 +655,95 @@ func TestVisionProxy_EmptyDescription_StripImageWithUnavailableMarker(t *testing
 	req := betaReqWithImages("describe", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
-	require.Contains(t, collectText(req), "description unavailable",
+	require.Contains(t, collectText(req), "vision proxy failed",
 		"empty upstream response treated as fail-strip")
 }
 
-// TestVisionProxy_HistoricalImages_StrippedWithoutDescribe verifies the
-// two-responsibility split: images in the LAST message go through the
-// vision upstream; images in older messages are replaced with a fixed
-// historical marker without any describe call. Calling Describe on every
-// historical image would be cost-prohibitive and is unnecessary because
-// the model rarely needs to reason about images outside the current turn.
-func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
+// TestVisionProxy_DescribeLimit_NewestFirst pins the bounded contract: cache
+// misses are described newest first, up to the per-request limit; older
+// misses get the deferral marker without any describe call this turn.
+func TestVisionProxy_DescribeLimit_NewestFirst(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("latest description")
 	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
 
 	req := betaReqWithMessages(
-		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", imgOld),
 		betaMessage(anthropic.BetaMessageParamRoleAssistant, "previous reply", ""),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", tinyPNGBase64),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", imgMid),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", imgNew),
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 1, fake.callCount(),
-		"only the LAST message's image triggers a describe call; historical images are stripped without upstream cost")
+		"with limit 1 only the newest miss is described; older misses are deferred without upstream cost")
 	require.Equal(t, 0, countImages(req), "all images removed from the request")
 
-	text := collectText(req)
-	require.Contains(t, text, "latest description", "latest image was described")
-	// Historical images get the fixed omitted marker, not the description text.
-	require.Contains(t, text, "omitted from history", "historical images carry the omitted marker")
+	// The newest message got the description; both older ones the marker.
+	require.Contains(t, blockText(req.Messages[3]), "latest description")
+	require.Contains(t, blockText(req.Messages[2]), imageOverLimitText)
+	require.Contains(t, blockText(req.Messages[0]), imageOverLimitText)
 }
 
-// TestVisionProxy_HistoricalImages_V1AndOpenAI covers v1 and OpenAI request
-// shapes with the same split contract.
-func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
+// blockText concatenates the text blocks of one Beta message.
+func blockText(m anthropic.BetaMessageParam) string {
+	var sb strings.Builder
+	for _, b := range m.Content {
+		if b.OfText != nil {
+			sb.WriteString(b.OfText.Text)
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
+// TestVisionProxy_DescribeLimit_V1AndOpenAI covers v1 and OpenAI request
+// shapes with the same bounded, newest-first contract.
+func TestVisionProxy_DescribeLimit_V1AndOpenAI(t *testing.T) {
 	t.Run("v1", func(t *testing.T) {
 		prov := mkProvider("anthropic-v1")
 		fake := newFakeVisionClient("v1 latest desc")
 		p := mkProcessor(t, fake, prov)
+		p.describeLimit = 1
 
 		req := v1ReqWithMessages(
-			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
-			v1Message(anthropic.MessageParamRoleUser, "current", tinyPNGBase64),
+			v1Message(anthropic.MessageParamRoleUser, "old turn", imgOld),
+			v1Message(anthropic.MessageParamRoleUser, "current", imgNew),
 		)
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-		require.NoError(t, p.Process(context.Background(), req, svcs))
-		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
+		require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
 		require.Contains(t, text, "v1 latest desc")
-		require.Contains(t, text, "omitted from history")
+		require.Contains(t, text, imageOverLimitText)
 	})
 	t.Run("openai", func(t *testing.T) {
 		prov := mkProvider("openai-vision")
 		fake := newFakeVisionClient("openai latest desc")
 		p := mkProcessor(t, fake, prov)
+		p.describeLimit = 1
 
 		req := &openai.ChatCompletionNewParams{
 			Model: openai.ChatModel("gpt-4o"),
 			Messages: []openai.ChatCompletionMessageParamUnion{
-				openaiUserMessageWithImage("old turn", tinyPNGBase64),
-				openaiUserMessageWithImage("current", tinyPNGBase64),
+				openaiUserMessageWithImage("old turn", imgOld),
+				openaiUserMessageWithImage("current", imgNew),
 			},
 		}
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-		require.NoError(t, p.Process(context.Background(), req, svcs))
-		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
+		require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
 		require.Contains(t, text, "openai latest desc")
-		require.Contains(t, text, "omitted from history")
+		require.Contains(t, text, imageOverLimitText)
 	})
 }
 
@@ -740,7 +756,7 @@ func TestVisionProxy_NoUsableService_StripImagesAndReturnNil(t *testing.T) {
 	req := betaReqWithImages("describe", tinyPNGBase64)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, false)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs), "must not error when no usable service")
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}), "must not error when no usable service")
 	require.Equal(t, 0, fake.callCount(), "no service → no vision call")
 	require.Equal(t, 0, countImages(req), "image stripped so downstream still works")
 }
@@ -763,7 +779,7 @@ func TestVisionProxy_Responses_Success(t *testing.T) {
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 1, fake.callCount())
 	require.Equal(t, 0, countImages(req), "no input_image parts remain")
 	require.Contains(t, collectText(req), "a yellow rubber duck")
@@ -782,35 +798,34 @@ func TestVisionProxy_Responses_InputMessageVariant(t *testing.T) {
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a chart with three bars")
 }
 
-// TestVisionProxy_Responses_HistoricalImagesStripped enforces the same
-// "describe latest, marker for history" split that the Anthropic /
-// Chat paths implement. Without this, a multi-turn Responses request
-// would re-describe every prior image — prohibitively expensive.
-func TestVisionProxy_Responses_HistoricalImagesStripped(t *testing.T) {
+// TestVisionProxy_Responses_DescribeLimit enforces the same bounded,
+// newest-first contract on the Responses path that the Anthropic / Chat
+// paths implement.
+func TestVisionProxy_Responses_DescribeLimit(t *testing.T) {
 	prov := mkProvider("openai-vision")
 	fake := newFakeVisionClient("latest description")
 	p := mkProcessor(t, fake, prov)
+	p.describeLimit = 1
 
 	req := responsesReqWithItems(
-		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", tinyPNGBase64),
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", imgOld),
 		responsesMessageItem(responses.EasyInputMessageRoleAssistant, "previous reply", ""),
-		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", tinyPNGBase64),
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", imgNew),
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
-	require.Equal(t, 1, fake.callCount(),
-		"only the LAST item's image triggers a describe call; historical images use the marker")
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
+	require.Equal(t, 1, fake.callCount(), "limit 1: describe only the newest miss")
 	require.Equal(t, 0, countImages(req))
 
 	text := collectText(req)
 	require.Contains(t, text, "latest description")
-	require.Contains(t, text, "omitted from history")
+	require.Contains(t, text, imageOverLimitText)
 }
 
 // TestVisionProxy_Responses_MarshalNoImageURL is a serialization-level
@@ -829,11 +844,150 @@ func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.NoError(t, p.Process(context.Background(), req, svcs, typ.SessionID{Value: "test-session"}))
 	require.Equal(t, 0, countImages(req))
 
 	body, err := req.MarshalJSON()
 	require.NoError(t, err)
 	require.NotContains(t, string(body), `"input_image"`)
 	require.NotContains(t, string(body), `"image_url"`)
+}
+
+// ---------------------------------------------------------------------------
+// Tests — describe cache (session-scoped, content-addressed reuse)
+// ---------------------------------------------------------------------------
+
+// Same session, same image bytes, same service: the second request must not
+// pay another upstream describe call, and the replacement text must be
+// identical (that's the whole point — no retry/failover-induced drift that
+// would break a downstream provider's prompt-prefix cache).
+func TestVisionProxy_Cache_SameSessionSameImage_SecondCallSkipsDescribe(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("a red apple on a white plate")
+	p := mkProcessor(t, fake, prov)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	req1 := betaReqWithImages("What's in the picture?", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req1, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "first occurrence: real describe call")
+	firstText := collectText(req1)
+	require.Contains(t, firstText, "a red apple on a white plate")
+
+	req2 := betaReqWithImages("What's in the picture?", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req2, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "second occurrence in the same session: cache hit, no new describe call")
+	require.Equal(t, firstText, collectText(req2), "cached replacement text is byte-identical across occurrences")
+}
+
+// A different session must never reuse another session's cached description,
+// even for byte-identical image content — see
+// .sdlc/docs/vision-vision-proxy-description-cache-20260902.spec.md §1 for
+// why session is part of the cache key rather than just image content.
+func TestVisionProxy_Cache_DifferentSession_DoesNotShareCache(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("first look", "second look")
+	p := mkProcessor(t, fake, prov)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+
+	req1 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req1, svcs, typ.SessionID{Value: "session-a"}))
+	require.Equal(t, 1, fake.callCount())
+
+	req2 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req2, svcs, typ.SessionID{Value: "session-b"}))
+	require.Equal(t, 2, fake.callCount(), "different session: independent describe call, no cross-session reuse")
+}
+
+// A historical image whose content was already described earlier in the
+// SAME session (e.g. it was the latest message last turn, now pushed into
+// history by a new turn) gets the real cached description spliced in,
+// instead of the deferral marker — no extra describe
+// call is made for it either way.
+func TestVisionProxy_Cache_HistoricalImageHitsCache_UsesRealDescription(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("a mountain landscape")
+	p := mkProcessor(t, fake, prov)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	// Turn 1: the image is the latest message — real describe call, cached.
+	turn1 := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "what's this?", tinyPNGBase64),
+	)
+	require.NoError(t, p.Process(context.Background(), turn1, svcs, session))
+	require.Equal(t, 1, fake.callCount())
+
+	// Turn 2: the same image is now historical (a new user turn follows it).
+	// It must hit the cache from turn 1 rather than falling back to the
+	// fixed historical marker, and must not trigger another describe call.
+	turn2 := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "what's this?", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleAssistant, "a mountain landscape", ""),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "and now?", ""),
+	)
+	require.NoError(t, p.Process(context.Background(), turn2, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "historical image was served from cache, not re-described")
+	text := collectText(turn2)
+	require.Contains(t, text, "a mountain landscape", "cached real description used for the historical image")
+	require.NotContains(t, text, imageOverLimitText, "cache hit never counts against the limit")
+}
+
+// A failed describe is never cached as a description: it goes to the
+// short-lived negative cache, so within describeFailureTTL the image is
+// fail-stripped without a retry (and without holding a describe slot), and
+// once the TTL passes a transient failure gets its retry and recovers.
+func TestVisionProxy_Cache_FailedDescribe_NegativeCachedThenRetried(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("", "recovered description")
+	fake.failCall(0, errors.New("upstream timeout"))
+	p := mkProcessor(t, fake, prov)
+	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	p.cache.now = func() time.Time { return now }
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+	session := typ.SessionID{Value: "session-a"}
+
+	req1 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req1, svcs, session))
+	require.Equal(t, 1, fake.callCount())
+	require.Contains(t, collectText(req1), "vision proxy failed")
+
+	// Within the TTL: stripped again, no upstream call.
+	now = now.Add(describeFailureTTL / 2)
+	req2 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req2, svcs, session))
+	require.Equal(t, 1, fake.callCount(), "recent failure is remembered; no retry yet")
+	require.Contains(t, collectText(req2), "vision proxy failed")
+
+	// Past the TTL: retried for real, and the recovery is cached.
+	now = now.Add(describeFailureTTL)
+	req3 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req3, svcs, session))
+	require.Equal(t, 2, fake.callCount(), "failure expired; second occurrence retries for real")
+	require.Contains(t, collectText(req3), "recovered description")
+
+	req4 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req4, svcs, session))
+	require.Equal(t, 2, fake.callCount(), "recovered description is cached")
+}
+
+// Switching the vision service (different model, same provider) for the same
+// session and image must not reuse the other model's cached description —
+// see FR2/the provider+model component of visionCacheKey.
+func TestVisionProxy_Cache_DifferentModel_DoesNotShareCache(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("described by model A", "described by model B")
+	p := mkProcessor(t, fake, prov)
+	session := typ.SessionID{Value: "session-a"}
+
+	svcModelA := &loadbalance.Service{Provider: prov.UUID, Model: "vision-model-a", Weight: 1, Active: true}
+	svcModelB := &loadbalance.Service{Provider: prov.UUID, Model: "vision-model-b", Weight: 1, Active: true}
+
+	req1 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req1, []*loadbalance.Service{svcModelA}, session))
+	require.Equal(t, 1, fake.callCount())
+
+	req2 := betaReqWithImages("describe", tinyPNGBase64)
+	require.NoError(t, p.Process(context.Background(), req2, []*loadbalance.Service{svcModelB}, session))
+	require.Equal(t, 2, fake.callCount(), "different model: independent describe call, no cross-model reuse")
 }

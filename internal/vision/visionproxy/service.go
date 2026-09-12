@@ -28,11 +28,13 @@ func NewService(p *VisionProxyProcessor) *Service {
 // NewServiceFromPool builds a Service backed by the production vision client,
 // dispatching describe calls through the shared ClientPool. Called once
 // during server boot after the ClientPool and config (provider resolver) are
-// constructed.
-func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver) *Service {
+// constructed. store backs the describe cache (see describe_store.go); nil
+// falls back to a process-local map.
+func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver, store DescribeStore) *Service {
 	return NewService(&VisionProxyProcessor{
 		Client:   NewPoolVisionClient(pool, resolver),
 		Resolver: resolver,
+		cache:    newDescribeCache(store),
 	})
 }
 
@@ -40,8 +42,9 @@ func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver) *Ser
 // rule-level and scenario-level scopes. It must run before service selection
 // (after the rule is resolved). The effective service is chosen by Resolve —
 // rule level wins over scenario level — and the processor runs at most once
-// per request.
-func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
+// per request. sessionID scopes the describe cache (see
+// VisionProxyProcessor.Process) to the caller's conversation.
+func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any, sessionID typ.SessionID) {
 	if s == nil || s.Processor == nil || typedRequest == nil {
 		return
 	}
@@ -49,7 +52,7 @@ func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType ty
 	if svc == nil {
 		return
 	}
-	_ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc})
+	_ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc}, sessionID)
 }
 
 // Resolve picks the effective vision service for this request. Rule level

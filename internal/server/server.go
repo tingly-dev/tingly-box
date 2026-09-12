@@ -373,7 +373,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.routingSelector = simpleSelector
 
 	// Wire the vision proxy service. Idempotent — safe across config reloads.
-	server.visionProxyService = visionproxy.NewServiceFromPool(server.clientPool, server.config)
+	// The describe cache persists in tingly.db so a restart does not
+	// re-describe (and re-word) every image a live conversation carries.
+	server.visionProxyService = visionproxy.NewServiceFromPool(server.clientPool, server.config, newVisionDescribeStore(cfg))
 
 	// Start affinity store background GC
 	affinityStore.StartGC()
@@ -657,11 +659,20 @@ func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 	return quotaMgr, nil
 }
 
-// applyVisionProxy is the single entry point for the vision proxy plugin,
-// covering both the rule-level and scenario-level scopes. It must run before
-// service selection (after the rule is resolved). Delegates to
-// visionproxy.Service — see internal/server/module/visionproxy and
-// .design/vision-proxy.md for the design.
-func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
-	s.visionProxyService.Apply(c.Request.Context(), s.config, scenarioType, rule, typedRequest)
+// newVisionDescribeStore opens the vision proxy's durable describe cache
+// over the StoreManager's shared tingly.db connection. Any failure degrades
+// the cache to memory-only rather than blocking boot: the proxy still works,
+// it just re-describes after a restart.
+func newVisionDescribeStore(cfg *config.Config) visionproxy.DescribeStore {
+	sm := cfg.StoreManager()
+	if sm == nil || sm.DB() == nil {
+		logrus.Warn("vision proxy: store manager unavailable; describe cache is memory-only")
+		return nil
+	}
+	store, err := visionproxy.NewSQLiteDescribeStore(sm.DB())
+	if err != nil {
+		logrus.WithError(err).Warn("vision proxy: describe store unavailable; describe cache is memory-only")
+		return nil
+	}
+	return store
 }
