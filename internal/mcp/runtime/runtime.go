@@ -74,34 +74,64 @@ func (r *Runtime) SetClientPool(cp *client.ClientPool) {
 }
 
 // Close releases all MCP sessions and tool source connections.
+//
+// Each stdio source's Disconnect can itself take up to ~15s (the underlying
+// SDK closes stdin, waits, then escalates through SIGTERM and SIGKILL before
+// giving up) and does not honor ctx. Disconnecting sources one at a time
+// under a single 5s budget — the previous behavior — meant that budget was
+// only ever enforced for the first source; every source after it added its
+// own unbounded wait on top, so a handful of slow MCP servers turned every
+// `restart`/`stop` into a multi-minute hang. Disconnecting them concurrently
+// keeps the wall-clock cost bounded to the single shared timeout no matter
+// how many sources are configured; any source still hung past the deadline
+// keeps trying to terminate its subprocess in the background rather than
+// blocking the caller.
 func (r *Runtime) Close() {
 	if r == nil {
 		return
 	}
 
-	// Close all active tool sources
-	if r.activeSources != nil {
-		if r.sweeper != nil {
-			r.sweeper.Stop()
-		}
-		r.sourcesMu.Lock()
-		defer r.sourcesMu.Unlock()
+	if r.sweeper != nil {
+		r.sweeper.Stop()
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	r.sourcesMu.Lock()
+	sources := r.activeSources
+	r.activeSources = make(map[string]ToolSource)
+	r.sourcesMu.Unlock()
 
-		for sourceID, source := range r.activeSources {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for sourceID, source := range sources {
+		wg.Add(1)
+		go func(sourceID string, source ToolSource) {
+			defer wg.Done()
 			if err := source.Disconnect(ctx); err != nil {
 				logrus.WithField("source", sourceID).WithError(err).
 					Warn("mcp: failed to disconnect source during close")
 			}
-		}
-		r.activeSources = make(map[string]ToolSource)
+		}(sourceID, source)
+	}
+	if r.sc != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.sc.closeAll()
+		}()
 	}
 
-	// Close all sessions
-	if r.sc != nil {
-		r.sc.closeAll()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		logrus.Warn("mcp: timed out waiting for all MCP sources to disconnect; remaining subprocess cleanup continues in the background")
 	}
 }
 
