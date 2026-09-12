@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,12 @@ type StdioToolSource struct {
 	ready          bool       // Track if server is ready
 	readyMu        sync.Mutex // Protect ready state
 	startupRetries int        // Retry counter during startup
+
+	// lastSession mirrors `session` but is read by ForceKill without taking
+	// mu. Disconnect holds mu for its entire (potentially ~10s) SIGTERM/
+	// SIGKILL escalation, and ForceKill exists specifically to backstop a
+	// Disconnect that's stuck there — so it must never contend for mu.
+	lastSession atomic.Pointer[sourceSession]
 }
 
 // NewStdioToolSource creates a new stdio tool source.
@@ -63,6 +70,7 @@ func (s *StdioToolSource) Connect(ctx context.Context) error {
 	}
 
 	s.session = ss
+	s.lastSession.Store(ss)
 
 	// Wait for server to be ready (especially important for builtin servers)
 	if err := s.waitForServerReady(ctx); err != nil {
@@ -148,6 +156,17 @@ func (s *StdioToolSource) Disconnect(ctx context.Context) error {
 	s.setState(StateDisconnected, nil)
 	logrus.Debugf("mcp: stdio source=%s disconnected", s.GetSourceID())
 	return nil
+}
+
+// ForceKill immediately kills the underlying subprocess, bypassing the SDK's
+// own close handshake (stdin-close wait -> SIGTERM -> wait -> SIGKILL).
+// Deliberately lock-free (see lastSession) so it can run concurrently with,
+// and without waiting behind, an in-flight Disconnect: it exists precisely
+// to backstop a Disconnect that hasn't finished within the caller's budget.
+func (s *StdioToolSource) ForceKill() {
+	if ss := s.lastSession.Load(); ss != nil {
+		ss.forceKill()
+	}
 }
 
 // IsConnected returns whether the stdio connection is active.
