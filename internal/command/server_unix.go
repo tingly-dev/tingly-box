@@ -52,13 +52,16 @@ func stopServerWithFileLock(fileLock *lock.FileLock) error {
 	// server has actually stopped (including closing its HTTP listener and
 	// disconnecting MCP sources), graceful shutdown can legitimately take a
 	// few seconds — give it more room than a single MCP round-trip before
-	// falling back to a force kill.
-	for i := 0; i < 10; i++ { // Wait up to 10 seconds
+	// falling back to a force kill. Poll finer than the ceiling so a shutdown
+	// that finishes early is observed promptly instead of on the next
+	// whole-second tick.
+	const pollInterval = 150 * time.Millisecond
+	const waitCeiling = 10 * time.Second
+	for deadline := time.Now().Add(waitCeiling); time.Now().Before(deadline); time.Sleep(pollInterval) {
 		if !fileLock.IsLocked() {
 			_ = fileLock.RemoveRuntimeFiles()
 			return nil
 		}
-		time.Sleep(1 * time.Second)
 	}
 
 	// If still running, force kill

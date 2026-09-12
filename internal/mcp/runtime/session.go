@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -22,13 +21,19 @@ type sourceSession struct {
 	sourceID string
 	client   *mcp.Client
 	session  *mcp.ClientSession
+	cmd      *exec.Cmd // set for stdio transport only
 	mu       sync.RWMutex
+}
 
-	// cmd is set for stdio transport only and read by forceKill without mu:
-	// close() (below) can hold mu for its entire ~10s SIGTERM/SIGKILL
-	// escalation, and forceKill exists specifically to backstop a close()
-	// that's stuck there — so it must never contend for mu.
-	cmd atomic.Pointer[exec.Cmd]
+// getCmd returns the stdio subprocess handle, or nil for other transports.
+// Callers needing lock-free access after the fact (see StdioToolSource's
+// killCmd) should copy the result rather than call this repeatedly — cmd
+// never changes for the lifetime of a session, so one read right after
+// getOrCreate returns is enough.
+func (ss *sourceSession) getCmd() *exec.Cmd {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	return ss.cmd
 }
 
 // listTools returns the list of tools from the SDK session.
@@ -76,18 +81,6 @@ func (ss *sourceSession) close() {
 		ss.session = nil
 	}
 	ss.client = nil
-}
-
-// forceKill immediately kills the stdio subprocess, bypassing the SDK's own
-// close handshake (stdin-close wait -> SIGTERM -> wait -> SIGKILL). Used as
-// a backstop when that handshake doesn't finish within the shutdown budget:
-// the process hosting this Runtime typically exits right after, which would
-// otherwise kill the handshake's goroutine — and orphan the subprocess —
-// before it ever gets to SIGKILL. No-op for non-stdio sessions.
-func (ss *sourceSession) forceKill() {
-	if cmd := ss.cmd.Load(); cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
-	}
 }
 
 // sessionCache maps source ID → sourceSession.
@@ -150,8 +143,13 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 		}
 		stdioCmd = cmd
 		t = &mcp.CommandTransport{
-			Command:           cmd,
-			TerminateDuration: 5 * time.Second,
+			Command: cmd,
+			// Runtime.Close() bounds the whole disconnect at 5s and force-
+			// kills whatever's left; a subprocess that would exit cleanly
+			// on SIGTERM should get the chance to before that backstop
+			// fires, so the SDK's own idle-wait-then-SIGTERM-then-wait
+			// escalation needs to fit well inside that outer budget.
+			TerminateDuration: 2 * time.Second,
 		}
 	case "http":
 		if strings.TrimSpace(source.Endpoint) == "" {
@@ -192,10 +190,10 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 		return nil, nil, &sessionError{sourceID: source.ID, msg: "connect: " + connErr.Error()}
 	}
 
-	ss.cmd.Store(stdioCmd)
 	ss.mu.Lock()
 	ss.client = client
 	ss.session = session
+	ss.cmd = stdioCmd
 	ss.mu.Unlock()
 
 	logrus.Debugf("mcp: session created for source=%s transport=%s", source.ID, transport)

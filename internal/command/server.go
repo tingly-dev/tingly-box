@@ -623,6 +623,18 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		serverErr <- serverManager.Start()
 	}()
 
+	// stopAndUnlock stops the server — including its HTTP listener — BEFORE
+	// releasing the lock/port file. IsLocked()/GetRuntimeServerPort() are how
+	// other CLI invocations (notably `restart`, which reuses this port) tell
+	// whether the server is actually still holding the port; releasing the
+	// lock first made them report "stopped" while the old listener was still
+	// bound, racing `restart`'s immediate re-bind attempt.
+	stopAndUnlock := func() error {
+		stopErr := serverManager.Stop()
+		fileLock.Unlock()
+		return stopErr
+	}
+
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
 	case err := <-serverErr:
@@ -631,19 +643,9 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
-		// Stop the server — including its HTTP listener — BEFORE releasing the
-		// lock/port file. IsLocked()/GetRuntimeServerPort() are how other CLI
-		// invocations (notably `restart`, which reuses this port) tell whether
-		// the server is actually still holding the port; releasing the lock
-		// first made them report "stopped" while the old listener was still
-		// bound, racing `restart`'s immediate re-bind attempt.
-		stopErr := serverManager.Stop()
-		fileLock.Unlock()
-		return stopErr
+		return stopAndUnlock()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		stopErr := serverManager.Stop()
-		fileLock.Unlock()
-		return stopErr
+		return stopAndUnlock()
 	}
 }

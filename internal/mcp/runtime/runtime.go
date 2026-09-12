@@ -76,17 +76,19 @@ func (r *Runtime) SetClientPool(cp *client.ClientPool) {
 
 // Close releases all MCP sessions and tool source connections.
 //
-// Each stdio source's Disconnect can itself take up to ~15s (the underlying
-// SDK closes stdin, waits, then escalates through SIGTERM and SIGKILL before
-// giving up) and does not honor ctx. Disconnecting sources one at a time
+// Each stdio source's Disconnect can itself take a few seconds (the
+// underlying SDK closes stdin, waits, then escalates through SIGTERM and
+// SIGKILL before giving up — see the CommandTransport.TerminateDuration set
+// in session.go) and does not honor ctx. Disconnecting sources one at a time
 // under a single 5s budget — the previous behavior — meant that budget was
 // only ever enforced for the first source; every source after it added its
-// own unbounded wait on top, so a handful of slow MCP servers turned every
-// `restart`/`stop` into a multi-minute hang. Disconnecting them concurrently
-// keeps the wall-clock cost bounded to the single shared timeout no matter
-// how many sources are configured; any source still hung past the deadline
-// keeps trying to terminate its subprocess in the background rather than
-// blocking the caller.
+// own wait on top, so a handful of slow MCP servers turned every
+// `restart`/`stop` into a multi-second-to-multi-minute hang depending on
+// source count. Disconnecting them concurrently keeps the wall-clock cost
+// bounded to the single shared timeout no matter how many sources are
+// configured; any source still hung past the deadline is force-killed
+// directly (see ForceKill) rather than left to finish in a background
+// goroutine that the exiting process would likely outlive.
 func (r *Runtime) Close() {
 	if r == nil {
 		return
