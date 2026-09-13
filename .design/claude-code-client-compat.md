@@ -507,9 +507,17 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 ## 7. 未决 / 后续
 
-- **有状态合成 `cc_prompt_id` / `cc_prev_req`**（§5.3）：若观察到直连与经代理的流量在缓存命中率或限流上有差异，值得做。
-  需要：按 session（metadata.session_id）缓存上一 upstream 响应的 `request-id`；按"最后一条 user 消息是否含非 tool_result 文本"判定新 turn 并生成 UUID。
+### 7.1 2.1.258 profile 里明知有差异但**没有**做的项（完整清单）
+
+| 项 | 状态 | 官方行为 | 我们的行为 | 原因 / 补法 |
+|---|---|---|---|---|
+| `x-app: cli-bg` | 未做 | `CLAUDE_CODE_SESSION_KIND=bg` 的后台会话发 `cli-bg`，其余 `cli` | 一律 `cli` | 未读入站 `x-app` 头。补法：入站为 `cli-bg` 时透传，一行改动。影响仅是把少量后台流量标成了前台。 |
+| `cc_prev_req` / `cc_prompt_id` 合成 | 未做，只透传入站已有的 | 直连时每请求带 `cc_prompt_id`（当前人类 prompt 的 UUID），第二个请求起带 `cc_prev_req`（上一响应的 `request-id`） | 入站没有就省略（= 官方"经代理"形态） | `cc_prev_req` 需按 session 记上一响应的 `request-id`（内存 map 即可）；`cc_prompt_id` 可由"最后一条人类 user 消息"确定性派生。语义未验证、收益未知，等观察到 cache 命中率差异再做。见 §5.3。 |
+| `structured-outputs-2025-12-15` 的灰度分支 | 无法做 | `growthbook("tengu_tool_pear") && supportsStructured(model)` 时加入基线 | 仅当请求体带 `output_config.format` / `output_format` 时加（官方的第二条路径 `T5o`），另接受入站回放 | 灰度值由 Anthropic 服务端按用户下发，代理侧看不到。"灰度开 + 请求未用结构化输出"时官方带而我们不带，但该形态本就因用户而异。 |
+
+其余 §0 表格中的项全部已实现并有测试覆盖。
+
+
 - **`cch` 的服务端校验方式未知**：我们哈希自己发出的字节并已做 JS 形态归一化；若服务端在重算前还做 key 重排等归一化，Go SDK 的 key 顺序（与 JS 不同）会导致不匹配。上线后若 OAuth 流量出现异常（限流/拒绝），优先怀疑这里。
-- **`x-app: cli-bg`**：后台会话 persona，目前无信号可判。
 - **`thinking.display`**：`Guard` 在 thinking 未指定时强制 `disabled` 的逻辑未动；2.1.258 交互式会显式给 `adaptive` + `display`，通常不会触发。
 - 抓包用的假服务与脚本没有入库（§2.4 已内联足以复现）；若需要常态化回归，可以放到 `tests/` 下做成可选的集成测试。
