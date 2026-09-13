@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
     Box,
+    Button,
     ButtonBase,
     CircularProgress,
     Dialog,
@@ -14,23 +15,10 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, Edit, ErrorOutline, Refresh, RestartAlt, Search, ZoomIn } from '@/components/icons';
-import {
-    formatBytes,
-    resultSrc,
-    type GenerationRun,
-    type ImportedImage,
-} from './ImageGenPlayground.types';
-
-// One tile of the overview. A completed run contributes one tile per image it
-// produced — the grid is about images, not about runs — while a run that is
-// still going or that failed contributes the one tile that says so, because an
-// overview that quietly drops those is not an overview of the session.
-type GalleryTile =
-    | { key: string; at: number; kind: 'output'; run: GenerationRun; imageIndex: number; src: string }
-    | { key: string; at: number; kind: 'pending'; run: GenerationRun }
-    | { key: string; at: number; kind: 'failed'; run: GenerationRun }
-    | { key: string; at: number; kind: 'import'; item: ImportedImage };
+import { Close, DeleteSweep, Edit, ErrorOutline, Refresh, RestartAlt, Search, ZoomIn } from '@/components/icons';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
+import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
 
 // Up to three of a run's reference images, in the corner of its tile. In a
 // grid of finished pictures there is otherwise nothing to say a tile came from
@@ -43,7 +31,8 @@ const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
     const shown = sources.slice(0, 3);
     return (
         <Tooltip title={t('playground.gallery.fromReferences', {
-            defaultValue: 'Generated from {{count}} reference images',
+            defaultValue_one: 'Generated from {{count}} reference image',
+            defaultValue_other: 'Generated from {{count}} reference images',
             count: sources.length,
         })}>
             <Stack
@@ -91,8 +80,12 @@ interface ImageGenGalleryDialogProps {
     onUseAsReference: (src: string) => void;
     onReuseRun: (run: GenerationRun) => void;
     onRetryRun: (run: GenerationRun) => void;
+    onCancelRun: (id: string) => void;
     onRemoveRun: (id: string) => void;
     onRemoveImport: (id: string) => void;
+    // Empties the session. Only reachable from here: this is the one surface
+    // that shows how much there is to empty.
+    onClearAll: () => void;
 }
 
 // Hover actions sit in the corner of a tile; the same chrome for all of them.
@@ -127,47 +120,17 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
     onUseAsReference,
     onReuseRun,
     onRetryRun,
+    onCancelRun,
     onRemoveRun,
     onRemoveImport,
+    onClearAll,
 }) => {
     const { t } = useTranslation();
     const [query, setQuery] = useState('');
+    const [confirmClear, setConfirmClear] = useState(false);
 
-    const tiles = useMemo<GalleryTile[]>(() => {
-        const fromRuns = runs.flatMap<GalleryTile>((run) => {
-            const at = run.createdAt ?? 0;
-            if (run.status === 'pending') return [{ key: run.id, at, kind: 'pending' as const, run }];
-            if (run.status === 'failed') return [{ key: run.id, at, kind: 'failed' as const, run }];
-            return run.images
-                .map((image, imageIndex) => ({ imageIndex, src: resultSrc(image) }))
-                .filter(({ src }) => src)
-                .map(({ imageIndex, src }) => ({
-                    key: `${run.id}-${imageIndex}`,
-                    at,
-                    kind: 'output' as const,
-                    run,
-                    imageIndex,
-                    src,
-                }));
-        });
-        const fromImports = imported.map<GalleryTile>((item) => ({
-            key: item.id,
-            at: item.createdAt,
-            kind: 'import',
-            item,
-        }));
-        // Newest first: in an overview the thing just made is what the eye
-        // should land on, and it is the one most likely to be acted on.
-        return [...fromRuns, ...fromImports].sort((a, b) => b.at - a.at);
-    }, [imported, runs]);
-
-    const filtered = useMemo(() => {
-        const needle = query.trim().toLowerCase();
-        if (!needle) return tiles;
-        return tiles.filter((tile) => (tile.kind === 'import'
-            ? tile.item.name.toLowerCase().includes(needle)
-            : [tile.run.prompt, tile.run.model].join(' ').toLowerCase().includes(needle)));
-    }, [query, tiles]);
+    const tiles = useMemo(() => buildGalleryTiles(runs, imported), [imported, runs]);
+    const filtered = useMemo(() => filterGalleryTiles(tiles, query), [query, tiles]);
 
     return (
         <Dialog
@@ -199,7 +162,11 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                             shown: filtered.length,
                             total: tiles.length,
                         })
-                        : t('playground.gallery.count', { defaultValue: '{{count}} images', count: tiles.length })}
+                        : t('playground.gallery.count', {
+                            defaultValue_one: '{{count}} image',
+                            defaultValue_other: '{{count}} images',
+                            count: tiles.length,
+                        })}
                 </Typography>
                 {/* On a phone the row wraps: the title keeps the close button
                     company and the search takes the second line by itself,
@@ -238,6 +205,18 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                         },
                     }}
                 />
+                {tiles.length > 0 && (
+                    <Button
+                        size="small"
+                        color="inherit"
+                        startIcon={<DeleteSweep fontSize="small" />}
+                        onClick={() => setConfirmClear(true)}
+                        data-testid="imagegen-gallery-clear"
+                        sx={{ order: { xs: 4, sm: 1 }, color: 'text.secondary', '&:hover': { color: 'error.main' } }}
+                    >
+                        {t('playground.gallery.clearAll', { defaultValue: 'Clear session' })}
+                    </Button>
+                )}
                 <IconButton
                     onClick={onClose}
                     aria-label={t('playground.gallery.close', { defaultValue: 'Close the overview' })}
@@ -374,6 +353,19 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                             transition: 'opacity 0.16s ease-out',
                                         }}
                                     >
+                                        {tile.kind === 'pending' && (
+                                            <Tooltip title={t('playground.cancelRun', { defaultValue: 'Cancel' })}>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => onCancelRun(tile.run.id)}
+                                                    aria-label={t('playground.cancelRun', { defaultValue: 'Cancel' })}
+                                                    data-testid="imagegen-gallery-cancel-run"
+                                                    sx={tileActionSx}
+                                                >
+                                                    <Close fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                         {tile.kind === 'failed' && (
                                             <Tooltip title={t('playground.retry', { defaultValue: 'Retry' })}>
                                                 <IconButton
@@ -475,6 +467,20 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     </Box>
                 )}
             </DialogContent>
+            <ConfirmDialog
+                open={confirmClear}
+                title={t('playground.gallery.clearAllTitle', { defaultValue: 'Clear this session?' })}
+                description={t('playground.gallery.clearAllBody', {
+                    defaultValue_one: 'Removes the image from the playground. Images already written to the output folder stay on disk.',
+                    defaultValue_other: 'Removes all {{count}} images from the playground. Images already written to the output folder stay on disk.',
+                    count: tiles.length,
+                })}
+                confirmLabel={t('playground.gallery.clearAll', { defaultValue: 'Clear session' })}
+                cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+                confirmColor="error"
+                onClose={() => setConfirmClear(false)}
+                onConfirm={() => { setConfirmClear(false); onClearAll(); }}
+            />
         </Dialog>
     );
 };

@@ -1,7 +1,8 @@
 // The shapes the Image Playground's session is made of, shared by the panel
 // that produces them (ImageGenPlaygroundCard) and the overview that lists them
 // all (ImageGenGalleryDialog). They live here rather than in the panel so the
-// overview doesn't have to import the panel to know what a run is.
+// overview doesn't have to import the panel to know what a run is. The logic
+// over these shapes lives next door in imageGenSession.ts.
 
 // Which gateway endpoint a run went through. Not a user choice: derived from
 // whether the run had reference images. Shown on the history card so API users
@@ -70,11 +71,11 @@ export interface SelectedImage {
     runId?: string;
 }
 
-export const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`);
-
-// What an API result renders from: the URL when the provider returned one,
-// otherwise the inline base64 it sent instead.
-export const resultSrc = (image: ImageResult): string => (image.url
-    || (image.b64_json ? `data:image/png;base64,${image.b64_json}` : ''));
+// One tile of the overview. A completed run contributes one tile per image it
+// produced — the grid is about images, not about runs — while a run that is
+// still going or that failed contributes the one tile that says so.
+export type GalleryTile =
+    | { key: string; at: number; kind: 'output'; run: GenerationRun; imageIndex: number; src: string }
+    | { key: string; at: number; kind: 'pending'; run: GenerationRun }
+    | { key: string; at: number; kind: 'failed'; run: GenerationRun }
+    | { key: string; at: number; kind: 'import'; item: ImportedImage };

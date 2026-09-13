@@ -118,6 +118,29 @@ completed 三种状态共用,点开进同一个 lightbox(`kind: 'source'`)。失
   是纯信息,`pointer-events: none`,点格子仍然是打开大图——要逐张看参考图,在大图
   的胶片条里看。
 
+### 2.8 会话能整份清掉,数量说清楚,文件名说清楚
+
+上面几条各自加了东西,连带暴露三个收尾问题:
+
+- **会话现在能跨刷新存活(IndexedDB),却只能一格一格删。** 四十张图要清空得点四十
+  次。总览是唯一"看得见到底有多少"的表面,清空按钮就放在它的头部,走
+  `ConfirmDialog` 二次确认;文案明说**只清 Playground 的会话,已经写进输出目录的
+  文件不动**——这个面板没有资格删磁盘上的东西。清空会顺手 abort 还在飞的请求。
+- **参考图被悄悄丢弃。** 一次拖 6 张进 5 格的行、或在满格时"用作参考图",以前
+  一个提示都没有:前者默默少加,后者默默挤掉最旧的一张。两条路径现在都会说出来
+  (一条 warning、一条 info)。注意提示要发在 setState **之外**——StrictMode 会把
+  updater 跑两次,写在里面就是两条 toast。
+- **下载的文件名分不清是原图还是结果。** 以前一律 `<prompt>-<n>`,于是一张
+  original 存下来看着像成品,而参考图/导入图(没有 prompt)存成 `image-1`。改成
+  `downloadStem()`:输出 `<prompt>-<n>`、原图 `<prompt>-original-<n>`、
+  参考图/导入图用它自己的文件名。
+
+顺带把纯逻辑从组件里拿出来:`imageGenSession.ts`(`resultSrc` / `reorderReferences`
+/ `buildGalleryTiles` / `filterGalleryTiles` / `downloadStem` / `formatBytes`),
+`.types.ts` 只留类型。这些是最容易悄悄坏掉又最难在组件里断言的部分,现在
+`imageGenSession.test.ts` 有 20 条用例盯着。大图预览的胶片条也补了 ←/→ 键(与参考
+图行同一个手势,首尾循环)。
+
 ---
 
 ## 3. 检查表对照

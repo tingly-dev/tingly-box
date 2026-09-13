@@ -37,15 +37,14 @@ import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playground
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
 import ImageGenGalleryDialog from './ImageGenGalleryDialog';
-import {
-    formatBytes,
-    resultSrc,
-    type Endpoint,
-    type GenerationRun,
-    type ImportedImage,
-    type Quality,
-    type SelectedImage,
+import type {
+    Endpoint,
+    GenerationRun,
+    ImportedImage,
+    Quality,
+    SelectedImage,
 } from './ImageGenPlayground.types';
+import { downloadStem, formatBytes, reorderReferences, resultSrc } from './imageGenSession';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -448,13 +447,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'));
         if (incoming.length === 0) return;
         const accepted = incoming.slice(0, Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length));
+        // Dropping images on the floor without saying so leaves the user
+        // believing a request carries pictures it does not.
+        if (accepted.length < incoming.length) {
+            showNotification(
+                t('playground.referenceCapReached', {
+                    defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
+                    max: MAX_EDIT_REFERENCE_IMAGES,
+                    ignored: incoming.length - accepted.length,
+                }),
+                'warning',
+            );
+        }
         if (accepted.length === 0) return;
         const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => {
             const previewUrl = await fileToDataUrl(file);
             return { file, previewUrl, source: 'upload', ...(await readImageSize(previewUrl) ?? {}) };
         }));
         setReferenceImages((current) => [...current, ...withPreviews].slice(0, MAX_EDIT_REFERENCE_IMAGES));
-    }, [referenceImages.length]);
+    }, [referenceImages.length, showNotification, t]);
 
     // Brings images into the results panel. Same decoding as a reference (data
     // URL up front, so one representation renders everywhere), different
@@ -531,13 +542,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // Moves one reference to another slot, keeping every other image's relative
     // order — the same result as dragging a card in a list.
     const handleReorderReference = useCallback((from: number, to: number) => {
-        setReferenceImages((current) => {
-            if (from === to || from < 0 || to < 0 || from >= current.length || to >= current.length) return current;
-            const next = [...current];
-            const [moved] = next.splice(from, 1);
-            next.splice(to, 0, moved);
-            return next;
-        });
+        setReferenceImages((current) => reorderReferences(current, from, to));
     }, []);
 
     // The keyboard's version of the same drag: with a thumbnail focused, the
@@ -651,6 +656,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 source: 'upload',
                 ...(await readImageSize(src) ?? {}),
             };
+            // The user pointed at this image, so it goes in; at the cap the
+            // oldest makes room — and that is said out loud, because a reference
+            // vanishing from the row unannounced is the request quietly changing
+            // behind the user's back.
+            if (referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) {
+                showNotification(
+                    t('playground.referenceEvicted', {
+                        defaultValue: 'Added as a reference — the oldest one made room (max {{max}})',
+                        max: MAX_EDIT_REFERENCE_IMAGES,
+                    }),
+                    'info',
+                );
+            }
             setReferenceImages((current) => [...current, next].slice(-MAX_EDIT_REFERENCE_IMAGES));
         } catch {
             showNotification(
@@ -658,7 +676,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 'error',
             );
         }
-    }, [showNotification, t]);
+    }, [referenceImages.length, showNotification, t]);
 
     // A sketch is just another way to get a reference image: it lands in the
     // same list, goes through the same request, and shows up in the run
@@ -728,7 +746,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // Hands the finished pixels over, not a notification that they exist.
     const handleDownload = useCallback(async (image: SelectedImage) => {
         try {
-            await downloadImage(image.src, `${slugify(image.prompt)}-${image.index + 1}`);
+            await downloadImage(image.src, downloadStem(image, slugify));
         } catch {
             showNotification(
                 t('playground.downloadFailed', { defaultValue: 'Could not download this image' }),
@@ -936,6 +954,20 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (src) void handleUseAsReference(src);
     }, [handleUseAsReference]);
 
+    // Empties the session in one move — the counterpart of a session that now
+    // survives a reload: without this, a playground with forty images can only
+    // be emptied one tile at a time. Only the in-memory/IndexedDB session goes;
+    // the files the gateway wrote to the output folder are not this panel's to
+    // delete, and the confirm says so.
+    const handleClearSession = useCallback(() => {
+        inFlightRef.current.forEach((controller) => controller.abort());
+        updateRuns(() => []);
+        imageGenSessionImports = [];
+        setImported([]);
+        setSelectedImage(null);
+        setGalleryOpen(false);
+    }, [updateRuns]);
+
     const handleRemoveRun = useCallback((id: string) => {
         updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== id));
     }, [updateRuns]);
@@ -1040,6 +1072,34 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         // One image with nothing to compare it to is not a filmstrip.
         return sources.length > 0 ? [...sources, ...outputs] : [];
     }, [lightboxRun]);
+
+    const showLightboxFrame = useCallback((frame: { src: string; kind: 'source' | 'output'; index: number }) => {
+        if (!lightboxRun) return;
+        setSelectedImage({
+            src: frame.src,
+            prompt: lightboxRun.prompt,
+            model: lightboxRun.model,
+            size: lightboxRun.size,
+            quality: lightboxRun.quality,
+            index: frame.index,
+            kind: frame.kind,
+            runId: lightboxRun.id,
+        });
+    }, [lightboxRun]);
+
+    // ←/→ walk the filmstrip, the same gesture the reference row uses. Without
+    // it, comparing an output against its original is a mouse-only move.
+    const handleLightboxKeyDown = useCallback((event: React.KeyboardEvent) => {
+        const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+        if (delta === 0 || lightboxFilm.length < 2 || !selectedImage) return;
+        const current = lightboxFilm.findIndex(
+            (frame) => frame.kind === selectedImage.kind && frame.index === selectedImage.index,
+        );
+        if (current === -1) return;
+        event.preventDefault();
+        // Wraps, so the strip has no dead end at either edge.
+        showLightboxFrame(lightboxFilm[(current + delta + lightboxFilm.length) % lightboxFilm.length]);
+    }, [lightboxFilm, selectedImage, showLightboxFrame]);
 
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
@@ -2038,6 +2098,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <Dialog
                 open={selectedImage !== null}
                 onClose={() => setSelectedImage(null)}
+                onKeyDown={handleLightboxKeyDown}
                 maxWidth={false}
                 fullWidth
                 slotProps={{
@@ -2258,16 +2319,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         )}
                                         <Tooltip title={label} placement="right">
                                             <ButtonBase
-                                                onClick={() => setSelectedImage({
-                                                    src: frame.src,
-                                                    prompt: lightboxRun.prompt,
-                                                    model: lightboxRun.model,
-                                                    size: lightboxRun.size,
-                                                    quality: lightboxRun.quality,
-                                                    index: frame.index,
-                                                    kind: frame.kind,
-                                                    runId: lightboxRun.id,
-                                                })}
+                                                onClick={() => showLightboxFrame(frame)}
                                                 aria-label={frame.kind === 'source'
                                                     ? t('playground.viewSourceImage', {
                                                         defaultValue: 'View original image {{number}}',
@@ -2347,8 +2399,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 // a grid while the thing they asked for happened elsewhere.
                 onReuseRun={(run) => { setGalleryOpen(false); void handleReuseRun(run); }}
                 onRetryRun={(run) => { void handleRetry(run); }}
+                onCancelRun={handleCancelRun}
                 onRemoveRun={handleRemoveRun}
                 onRemoveImport={handleRemoveImport}
+                onClearAll={handleClearSession}
             />
             <ImageSliceDialog
                 open={sliceTarget !== null}
