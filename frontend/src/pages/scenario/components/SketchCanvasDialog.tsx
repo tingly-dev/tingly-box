@@ -15,7 +15,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, HandFinger, Rotate3d, Undo } from '@/components/icons';
+import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo } from '@/components/icons';
 import PoseLibraryPopover from './PoseLibraryPopover';
 import ViewAnglePopover from './ViewAnglePopover';
 import {
@@ -47,7 +47,6 @@ import {
     figureTurn,
     flipFigure,
     isTurnHandleHit,
-    setFigureDetail,
     setFigureTurn,
     turnFigure,
     TURN_DEGREES_PER_PIXEL,
@@ -390,16 +389,6 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         if (!selectedFigure) return;
         snapshot();
         updateFigure(selectedFigure.id, (figure) => setFigureTurn(figure, VIEW_PRESETS[view]));
-    }, [selectedFigure, snapshot, updateFigure]);
-
-    // The detail tier is per figure and starts off. A body is posed at the
-    // shoulders and hips; the face, hands and toes are a second pass most
-    // people never need, and five more handles on every figure would be a
-    // permanent cost for an occasional gain (principles 6 and 9).
-    const handleToggleDetail = useCallback(() => {
-        if (!selectedFigure) return;
-        snapshot();
-        updateFigure(selectedFigure.id, (figure) => setFigureDetail(figure, figure.detail !== true));
     }, [selectedFigure, snapshot, updateFigure]);
 
     const handleToolChange = useCallback((next: Tool) => {
@@ -749,17 +738,6 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                                 pitch: Math.round(figureTurn(selectedFigure).pitch),
                                             })}
                                         </Button>
-                                        <Tooltip title={t('playground.sketch.pose.detail', { defaultValue: 'Pose the face, hands and feet' })}>
-                                            <IconButton
-                                                size="small"
-                                                onClick={handleToggleDetail}
-                                                aria-label={t('playground.sketch.pose.detail', { defaultValue: 'Pose the face, hands and feet' })}
-                                                aria-pressed={selectedFigure.detail === true}
-                                                color={selectedFigure.detail === true ? 'primary' : 'default'}
-                                            >
-                                                <HandFinger fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
                                         <Tooltip title={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}>
                                             <IconButton
                                                 size="small"
@@ -937,7 +915,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {figures.length > 0
                             ? t('playground.sketch.pose.hint', {
-                                defaultValue: 'Drag a joint and the limb below it follows — drag it short and the limb points at you; hold Shift to send it behind the body, Alt to move one joint alone. Drag the ring at bottom-left to turn the figure, the corner to resize. The hand button adds handles for the face, hands and feet. The grey mannequin is a pose reference — the prompt says who it is.',
+                                defaultValue: 'Drag a joint and the limb below it follows — drag it short and the limb points at you; hold Shift to send it behind the body, Alt to move one joint alone. Drag the ring at bottom-left to turn the figure, the corner to resize. The small hollow handle in front of the head aims the face. The grey mannequin is a pose reference — the prompt says who it is.',
                             })
                             : t('playground.sketch.hint', {
                                 defaultValue: 'A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.',

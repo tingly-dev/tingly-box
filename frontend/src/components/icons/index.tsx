@@ -122,7 +122,6 @@ import {
     IconAccessible,
     IconFlipHorizontal,
     IconRotate3d,
-    IconHandFinger,
     IconUser,
     IconUsers,
     IconShield,
@@ -305,7 +304,6 @@ export const Remove = tablerMui(IconMinus);
 export const HorizontalRule = tablerMui(IconMinus);
 export const Flip = tablerMui(IconFlipHorizontal);
 export const Rotate3d = tablerMui(IconRotate3d);
-export const HandFinger = tablerMui(IconHandFinger);
 export const ViewList = tablerMui(IconList);
 export const NearMeOutlined = tablerMui(IconNavigation);
 

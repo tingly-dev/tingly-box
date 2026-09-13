@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
     createFigure,
-    DETAIL_JOINT_KEYS,
     figureUnit,
     JOINT_KEYS,
     JOINT_PARENT,
@@ -205,34 +204,24 @@ describe('bodyForward', () => {
     });
 });
 
-describe('the detail tier', () => {
-    // The reason the mannequin's joint set was aligned with the landmark set:
-    // where the face looks, where the hands point and where the toes point are
-    // now joints, and a photograph is the one source that can fill all five
-    // outright instead of guessing them from the hips.
-    it('fills every detail joint from the landmarks it was aligned to', () => {
-        const figure = createFigure('walking', DIMS);
+describe('the face joint', () => {
+    // The sixteenth joint, and the one a photograph is uniquely good for: a
+    // body cannot imply where a head is looking.
+    it('comes back from the nose landmark', () => {
+        const figure = createFigure('lookingBack', DIMS);
         const result = roundTrip(figure);
-        for (const key of DETAIL_JOINT_KEYS) {
-            expect(result.fellBack).not.toContain(key);
-            const a = figure.joints[key];
-            const b = result.figure.joints[key];
-            expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(figureUnit(figure) * 0.03);
-        }
-        // ...and the figure arrives at the detail tier, because those joints
-        // now carry something the body could not have worked out.
-        expect(result.figure.detail).toBe(true);
+        expect(result.fellBack).not.toContain('face');
+        const a = figure.joints.face;
+        const b = result.figure.joints.face;
+        expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(figureUnit(figure) * 0.03);
     });
 
-    it('stays simple when the photograph could not see the toes', () => {
-        // Switching the tier on to reveal five joints that are still derived
-        // would be a promise the photograph did not keep.
+    it('keeps looking where the body was looking when the nose is hidden', () => {
         const figure = createFigure('standing', DIMS);
-        const noFeet = landmarksFromFigure(figure, FRAME).map((l, i) => (
-            i === LANDMARK.toeL || i === LANDMARK.toeR ? { ...l, visibility: 0 } : l
+        const noNose = landmarksFromFigure(figure, FRAME).map((l, i) => (
+            i === LANDMARK.nose ? { ...l, visibility: 0 } : l
         ));
-        const result = figureFromLandmarks(noFeet, { frame: FRAME, reference: figure })!;
-        expect(result.figure.detail).toBeFalsy();
-        expect(result.fellBack).toContain('toeL');
+        const result = figureFromLandmarks(noNose, { frame: FRAME, reference: figure })!;
+        expect(result.fellBack).toContain('face');
     });
 });

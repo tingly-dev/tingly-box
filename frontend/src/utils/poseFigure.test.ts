@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { JointKey, PoseFigure } from './poseFigure';
 import {
     applyPreset,
-    CORE_JOINT_KEYS,
     figureTurn,
+    inPolygon,
     isTurnHandleHit,
     MAX_VIEW_PITCH,
     perspectiveAt,
@@ -213,29 +213,57 @@ describe('distanceToSegment', () => {
 describe('figureParts', () => {
     const parts = () => figureParts(createFigure('standing', DIMS));
 
-    it('puts the chest above the pelvis on the torso axis', () => {
-        const figure = createFigure('standing', DIMS);
-        const { chest, pelvis } = figureParts(figure);
-        expect(chest.center.y).toBeLessThan(pelvis.center.y);
-        expect(chest.center.y).toBeGreaterThan(figure.joints.neck.y);
-        expect(pelvis.center.y).toBeGreaterThan(figure.joints.hip.y);
-        expect(chest.radiusY).toBeGreaterThan(pelvis.radiusY);
+    // How wide the torso outline is at a given fraction down the neck→hip
+    // axis: the widest gap between points that sit at that height.
+    const torsoWidthAt = (figure: PoseFigure, t: number): number => {
+        const { torso } = figureParts(figure);
+        const at = projectFigure(figure);
+        const hipMid = { x: (at.hipL.x + at.hipR.x) / 2, y: (at.hipL.y + at.hipR.y) / 2 };
+        const y = at.neck.y + (hipMid.y - at.neck.y) * t;
+        const near = torso.filter((point) => Math.abs(point.y - y) < figureUnit(figure) * 0.02);
+        if (near.length < 2) return 0;
+        const xs = near.map((point) => point.x);
+        return Math.max(...xs) - Math.min(...xs);
+    };
+
+    it('draws the torso as a body: broad at the shoulders, in at the waist, out at the hips', () => {
+        // The shape, asserted as a shape. Three stacked ellipses passed every
+        // test we had and still looked like three stacked ellipses.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const shoulders = torsoWidthAt(figure, 0.14);
+        const waist = torsoWidthAt(figure, 0.62);
+        const hips = torsoWidthAt(figure, 0.95);
+        expect(waist).toBeLessThan(shoulders * 0.8);
+        expect(hips).toBeGreaterThan(waist * 1.15);
+        expect(hips).toBeLessThan(shoulders);
     });
 
-    it('angles the chest from the shoulder line, so one shoulder twists the torso', () => {
-        const figure = createFigure('standing', DIMS);
+    it('closes the torso outline around the body', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const { torso } = figureParts(figure);
+        const at = projectFigure(figure);
+        expect(torso.length).toBeGreaterThan(24);
+        // The chest is inside it; a point out beside the waist is not.
+        const chest = { x: at.neck.x, y: at.neck.y + (at.hip.y - at.neck.y) * 0.3 };
+        expect(inPolygon(chest, torso)).toBe(true);
+        expect(inPolygon({ x: chest.x + figureUnit(figure) * 0.3, y: chest.y }, torso)).toBe(false);
+    });
+
+    it('hangs the top of the torso off the shoulders and the bottom off the hips', () => {
+        // That difference is the twist, and it is the whole reason the torso
+        // is not a symmetrical tube.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
         const twisted = moveJoint(figure, 'shoulderR', {
             x: figure.joints.shoulderR.x - 60,
             y: figure.joints.shoulderR.y + 40,
         });
-        expect(figureParts(twisted).chest.angle).not.toBeCloseTo(figureParts(figure).chest.angle, 2);
-        expect(figureParts(twisted).chest.radiusX).not.toBeCloseTo(figureParts(figure).chest.radiusX, 1);
-        // ...and the pelvis stays exactly where it was: that difference is the
-        // twist. It holds because the camera is aimed at neck-and-hip, which a
-        // shoulder drag cannot move.
-        expect(figureParts(twisted).pelvis.angle).toBeCloseTo(figureParts(figure).pelvis.angle, 6);
-        expect(figureParts(twisted).pelvis.center.x).toBeCloseTo(figureParts(figure).pelvis.center.x, 6);
-        expect(figureParts(twisted).pelvis.center.y).toBeCloseTo(figureParts(figure).pelvis.center.y, 6);
+        const shoulderChange = Math.abs(torsoWidthAt(twisted, 0.14) / torsoWidthAt(figure, 0.14) - 1);
+        // The camera is aimed at neck-and-hip, which a shoulder drag cannot
+        // move, so the hips stay put — to within the hair the smoothing
+        // carries round the closing seam.
+        const hipChange = Math.abs(torsoWidthAt(twisted, 0.95) / torsoWidthAt(figure, 0.95) - 1);
+        expect(shoulderChange).toBeGreaterThan(0.1);
+        expect(hipChange).toBeLessThan(0.01);
     });
 
     it('tapers every limb from its proximal to its distal end', () => {
@@ -250,15 +278,17 @@ describe('figureParts', () => {
         expect(knee.radius).toBeGreaterThan(ankle.radius);
     });
 
-    it('keeps the hip balls apart and inside the pelvis block', () => {
-        const { hipBalls, pelvis, balls } = parts();
+    it('keeps the hip balls inside the pelvis, and out of the legs', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const { hipBalls, torso, clusters } = figureParts(figure);
         expect(hipBalls).toHaveLength(2);
-        expect(balls.some((ball) => ball.center === hipBalls[0].center)).toBe(false);
-        // Centre well inside the block, with at most a sliver showing where
-        // the thigh comes out.
-        expect(Math.abs(hipBalls[1].center.x - pelvis.center.x)).toBeLessThan(pelvis.radiusX);
-        const reach = Math.abs(hipBalls[1].center.x - pelvis.center.x) + hipBalls[1].radius;
-        expect(reach).toBeLessThanOrEqual(pelvis.radiusX + hipBalls[1].radius * 0.2);
+        expect(inPolygon(hipBalls[0].center, torso)).toBe(true);
+        // Drawn once, under the pelvis. Drawn again with the leg, a hip ball
+        // lands on top of the thigh as a dark disc and reads as a kneecap in
+        // the wrong place.
+        const legShapes = clusters.filter((cluster) => cluster.key.startsWith('leg'))
+            .flatMap((cluster) => cluster.shapes);
+        expect(legShapes.some((shape) => shape.kind === 'ball' && shape.ball === hipBalls[0])).toBe(false);
     });
 
     it('points the foot the way the body faces and the hand along the forearm', () => {
@@ -281,10 +311,27 @@ describe('figureParts', () => {
     });
 
     it('scales every part with the figure', () => {
-        const small = figureParts(createFigure('standing', DIMS));
-        const big = figureParts(scaleFigure(createFigure('standing', DIMS), 2));
-        expect(big.head.radiusY).toBeCloseTo(small.head.radiusY * 2, 4);
+        const base = createFigure('standing', DIMS);
+        const small = figureParts(base);
+        const big = figureParts(scaleFigure(base, 2));
         expect(big.limbs[0].fromRadius).toBeCloseTo(small.limbs[0].fromRadius * 2, 4);
+        const span = (points: { x: number }[]) => Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x));
+        expect(span(big.head)).toBeCloseTo(span(small.head) * 2, 3);
+        expect(span(big.torso)).toBeCloseTo(span(small.torso) * 2, 3);
+    });
+
+    it('gives the head a jaw rather than leaving it an egg', () => {
+        // An egg on a peg is the most toy-like thing a mannequin can have on
+        // its shoulders.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const { head } = figureParts(figure);
+        const top = Math.min(...head.map((p) => p.y));
+        const bottom = Math.max(...head.map((p) => p.y));
+        const widthNear = (y: number) => {
+            const near = head.filter((p) => Math.abs(p.y - y) < (bottom - top) * 0.06);
+            return near.length < 2 ? 0 : Math.max(...near.map((p) => p.x)) - Math.min(...near.map((p) => p.x));
+        };
+        expect(widthNear(top + (bottom - top) * 0.3)).toBeGreaterThan(widthNear(top + (bottom - top) * 0.9) * 1.8);
     });
 });
 
@@ -380,13 +427,13 @@ describe('shades', () => {
 describe('the skeleton', () => {
     const boneLength = bone3;
 
-    it('hangs every joint off the hip, detail tier included', () => {
+    it('hangs every joint off the hip, the face included', () => {
         expect(subtreeOf('hip')).toHaveLength(JOINT_KEYS.length);
-        expect(subtreeOf('shoulderL').sort()).toEqual(['elbowL', 'handL', 'shoulderL', 'wristL']);
-        // The detail joints are ordinary children: dragging a wrist takes its
-        // hand along, with no new machinery.
-        expect(subtreeOf('wristR').sort()).toEqual(['handR', 'wristR']);
-        expect(subtreeOf('handR')).toEqual(['handR']);
+        expect(subtreeOf('shoulderL').sort()).toEqual(['elbowL', 'shoulderL', 'wristL']);
+        // The face is an ordinary child: dragging the head takes it along,
+        // with no new machinery.
+        expect(subtreeOf('head').sort()).toEqual(['face', 'head']);
+        expect(subtreeOf('face')).toEqual(['face']);
     });
 
     it('swings the limb below the joint and keeps every bone length', () => {
@@ -524,9 +571,10 @@ describe('the pose library', () => {
         // 3D data structure. The calibration pose is allowed to be one.
         const flat = everyPose.filter((pose) => {
             const figure = createFigure(pose, DIMS, undefined, 0, { yaw: 0, pitch: 0 });
-            // Core joints only: the face and the toes point out of the screen
-            // in every pose, so counting them would make the test vacuous.
-            const zs = CORE_JOINT_KEYS.map((key) => figure.joints[key].z);
+            // The body only: the face marker points out of the screen in every
+            // pose, so counting it would make the test vacuous.
+            const zs = JOINT_KEYS.filter((key) => key !== 'face')
+                .map((key) => figure.joints[key].z);
             return Math.max(...zs) - Math.min(...zs) < figureUnit(figure) * 0.05;
         });
         expect(flat).toEqual(['tPose']);
@@ -546,6 +594,7 @@ describe('figure scale is the body, not the bounding box', () => {
         // difference is perspective, which is a thing about the camera rather
         // than about the body.
         const ratio = figureParts(lying).limbs[4].fromRadius / figureParts(standing).limbs[4].fromRadius;
+        expect(Number.isFinite(ratio)).toBe(true);
         expect(ratio).toBeGreaterThan(0.9);
         expect(ratio).toBeLessThan(1.1);
     });

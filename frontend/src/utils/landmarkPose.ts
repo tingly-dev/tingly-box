@@ -15,7 +15,6 @@
 import {
     centerFigureAt,
     completeFigure,
-    DETAIL_JOINT_KEYS,
     figureCenter,
     figureUnit,
     JOINT_KEYS,
@@ -135,12 +134,9 @@ const SIDE_OF: Partial<Record<JointKey, number>> = {
     hipL: LANDMARK.hipR, hipR: LANDMARK.hipL,
     kneeL: LANDMARK.kneeR, kneeR: LANDMARK.kneeL,
     ankleL: LANDMARK.ankleR, ankleR: LANDMARK.ankleL,
-    // The detail tier, and the reason the tier stops where it does: every one
-    // of these is a landmark the estimator already emits. `face` is the nose —
-    // our face joint sits in front of the skull and so does a nose.
+    // The sixteenth joint, and the one a photograph is uniquely good for:
+    // our face joint sits in front of the skull, and so does a nose.
     face: LANDMARK.nose,
-    handL: LANDMARK.indexR, handR: LANDMARK.indexL,
-    toeL: LANDMARK.toeR, toeR: LANDMARK.toeL,
 };
 
 const visible = (landmark: Landmark | undefined, floor: number): boolean =>
@@ -386,20 +382,11 @@ export const figureFromLandmarks = (
     const { joints, fellBack } = retargetToBones(read.points, reference);
     const turn = turnOfBody(joints);
 
-    // A photograph is the one source that can fill the detail tier outright,
-    // so a figure that came from one arrives with it on: the extra joints now
-    // carry information the body could not have guessed, and hiding their
-    // handles would mean the user could see the turned foot but not adjust it.
-    // If the toes and fingers were not visible, the figure stays simple —
-    // switching a tier on to show five joints that are still derived would be
-    // a promise the photograph did not keep.
-    const gotDetail = DETAIL_JOINT_KEYS.every((key) => !fellBack.includes(key));
     const raw: PoseFigure = {
         id: options.reference.id,
         joints,
         shade: options.reference.shade,
         turn,
-        detail: gotDetail || options.reference.detail,
     };
     // Our body, our size, where the figure already was: importing a pose
     // changes the pose, not who the person is or where they stand.
@@ -445,11 +432,6 @@ export const landmarksFromFigure = (figure: PoseFigure, frame: LandmarkFrame): L
     // written above. Together they are the three points the depth check needs.
     put(LANDMARK.earL, add(whole.joints.head, mul(across, unit * 0.045)));
     put(LANDMARK.earR, add(whole.joints.head, mul(across, -unit * 0.045)));
-    // Heels sit behind the toes, opposite the way the foot points.
-    for (const [ankle, toe, heel] of [['ankleL', 'toeL', LANDMARK.heelR], ['ankleR', 'toeR', LANDMARK.heelL]] as const) {
-        const step = norm(sub(whole.joints[toe], whole.joints[ankle]));
-        put(heel, add(whole.joints[ankle], mul(step, -unit * 0.012)));
-    }
 
     return out;
 };
