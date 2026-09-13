@@ -1,4 +1,5 @@
 import type { ThemeOptions } from '@mui/material/styles';
+import { primaryGradientButton } from './buttonVariants';
 
 // Anthropic brand tokens: Dark #141413 · Light #FAF9F5 · Light Gray #E8E6DC · Orange #D97757
 export const claudeComponents: ThemeOptions['components'] = {
@@ -49,21 +50,7 @@ export const claudeComponents: ThemeOptions['components'] = {
         },
       },
     },
-    // Scoped to the primary colour on purpose: as a bare `contained`
-    // override the gradient painted every contained button, including
-    // `color="error"` ones, so destructive confirmations came out
-    // looking like primary actions. Other colours now keep their palette.
-    variants: [
-      {
-        props: { variant: 'contained' as const, color: 'primary' as const },
-        style: {
-          background: 'linear-gradient(135deg, #D97757 0%, #C26146 100%)',
-          '&:hover': {
-            background: 'linear-gradient(135deg, #C26146 0%, #A85138 100%)',
-          },
-        },
-      },
-    ],
+    variants: primaryGradientButton('#D97757', '#C26146', '#C26146', '#A85138'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

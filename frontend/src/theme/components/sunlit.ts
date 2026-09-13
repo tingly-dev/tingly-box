@@ -1,5 +1,6 @@
 import type { ThemeOptions } from '@mui/material/styles';
 import { sunlitPrimary, sunlitPrimaryLight, sunlitPrimaryDark } from '../palettes/sunlit';
+import { primaryGradientButton } from './buttonVariants';
 
 // Sunlit reusable tokens for component overrides
 const sunlitTokens = {
@@ -80,21 +81,7 @@ export const sunlitComponents: ThemeOptions['components'] = {
         },
       },
     },
-    // Scoped to the primary colour on purpose: as a bare `contained`
-    // override the gradient painted every contained button, including
-    // `color="error"` ones, so destructive confirmations came out
-    // looking like primary actions. Other colours now keep their palette.
-    variants: [
-      {
-        props: { variant: 'contained' as const, color: 'primary' as const },
-        style: {
-          background: `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`,
-          '&:hover': {
-            background: `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`,
-          },
-        },
-      },
-    ],
+    variants: primaryGradientButton(sunlitPrimary, sunlitPrimaryDark, sunlitPrimaryDark, '#0369a1'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

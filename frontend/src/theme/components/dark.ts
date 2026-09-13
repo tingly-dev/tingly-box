@@ -7,6 +7,7 @@ import {
   darkInputBorder,
   darkInputBorderHover,
 } from '../palettes/dark';
+import { primaryGradientButton } from './buttonVariants';
 
 export const darkComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -56,21 +57,7 @@ export const darkComponents: ThemeOptions['components'] = {
         },
       },
     },
-    // Scoped to the primary colour on purpose: as a bare `contained`
-    // override the gradient painted every contained button, including
-    // `color="error"` ones, so destructive confirmations came out
-    // looking like primary actions. Other colours now keep their palette.
-    variants: [
-      {
-        props: { variant: 'contained' as const, color: 'primary' as const },
-        style: {
-          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-          '&:hover': {
-            background: 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)',
-          },
-        },
-      },
-    ],
+    variants: primaryGradientButton('#3b82f6', '#2563eb', '#60a5fa', '#3b82f6'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

@@ -1,4 +1,5 @@
 import type { ThemeOptions } from '@mui/material/styles';
+import { primaryGradientButton } from './buttonVariants';
 
 export const lightComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -48,21 +49,7 @@ export const lightComponents: ThemeOptions['components'] = {
         },
       },
     },
-    // Scoped to the primary colour on purpose: as a bare `contained`
-    // override the gradient painted every contained button, including
-    // `color="error"` ones, so destructive confirmations came out
-    // looking like primary actions. Other colours now keep their palette.
-    variants: [
-      {
-        props: { variant: 'contained' as const, color: 'primary' as const },
-        style: {
-          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-          '&:hover': {
-            background: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
-          },
-        },
-      },
-    ],
+    variants: primaryGradientButton('#2563eb', '#1d4ed8', '#1d4ed8', '#1e40af'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

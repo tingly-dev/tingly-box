@@ -1695,10 +1695,6 @@ export default {
     "runFailed": "Generation failed",
     "interruptedByReload": "Interrupted by a page reload",
     "retry": "Retry",
-    "reuseRequest": "Edit this request",
-    "reuseLoaded": "Request loaded into the panel — edit it and generate again",
-    "reuseModelMissing": "{{model}} has no rule any more — pick a model before generating",
-    "reuseFailed": "Could not load this request",
     "cancelRun": "Cancel",
     "cancelled": "Cancelled",
     "removeRun": "Remove this generation",
@@ -1708,6 +1704,12 @@ export default {
     "promptCopied": "Copied",
     "download": "Download",
     "downloadFailed": "Could not download this image",
+    "reuse": {
+      "action": "Edit this request",
+      "loaded": "Request loaded into the panel — edit it and generate again",
+      "modelMissing": "{{model}} has no rule any more — pick a model before generating",
+      "failed": "Could not load this request"
+    },
     "gallery": {
       "action": "Overview",
       "clearAll": "Clear session",
@@ -1723,6 +1725,7 @@ export default {
       "search": "Search prompts and file names",
       "clearSearch": "Clear the search",
       "noMatch": "Nothing matches \u201c{{query}}\u201d",
+      "noMatchHint": "Search runs over prompts, models and file names.",
       "close": "Close the overview"
     },
     "sketch": {

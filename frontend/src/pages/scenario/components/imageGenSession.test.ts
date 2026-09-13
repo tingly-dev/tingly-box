@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { slugify } from '@/utils/download';
 import {
+    addReferences,
     buildGalleryTiles,
     downloadStem,
     filterGalleryTiles,
     formatBytes,
     reorderReferences,
     resultSrc,
+    runImage,
 } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
 
@@ -54,6 +56,60 @@ describe('resultSrc', () => {
         // A result with neither is what an upstream returns when it refuses;
         // callers filter on this, so it must be falsy rather than a broken src.
         expect(resultSrc({})).toBe('');
+    });
+});
+
+describe('resultSrc caching', () => {
+    it('hands back the identical string for the same result object', () => {
+        // The data URL copies the whole base64 payload; the strip, the overview
+        // and the filmstrip all ask for it on every render.
+        const image = { b64_json: 'aW1n' };
+        expect(resultSrc(image)).toBe(resultSrc(image));
+    });
+});
+
+describe('runImage', () => {
+    it('carries the run request and the image identity into the lightbox', () => {
+        const r = run({ id: 'r1', prompt: 'a bonsai', model: 'gpt-image-1' });
+        expect(runImage(r, 'source', 2, 'data:image/png;base64,x')).toEqual({
+            src: 'data:image/png;base64,x',
+            prompt: 'a bonsai',
+            model: 'gpt-image-1',
+            size: '1024x1024',
+            quality: 'auto',
+            index: 2,
+            kind: 'source',
+            runId: 'r1',
+        });
+    });
+});
+
+describe('addReferences', () => {
+    it('fills the free slots and reports what was left out', () => {
+        // A batch dropped on a row that is nearly full: the images already there
+        // were put there on purpose, so the extras are the ones that lose.
+        const { next, ignored, evicted } = addReferences(['a', 'b', 'c', 'd'], ['e', 'f', 'g'], 5, 'ignore');
+        expect(next).toEqual(['a', 'b', 'c', 'd', 'e']);
+        expect({ ignored, evicted }).toEqual({ ignored: 2, evicted: 0 });
+    });
+
+    it('adds nothing, and says so, when the row is already full', () => {
+        const { next, ignored } = addReferences(['a', 'b'], ['c'], 2, 'ignore');
+        expect(next).toEqual(['a', 'b']);
+        expect(ignored).toBe(1);
+    });
+
+    it('honours a pointed-at image by evicting the oldest', () => {
+        // "Use this one as a reference" is a request for one specific image.
+        const { next, ignored, evicted } = addReferences(['a', 'b', 'c'], ['d'], 3, 'evict');
+        expect(next).toEqual(['b', 'c', 'd']);
+        expect({ ignored, evicted }).toEqual({ ignored: 0, evicted: 1 });
+    });
+
+    it('evicts nothing while there is room', () => {
+        const { next, evicted } = addReferences(['a'], ['b'], 3, 'evict');
+        expect(next).toEqual(['a', 'b']);
+        expect(evicted).toBe(0);
     });
 });
 

@@ -1691,10 +1691,6 @@ export default {
     "runFailed": "生成失败",
     "interruptedByReload": "页面刷新时被中断",
     "retry": "重试",
-    "reuseRequest": "载入这次请求并编辑",
-    "reuseLoaded": "已载入到左侧输入区——改完再生成一次",
-    "reuseModelMissing": "{{model}} 已经没有对应规则了——请先选一个模型再生成",
-    "reuseFailed": "无法载入这次请求",
     "cancelRun": "取消",
     "cancelled": "已取消",
     "removeRun": "移除这次生成",
@@ -1704,6 +1700,12 @@ export default {
     "promptCopied": "已复制",
     "download": "下载",
     "downloadFailed": "无法下载这张图片",
+    "reuse": {
+      "action": "载入这次请求并编辑",
+      "loaded": "已载入到左侧输入区——改完再生成一次",
+      "modelMissing": "{{model}} 已经没有对应规则了——请先选一个模型再生成",
+      "failed": "无法载入这次请求"
+    },
     "gallery": {
       "action": "总览",
       "clearAll": "清空会话",
@@ -1719,6 +1721,7 @@ export default {
       "search": "搜索提示词和文件名",
       "clearSearch": "清空搜索",
       "noMatch": "没有匹配 \u201c{{query}}\u201d 的图片",
+      "noMatchHint": "搜索会匹配提示词、模型和文件名。",
       "close": "关闭总览"
     },
     "sketch": {

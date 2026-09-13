@@ -9,6 +9,7 @@ import type {
     GenerationRun,
     ImageResult,
     ImportedImage,
+    Quality,
     SelectedImage,
 } from './ImageGenPlayground.types';
 
@@ -16,10 +17,43 @@ export const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
+// A result's data URL is built once per result object and remembered: the
+// concatenation copies the whole base64 payload (megabytes for a 1024px PNG),
+// and this runs for every image on every render of the strip, the overview and
+// the filmstrip. Keyed weakly, so a result that leaves the session is collected
+// with its cached string.
+const srcCache = new WeakMap<ImageResult, string>();
+
 // What an API result renders from: the URL when the provider returned one,
 // otherwise the inline base64 it sent instead.
-export const resultSrc = (image: ImageResult): string => (image.url
-    || (image.b64_json ? `data:image/png;base64,${image.b64_json}` : ''));
+export const resultSrc = (image: ImageResult): string => {
+    const cached = srcCache.get(image);
+    if (cached !== undefined) return cached;
+    const src = image.url || (image.b64_json ? `data:image/png;base64,${image.b64_json}` : '');
+    srcCache.set(image, src);
+    return src;
+};
+
+/**
+ * One of a run's images, as the lightbox wants it. Every surface that opens an
+ * image belonging to a run — the card, the overview, the filmstrip — needs the
+ * same nine fields off the same run, so they say it once here.
+ */
+export const runImage = (
+    run: GenerationRun,
+    kind: 'output' | 'source',
+    index: number,
+    src: string,
+): SelectedImage => ({
+    src,
+    prompt: run.prompt,
+    model: run.model,
+    size: run.size,
+    quality: run.quality as Quality,
+    index,
+    kind,
+    runId: run.id,
+});
 
 /**
  * Moves one reference image to another slot, keeping every other image's
@@ -33,6 +67,31 @@ export const reorderReferences = <T>(list: T[], from: number, to: number): T[] =
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     return next;
+};
+
+/**
+ * Applies the reference-image cap in one place, for every way an image gets
+ * into the row, and reports what the cap cost so the caller can say it out loud.
+ *
+ * The two overflow policies are deliberate and different: a batch of files
+ * dropped on the row fills the free slots and leaves the rest out (`ignore` —
+ * the images already in the row were put there on purpose), while "use this one
+ * as a reference" is a request for one specific image and always honours it,
+ * letting the oldest make room (`evict`).
+ */
+export const addReferences = <T>(
+    current: T[],
+    incoming: T[],
+    max: number,
+    overflow: 'ignore' | 'evict',
+): { next: T[]; ignored: number; evicted: number } => {
+    if (overflow === 'ignore') {
+        const accepted = incoming.slice(0, Math.max(0, max - current.length));
+        return { next: [...current, ...accepted], ignored: incoming.length - accepted.length, evicted: 0 };
+    }
+    const combined = [...current, ...incoming];
+    const next = combined.slice(-max);
+    return { next, ignored: 0, evicted: combined.length - next.length };
 };
 
 /**

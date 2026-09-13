@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
     Box,
     Button,
@@ -10,15 +10,23 @@ import {
     IconButton,
     InputAdornment,
     Stack,
-    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Close, DeleteSweep, Edit, ErrorOutline, Refresh, RestartAlt, Search, ZoomIn } from '@/components/icons';
+import { Close, DeleteSweep, Edit, ErrorOutline, Photo, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import SearchField from '@/components/SearchField';
 import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
+import {
+    fullBleedDialogPaperSx,
+    hoverRevealSx,
+    overlayActionSx,
+    overlayPlateSx,
+    zoomScrimSx,
+} from './ImageGenPlayground.chrome';
 
 // Up to three of a run's reference images, in the corner of its tile. In a
 // grid of finished pictures there is otherwise nothing to say a tile came from
@@ -40,13 +48,12 @@ const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
                 spacing={0.25}
                 data-testid="imagegen-gallery-tile-sources"
                 sx={{
+                    ...overlayPlateSx,
                     position: 'absolute',
                     top: 6,
                     left: 6,
                     p: 0.25,
                     borderRadius: 1,
-                    bgcolor: 'rgba(15, 23, 42, 0.62)',
-                    backdropFilter: 'blur(4px)',
                     pointerEvents: 'none',
                     alignItems: 'center',
                 }}
@@ -57,6 +64,8 @@ const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
                         component="img"
                         src={src}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         sx={{ width: 22, height: 22, borderRadius: 0.5, objectFit: 'cover', display: 'block' }}
                     />
                 ))}
@@ -88,15 +97,30 @@ interface ImageGenGalleryDialogProps {
     onClearAll: () => void;
 }
 
-// Hover actions sit in the corner of a tile; the same chrome for all of them.
-const tileActionSx = {
-    width: 28,
-    height: 28,
-    color: 'common.white',
-    bgcolor: 'rgba(15, 23, 42, 0.58)',
-    backdropFilter: 'blur(4px)',
-    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.82)' },
-} as const;
+// Every action on a tile is the same button with a different icon: it fades in
+// with the pointer, is always there on touch, and says the same thing twice —
+// once to the pointer, once to a screen reader.
+const TileAction: React.FC<{
+    label: string;
+    icon: ReactNode;
+    onClick: () => void;
+    testId?: string;
+    corner?: 'bottom' | 'top';
+}> = ({ label, icon, onClick, testId, corner = 'bottom' }) => (
+    <Tooltip title={label}>
+        <IconButton
+            size="small"
+            onClick={onClick}
+            aria-label={label}
+            data-testid={testId}
+            sx={corner === 'top'
+                ? { ...overlayActionSx(28), position: 'absolute', top: 8, right: 8, ...hoverRevealSx }
+                : overlayActionSx(28)}
+        >
+            {icon}
+        </IconButton>
+    </Tooltip>
+);
 
 /**
  * The session's images all at once.
@@ -128,6 +152,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
     const { t } = useTranslation();
     const [query, setQuery] = useState('');
     const [confirmClear, setConfirmClear] = useState(false);
+    const clearLabel = t('playground.gallery.clearAll', { defaultValue: 'Clear session' });
 
     const tiles = useMemo(() => buildGalleryTiles(runs, imported), [imported, runs]);
     const filtered = useMemo(() => filterGalleryTiles(tiles, query), [query, tiles]);
@@ -138,18 +163,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
             onClose={onClose}
             maxWidth={false}
             fullWidth
-            slotProps={{
-                paper: {
-                    sx: {
-                        width: { xs: 'calc(100vw - 16px)', sm: 'calc(100vw - 48px)' },
-                        height: { xs: 'calc(100dvh - 16px)', sm: 'calc(100dvh - 48px)' },
-                        maxWidth: 'none',
-                        maxHeight: 'none',
-                        m: { xs: 1, sm: 3 },
-                        borderRadius: 3,
-                    },
-                },
-            }}
+            slotProps={{ paper: { sx: fullBleedDialogPaperSx } }}
         >
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, pr: 1.5, flexWrap: 'wrap' }}>
                 <Typography variant="h6" component="span" sx={{ fontSize: '1.05rem' }}>
@@ -172,8 +186,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     company and the search takes the second line by itself,
                     rather than the close button being pushed onto a line of
                     its own. */}
-                <TextField
-                    size="small"
+                <SearchField
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder={t('playground.gallery.search', { defaultValue: 'Search prompts and file names' })}
@@ -185,11 +198,6 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     }}
                     slotProps={{
                         input: {
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <Search sx={{ fontSize: 18, color: 'text.disabled' }} />
-                                </InputAdornment>
-                            ),
                             endAdornment: query ? (
                                 <InputAdornment position="end">
                                     <IconButton
@@ -214,7 +222,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                         data-testid="imagegen-gallery-clear"
                         sx={{ order: { xs: 4, sm: 1 }, color: 'text.secondary', '&:hover': { color: 'error.main' } }}
                     >
-                        {t('playground.gallery.clearAll', { defaultValue: 'Clear session' })}
+                        {clearLabel}
                     </Button>
                 )}
                 <IconButton
@@ -227,12 +235,16 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
             </DialogTitle>
             <DialogContent dividers sx={{ bgcolor: 'action.hover' }}>
                 {filtered.length === 0 ? (
-                    <Stack spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
-                        <Typography variant="subtitle2">
-                            {query.trim()
+                    <Stack sx={{ height: '100%', justifyContent: 'center' }}>
+                        <EmptyState
+                            icon={<Photo />}
+                            title={query.trim()
                                 ? t('playground.gallery.noMatch', { defaultValue: 'Nothing matches “{{query}}”', query: query.trim() })
                                 : t('playground.previewEmpty', { defaultValue: 'Generated and imported images appear here' })}
-                        </Typography>
+                            description={query.trim()
+                                ? t('playground.gallery.noMatchHint', { defaultValue: 'Search runs over prompts, models and file names.' })
+                                : undefined}
+                        />
                     </Stack>
                 ) : (
                     <Box
@@ -313,22 +325,10 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                                 src={tile.kind === 'import' ? tile.item.src : tile.src}
                                                 alt={tile.kind === 'import' ? tile.item.name : tile.run.prompt}
                                                 loading="lazy"
+                                                decoding="async"
                                                 sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                                             />
-                                            <Box
-                                                className="tile-zoom"
-                                                sx={{
-                                                    position: 'absolute',
-                                                    inset: 0,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: 'common.white',
-                                                    bgcolor: 'rgba(15, 23, 42, 0.34)',
-                                                    opacity: 0,
-                                                    transition: 'opacity 0.16s ease-out',
-                                                }}
-                                            >
+                                            <Box className="tile-zoom" sx={zoomScrimSx}>
                                                 <ZoomIn sx={{ fontSize: 28 }} />
                                             </Box>
                                         </ButtonBase>
@@ -345,87 +345,51 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                         className="tile-actions"
                                         direction="row"
                                         spacing={0.5}
-                                        sx={{
-                                            position: 'absolute',
-                                            bottom: 8,
-                                            right: 8,
-                                            opacity: { xs: 1, md: 0 },
-                                            transition: 'opacity 0.16s ease-out',
-                                        }}
+                                        sx={{ position: 'absolute', bottom: 8, right: 8, ...hoverRevealSx }}
                                     >
                                         {tile.kind === 'pending' && (
-                                            <Tooltip title={t('playground.cancelRun', { defaultValue: 'Cancel' })}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => onCancelRun(tile.run.id)}
-                                                    aria-label={t('playground.cancelRun', { defaultValue: 'Cancel' })}
-                                                    data-testid="imagegen-gallery-cancel-run"
-                                                    sx={tileActionSx}
-                                                >
-                                                    <Close fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
+                                            <TileAction
+                                                label={t('playground.cancelRun', { defaultValue: 'Cancel' })}
+                                                icon={<Close fontSize="small" />}
+                                                onClick={() => onCancelRun(tile.run.id)}
+                                                testId="imagegen-gallery-cancel-run"
+                                            />
                                         )}
                                         {tile.kind === 'failed' && (
-                                            <Tooltip title={t('playground.retry', { defaultValue: 'Retry' })}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => onRetryRun(tile.run)}
-                                                    aria-label={t('playground.retry', { defaultValue: 'Retry' })}
-                                                    sx={tileActionSx}
-                                                >
-                                                    <Refresh fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
+                                            <TileAction
+                                                label={t('playground.retry', { defaultValue: 'Retry' })}
+                                                icon={<Refresh fontSize="small" />}
+                                                onClick={() => onRetryRun(tile.run)}
+                                            />
                                         )}
-                                        {tile.kind !== 'pending' && tile.kind !== 'failed' && (
-                                            <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => onUseAsReference(tile.kind === 'import' ? tile.item.src : tile.src)}
-                                                    aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
-                                                    data-testid="imagegen-gallery-use-as-reference"
-                                                    sx={tileActionSx}
-                                                >
-                                                    <Edit fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
+                                        {(tile.kind === 'output' || tile.kind === 'import') && (
+                                            <TileAction
+                                                label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
+                                                icon={<Edit fontSize="small" />}
+                                                onClick={() => onUseAsReference(tile.kind === 'import' ? tile.item.src : tile.src)}
+                                                testId="imagegen-gallery-use-as-reference"
+                                            />
                                         )}
                                         {tile.kind !== 'import' && (
-                                            <Tooltip title={t('playground.reuseRequest', { defaultValue: 'Edit this request' })}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => onReuseRun(tile.run)}
-                                                    aria-label={t('playground.reuseRequest', { defaultValue: 'Edit this request' })}
-                                                    data-testid="imagegen-gallery-reuse-run"
-                                                    sx={tileActionSx}
-                                                >
-                                                    <RestartAlt fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
+                                            <TileAction
+                                                label={t('playground.reuse.action', { defaultValue: 'Edit this request' })}
+                                                icon={<RestartAlt fontSize="small" />}
+                                                onClick={() => onReuseRun(tile.run)}
+                                                testId="imagegen-gallery-reuse-run"
+                                            />
                                         )}
                                     </Stack>
                                     {tile.kind !== 'pending' && (
-                                        <IconButton
-                                            className="tile-actions"
-                                            size="small"
+                                        <TileAction
+                                            corner="top"
+                                            label={tile.kind === 'import'
+                                                ? t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: tile.item.name })
+                                                : t('playground.removeRun', { defaultValue: 'Remove this generation' })}
+                                            icon={<Close fontSize="small" />}
                                             onClick={() => (tile.kind === 'import'
                                                 ? onRemoveImport(tile.item.id)
                                                 : onRemoveRun(tile.run.id))}
-                                            aria-label={tile.kind === 'import'
-                                                ? t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: tile.item.name })
-                                                : t('playground.removeRun', { defaultValue: 'Remove this generation' })}
-                                            sx={{
-                                                position: 'absolute',
-                                                top: 8,
-                                                right: 8,
-                                                opacity: { xs: 1, md: 0 },
-                                                transition: 'opacity 0.16s ease-out',
-                                                ...tileActionSx,
-                                            }}
-                                        >
-                                            <Close fontSize="small" />
-                                        </IconButton>
+                                        />
                                     )}
                                 </Box>
                                 {/* Two lines under every tile, always the same two: what it
@@ -475,7 +439,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     defaultValue_other: 'Removes all {{count}} images from the playground. Images already written to the output folder stay on disk.',
                     count: tiles.length,
                 })}
-                confirmLabel={t('playground.gallery.clearAll', { defaultValue: 'Clear session' })}
+                confirmLabel={clearLabel}
                 cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
                 confirmColor="error"
                 onClose={() => setConfirmClear(false)}

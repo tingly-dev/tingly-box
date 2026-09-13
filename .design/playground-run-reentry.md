@@ -141,6 +141,35 @@ completed 三种状态共用,点开进同一个 lightbox(`kind: 'source'`)。失
 `imageGenSession.test.ts` 有 20 条用例盯着。大图预览的胶片条也补了 ←/→ 键(与参考
 图行同一个手势,首尾循环)。
 
+### 2.9 收尾的简化
+
+功能定下来之后过了一遍复用/简化/效率/深度四个角度,改掉的是:
+
+- **共享 chrome**:图片上的那套装饰(半透明圆形动作按钮、hover 出的放大遮罩、
+  缩略图浮层底板、全屏对话框的 paper)原来在六七处各写一遍,alpha 值已经开始漂
+  (0.58 / 0.7 / 0.72)。统一到 `ImageGenPlayground.chrome.ts`。
+- **复用已有组件**:总览的搜索框换成全站的 `SearchField`(它是 32px 高度契约的
+  持有者),空状态换成 `EmptyState`。
+- **重复 JSX 收成组件**:面板头部三个动作 → `PanelAction`,总览格子五个动作 →
+  `TileAction`,参考图缩略图(带全部拖拽处理)→ `ReferenceThumb`。
+- **一处构造 `SelectedImage`**:四个地方各自拼九个字段 → `runImage(run, kind,
+  index, src)`。
+- **一处应用参考图上限**:两个入口各写一份 slice → `addReferences(current,
+  incoming, max, overflow)`,两种溢出策略(`ignore` / `evict`)从此是显式参数而
+  不是两段各自演化的代码;有测试。
+- **拖拽判别落到实处**:`REFERENCE_DND_TYPE` 原来只写不读,内部拖拽全靠 state
+  判断。现在 `dataTransfer.types` 真的被读,行内拖拽和外部落文件的区分是显式的。
+- **session 两半各有一个写者**:`imageGenSessionImports` 原来在三处手工与 React
+  state 同步(清空会话又加了一处),现在与 runs 对称,只经 `updateImports`。
+- **`resultSrc` 记住结果**:data URL 拼接会复制整段 base64(1024px PNG 就是几
+  MB),而横条、总览、胶片条每次渲染都要。改成按结果对象 WeakMap 缓存。
+- **主题渐变的说明只写一遍**:四个主题各贴一份 `variants` 块和四行理由 →
+  `theme/components/buttonVariants.ts`。
+
+没做的(记在这里免得下次重找):把横条卡片和总览格子合并成一个"图片瓦片"组件
+(两者的布局其实不同——一张卡片是一次运行的 N 张图,一格是一张图),以及把整个
+session 收进 `useImageGenSession()` hook(值得做,但会是另一个大 diff)。
+
 ---
 
 ## 3. 检查表对照
