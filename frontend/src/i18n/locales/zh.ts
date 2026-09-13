@@ -1667,6 +1667,8 @@ export default {
     "useAsReference": "用作参考图",
     "referenceLoadFailed": "无法将该图像用作参考图",
     "openReference": "打开参考图 {{number}}",
+    "openReferenceReorderable": "第 {{number}} / {{total}} 张参考图——点击查看，方向键可调整顺序",
+    "referenceReorderHint": "拖动缩略图可调整顺序",
     "referenceThumbAlt": "第 {{number}} 张参考图像",
     "viewSourceImage": "查看第 {{number}} 张原图",
     "previewEmpty": "生成的图和导入的图都会出现在这里",

@@ -1681,6 +1681,8 @@ export default {
     "useAsReference": "Использовать как референс",
     "referenceLoadFailed": "Не удалось использовать это изображение как исходное",
     "openReference": "Открыть референс {{number}}",
+    "openReferenceReorderable": "Референс {{number}} из {{total}} — откройте его или переместите стрелками",
+    "referenceReorderHint": "перетащите миниатюру, чтобы изменить порядок",
     "referenceThumbAlt": "Исходное изображение {{number}}",
     "viewSourceImage": "Просмотреть исходное изображение {{number}}",
     "previewEmpty": "Здесь появляются сгенерированные и импортированные изображения",

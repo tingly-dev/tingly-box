@@ -1671,6 +1671,8 @@ export default {
     "useAsReference": "Use as reference",
     "referenceLoadFailed": "Could not use this image as a reference",
     "openReference": "Open reference image {{number}}",
+    "openReferenceReorderable": "Reference image {{number}} of {{total}} — open it, or move it with the arrow keys",
+    "referenceReorderHint": "drag a thumbnail to reorder",
     "referenceThumbAlt": "Reference image {{number}}",
     "viewSourceImage": "View original image {{number}}",
     "previewEmpty": "Generated and imported images appear here",
