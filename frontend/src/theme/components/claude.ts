@@ -40,12 +40,6 @@ export const claudeComponents: ThemeOptions['components'] = {
           boxShadow: '0 1px 2px 0 rgba(20, 20, 19, 0.06)',
         },
       },
-      contained: {
-        background: 'linear-gradient(135deg, #D97757 0%, #C26146 100%)',
-        '&:hover': {
-          background: 'linear-gradient(135deg, #C26146 0%, #A85138 100%)',
-        },
-      },
       outlined: {
         borderColor: '#D6D3C7',
         color: '#141413',
@@ -55,6 +49,21 @@ export const claudeComponents: ThemeOptions['components'] = {
         },
       },
     },
+    // Scoped to the primary colour on purpose: as a bare `contained`
+    // override the gradient painted every contained button, including
+    // `color="error"` ones, so destructive confirmations came out
+    // looking like primary actions. Other colours now keep their palette.
+    variants: [
+      {
+        props: { variant: 'contained' as const, color: 'primary' as const },
+        style: {
+          background: 'linear-gradient(135deg, #D97757 0%, #C26146 100%)',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #C26146 0%, #A85138 100%)',
+          },
+        },
+      },
+    ],
   },
   MuiOutlinedInput: {
     styleOverrides: {

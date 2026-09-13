@@ -71,12 +71,6 @@ export const sunlitComponents: ThemeOptions['components'] = {
         boxShadow: 'none',
         '&:hover': { boxShadow: buttonHoverShadow },
       },
-      contained: {
-        background: `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`,
-        '&:hover': {
-          background: `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`,
-        },
-      },
       outlined: {
         borderColor: 'rgba(14, 165, 233, 0.3)',
         color: '#0369a1',
@@ -86,6 +80,21 @@ export const sunlitComponents: ThemeOptions['components'] = {
         },
       },
     },
+    // Scoped to the primary colour on purpose: as a bare `contained`
+    // override the gradient painted every contained button, including
+    // `color="error"` ones, so destructive confirmations came out
+    // looking like primary actions. Other colours now keep their palette.
+    variants: [
+      {
+        props: { variant: 'contained' as const, color: 'primary' as const },
+        style: {
+          background: `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`,
+          '&:hover': {
+            background: `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`,
+          },
+        },
+      },
+    ],
   },
   MuiOutlinedInput: {
     styleOverrides: {
