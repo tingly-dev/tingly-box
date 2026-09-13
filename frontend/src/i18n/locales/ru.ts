@@ -1715,6 +1715,16 @@ export default {
     "promptCopied": "Скопировано",
     "download": "Скачать",
     "downloadFailed": "Не удалось скачать это изображение",
+    "gallery": {
+      "action": "Обзор",
+      "title": "Все изображения сессии",
+      "count": "{{count}} изображений",
+      "matchCount": "{{shown}} из {{total}}",
+      "search": "Поиск по промптам и именам файлов",
+      "clearSearch": "Очистить поиск",
+      "noMatch": "Ничего не найдено по запросу \u201c{{query}}\u201d",
+      "close": "Закрыть обзор"
+    },
     "sketch": {
       "action": "Эскиз",
       "editAction": "Изменить эскиз",

@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, RestartAlt, ViewGallery, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
 import { parseImageSize } from '@/utils/sketchCanvas';
@@ -36,6 +36,16 @@ import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
+import ImageGenGalleryDialog from './ImageGenGalleryDialog';
+import {
+    formatBytes,
+    resultSrc,
+    type Endpoint,
+    type GenerationRun,
+    type ImportedImage,
+    type Quality,
+    type SelectedImage,
+} from './ImageGenPlayground.types';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -59,17 +69,6 @@ const overlayIconSx = {
     bgcolor: 'rgba(255, 255, 255, 0.08)',
     '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
 } as const;
-
-// Which gateway endpoint a run went through. Not a user choice: derived
-// from whether the run had reference images (see handleSubmit). Shown on
-// the history card so API users learn which endpoint does what they just did.
-type Endpoint = 'generations' | 'edits';
-type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
-
-interface ImageResult {
-    url?: string;
-    b64_json?: string;
-}
 
 interface ReferenceImage {
     file: File;
@@ -101,43 +100,6 @@ const readImageSize = (src: string): Promise<{ width: number; height: number } |
 // a new sketch, otherwise the reference image being redrawn.
 type SketchTarget = { index: number | null } | null;
 
-// An image the user brought in to work on rather than to generate from: it
-// lands in the results panel, not in the request. The two destinations are
-// different intents ("edit this with a model" vs "cut this one up"), so they
-// are different drops, each landing where its result shows up.
-interface ImportedImage {
-    id: string;
-    src: string;
-    name: string;
-    bytes: number;
-    width?: number;
-    height?: number;
-    createdAt: number;
-}
-
-interface GenerationRun {
-    id: string;
-    endpoint: Endpoint;
-    createdAt: number;
-    prompt: string;
-    model: string;
-    size: string;
-    quality: Quality;
-    images: ImageResult[];
-    // Data URLs of the reference images a run was built from, kept for
-    // display alongside the output — the "what did I ask for" half of the
-    // history card (only set when the run went through `edits`).
-    sourceImages?: string[];
-    // How many images the run asked for — kept so a failed run can be retried
-    // with exactly the request it made.
-    count?: number;
-    status?: 'pending' | 'completed' | 'failed';
-    // Why a failed run failed, shown on its card. A run that fails stays in
-    // the strip: silently removing it leaves the user with a toast that has
-    // already gone and no record of what was asked.
-    error?: string;
-}
-
 // Reads a File into a base64 data URL, the same representation already used
 // for generated images (`data:image/png;base64,...`) so reference thumbnails
 // and outputs render through one code path.
@@ -148,34 +110,10 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, rej
     reader.readAsDataURL(file);
 });
 
-interface SelectedImage {
-    src: string;
-    prompt: string;
-    model: string;
-    size: string;
-    quality: Quality;
-    index: number;
-    // Where this image came from — same lightbox, different framing. A run's
-    // output and its `source` originals carry a prompt and a model; a
-    // `reference` waiting in the request and an `import` brought in to work on
-    // carry neither, so those two are titled by their file instead.
-    kind: 'output' | 'source' | 'reference' | 'import';
-    // Set for `reference` and `import`: what to call this image and what it is.
-    label?: string;
-    caption?: string;
-    // The run this image belongs to (`output` / `source`), so the lightbox can
-    // offer the same "put this request back in the panel" action the card does.
-    runId?: string;
-}
-
 // Keep playground output while navigating between pages in the current app session.
 // This deliberately stays in memory: base64 images can quickly exceed sessionStorage quotas.
 let imageGenSessionRuns: GenerationRun[] = [];
 let imageGenSessionImports: ImportedImage[] = [];
-
-const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 interface ImportedImageCardProps {
     item: ImportedImage;
@@ -425,6 +363,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [imported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
+    // The overview: the strip answers "what is happening now", this answers
+    // "where is the one I made twenty images ago" without dragging a scrollbar.
+    const [galleryOpen, setGalleryOpen] = useState(false);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -534,6 +475,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }));
         imageGenSessionImports = [...imageGenSessionImports, ...items];
         setImported(imageGenSessionImports);
+    }, []);
+
+    const handleOpenImport = useCallback((item: ImportedImage) => {
+        setSelectedImage({
+            src: item.src,
+            prompt: '',
+            model: '',
+            size: '',
+            quality: 'auto',
+            index: 0,
+            kind: 'import',
+            label: item.name,
+            caption: [
+                item.width && item.height ? `${item.width}×${item.height} px` : '',
+                formatBytes(item.bytes),
+            ].filter(Boolean).join(' · '),
+        });
     }, []);
 
     const handleRemoveImport = useCallback((id: string) => {
@@ -1019,6 +977,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             )}
         </Stack>
     );
+
+    // The results panel's header actions. Three of them do not fit a phone at
+    // full width, so the label drops away below `sm` and the icon carries the
+    // button — the action itself never disappears, and the aria-label keeps
+    // saying what it is.
+    const panelActionSx = {
+        color: 'text.secondary',
+        minWidth: 0,
+        px: { xs: 0.75, sm: 1 },
+        '& .MuiButton-startIcon': { mr: { xs: 0, sm: 0.5 } },
+        '&:hover': { color: 'primary.main' },
+    } as const;
+    const panelActionLabelSx = { display: { xs: 'none', sm: 'inline' } } as const;
 
     // The three ways a reference image gets here, as equals. Drop is not in
     // the list because it has no button — the dashed box itself is the target.
@@ -1627,7 +1598,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                     <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
                                         {t('playground.sessionOutputs', { defaultValue: 'Session images' })}
                                     </Typography>
@@ -1637,7 +1608,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             color: "text.secondary",
                                             flexShrink: 0,
                                             whiteSpace: 'nowrap',
-                                            ml: 'auto',
                                         }}
                                     >
                                         {[
@@ -1654,26 +1624,53 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         ].filter(Boolean).join(' · ')}
                                     </Typography>
                                     {/* The same two ways in as the empty state offers: the
-                                        strip filling up must not take them away. */}
-                                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                        <Button
-                                            size="small"
-                                            color="inherit"
-                                            startIcon={<FileUpload fontSize="small" />}
-                                            onClick={() => importFileInputRef.current?.click()}
-                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                        >
-                                            {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            color="inherit"
-                                            startIcon={<ContentPaste fontSize="small" />}
-                                            onClick={() => { void handleImportFromClipboard(); }}
-                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                        >
-                                            {t('playground.referencePaste', { defaultValue: 'Paste' })}
-                                        </Button>
+                                        strip filling up must not take them away. Plus the way
+                                        out of the strip itself, which is what a session with
+                                        thirty images actually needs. */}
+                                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
+                                        <Tooltip title={t('playground.gallery.action', { defaultValue: 'Overview' })}>
+                                            <Button
+                                                size="small"
+                                                color="inherit"
+                                                startIcon={<ViewGallery fontSize="small" />}
+                                                onClick={() => setGalleryOpen(true)}
+                                                data-testid="imagegen-open-gallery"
+                                                aria-label={t('playground.gallery.action', { defaultValue: 'Overview' })}
+                                                sx={panelActionSx}
+                                            >
+                                                <Box component="span" sx={panelActionLabelSx}>
+                                                    {t('playground.gallery.action', { defaultValue: 'Overview' })}
+                                                </Box>
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip title={t('playground.referenceBrowse', { defaultValue: 'Browse' })}>
+                                            <Button
+                                                size="small"
+                                                color="inherit"
+                                                startIcon={<FileUpload fontSize="small" />}
+                                                onClick={() => importFileInputRef.current?.click()}
+                                                aria-label={t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                                sx={panelActionSx}
+                                            >
+                                                <Box component="span" sx={panelActionLabelSx}>
+                                                    {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                                </Box>
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip title={t('playground.referencePaste', { defaultValue: 'Paste' })}>
+                                            <Button
+                                                size="small"
+                                                color="inherit"
+                                                startIcon={<ContentPaste fontSize="small" />}
+                                                onClick={() => { void handleImportFromClipboard(); }}
+                                                aria-label={t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                                sx={panelActionSx}
+                                            >
+                                                <Box component="span" sx={panelActionLabelSx}>
+                                                    {t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                                </Box>
+                                            </Button>
+                                        </Tooltip>
                                     </Stack>
                                 </Box>
 
@@ -1699,22 +1696,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         <ImportedImageCard
                                             key={entry.item.id}
                                             item={entry.item}
-                                            onOpen={() => setSelectedImage({
-                                                src: entry.item.src,
-                                                prompt: '',
-                                                model: '',
-                                                size: '',
-                                                quality: 'auto',
-                                                index: 0,
-                                                kind: 'import',
-                                                label: entry.item.name,
-                                                caption: [
-                                                    entry.item.width && entry.item.height
-                                                        ? `${entry.item.width}×${entry.item.height} px`
-                                                        : '',
-                                                    formatBytes(entry.item.bytes),
-                                                ].filter(Boolean).join(' · '),
-                                            })}
+                                            onOpen={() => handleOpenImport(entry.item)}
                                             onUseAsReference={() => { void handleUseAsReference(entry.item.src); }}
                                             onRemove={() => handleRemoveImport(entry.item.id)}
                                         />
@@ -1915,9 +1897,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     }}
                                                 >
                                                     {run.images.map((image, index) => {
-                                                        const src = image.url || (image.b64_json
-                                                            ? `data:image/png;base64,${image.b64_json}`
-                                                            : '');
+                                                        const src = resultSrc(image);
                                                         return src ? (
                                                             <Box
                                                                 key={`${run.id}-${index}`}
@@ -2235,6 +2215,31 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     )}
                 </DialogContent>
             </Dialog>
+            <ImageGenGalleryDialog
+                open={galleryOpen}
+                runs={runs}
+                imported={imported}
+                onClose={() => setGalleryOpen(false)}
+                onOpenOutput={(run, imageIndex, src) => setSelectedImage({
+                    src,
+                    prompt: run.prompt,
+                    model: run.model,
+                    size: run.size,
+                    quality: run.quality,
+                    index: imageIndex,
+                    kind: 'output',
+                    runId: run.id,
+                })}
+                onOpenImport={handleOpenImport}
+                onUseAsReference={(src) => { void handleUseAsReference(src); }}
+                // Loading a request refills the panel behind the dialog, so the
+                // dialog gets out of the way — otherwise the user is looking at
+                // a grid while the thing they asked for happened elsewhere.
+                onReuseRun={(run) => { setGalleryOpen(false); void handleReuseRun(run); }}
+                onRetryRun={(run) => { void handleRetry(run); }}
+                onRemoveRun={handleRemoveRun}
+                onRemoveImport={handleRemoveImport}
+            />
             <ImageSliceDialog
                 open={sliceTarget !== null}
                 src={sliceTarget?.src ?? null}

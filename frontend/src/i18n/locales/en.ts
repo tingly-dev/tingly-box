@@ -1705,6 +1705,16 @@ export default {
     "promptCopied": "Copied",
     "download": "Download",
     "downloadFailed": "Could not download this image",
+    "gallery": {
+      "action": "Overview",
+      "title": "All session images",
+      "count": "{{count}} images",
+      "matchCount": "{{shown}} of {{total}}",
+      "search": "Search prompts and file names",
+      "clearSearch": "Clear the search",
+      "noMatch": "Nothing matches \u201c{{query}}\u201d",
+      "close": "Close the overview"
+    },
     "sketch": {
       "action": "Sketch",
       "editAction": "Edit sketch",

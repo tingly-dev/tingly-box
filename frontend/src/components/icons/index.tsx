@@ -145,6 +145,7 @@ import {
     IconCircleFilled,
     IconWorldDownload,
     IconGridDots,
+    IconLayoutGrid,
     IconCalendarClock,
     IconCalendarEvent,
     IconFileText,
@@ -365,3 +366,6 @@ export const Bell = tablerMui(IconBell);
 
 // --- Layout ------------------------------------------------------------------
 export const GridView = tablerMui(IconGridDots);
+// A filled grid of panes — the "show me everything at once" view, distinct
+// from GridView's dotted grid (which means "cut this image into tiles").
+export const ViewGallery = tablerMui(IconLayoutGrid);

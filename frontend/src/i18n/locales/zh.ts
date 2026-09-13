@@ -1701,6 +1701,16 @@ export default {
     "promptCopied": "已复制",
     "download": "下载",
     "downloadFailed": "无法下载这张图片",
+    "gallery": {
+      "action": "总览",
+      "title": "本次会话的全部图片",
+      "count": "{{count}} 张图片",
+      "matchCount": "{{shown}} / {{total}}",
+      "search": "搜索提示词和文件名",
+      "clearSearch": "清空搜索",
+      "noMatch": "没有匹配 \u201c{{query}}\u201d 的图片",
+      "close": "关闭总览"
+    },
     "sketch": {
       "action": "手绘",
       "editAction": "修改草图",
