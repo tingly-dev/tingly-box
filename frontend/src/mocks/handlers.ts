@@ -2564,6 +2564,17 @@ export const handlers = [
             return svgDataUrl(svg)
         }
 
+        // Same `[fail]` escape hatch the generations mock has, so a failed
+        // *edit* — the one whose card has to keep showing its source images —
+        // is exercisable too.
+        if (/\[fail\]/i.test(promptText)) {
+            await new Promise((r) => setTimeout(r, 300))
+            return HttpResponse.json(
+                { error: { message: 'mock upstream rejected the request (prompt contains [fail])', type: 'server_error' } },
+                { status: 502 },
+            )
+        }
+
         // Simulate a small latency so the loading state is visible
         await new Promise((r) => setTimeout(r, 600))
 
