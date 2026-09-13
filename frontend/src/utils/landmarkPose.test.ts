@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     createFigure,
+    DETAIL_JOINT_KEYS,
     figureUnit,
     JOINT_KEYS,
     JOINT_PARENT,
@@ -10,7 +11,6 @@ import {
     type PoseFigure,
 } from './poseFigure';
 import {
-    aimFromLandmarks,
     bodyForward,
     figureFromLandmarks,
     LANDMARK,
@@ -205,34 +205,34 @@ describe('bodyForward', () => {
     });
 });
 
-describe('aimFromLandmarks', () => {
-    // The three directions the renderer currently guesses from the hips. The
-    // landmark set can say them outright; this is the reader that will feed
-    // them in once the mannequin carries them (.design/pose-from-image.md §4).
-    const withFeet = (figure: PoseFigure): Landmark[] => {
-        const landmarks = landmarksFromFigure(figure, FRAME);
-        const put = (index: number, from: JointKey, dx: number, dz: number) => {
-            landmarks[index] = {
-                x: figure.joints[from].x / 1 + dx,
-                y: figure.joints[from].y,
-                z: -(figure.joints[from].z) + dz,
-                visibility: 1,
-            };
-        };
-        put(LANDMARK.heelL, 'ankleR', 0, 0);
-        put(LANDMARK.toeL, 'ankleR', 0, -0.2);
-        put(LANDMARK.heelR, 'ankleL', 0, 0);
-        put(LANDMARK.toeR, 'ankleL', 0, -0.2);
-        return landmarks;
-    };
+describe('the detail tier', () => {
+    // The reason the mannequin's joint set was aligned with the landmark set:
+    // where the face looks, where the hands point and where the toes point are
+    // now joints, and a photograph is the one source that can fill all five
+    // outright instead of guessing them from the hips.
+    it('fills every detail joint from the landmarks it was aligned to', () => {
+        const figure = createFigure('walking', DIMS);
+        const result = roundTrip(figure);
+        for (const key of DETAIL_JOINT_KEYS) {
+            expect(result.fellBack).not.toContain(key);
+            const a = figure.joints[key];
+            const b = result.figure.joints[key];
+            expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(figureUnit(figure) * 0.03);
+        }
+        // ...and the figure arrives at the detail tier, because those joints
+        // now carry something the body could not have worked out.
+        expect(result.figure.detail).toBe(true);
+    });
 
-    it('reads a face direction and a foot direction, and admits when it cannot', () => {
-        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
-        const aim = aimFromLandmarks(withFeet(figure), FRAME);
-        expect(aim.head!.z).toBeGreaterThan(0.9);
-        // Toes ahead of heels: the foot points at the camera, which is the
-        // thing the body-derived guess cannot know.
-        expect(aim.footL!.z).toBeGreaterThan(0.9);
-        expect(aimFromLandmarks(landmarksFromFigure(figure, FRAME), FRAME).footL).toBeNull();
+    it('stays simple when the photograph could not see the toes', () => {
+        // Switching the tier on to reveal five joints that are still derived
+        // would be a promise the photograph did not keep.
+        const figure = createFigure('standing', DIMS);
+        const noFeet = landmarksFromFigure(figure, FRAME).map((l, i) => (
+            i === LANDMARK.toeL || i === LANDMARK.toeR ? { ...l, visibility: 0 } : l
+        ));
+        const result = figureFromLandmarks(noFeet, { frame: FRAME, reference: figure })!;
+        expect(result.figure.detail).toBeFalsy();
+        expect(result.fellBack).toContain('toeL');
     });
 });

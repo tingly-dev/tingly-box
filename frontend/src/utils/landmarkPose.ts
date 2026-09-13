@@ -14,6 +14,8 @@
 
 import {
     centerFigureAt,
+    completeFigure,
+    DETAIL_JOINT_KEYS,
     figureCenter,
     figureUnit,
     JOINT_KEYS,
@@ -133,6 +135,12 @@ const SIDE_OF: Partial<Record<JointKey, number>> = {
     hipL: LANDMARK.hipR, hipR: LANDMARK.hipL,
     kneeL: LANDMARK.kneeR, kneeR: LANDMARK.kneeL,
     ankleL: LANDMARK.ankleR, ankleR: LANDMARK.ankleL,
+    // The detail tier, and the reason the tier stops where it does: every one
+    // of these is a landmark the estimator already emits. `face` is the nose —
+    // our face joint sits in front of the skull and so does a nose.
+    face: LANDMARK.nose,
+    handL: LANDMARK.indexR, handR: LANDMARK.indexL,
+    toeL: LANDMARK.toeR, toeR: LANDMARK.toeL,
 };
 
 const visible = (landmark: Landmark | undefined, floor: number): boolean =>
@@ -359,7 +367,8 @@ export const figureFromLandmarks = (
     const floor = options.minVisibility ?? DEFAULT_MIN_VISIBILITY;
     const aspect = options.frame.height > 0 ? options.frame.width / options.frame.height : 1;
 
-    const offsets = torsoOffsetsOf(options.reference);
+    const reference = completeFigure(options.reference);
+    const offsets = torsoOffsetsOf(reference);
     const first = readJoints(landmarks, aspect, floor, offsets);
     // Without a torso there is no body to hang anything off, and no frame to
     // read a camera angle from. Better to say "no pose here" than to invent one.
@@ -374,19 +383,28 @@ export const figureFromLandmarks = (
         offsets,
     );
 
-    const { joints, fellBack } = retargetToBones(read.points, options.reference);
+    const { joints, fellBack } = retargetToBones(read.points, reference);
     const turn = turnOfBody(joints);
 
+    // A photograph is the one source that can fill the detail tier outright,
+    // so a figure that came from one arrives with it on: the extra joints now
+    // carry information the body could not have guessed, and hiding their
+    // handles would mean the user could see the turned foot but not adjust it.
+    // If the toes and fingers were not visible, the figure stays simple —
+    // switching a tier on to show five joints that are still derived would be
+    // a promise the photograph did not keep.
+    const gotDetail = DETAIL_JOINT_KEYS.every((key) => !fellBack.includes(key));
     const raw: PoseFigure = {
         id: options.reference.id,
         joints,
         shade: options.reference.shade,
         turn,
+        detail: gotDetail || options.reference.detail,
     };
     // Our body, our size, where the figure already was: importing a pose
     // changes the pose, not who the person is or where they stand.
-    const sized = scaleFigure(raw, figureUnit(options.reference) / figureUnit(raw));
-    const placed = centerFigureAt(sized, figureCenter(options.reference));
+    const sized = scaleFigure(raw, figureUnit(reference) / figureUnit(raw));
+    const placed = centerFigureAt(sized, figureCenter(reference));
 
     const used = JOINT_KEYS.map((key) => read.seen[key]).filter((v): v is number => v !== undefined);
     return {
@@ -415,46 +433,23 @@ export const landmarksFromFigure = (figure: PoseFigure, frame: LandmarkFrame): L
         };
     };
 
+    const whole = completeFigure(figure);
     for (const key of JOINT_KEYS) {
         const index = SIDE_OF[key];
-        if (index !== undefined) put(index, figure.joints[key]);
+        if (index !== undefined) put(index, whole.joints[key]);
     }
 
-    const forward = bodyForward(figure.joints) ?? { x: 0, y: 0, z: 1 };
-    const across = norm(sub(figure.joints.shoulderR, figure.joints.shoulderL));
-    const unit = figureUnit(figure);
-    // The ears straddle the head joint and the nose sits in front of it: the
-    // same three points the depth check relies on.
-    put(LANDMARK.earL, add(figure.joints.head, mul(across, unit * 0.045)));
-    put(LANDMARK.earR, add(figure.joints.head, mul(across, -unit * 0.045)));
-    put(LANDMARK.nose, add(figure.joints.head, mul(forward, unit * 0.055)));
+    const across = norm(sub(whole.joints.shoulderR, whole.joints.shoulderL));
+    const unit = figureUnit(whole);
+    // The ears straddle the head joint; the nose is the face joint, already
+    // written above. Together they are the three points the depth check needs.
+    put(LANDMARK.earL, add(whole.joints.head, mul(across, unit * 0.045)));
+    put(LANDMARK.earR, add(whole.joints.head, mul(across, -unit * 0.045)));
+    // Heels sit behind the toes, opposite the way the foot points.
+    for (const [ankle, toe, heel] of [['ankleL', 'toeL', LANDMARK.heelR], ['ankleR', 'toeR', LANDMARK.heelL]] as const) {
+        const step = norm(sub(whole.joints[toe], whole.joints[ankle]));
+        put(heel, add(whole.joints[ankle], mul(step, -unit * 0.012)));
+    }
 
     return out;
-};
-
-// A figure's own idea of where its feet and hands point, for the day the
-// landmark set is allowed to say so instead. Today the renderer derives both
-// from the body; `.design/pose-from-image.md` §4 is where that changes.
-export const aimFromLandmarks = (
-    landmarks: readonly Landmark[],
-    frame: LandmarkFrame,
-    floor = DEFAULT_MIN_VISIBILITY,
-): { head: Vec3 | null; footL: Vec3 | null; footR: Vec3 | null } => {
-    const aspect = frame.height > 0 ? frame.width / frame.height : 1;
-    const between = (from: number, to: number): Vec3 | null => {
-        if (!visible(landmarks[from], floor) || !visible(landmarks[to], floor)) return null;
-        const direction = sub(toWorld(landmarks[to], aspect), toWorld(landmarks[from], aspect));
-        return len(direction) < 1e-9 ? null : norm(direction);
-    };
-    const earMid = visible(landmarks[LANDMARK.earL], floor) && visible(landmarks[LANDMARK.earR], floor)
-        ? mid(toWorld(landmarks[LANDMARK.earL], aspect), toWorld(landmarks[LANDMARK.earR], aspect))
-        : null;
-    const nose = visible(landmarks[LANDMARK.nose], floor) ? toWorld(landmarks[LANDMARK.nose], aspect) : null;
-    return {
-        head: earMid && nose ? norm(sub(nose, earMid)) : null,
-        // Heel to toe: the direction a foot actually points, which is the one
-        // thing the mannequin currently has to guess from the hips.
-        footL: between(LANDMARK.heelR, LANDMARK.toeR),
-        footR: between(LANDMARK.heelL, LANDMARK.toeL),
-    };
 };

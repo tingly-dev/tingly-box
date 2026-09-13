@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { JointKey, PoseFigure } from './poseFigure';
 import {
     applyPreset,
+    CORE_JOINT_KEYS,
     figureTurn,
     isTurnHandleHit,
     MAX_VIEW_PITCH,
@@ -66,8 +67,11 @@ describe('createFigure', () => {
         expect(bounds.height).toBeLessThan(1024 * 0.76);
         expect(bounds.x + bounds.width / 2).toBeCloseTo(512, 0);
         expect(bounds.y + bounds.height / 2).toBeCloseTo(512, 0);
-        expect(figureBounds(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front)).height)
-            .toBeCloseTo(1024 * 0.7, 0);
+        // Dead-on it is the authored 70% plus the toes, which stick out past
+        // the heel and are part of what you can see and grab.
+        const front = figureBounds(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front)).height;
+        expect(front).toBeGreaterThan(1024 * 0.7);
+        expect(front).toBeLessThan(1024 * 0.72);
     });
 
     it('keeps every figure inside a narrow canvas', () => {
@@ -376,10 +380,13 @@ describe('shades', () => {
 describe('the skeleton', () => {
     const boneLength = bone3;
 
-    it('hangs every joint off the hip', () => {
+    it('hangs every joint off the hip, detail tier included', () => {
         expect(subtreeOf('hip')).toHaveLength(JOINT_KEYS.length);
-        expect(subtreeOf('shoulderL').sort()).toEqual(['elbowL', 'shoulderL', 'wristL']);
-        expect(subtreeOf('wristR')).toEqual(['wristR']);
+        expect(subtreeOf('shoulderL').sort()).toEqual(['elbowL', 'handL', 'shoulderL', 'wristL']);
+        // The detail joints are ordinary children: dragging a wrist takes its
+        // hand along, with no new machinery.
+        expect(subtreeOf('wristR').sort()).toEqual(['handR', 'wristR']);
+        expect(subtreeOf('handR')).toEqual(['handR']);
     });
 
     it('swings the limb below the joint and keeps every bone length', () => {
@@ -517,7 +524,9 @@ describe('the pose library', () => {
         // 3D data structure. The calibration pose is allowed to be one.
         const flat = everyPose.filter((pose) => {
             const figure = createFigure(pose, DIMS, undefined, 0, { yaw: 0, pitch: 0 });
-            const zs = JOINT_KEYS.map((key) => figure.joints[key].z);
+            // Core joints only: the face and the toes point out of the screen
+            // in every pose, so counting them would make the test vacuous.
+            const zs = CORE_JOINT_KEYS.map((key) => figure.joints[key].z);
             return Math.max(...zs) - Math.min(...zs) < figureUnit(figure) * 0.05;
         });
         expect(flat).toEqual(['tPose']);

@@ -36,12 +36,34 @@ export type JointKey =
     | 'wristL' | 'wristR'
     | 'hip' | 'hipL' | 'hipR'
     | 'kneeL' | 'kneeR'
-    | 'ankleL' | 'ankleR';
+    | 'ankleL' | 'ankleR'
+    // The detail tier. See DETAIL_JOINT_KEYS.
+    | 'face' | 'handL' | 'handR' | 'toeL' | 'toeR';
 
-export const JOINT_KEYS: readonly JointKey[] = [
+// The body every pose in the library is written in, and the only joints a
+// figure shows handles for by default. Fifteen is enough to say what a body is
+// doing, and few enough to read at a glance.
+export const CORE_JOINT_KEYS: readonly JointKey[] = [
     'head', 'neck', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR', 'wristL', 'wristR',
     'hip', 'hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR',
 ];
+
+// The five the mannequin used to *guess* from the rest of the body: which way
+// the face looks, which way each hand points, which way each foot points.
+//
+// The tier stops here, and the boundary is not a matter of taste — it is
+// exactly what a pose estimator's landmark set can fill (a nose, two ears, the
+// finger landmarks, heels and toes; see `.design/pose-from-image.md`). A joint
+// no photograph could ever fill would be a handle with no source: something
+// the user must pose by hand for ever, on every figure, to get a body that
+// still reads the same from three metres away. A spine segment is the obvious
+// candidate and the obvious mistake — the landmark set has no spine.
+export const DETAIL_JOINT_KEYS: readonly JointKey[] = ['face', 'handL', 'handR', 'toeL', 'toeR'];
+
+export const JOINT_KEYS: readonly JointKey[] = [...CORE_JOINT_KEYS, ...DETAIL_JOINT_KEYS];
+
+const DETAIL_SET = new Set<JointKey>(DETAIL_JOINT_KEYS);
+export const isDetailJoint = (key: JointKey): boolean => DETAIL_SET.has(key);
 
 // Joints live in world space: x/y are canvas pixels, z is depth in the same
 // unit, positive toward the viewer. A `Vec3` is structurally a `CanvasPoint`
@@ -64,7 +86,28 @@ export interface PoseFigure {
     shade?: number;
     // Optional for the same reason: a sketch saved flat opens facing front.
     turn?: FigureTurn;
+    // Whether this figure is being posed at the detail tier: the five extra
+    // joints are always *there* and always drive the drawing, but their
+    // handles — and the ability to grab them — appear only when asked for, or
+    // when something has actually set them (a photograph). Per figure, not per
+    // canvas: one person in a crowd may need a hand posed while the others do
+    // not, and turning detail on for all of them to fix one is noise.
+    detail?: boolean;
 }
+
+// Which joints this figure answers to right now.
+export const jointKeysOf = (figure: PoseFigure): readonly JointKey[] => (
+    figure.detail ? JOINT_KEYS : CORE_JOINT_KEYS
+);
+
+// Turning the tier off does not throw the detail away — the joints stay where
+// they were put, they just stop being grabbable. "Done" is not "locked"
+// (principle 10), and a hand posed by hand or lifted from a photograph must
+// survive a glance at the simpler view.
+export const setFigureDetail = (figure: PoseFigure, detail: boolean): PoseFigure => ({
+    ...completeFigure(figure),
+    detail,
+});
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
@@ -278,6 +321,14 @@ const BONE = {
     upperArm: 0.155, foreArm: 0.145,
     hipSpan: 0.052, hipDrop: 0.022,
     thigh: 0.235, shin: 0.225,
+    // The detail bones. Their lengths are chosen so that a figure whose detail
+    // joints are still where the body put them draws as it did when the
+    // renderer worked them out for itself — the tier adds control, not a
+    // different-looking mannequin. The toe is the one exception: at the length
+    // that reproduced the old foot exactly, its handle sat on top of the
+    // ankle's and could not be grabbed. The foot is a little longer for it,
+    // which it wanted to be anyway.
+    face: 0.075, hand: 0.034, toe: 0.048,
 } as const;
 
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
@@ -301,6 +352,64 @@ const along = (angle: Angle, length: number): Vec3 => {
 // the "same bones in every pose" guarantee quietly breaks for tilted poses.
 const turned = (offset: Vec3, degrees: number): Vec3 =>
     rotateAxis(offset, { x: 0, y: 0, z: 1 }, rad(degrees));
+
+// --- the detail joints, when nothing has set them ----------------------------
+//
+// One set of formulas, used by three callers: the preset builder below (so all
+// thirty-six poses get them without a line of editing), `completeFigure` (so a
+// sketch saved before the tier existed opens with them), and nothing else —
+// the renderer now *reads* these joints instead of working them out, which is
+// what makes them posable at all.
+
+// Which way the body faces: across the shoulders, crossed with the spine.
+export const bodyForwardOf = (joints: Pick<Record<JointKey, Vec3>, 'neck' | 'hip' | 'shoulderL' | 'shoulderR'>): Vec3 => {
+    const forward = cross3(sub3(joints.neck, joints.hip), sub3(joints.shoulderR, joints.shoulderL));
+    return len3(forward) < 1e-9 ? { x: 0, y: 0, z: 1 } : norm3(forward);
+};
+
+// The part of `forward` that survives once the component along `axis` is taken
+// out — "point this the way the body faces, but keep it square to the limb it
+// hangs off". A raised foot carries its toes round with it this way, and a
+// tipped head keeps its face on the front of the skull.
+const squareTo = (forward: Vec3, axis: Vec3): Vec3 => {
+    const flat = sub3(forward, mul3(axis, dot3(forward, axis)));
+    return len3(flat) > 1e-3 ? norm3(flat) : forward;
+};
+
+export const derivedDetailJoints = (
+    joints: Record<JointKey, Vec3>,
+    unit: number,
+): Record<'face' | 'handL' | 'handR' | 'toeL' | 'toeR', Vec3> => {
+    const forward = bodyForwardOf(joints);
+    const headAxis = norm3(sub3(joints.head, joints.neck));
+    const alongArm = (from: JointKey, to: JointKey): Vec3 => {
+        const direction = sub3(joints[to], joints[from]);
+        return len3(direction) < 1e-9 ? forward : norm3(direction);
+    };
+    const overFoot = (knee: JointKey, ankle: JointKey): Vec3 => {
+        const shin = sub3(joints[ankle], joints[knee]);
+        return squareTo(forward, len3(shin) < 1e-9 ? forward : norm3(shin));
+    };
+    return {
+        face: add3(joints.head, mul3(squareTo(forward, headAxis), unit * BONE.face)),
+        handL: add3(joints.wristL, mul3(alongArm('elbowL', 'wristL'), unit * BONE.hand)),
+        handR: add3(joints.wristR, mul3(alongArm('elbowR', 'wristR'), unit * BONE.hand)),
+        toeL: add3(joints.ankleL, mul3(overFoot('kneeL', 'ankleL'), unit * BONE.toe)),
+        toeR: add3(joints.ankleR, mul3(overFoot('kneeR', 'ankleR'), unit * BONE.toe)),
+    };
+};
+
+// A figure that predates the detail tier — or one built by hand — gets its
+// five extra joints put where the body implies they are. Cheap, idempotent,
+// and the reason nothing downstream has to cope with a missing joint.
+export const completeFigure = (figure: PoseFigure): PoseFigure => {
+    if (DETAIL_JOINT_KEYS.every((key) => figure.joints[key] !== undefined)) return figure;
+    const joints = { ...figure.joints };
+    for (const [key, point] of Object.entries(derivedDetailJoints(joints, figureUnit(figure)))) {
+        if (joints[key as JointKey] === undefined) joints[key as JointKey] = point;
+    }
+    return { ...figure, joints };
+};
 
 const buildPose = (spec: PoseSpec): PresetPoints => {
     const hip = { ...ORIGIN };
@@ -334,29 +443,38 @@ const buildPose = (spec: PoseSpec): PresetPoints => {
     const kneeL = add3(hipL, along(spec.legs.l[0], BONE.thigh));
     const kneeR = add3(hipR, along(spec.legs.r[0], BONE.thigh));
 
-    const raw: Record<JointKey, Vec3> = {
+    const raw = {
         hip, neck, head, shoulderL, shoulderR, hipL, hipR, elbowL, elbowR, kneeL, kneeR,
         wristL: add3(elbowL, along(spec.arms.l[1], BONE.foreArm)),
         wristR: add3(elbowR, along(spec.arms.r[1], BONE.foreArm)),
         ankleL: add3(kneeL, along(spec.legs.l[1], BONE.shin)),
         ankleR: add3(kneeR, along(spec.legs.r[1], BONE.shin)),
-    };
+    } as Record<JointKey, Vec3>;
     // The head's turn is applied last: it rotates the skull about the torso's
     // axis without moving anything else, which is what "looking over your
     // shoulder" is.
     if (spec.headTurn) {
         raw.head = add3(neck, rotateAxis(sub3(raw.head, neck), axis, rad(spec.headTurn)));
     }
+    // The detail joints are derived, never declared. That is what let the tier
+    // be added without touching a single one of the thirty-six pose specs: a
+    // preset says what the body is doing, and where the face and the toes go
+    // follows from that until somebody says otherwise.
+    Object.assign(raw, derivedDetailJoints(raw, BONE.torso / TORSO_HEIGHT_RATIO));
 
     // Into the unit box, at one scale shared by every pose — deliberately not
     // "stretch each pose to fill the box". Same bones, same body: a crouching
     // figure is genuinely shorter than a standing one, and swapping poses
     // never resizes the person.
-    const xs = JOINT_KEYS.map((key) => raw[key].x);
-    const ys = JOINT_KEYS.map((key) => raw[key].y);
+    // Measured over the core joints only. A figure's size is its body: letting
+    // the toes and the face push the unit box out would make every pose a
+    // little smaller the day the detail tier was added, for no reason anyone
+    // could see.
+    const xs = CORE_JOINT_KEYS.map((key) => raw[key].x);
+    const ys = CORE_JOINT_KEYS.map((key) => raw[key].y);
     const minY = Math.min(...ys);
     const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
-    const zs = JOINT_KEYS.map((key) => zOf(raw[key]));
+    const zs = CORE_JOINT_KEYS.map((key) => zOf(raw[key]));
     const midZ = (Math.min(...zs) + Math.max(...zs)) / 2;
     const points = {} as Record<JointKey, readonly [number, number, number]>;
     for (const key of JOINT_KEYS) {
@@ -775,6 +893,10 @@ export const JOINT_PARENT: Record<JointKey, JointKey | null> = {
     shoulderL: 'neck', shoulderR: 'neck', head: 'neck',
     elbowL: 'shoulderL', wristL: 'elbowL',
     elbowR: 'shoulderR', wristR: 'elbowR',
+    // The detail tier hangs off the core exactly like everything else, which
+    // is the point: dragging a wrist takes its hand along, dragging the head
+    // takes the face, and no new machinery is needed to pose them.
+    face: 'head', handL: 'wristL', handR: 'wristR', toeL: 'ankleL', toeR: 'ankleR',
 };
 
 // The joint plus everything hanging off it.
@@ -974,15 +1096,19 @@ export const translateFigure = (figure: PoseFigure, dx: number, dy: number): Pos
 // figures standing in it stay in register. Depth rides the same scale — it is
 // measured in canvas pixels like everything else, and leaving it behind would
 // flatten a reopened sketch.
+// Also the door every foreign figure comes through, so it is where a sketch
+// saved before the detail tier gets its five extra joints — even when the
+// transform itself is a no-op.
 export const transformFigures = (
     figures: readonly PoseFigure[],
     transform: CanvasTransform,
-): PoseFigure[] => (isIdentityTransform(transform)
-    ? figures as PoseFigure[]
-    : figures.map((figure) => mapJoints(figure, (p) => ({
+): PoseFigure[] => figures.map((figure) => {
+    const whole = completeFigure(figure);
+    return isIdentityTransform(transform) ? whole : mapJoints(whole, (p) => ({
         ...applyTransform(p, transform),
         z: zOf(p) * transform.scale,
-    }))));
+    }));
+});
 
 // In `figureUnit` space, like every other size in this module: a bounding box
 // would mean a different physical minimum per pose, letting a lying figure be
@@ -1068,7 +1194,10 @@ export const hitTestJoint = (figure: PoseFigure, point: CanvasPoint, radius: num
     let best: JointKey | null = null;
     let bestDistance = radius;
     let bestDepth = -Infinity;
-    for (const key of JOINT_KEYS) {
+    // Only the joints this figure is showing. Grabbing a detail joint you
+    // cannot see — and that sits right on top of a wrist or a head — would
+    // make the simple tier quietly harder to use than no tier at all.
+    for (const key of jointKeysOf(figure)) {
         const joint = projected[key];
         const distance = Math.hypot(point.x - joint.x, point.y - joint.y);
         if (distance > bestDistance) continue;
@@ -1272,61 +1401,41 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         radius: u(ratio, at[key].scale),
     }));
 
-    // A manikin's mitten hand continues the forearm; its block foot sits
-    // across the shin, so a bent leg carries its foot around with it.
-    const hands: Ellipse[] = ([['elbowL', 'wristL'], ['elbowR', 'wristR']] as const).map(([from, to]) => {
-        const direction = angleOf(at[from], at[to]);
-        const scale = at[to].scale;
+    // Hands, feet and the plane of the face are no longer worked out here.
+    // They hang off `handL/R`, `toeL/R` and `face`, which the preset builder
+    // fills with exactly these directions — so a figure nobody has touched
+    // draws identically, and one whose toes have been turned draws the turn.
+    const hands: Ellipse[] = ([['wristL', 'handL'], ['wristR', 'handR']] as const).map(([wrist, hand]) => {
+        const scale = at[wrist].scale;
         return {
-            center: {
-                x: at[to].x + Math.cos(direction) * u(R.handLong, scale) * 0.55,
-                y: at[to].y + Math.sin(direction) * u(R.handLong, scale) * 0.55,
-            },
+            center: place(lerp3(joints[wrist], joints[hand], 0.55)),
             radiusX: u(R.handLong, scale),
             radiusY: u(R.handWide, scale),
-            angle: direction,
+            angle: angleOf(at[wrist], at[hand]),
         };
     });
 
-    // Which way the body faces, in three dimensions: across the shoulders,
-    // crossed with the spine. Feet and face both hang off this — the two
-    // places where a manikin has to admit it has a front.
-    const spineUp = sub3(joints.neck, joints.hip);
-    const across = sub3(joints.shoulderR, joints.shoulderL);
-    const bodyForward = norm3(cross3(spineUp, across));
-
-    // A foot points the way the body does, not sideways across the shin. On a
-    // flat figure the two were indistinguishable; on this one, a block foot
-    // laid across the ankle makes every standing pose read as pigeon-toed and
-    // every seated one as impossible. Taken perpendicular to the shin so a
-    // raised leg carries its foot round with it.
-    const feet: Ellipse[] = ([['kneeL', 'ankleL'], ['kneeR', 'ankleR']] as const).map(([from, to]) => {
-        const shin = norm3(sub3(joints[to], joints[from]));
-        const forwardOnShin = sub3(bodyForward, mul3(shin, dot3(bodyForward, shin)));
-        const step = len3(forwardOnShin) > 1e-3 ? norm3(forwardOnShin) : bodyForward;
-        const scale = at[to].scale;
-        const toe = place(add3(joints[to], mul3(step, unit * R.footLong * 0.55)));
-        const direction = angleOf(at[to], toe);
-        // The projected length is the foreshortening: a foot pointing at the
-        // camera is a short foot, and it has to be, or a figure walking toward
-        // you grows skis.
-        const reach = Math.max(spanOf(at[to], toe), u(R.footWide, scale) * 0.7);
+    // A foot points where its toes point. The projected length is the
+    // foreshortening: a foot pointing at the camera is a short foot, and it
+    // has to be, or a figure walking toward you grows skis.
+    const feet: Ellipse[] = ([['ankleL', 'toeL'], ['ankleR', 'toeR']] as const).map(([ankle, toe]) => {
+        const scale = at[ankle].scale;
+        const center = place(lerp3(joints[ankle], joints[toe], 0.55));
+        const reach = Math.max(spanOf(at[ankle], center), u(R.footWide, scale) * 0.7);
         return {
-            center: toe,
+            center,
             radiusX: reach + u(R.footWide, scale) * 0.5,
             radiusY: u(R.footWide, scale),
-            angle: direction,
+            angle: angleOf(at[ankle], center),
         };
     });
 
-    // The facial plane sits on the front of the skull, perpendicular to the
-    // head's own axis, and is simply absent once it has turned away. It is
-    // lighter rather than darker: the light is in front, so the flat of the
-    // face is the part of the head that catches it — and a dark patch on a
-    // head reads as a mask, which is not what we want a model to paint.
-    const headAxis = norm3(sub3(joints.head, joints.neck));
-    const facingRaw = sub3(bodyForward, mul3(headAxis, dot3(bodyForward, headAxis)));
-    const facing = len3(facingRaw) > 1e-3 ? norm3(facingRaw) : bodyForward;
+    // The facial plane sits on the front of the skull and is simply absent
+    // once it has turned away. It is lighter rather than darker: the light is
+    // in front, so the flat of the face is the part of the head that catches
+    // it — and a dark patch on a head reads as a mask, which is not what we
+    // want a model to paint.
+    const facing = norm3(sub3(joints.face, joints.head));
     const facingCamera = zOf(facing);
     const face: Ellipse | null = facingCamera > 0.06 ? (() => {
         const center = place(add3(joints.head, mul3(facing, unit * R.headWide * 0.42)));
@@ -1705,12 +1814,18 @@ export const drawFigureHandles = (
     ctx.lineWidth = Math.max(1, handleRadius * 0.35);
     // Nearer joints get bigger dots. It costs nothing and it means the depth
     // of a pose is legible from the handles alone, before anything is dragged.
-    const ordered = [...JOINT_KEYS].sort((a, b) => projected[a].depth - projected[b].depth);
+    const keys = jointKeysOf(figure);
+    const ordered = [...keys].sort((a, b) => projected[a].depth - projected[b].depth);
     for (const key of ordered) {
         const joint = projected[key];
-        const radius = handleRadius * Math.max(0.7, Math.min(1.4, joint.scale));
-        ctx.fillStyle = HANDLE_FILL;
-        ctx.strokeStyle = HANDLE_STROKE;
+        const detail = isDetailJoint(key);
+        // Detail handles are smaller and hollow. They are secondary by
+        // construction — a body is posed at the shoulders and hips, and the
+        // face and toes are a second pass — so they must not compete with the
+        // fifteen that matter for reading the pose (principle 9).
+        const radius = handleRadius * (detail ? 0.62 : 1) * Math.max(0.7, Math.min(1.4, joint.scale));
+        ctx.fillStyle = detail ? HANDLE_STROKE : HANDLE_FILL;
+        ctx.strokeStyle = detail ? HANDLE_FILL : HANDLE_STROKE;
         ctx.beginPath();
         ctx.arc(joint.x, joint.y, radius, 0, Math.PI * 2);
         ctx.fill();
