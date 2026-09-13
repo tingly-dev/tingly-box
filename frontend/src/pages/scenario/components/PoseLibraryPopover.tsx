@@ -4,17 +4,25 @@ import { useTranslation } from 'react-i18next';
 import {
     createFigure,
     drawFigure,
-    fitFigureInto,
+    fitFigureIntoTile,
     POSE_LIBRARY,
+    type FigureTurn,
     type PosePresetKey,
 } from '@/utils/poseFigure';
 
 // Thumbnails are drawn by the same renderer as the canvas, not by hand-drawn
 // icons: a library of poses is only useful if what you pick is what you get,
 // and an icon set would drift the moment the manikin changes.
-const THUMB = { width: 54, height: 76, scale: 2 };
+// Sized so that the widest group — nine poses — is one row: a group that wraps
+// to 8 + 1 reads as two groups, and the grouping is the only navigation this
+// grid has.
+const THUMB = { width: 46, height: 64, scale: 2 };
 
-const PoseThumbnail: React.FC<{ pose: PosePresetKey }> = ({ pose }) => {
+// Drawn from the angle the figure on the canvas is being looked at, not from
+// a fixed elevation: the grid's whole value is that what you pick is what you
+// get, and a pose seen from the front and the same pose seen from above are
+// not the same picture.
+const PoseThumbnail: React.FC<{ pose: PosePresetKey; turn: FigureTurn }> = ({ pose, turn }) => {
     const paint = useCallback((canvas: HTMLCanvasElement | null) => {
         if (!canvas) return;
         const width = THUMB.width * THUMB.scale;
@@ -28,8 +36,8 @@ const PoseThumbnail: React.FC<{ pose: PosePresetKey }> = ({ pose }) => {
         // arms out or lying down, a pose is much wider than a standing one and
         // would be cropped at exactly the poses that need to be recognisable.
         const box = { width, height };
-        drawFigure(ctx, fitFigureInto(createFigure(pose, box), box, width * 0.08));
-    }, [pose]);
+        drawFigure(ctx, fitFigureIntoTile(createFigure(pose, box, undefined, 0, turn), box, width * 0.08));
+    }, [pose, turn]);
 
     return (
         <Box
@@ -44,11 +52,12 @@ const PoseThumbnail: React.FC<{ pose: PosePresetKey }> = ({ pose }) => {
 
 interface PoseLibraryPopoverProps {
     anchorEl: HTMLElement | null;
+    turn: FigureTurn;
     onClose: () => void;
     onPick: (pose: PosePresetKey) => void;
 }
 
-const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, onClose, onPick }) => {
+const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, turn, onClose, onPick }) => {
     const { t } = useTranslation();
 
     return (
@@ -58,7 +67,7 @@ const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, onClo
             onClose={onClose}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-            slotProps={{ paper: { sx: { p: 1.5, maxWidth: 452 } } }}
+            slotProps={{ paper: { sx: { p: 1.5, maxWidth: 588, maxHeight: '72vh' } } }}
         >
             <Stack spacing={1.25}>
                 {POSE_LIBRARY.map(({ group, poses }) => (
@@ -86,7 +95,7 @@ const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, onClo
                                                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                             }}
                                         >
-                                            <PoseThumbnail pose={pose} />
+                                            <PoseThumbnail pose={pose} turn={turn} />
                                         </ButtonBase>
                                     </Tooltip>
                                 );

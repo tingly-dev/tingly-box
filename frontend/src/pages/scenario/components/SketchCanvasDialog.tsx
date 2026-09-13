@@ -15,8 +15,9 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Undo } from '@/components/icons';
+import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo } from '@/components/icons';
 import PoseLibraryPopover from './PoseLibraryPopover';
+import ViewAnglePopover from './ViewAnglePopover';
 import {
     applyStrokeStyle,
     BRUSH_SIZES,
@@ -43,7 +44,13 @@ import {
     drawFigure,
     drawFigureHandles,
     figureBounds,
+    figureTurn,
     flipFigure,
+    isTurnHandleHit,
+    setFigureTurn,
+    turnFigure,
+    TURN_DEGREES_PER_PIXEL,
+    VIEW_PRESETS,
     hitTestJoint,
     nextFigureAt,
     placeNewFigure,
@@ -57,6 +64,7 @@ import {
     type JointKey,
     type PoseFigure,
     type PosePresetKey,
+    type ViewPresetKey,
 } from '@/utils/poseFigure';
 
 type Tool = 'pen' | 'eraser' | 'pose';
@@ -99,7 +107,11 @@ type PoseDrag =
     // for the rare pose the skeleton will not give you.
     | (PoseDragBase & { mode: 'joint'; joint: JointKey; detached: boolean })
     | (PoseDragBase & { mode: 'move'; last: CanvasPoint })
-    | (PoseDragBase & { mode: 'scale'; origin: CanvasPoint; startDistance: number; start: PoseFigure });
+    | (PoseDragBase & { mode: 'scale'; origin: CanvasPoint; startDistance: number; start: PoseFigure })
+    // Turning is absolute rather than incremental: the drag remembers where it
+    // started and re-derives the angle from the pointer's total offset, so a
+    // slow drag and a fast one end in the same place and nothing accumulates.
+    | (PoseDragBase & { mode: 'turn'; origin: CanvasPoint; start: PoseFigure });
 
 // What a finished sketch hands back. `file`/`previewUrl` are the composited
 // pixels the model gets; `layers` is what it was made of, so re-opening it
@@ -166,6 +178,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     const [figures, setFigures] = useState<PoseFigure[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [libraryAnchor, setLibraryAnchor] = useState<HTMLElement | null>(null);
+    const [viewAnchor, setViewAnchor] = useState<HTMLElement | null>(null);
     // Two facts the toolbar and the primary action key off: whether there is
     // anything to undo, and whether there is anything on the canvas at all.
     const [canUndo, setCanUndo] = useState(false);
@@ -371,6 +384,13 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         updateFigure(selectedFigure.id, (figure) => applyPreset(figure, preset, dims));
     }, [dims, selectedFigure, snapshot, updateFigure]);
 
+    const handleView = useCallback((view: ViewPresetKey) => {
+        setViewAnchor(null);
+        if (!selectedFigure) return;
+        snapshot();
+        updateFigure(selectedFigure.id, (figure) => setFigureTurn(figure, VIEW_PRESETS[view]));
+    }, [selectedFigure, snapshot, updateFigure]);
+
     const handleToolChange = useCallback((next: Tool) => {
         setTool(next);
         if (next !== 'pose') return;
@@ -474,6 +494,20 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         const point = pointFromEvent(event);
         const jointRadius = toCanvasPx(14);
 
+        if (selectedFigure && isTurnHandleHit(selectedFigure, point, toCanvasPx(14))) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            poseDragRef.current = {
+                pointerId: event.pointerId,
+                mode: 'turn',
+                figureId: selectedFigure.id,
+                before: figures,
+                committed: false,
+                origin: point,
+                start: selectedFigure,
+            };
+            return;
+        }
+
         if (selectedFigure && isScaleHandleHit(selectedFigure, point, toCanvasPx(14))) {
             const bounds = figureBounds(selectedFigure);
             const origin = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
@@ -545,7 +579,17 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         if (drag.mode === 'joint') {
             updateFigure(drag.figureId, (figure) => (drag.detached
                 ? moveJoint(figure, drag.joint, point)
-                : swingJoint(figure, drag.joint, point)));
+                // A pointer on screen names a circle of 3D positions, not a
+                // point; Shift is how you say "the other side of the body".
+                : swingJoint(figure, drag.joint, point, { away: event.shiftKey })));
+            return;
+        }
+        if (drag.mode === 'turn') {
+            updateFigure(drag.figureId, () => turnFigure(
+                drag.start,
+                (point.x - drag.origin.x) * TURN_DEGREES_PER_PIXEL,
+                (point.y - drag.origin.y) * TURN_DEGREES_PER_PIXEL,
+            ));
             return;
         }
         if (drag.mode === 'move') {
@@ -675,6 +719,24 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                             sx={{ textTransform: 'none', py: 0.1, px: 1, color: 'text.secondary' }}
                                         >
                                             {t('playground.sketch.pose.presets', { defaultValue: 'Poses' })}
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="inherit"
+                                            onClick={(event) => setViewAnchor(event.currentTarget)}
+                                            aria-label={t('playground.sketch.pose.views', { defaultValue: 'View' })}
+                                            title={t('playground.sketch.pose.views', { defaultValue: 'View' })}
+                                            startIcon={<Rotate3d fontSize="small" />}
+                                            sx={{ textTransform: 'none', py: 0.1, px: 1, color: 'text.secondary' }}
+                                        >
+                                            {/* The angle itself, not the word "view": the figure is at
+                                                35°, and saying so is both the label and the readout. */}
+                                            {t('playground.sketch.pose.viewShort', {
+                                                defaultValue: '{{yaw}}° / {{pitch}}°',
+                                                yaw: Math.round(figureTurn(selectedFigure).yaw),
+                                                pitch: Math.round(figureTurn(selectedFigure).pitch),
+                                            })}
                                         </Button>
                                         <Tooltip title={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}>
                                             <IconButton
@@ -853,7 +915,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {figures.length > 0
                             ? t('playground.sketch.pose.hint', {
-                                defaultValue: 'Drag a joint and the limb below it follows; hold Alt to move one joint alone. Drag the body to move it, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is.',
+                                defaultValue: 'Drag a joint and the limb below it follows — drag it short and the limb points at you; hold Shift to send it behind the body, Alt to move one joint alone. Drag the ring at bottom-left to turn the figure, the corner to resize. The grey mannequin is a pose reference — the prompt says who it is.',
                             })
                             : t('playground.sketch.hint', {
                                 defaultValue: 'A rough sketch is enough — the prompt says what it should become. It joins the reference images and goes to the model as-is.',
@@ -873,8 +935,15 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             </DialogActions>
             <PoseLibraryPopover
                 anchorEl={libraryAnchor}
+                turn={selectedFigure ? figureTurn(selectedFigure) : { yaw: 0, pitch: 0 }}
                 onClose={() => setLibraryAnchor(null)}
                 onPick={handlePreset}
+            />
+            <ViewAnglePopover
+                anchorEl={viewAnchor}
+                figure={selectedFigure}
+                onClose={() => setViewAnchor(null)}
+                onPick={handleView}
             />
         </Dialog>
     );

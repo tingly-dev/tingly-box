@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { JointKey, PoseFigure } from './poseFigure';
 import {
     applyPreset,
+    figureTurn,
+    isTurnHandleHit,
+    MAX_VIEW_PITCH,
+    perspectiveAt,
+    projectFigure,
+    setFigureTurn,
+    turnFigure,
+    turnHandlePoint,
+    unprojectPoint,
+    projectionOf,
+    VIEW_PRESETS,
+    viewPresetOf,
     createFigure,
     distanceToSegment,
     figureBounds,
@@ -31,13 +43,31 @@ import {
 
 const DIMS = { width: 1024, height: 1024 };
 
+// Bone lengths are three-dimensional now, and that is the whole point: what a
+// drag preserves is the bone, not its shadow on the screen. A 2D measurement
+// of a foreshortened limb is *supposed* to come out short.
+const projectPointScale = (point: { z: number }, projection: { anchor: { z: number }; distance: number }) =>
+    perspectiveAt(point.z, projection as never);
+
+const bone3 = (figure: PoseFigure, a: JointKey, b: JointKey) => Math.hypot(
+    figure.joints[a].x - figure.joints[b].x,
+    figure.joints[a].y - figure.joints[b].y,
+    (figure.joints[a].z ?? 0) - (figure.joints[b].z ?? 0),
+);
+
 describe('createFigure', () => {
-    it('centres the figure and sizes it to 70% of the canvas height', () => {
+    it('centres the figure and sizes it to about 70% of the canvas height', () => {
+        // "About", because a figure is now seen through a lens: the default
+        // three-quarter view foreshortens it a little and perspective grows
+        // whatever is nearest. Dead-on, the old number is exact.
         const figure = createFigure('standing', DIMS);
         const bounds = figureBounds(figure);
-        expect(bounds.height).toBeCloseTo(1024 * 0.7, 0);
+        expect(bounds.height).toBeGreaterThan(1024 * 0.62);
+        expect(bounds.height).toBeLessThan(1024 * 0.76);
         expect(bounds.x + bounds.width / 2).toBeCloseTo(512, 0);
         expect(bounds.y + bounds.height / 2).toBeCloseTo(512, 0);
+        expect(figureBounds(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front)).height)
+            .toBeCloseTo(1024 * 0.7, 0);
     });
 
     it('keeps every figure inside a narrow canvas', () => {
@@ -51,14 +81,21 @@ describe('createFigure', () => {
         expect(createFigure('standing', DIMS).id).not.toBe(createFigure('standing', DIMS).id);
     });
 
-    it('defines every joint for every preset', () => {
+    it('defines every joint, in three dimensions, for every preset', () => {
         for (const preset of POSE_LIBRARY.flatMap((group) => group.poses)) {
             const figure = createFigure(preset, DIMS);
             for (const key of JOINT_KEYS) {
                 expect(Number.isFinite(figure.joints[key].x)).toBe(true);
                 expect(Number.isFinite(figure.joints[key].y)).toBe(true);
+                expect(Number.isFinite(figure.joints[key].z)).toBe(true);
             }
         }
+    });
+
+    it('lands at a three-quarter view rather than dead-on', () => {
+        // A front elevation is the one angle at which a 3D pose looks exactly
+        // like the flat one it replaced.
+        expect(figureTurn(createFigure('standing', DIMS)).yaw).not.toBe(0);
     });
 });
 
@@ -88,10 +125,13 @@ describe('transforms', () => {
         }
     });
 
-    it('moves a single joint without touching the others', () => {
+    it('moves a single joint to where the pointer is, at the depth it had', () => {
         const figure = createFigure('standing', DIMS);
         const moved = moveJoint(figure, 'wristL', { x: 1, y: 2 });
-        expect(moved.joints.wristL).toEqual({ x: 1, y: 2 });
+        const landed = projectFigure(moved).wristL;
+        expect(landed.x).toBeCloseTo(1, 4);
+        expect(landed.y).toBeCloseTo(2, 4);
+        expect(moved.joints.wristL.z).toBeCloseTo(figure.joints.wristL.z, 6);
         expect(moved.joints.wristR).toEqual(figure.joints.wristR);
     });
 
@@ -186,9 +226,12 @@ describe('figureParts', () => {
         });
         expect(figureParts(twisted).chest.angle).not.toBeCloseTo(figureParts(figure).chest.angle, 2);
         expect(figureParts(twisted).chest.radiusX).not.toBeCloseTo(figureParts(figure).chest.radiusX, 1);
-        // ...and the pelvis stays exactly where it was: that difference is the twist.
+        // ...and the pelvis stays exactly where it was: that difference is the
+        // twist. It holds because the camera is aimed at neck-and-hip, which a
+        // shoulder drag cannot move.
         expect(figureParts(twisted).pelvis.angle).toBeCloseTo(figureParts(figure).pelvis.angle, 6);
-        expect(figureParts(twisted).pelvis.center).toEqual(figureParts(figure).pelvis.center);
+        expect(figureParts(twisted).pelvis.center.x).toBeCloseTo(figureParts(figure).pelvis.center.x, 6);
+        expect(figureParts(twisted).pelvis.center.y).toBeCloseTo(figureParts(figure).pelvis.center.y, 6);
     });
 
     it('tapers every limb from its proximal to its distal end', () => {
@@ -214,19 +257,23 @@ describe('figureParts', () => {
         expect(reach).toBeLessThanOrEqual(pelvis.radiusX + hipBalls[1].radius * 0.2);
     });
 
-    it('sets the foot across the shin and the hand along the forearm', () => {
-        const figure = createFigure('standing', DIMS);
-        const { feet, hands } = figureParts(figure);
-        const shin = Math.atan2(
-            figure.joints.ankleL.y - figure.joints.kneeL.y,
-            figure.joints.ankleL.x - figure.joints.kneeL.x,
-        );
-        expect(Math.abs(feet[0].angle - shin)).toBeCloseTo(Math.PI / 2, 6);
+    it('points the foot the way the body faces and the hand along the forearm', () => {
+        const projected = projectFigure(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side));
+        const { feet, hands } = figureParts(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side));
+        // Seen from the side, a forward-pointing foot runs across the screen.
+        expect(Math.abs(Math.sin(feet[0].angle))).toBeLessThan(0.4);
         const forearm = Math.atan2(
-            figure.joints.wristL.y - figure.joints.elbowL.y,
-            figure.joints.wristL.x - figure.joints.elbowL.x,
+            projected.wristL.y - projected.elbowL.y,
+            projected.wristL.x - projected.elbowL.x,
         );
         expect(hands[0].angle).toBeCloseTo(forearm, 6);
+    });
+
+    it('drops the face once the figure has turned away, and only then', () => {
+        // Without it a back view is pixel-for-pixel a front view, and turning
+        // the figure round would be a control that changes nothing.
+        expect(figureParts(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front)).face).not.toBeNull();
+        expect(figureParts(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.back)).face).toBeNull();
     });
 
     it('scales every part with the figure', () => {
@@ -327,8 +374,7 @@ describe('shades', () => {
 });
 
 describe('the skeleton', () => {
-    const boneLength = (figure: PoseFigure, a: JointKey, b: JointKey) =>
-        Math.hypot(figure.joints[a].x - figure.joints[b].x, figure.joints[a].y - figure.joints[b].y);
+    const boneLength = bone3;
 
     it('hangs every joint off the hip', () => {
         expect(subtreeOf('hip')).toHaveLength(JOINT_KEYS.length);
@@ -339,29 +385,54 @@ describe('the skeleton', () => {
     it('swings the limb below the joint and keeps every bone length', () => {
         const figure = createFigure('standing', DIMS);
         const before = { upper: boneLength(figure, 'shoulderL', 'elbowL'), fore: boneLength(figure, 'elbowL', 'wristL') };
-        const swung = swingJoint(figure, 'elbowL', { x: figure.joints.elbowL.x - 200, y: figure.joints.elbowL.y - 40 });
+        const at = projectFigure(figure);
+        const swung = swingJoint(figure, 'elbowL', { x: at.elbowL.x - 200, y: at.elbowL.y - 40 });
         expect(boneLength(swung, 'shoulderL', 'elbowL')).toBeCloseTo(before.upper, 4);
         expect(boneLength(swung, 'elbowL', 'wristL')).toBeCloseTo(before.fore, 4);
         // The wrist came along; the shoulder it hangs from did not move.
         expect(swung.joints.wristL.x).not.toBeCloseTo(figure.joints.wristL.x, 1);
+        // Rigid: the bone between them came along whole, in three dimensions.
+        expect(boneLength(swung, 'elbowL', 'wristL')).toBeCloseTo(boneLength(figure, 'elbowL', 'wristL'), 4);
         expect(swung.joints.shoulderL).toEqual(figure.joints.shoulderL);
         expect(swung.joints.wristR).toEqual(figure.joints.wristR);
     });
 
-    it('swings toward the pointer without following it past the bone length', () => {
-        const figure = createFigure('standing', DIMS);
-        const target = { x: figure.joints.shoulderR.x + 400, y: figure.joints.shoulderR.y };
-        const swung = swingJoint(figure, 'elbowR', target);
+    it('lays the bone in the picture plane once the pointer is past its reach', () => {
+        // Beyond the silhouette of the bone's sphere there is no depth left to
+        // give: the limb simply points at the pointer, exactly as it did when
+        // the figure was flat.
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+        const at = projectFigure(figure);
+        const swung = swingJoint(figure, 'elbowR', { x: at.shoulderR.x + 400, y: at.shoulderR.y });
         const shoulder = swung.joints.shoulderR;
         const elbow = swung.joints.elbowR;
+        expect(elbow.z - shoulder.z).toBeCloseTo(0, 6);
         expect(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x)).toBeCloseTo(0, 6);
-        expect(Math.hypot(elbow.x - shoulder.x, elbow.y - shoulder.y))
+        expect(boneLength(swung, 'shoulderR', 'elbowR'))
             .toBeCloseTo(boneLength(figure, 'shoulderR', 'elbowR'), 4);
+    });
+
+    it('sends the bone out of the screen when the pointer is inside its reach', () => {
+        // The one thing a flat figure could never say. Dragging a joint to
+        // half the bone's projected length means the rest of it is pointing
+        // at the viewer — there is no other length-preserving answer.
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+        const at = projectFigure(figure);
+        const reach = boneLength(figure, 'shoulderR', 'elbowR');
+        const near = { x: at.shoulderR.x + reach * 0.4, y: at.shoulderR.y };
+        const swung = swingJoint(figure, 'elbowR', near);
+        expect(swung.joints.elbowR.z - swung.joints.shoulderR.z).toBeGreaterThan(reach * 0.5);
+        expect(boneLength(swung, 'shoulderR', 'elbowR')).toBeCloseTo(reach, 4);
+        // ...and the same drag with Shift sends it behind the body instead.
+        const away = swingJoint(figure, 'elbowR', near, { away: true });
+        expect(away.joints.elbowR.z - away.joints.shoulderR.z).toBeLessThan(-reach * 0.5);
+        expect(boneLength(away, 'shoulderR', 'elbowR')).toBeCloseTo(reach, 4);
     });
 
     it('moves the whole figure when the root is dragged', () => {
         const figure = createFigure('standing', DIMS);
-        const swung = swingJoint(figure, 'hip', { x: figure.joints.hip.x + 30, y: figure.joints.hip.y - 15 });
+        const at = projectFigure(figure);
+        const swung = swingJoint(figure, 'hip', { x: at.hip.x + 30, y: at.hip.y - 15 });
         for (const key of JOINT_KEYS) {
             expect(swung.joints[key].x).toBeCloseTo(figure.joints[key].x + 30, 4);
             expect(swung.joints[key].y).toBeCloseTo(figure.joints[key].y - 15, 4);
@@ -370,7 +441,7 @@ describe('the skeleton', () => {
 
     it('ignores a drag that lands on the parent, which gives no direction', () => {
         const figure = createFigure('standing', DIMS);
-        expect(swingJoint(figure, 'kneeL', figure.joints.hipL)).toBe(figure);
+        expect(swingJoint(figure, 'kneeL', projectFigure(figure).hipL)).toBe(figure);
     });
 
     it('leaves proportions intact however far a pose is pushed', () => {
@@ -394,16 +465,12 @@ describe('the pose library', () => {
     const everyPose = POSE_LIBRARY.flatMap((group) => group.poses);
     const boneLengths = (figure: PoseFigure) => JOINT_KEYS.map((key) => {
         const parent = JOINT_PARENT[key];
-        if (!parent) return 0;
-        return Math.hypot(
-            figure.joints[key].x - figure.joints[parent].x,
-            figure.joints[key].y - figure.joints[parent].y,
-        );
+        return parent ? bone3(figure, key, parent) : 0;
     });
 
     it('lists every pose once, in a group', () => {
         expect(new Set(everyPose).size).toBe(everyPose.length);
-        expect(everyPose.length).toBeGreaterThanOrEqual(20);
+        expect(everyPose.length).toBeGreaterThanOrEqual(30);
     });
 
     it('builds every pose from the same bone lengths', () => {
@@ -419,30 +486,41 @@ describe('the pose library', () => {
 
     it('lets a crouch be shorter than a stand instead of stretching it', () => {
         const standing = figureBounds(createFigure('standing', DIMS)).height;
-        expect(standing).toBeCloseTo(1024 * 0.7, 0);
         expect(figureBounds(createFigure('crouching', DIMS)).height).toBeLessThan(standing * 0.92);
         expect(figureBounds(createFigure('lying', DIMS)).height).toBeLessThan(standing * 0.5);
     });
 
-    it('stands every pose up except the two that are meant to be horizontal', () => {
-        const horizontal = new Set(['lying', 'bowing']);
+    it('stands every pose up except the ones that are meant to be horizontal', () => {
+        // Bowing is no longer on the list: it used to fold sideways across the
+        // screen because that was the only fold a flat figure had. It now
+        // folds forward, out of the picture, which is what bowing is.
+        const horizontal = new Set(['lying', 'lyingSide', 'prone', 'pushUp']);
         for (const pose of everyPose) {
-            const figure = createFigure(pose, DIMS);
+            const figure = createFigure(pose, DIMS, undefined, 0, { yaw: 0, pitch: 0 });
             const rise = figure.joints.hip.y - figure.joints.neck.y;
             const run = Math.abs(figure.joints.neck.x - figure.joints.hip.x);
             expect(rise > run).toBe(!horizontal.has(pose));
         }
     });
 
-    it('swaps a pose without resizing the person', () => {
-        const figure = scaleFigure(createFigure('standing', DIMS), 0.6);
-        const torso = (f: PoseFigure) => Math.hypot(
-            f.joints.neck.x - f.joints.hip.x,
-            f.joints.neck.y - f.joints.hip.y,
-        );
+    it('swaps a pose without resizing the person or moving the camera', () => {
+        const figure = turnFigure(scaleFigure(createFigure('standing', DIMS), 0.6), 17, -4);
         for (const pose of everyPose) {
-            expect(torso(applyPreset(figure, pose, DIMS))).toBeCloseTo(torso(figure), 3);
+            const swapped = applyPreset(figure, pose, DIMS);
+            expect(figureUnit(swapped)).toBeCloseTo(figureUnit(figure), 3);
+            expect(figureTurn(swapped)).toEqual(figureTurn(figure));
         }
+    });
+
+    it('uses the third dimension in most of the library, not as a garnish', () => {
+        // A pose whose joints are all at one depth is a flat pose wearing a
+        // 3D data structure. The calibration pose is allowed to be one.
+        const flat = everyPose.filter((pose) => {
+            const figure = createFigure(pose, DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+            const zs = JOINT_KEYS.map((key) => figure.joints[key].z);
+            return Math.max(...zs) - Math.min(...zs) < figureUnit(figure) * 0.05;
+        });
+        expect(flat).toEqual(['tPose']);
     });
 });
 
@@ -451,12 +529,16 @@ describe('figure scale is the body, not the bounding box', () => {
         // The lying pose has a fifth of the box height but the same bones.
         // Sizing anything off the box turns it into the stick figure the
         // manikin exists to avoid.
-        const standing = createFigure('standing', DIMS);
-        const lying = createFigure('lying', DIMS);
+        const standing = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const lying = createFigure('lying', DIMS, undefined, 0, VIEW_PRESETS.front);
         expect(figureBounds(lying).height).toBeLessThan(figureBounds(standing).height * 0.4);
         expect(figureUnit(lying)).toBeCloseTo(figureUnit(standing), 4);
-        expect(figureParts(lying).head.radiusY).toBeCloseTo(figureParts(standing).head.radiusY, 4);
-        expect(figureParts(lying).limbs[4].fromRadius).toBeCloseTo(figureParts(standing).limbs[4].fromRadius, 4);
+        // Girth is within a few percent, not identical: what is left of the
+        // difference is perspective, which is a thing about the camera rather
+        // than about the body.
+        const ratio = figureParts(lying).limbs[4].fromRadius / figureParts(standing).limbs[4].fromRadius;
+        expect(ratio).toBeGreaterThan(0.9);
+        expect(ratio).toBeLessThan(1.1);
     });
 
     it('keeps a lying figure as grabbable as a standing one', () => {
@@ -503,8 +585,7 @@ describe('clampScaleFactor', () => {
 
     it('applies a pose to a tiny figure without inflating it', () => {
         const tiny = scaleFigure(createFigure('standing', DIMS), 0.03);
-        const torso = (f: PoseFigure) => Math.hypot(f.joints.neck.x - f.joints.hip.x, f.joints.neck.y - f.joints.hip.y);
-        expect(torso(applyPreset(tiny, 'lying', DIMS))).toBeCloseTo(torso(tiny), 4);
+        expect(figureUnit(applyPreset(tiny, 'lying', DIMS))).toBeCloseTo(figureUnit(tiny), 4);
     });
 });
 
@@ -516,5 +597,104 @@ describe('transformFigures', () => {
             expect(moved.joints[key].x).toBeCloseTo(figure.joints[key].x * 0.5 + 10, 4);
             expect(moved.joints[key].y).toBeCloseTo(figure.joints[key].y * 0.5 - 4, 4);
         }
+    });
+});
+
+describe('the camera', () => {
+    it('projects nearer joints bigger and farther ones smaller', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+        const projection = projectionOf(figure);
+        const near = { ...figure.joints.hip, z: figure.joints.hip.z + figureUnit(figure) * 0.4 };
+        const far = { ...figure.joints.hip, z: figure.joints.hip.z - figureUnit(figure) * 0.4 };
+        expect(projectPointScale(near, projection)).toBeGreaterThan(1);
+        expect(projectPointScale(far, projection)).toBeLessThan(1);
+    });
+
+    it('unprojects back to where it projected from', () => {
+        const figure = createFigure('reaching', DIMS);
+        const projection = projectionOf(figure);
+        const at = projectFigure(figure);
+        const back = unprojectPoint(at.wristR, figure.joints.wristR.z, projection);
+        expect(back.x).toBeCloseTo(figure.joints.wristR.x, 6);
+        expect(back.y).toBeCloseTo(figure.joints.wristR.y, 6);
+    });
+
+    it('aims at the torso, so posing a limb never nudges the rest of the figure', () => {
+        // The camera used to be aimed at the centre of the joint cloud, which
+        // every limb moves: dragging a wrist re-projected — and visibly slid —
+        // the whole body.
+        const figure = createFigure('standing', DIMS);
+        const at = projectFigure(figure);
+        const swung = swingJoint(figure, 'wristL', { x: at.wristL.x + 90, y: at.wristL.y - 120 });
+        const after = projectFigure(swung);
+        for (const key of ['head', 'neck', 'hip', 'kneeR', 'ankleR'] as JointKey[]) {
+            expect(after[key].x).toBeCloseTo(at[key].x, 6);
+            expect(after[key].y).toBeCloseTo(at[key].y, 6);
+        }
+    });
+
+    it('turns without drift, however many times it is turned', () => {
+        // Composing deltas onto the joints works roll into the body; deriving
+        // them from the totals cannot.
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+        let walked = figure;
+        for (let i = 0; i < 40; i += 1) walked = turnFigure(walked, 9, 1.5);
+        for (let i = 0; i < 40; i += 1) walked = turnFigure(walked, -9, -1.5);
+        expect(figureTurn(walked).yaw).toBeCloseTo(0, 6);
+        expect(figureTurn(walked).pitch).toBeCloseTo(0, 6);
+        for (const key of JOINT_KEYS) {
+            expect(walked.joints[key].x).toBeCloseTo(figure.joints[key].x, 3);
+            expect(walked.joints[key].z).toBeCloseTo(figure.joints[key].z, 3);
+        }
+    });
+
+    it('keeps the figure where it was on the canvas while it turns', () => {
+        const figure = createFigure('walking', DIMS);
+        const before = figureBounds(figure);
+        const turned = setFigureTurn(figure, VIEW_PRESETS.side);
+        const after = figureBounds(turned);
+        expect(after.x + after.width / 2).toBeCloseTo(before.x + before.width / 2, 4);
+        expect(after.y + after.height / 2).toBeCloseTo(before.y + before.height / 2, 4);
+        // ...and it is the same body, only seen from elsewhere.
+        expect(figureUnit(turned)).toBeCloseTo(figureUnit(figure), 4);
+    });
+
+    it('goes all the way round but stops short of looking down its own axis', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 0, pitch: 0 });
+        expect(figureTurn(turnFigure(figure, 200, 0)).yaw).toBeCloseTo(-160, 6);
+        expect(figureTurn(turnFigure(figure, 0, 200)).pitch).toBe(MAX_VIEW_PITCH);
+        expect(figureTurn(turnFigure(figure, 0, -200)).pitch).toBe(-MAX_VIEW_PITCH);
+    });
+
+    it('names the view when it is one and reports the angles when it is not', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side);
+        expect(viewPresetOf(figure)).toBe('side');
+        expect(viewPresetOf(turnFigure(figure, 13, 0))).toBeNull();
+    });
+
+    it('mirrors the view along with the body', () => {
+        // Mirroring a figure turned 35° to its left leaves it turned 35° to
+        // its right, and the readout has to say so.
+        const figure = createFigure('standing', DIMS, undefined, 0, { yaw: 35, pitch: 8 });
+        expect(figureTurn(flipFigure(figure))).toEqual({ yaw: -35, pitch: 8 });
+    });
+
+    it('puts the turn grip opposite the scale grip', () => {
+        const figure = createFigure('standing', DIMS);
+        const visual = figureVisualBounds(figure);
+        const grip = turnHandlePoint(figure);
+        expect(grip.x).toBeCloseTo(visual.x, 4);
+        expect(grip.y).toBeCloseTo(visual.y + visual.height, 4);
+        expect(isTurnHandleHit(figure, { x: grip.x - 4, y: grip.y + 4 }, 12)).toBe(true);
+        expect(isScaleHandleHit(figure, grip, 12)).toBe(false);
+    });
+
+    it('scales depth with the figure, so shrinking never flattens it', () => {
+        const figure = createFigure('reaching', DIMS);
+        const spread = (f: PoseFigure) => Math.max(...JOINT_KEYS.map((key) => f.joints[key].z))
+            - Math.min(...JOINT_KEYS.map((key) => f.joints[key].z));
+        expect(spread(scaleFigure(figure, 0.5))).toBeCloseTo(spread(figure) * 0.5, 4);
+        expect(spread(transformFigures([figure], { scale: 0.25, dx: 3, dy: 7 })[0]))
+            .toBeCloseTo(spread(figure) * 0.25, 4);
     });
 });
