@@ -1022,6 +1022,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         ...runs.map((run) => ({ kind: 'run' as const, at: run.createdAt ?? 0, run })),
     ].sort((a, b) => a.at - b.at)), [imported, runs]);
 
+    // The run behind the image currently in the lightbox, and every image that
+    // run touched: what went in, then what came out. Without this an output on
+    // screen says nothing about what it was made from — the lightbox is exactly
+    // where "what did I reference here?" gets asked, and closing it to go read
+    // the card is not an answer.
+    const lightboxRun = useMemo(
+        () => (selectedImage?.runId ? runs.find((run) => run.id === selectedImage.runId) : undefined),
+        [runs, selectedImage?.runId],
+    );
+    const lightboxFilm = useMemo(() => {
+        if (!lightboxRun) return [];
+        const sources = (lightboxRun.sourceImages ?? []).map((src, index) => ({ src, kind: 'source' as const, index }));
+        const outputs = lightboxRun.images
+            .map((image, index) => ({ src: resultSrc(image), kind: 'output' as const, index }))
+            .filter((item) => item.src);
+        // One image with nothing to compare it to is not a filmstrip.
+        return sources.length > 0 ? [...sources, ...outputs] : [];
+    }, [lightboxRun]);
+
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
         ? 'auto'
@@ -2195,8 +2214,99 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         justifyContent: 'center',
                         bgcolor: 'common.black',
                         overflow: 'hidden',
+                        position: 'relative',
                     }}
                 >
+                    {/* Top-left, over the artwork: the run's originals first, then
+                        what it produced, the one on screen ringed. Clicking a frame
+                        swaps the lightbox to it, so comparing an output against the
+                        image it was made from is one click each way. */}
+                    {lightboxRun && lightboxFilm.length > 0 && (
+                        <Stack
+                            data-testid="imagegen-lightbox-film"
+                            spacing={0.75}
+                            sx={{
+                                position: 'absolute',
+                                top: 12,
+                                left: 12,
+                                maxHeight: 'calc(100% - 24px)',
+                                overflowY: 'auto',
+                                p: 0.75,
+                                borderRadius: 1.5,
+                                bgcolor: 'rgba(15, 23, 42, 0.62)',
+                                backdropFilter: 'blur(6px)',
+                                scrollbarWidth: 'thin',
+                            }}
+                        >
+                            {lightboxFilm.map((frame, position) => {
+                                const active = selectedImage?.kind === frame.kind && selectedImage.index === frame.index;
+                                const label = frame.kind === 'source'
+                                    ? t('playground.originalBadge', { defaultValue: 'Original' })
+                                    : t('playground.generatedBadge', { defaultValue: 'Generated' });
+                                // The first frame of each group carries the group's word;
+                                // repeating it down the column would be noise.
+                                const showLabel = position === 0 || lightboxFilm[position - 1].kind !== frame.kind;
+                                return (
+                                    <Box key={`${frame.kind}-${frame.index}`}>
+                                        {showLabel && (
+                                            <Typography
+                                                variant="caption"
+                                                sx={{ display: 'block', mb: 0.25, color: 'grey.400', fontSize: 10, lineHeight: 1.4 }}
+                                            >
+                                                {label}
+                                            </Typography>
+                                        )}
+                                        <Tooltip title={label} placement="right">
+                                            <ButtonBase
+                                                onClick={() => setSelectedImage({
+                                                    src: frame.src,
+                                                    prompt: lightboxRun.prompt,
+                                                    model: lightboxRun.model,
+                                                    size: lightboxRun.size,
+                                                    quality: lightboxRun.quality,
+                                                    index: frame.index,
+                                                    kind: frame.kind,
+                                                    runId: lightboxRun.id,
+                                                })}
+                                                aria-label={frame.kind === 'source'
+                                                    ? t('playground.viewSourceImage', {
+                                                        defaultValue: 'View original image {{number}}',
+                                                        number: frame.index + 1,
+                                                    })
+                                                    : t('playground.openResult', {
+                                                        defaultValue: 'Open generated image {{number}}',
+                                                        number: frame.index + 1,
+                                                    })}
+                                                aria-current={active}
+                                                sx={{
+                                                    display: 'block',
+                                                    // Smaller on a phone, where the strip shares the
+                                                    // width with the artwork it sits over.
+                                                    width: { xs: 36, sm: 48 },
+                                                    height: { xs: 36, sm: 48 },
+                                                    borderRadius: 1,
+                                                    overflow: 'hidden',
+                                                    outline: active ? '2px solid' : '1px solid',
+                                                    outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
+                                                    outlineOffset: -1,
+                                                    opacity: active ? 1 : 0.72,
+                                                    transition: 'opacity 0.16s ease-out',
+                                                    '&:hover, &:focus-visible': { opacity: 1 },
+                                                }}
+                                            >
+                                                <Box
+                                                    component="img"
+                                                    src={frame.src}
+                                                    alt=""
+                                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                />
+                                            </ButtonBase>
+                                        </Tooltip>
+                                    </Box>
+                                );
+                            })}
+                        </Stack>
+                    )}
                     {selectedImage && (
                         <Box
                             component="img"

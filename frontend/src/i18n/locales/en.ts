@@ -1658,6 +1658,7 @@ export default {
     "generateAnother": "Generate another · {{count}} running",
     "generatingNew": "Generating new images…",
     "originalBadge": "Original",
+    "generatedBadge": "Generated",
     "referenceImages": "Reference images",
     "referenceOptional": "optional · drop images here to generate from them",
     "referenceBrowse": "Browse",
@@ -1707,6 +1708,7 @@ export default {
     "downloadFailed": "Could not download this image",
     "gallery": {
       "action": "Overview",
+      "fromReferences": "Generated from {{count}} reference images",
       "title": "All session images",
       "count": "{{count}} images",
       "matchCount": "{{shown}} of {{total}}",

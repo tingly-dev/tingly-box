@@ -1654,6 +1654,7 @@ export default {
     "generateAnother": "再生成一批 · {{count}} 个进行中",
     "generatingNew": "正在生成新图像…",
     "originalBadge": "原图",
+    "generatedBadge": "生成结果",
     "referenceImages": "参考图像",
     "referenceOptional": "可选 · 拖进来作为生成的参考",
     "referenceBrowse": "浏览",
@@ -1703,6 +1704,7 @@ export default {
     "downloadFailed": "无法下载这张图片",
     "gallery": {
       "action": "总览",
+      "fromReferences": "基于 {{count}} 张参考图生成",
       "title": "本次会话的全部图片",
       "count": "{{count}} 张图片",
       "matchCount": "{{shown}} / {{total}}",

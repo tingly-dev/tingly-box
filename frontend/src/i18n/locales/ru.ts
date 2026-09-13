@@ -1668,6 +1668,7 @@ export default {
     "generateAnother": "Сгенерировать ещё · выполняется: {{count}}",
     "generatingNew": "Генерируем новые изображения…",
     "originalBadge": "Исходное",
+    "generatedBadge": "Результат",
     "referenceImages": "Исходные изображения",
     "referenceOptional": "необязательно · перетащите изображения сюда, чтобы генерировать по ним",
     "referenceBrowse": "Выбрать",
@@ -1717,6 +1718,7 @@ export default {
     "downloadFailed": "Не удалось скачать это изображение",
     "gallery": {
       "action": "Обзор",
+      "fromReferences": "Создано на основе {{count}} референсов",
       "title": "Все изображения сессии",
       "count": "{{count}} изображений",
       "matchCount": "{{shown}} из {{total}}",

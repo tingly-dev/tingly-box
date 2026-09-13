@@ -32,6 +32,55 @@ type GalleryTile =
     | { key: string; at: number; kind: 'failed'; run: GenerationRun }
     | { key: string; at: number; kind: 'import'; item: ImportedImage };
 
+// Up to three of a run's reference images, in the corner of its tile. In a
+// grid of finished pictures there is otherwise nothing to say a tile came from
+// an edit, let alone from what — and that is the question the overview gets
+// asked most after "where is it". Informational only: the frames are
+// click-through, and the lightbox behind the tile is where they are browsable.
+const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
+    const { t } = useTranslation();
+    if (sources.length === 0) return null;
+    const shown = sources.slice(0, 3);
+    return (
+        <Tooltip title={t('playground.gallery.fromReferences', {
+            defaultValue: 'Generated from {{count}} reference images',
+            count: sources.length,
+        })}>
+            <Stack
+                direction="row"
+                spacing={0.25}
+                data-testid="imagegen-gallery-tile-sources"
+                sx={{
+                    position: 'absolute',
+                    top: 6,
+                    left: 6,
+                    p: 0.25,
+                    borderRadius: 1,
+                    bgcolor: 'rgba(15, 23, 42, 0.62)',
+                    backdropFilter: 'blur(4px)',
+                    pointerEvents: 'none',
+                    alignItems: 'center',
+                }}
+            >
+                {shown.map((src, i) => (
+                    <Box
+                        key={i}
+                        component="img"
+                        src={src}
+                        alt=""
+                        sx={{ width: 22, height: 22, borderRadius: 0.5, objectFit: 'cover', display: 'block' }}
+                    />
+                ))}
+                {sources.length > shown.length && (
+                    <Typography variant="caption" sx={{ px: 0.25, color: 'common.white', fontSize: 10 }}>
+                        +{sources.length - shown.length}
+                    </Typography>
+                )}
+            </Stack>
+        </Tooltip>
+    );
+};
+
 interface ImageGenGalleryDialogProps {
     open: boolean;
     runs: GenerationRun[];
@@ -304,6 +353,10 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                                 <ZoomIn sx={{ fontSize: 28 }} />
                                             </Box>
                                         </ButtonBase>
+                                    )}
+
+                                    {tile.kind !== 'import' && (
+                                        <TileSourceBadge sources={tile.run.sourceImages ?? []} />
                                     )}
 
                                     {/* The tile's actions are the card's actions: nothing
