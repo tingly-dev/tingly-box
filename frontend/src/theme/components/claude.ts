@@ -1,4 +1,5 @@
 import type { ThemeOptions } from '@mui/material/styles';
+import { primaryGradientButton } from './buttonVariants';
 
 // Anthropic brand tokens: Dark #141413 · Light #FAF9F5 · Light Gray #E8E6DC · Orange #D97757
 export const claudeComponents: ThemeOptions['components'] = {
@@ -40,12 +41,6 @@ export const claudeComponents: ThemeOptions['components'] = {
           boxShadow: '0 1px 2px 0 rgba(20, 20, 19, 0.06)',
         },
       },
-      contained: {
-        background: 'linear-gradient(135deg, #D97757 0%, #C26146 100%)',
-        '&:hover': {
-          background: 'linear-gradient(135deg, #C26146 0%, #A85138 100%)',
-        },
-      },
       outlined: {
         borderColor: '#D6D3C7',
         color: '#141413',
@@ -55,6 +50,7 @@ export const claudeComponents: ThemeOptions['components'] = {
         },
       },
     },
+    variants: primaryGradientButton('#D97757', '#C26146', '#C26146', '#A85138'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

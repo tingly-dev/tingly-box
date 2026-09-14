@@ -1,4 +1,5 @@
 import type { ThemeOptions } from '@mui/material/styles';
+import { primaryGradientButton } from './buttonVariants';
 
 export const lightComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -39,12 +40,6 @@ export const lightComponents: ThemeOptions['components'] = {
           boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
         },
       },
-      contained: {
-        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-        '&:hover': {
-          background: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
-        },
-      },
       outlined: {
         borderColor: '#d1d5db',
         color: '#374151',
@@ -54,6 +49,7 @@ export const lightComponents: ThemeOptions['components'] = {
         },
       },
     },
+    variants: primaryGradientButton('#2563eb', '#1d4ed8', '#1d4ed8', '#1e40af'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

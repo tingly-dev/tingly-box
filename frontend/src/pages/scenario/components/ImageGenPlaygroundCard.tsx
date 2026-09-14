@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, ZoomIn } from '@/components/icons';
+import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, RestartAlt, ViewGallery, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
 import { parseImageSize } from '@/utils/sketchCanvas';
@@ -36,6 +36,31 @@ import { downloadImage, fetchBlob, slugify } from '@/utils/download';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
+import ImageGenGalleryDialog from './ImageGenGalleryDialog';
+import type {
+    Endpoint,
+    GenerationRun,
+    ImportedImage,
+    Quality,
+    SelectedImage,
+} from './ImageGenPlayground.types';
+import {
+    addReferences,
+    downloadStem,
+    formatBytes,
+    reorderReferences,
+    resultSrc,
+    runImage,
+} from './imageGenSession';
+import {
+    fullBleedDialogPaperSx,
+    hoverRevealSx,
+    overlayActionSx,
+    overlayPlateSx,
+    panelActionLabelSx,
+    panelActionSx,
+    zoomScrimSx,
+} from './ImageGenPlayground.chrome';
 import SketchCanvasDialog, { type SketchLayers, type SketchResult } from './SketchCanvasDialog';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -49,6 +74,9 @@ const REFERENCE_STRIP_EXTRA_HEIGHT = 48;
 // .design/imageedit.md) — the common denominator across providers behind
 // this scenario.
 const MAX_EDIT_REFERENCE_IMAGES = 5;
+// Marks a drag as "one of this row's thumbnails moving", so the row's own
+// file-drop target can tell a reorder apart from images arriving from outside.
+const REFERENCE_DND_TYPE = 'application/x-tingly-reference-index';
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
@@ -56,17 +84,6 @@ const overlayIconSx = {
     bgcolor: 'rgba(255, 255, 255, 0.08)',
     '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
 } as const;
-
-// Which gateway endpoint a run went through. Not a user choice: derived
-// from whether the run had reference images (see handleSubmit). Shown on
-// the history card so API users learn which endpoint does what they just did.
-type Endpoint = 'generations' | 'edits';
-type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
-
-interface ImageResult {
-    url?: string;
-    b64_json?: string;
-}
 
 interface ReferenceImage {
     file: File;
@@ -98,43 +115,6 @@ const readImageSize = (src: string): Promise<{ width: number; height: number } |
 // a new sketch, otherwise the reference image being redrawn.
 type SketchTarget = { index: number | null } | null;
 
-// An image the user brought in to work on rather than to generate from: it
-// lands in the results panel, not in the request. The two destinations are
-// different intents ("edit this with a model" vs "cut this one up"), so they
-// are different drops, each landing where its result shows up.
-interface ImportedImage {
-    id: string;
-    src: string;
-    name: string;
-    bytes: number;
-    width?: number;
-    height?: number;
-    createdAt: number;
-}
-
-interface GenerationRun {
-    id: string;
-    endpoint: Endpoint;
-    createdAt: number;
-    prompt: string;
-    model: string;
-    size: string;
-    quality: Quality;
-    images: ImageResult[];
-    // Data URLs of the reference images a run was built from, kept for
-    // display alongside the output — the "what did I ask for" half of the
-    // history card (only set when the run went through `edits`).
-    sourceImages?: string[];
-    // How many images the run asked for — kept so a failed run can be retried
-    // with exactly the request it made.
-    count?: number;
-    status?: 'pending' | 'completed' | 'failed';
-    // Why a failed run failed, shown on its card. A run that fails stays in
-    // the strip: silently removing it leaves the user with a toast that has
-    // already gone and no record of what was asked.
-    error?: string;
-}
-
 // Reads a File into a base64 data URL, the same representation already used
 // for generated images (`data:image/png;base64,...`) so reference thumbnails
 // and outputs render through one code path.
@@ -145,31 +125,10 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, rej
     reader.readAsDataURL(file);
 });
 
-interface SelectedImage {
-    src: string;
-    prompt: string;
-    model: string;
-    size: string;
-    quality: Quality;
-    index: number;
-    // Where this image came from — same lightbox, different framing. A run's
-    // output and its `source` originals carry a prompt and a model; a
-    // `reference` waiting in the request and an `import` brought in to work on
-    // carry neither, so those two are titled by their file instead.
-    kind: 'output' | 'source' | 'reference' | 'import';
-    // Set for `reference` and `import`: what to call this image and what it is.
-    label?: string;
-    caption?: string;
-}
-
 // Keep playground output while navigating between pages in the current app session.
 // This deliberately stays in memory: base64 images can quickly exceed sessionStorage quotas.
 let imageGenSessionRuns: GenerationRun[] = [];
 let imageGenSessionImports: ImportedImage[] = [];
-
-const formatBytes = (bytes: number): string => (bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 interface ImportedImageCardProps {
     item: ImportedImage;
@@ -230,20 +189,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 alt={item.name}
                                 sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                             />
-                            <Box
-                                className="image-preview-overlay"
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'common.white',
-                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
-                                    opacity: 0,
-                                    transition: 'opacity 0.16s ease-out',
-                                }}
-                            >
+                            <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                 <ZoomIn sx={{ fontSize: 30 }} />
                             </Box>
                         </ButtonBase>
@@ -252,17 +198,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 size="small"
                                 onClick={onUseAsReference}
                                 aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
-                                sx={{
-                                    position: 'absolute',
-                                    bottom: 8,
-                                    right: 8,
-                                    width: 30,
-                                    height: 30,
-                                    color: 'common.white',
-                                    bgcolor: 'rgba(15, 23, 42, 0.58)',
-                                    backdropFilter: 'blur(4px)',
-                                    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.78)' },
-                                }}
+                                sx={{ position: 'absolute', bottom: 8, right: 8, ...overlayActionSx() }}
                             >
                                 <Edit fontSize="small" />
                             </IconButton>
@@ -271,17 +207,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                             size="small"
                             onClick={onRemove}
                             aria-label={t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: item.name })}
-                            sx={{
-                                position: 'absolute',
-                                top: 8,
-                                right: 8,
-                                width: 30,
-                                height: 30,
-                                color: 'common.white',
-                                bgcolor: 'rgba(15, 23, 42, 0.58)',
-                                backdropFilter: 'blur(4px)',
-                                '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.78)' },
-                            }}
+                            sx={{ position: 'absolute', top: 8, right: 8, ...overlayActionSx() }}
                         >
                             <Close fontSize="small" />
                         </IconButton>
@@ -289,6 +215,252 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                 </Stack>
             </CardContent>
         </Card>
+    );
+};
+
+interface RunSourceStripProps {
+    sources: string[];
+    onOpen: (index: number) => void;
+    // Puts one of these images back into the request as a reference. The
+    // materials of a past run are the most likely input of the next one, so
+    // getting them there is a click on the thumbnail, not a download and a
+    // re-upload.
+    onUseAsReference: (src: string) => void;
+    // The in-flight card centres its content; the other two are left-aligned.
+    align?: 'flex-start' | 'center';
+}
+
+// The images a run was built from, as thumbnails that open in the lightbox.
+// Shown in every card state — while a run is in flight and after it failed is
+// exactly when "what did I actually send?" needs an answer, and a retry that
+// can't show its own materials asks the user to remember them.
+const RunSourceStrip: React.FC<RunSourceStripProps> = ({ sources, onOpen, onUseAsReference, align = 'flex-start' }) => {
+    const { t } = useTranslation();
+    if (sources.length === 0) return null;
+    return (
+        <Stack
+            direction="row"
+            spacing={0.5}
+            data-testid="imagegen-run-sources"
+            sx={{ width: '100%', mt: 0.75, justifyContent: align, overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'thin' }}
+        >
+            {sources.map((src, i) => (
+                <Box
+                    key={i}
+                    sx={{
+                        position: 'relative',
+                        width: 36,
+                        height: 36,
+                        flexShrink: 0,
+                        '&:hover .source-reuse, &:focus-within .source-reuse': { opacity: 1 },
+                    }}
+                >
+                    <ButtonBase
+                        onClick={() => onOpen(i)}
+                        aria-label={t('playground.viewSourceImage', {
+                            defaultValue: 'View original image {{number}}',
+                            number: i + 1,
+                        })}
+                        sx={{
+                            display: 'block',
+                            width: '100%',
+                            height: '100%',
+                            borderRadius: 0.5,
+                            overflow: 'hidden',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        <Box
+                            component="img"
+                            src={src}
+                            alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                    </ButtonBase>
+                    <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
+                        <IconButton
+                            className="source-reuse"
+                            size="small"
+                            onClick={(event) => { event.stopPropagation(); onUseAsReference(src); }}
+                            aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
+                            data-testid="imagegen-source-use-as-reference"
+                            sx={{
+                                ...overlayActionSx(16),
+                                position: 'absolute',
+                                bottom: -2,
+                                right: -2,
+                                ...hoverRevealSx,
+                                '&:hover, &:focus-visible': { opacity: 1 },
+                            }}
+                        >
+                            <Edit sx={{ fontSize: 10 }} />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+            ))}
+        </Stack>
+    );
+};
+
+// A results-panel header action. Three of them do not fit a phone at full
+// width, so the label drops away below `sm` and the icon carries the button —
+// the action itself never disappears, and the aria-label keeps saying what it
+// is.
+const PanelAction: React.FC<{
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    testId?: string;
+}> = ({ label, icon, onClick, testId }) => (
+    <Tooltip title={label}>
+        <Button
+            size="small"
+            color="inherit"
+            startIcon={icon}
+            onClick={onClick}
+            aria-label={label}
+            data-testid={testId}
+            sx={panelActionSx}
+        >
+            <Box component="span" sx={panelActionLabelSx}>{label}</Box>
+        </Button>
+    </Tooltip>
+);
+
+interface ReferenceThumbProps {
+    image: ReferenceImage;
+    index: number;
+    total: number;
+    dragging: boolean;
+    dragOver: boolean;
+    onOpen: () => void;
+    onEditSketch: () => void;
+    onRemove: () => void;
+    onReorder: (from: number, to: number) => void;
+    onMoveByKey: (event: React.KeyboardEvent, index: number) => void;
+    // The row owns which thumbnail is moving and which one it is over; this one
+    // only reports the pointer events that change that.
+    onDragStart: () => void;
+    onDragEnd: () => void;
+    onDragEnter: () => void;
+    onDragLeave: () => void;
+}
+
+// One image waiting in the request. It is a thumbnail, a drag handle and a
+// drop target at once, which is why it lives here rather than inline in the
+// row: reading how reordering behaves should not mean scrolling through the
+// panel's render tree.
+const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
+    image,
+    index,
+    total,
+    dragging,
+    dragOver,
+    onOpen,
+    onEditSketch,
+    onRemove,
+    onReorder,
+    onMoveByKey,
+    onDragStart,
+    onDragEnd,
+    onDragEnter,
+    onDragLeave,
+}) => {
+    const { t } = useTranslation();
+    // Only a thumbnail of this row reorders. Files arriving from outside carry
+    // no such type and fall through to the row's own drop target, which adds
+    // them as new references.
+    const isReorder = (event: React.DragEvent) => event.dataTransfer.types.includes(REFERENCE_DND_TYPE);
+    return (
+        <Box
+            draggable
+            onDragStart={(event) => {
+                event.stopPropagation();
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData(REFERENCE_DND_TYPE, String(index));
+                onDragStart();
+            }}
+            onDragEnd={onDragEnd}
+            onDragOver={(event) => {
+                if (!isReorder(event)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = 'move';
+                onDragEnter();
+            }}
+            onDragLeave={onDragLeave}
+            onDrop={(event) => {
+                if (!isReorder(event)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onReorder(Number(event.dataTransfer.getData(REFERENCE_DND_TYPE)), index);
+                onDragEnd();
+            }}
+            sx={{
+                position: 'relative',
+                width: 56,
+                height: 56,
+                borderRadius: 1,
+                flexShrink: 0,
+                cursor: 'grab',
+                opacity: dragging ? 0.4 : 1,
+                outline: dragOver && !dragging ? '2px solid' : 'none',
+                outlineColor: 'primary.main',
+                outlineOffset: 1,
+                '&:active': { cursor: 'grabbing' },
+            }}
+        >
+            <ButtonBase
+                data-reference-index={index}
+                onClick={(event) => { event.stopPropagation(); onOpen(); }}
+                onKeyDown={(event) => onMoveByKey(event, index)}
+                aria-label={t('playground.openReferenceReorderable', {
+                    defaultValue: 'Reference image {{number}} of {{total}} — open it, or move it with the arrow keys',
+                    number: index + 1,
+                    total,
+                })}
+                sx={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
+                }}
+            >
+                <Box
+                    component="img"
+                    src={image.previewUrl}
+                    alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
+                    decoding="async"
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+                <Box className="reference-zoom" sx={zoomScrimSx}>
+                    <ZoomIn fontSize="small" />
+                </Box>
+            </ButtonBase>
+            {image.source === 'sketch' && (
+                <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
+                    <IconButton
+                        size="small"
+                        onClick={(event) => { event.stopPropagation(); onEditSketch(); }}
+                        aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
+                        sx={{ ...overlayActionSx(20), position: 'absolute', bottom: 2, right: 2 }}
+                    >
+                        <Create sx={{ fontSize: 13 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
+            <IconButton
+                size="small"
+                onClick={(event) => { event.stopPropagation(); onRemove(); }}
+                aria-label={t('playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
+                sx={{ ...overlayActionSx(20), position: 'absolute', top: -6, right: -6 }}
+            >
+                <Close sx={{ fontSize: 14 }} />
+            </IconButton>
+        </Box>
     );
 };
 
@@ -321,10 +493,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState(1);
     const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+    // The thumbnail being dragged and the one it is hovering over. Order is
+    // part of the request — providers read the reference list in order — so it
+    // has to be editable in place rather than by removing and re-adding.
+    const [draggingReference, setDraggingReference] = useState<number | null>(null);
+    const [dragOverReference, setDragOverReference] = useState<number | null>(null);
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
     const [imported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [sliceTarget, setSliceTarget] = useState<SelectedImage | null>(null);
+    // The overview: the strip answers "what is happening now", this answers
+    // "where is the one I made twenty images ago" without dragging a scrollbar.
+    const [galleryOpen, setGalleryOpen] = useState(false);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -337,6 +517,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         return () => { cancelled = true; };
     }, []);
     const historyTrackRef = useRef<HTMLDivElement>(null);
+    // Reusing a run refills this panel; on a narrow layout it sits above the
+    // results strip and off-screen, so the refilled form is scrolled back
+    // into view instead of leaving the user to wonder where the request went.
+    const controlsPanelRef = useRef<HTMLDivElement>(null);
     const referenceFileInputRef = useRef<HTMLInputElement>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const promptFileInputRef = useRef<HTMLInputElement>(null);
@@ -347,10 +531,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // gateway's timeout on a provider that has stopped answering.
     const inFlightRef = useRef(new Map<string, AbortController>());
 
+    // The session's two halves have one writer each: the module-level copy (what
+    // survives navigation between pages) and the React state must move together,
+    // and a caller that has to remember both in the right order eventually won't.
     const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
-        const nextRuns = updater(imageGenSessionRuns);
-        imageGenSessionRuns = nextRuns;
-        setRuns(nextRuns);
+        imageGenSessionRuns = updater(imageGenSessionRuns);
+        setRuns(imageGenSessionRuns);
+    }, []);
+
+    const updateImports = useCallback((updater: (currentImports: ImportedImage[]) => ImportedImage[]) => {
+        imageGenSessionImports = updater(imageGenSessionImports);
+        setImported(imageGenSessionImports);
     }, []);
 
     // The session outlives a reload: whatever the last visit left in
@@ -368,20 +559,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
         void loadPlaygroundSession<GenerationRun, ImportedImage>().then(({ runs: savedRuns, imports: savedImports }) => {
             if (cancelled) return;
-            if (imageGenSessionRuns.length === 0 && savedRuns.length > 0) {
-                imageGenSessionRuns = savedRuns.map((run) => (run.status === 'pending'
+            if (savedRuns.length > 0) {
+                updateRuns((current) => (current.length > 0 ? current : savedRuns.map((run) => (run.status === 'pending'
                     ? { ...run, status: 'failed', error: t('playground.interruptedByReload', { defaultValue: 'Interrupted by a page reload' }) }
-                    : run));
-                setRuns(imageGenSessionRuns);
+                    : run))));
             }
-            if (imageGenSessionImports.length === 0 && savedImports.length > 0) {
-                imageGenSessionImports = savedImports;
-                setImported(imageGenSessionImports);
+            if (savedImports.length > 0) {
+                updateImports((current) => (current.length > 0 ? current : savedImports));
             }
             setSessionRestored(true);
         });
         return () => { cancelled = true; };
-    }, [t]);
+    }, [t, updateImports, updateRuns]);
 
     useEffect(() => {
         if (!sessionRestored) return;
@@ -402,14 +591,31 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleAddReferenceImages = useCallback(async (files: FileList | File[]) => {
         const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'));
         if (incoming.length === 0) return;
-        const accepted = incoming.slice(0, Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length));
+        const { next: accepted, ignored } = addReferences(
+            [] as File[],
+            incoming,
+            Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length),
+            'ignore',
+        );
+        // Dropping images on the floor without saying so leaves the user
+        // believing a request carries pictures it does not.
+        if (ignored > 0) {
+            showNotification(
+                t('playground.referenceCapReached', {
+                    defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
+                    max: MAX_EDIT_REFERENCE_IMAGES,
+                    ignored,
+                }),
+                'warning',
+            );
+        }
         if (accepted.length === 0) return;
         const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => {
             const previewUrl = await fileToDataUrl(file);
             return { file, previewUrl, source: 'upload', ...(await readImageSize(previewUrl) ?? {}) };
         }));
-        setReferenceImages((current) => [...current, ...withPreviews].slice(0, MAX_EDIT_REFERENCE_IMAGES));
-    }, [referenceImages.length]);
+        setReferenceImages((current) => addReferences(current, withPreviews, MAX_EDIT_REFERENCE_IMAGES, 'ignore').next);
+    }, [referenceImages.length, showNotification, t]);
 
     // Brings images into the results panel. Same decoding as a reference (data
     // URL up front, so one representation renders everywhere), different
@@ -428,14 +634,29 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 ...(await readImageSize(src) ?? {}),
             };
         }));
-        imageGenSessionImports = [...imageGenSessionImports, ...items];
-        setImported(imageGenSessionImports);
+        updateImports((current) => [...current, ...items]);
+    }, [updateImports]);
+
+    const handleOpenImport = useCallback((item: ImportedImage) => {
+        setSelectedImage({
+            src: item.src,
+            prompt: '',
+            model: '',
+            size: '',
+            quality: 'auto',
+            index: 0,
+            kind: 'import',
+            label: item.name,
+            caption: [
+                item.width && item.height ? `${item.width}×${item.height} px` : '',
+                formatBytes(item.bytes),
+            ].filter(Boolean).join(' · '),
+        });
     }, []);
 
     const handleRemoveImport = useCallback((id: string) => {
-        imageGenSessionImports = imageGenSessionImports.filter((item) => item.id !== id);
-        setImported(imageGenSessionImports);
-    }, []);
+        updateImports((current) => current.filter((item) => item.id !== id));
+    }, [updateImports]);
 
     // The click-shaped twin of Ctrl+V, aimed at the results panel.
     const handleImportFromClipboard = useCallback(async () => {
@@ -465,6 +686,29 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleRemoveReferenceImage = useCallback((index: number) => {
         setReferenceImages((current) => current.filter((_, i) => i !== index));
     }, []);
+
+    // Moves one reference to another slot, keeping every other image's relative
+    // order — the same result as dragging a card in a list.
+    const handleReorderReference = useCallback((from: number, to: number) => {
+        setReferenceImages((current) => reorderReferences(current, from, to));
+    }, []);
+
+    // The keyboard's version of the same drag: with a thumbnail focused, the
+    // arrow keys walk it along the row. Focus follows the image it moved, not
+    // the slot it left.
+    const handleReferenceKeyDown = useCallback((event: React.KeyboardEvent, index: number) => {
+        const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+        if (delta === 0) return;
+        const target = index + delta;
+        if (target < 0 || target >= referenceImages.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        handleReorderReference(index, target);
+        requestAnimationFrame(() => {
+            const moved = document.querySelector<HTMLElement>(`[data-reference-index="${target}"]`);
+            moved?.focus();
+        });
+    }, [handleReorderReference, referenceImages.length]);
 
     // A text file — .txt, .md, a JSON or YAML template — is a prompt kept
     // outside the browser, and it opens as the prompt wherever on the panel
@@ -560,14 +804,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 source: 'upload',
                 ...(await readImageSize(src) ?? {}),
             };
-            setReferenceImages((current) => [...current, next].slice(-MAX_EDIT_REFERENCE_IMAGES));
+            // The user pointed at this image, so it goes in; at the cap the
+            // oldest makes room — and that is said out loud, because a reference
+            // vanishing from the row unannounced is the request quietly changing
+            // behind the user's back.
+            if (referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) {
+                showNotification(
+                    t('playground.referenceEvicted', {
+                        defaultValue: 'Added as a reference — the oldest one made room (max {{max}})',
+                        max: MAX_EDIT_REFERENCE_IMAGES,
+                    }),
+                    'info',
+                );
+            }
+            setReferenceImages((current) => addReferences(current, [next], MAX_EDIT_REFERENCE_IMAGES, 'evict').next);
         } catch {
             showNotification(
                 t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
                 'error',
             );
         }
-    }, [showNotification, t]);
+    }, [referenceImages.length, showNotification, t]);
 
     // A sketch is just another way to get a reference image: it lands in the
     // same list, goes through the same request, and shows up in the run
@@ -637,7 +894,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // Hands the finished pixels over, not a notification that they exist.
     const handleDownload = useCallback(async (image: SelectedImage) => {
         try {
-            await downloadImage(image.src, `${slugify(image.prompt)}-${image.index + 1}`);
+            await downloadImage(image.src, downloadStem(image, slugify));
         } catch {
             showNotification(
                 t('playground.downloadFailed', { defaultValue: 'Could not download this image' }),
@@ -757,14 +1014,26 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [handleSubmit]);
 
-    // A failed run's references only survive as data URLs, so they are read
-    // back into files here; the request itself is the one the card records.
+    // A run's references only survive as data URLs, so they are read back into
+    // files here — the shape both retry (same request again) and re-entry (same
+    // request, editable) need. The bytes and the pixel size come from two
+    // independent decodes of the same data URL, so they are awaited together
+    // rather than one after the other.
+    const runSourcesToReferences = useCallback((run: GenerationRun): Promise<ReferenceImage[]> => Promise.all(
+        (run.sourceImages ?? []).map(async (src, index): Promise<ReferenceImage> => {
+            const [blob, size] = await Promise.all([fetchBlob(src), readImageSize(src)]);
+            return {
+                file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }),
+                previewUrl: src,
+                source: 'upload',
+                ...(size ?? {}),
+            };
+        }),
+    ), []);
+
     const handleRetry = useCallback(async (run: GenerationRun) => {
         try {
-            const sources = await Promise.all((run.sourceImages ?? []).map(async (src, index) => {
-                const blob = await fetchBlob(src);
-                return { file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }), previewUrl: src };
-            }));
+            const sources = await runSourcesToReferences(run);
             await runGeneration({
                 prompt: run.prompt,
                 model: run.model,
@@ -777,11 +1046,108 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch {
             showNotification(t('playground.requestFailed', { defaultValue: 'Request failed' }), 'error');
         }
-    }, [runGeneration, showNotification, t]);
+    }, [runGeneration, runSourcesToReferences, showNotification, t]);
+
+    // Re-entry, not just retry: puts a run's entire request back into the
+    // panel — prompt, model, size, quality, count and the images it was built
+    // from — so the next attempt starts from what was asked and can be edited
+    // first. "Done" is a state, not a lock (.design/ux-principles.md §10).
+    const handleReuseRun = useCallback(async (run: GenerationRun) => {
+        try {
+            const sources = await runSourcesToReferences(run);
+            setPrompt(run.prompt);
+            setSelectedModel(run.model);
+            setSize(run.size);
+            setQuality(run.quality);
+            setCount(run.count ?? 1);
+            setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
+            controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // A model that no longer has a rule can't be silently swapped for
+            // another one: the panel says so rather than generating with a
+            // model the user did not ask for.
+            if (run.model && !models.includes(run.model)) {
+                showNotification(
+                    t('playground.reuse.modelMissing', {
+                        defaultValue: '{{model}} has no rule any more — pick a model before generating',
+                        model: run.model,
+                    }),
+                    'warning',
+                );
+                return;
+            }
+            showNotification(
+                t('playground.reuse.loaded', { defaultValue: 'Request loaded into the panel — edit it and generate again' }),
+                'success',
+            );
+        } catch {
+            showNotification(t('playground.reuse.failed', { defaultValue: 'Could not load this request' }), 'error');
+        }
+    }, [models, runSourcesToReferences, showNotification, t]);
+
+    // Opens one of a run's source images in the same lightbox its outputs use.
+    const handleOpenRunSource = useCallback((run: GenerationRun, index: number) => {
+        const src = run.sourceImages?.[index];
+        if (src) setSelectedImage(runImage(run, 'source', index, src));
+    }, []);
+
+    // Empties the session in one move — the counterpart of a session that now
+    // survives a reload: without this, a playground with forty images can only
+    // be emptied one tile at a time. Only the in-memory/IndexedDB session goes;
+    // the files the gateway wrote to the output folder are not this panel's to
+    // delete, and the confirm says so.
+    const handleClearSession = useCallback(() => {
+        inFlightRef.current.forEach((controller) => controller.abort());
+        updateRuns(() => []);
+        updateImports(() => []);
+        setSelectedImage(null);
+        setGalleryOpen(false);
+    }, [updateImports, updateRuns]);
 
     const handleRemoveRun = useCallback((id: string) => {
         updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== id));
     }, [updateRuns]);
+
+    // The per-run actions that read the same in every card state: take the
+    // prompt away as text (a prompt should never have to be selected by hand),
+    // put the whole request back in the panel, and drop the card. While a run
+    // is in flight Cancel is what removes it, so `onRemove` is left out there.
+    const reuseLabel = t('playground.reuse.action', { defaultValue: 'Edit this request' });
+    const copyPromptLabel = t('playground.copyPrompt', { defaultValue: 'Copy prompt' });
+    const promptCopiedLabel = t('playground.promptCopied', { defaultValue: 'Copied' });
+
+    const renderRunActions = (run: GenerationRun, onRemove?: () => void) => (
+        <Stack direction="row" spacing={0} sx={{ flexShrink: 0, alignItems: 'center' }}>
+            <CopyIconButton
+                value={run.prompt}
+                label={copyPromptLabel}
+                copiedLabel={promptCopiedLabel}
+                iconSize={16}
+                color="text.disabled"
+                sx={{ p: 0.5, '&:hover': { color: 'text.primary' } }}
+            />
+            <Tooltip title={reuseLabel}>
+                <IconButton
+                    size="small"
+                    onClick={() => { void handleReuseRun(run); }}
+                    aria-label={reuseLabel}
+                    data-testid="imagegen-reuse-run"
+                    sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                >
+                    <RestartAlt sx={{ fontSize: 16 }} />
+                </IconButton>
+            </Tooltip>
+            {onRemove && (
+                <IconButton
+                    size="small"
+                    onClick={onRemove}
+                    aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
+                    sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                >
+                    <Close sx={{ fontSize: 16 }} />
+                </IconButton>
+            )}
+        </Stack>
+    );
 
     // The three ways a reference image gets here, as equals. Drop is not in
     // the list because it has no button — the dashed box itself is the target.
@@ -813,6 +1179,43 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         ...imported.map((item) => ({ kind: 'import' as const, at: item.createdAt, item })),
         ...runs.map((run) => ({ kind: 'run' as const, at: run.createdAt ?? 0, run })),
     ].sort((a, b) => a.at - b.at)), [imported, runs]);
+
+    // The run behind the image currently in the lightbox, and every image that
+    // run touched: what went in, then what came out. Without this an output on
+    // screen says nothing about what it was made from — the lightbox is exactly
+    // where "what did I reference here?" gets asked, and closing it to go read
+    // the card is not an answer.
+    const lightboxRun = useMemo(
+        () => (selectedImage?.runId ? runs.find((run) => run.id === selectedImage.runId) : undefined),
+        [runs, selectedImage?.runId],
+    );
+    const lightboxFilm = useMemo(() => {
+        if (!lightboxRun) return [];
+        const sources = (lightboxRun.sourceImages ?? []).map((src, index) => ({ src, kind: 'source' as const, index }));
+        const outputs = lightboxRun.images
+            .map((image, index) => ({ src: resultSrc(image), kind: 'output' as const, index }))
+            .filter((item) => item.src);
+        // One image with nothing to compare it to is not a filmstrip.
+        return sources.length > 0 ? [...sources, ...outputs] : [];
+    }, [lightboxRun]);
+
+    const showLightboxFrame = useCallback((frame: (typeof lightboxFilm)[number]) => {
+        if (lightboxRun) setSelectedImage(runImage(lightboxRun, frame.kind, frame.index, frame.src));
+    }, [lightboxRun]);
+
+    // ←/→ walk the filmstrip, the same gesture the reference row uses. Without
+    // it, comparing an output against its original is a mouse-only move.
+    const handleLightboxKeyDown = useCallback((event: React.KeyboardEvent) => {
+        const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+        if (delta === 0 || lightboxFilm.length < 2 || !selectedImage) return;
+        const current = lightboxFilm.findIndex(
+            (frame) => frame.kind === selectedImage.kind && frame.index === selectedImage.index,
+        );
+        if (current === -1) return;
+        event.preventDefault();
+        // Wraps, so the strip has no dead end at either edge.
+        showLightboxFrame(lightboxFilm[(current + delta + lightboxFilm.length) % lightboxFilm.length]);
+    }, [lightboxFilm, selectedImage, showLightboxFrame]);
 
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules
@@ -855,6 +1258,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     }}
                 >
                     <Stack
+                        ref={controlsPanelRef}
                         data-testid="imagegen-controls-panel"
                         spacing={2}
                         sx={{
@@ -925,85 +1329,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     ) : (
                                         <>
                                             {referenceImages.map((ref, index) => (
-                                                <Box
+                                                <ReferenceThumb
                                                     key={index}
-                                                    sx={{ position: 'relative', width: 56, height: 56, borderRadius: 1, overflow: 'hidden', flexShrink: 0 }}
-                                                >
-                                                    <ButtonBase
-                                                        onClick={(event) => { event.stopPropagation(); handleOpenReference(index); }}
-                                                        aria-label={t('playground.openReference', {
-                                                            defaultValue: 'Open reference image {{number}}',
-                                                            number: index + 1,
-                                                        })}
-                                                        sx={{
-                                                            width: '100%',
-                                                            height: '100%',
-                                                            display: 'block',
-                                                            '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
-                                                        }}
-                                                    >
-                                                        <Box
-                                                            component="img"
-                                                            src={ref.previewUrl}
-                                                            alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
-                                                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                                        />
-                                                        <Box
-                                                            className="reference-zoom"
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                inset: 0,
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                color: 'common.white',
-                                                                bgcolor: 'rgba(15, 23, 42, 0.42)',
-                                                                opacity: 0,
-                                                                transition: 'opacity 0.16s ease-out',
-                                                            }}
-                                                        >
-                                                            <ZoomIn fontSize="small" />
-                                                        </Box>
-                                                    </ButtonBase>
-                                                    {ref.source === 'sketch' && (
-                                                        <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={(event) => { event.stopPropagation(); handleOpenSketch(index); }}
-                                                                aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
-                                                                sx={{
-                                                                    position: 'absolute',
-                                                                    bottom: 2,
-                                                                    right: 2,
-                                                                    width: 20,
-                                                                    height: 20,
-                                                                    bgcolor: 'rgba(15, 23, 42, 0.7)',
-                                                                    color: 'common.white',
-                                                                    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.9)' },
-                                                                }}
-                                                            >
-                                                                <Create sx={{ fontSize: 13 }} />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    )}
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(event) => { event.stopPropagation(); handleRemoveReferenceImage(index); }}
-                                                        aria-label={t('playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
-                                                        sx={{
-                                                            position: 'absolute',
-                                                            top: -6,
-                                                            right: -6,
-                                                            width: 20,
-                                                            height: 20,
-                                                            bgcolor: 'rgba(15, 23, 42, 0.7)',
-                                                            color: 'common.white',
-                                                            '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.9)' },
-                                                        }}
-                                                    >
-                                                        <Close sx={{ fontSize: 14 }} />
-                                                    </IconButton>
-                                                </Box>
+                                                    image={ref}
+                                                    index={index}
+                                                    total={referenceImages.length}
+                                                    dragging={draggingReference === index}
+                                                    dragOver={dragOverReference === index}
+                                                    onOpen={() => handleOpenReference(index)}
+                                                    onEditSketch={() => handleOpenSketch(index)}
+                                                    onRemove={() => handleRemoveReferenceImage(index)}
+                                                    onReorder={handleReorderReference}
+                                                    onMoveByKey={handleReferenceKeyDown}
+                                                    onDragStart={() => setDraggingReference(index)}
+                                                    onDragEnd={() => { setDraggingReference(null); setDragOverReference(null); }}
+                                                    onDragEnter={() => setDragOverReference(index)}
+                                                    onDragLeave={() => setDragOverReference((current) => (current === index ? null : current))}
+                                                />
                                             ))}
                                             {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && referenceSources.map((source) => (
                                                 <Tooltip key={source.key} title={source.label}>
@@ -1029,10 +1371,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 </Box>
                                 {referenceImages.length > 0 && (
                                     <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.disabled' }}>
-                                        {t('playground.referenceHint', {
-                                            defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
-                                            max: MAX_EDIT_REFERENCE_IMAGES,
-                                        })}
+                                        {[
+                                            t('playground.referenceHint', {
+                                                defaultValue: 'Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits',
+                                                max: MAX_EDIT_REFERENCE_IMAGES,
+                                            }),
+                                            // Order is only worth mentioning once there is an order.
+                                            referenceImages.length > 1 && t('playground.referenceReorderHint', {
+                                                defaultValue: 'drag a thumbnail to reorder',
+                                            }),
+                                        ].filter(Boolean).join(' · ')}
                                     </Typography>
                                 )}
                                 <input
@@ -1105,6 +1453,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 input: {
                                     endAdornment: (
                                         <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5, mr: -0.5, gap: 0.25 }}>
+                                            {/* A prompt is text the user goes on to reuse elsewhere —
+                                                it should never have to be selected by hand. */}
+                                            {prompt.trim() && (
+                                                <CopyIconButton
+                                                    value={prompt}
+                                                    label={copyPromptLabel}
+                                                    copiedLabel={promptCopiedLabel}
+                                                    iconSize={16}
+                                                />
+                                            )}
                                             <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
                                                 <IconButton
                                                     size="small"
@@ -1325,7 +1683,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                     <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
                                         {t('playground.sessionOutputs', { defaultValue: 'Session images' })}
                                     </Typography>
@@ -1335,7 +1693,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             color: "text.secondary",
                                             flexShrink: 0,
                                             whiteSpace: 'nowrap',
-                                            ml: 'auto',
                                         }}
                                     >
                                         {[
@@ -1352,26 +1709,26 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         ].filter(Boolean).join(' · ')}
                                     </Typography>
                                     {/* The same two ways in as the empty state offers: the
-                                        strip filling up must not take them away. */}
-                                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                        <Button
-                                            size="small"
-                                            color="inherit"
-                                            startIcon={<FileUpload fontSize="small" />}
+                                        strip filling up must not take them away. Plus the way
+                                        out of the strip itself, which is what a session with
+                                        thirty images actually needs. */}
+                                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
+                                        <PanelAction
+                                            label={t('playground.gallery.action', { defaultValue: 'Overview' })}
+                                            icon={<ViewGallery fontSize="small" />}
+                                            onClick={() => setGalleryOpen(true)}
+                                            testId="imagegen-open-gallery"
+                                        />
+                                        <PanelAction
+                                            label={t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                            icon={<FileUpload fontSize="small" />}
                                             onClick={() => importFileInputRef.current?.click()}
-                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                        >
-                                            {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            color="inherit"
-                                            startIcon={<ContentPaste fontSize="small" />}
+                                        />
+                                        <PanelAction
+                                            label={t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                            icon={<ContentPaste fontSize="small" />}
                                             onClick={() => { void handleImportFromClipboard(); }}
-                                            sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                        >
-                                            {t('playground.referencePaste', { defaultValue: 'Paste' })}
-                                        </Button>
+                                        />
                                     </Stack>
                                 </Box>
 
@@ -1397,22 +1754,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         <ImportedImageCard
                                             key={entry.item.id}
                                             item={entry.item}
-                                            onOpen={() => setSelectedImage({
-                                                src: entry.item.src,
-                                                prompt: '',
-                                                model: '',
-                                                size: '',
-                                                quality: 'auto',
-                                                index: 0,
-                                                kind: 'import',
-                                                label: entry.item.name,
-                                                caption: [
-                                                    entry.item.width && entry.item.height
-                                                        ? `${entry.item.width}×${entry.item.height} px`
-                                                        : '',
-                                                    formatBytes(entry.item.bytes),
-                                                ].filter(Boolean).join(' · '),
-                                            })}
+                                            onOpen={() => handleOpenImport(entry.item)}
                                             onUseAsReference={() => { void handleUseAsReference(entry.item.src); }}
                                             onRemove={() => handleRemoveImport(entry.item.id)}
                                         />
@@ -1444,6 +1786,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         textAlign: 'center',
                                                     }}
                                                 >
+                                                    {/* A running request is still a request to copy or to
+                                                        fork into the next one — the actions do not wait
+                                                        for it to land. */}
+                                                    <Box sx={{ alignSelf: 'flex-end', mt: -0.5, mr: -0.5 }}>
+                                                        {renderRunActions(run)}
+                                                    </Box>
                                                     <CircularProgress size={24} />
                                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                         {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
@@ -1473,6 +1821,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     >
                                                         {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
+                                                    <RunSourceStrip
+                                                        sources={run.sourceImages ?? []}
+                                                        align="center"
+                                                        onOpen={(index) => handleOpenRunSource(run, index)}
+                                                        onUseAsReference={(src) => { void handleUseAsReference(src); }}
+                                                    />
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
@@ -1491,14 +1845,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         <Typography variant="body2" sx={{ fontWeight: 500, flex: 1, minWidth: 0 }}>
                                                             {t('playground.runFailed', { defaultValue: 'Generation failed' })}
                                                         </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleRemoveRun(run.id)}
-                                                            aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
-                                                            sx={{ mr: -0.5, mt: -0.5 }}
-                                                        >
-                                                            <Close fontSize="small" />
-                                                        </IconButton>
+                                                        <Box sx={{ mr: -0.5, mt: -0.5 }}>
+                                                            {renderRunActions(run, () => handleRemoveRun(run.id))}
+                                                        </Box>
                                                     </Box>
                                                     <Typography
                                                         variant="caption"
@@ -1531,6 +1880,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     >
                                                         {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
+                                                    {/* Retrying blind is not retrying: the images the failed
+                                                        request was built from stay on the card, openable in
+                                                        the same lightbox as any other image here. */}
+                                                    <RunSourceStrip
+                                                        sources={run.sourceImages ?? []}
+                                                        onOpen={(index) => handleOpenRunSource(run, index)}
+                                                        onUseAsReference={(src) => { void handleUseAsReference(src); }}
+                                                    />
                                                     <Box sx={{ flex: 1 }} />
                                                     <Button
                                                         size="small"
@@ -1560,14 +1917,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         >
                                                             {run.prompt}
                                                         </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleRemoveRun(run.id)}
-                                                            aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
-                                                            sx={{ mr: -0.75, mt: -0.75, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                                                        >
-                                                            <Close sx={{ fontSize: 16 }} />
-                                                        </IconButton>
+                                                        <Box sx={{ mr: -0.75, mt: -0.75 }}>
+                                                            {renderRunActions(run, () => handleRemoveRun(run.id))}
+                                                        </Box>
                                                     </Box>
                                                     <Typography
                                                         variant="caption"
@@ -1581,45 +1933,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     >
                                                         {run.model} · {run.size} · {run.quality} · images/{run.endpoint}
                                                     </Typography>
-                                                    {run.sourceImages && run.sourceImages.length > 0 && (
-                                                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, overflowX: 'auto' }}>
-                                                            {run.sourceImages.map((src, i) => (
-                                                                <ButtonBase
-                                                                    key={i}
-                                                                    onClick={() => setSelectedImage({
-                                                                        src,
-                                                                        prompt: run.prompt,
-                                                                        model: run.model,
-                                                                        size: run.size,
-                                                                        quality: run.quality,
-                                                                        index: i,
-                                                                        kind: 'source',
-                                                                    })}
-                                                                    aria-label={t('playground.viewSourceImage', {
-                                                                        defaultValue: 'View original image {{number}}',
-                                                                        number: i + 1,
-                                                                    })}
-                                                                    sx={{
-                                                                        display: 'block',
-                                                                        width: 28,
-                                                                        height: 28,
-                                                                        borderRadius: 0.5,
-                                                                        overflow: 'hidden',
-                                                                        flexShrink: 0,
-                                                                        border: '1px solid',
-                                                                        borderColor: 'divider',
-                                                                    }}
-                                                                >
-                                                                    <Box
-                                                                        component="img"
-                                                                        src={src}
-                                                                        alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
-                                                                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                                                    />
-                                                                </ButtonBase>
-                                                            ))}
-                                                        </Stack>
-                                                    )}
+                                                    <RunSourceStrip
+                                                        sources={run.sourceImages ?? []}
+                                                        onOpen={(index) => handleOpenRunSource(run, index)}
+                                                        onUseAsReference={(src) => { void handleUseAsReference(src); }}
+                                                    />
                                                 </Box>
                                                 <Box
                                                     sx={{
@@ -1633,24 +1951,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     }}
                                                 >
                                                     {run.images.map((image, index) => {
-                                                        const src = image.url || (image.b64_json
-                                                            ? `data:image/png;base64,${image.b64_json}`
-                                                            : '');
+                                                        const src = resultSrc(image);
                                                         return src ? (
                                                             <Box
                                                                 key={`${run.id}-${index}`}
                                                                 sx={{ position: 'relative', width: '100%', height: '100%', borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}
                                                             >
                                                                 <ButtonBase
-                                                                    onClick={() => setSelectedImage({
-                                                                        src,
-                                                                        prompt: run.prompt,
-                                                                        model: run.model,
-                                                                        size: run.size,
-                                                                        quality: run.quality,
-                                                                        index,
-                                                                        kind: 'output',
-                                                                    })}
+                                                                    onClick={() => setSelectedImage(runImage(run, 'output', index, src))}
                                                                     aria-label={t('playground.openResult', {
                                                                         defaultValue: 'Open generated image {{number}}',
                                                                         number: index + 1,
@@ -1679,36 +1987,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                             display: 'block',
                                                                         }}
                                                                     />
-                                                                    <Box
-                                                                        className="image-preview-overlay"
-                                                                        sx={{
-                                                                            position: 'absolute',
-                                                                            inset: 0,
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            color: 'common.white',
-                                                                            bgcolor: 'rgba(15, 23, 42, 0.38)',
-                                                                            opacity: 0,
-                                                                            transition: 'opacity 0.16s ease-out',
-                                                                        }}
-                                                                    >
+                                                                    <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                                                         <ZoomIn sx={{ fontSize: 30 }} />
                                                                     </Box>
                                                                     <Box
                                                                         sx={{
+                                                                            ...overlayActionSx(),
                                                                             position: 'absolute',
                                                                             top: 8,
                                                                             right: 8,
-                                                                            width: 30,
-                                                                            height: 30,
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
                                                                             borderRadius: '50%',
-                                                                            color: 'common.white',
-                                                                            bgcolor: 'rgba(15, 23, 42, 0.58)',
-                                                                            backdropFilter: 'blur(4px)',
                                                                         }}
                                                                     >
                                                                         <ZoomIn fontSize="small" />
@@ -1718,17 +2009,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                                     size="small"
                                                                     onClick={(event) => { event.stopPropagation(); void handleUseAsReference(src); }}
                                                                     aria-label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        bottom: 8,
-                                                                        right: 8,
-                                                                        width: 30,
-                                                                        height: 30,
-                                                                        color: 'common.white',
-                                                                        bgcolor: 'rgba(15, 23, 42, 0.58)',
-                                                                        backdropFilter: 'blur(4px)',
-                                                                        '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.78)' },
-                                                                    }}
+                                                                    sx={{ position: 'absolute', bottom: 8, right: 8, ...overlayActionSx() }}
                                                                 >
                                                                     <Edit fontSize="small" />
                                                                 </IconButton>
@@ -1756,17 +2037,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <Dialog
                 open={selectedImage !== null}
                 onClose={() => setSelectedImage(null)}
+                onKeyDown={handleLightboxKeyDown}
                 maxWidth={false}
                 fullWidth
                 slotProps={{
                     paper: {
                         sx: {
-                            width: { xs: 'calc(100vw - 16px)', sm: 'calc(100vw - 48px)' },
-                            height: { xs: 'calc(100dvh - 16px)', sm: 'calc(100dvh - 48px)' },
-                            maxWidth: 'none',
-                            maxHeight: 'none',
-                            m: { xs: 1, sm: 3 },
-                            borderRadius: 3,
+                            ...fullBleedDialogPaperSx,
                             bgcolor: 'grey.900',
                             color: 'common.white',
                             overflow: 'hidden',
@@ -1845,6 +2122,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </IconButton>
                         </Tooltip>
                         )}
+                        {/* Zoomed in on a result is exactly where "now change one
+                            word and run it again" happens — the request that made
+                            this image goes back into the panel from here too. */}
+                        {lightboxRun && (
+                            <Tooltip title={reuseLabel}>
+                                <IconButton
+                                    onClick={() => {
+                                        void handleReuseRun(lightboxRun);
+                                        setSelectedImage(null);
+                                    }}
+                                    aria-label={reuseLabel}
+                                    sx={overlayIconSx}
+                                >
+                                    <RestartAlt fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>
                             <IconButton
                                 onClick={() => setSliceTarget(selectedImage)}
@@ -1913,8 +2207,88 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         justifyContent: 'center',
                         bgcolor: 'common.black',
                         overflow: 'hidden',
+                        position: 'relative',
                     }}
                 >
+                    {/* Top-left, over the artwork: the run's originals first, then
+                        what it produced, the one on screen ringed. Clicking a frame
+                        swaps the lightbox to it, so comparing an output against the
+                        image it was made from is one click each way. */}
+                    {lightboxFilm.length > 0 && (
+                        <Stack
+                            data-testid="imagegen-lightbox-film"
+                            spacing={0.75}
+                            sx={{
+                                ...overlayPlateSx,
+                                position: 'absolute',
+                                top: 12,
+                                left: 12,
+                                maxHeight: 'calc(100% - 24px)',
+                                overflowY: 'auto',
+                                p: 0.75,
+                                scrollbarWidth: 'thin',
+                            }}
+                        >
+                            {lightboxFilm.map((frame, position) => {
+                                const active = selectedImage?.kind === frame.kind && selectedImage.index === frame.index;
+                                const label = frame.kind === 'source'
+                                    ? t('playground.originalBadge', { defaultValue: 'Original' })
+                                    : t('playground.generatedBadge', { defaultValue: 'Generated' });
+                                // The first frame of each group carries the group's word;
+                                // repeating it down the column would be noise.
+                                const showLabel = position === 0 || lightboxFilm[position - 1].kind !== frame.kind;
+                                return (
+                                    <Box key={`${frame.kind}-${frame.index}`}>
+                                        {showLabel && (
+                                            <Typography
+                                                variant="caption"
+                                                sx={{ display: 'block', mb: 0.25, color: 'grey.400', fontSize: 10, lineHeight: 1.4 }}
+                                            >
+                                                {label}
+                                            </Typography>
+                                        )}
+                                        <Tooltip title={label} placement="right">
+                                            <ButtonBase
+                                                onClick={() => showLightboxFrame(frame)}
+                                                aria-label={frame.kind === 'source'
+                                                    ? t('playground.viewSourceImage', {
+                                                        defaultValue: 'View original image {{number}}',
+                                                        number: frame.index + 1,
+                                                    })
+                                                    : t('playground.openResult', {
+                                                        defaultValue: 'Open generated image {{number}}',
+                                                        number: frame.index + 1,
+                                                    })}
+                                                aria-current={active}
+                                                sx={{
+                                                    display: 'block',
+                                                    // Smaller on a phone, where the strip shares the
+                                                    // width with the artwork it sits over.
+                                                    width: { xs: 36, sm: 48 },
+                                                    height: { xs: 36, sm: 48 },
+                                                    borderRadius: 1,
+                                                    overflow: 'hidden',
+                                                    outline: active ? '2px solid' : '1px solid',
+                                                    outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
+                                                    outlineOffset: -1,
+                                                    opacity: active ? 1 : 0.72,
+                                                    transition: 'opacity 0.16s ease-out',
+                                                    '&:hover, &:focus-visible': { opacity: 1 },
+                                                }}
+                                            >
+                                                <Box
+                                                    component="img"
+                                                    src={frame.src}
+                                                    alt=""
+                                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                />
+                                            </ButtonBase>
+                                        </Tooltip>
+                                    </Box>
+                                );
+                            })}
+                        </Stack>
+                    )}
                     {selectedImage && (
                         <Box
                             component="img"
@@ -1933,6 +2307,24 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     )}
                 </DialogContent>
             </Dialog>
+            <ImageGenGalleryDialog
+                open={galleryOpen}
+                runs={runs}
+                imported={imported}
+                onClose={() => setGalleryOpen(false)}
+                onOpenOutput={(run, imageIndex, src) => setSelectedImage(runImage(run, 'output', imageIndex, src))}
+                onOpenImport={handleOpenImport}
+                onUseAsReference={(src) => { void handleUseAsReference(src); }}
+                // Loading a request refills the panel behind the dialog, so the
+                // dialog gets out of the way — otherwise the user is looking at
+                // a grid while the thing they asked for happened elsewhere.
+                onReuseRun={(run) => { setGalleryOpen(false); void handleReuseRun(run); }}
+                onRetryRun={(run) => { void handleRetry(run); }}
+                onCancelRun={handleCancelRun}
+                onRemoveRun={handleRemoveRun}
+                onRemoveImport={handleRemoveImport}
+                onClearAll={handleClearSession}
+            />
             <ImageSliceDialog
                 open={sliceTarget !== null}
                 src={sliceTarget?.src ?? null}
@@ -1950,6 +2342,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
                         {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
                     </Typography>
+                    <CopyIconButton
+                        value={prompt}
+                        label={copyPromptLabel}
+                        copiedLabel={promptCopiedLabel}
+                        size="medium"
+                    />
                     <Tooltip title={t('playground.openPromptFile', { defaultValue: 'Open a text file as the prompt' })}>
                         <IconButton
                             onClick={() => promptFileInputRef.current?.click()}

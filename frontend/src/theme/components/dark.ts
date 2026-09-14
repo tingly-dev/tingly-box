@@ -7,6 +7,7 @@ import {
   darkInputBorder,
   darkInputBorderHover,
 } from '../palettes/dark';
+import { primaryGradientButton } from './buttonVariants';
 
 export const darkComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -47,12 +48,6 @@ export const darkComponents: ThemeOptions['components'] = {
           boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',
         },
       },
-      contained: {
-        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-        '&:hover': {
-          background: 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)',
-        },
-      },
       outlined: {
         borderColor: 'rgba(255, 255, 255, 0.23)',
         color: '#e2e8f0',
@@ -62,6 +57,7 @@ export const darkComponents: ThemeOptions['components'] = {
         },
       },
     },
+    variants: primaryGradientButton('#3b82f6', '#2563eb', '#60a5fa', '#3b82f6'),
   },
   MuiOutlinedInput: {
     styleOverrides: {

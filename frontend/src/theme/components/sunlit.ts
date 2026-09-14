@@ -1,5 +1,6 @@
 import type { ThemeOptions } from '@mui/material/styles';
 import { sunlitPrimary, sunlitPrimaryLight, sunlitPrimaryDark } from '../palettes/sunlit';
+import { primaryGradientButton } from './buttonVariants';
 
 // Sunlit reusable tokens for component overrides
 const sunlitTokens = {
@@ -71,12 +72,6 @@ export const sunlitComponents: ThemeOptions['components'] = {
         boxShadow: 'none',
         '&:hover': { boxShadow: buttonHoverShadow },
       },
-      contained: {
-        background: `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`,
-        '&:hover': {
-          background: `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`,
-        },
-      },
       outlined: {
         borderColor: 'rgba(14, 165, 233, 0.3)',
         color: '#0369a1',
@@ -86,6 +81,7 @@ export const sunlitComponents: ThemeOptions['components'] = {
         },
       },
     },
+    variants: primaryGradientButton(sunlitPrimary, sunlitPrimaryDark, sunlitPrimaryDark, '#0369a1'),
   },
   MuiOutlinedInput: {
     styleOverrides: {
