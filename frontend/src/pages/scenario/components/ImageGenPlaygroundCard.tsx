@@ -25,6 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, RestartAlt, ViewGallery, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -654,9 +655,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         });
     }, []);
 
-    const handleRemoveImport = useCallback((id: string) => {
+    // Deleting is one-way — the image leaves the session for good — so every
+    // path into it (the strip's own button, the gallery tile's button) goes
+    // through the same confirm below rather than firing immediately.
+    const [pendingRemoval, setPendingRemoval] = useState<{ kind: 'run' | 'import'; id: string } | null>(null);
+
+    const removeImport = useCallback((id: string) => {
         updateImports((current) => current.filter((item) => item.id !== id));
     }, [updateImports]);
+
+    const handleRemoveImport = useCallback((id: string) => {
+        setPendingRemoval({ kind: 'import', id });
+    }, []);
 
     // The click-shaped twin of Ctrl+V, aimed at the results panel.
     const handleImportFromClipboard = useCallback(async () => {
@@ -1103,9 +1113,24 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setGalleryOpen(false);
     }, [updateImports, updateRuns]);
 
-    const handleRemoveRun = useCallback((id: string) => {
+    const removeRun = useCallback((id: string) => {
         updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== id));
     }, [updateRuns]);
+
+    const handleRemoveRun = useCallback((id: string) => {
+        setPendingRemoval({ kind: 'run', id });
+    }, []);
+
+    const pendingImport = pendingRemoval?.kind === 'import'
+        ? imported.find((item) => item.id === pendingRemoval.id)
+        : undefined;
+
+    const handleConfirmRemoval = useCallback(() => {
+        if (!pendingRemoval) return;
+        if (pendingRemoval.kind === 'run') removeRun(pendingRemoval.id);
+        else removeImport(pendingRemoval.id);
+        setPendingRemoval(null);
+    }, [pendingRemoval, removeImport, removeRun]);
 
     // The per-run actions that read the same in every card state: take the
     // prompt away as text (a prompt should never have to be selected by hand),
@@ -2324,6 +2349,25 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onRemoveRun={handleRemoveRun}
                 onRemoveImport={handleRemoveImport}
                 onClearAll={handleClearSession}
+            />
+            <ConfirmDialog
+                open={pendingRemoval !== null}
+                title={pendingRemoval?.kind === 'import'
+                    ? t('playground.removeImportedTitle', {
+                        defaultValue: 'Remove {{name}}?',
+                        name: pendingImport?.name ?? '',
+                    })
+                    : t('playground.removeRunTitle', { defaultValue: 'Remove this generation?' })}
+                description={pendingRemoval?.kind === 'import'
+                    ? t('playground.removeImportedBody', { defaultValue: 'Removes it from the playground.' })
+                    : t('playground.removeRunBody', {
+                        defaultValue: 'Removes it from the playground. Images already written to the output folder stay on disk.',
+                    })}
+                confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
+                cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+                confirmColor="error"
+                onClose={() => setPendingRemoval(null)}
+                onConfirm={handleConfirmRemoval}
             />
             <ImageSliceDialog
                 open={sliceTarget !== null}
