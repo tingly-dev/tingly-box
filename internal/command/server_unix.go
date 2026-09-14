@@ -48,13 +48,20 @@ func stopServerWithFileLock(fileLock *lock.FileLock) error {
 		return fmt.Errorf("failed to send shutdown signal: %w", err)
 	}
 
-	// Wait for process to exit
-	for i := 0; i < 5; i++ { // Wait up to 5 seconds
+	// Wait for process to exit. Now that the lock is only released after the
+	// server has actually stopped (including closing its HTTP listener and
+	// disconnecting MCP sources), graceful shutdown can legitimately take a
+	// few seconds — give it more room than a single MCP round-trip before
+	// falling back to a force kill. Poll finer than the ceiling so a shutdown
+	// that finishes early is observed promptly instead of on the next
+	// whole-second tick.
+	const pollInterval = 150 * time.Millisecond
+	const waitCeiling = 10 * time.Second
+	for deadline := time.Now().Add(waitCeiling); time.Now().Before(deadline); time.Sleep(pollInterval) {
 		if !fileLock.IsLocked() {
 			_ = fileLock.RemoveRuntimeFiles()
 			return nil
 		}
-		time.Sleep(1 * time.Second)
 	}
 
 	// If still running, force kill
