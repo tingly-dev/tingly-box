@@ -24,21 +24,26 @@ func SendSSErrorEventJSON(c *gin.Context, errorJSON []byte) {
 	c.SSEvent("error", string(errorJSON))
 }
 
-// BuildErrorEvent builds a standard error event map
-func BuildErrorEvent(message, errorType, code string) map[string]interface{} {
+// BuildErrorEvent builds Anthropic's standard stream error event map from
+// err (message via protocol.UpstreamMessage). "type" is always
+// "stream_error" — no call site ever varies it — so it's hardcoded; code is
+// the part that does vary. Kept in this package rather than protocol: this
+// is Anthropic's own wire shape, not a protocol-agnostic one (see
+// .design/logging.md §5).
+func BuildErrorEvent(err error, code string) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "error",
 		"error": map[string]interface{}{
-			"message": message,
-			"type":    errorType,
+			"message": protocol.UpstreamMessage(err),
+			"type":    "stream_error",
 			"code":    code,
 		},
 	}
 }
 
 // MarshalAndSendErrorEvent marshals and sends an error event
-func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
-	errorEvent := BuildErrorEvent(message, errorType, code)
+func MarshalAndSendErrorEvent(c *gin.Context, err error, code string) {
+	errorEvent := BuildErrorEvent(err, code)
 	errorJSON, marshalErr := json.Marshal(errorEvent)
 	if marshalErr != nil {
 		logrus.WithContext(c.Request.Context()).Debugf("Failed to marshal error event: %v", marshalErr)
@@ -69,9 +74,10 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 // flattening every pre-stream failure into a 500.
 func SendStreamingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to create streaming request: " + err.Error(),
+			Message: "Failed to create streaming request: " + failure.Message,
 			Type:    "api_error",
 		},
 	})
@@ -81,9 +87,10 @@ func SendStreamingError(c *gin.Context, err error) {
 // propagating the upstream provider's HTTP status when the error carries one.
 func SendForwardingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to forward request: " + err.Error(),
+			Message: "Failed to forward request: " + failure.Message,
 			Type:    "api_error",
 		},
 	})

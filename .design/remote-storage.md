@@ -124,7 +124,7 @@ append 一条消息要重新 marshal 整个 sessions 文件 → 消息数增长�
 
 原计划是给它建 `remote_audit` 表（见下方 schema）换取持久化，但那等于
 维护第二套日志系统去解决"没有持久化"——而 `pkg/obs.MultiLogger` 已经是
-持久化的（JSON 文件 + rotation + retention，见 `.design/logging-redesign.md`），
+持久化的（JSON 文件 + rotation + retention，见 `.design/logging.md`），
 且已经有 `GET /api/v1/system/logs` 之类的出口。`remote/audit` 唯一自己的动作
 `logToConsole`（`logger.go:219`）本来就是转发到 logrus。
 

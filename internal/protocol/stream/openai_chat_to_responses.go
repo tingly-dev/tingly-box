@@ -45,7 +45,7 @@ func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *opena
 			Type:           "error",
 			SequenceNumber: conv.nextSeq(),
 			Error: wire.ResponsesStreamErrorBody{
-				Message: err.Error(),
+				Message: protocol.UpstreamMessage(err),
 				Type:    "stream_error",
 			},
 		}

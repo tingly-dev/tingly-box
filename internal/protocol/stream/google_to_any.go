@@ -263,14 +263,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				return usage, nil
 			}
 			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
-			errorEvent := map[string]interface{}{
-				"type": "error",
-				"error": map[string]interface{}{
-					"message": err.Error(),
-					"type":    "stream_error",
-					"code":    "stream_failed",
-				},
-			}
+			errorEvent := BuildErrorEvent(err, "stream_failed")
 			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return usage, err
 		}
@@ -434,14 +427,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				return usage, nil
 			}
 			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
-			errorEvent := map[string]interface{}{
-				"type": "error",
-				"error": map[string]interface{}{
-					"message": err.Error(),
-					"type":    "stream_error",
-					"code":    "stream_failed",
-				},
-			}
+			errorEvent := BuildErrorEvent(err, "stream_failed")
 			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return usage, err
 		}
