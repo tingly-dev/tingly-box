@@ -326,7 +326,21 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                                 alt={tile.kind === 'import' ? tile.item.name : tile.run.prompt}
                                                 loading="lazy"
                                                 decoding="async"
-                                                sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                                                // Lazy-loading is what keeps a grid of hundreds of
+                                                // data: URLs from decoding all at once — the trade-off
+                                                // is that each tile's decode lands on its own frame as
+                                                // it scrolls into view, which without this reads as the
+                                                // grid flickering. Fading each tile in on its own
+                                                // `load` masks that stagger instead of fighting it.
+                                                onLoad={(event) => { event.currentTarget.style.opacity = '1'; }}
+                                                sx={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    objectFit: 'contain',
+                                                    display: 'block',
+                                                    opacity: 0,
+                                                    transition: 'opacity 0.15s ease-out',
+                                                }}
                                             />
                                             <Box className="tile-zoom" sx={zoomScrimSx}>
                                                 <ZoomIn sx={{ fontSize: 28 }} />
