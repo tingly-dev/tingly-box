@@ -85,21 +85,16 @@ func TestJourney_LocalFolderInPlace(t *testing.T) {
 	if code := s.do(http.MethodGet, "/api/v1/agent/fs/dirs", nil, &listing); code != 200 || len(listing.Entries) != 1 || listing.Entries[0].Path != dir {
 		t.Fatalf("top level after adding: %d %+v", code, listing)
 	}
-	// One task at a time in a folder: the agent edits it in place, so a
-	// second live task would be a second process on the same files.
-	if code := s.do(http.MethodPost, "/api/v1/agent/sessions", map[string]any{"path": dir, "prompt": "And Germany?"}, nil); code != 409 {
-		t.Fatalf("second task in a busy folder: want 409, got %d", code)
-	}
-	if code := s.do(http.MethodPost, "/api/v1/agent/sessions/"+id+"/archive", nil, nil); code != 200 {
-		t.Fatalf("archive: %d", code)
-	}
+	// A second task in the same folder is fine, and reuses the folder.
 	d2 := s.createSession(map[string]any{"path": dir, "prompt": "And Germany?"})
 	if d2.Folder.ID != d.Folder.ID {
 		t.Fatalf("the second task must run in the same folder: %s vs %s", d2.Folder.ID, d.Folder.ID)
 	}
 	s.waitIdle(d2.Session.ID)
-	if code := s.do(http.MethodPost, "/api/v1/agent/sessions/"+d2.Session.ID+"/archive", nil, nil); code != 200 {
-		t.Fatalf("archive second: %d", code)
+	for _, sid := range []string{id, d2.Session.ID} {
+		if code := s.do(http.MethodPost, "/api/v1/agent/sessions/"+sid+"/archive", nil, nil); code != 200 {
+			t.Fatalf("archive %s: %d", sid, code)
+		}
 	}
 
 	// Removing the folder withdraws the grant and leaves the directory alone.

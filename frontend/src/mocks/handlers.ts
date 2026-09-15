@@ -2361,11 +2361,6 @@ export const handlers = [
             }
         }
         if (!folder) return HttpResponse.json({ error: { message: 'folder_id or path is required' } }, { status: 400 })
-        // A folder runs one task at a time: the agent edits it in place.
-        const busy = mockAgentSessions.find((r) => r.session.folder_id === folder.id && ['queued', 'running', 'waiting_input', 'idle'].includes(r.session.status))
-        if (busy) {
-            return HttpResponse.json({ error: { message: `${folder.name} already has an active task ("${busy.session.title}"); archive it or keep steering it`, type: 'conflict_error' } }, { status: 409 })
-        }
         folder.last_used_at = new Date().toISOString()
         const row = newMockAgentSession(folder.id, body.prompt, { permission_mode: body.permission_mode || '' })
         scriptMockAgentSession(row)

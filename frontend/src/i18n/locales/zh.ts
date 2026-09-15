@@ -904,6 +904,8 @@ export default {
       "subtitle": "本机上允许 agent 工作的目录。只有在这里添加过、或在其中开过任务的目录才能被列出；agent 就地修改，Tingly Box 永远不会删除其中的任何内容。",
       "add": "添加目录",
       "remove": "从列表移除",
+      "activeTasks_one": "{{count}} 个任务进行中",
+      "activeTasks_other": "{{count}} 个任务进行中",
       "removeTitle": "把这个目录从列表移除？",
       "removeConfirm": "目录和里面的内容原样保留。Tingly Box 只是不再记住和列出它；在里面跑过的任务日志也保留。",
       "addHelp": "运行 Tingly Box 那台机器上的绝对路径。添加后 agent 可以在里面工作，选择器也可以浏览它的子目录。",

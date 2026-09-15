@@ -6,7 +6,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
-    Button, Card, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
+    Button, Card, Chip, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
@@ -15,7 +15,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import DialogHeader from '@/components/DialogHeader';
 import {Add as IconAdd, FolderOpen as IconFolder, LinkOff as IconRemove} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
-import {agentApi, type AgentFolder} from '@/services/agentApi';
+import {agentApi, isActiveStatus, type AgentFolder} from '@/services/agentApi';
 
 const isAbsolutePath = (v: string): boolean => /^(\/|[A-Za-z]:[\\/])/.test(v.trim());
 
@@ -23,6 +23,9 @@ const FoldersPage = () => {
     const {t} = useTranslation();
     const notify = useNotify();
     const [folders, setFolders] = useState<AgentFolder[]>([]);
+    // How many tasks are live in each folder. Several at once is normal —
+    // the same as running several claude sessions in one directory.
+    const [activeTasks, setActiveTasks] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [path, setPath] = useState('');
@@ -31,9 +34,18 @@ const FoldersPage = () => {
     const [removeBusy, setRemoveBusy] = useState(false);
 
     const load = useCallback(async () => {
-        const res = await agentApi.listFolders();
+        const [res, sessions] = await Promise.all([agentApi.listFolders(), agentApi.listSessions({active: true})]);
         if (res.ok) setFolders(res.data.folders ?? []);
         else notify.error(res.error);
+        if (sessions.ok) {
+            const counts: Record<string, number> = {};
+            for (const row of sessions.data.sessions ?? []) {
+                if (row.folder && isActiveStatus(row.session.status)) {
+                    counts[row.folder.id] = (counts[row.folder.id] ?? 0) + 1;
+                }
+            }
+            setActiveTasks(counts);
+        }
         setLoading(false);
     }, [notify]);
 
@@ -98,6 +110,9 @@ const FoldersPage = () => {
                                     <Stack sx={{flex: 1, minWidth: 0}}>
                                         <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                                             <Typography variant="subtitle1" sx={{fontWeight: 600}}>{f.name}</Typography>
+                                            {(activeTasks[f.id] ?? 0) > 0 && (
+                                                <Chip size="small" color="info" variant="outlined" label={t('tasks.folders.activeTasks', {count: activeTasks[f.id]})} />
+                                            )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
                                             {f.path}

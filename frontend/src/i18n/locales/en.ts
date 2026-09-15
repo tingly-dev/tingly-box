@@ -903,6 +903,8 @@ export default {
       "subtitle": "Folders on this machine the agent may work in. Only folders you add here, or start a task in, can be listed; the agent edits them in place and Tingly Box never deletes anything in them.",
       "add": "Add folder",
       "remove": "Remove from list",
+      "activeTasks_one": "{{count}} task running",
+      "activeTasks_other": "{{count}} tasks running",
       "removeTitle": "Remove this folder from the list?",
       "removeConfirm": "The folder and everything in it stay exactly as they are. Tingly Box only forgets it and stops listing it; tasks that ran there keep their logs.",
       "addHelp": "Absolute path on the machine running Tingly Box. Adding it lets the agent work there and lets the picker browse inside it.",

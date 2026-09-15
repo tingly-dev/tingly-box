@@ -128,10 +128,11 @@ type CreateSessionInput struct {
 // CreateSession opens a conversation in a folder and asks the Launcher to
 // run its first turn.
 //
-// One active session per folder: the agent edits the directory in place, so
-// two live sessions would be two processes writing the same files (and two
-// Claude Code sessions keyed on the same cwd). A second task has to wait for
-// the first to be archived — the conflict says so.
+// A folder takes as many tasks at once as the user wants, the same way
+// several `claude` sessions run in one directory locally: Claude Code keys a
+// session on its own id (the cwd only groups them), so concurrent sessions
+// are independent conversations. Whether two agents editing the same files
+// at the same time is a good idea is the user's call, not ours.
 func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Session, error) {
 	in.Prompt = strings.TrimSpace(in.Prompt)
 	if in.Prompt == "" {
@@ -161,14 +162,6 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}
 	if _, err := cleanFolderPath(folder.Path); err != nil {
 		return nil, err
-	}
-
-	live, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{FolderID: folder.ID, Active: true})
-	if err != nil {
-		return nil, err
-	}
-	if len(live) > 0 {
-		return nil, conflict("%s already has an active task (%q); archive it or keep steering it", folder.Name, live[0].Title)
 	}
 
 	now := s.now()

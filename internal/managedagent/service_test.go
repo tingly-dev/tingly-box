@@ -155,31 +155,40 @@ func TestCreateSessionFromPath(t *testing.T) {
 	}
 }
 
-// One task at a time per folder: the agent edits the directory in place, so
-// a second live session would be a second process writing the same files.
-func TestOneActiveSessionPerFolder(t *testing.T) {
+// A folder takes several tasks at once, the way several claude sessions run
+// in one directory locally. Each is its own conversation.
+func TestSeveralTasksInOneFolder(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _ := newTestService(t)
+	svc, _, launcher := newTestService(t)
 	dir := t.TempDir()
-	other := t.TempDir()
 
 	first, err := svc.CreateSession(ctx, CreateSessionInput{Path: dir, Prompt: "first"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateSession(ctx, CreateSessionInput{Path: dir, Prompt: "second"}); !errors.Is(err, ErrConflict) {
-		t.Fatalf("a second task in the same folder must be refused, got %v", err)
+	second, err := svc.CreateSession(ctx, CreateSessionInput{Path: dir, Prompt: "second"})
+	if err != nil {
+		t.Fatalf("a second task in the same folder must be allowed: %v", err)
 	}
-	// A different folder is unaffected.
-	if _, err := svc.CreateSession(ctx, CreateSessionInput{Path: other, Prompt: "elsewhere"}); err != nil {
-		t.Fatal(err)
+	if first.ID == second.ID || first.FolderID != second.FolderID {
+		t.Fatalf("two tasks, one folder: %+v %+v", first, second)
 	}
-	// Archiving the first frees the folder.
-	if _, err := svc.Archive(ctx, first.ID); err != nil {
-		t.Fatal(err)
+	if len(launcher.started) != 2 {
+		t.Fatalf("both must be started: %+v", launcher.started)
 	}
-	if _, err := svc.CreateSession(ctx, CreateSessionInput{Path: dir, Prompt: "second"}); err != nil {
-		t.Fatalf("after archiving, the folder is free again: %v", err)
+	active, _ := svc.ListSessions(ctx, SessionFilter{FolderID: first.FolderID, Active: true})
+	if len(active) != 2 {
+		t.Fatalf("both must be active: %+v", active)
+	}
+	// Their transcripts are separate.
+	ev1, _ := svc.ListEvents(ctx, first.ID, 0, 0)
+	ev2, _ := svc.ListEvents(ctx, second.ID, 0, 0)
+	if len(ev1) != 1 || len(ev2) != 1 || ev1[0].Text == ev2[0].Text {
+		t.Fatalf("transcripts must be separate: %+v / %+v", ev1, ev2)
+	}
+	// Only one folder was added.
+	if folders, _ := svc.ListFolders(ctx); len(folders) != 1 {
+		t.Fatalf("folders = %+v", folders)
 	}
 }
 

@@ -75,18 +75,20 @@ func TestSessionFlow(t *testing.T) {
 	}
 	id := detail.Session.ID
 
-	// A second task in the same folder waits for the first.
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"folder_id":"`+folder.ID+`","prompt":"another"}`, nil); rec.Code != 409 {
-		t.Fatalf("second task in the same folder: want 409, got %d", rec.Code)
+	// A folder takes several tasks at once, like several claude sessions in
+	// one directory.
+	var second SessionDetail
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"folder_id":"`+folder.ID+`","prompt":"another"}`, &second); rec.Code != 201 {
+		t.Fatalf("second task in the same folder: %d %s", rec.Code, rec.Body)
 	}
-	// So does removing the folder it works in.
+	// Removing the folder they work in is still refused while they run.
 	if rec := do(t, engine, http.MethodDelete, "/api/v1/agent/folders/"+folder.ID, "", nil); rec.Code != 409 {
 		t.Fatalf("removing a busy folder: want 409, got %d", rec.Code)
 	}
 
 	var list SessionListResponse
 	do(t, engine, http.MethodGet, "/api/v1/agent/sessions?active=true", "", &list)
-	if len(list.Sessions) != 1 || list.Sessions[0].Folder == nil || list.Sessions[0].Folder.Name != folder.Name {
+	if len(list.Sessions) != 2 || list.Sessions[0].Folder == nil || list.Sessions[0].Folder.Name != folder.Name {
 		t.Fatalf("list = %+v", list.Sessions)
 	}
 
@@ -115,6 +117,7 @@ func TestSessionFlow(t *testing.T) {
 	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/archive", "", &detail); rec.Code != 200 || detail.Session.Status != managedagent.SessionArchived {
 		t.Fatalf("archive: %d %s", rec.Code, rec.Body)
 	}
+	do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+second.Session.ID+"/archive", "", nil)
 	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/messages", `{"text":"too late"}`, nil); rec.Code != 409 {
 		t.Fatalf("steer after archive: want 409, got %d", rec.Code)
 	}

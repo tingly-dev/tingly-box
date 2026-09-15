@@ -52,7 +52,8 @@ Server logs are noisy under `-v`; filter with `| grep -v 'level='`.
 
 | Test | File | What it proves |
 |---|---|---|
-| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | allowlist: nothing listable before the folder is handed over (403, top level empty) → start with a `path` (that is the grant) → answer → diff shows the edit → the folder is on the allowlist and only it is browsable, its parent stays 403 → a second task in a busy folder is 409 → after archiving the folder is free → removing the folder keeps its files and withdraws browsing → non-git folder works with an empty diff → missing folder is 400 |
+| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | allowlist: nothing listable before the folder is handed over (403, top level empty) → start with a `path` (that is the grant) → answer → diff shows the edit → the folder is on the allowlist and only it is browsable, its parent stays 403 → a second task runs in the same folder → removing the folder keeps its files and withdraws browsing → non-git folder works with an empty diff → missing folder is 400 |
+| `TestJourney_TwoTasksInOneFolder` | `concurrent_test.go` | one folder, two tasks at once: separate Claude sessions, separate transcripts, steering one leaves the other alone, both list under the folder; the folder cannot be withdrawn while they run |
 | `TestJourney_PermissionPrompt` | `permission_test.go` | a write command → `approval_request` → `waiting_input` → approve → command ran, output in the log **and** back to the model → deny → nothing ran, model told → `bypassPermissions` → no question → bad mode is 400 |
 | `TestJourney_InterruptThenResume` | `interrupt_test.go` | slow model → interrupt → `idle` (not failed) → next message continues → archive is final |
 | `TestJourney_ArchiveWhileRunning` | `interrupt_test.go` | archive mid-turn stops the CLI and stays archived |
@@ -83,8 +84,9 @@ Facts that bit us, keep them in mind when scripting:
   `status` event), not on the status field, which lags a beat when a new
   turn starts.
 - Every journey boots its own stack; never share sessions across tests.
-- A folder runs one task at a time, so a journey that wants several tasks
-  either archives between them or uses one folder per task.
+- A folder takes several tasks at once (like several claude sessions in one
+  directory), so a journey may run them in parallel; give each its own
+  folder only when it needs an isolated diff.
 
 ## Adding a journey
 
