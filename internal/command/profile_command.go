@@ -11,6 +11,8 @@ import (
 // ============== Kong Command Structures ==============
 
 // ProfileCmdKong is the Kong command for managing and using Claude Code profiles.
+// It is also reachable via the `use` alias (`tb use p1`), the shorthand for
+// the common "launch with this profile" case.
 //
 // Management mode:
 //
@@ -21,6 +23,7 @@ import (
 //
 //	tingly-box profile                    → list profiles (interactive on TTY, select to launch)
 //	tingly-box profile p1                 → launch Claude Code with profile p1
+//	tingly-box use p1                     → same as above, via the `use` alias
 //	tingly-box profile --port 12580 p1    → launch Claude Code with profile p1 on port 12580
 //	tingly-box profile p1 --model opus    → launch with profile p1, passing --model opus to Claude
 //	tingly-box profile p1 -p hi           → launch with profile p1, using Claude's print mode
