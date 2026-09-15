@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/control/render"
 )
 
 // streamingMessageHandler renders agent output to an IM chat in real time.
@@ -22,7 +23,7 @@ type streamingMessageHandler struct {
 	chatID    string
 	replyTo   string
 	mu        sync.Mutex
-	formatter *claude.TextFormatter
+	formatter *render.TextFormatter
 	verbose   bool // If false, only show final results (hide intermediate messages)
 
 	// toolBuffer accumulates formatted tool-only renders between text-bearing
@@ -65,7 +66,7 @@ func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose b
 		bot:       bot,
 		chatID:    chatID,
 		replyTo:   replyTo,
-		formatter: claude.NewTextFormatter(),
+		formatter: render.NewTextFormatter(),
 		verbose:   verbose,
 	}
 }
