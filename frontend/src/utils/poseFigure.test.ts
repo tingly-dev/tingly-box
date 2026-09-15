@@ -371,17 +371,32 @@ describe('figureParts', () => {
         expect(hitTestBody(folded, shin, 4)).toBe(true);
     });
 
-    it('keeps the hip balls inside the pelvis, and out of the legs', () => {
+    it('puts a ball on the sockets and nothing on the hinges', () => {
+        // What a wooden manikin actually shows: a ball at the shoulder and the
+        // hip, a *narrowing* at the elbow, knee, wrist and ankle. Copying the
+        // ball onto the hinges is what made ours read as a toy; dropping it
+        // from the sockets too was over-correcting the other way.
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
-        const { hipBalls, torso, clusters } = figureParts(figure);
-        expect(hipBalls).toHaveLength(2);
-        expect(inPolygon(hipBalls[0].center, torso)).toBe(true);
-        // Drawn once, under the pelvis. Drawn again with the leg, a hip ball
+        const { sockets, torso, clusters } = figureParts(figure);
+        expect(sockets).toHaveLength(4);
+        for (const ball of sockets) expect(inPolygon(ball.center, torso)).toBe(true);
+        // Drawn once, under the torso. Drawn again with the limb, a socket
         // lands on top of the thigh as a dark disc and reads as a kneecap in
         // the wrong place.
-        const legShapes = clusters.filter((cluster) => cluster.key.startsWith('leg'))
+        const limbShapes = clusters.filter((cluster) => cluster.key !== 'torso')
             .flatMap((cluster) => cluster.shapes);
-        expect(legShapes.some((shape) => shape.kind === 'ball' && shape.ball === hipBalls[0])).toBe(false);
+        expect(limbShapes.some((shape) => shape.kind === 'ball')).toBe(false);
+    });
+
+    it('draws one seam across the torso, where the ribcage meets the pelvis', () => {
+        const { clusters } = parts();
+        const torso = clusters.find((cluster) => cluster.key === 'torso')!;
+        expect(torso.seam).toBeDefined();
+        // Across the body, not along it: the two ends sit on opposite sides.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
+        const { seam } = figureParts(figure).clusters.find((cluster) => cluster.key === 'torso')!;
+        expect(Math.sign(seam!.from.x - at.neck.x)).toBe(-Math.sign(seam!.to.x - at.neck.x));
     });
 
     it('runs the foot out the way the body faces', () => {

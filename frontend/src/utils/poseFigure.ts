@@ -1166,7 +1166,7 @@ export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 
     // you can grab and what you can see cannot drift apart.
     if (inPolygon(point, parts.torso) || inPolygon(point, parts.head)) return true;
     if (parts.limbs.some((limb) => limb.outlines.some((outline) => inPolygon(point, outline)))) return true;
-    if (parts.hipBalls
+    if (parts.sockets
         .some((ball) => Math.hypot(point.x - ball.center.x, point.y - ball.center.y) <= ball.radius + tolerance)) {
         return true;
     }
@@ -1301,7 +1301,10 @@ export interface FigureParts {
     // people say that drawing from one gives you wooden figures. The art-school
     // construction narrows a limb at its joints instead.
     limbs: FigureLimb[];
-    hipBalls: Ball[];
+    // The ball-and-socket joints — two shoulders, two hips — drawn *under*
+    // the torso so each shows only the sliver the limb leaves uncovered. The
+    // hinges are not here: they are a narrowing in the limb's own outline.
+    sockets: Ball[];
     // The same shapes again, grouped and carrying their depth: hit testing
     // wants them by name, the renderer wants them in order. One geometry,
     // two views of it — never two tables.
@@ -1331,7 +1334,10 @@ const R = {
     // limbs **narrow** at a joint rather than bulging — see `limbOutline`.
     upperArm: 0.031, elbow: 0.028, wrist: 0.019,
     thigh: 0.043, knee: 0.030, calf: 0.034, ankle: 0.023,
-    hipBall: 0.031,
+    // The two ball-and-socket joints a wooden manikin really does show as
+    // balls. The hinges — elbow, knee, wrist, ankle — do not: look at a
+    // manikin and the upper arm *narrows* into the elbow pin.
+    hipBall: 0.031, shoulderBall: 0.034,
     // Longer and narrower than they were: a mitten only a little wider than
     // the wrist reads as a hand, while one much wider reads as an oven glove.
     handLong: 0.052, handWide: 0.021,
@@ -1401,6 +1407,10 @@ const TORSO_PROFILE: readonly (readonly [number, number, 'shoulder' | 'waist' | 
     [1.08, 0.80, 'hip'],
     [1.16, 0.30, 'hip'],        // the seat closing under the pelvis
 ];
+
+// Which row of that table is the waist — where the ribcage stops and the
+// pelvis starts, and so where the torso gets its one seam.
+const WAIST_ROW = 4;
 
 // One limb, as a closed outline through its nodes. Each side is offset by the
 // node's radius along the bisector, and both ends are capped with a half
@@ -1665,7 +1675,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
     })() : null;
 
     // however hard a shoulder is dragged, and there is nothing to show through.
-    const torso: CanvasPoint[] = (() => {
+    const { outline: torso, seam: waistSeam } = (() => {
         const axis = { x: hipMid.x - at.neck.x, y: hipMid.y - at.neck.y };
         const axisLength = Math.hypot(axis.x, axis.y) || 1;
         // Across the body. Floored on the body's own depth, so a torso turned
@@ -1700,7 +1710,20 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             right.push({ x: spine.x + width.x * scale, y: spine.y + width.y * scale });
             left.push({ x: spine.x - width.x * scale, y: spine.y - width.y * scale });
         }
-        return smoothLoop([...right, ...left.reverse()]);
+        // The ribcage meets the pelvis at the waist. On a wooden manikin that
+        // is a real gap with the waist ball showing through it; on one closed
+        // outline it is the same thing an elbow gets — a line across the form,
+        // bowed downward because the ribcage sits *in front of* the pelvis
+        // when the body bends toward you.
+        const seam = {
+            from: right[WAIST_ROW],
+            to: left[WAIST_ROW],
+            bow: {
+                x: at.neck.x + axis.x * (TORSO_PROFILE[WAIST_ROW][0] + 0.06),
+                y: at.neck.y + axis.y * (TORSO_PROFILE[WAIST_ROW][0] + 0.06),
+            },
+        };
+        return { outline: smoothLoop([...right, ...left.reverse()]), seam };
     })();
 
     const head: CanvasPoint[] = (() => {
@@ -1733,10 +1756,12 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         fromRadius: u(R.neck, at.neck.scale),
         toRadius: u(R.neck, at.head.scale),
     };
-    // Kept, and still drawn *under* the torso: a hip ball on top of the block
-    // reads as a buttock, while one behind it shows only where the thigh comes
-    // out, which is what the wooden joint actually looks like.
-    const hipBalls: Ball[] = [
+    // Drawn *under* the torso, always: a ball on top of the block reads as a
+    // buttock or a pauldron, while one behind it shows only where the limb
+    // comes out, which is what the wooden joint actually looks like.
+    const sockets: Ball[] = [
+        { center: at.shoulderL, radius: u(R.shoulderBall, at.shoulderL.scale) },
+        { center: at.shoulderR, radius: u(R.shoulderBall, at.shoulderR.scale) },
         { center: at.hipL, radius: u(R.hipBall, at.hipL.scale) },
         { center: at.hipR, radius: u(R.hipBall, at.hipR.scale) },
     ];
@@ -1748,9 +1773,12 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             key: 'torso',
             order: 'authored',
             depth: mean(at.neck.depth, hipMid.depth),
+            seam: waistSeam,
             shapes: [
-                { kind: 'ball', ball: hipBalls[0], tone: 'joint', depth: at.hipL.depth },
-                { kind: 'ball', ball: hipBalls[1], tone: 'joint', depth: at.hipR.depth },
+                { kind: 'ball', ball: sockets[0], tone: 'joint', depth: at.shoulderL.depth },
+                { kind: 'ball', ball: sockets[1], tone: 'joint', depth: at.shoulderR.depth },
+                { kind: 'ball', ball: sockets[2], tone: 'joint', depth: at.hipL.depth },
+                { kind: 'ball', ball: sockets[3], tone: 'joint', depth: at.hipR.depth },
                 { kind: 'polygon', points: torso, tone: 'body', depth: mean(at.neck.depth, hipMid.depth) },
             ],
         },
@@ -1778,7 +1806,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         })),
     ];
 
-    return { head, face, neck, torso, limbs, hipBalls, clusters };
+    return { head, face, neck, torso, limbs, sockets, clusters };
 };
 
 // --- drawing -----------------------------------------------------------------
