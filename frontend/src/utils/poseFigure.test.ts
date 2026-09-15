@@ -210,6 +210,44 @@ describe('distanceToSegment', () => {
     });
 });
 
+// How wide a limb's outline is at a given point along it, measured across
+// the outline itself — the only honest way to ask, now that a limb is one
+// shape rather than a stack of capsules with known radii. A limb's points
+// are sparse along a straight run, so this cuts the polygon with a line
+// through the sample point, square to the limb axis, and takes the span
+// between the two crossings that bracket it.
+const limbWidthAt = (
+    limb: { outlines: { x: number; y: number }[][] },
+    point: { x: number; y: number },
+    axis: { x: number; y: number },
+) => {
+    const len = Math.hypot(axis.x, axis.y) || 1;
+    // The cut direction: square to the limb, so the span is a true width.
+    const nx = -axis.y / len;
+    const ny = axis.x / len;
+    const hits: number[] = [];
+    const poly = limb.outlines[0];
+    for (let i = 0; i < poly.length; i += 1) {
+        const a = poly[i];
+        const b = poly[(i + 1) % poly.length];
+        const ex = b.x - a.x;
+        const ey = b.y - a.y;
+        const denom = nx * ey - ny * ex;
+        if (Math.abs(denom) < 1e-9) continue;
+        const dx = a.x - point.x;
+        const dy = a.y - point.y;
+        // Parameter along the edge, and along the cut line, at the crossing.
+        const u = (ny * dx - nx * dy) / denom;
+        if (u < 0 || u > 1) continue;
+        hits.push(ex === 0 && ey === 0 ? 0 : ((dx + ex * u) * nx + (dy + ey * u) * ny));
+    }
+    if (hits.length < 2) return 0;
+    const below = hits.filter((t) => t <= 0);
+    const above = hits.filter((t) => t > 0);
+    if (!below.length || !above.length) return 0;
+    return Math.min(...above) - Math.max(...below);
+};
+
 describe('figureParts', () => {
     const parts = () => figureParts(createFigure('standing', DIMS));
 
@@ -266,16 +304,71 @@ describe('figureParts', () => {
         expect(hipChange).toBeLessThan(0.01);
     });
 
-    it('tapers every limb from its proximal to its distal end', () => {
-        for (const limb of parts().limbs) {
-            expect(limb.fromRadius).toBeGreaterThan(limb.toRadius);
+    it('narrows a limb at its joint instead of bulging', () => {
+        // The whole reason the joints stopped being balls. A physical wooden
+        // manikin has to bulge there to rotate; a drawing never does, and
+        // copying the manufacturing is what made ours read as a toy.
+        const figure = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
+        const { limbs } = figureParts(figure);
+        const arm = limbs.find((limb) => limb.key === 'armR')!;
+        const axis = { x: at.elbowR.x - at.shoulderR.x, y: at.elbowR.y - at.shoulderR.y };
+        const upper = {
+            x: (at.shoulderR.x + at.elbowR.x) / 2,
+            y: (at.shoulderR.y + at.elbowR.y) / 2,
+        };
+        expect(limbWidthAt(arm, at.elbowR, axis)).toBeGreaterThan(0);
+        expect(limbWidthAt(arm, at.elbowR, axis)).toBeLessThan(limbWidthAt(arm, upper, axis));
+    });
+
+    it('swells the lower leg at the calf rather than tapering straight down', () => {
+        const figure = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
+        const leg = figureParts(figure).limbs.find((limb) => limb.key === 'legR')!;
+        const axis = { x: at.ankleR.x - at.kneeR.x, y: at.ankleR.y - at.kneeR.y };
+        const calf = {
+            x: at.kneeR.x + axis.x * 0.33,
+            y: at.kneeR.y + axis.y * 0.33,
+        };
+        expect(limbWidthAt(leg, calf, axis)).toBeGreaterThan(limbWidthAt(leg, at.kneeR, axis));
+        expect(limbWidthAt(leg, calf, axis)).toBeGreaterThan(limbWidthAt(leg, at.ankleR, axis));
+    });
+
+    it('gives every limb one closed outline and one seam', () => {
+        const limbs = parts().limbs;
+        expect(limbs.map((limb) => limb.key).sort()).toEqual(['armL', 'armR', 'legL', 'legR']);
+        for (const limb of limbs) {
+            expect(limb.outlines[0].length).toBeGreaterThan(24);
+            expect(Number.isFinite(limb.seam!.from.x)).toBe(true);
         }
     });
 
-    it('gives the joint balls a descending size down each limb', () => {
-        const [shoulder, , elbow, , knee, , ankle] = parts().balls;
-        expect(shoulder.radius).toBeGreaterThan(elbow.radius);
-        expect(knee.radius).toBeGreaterThan(ankle.radius);
+    it('splits a limb that folds back on itself instead of fanning it out', () => {
+        // A shin tucked under a thigh and seen from above projects as a limb
+        // doubled right back. One outline cannot follow that — its two sides
+        // cross and the fill grows a fin where the knee is. Two overlapping
+        // pieces, depth-sorted, is what an artist draws there anyway.
+        const folded = createFigure('crossLegged', DIMS, undefined, 0, VIEW_PRESETS.above);
+        const leg = figureParts(folded).limbs.find((limb) => limb.key === 'legL')!;
+        expect(leg.outlines).toHaveLength(2);
+        expect(leg.seam).toBeUndefined();
+        // ...and a leg that reads as one run stays one piece, seam and all.
+        const open = figureParts(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front))
+            .limbs.find((limb) => limb.key === 'legL')!;
+        expect(open.outlines).toHaveLength(1);
+        expect(open.seam).toBeDefined();
+    });
+
+    it('still lets you grab the far side of a split limb', () => {
+        // The hit test runs on the same outlines the renderer fills, so a
+        // split must not make half a leg untouchable.
+        const folded = createFigure('crossLegged', DIMS, undefined, 0, VIEW_PRESETS.above);
+        const at = projectFigure(folded);
+        const shin = {
+            x: (at.kneeL.x + at.ankleL.x) / 2,
+            y: (at.kneeL.y + at.ankleL.y) / 2,
+        };
+        expect(hitTestBody(folded, shin, 4)).toBe(true);
     });
 
     it('keeps the hip balls inside the pelvis, and out of the legs', () => {
@@ -291,16 +384,14 @@ describe('figureParts', () => {
         expect(legShapes.some((shape) => shape.kind === 'ball' && shape.ball === hipBalls[0])).toBe(false);
     });
 
-    it('points the foot the way the body faces and the hand along the forearm', () => {
-        const projected = projectFigure(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side));
-        const { feet, hands } = figureParts(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side));
-        // Seen from the side, a forward-pointing foot runs across the screen.
-        expect(Math.abs(Math.sin(feet[0].angle))).toBeLessThan(0.4);
-        const forearm = Math.atan2(
-            projected.wristL.y - projected.elbowL.y,
-            projected.wristL.x - projected.elbowL.x,
-        );
-        expect(hands[0].angle).toBeCloseTo(forearm, 6);
+    it('runs the foot out the way the body faces', () => {
+        // Seen from the side, a forward-pointing foot reaches across the
+        // screen well past the ankle.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side);
+        const at = projectFigure(figure);
+        const leg = figureParts(figure).limbs.find((limb) => limb.key === 'legL')!;
+        const reach = Math.max(...leg.outlines.flat().map((p) => Math.abs(p.x - at.ankleL.x)));
+        expect(reach).toBeGreaterThan(figureUnit(figure) * 0.04);
     });
 
     it('drops the face once the figure has turned away, and only then', () => {
@@ -314,10 +405,10 @@ describe('figureParts', () => {
         const base = createFigure('standing', DIMS);
         const small = figureParts(base);
         const big = figureParts(scaleFigure(base, 2));
-        expect(big.limbs[0].fromRadius).toBeCloseTo(small.limbs[0].fromRadius * 2, 4);
         const span = (points: { x: number }[]) => Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x));
         expect(span(big.head)).toBeCloseTo(span(small.head) * 2, 3);
         expect(span(big.torso)).toBeCloseTo(span(small.torso) * 2, 3);
+        expect(span(big.limbs[0].outlines[0])).toBeCloseTo(span(small.limbs[0].outlines[0]) * 2, 3);
     });
 
     it('gives the head a jaw rather than leaving it an egg', () => {
@@ -593,7 +684,17 @@ describe('figure scale is the body, not the bounding box', () => {
         // Girth is within a few percent, not identical: what is left of the
         // difference is perspective, which is a thing about the camera rather
         // than about the body.
-        const ratio = figureParts(lying).limbs[4].fromRadius / figureParts(standing).limbs[4].fromRadius;
+        // Measured across the thigh, not down the bounding box: a lying leg
+        // runs sideways, so its box height is its girth and its box width is
+        // its length. Girth is the thing that must not change.
+        const thighGirth = (f: PoseFigure) => {
+            const leg = figureParts(f).limbs.find((limb) => limb.key === 'legL')!;
+            const at = projectFigure(f);
+            const axis = { x: at.kneeL.x - at.hipL.x, y: at.kneeL.y - at.hipL.y };
+            const mid = { x: (at.hipL.x + at.kneeL.x) / 2, y: (at.hipL.y + at.kneeL.y) / 2 };
+            return limbWidthAt(leg, mid, axis);
+        };
+        const ratio = thighGirth(lying) / thighGirth(standing);
         expect(Number.isFinite(ratio)).toBe(true);
         expect(ratio).toBeGreaterThan(0.9);
         expect(ratio).toBeLessThan(1.1);

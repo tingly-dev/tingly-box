@@ -296,6 +296,9 @@ const BONE = {
 
 const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
 
+// How far the neck leans out of the torso's axis, toward the body's front.
+const NECK_FORWARD = 7;
+
 // Down is 0, so a spec reads the way a person describes a limb: "hanging" is 0.
 // The second number swings the same bone out of the screen plane, which is
 // what a flat angle can never say — and is exactly the information a pose
@@ -389,6 +392,14 @@ const buildPose = (spec: PoseSpec): PresetPoints => {
         ankleL: add3(kneeL, along(spec.legs.l[1], BONE.shin)),
         ankleR: add3(kneeR, along(spec.legs.r[1], BONE.shin)),
     } as Record<JointKey, Vec3>;
+    // The neck is a cylinder that angles forward, not a vertical peg — one of
+    // the few things the art-school construction is explicit about. Applied
+    // here rather than in every pose spec, so it costs no preset a line.
+    raw.head = add3(neck, rotateAxis(
+        sub3(raw.head, neck),
+        norm3(cross3(sub3(raw.head, neck), bodyForwardOf(raw))),
+        rad(-NECK_FORWARD),
+    ));
     // The head's turn is applied last: it rotates the skull about the torso's
     // axis without moving anything else, which is what "looking over your
     // shoulder" is.
@@ -1154,14 +1165,12 @@ export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 
     // The torso is tested against the outline that is actually drawn, so what
     // you can grab and what you can see cannot drift apart.
     if (inPolygon(point, parts.torso) || inPolygon(point, parts.head)) return true;
-    if ([...parts.hands, ...parts.feet]
-        .some((ellipse) => insideEllipse(point, ellipse, tolerance))) return true;
-    if ([...parts.hipBalls, ...parts.balls]
+    if (parts.limbs.some((limb) => limb.outlines.some((outline) => inPolygon(point, outline)))) return true;
+    if (parts.hipBalls
         .some((ball) => Math.hypot(point.x - ball.center.x, point.y - ball.center.y) <= ball.radius + tolerance)) {
         return true;
     }
-    return [parts.neck, ...parts.limbs]
-        .some((segment) => insideSegment(point, segment, tolerance));
+    return insideSegment(point, parts.neck, tolerance);
 };
 
 // Bottom-right of the visual box: the familiar corner grip, so scaling does
@@ -1214,6 +1223,25 @@ export interface Ellipse { center: CanvasPoint; radiusX: number; radiusY: number
 export interface Segment { from: CanvasPoint; to: CanvasPoint; fromRadius: number; toRadius: number }
 export interface Ball { center: CanvasPoint; radius: number }
 
+export interface FigureLimb {
+    key: 'armL' | 'armR' | 'legL' | 'legR';
+    // Closed, projected, and the same arrays the renderer fills and the hit
+    // test runs on — so what you can grab cannot drift from what you can see.
+    // One piece for a limb that reads as one run; two where it folds back on
+    // itself far enough that a single outline would cross itself, which fills
+    // as a fin. An artist splits there too: the forearm is drawn *over* the
+    // upper arm, not merged into it.
+    outlines: CanvasPoint[][];
+    // The bend, as the two points where it crosses the limb plus a control
+    // point bowed toward the far side. A full circle here reads as a dot drawn
+    // on the arm; this reads as two turned pieces meeting. Absent once the
+    // limb is split, where the overlap of the two pieces *is* the joint.
+    seam?: { from: CanvasPoint; to: CanvasPoint; bow: CanvasPoint };
+    depth: number;
+    // Per piece, in the same order as `outlines`.
+    depths: number[];
+}
+
 export type ShapeTone = 'body' | 'joint' | 'head';
 
 // A drawable with the depth it is at, so the renderer can sort. Parts are
@@ -1231,6 +1259,8 @@ export type FigureShape =
 
 export interface FigureCluster {
     key: 'torso' | 'head' | 'armL' | 'armR' | 'legL' | 'legR';
+    // Drawn as a hairline after the cluster's body, where it has one.
+    seam?: { from: CanvasPoint; to: CanvasPoint; bow: CanvasPoint };
     depth: number;
     // Fixed for the torso, where the order encodes anatomy (hip balls under
     // the pelvis); by depth inside a limb, where a fold really does put the
@@ -1260,11 +1290,18 @@ export interface FigureParts {
     // one light across the whole of it, and still twists, because its top edge
     // follows the shoulder line and its bottom edge follows the hip line.
     torso: CanvasPoint[];
-    limbs: Segment[];
-    balls: Ball[];
+    // Each limb is one closed outline from the shoulder or hip all the way
+    // into the mitten or the foot, with the bend showing only as a seam drawn
+    // *across* it.
+    //
+    // This replaces a chain of tapered capsules with a ball at every joint,
+    // which was the single thing making the mannequin read as assembled parts.
+    // The ball is not a drawing convention at all — it is how a physical
+    // wooden manikin has to be *manufactured* to rotate, and copying it is why
+    // people say that drawing from one gives you wooden figures. The art-school
+    // construction narrows a limb at its joints instead.
+    limbs: FigureLimb[];
     hipBalls: Ball[];
-    hands: Ellipse[];
-    feet: Ellipse[];
     // The same shapes again, grouped and carrying their depth: hit testing
     // wants them by name, the renderer wants them in order. One geometry,
     // two views of it — never two tables.
@@ -1282,15 +1319,23 @@ const spanOf = (a: CanvasPoint, b: CanvasPoint): number => Math.hypot(b.x - a.x,
 
 // Radii as fractions of the figure's height, so proportions survive scaling.
 const R = {
-    headLong: 0.062, headWide: 0.050,
+    headLong: 0.068, headWide: 0.046,
     // A column, not a peg. The old one was so thin, and the old head so large,
     // that no neck was visible at all and the skull sat straight on the chest.
     neck: 0.027,
-    shoulder: 0.034, elbow: 0.027, wrist: 0.019,
-    hipBall: 0.031, knee: 0.033, ankle: 0.023,
-    upperArm: 0.031, foreArm: 0.023, thigh: 0.043, shin: 0.031,
-    handLong: 0.042, handWide: 0.027,
-    footLong: 0.046, footWide: 0.024,
+    // The width of a limb at each node, from the shoulder or hip down. Two
+    // rules from the art-school construction, both of which the first version
+    // had backwards: an upper arm "stays about the same width from top to
+    // bottom", and a lower leg is "widest at the calf, about two thirds of the
+    // way up" rather than tapering straight from the knee to the ankle. And
+    // limbs **narrow** at a joint rather than bulging — see `limbOutline`.
+    upperArm: 0.031, elbow: 0.028, wrist: 0.019,
+    thigh: 0.043, knee: 0.030, calf: 0.034, ankle: 0.023,
+    hipBall: 0.031,
+    // Longer and narrower than they were: a mitten only a little wider than
+    // the wrist reads as a hand, while one much wider reads as an oven glove.
+    handLong: 0.052, handWide: 0.021,
+    footLong: 0.058, footWide: 0.019,
     // A body is not a cut-out: seen from the side the chest and pelvis are as
     // deep as they are wide, so their on-screen width can never fall below
     // this however far the shoulders foreshorten.
@@ -1357,6 +1402,144 @@ const TORSO_PROFILE: readonly (readonly [number, number, 'shoulder' | 'waist' | 
     [1.16, 0.30, 'hip'],        // the seat closing under the pelvis
 ];
 
+// One limb, as a closed outline through its nodes. Each side is offset by the
+// node's radius along the bisector, and both ends are capped with a half
+// circle — the torso's idea, applied to an arm.
+interface LimbNode { point: CanvasPoint; radius: number }
+
+const CAP_STEPS = 9;
+
+// Seen end-on — a shin under a cross-legged figure viewed from above — a
+// segment projects to almost nothing. Its direction is then noise, and
+// offsetting along it throws the two rails across each other as a fin. So
+// fold any node that lands on top of its predecessor into it, keeping the
+// wider radius: a limb pointing at the camera is a disc, which is what it
+// looks like.
+const foldDegenerate = (nodes: readonly LimbNode[]): LimbNode[] => {
+    const kept: LimbNode[] = [];
+    for (const node of nodes) {
+        const last = kept[kept.length - 1];
+        if (last && Math.hypot(node.point.x - last.point.x, node.point.y - last.point.y)
+            < Math.max(last.radius, node.radius) * 0.35) {
+            kept[kept.length - 1] = {
+                point: node.point,
+                radius: Math.max(last.radius, node.radius),
+            };
+            continue;
+        }
+        kept.push(node);
+    }
+    return kept;
+};
+
+const limbOutline = (input: readonly LimbNode[]): {
+    outline: CanvasPoint[];
+    right: CanvasPoint[];
+    left: CanvasPoint[];
+} => {
+    const nodes = foldDegenerate(input);
+    if (nodes.length < 2) {
+        // A limb aimed straight at the camera. One circle, no rails.
+        const only = nodes[0] ?? input[0];
+        const ring: CanvasPoint[] = [];
+        for (let step = 0; step < CAP_STEPS * 2; step += 1) {
+            const angle = (step / (CAP_STEPS * 2)) * Math.PI * 2;
+            ring.push({
+                x: only.point.x + Math.cos(angle) * only.radius,
+                y: only.point.y + Math.sin(angle) * only.radius,
+            });
+        }
+        return { outline: ring, right: [only.point], left: [only.point] };
+    }
+    const normals: CanvasPoint[] = [];
+    for (let i = 0; i < nodes.length - 1; i += 1) {
+        const dx = nodes[i + 1].point.x - nodes[i].point.x;
+        const dy = nodes[i + 1].point.y - nodes[i].point.y;
+        const length = Math.hypot(dx, dy) || 1;
+        normals.push({ x: -dy / length, y: dx / length });
+    }
+    const sideways: CanvasPoint[] = nodes.map((_, i) => {
+        if (i === 0) return normals[0];
+        if (i === nodes.length - 1) return normals[normals.length - 1];
+        const a = normals[i - 1];
+        const b = normals[i];
+        let x = a.x + b.x;
+        let y = a.y + b.y;
+        const length = Math.hypot(x, y);
+        if (length < 1e-6) return b;
+        x /= length;
+        y /= length;
+        // Mitred, with a limit — an arm folded right back would otherwise
+        // throw a spike out of the inside of the elbow.
+        const cos = Math.max(0.45, x * b.x + y * b.y);
+        return { x: x / cos, y: y / cos };
+    });
+    const right = nodes.map((node, i) => ({
+        x: node.point.x + sideways[i].x * node.radius,
+        y: node.point.y + sideways[i].y * node.radius,
+    }));
+    const left = nodes.map((node, i) => ({
+        x: node.point.x - sideways[i].x * node.radius,
+        y: node.point.y - sideways[i].y * node.radius,
+    }));
+    const cap = (node: LimbNode, from: CanvasPoint): CanvasPoint[] => {
+        const start = Math.atan2(from.y - node.point.y, from.x - node.point.x);
+        const arc: CanvasPoint[] = [];
+        for (let step = 1; step < CAP_STEPS; step += 1) {
+            const angle = start - Math.PI * (step / CAP_STEPS);
+            arc.push({
+                x: node.point.x + Math.cos(angle) * node.radius,
+                y: node.point.y + Math.sin(angle) * node.radius,
+            });
+        }
+        return arc;
+    };
+    const last = nodes.length - 1;
+    return {
+        outline: [
+            ...right,
+            ...cap(nodes[last], right[last]),
+            ...[...left].reverse(),
+            ...[...cap(nodes[0], left[0])].reverse(),
+        ],
+        right,
+        left,
+    };
+};
+
+// How far a limb may turn on screen before one outline stops working. Straight
+// is 1 and doubled right back is -1; this sits at about 110 degrees off
+// straight, past which the two rails cross and the fill grows a fin.
+const FOLD_LIMIT = -0.35;
+
+const foldIndex = (nodes: readonly LimbNode[]): number => {
+    for (let i = 1; i < nodes.length - 1; i += 1) {
+        const inX = nodes[i].point.x - nodes[i - 1].point.x;
+        const inY = nodes[i].point.y - nodes[i - 1].point.y;
+        const outX = nodes[i + 1].point.x - nodes[i].point.x;
+        const outY = nodes[i + 1].point.y - nodes[i].point.y;
+        const lengths = Math.hypot(inX, inY) * Math.hypot(outX, outY);
+        if (lengths < 1e-6) continue;
+        if ((inX * outX + inY * outY) / lengths < FOLD_LIMIT) return i;
+    }
+    return -1;
+};
+
+// Which rail point stands for a given joint. Folding degenerate nodes away can
+// shorten the rails, so the index is looked up rather than assumed.
+const nearestRail = (rail: readonly CanvasPoint[], point: CanvasPoint): number => {
+    let best = 0;
+    let bestGap = Infinity;
+    for (let i = 0; i < rail.length; i += 1) {
+        const gap = Math.hypot(rail[i].x - point.x, rail[i].y - point.y);
+        if (gap < bestGap) {
+            bestGap = gap;
+            best = i;
+        }
+    }
+    return best;
+};
+
 export const inPolygon = (point: CanvasPoint, polygon: readonly CanvasPoint[]): boolean => {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
@@ -1381,76 +1564,94 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 
     const hipMid = place(mid3(joints.hipL, joints.hipR));
 
-    const limbSpec = [
-        ['shoulderL', 'elbowL', R.upperArm, R.elbow],
-        ['shoulderR', 'elbowR', R.upperArm, R.elbow],
-        ['elbowL', 'wristL', R.foreArm, R.wrist],
-        ['elbowR', 'wristR', R.foreArm, R.wrist],
-        ['hipL', 'kneeL', R.thigh, R.knee],
-        ['hipR', 'kneeR', R.thigh, R.knee],
-        ['kneeL', 'ankleL', R.shin, R.ankle],
-        ['kneeR', 'ankleR', R.shin, R.ankle],
-    ] as const;
-
-    const limbs: Segment[] = limbSpec.map(([from, to, fromRatio, toRatio]) => ({
-        from: at[from],
-        to: at[to],
-        fromRadius: u(fromRatio, at[from].scale),
-        toRadius: u(toRatio, at[to].scale),
-    }));
-
-    const ballSpec = [
-        ['shoulderL', R.shoulder], ['shoulderR', R.shoulder],
-        ['elbowL', R.elbow], ['elbowR', R.elbow],
-        ['kneeL', R.knee], ['kneeR', R.knee],
-        ['ankleL', R.ankle], ['ankleR', R.ankle],
-    ] as const;
-    const balls: Ball[] = ballSpec.map(([key, ratio]) => ({
-        center: at[key],
-        radius: u(ratio, at[key].scale),
-    }));
-
-    // A manikin's mitten hand continues the forearm; its block foot points the
-    // way the body does. Both are worked out here rather than being joints of
-    // their own: nobody would ever drag them twice, and two more handles per
-    // limb is a cost paid on every figure for a gain almost no figure needs.
     const forward = bodyForwardOf(joints);
-    const hands: Ellipse[] = ([['elbowL', 'wristL'], ['elbowR', 'wristR']] as const).map(([from, to]) => {
-        const direction = angleOf(at[from], at[to]);
-        const scale = at[to].scale;
+
+    // Where each limb's outline changes width. The bend node is deliberately
+    // the *narrowest* point between the two segments: a limb narrows at a
+    // joint. The calf node exists because a lower leg is widest two thirds of
+    // the way up, not at the knee.
+    const limbSpec = [
+        ['armL', 'shoulderL', 'elbowL', 'wristL'],
+        ['armR', 'shoulderR', 'elbowR', 'wristR'],
+        ['legL', 'hipL', 'kneeL', 'ankleL'],
+        ['legR', 'hipR', 'kneeR', 'ankleR'],
+    ] as const;
+
+    const limbs: FigureLimb[] = limbSpec.map(([key, root, bend, tip]) => {
+        const leg = key.startsWith('leg');
+        const scale = (joint: JointKey) => at[joint].scale;
+        // The root node is pulled a little way down the limb so its cap tucks
+        // under the torso instead of standing proud of the shoulder line as a
+        // bump — the arm is its own cluster, so its outline would otherwise
+        // draw a dome on top of the deltoid.
+        const rootRadius = u(leg ? R.thigh : R.upperArm, scale(root));
+        const inward = norm3(sub3(joints[bend], joints[root]));
+        const nodes: LimbNode[] = [
+            // Further in for an arm than for a leg: a hip sits deep inside the
+            // pelvis already, while a shoulder sits right at the torso's edge.
+            { point: place(add3(joints[root], mul3(inward, rootRadius * (leg ? 0.3 : 0.78)))), radius: rootRadius },
+            { point: at[bend], radius: u(leg ? R.knee : R.elbow, scale(bend)) },
+        ];
+        if (leg) {
+            const calf = place(lerp3(joints[bend], joints[tip], 0.33));
+            nodes.push({ point: calf, radius: u(R.calf, calf.scale) });
+        }
+        nodes.push({ point: at[tip], radius: u(leg ? R.ankle : R.wrist, scale(tip)) });
+
+        // The hand and the foot are the end of the limb, not a lozenge stuck
+        // on it: a mitten that swells past the wrist, a block that points the
+        // way the body faces.
+        const long = leg ? R.footLong : R.handLong;
+        const wide = leg ? R.footWide : R.handWide;
+        const direction = leg
+            ? squareTo(forward, norm3(sub3(joints[tip], joints[bend])))
+            : norm3(sub3(joints[tip], joints[bend]));
+        const mid = place(add3(joints[tip], mul3(direction, unit * long * 0.45)));
+        const far = place(add3(joints[tip], mul3(direction, unit * long * 0.95)));
+        nodes.push({ point: mid, radius: u(wide, mid.scale) });
+        nodes.push({ point: far, radius: u(wide, far.scale) * 0.82 });
+
+        // Where does the chain double back on itself? Not at the joint's real
+        // angle — a knee bent flat to the floor still reads as one run when
+        // seen from the front — but at its angle *on screen*, which is what
+        // the outline is built in.
+        const fold = foldIndex(nodes);
+        const depth = (at[root].depth + at[bend].depth + at[tip].depth) / 3;
+        if (fold >= 0) {
+            const near = limbOutline(nodes.slice(0, fold + 1));
+            const far = limbOutline(nodes.slice(fold));
+            return {
+                key,
+                outlines: [smoothLoop(near.outline), smoothLoop(far.outline)],
+                depths: [
+                    (at[root].depth + at[bend].depth) / 2,
+                    (at[bend].depth + at[tip].depth) / 2,
+                ],
+                depth,
+            };
+        }
+        const built = limbOutline(nodes);
+        const bendRail = nearestRail(built.right, at[bend]);
+        const after = nodes[Math.min(bendRail + 1, nodes.length - 1)].point;
+        const bow = {
+            x: at[bend].x + (after.x - at[bend].x) * 0.24,
+            y: at[bend].y + (after.y - at[bend].y) * 0.24,
+        };
         return {
-            center: {
-                x: at[to].x + Math.cos(direction) * u(R.handLong, scale) * 0.55,
-                y: at[to].y + Math.sin(direction) * u(R.handLong, scale) * 0.55,
-            },
-            radiusX: u(R.handLong, scale),
-            radiusY: u(R.handWide, scale),
-            angle: direction,
+            key,
+            outlines: [smoothLoop(built.outline)],
+            depths: [depth],
+            seam: { from: built.right[bendRail], to: built.left[bendRail], bow },
+            depth,
         };
     });
 
-    // Taken square to the shin, so a raised leg carries its foot round with
-    // it. The projected length is the foreshortening: a foot pointing at the
-    // camera is a short foot, or a figure walking toward you grows skis.
-    const feet: Ellipse[] = ([['kneeL', 'ankleL'], ['kneeR', 'ankleR']] as const).map(([knee, ankle]) => {
-        const shin = sub3(joints[ankle], joints[knee]);
-        const step = squareTo(forward, len3(shin) < 1e-9 ? forward : norm3(shin));
-        const scale = at[ankle].scale;
-        const toe = place(add3(joints[ankle], mul3(step, unit * R.footLong * 0.62)));
-        const reach = Math.max(spanOf(at[ankle], toe), u(R.footWide, scale) * 0.7);
-        return {
-            center: toe,
-            radiusX: reach + u(R.footWide, scale) * 0.5,
-            radiusY: u(R.footWide, scale),
-            angle: angleOf(at[ankle], toe),
-        };
-    });
-
+    // The torso, as one outline. No spine segment underneath any more: the
+    // outline itself spans neck to hip, so the figure cannot come apart
     // The facial plane sits on the front of the skull and is simply absent
     // once it has turned away. It is lighter rather than darker: the light is
     // in front, so the flat of the face is the part of the head that catches
-    // it — and a dark patch on a head reads as a mask, which is not what we
-    // want a model to paint.
+    // it — and a dark patch on a head reads as a mask.
     const facing = norm3(sub3(joints.face, joints.head));
     const facingCamera = zOf(facing);
     const face: Ellipse | null = facingCamera > 0.06 ? (() => {
@@ -1463,8 +1664,6 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         };
     })() : null;
 
-    // The torso, as one outline. No spine segment underneath any more: the
-    // outline itself spans neck to hip, so the figure cannot come apart
     // however hard a shoulder is dragged, and there is nothing to show through.
     const torso: CanvasPoint[] = (() => {
         const axis = { x: hipMid.x - at.neck.x, y: hipMid.y - at.neck.y };
@@ -1480,13 +1679,13 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             if (span < 1e-6) return { x: (-axis.y / axisLength) * half, y: (axis.x / axisLength) * half };
             return { x: (dx / span) * half, y: (dy / span) * half };
         };
-        const shoulder = sideways(at.shoulderL, at.shoulderR, u(R.chestDepth, at.neck.scale) * 1.15, 1.06);
+        const shoulder = sideways(at.shoulderL, at.shoulderR, u(R.chestDepth, at.neck.scale) * 1.15, 1.29);
         // The hip *joints* sit well inside the pelvis — they are where the
         // thighs pivot, not where the body ends — so the flare is built out
         // past them. Taking the joint span as the width was what made the
         // torso a tube: it came out narrower at the hip than at the waist,
         // which is not a shape any person has.
-        const hip = sideways(at.hipL, at.hipR, u(R.pelvisDepth, hipMid.scale), 1.30, u(R.hipBall, hipMid.scale) * 0.22);
+        const hip = sideways(at.hipL, at.hipR, u(R.pelvisDepth, hipMid.scale), 1.52, u(R.hipBall, hipMid.scale) * 0.22);
         const waistScale = 0.58;
         const widths = {
             shoulder,
@@ -1544,29 +1743,6 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 
     const mean = (...depths: number[]) => depths.reduce((sum, d) => sum + d, 0) / depths.length;
 
-    const limbCluster = (
-        key: FigureCluster['key'],
-        ball: Ball | null,
-        upper: Segment,
-        joint: Ball,
-        lower: Segment,
-        end: Ball | null,
-        tip: Ellipse,
-        depths: readonly [number, number, number],
-    ): FigureCluster => ({
-        key,
-        order: 'depth',
-        depth: mean(...depths),
-        shapes: [
-            { kind: 'segment', segment: upper, tone: 'body', depth: mean(depths[0], depths[1]) },
-            { kind: 'segment', segment: lower, tone: 'body', depth: mean(depths[1], depths[2]) },
-            { kind: 'ellipse', ellipse: tip, tone: 'body', depth: depths[2] },
-            ...(ball ? [{ kind: 'ball' as const, ball, tone: 'joint' as const, depth: depths[0] }] : []),
-            { kind: 'ball', ball: joint, tone: 'joint', depth: depths[1] },
-            ...(end ? [{ kind: 'ball' as const, ball: end, tone: 'joint' as const, depth: depths[2] }] : []),
-        ],
-    });
-
     const clusters: FigureCluster[] = [
         {
             key: 'torso',
@@ -1588,21 +1764,21 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
                 ...(face ? [{ kind: 'ellipse' as const, ellipse: face, tone: 'head' as const, tint: 0.34, depth: at.head.depth }] : []),
             ],
         },
-        limbCluster('armL', balls[0], limbs[0], balls[2], limbs[2], null, hands[0],
-            [at.shoulderL.depth, at.elbowL.depth, at.wristL.depth]),
-        limbCluster('armR', balls[1], limbs[1], balls[3], limbs[3], null, hands[1],
-            [at.shoulderR.depth, at.elbowR.depth, at.wristR.depth]),
-        // The legs deliberately do *not* carry the hip ball. It belongs to the
-        // torso, drawn under the pelvis where it shows only as the seam the
-        // thigh comes out of; drawn again with the leg it lands on top of the
-        // thigh as a dark disc, which reads as a kneecap in the wrong place.
-        limbCluster('legL', null, limbs[4], balls[4], limbs[6], balls[6], feet[0],
-            [at.hipL.depth, at.kneeL.depth, at.ankleL.depth]),
-        limbCluster('legR', null, limbs[5], balls[5], limbs[7], balls[7], feet[1],
-            [at.hipR.depth, at.kneeR.depth, at.ankleR.depth]),
+        ...limbs.map((limb): FigureCluster => ({
+            key: limb.key,
+            // A split limb's two pieces overlap, so which one is in front is a
+            // question about depth — the whole reason the split is allowed to
+            // look like an overlap rather than a merge.
+            order: limb.outlines.length > 1 ? 'depth' : 'authored',
+            depth: limb.depth,
+            seam: limb.seam,
+            shapes: limb.outlines.map((points, i): FigureShape => ({
+                kind: 'polygon', points, tone: 'body', depth: limb.depths[i],
+            })),
+        })),
     ];
 
-    return { head, face, neck, torso, limbs, balls, hipBalls, hands, feet, clusters };
+    return { head, face, neck, torso, limbs, hipBalls, clusters };
 };
 
 // --- drawing -----------------------------------------------------------------
@@ -1889,6 +2065,19 @@ export const drawFigure = (
         for (const shape of ordered) {
             ctx.fillStyle = shapeFill(ctx, shape, tone, unit);
             fillShape(ctx, shape);
+        }
+        if (cluster.seam) {
+            // Across the limb, bowed toward the far side of the bend. The
+            // articulation as an edge rather than a lump: the whole reason the
+            // joints stopped being balls.
+            ctx.strokeStyle = tone.rim;
+            ctx.globalAlpha = 0.4;
+            ctx.lineWidth = Math.max(unit * 0.0045, 0.8);
+            ctx.beginPath();
+            ctx.moveTo(cluster.seam.from.x, cluster.seam.from.y);
+            ctx.quadraticCurveTo(cluster.seam.bow.x, cluster.seam.bow.y, cluster.seam.to.x, cluster.seam.to.y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
         }
     }
     ctx.restore();
