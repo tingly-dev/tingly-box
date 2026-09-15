@@ -56,6 +56,16 @@ export interface ProbeRequest {
     // Vision: attach the canonical probe image in the user message ('user')
     // or a synthetic tool-result turn ('tool'). Omitted/'none' sends no image.
     vision?: ProbeVision;
+
+    // A raw client request body in `request_protocol`'s shape — what a real
+    // client would send TB. Parsed with the same SDK decoders TB's handlers
+    // use; the probe fills the model (and Anthropic max_tokens) and sends it
+    // on that protocol's wire. Replaces the fixture: `message`, `tool`,
+    // `vision`, `thinking` are rejected alongside it; `stream` still applies.
+    // Provider targets speak `request_protocol`; rule targets require the
+    // scenario's protocol family.
+    request?: Record<string, unknown>;
+    request_protocol?: ProbeProtocol;
 }
 
 export interface ProbeToolCall {
