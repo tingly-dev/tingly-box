@@ -1,4 +1,4 @@
-package claude
+package render
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 // ToolRenderer renders a tool_use call to a single (possibly multi-line) string.
@@ -13,7 +15,7 @@ type ToolRenderer func(name string, input map[string]interface{}) string
 
 // ToolResultRenderer renders a tool_result message to a single (possibly
 // multi-line) string. The tool name is looked up via ToolUseID by the formatter.
-type ToolResultRenderer func(name string, m *ToolResultMessage) string
+type ToolResultRenderer func(name string, m *claude.ToolResultMessage) string
 
 var (
 	toolRenderers       = map[string]ToolRenderer{}
@@ -42,7 +44,7 @@ func renderToolUse(name string, input map[string]interface{}, detail bool) strin
 }
 
 // renderToolResult dispatches to a per-tool result renderer or falls back.
-func renderToolResult(name string, m *ToolResultMessage) string {
+func renderToolResult(name string, m *claude.ToolResultMessage) string {
 	if name != "" {
 		if fn, ok := toolResultRenderers[name]; ok {
 			return fn(name, m)
@@ -374,7 +376,7 @@ func renderGenericToolUse(name string, in map[string]interface{}) string {
 
 // ----- per-tool renderers (tool_result) -----
 
-func renderReadResult(_ string, m *ToolResultMessage) string {
+func renderReadResult(_ string, m *claude.ToolResultMessage) string {
 	body := resultBody(m)
 	if m.IsError {
 		return "Read ✗: " + truncate(firstLine(body), 120)
@@ -386,7 +388,7 @@ func renderReadResult(_ string, m *ToolResultMessage) string {
 	return fmt.Sprintf("Read ✓ (%d lines)", lines)
 }
 
-func renderBashResult(_ string, m *ToolResultMessage) string {
+func renderBashResult(_ string, m *claude.ToolResultMessage) string {
 	body := resultBody(m)
 	mark := "✓"
 	if m.IsError {
@@ -403,14 +405,14 @@ func renderBashResult(_ string, m *ToolResultMessage) string {
 	return out
 }
 
-func renderTodoWriteResult(_ string, m *ToolResultMessage) string {
+func renderTodoWriteResult(_ string, m *claude.ToolResultMessage) string {
 	if m.IsError {
 		return "Todos ✗: " + truncate(firstLine(resultBody(m)), 120)
 	}
 	return "Todos updated"
 }
 
-func renderGrepResult(_ string, m *ToolResultMessage) string {
+func renderGrepResult(_ string, m *claude.ToolResultMessage) string {
 	body := resultBody(m)
 	if m.IsError {
 		return "Grep ✗: " + truncate(firstLine(body), 120)
@@ -434,7 +436,7 @@ func renderGrepResult(_ string, m *ToolResultMessage) string {
 	return out
 }
 
-func renderGlobResult(_ string, m *ToolResultMessage) string {
+func renderGlobResult(_ string, m *claude.ToolResultMessage) string {
 	body := resultBody(m)
 	if m.IsError {
 		return "Glob ✗: " + truncate(firstLine(body), 120)
@@ -451,14 +453,14 @@ func renderGlobResult(_ string, m *ToolResultMessage) string {
 	return out
 }
 
-func renderWebFetchResult(_ string, m *ToolResultMessage) string {
+func renderWebFetchResult(_ string, m *claude.ToolResultMessage) string {
 	if m.IsError {
 		return "Fetch ✗: " + truncate(firstLine(resultBody(m)), 120)
 	}
 	return "Fetch ✓: " + truncate(singleLine(resultBody(m)), 200)
 }
 
-func renderWebSearchResult(_ string, m *ToolResultMessage) string {
+func renderWebSearchResult(_ string, m *claude.ToolResultMessage) string {
 	if m.IsError {
 		return "Search ✗: " + truncate(firstLine(resultBody(m)), 120)
 	}
@@ -466,7 +468,7 @@ func renderWebSearchResult(_ string, m *ToolResultMessage) string {
 }
 
 // renderQuietResult is used by Edit/Write/MultiEdit: only print on error.
-func renderQuietResult(name string, m *ToolResultMessage) string {
+func renderQuietResult(name string, m *claude.ToolResultMessage) string {
 	if m.IsError {
 		return name + " ✗: " + truncate(firstLine(resultBody(m)), 120)
 	}
@@ -474,7 +476,7 @@ func renderQuietResult(name string, m *ToolResultMessage) string {
 }
 
 // renderGenericToolResult is the fallback for tools without a result renderer.
-func renderGenericToolResult(name string, m *ToolResultMessage) string {
+func renderGenericToolResult(name string, m *claude.ToolResultMessage) string {
 	mark := "✓"
 	if m.IsError {
 		mark = "✗"
@@ -495,9 +497,9 @@ func renderGenericToolResult(name string, m *ToolResultMessage) string {
 	return out
 }
 
-// resultBody returns the textual body of a ToolResultMessage, preferring the
-// explicit Output field but falling back to ToolResultContentBlock content.
-func resultBody(m *ToolResultMessage) string {
+// resultBody returns the textual body of a claude.ToolResultMessage, preferring the
+// explicit Output field but falling back to claude.ToolResultContentBlock content.
+func resultBody(m *claude.ToolResultMessage) string {
 	if m == nil {
 		return ""
 	}
@@ -505,7 +507,7 @@ func resultBody(m *ToolResultMessage) string {
 		return m.Output
 	}
 	for _, c := range m.Content {
-		if tr, ok := c.(*ToolResultContentBlock); ok && tr.Content != "" {
+		if tr, ok := c.(*claude.ToolResultContentBlock); ok && tr.Content != "" {
 			return tr.Content
 		}
 	}
@@ -549,13 +551,38 @@ func inputFromRaw(v any) map[string]interface{} {
 	return out
 }
 
-// getStr is a thin wrapper around the package-level getString that tolerates a
+// getStr extracts a string value from a tool input/result map. Tolerates a
 // nil map (callers in this file frequently receive nil from inputFromRaw).
 func getStr(m map[string]interface{}, k string) string {
 	if m == nil {
 		return ""
 	}
-	return getString(m, k)
+	if v, ok := m[k].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// getInt extracts an int value decoded from JSON (float64) at k.
+func getInt(m map[string]interface{}, k string) int {
+	if m == nil {
+		return 0
+	}
+	if v, ok := m[k].(float64); ok {
+		return int(v)
+	}
+	return 0
+}
+
+// getBool extracts a bool value at k.
+func getBool(m map[string]interface{}, k string) bool {
+	if m == nil {
+		return false
+	}
+	if v, ok := m[k].(bool); ok {
+		return v
+	}
+	return false
 }
 
 func getSlice(m map[string]interface{}, k string) []interface{} {

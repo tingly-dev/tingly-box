@@ -1,4 +1,4 @@
-package claude
+package render
 
 import (
 	"fmt"
@@ -6,11 +6,13 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 // Formatter converts messages to structured text
 type Formatter interface {
-	Format(msg Message) string
+	Format(msg claude.Message) string
 }
 
 // TextFormatter implements Formatter using built-in formatting
@@ -24,7 +26,7 @@ type TextFormatter struct {
 	// removed once the corresponding result is rendered.
 	toolNameByID map[string]string
 	// seenAssistantToolIDs records IDs of tool_use blocks already rendered
-	// inside an AssistantMessage so the SDK's standalone *ToolUseMessage
+	// inside an claude.AssistantMessage so the SDK's standalone *claude.ToolUseMessage
 	// duplicate is suppressed (returns "" and is dropped by the caller).
 	seenAssistantToolIDs map[string]struct{}
 }
@@ -92,45 +94,45 @@ func (f *TextFormatter) wasAssistantToolID(id string) bool {
 }
 
 // Format formats a message
-func (f *TextFormatter) Format(msg Message) string {
+func (f *TextFormatter) Format(msg claude.Message) string {
 	if msg == nil {
 		return ""
 	}
 
 	switch m := msg.(type) {
-	case *SystemMessage:
+	case *claude.SystemMessage:
 		return f.formatSystem(m)
-	case *AssistantMessage:
+	case *claude.AssistantMessage:
 		return f.formatAssistant(m)
-	case *UserMessage:
+	case *claude.UserMessage:
 		return f.formatUser(m)
-	case *ToolUseMessage:
+	case *claude.ToolUseMessage:
 		return f.formatToolUse(m)
-	case *ToolResultMessage:
+	case *claude.ToolResultMessage:
 		return f.formatToolResult(m)
-	case *StreamEventMessage:
+	case *claude.StreamEventMessage:
 		return f.formatStreamEvent(m)
-	case *ResultMessage:
+	case *claude.ResultMessage:
 		return f.formatResult(m)
 	default:
 		return fmt.Sprintf("[UNKNOWN] %s", msg.GetType())
 	}
 }
 
-func (f *TextFormatter) formatSystem(m *SystemMessage) string {
+func (f *TextFormatter) formatSystem(m *claude.SystemMessage) string {
 	switch m.SubType {
-	case SystemSubtypeTaskStarted:
+	case claude.SystemSubtypeTaskStarted:
 		return f.formatTaskStarted(m)
-	case SystemSubtypeTaskCompleted:
+	case claude.SystemSubtypeTaskCompleted:
 		return f.formatTaskCompleted(m)
-	case SystemSubtypeTaskNotification:
+	case claude.SystemSubtypeTaskNotification:
 		return f.formatTaskNotification(m)
-	case SystemSubtypeTaskProgress, SystemSubtypeTaskUpdated:
+	case claude.SystemSubtypeTaskProgress, claude.SystemSubtypeTaskUpdated:
 		// Claude Code emits these frequently while a subagent is running. The
 		// raw message remains available to consumers; suppressing incremental
 		// patches here avoids flooding chat surfaces.
 		return ""
-	case SystemSubtypeInit:
+	case claude.SystemSubtypeInit:
 		var b strings.Builder
 		b.WriteString("[SYSTEM] ")
 		b.WriteString(m.SubType)
@@ -141,9 +143,9 @@ func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 			b.WriteString(m.Timestamp.Format("2006-01-02 15:04:05"))
 		}
 		return b.String()
-	case SystemSubtypeAPIRetry:
+	case claude.SystemSubtypeAPIRetry:
 		return f.formatRetryNotice(m, "Retrying API request")
-	case SystemSubtypeRateLimit:
+	case claude.SystemSubtypeRateLimit:
 		return f.formatRetryNotice(m, "Rate limited, waiting")
 	default:
 		logrus.Debugf("system message, subtype: %s", m.SubType)
@@ -155,17 +157,17 @@ func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 // emits these while an upstream call is being retried; surfacing them tells the
 // user why the agent is pausing instead of leaving a silent gap. lead is the
 // human-readable action ("Retrying API request", "Rate limited, waiting").
-func (f *TextFormatter) formatRetryNotice(m *SystemMessage, lead string) string {
+func (f *TextFormatter) formatRetryNotice(m *claude.SystemMessage, lead string) string {
 	var b strings.Builder
 	b.WriteString("[RETRY] ")
 	b.WriteString(lead)
-	if n := m.retryAttempt(); n > 0 {
+	if n := m.RetryAttempt(); n > 0 {
 		fmt.Fprintf(&b, " (attempt %d)", n)
 	}
-	if d := m.retryDelayMS(); d > 0 {
+	if d := m.RetryDelayMS(); d > 0 {
 		fmt.Fprintf(&b, ", retry in %s", formatRetryDelay(d))
 	}
-	if reason := m.retryReason(); reason != "" {
+	if reason := m.RetryReason(); reason != "" {
 		b.WriteString(": ")
 		b.WriteString(reason)
 	}
@@ -180,7 +182,7 @@ func formatRetryDelay(ms int64) string {
 	return fmt.Sprintf("%.1fs", float64(ms)/1000)
 }
 
-func (f *TextFormatter) formatTaskStarted(m *SystemMessage) string {
+func (f *TextFormatter) formatTaskStarted(m *claude.SystemMessage) string {
 	var b strings.Builder
 	b.WriteString("[SUBAGENT] ")
 	if m.Description != "" {
@@ -200,7 +202,7 @@ func (f *TextFormatter) formatTaskStarted(m *SystemMessage) string {
 	return b.String()
 }
 
-func (f *TextFormatter) formatTaskCompleted(m *SystemMessage) string {
+func (f *TextFormatter) formatTaskCompleted(m *claude.SystemMessage) string {
 	var b strings.Builder
 	b.WriteString("[SUBAGENT DONE]")
 	if m.Description != "" {
@@ -210,7 +212,7 @@ func (f *TextFormatter) formatTaskCompleted(m *SystemMessage) string {
 	return b.String()
 }
 
-func (f *TextFormatter) formatTaskNotification(m *SystemMessage) string {
+func (f *TextFormatter) formatTaskNotification(m *claude.SystemMessage) string {
 	var b strings.Builder
 	b.WriteString("[SUBAGENT] Done")
 	if m.Description != "" {
@@ -220,7 +222,7 @@ func (f *TextFormatter) formatTaskNotification(m *SystemMessage) string {
 	return b.String()
 }
 
-func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
+func (f *TextFormatter) formatAssistant(m *claude.AssistantMessage) string {
 	var sections []string
 	var tools []ToolUseRef
 
@@ -236,12 +238,12 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 
 	for _, content := range m.Message.Content {
 		switch content.Type {
-		case ContentBlockTypeText:
+		case claude.ContentBlockTypeText:
 			flushTools()
 			if content.Text != "" {
 				sections = append(sections, strings.TrimRight(content.Text, "\n"))
 			}
-		case ContentBlockTypeToolUse, ContentBlockTypeServerToolUse:
+		case claude.ContentBlockTypeToolUse, claude.ContentBlockTypeServerToolUse:
 			f.rememberToolName(content.ID, content.Name)
 			f.markAssistantToolID(content.ID)
 			tools = append(tools, ToolUseRef{
@@ -249,22 +251,22 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 				Name:  content.Name,
 				Input: inputFromRaw(content.Input),
 			})
-		case ContentBlockTypeThinking:
+		case claude.ContentBlockTypeThinking:
 			flushTools()
 			if f.Verbose && content.Thinking != "" {
 				sections = append(sections, "[THINKING] "+content.Thinking)
 			}
-		case ContentBlockTypeRedactedThinking:
+		case claude.ContentBlockTypeRedactedThinking:
 			// Redacted reasoning is intentionally never rendered.
-		case ContentBlockTypeWebSearchToolResult,
-			ContentBlockTypeWebFetchToolResult,
-			ContentBlockTypeCodeExecutionToolResult,
-			ContentBlockTypeBashCodeExecutionToolResult,
-			ContentBlockTypeTextEditorExecutionToolResult,
-			ContentBlockTypeToolSearchToolResult:
+		case claude.ContentBlockTypeWebSearchToolResult,
+			claude.ContentBlockTypeWebFetchToolResult,
+			claude.ContentBlockTypeCodeExecutionToolResult,
+			claude.ContentBlockTypeBashCodeExecutionToolResult,
+			claude.ContentBlockTypeTextEditorExecutionToolResult,
+			claude.ContentBlockTypeToolSearchToolResult:
 			flushTools()
 			sections = append(sections, f.formatServerToolResult(content.Type, content.ToolUseID))
-		case ContentBlockTypeContainerUpload:
+		case claude.ContentBlockTypeContainerUpload:
 			flushTools()
 			sections = append(sections, "Container upload ready")
 		}
@@ -286,24 +288,24 @@ func (f *TextFormatter) formatServerToolResult(blockType, toolUseID string) stri
 		return name + " result"
 	}
 	switch blockType {
-	case ContentBlockTypeWebSearchToolResult:
+	case claude.ContentBlockTypeWebSearchToolResult:
 		return "Web search result"
-	case ContentBlockTypeWebFetchToolResult:
+	case claude.ContentBlockTypeWebFetchToolResult:
 		return "Web fetch result"
-	case ContentBlockTypeCodeExecutionToolResult:
+	case claude.ContentBlockTypeCodeExecutionToolResult:
 		return "Code execution result"
-	case ContentBlockTypeBashCodeExecutionToolResult:
+	case claude.ContentBlockTypeBashCodeExecutionToolResult:
 		return "Bash execution result"
-	case ContentBlockTypeTextEditorExecutionToolResult:
+	case claude.ContentBlockTypeTextEditorExecutionToolResult:
 		return "Text editor execution result"
-	case ContentBlockTypeToolSearchToolResult:
+	case claude.ContentBlockTypeToolSearchToolResult:
 		return "Tool search result"
 	default:
 		return "Server tool result"
 	}
 }
 
-func (f *TextFormatter) formatUser(m *UserMessage) string {
+func (f *TextFormatter) formatUser(m *claude.UserMessage) string {
 	if m.Message == "" {
 		return ""
 	}
@@ -319,12 +321,12 @@ func (f *TextFormatter) formatUser(m *UserMessage) string {
 	return b.String()
 }
 
-func (f *TextFormatter) formatToolUse(m *ToolUseMessage) string {
+func (f *TextFormatter) formatToolUse(m *claude.ToolUseMessage) string {
 	if m == nil {
 		return ""
 	}
 	// Suppress duplicates: if the same tool_use ID was already rendered as
-	// part of an AssistantMessage bundle, drop this standalone event.
+	// part of an claude.AssistantMessage bundle, drop this standalone event.
 	if f.wasAssistantToolID(m.ToolUseID) {
 		return ""
 	}
@@ -332,7 +334,7 @@ func (f *TextFormatter) formatToolUse(m *ToolUseMessage) string {
 	return renderToolUse(m.Name, m.Input, f.ShowToolDetails)
 }
 
-func (f *TextFormatter) formatToolResult(m *ToolResultMessage) string {
+func (f *TextFormatter) formatToolResult(m *claude.ToolResultMessage) string {
 	if m == nil {
 		return ""
 	}
@@ -340,7 +342,7 @@ func (f *TextFormatter) formatToolResult(m *ToolResultMessage) string {
 	return renderToolResult(name, m)
 }
 
-func (f *TextFormatter) formatStreamEvent(m *StreamEventMessage) string {
+func (f *TextFormatter) formatStreamEvent(m *claude.StreamEventMessage) string {
 	var b strings.Builder
 	b.WriteString("[STREAM]")
 	if m.Event.Type != "" {
@@ -350,10 +352,10 @@ func (f *TextFormatter) formatStreamEvent(m *StreamEventMessage) string {
 
 	if m.Event.Delta != nil {
 		switch delta := m.Event.Delta.(type) {
-		case *TextDelta:
+		case *claude.TextDelta:
 			b.WriteString(" +")
 			b.WriteString(delta.Text)
-		case *InputJSONDelta:
+		case *claude.InputJSONDelta:
 			b.WriteString(" +JSON: ")
 			b.WriteString(delta.PartialJSON)
 		}
@@ -361,7 +363,7 @@ func (f *TextFormatter) formatStreamEvent(m *StreamEventMessage) string {
 	return b.String()
 }
 
-func (f *TextFormatter) formatResult(m *ResultMessage) string {
+func (f *TextFormatter) formatResult(m *claude.ResultMessage) string {
 	var b strings.Builder
 	b.WriteString("[RESULT] ")
 	if m.IsError {
