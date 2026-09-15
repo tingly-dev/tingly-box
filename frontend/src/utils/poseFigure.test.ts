@@ -20,6 +20,7 @@ import {
     figureBounds,
     figureParts,
     figureUnit,
+    HEAD_LENGTH_RATIO,
     figureVisualBounds,
     flipFigure,
     hitTestBody,
@@ -268,7 +269,7 @@ describe('figureParts', () => {
         // The shape, asserted as a shape. Three stacked ellipses passed every
         // test we had and still looked like three stacked ellipses.
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
-        const shoulders = torsoWidthAt(figure, 0.14);
+        const shoulders = torsoWidthAt(figure, 0.10);
         const waist = torsoWidthAt(figure, 0.62);
         const hips = torsoWidthAt(figure, 0.95);
         expect(waist).toBeLessThan(shoulders * 0.8);
@@ -297,9 +298,10 @@ describe('figureParts', () => {
         });
         const shoulderChange = Math.abs(torsoWidthAt(twisted, 0.14) / torsoWidthAt(figure, 0.14) - 1);
         // The camera is aimed at neck-and-hip, which a shoulder drag cannot
-        // move, so the hips stay put — to within the hair the smoothing
-        // carries round the closing seam.
-        const hipChange = Math.abs(torsoWidthAt(twisted, 0.95) / torsoWidthAt(figure, 0.95) - 1);
+        // move, so the hips stay put. Measured squarely in the pelvis rather
+        // than at its top edge: the waist row *is* derived from the shoulders,
+        // and the smoothing carries a hair of that down into the row below it.
+        const hipChange = Math.abs(torsoWidthAt(twisted, 1.02) / torsoWidthAt(figure, 1.02) - 1);
         expect(shoulderChange).toBeGreaterThan(0.1);
         expect(hipChange).toBeLessThan(0.01);
     });
@@ -369,6 +371,49 @@ describe('figureParts', () => {
             y: (at.kneeL.y + at.ankleL.y) / 2,
         };
         expect(hitTestBody(folded, shin, 4)).toBe(true);
+    });
+
+    it('hangs each limb off the body\'s corner, not out of the middle of a slab', () => {
+        // The bug this replaces: the torso's width was inflated *away* from the
+        // joints (shoulders x1.29, hips x1.52 plus a pad), so the body's edge
+        // stood well outboard of where a limb actually leaves it. An arm then
+        // read as hanging from under a shelf, and the legs came out through a
+        // slot in the middle of a wide skirt — the "nappy". Anchoring the
+        // silhouette near the joints is what fixed a dozen poses at once.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
+        const { torso } = figureParts(figure);
+        const half = (t: number) => torsoWidthAt(figure, t) / 2;
+        const spine = (at.neck.x + (at.hipL.x + at.hipR.x) / 2) / 2;
+
+        // The shoulder joint reaches most of the way to the deltoid's edge.
+        // The geometry this replaces measured 0.77 and 0.63, with the pelvis
+        // hanging 6.5% of the body's height below the hip joints.
+        const shoulderOut = Math.abs(at.shoulderR.x - spine);
+        expect(shoulderOut / half(0.10)).toBeGreaterThan(0.8);
+        // ...and the hip joint most of the way to the pelvis's lower corner,
+        // measured at the joint's own height rather than up at the crest.
+        const hipOut = Math.abs(at.hipR.x - spine);
+        expect(hipOut / half(1.06)).toBeGreaterThan(0.72);
+
+        // No skirt: the pelvis stops at the hip joints rather than hanging
+        // below them, so the legs pivot on its bottom corners.
+        const hipY = Math.max(at.hipL.y, at.hipR.y);
+        const lowest = Math.max(...torso.map((point) => point.y));
+        expect(lowest - hipY).toBeLessThan(figureUnit(figure) * 0.04);
+    });
+
+    it('gives the body the shoulders and hips the canon asks for', () => {
+        // Two heads across the shoulders, and hips about three quarters of
+        // that. Measured, because "looks about right" is how it drifted.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const head = HEAD_LENGTH_RATIO * figureUnit(figure);
+        const shoulders = torsoWidthAt(figure, 0.10);
+        const hips = torsoWidthAt(figure, 0.88);   // the iliac crest, the widest
+        expect(shoulders / head).toBeGreaterThan(1.8);
+        expect(shoulders / head).toBeLessThan(2.2);
+        expect(hips / shoulders).toBeGreaterThan(0.68);
+        expect(hips / shoulders).toBeLessThan(0.86);
     });
 
     it('puts a ball on the sockets and nothing on the hinges', () => {

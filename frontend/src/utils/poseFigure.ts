@@ -236,9 +236,14 @@ export const projectFigure = (figure: PoseFigure): ProjectedJoints => {
 // A figure lands at 70% of the canvas height, centred. Big enough to read as
 // the subject, small enough to leave room for the scene around it.
 const FIGURE_HEIGHT_RATIO = 0.7;
-// Width of the unit box relative to its height. Arms out to the side need
-// more room than a body is wide.
-const FIGURE_ASPECT = 0.45;
+// Width of the unit box relative to its height. Arms out to the side need more
+// room than a body is wide — and the box has to hold the *drawn* figure, not
+// just its joints: the deltoid and the shoulder ball both sit outboard of the
+// shoulder joint, so a pose with its arms straight up is wider than its
+// skeleton. Changing this only changes how much room is reserved; bone lengths
+// are unaffected, because the same factor divides out when a preset is
+// normalised (see `POSE_SCALE * FIGURE_ASPECT` below).
+const FIGURE_ASPECT = 0.48;
 
 export type PosePresetKey =
     | 'standing' | 'contrapposto' | 'handsOnHips' | 'armsCrossed' | 'tPose' | 'armsUp' | 'armsBehind'
@@ -286,9 +291,12 @@ interface PoseSpec {
 // One skeleton for every pose, in arbitrary units — the result is normalised.
 const BONE = {
     torso: 0.36, head: 0.11,
-    shoulderSpan: 0.085, shoulderDrop: 0.035,
+    // Wide enough that the shoulder joint sits *on* the deltoid corner and the
+    // hip joint on the pelvis's lower corner. Tucked inside the body instead,
+    // a limb reads as hanging off a shelf, and every raised arm cuts a notch.
+    shoulderSpan: 0.118, shoulderDrop: 0.035,
     upperArm: 0.155, foreArm: 0.145,
-    hipSpan: 0.052, hipDrop: 0.022,
+    hipSpan: 0.070, hipDrop: 0.022,
     thigh: 0.235, shin: 0.225,
     // Far enough in front of the skull that the handle clears the head's.
     face: 0.075,
@@ -1348,6 +1356,12 @@ const R = {
     chestDepth: 0.070, pelvisDepth: 0.050,
 } as const;
 
+// The canon's unit of measure: crown to chin, as a fraction of the figure's
+// height. Eight of these is the whole body, two of them the shoulders. Exported
+// because it is the ruler the proportions are checked against, and a ruler kept
+// privately is a ruler that drifts.
+export const HEAD_LENGTH_RATIO = R.headLong * 2;
+
 // A closed outline through the given points, smoothed. Catmull-Rom rather
 // than straight edges because a torso has no corners, and sampled to a
 // polygon rather than left as curves because the same array then serves both
@@ -1398,14 +1412,18 @@ const HEAD_PROFILE: readonly (readonly [number, number])[] = [
 
 const TORSO_PROFILE: readonly (readonly [number, number, 'shoulder' | 'waist' | 'hip'])[] = [
     [-0.05, 0.54, 'shoulder'],  // behind the neck, so there is no notch there
-    [0.02, 0.90, 'shoulder'],   // the slope of the trapezius
-    [0.14, 1.00, 'shoulder'],   // deltoid — the widest point of the body
-    [0.37, 0.79, 'shoulder'],   // the ribcage drawing in
+    [0.02, 0.88, 'shoulder'],   // the slope of the trapezius
+    [0.10, 1.00, 'shoulder'],   // deltoid — level with the shoulder joint
+    [0.37, 0.78, 'shoulder'],   // the ribcage drawing in
     [0.62, 1.00, 'waist'],
-    [0.84, 0.93, 'hip'],
-    [0.97, 1.00, 'hip'],        // the hip, flared
-    [1.08, 0.80, 'hip'],
-    [1.16, 0.30, 'hip'],        // the seat closing under the pelvis
+    [0.88, 1.00, 'hip'],        // the iliac crest — the widest the pelvis gets
+    [1.00, 0.94, 'hip'],
+    // The pelvis is a trapezoid that *narrows onto* the hip joints (t≈1.06)
+    // and stops. Carrying it wider and lower than the joints was the "skirt":
+    // the legs then leave through a slot in the middle of it instead of
+    // pivoting on its bottom corners, which is what a manikin actually does.
+    [1.05, 0.72, 'hip'],
+    [1.09, 0.32, 'hip'],
 ];
 
 // Which row of that table is the waist — where the ribcage stops and the
@@ -1599,7 +1617,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         const nodes: LimbNode[] = [
             // Further in for an arm than for a leg: a hip sits deep inside the
             // pelvis already, while a shoulder sits right at the torso's edge.
-            { point: place(add3(joints[root], mul3(inward, rootRadius * (leg ? 0.3 : 0.78)))), radius: rootRadius },
+            { point: place(add3(joints[root], mul3(inward, rootRadius * (leg ? 0.25 : 0.35)))), radius: rootRadius },
             { point: at[bend], radius: u(leg ? R.knee : R.elbow, scale(bend)) },
         ];
         if (leg) {
@@ -1689,13 +1707,13 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             if (span < 1e-6) return { x: (-axis.y / axisLength) * half, y: (axis.x / axisLength) * half };
             return { x: (dx / span) * half, y: (dy / span) * half };
         };
-        const shoulder = sideways(at.shoulderL, at.shoulderR, u(R.chestDepth, at.neck.scale) * 1.15, 1.29);
+        const shoulder = sideways(at.shoulderL, at.shoulderR, u(R.chestDepth, at.neck.scale) * 1.15, 1.15);
         // The hip *joints* sit well inside the pelvis — they are where the
         // thighs pivot, not where the body ends — so the flare is built out
         // past them. Taking the joint span as the width was what made the
         // torso a tube: it came out narrower at the hip than at the waist,
         // which is not a shape any person has.
-        const hip = sideways(at.hipL, at.hipR, u(R.pelvisDepth, hipMid.scale), 1.52, u(R.hipBall, hipMid.scale) * 0.22);
+        const hip = sideways(at.hipL, at.hipR, u(R.pelvisDepth, hipMid.scale), 1.46);
         const waistScale = 0.58;
         const widths = {
             shoulder,
