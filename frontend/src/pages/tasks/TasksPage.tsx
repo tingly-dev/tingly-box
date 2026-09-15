@@ -13,9 +13,7 @@ import {PageLayout} from '@/components/PageLayout';
 import {ArrowForward as IconGo, FolderOpen as IconFolder, KeyboardArrowDown as IconCaret, Shield as IconShield} from '@/components/icons';
 import FolderPickerDialog from './FolderPickerDialog';
 import {useNotify} from '@/hooks/useNotify';
-import {
-    agentApi, isActiveStatus, type AgentEnvironment, type PermissionMode, type RecentFolder, type SessionListItem,
-} from '@/services/agentApi';
+import {agentApi, isActiveStatus, type AgentFolder, type PermissionMode, type SessionListItem} from '@/services/agentApi';
 import {PERMISSION_MODES, permissionModeKey, relativeTime, StatusChip, StatusDot} from './taskShared';
 
 const COLUMN = 760;
@@ -25,14 +23,13 @@ const TasksPage = () => {
     const navigate = useNavigate();
     const notify = useNotify();
 
-    const [environments, setEnvironments] = useState<AgentEnvironment[]>([]);
     const [sessions, setSessions] = useState<SessionListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'active' | 'all'>('active');
 
     const [prompt, setPrompt] = useState('');
     const [folder, setFolder] = useState('');
-    const [folders, setFolders] = useState<RecentFolder[]>([]);
+    const [folders, setFolders] = useState<AgentFolder[]>([]);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [folderAnchor, setFolderAnchor] = useState<HTMLElement | null>(null);
     const [modeAnchor, setModeAnchor] = useState<HTMLElement | null>(null);
@@ -40,13 +37,11 @@ const TasksPage = () => {
     const [starting, setStarting] = useState(false);
 
     const load = useCallback(async () => {
-        const [env, list, recent] = await Promise.all([
-            agentApi.listEnvironments(),
+        const [list, known] = await Promise.all([
             agentApi.listSessions(filter === 'active' ? {active: true} : {}),
-            agentApi.recentFolders(),
+            agentApi.listFolders(),
         ]);
-        if (recent.ok) setFolders(recent.data.folders ?? []);
-        if (env.ok) setEnvironments(env.data.environments ?? []);
+        if (known.ok) setFolders(known.data.folders ?? []);
         if (list.ok) setSessions(list.data.sessions ?? []);
         else notify.error(list.error);
         setLoading(false);
@@ -67,25 +62,25 @@ const TasksPage = () => {
         if (!folder && folders.length > 0) setFolder(folders[0].path);
     }, [folders, folder]);
 
-    const environment = environments.find((e) => e.is_default) ?? environments[0];
-
     const pickFolder = (path: string) => {
         setPickerOpen(false);
         setFolderAnchor(null);
         setFolder(path);
         if (!folders.some((f) => f.path === path)) {
-            setFolders([{path, name: path.split(/[\\/]/).filter(Boolean).pop() ?? path, is_repo: false}, ...folders]);
+            // Optimistic: the folder is really added when the task starts.
+            const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+            const now = new Date().toISOString();
+            setFolders([{id: path, path, name, created_at: now, last_used_at: now}, ...folders]);
         }
     };
 
-    const canStart = prompt.trim().length > 0 && !!folder && !!environment && !starting;
+    const canStart = prompt.trim().length > 0 && !!folder && !starting;
 
     const start = async () => {
-        if (!canStart || !environment) return;
+        if (!canStart) return;
         setStarting(true);
         const res = await agentApi.createSession({
-            source_id: '', local_path: folder, environment_id: environment.id, prompt: prompt.trim(),
-            workspace_id: '', base_ref: '', title: '', permission_mode: permissionMode,
+            folder_id: '', path: folder, prompt: prompt.trim(), title: '', permission_mode: permissionMode,
         });
         setStarting(false);
         if (!res.ok) {
@@ -97,9 +92,7 @@ const TasksPage = () => {
 
     const folderName = folders.find((f) => f.path === folder)?.name ?? (folder ? folder.split(/[\\/]/).filter(Boolean).pop() : undefined);
     const modeKey = permissionModeKey(permissionMode);
-    const modeLabel = modeKey === 'inherit' && environment?.permission_mode
-        ? t(`tasks.mode.${environment.permission_mode}`)
-        : t(`tasks.mode.${modeKey}`);
+    const modeLabel = t(`tasks.mode.${modeKey}`);
 
     return (
         <PageLayout loading={loading}>
@@ -206,8 +199,8 @@ const TasksPage = () => {
                     </Typography>
                 ) : (
                     <List disablePadding sx={{borderTop: '1px solid', borderColor: 'divider'}}>
-                        {sessions.map(({session: s, source: src}) => {
-                            const meta = [src?.name, (s.artifact?.changed_files ?? 0) > 0 ? t('tasks.list.changedFiles', {count: s.artifact.changed_files}) : undefined, relativeTime(s.last_active_at)]
+                        {sessions.map(({session: s, folder: f}) => {
+                            const meta = [f?.name, s.changed_files > 0 ? t('tasks.list.changedFiles', {count: s.changed_files}) : undefined, relativeTime(s.last_active_at)]
                                 .filter(Boolean)
                                 .join(' · ');
                             const highlight = s.status === 'waiting_input' || s.status === 'failed' || s.status === 'running';

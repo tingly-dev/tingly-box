@@ -25,7 +25,7 @@ func TestJourney_PermissionPrompt(t *testing.T) {
 	s := bootStack(t, up)
 	dir := newGitDir(t, "perm")
 
-	d := s.createSession(map[string]any{"local_path": dir, "prompt": "run the command"})
+	d := s.createSession(map[string]any{"path": dir, "prompt": "run the command"})
 	id := d.Session.ID
 	if d.Session.PermissionMode != "" && d.Session.PermissionMode != managedagent.PermissionDefault {
 		t.Fatalf("unexpected mode %q", d.Session.PermissionMode)

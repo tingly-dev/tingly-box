@@ -100,16 +100,14 @@ func TestBridge_NotifiesAndAnswersApproval(t *testing.T) {
 	bus := managedagent.NewEventBus(stores.Events)
 	stores.Events = bus
 	launcher := &fakeLauncher{}
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher})
 	ch := &fakeChannel{reply: interaction.Reply{Status: interaction.StatusAnswered, Selected: "allow"}}
 	rt := &fakeRuntime{ch: ch}
 	bridge := New(svc, rt)
 	bus.Subscribe(bridge.OnEvent)
 	_ = mem
 
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "https://x/y.git"})
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "Do it"})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: t.TempDir(), Prompt: "Do it"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +137,7 @@ func TestBridge_NotifiesAndAnswersApproval(t *testing.T) {
 
 	// Finishing the turn notifies with the change count.
 	sess.Status = managedagent.SessionIdle
-	sess.Artifact.Changed = 3
+	sess.ChangedFiles = 3
 	_ = stores.Sessions.UpdateSession(ctx, sess)
 	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventToolUse, Text: "Bash", RequestID: "tu-9"})
 	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventAssistantMessage, Text: "Tests pass; validation added."})
@@ -169,14 +167,12 @@ func TestBridge_AskRequestCarriesFreeText(t *testing.T) {
 	bus := managedagent.NewEventBus(stores.Events)
 	stores.Events = bus
 	launcher := &fakeLauncher{}
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher})
 	ch := &fakeChannel{reply: interaction.Reply{Status: interaction.StatusAnswered, FreeText: "use postgres"}}
 	bridge := New(svc, &fakeRuntime{ch: ch})
 	bus.Subscribe(bridge.OnEvent)
 
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "https://x/y.git"})
-	sess, _ := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "Do it"})
+	sess, _ := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: t.TempDir(), Prompt: "Do it"})
 	sess.Status = managedagent.SessionWaitingInput
 	_ = stores.Sessions.UpdateSession(ctx, sess)
 	_ = bus.AppendEvent(ctx, &managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventAskRequest, RequestID: "ask-1", Text: "Which database?"})
@@ -192,13 +188,11 @@ func TestBridge_NoRouteIsSilent(t *testing.T) {
 	_, stores := managedagent.NewMemStores()
 	bus := managedagent.NewEventBus(stores.Events)
 	stores.Events = bus
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
+	svc := managedagent.NewService(managedagent.Config{Stores: stores})
 	ch := &fakeChannel{}
 	rt := &fakeRuntime{ch: ch, unbound: true}
 	bus.Subscribe(New(svc, rt).OnEvent)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "https://x/y.git"})
-	if _, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "Do it"}); err != nil {
+	if _, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: t.TempDir(), Prompt: "Do it"}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "resolve attempted", func() bool {

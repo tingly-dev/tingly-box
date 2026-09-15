@@ -19,7 +19,7 @@ func TestJourney_InterruptThenResume(t *testing.T) {
 	s := bootStack(t, up)
 	dir := newGitDir(t, "slow")
 
-	d := s.createSession(map[string]any{"local_path": dir, "prompt": "think hard"})
+	d := s.createSession(map[string]any{"path": dir, "prompt": "think hard"})
 	id := d.Session.ID
 	s.waitStatus(id, managedagent.SessionRunning)
 	// Give the CLI a moment to actually be inside the upstream call.
@@ -37,7 +37,7 @@ func TestJourney_InterruptThenResume(t *testing.T) {
 	}
 	ccID := d.Session.CCSessionID
 
-	// Resume: the next turn is quick and lands on the same Claude session.
+	// Resume: the next turn is quick and continues the same task.
 	before := len(ev)
 	up.Queue(upstreamTurn{Text: "back and quick"})
 	s.send(id, "ok, shorter")
@@ -45,8 +45,17 @@ func TestJourney_InterruptThenResume(t *testing.T) {
 	if d.Session.Status != managedagent.SessionIdle || !hasEvent(ev[before:], managedagent.EventAssistantMessage, "back and quick") {
 		t.Fatalf("resume after interrupt: %s %q\n%s", d.Session.Status, d.Session.Error, eventsDump(ev[before:]))
 	}
-	if ccID != "" && d.Session.CCSessionID != ccID {
-		t.Fatalf("Claude session changed across interrupt: %s → %s", ccID, d.Session.CCSessionID)
+	// The Claude Code session carries on — unless the interrupt landed
+	// before the CLI ever wrote its session file, in which case there is
+	// nothing to resume and a fresh one is started. Both are correct; what
+	// must never happen is a silent change, so the log says which it was.
+	if ccID != "" && d.Session.CCSessionID != ccID && !hasEvent(ev, managedagent.EventSystem, "was never saved") {
+		t.Fatalf("the claude session changed with no explanation in the log: %s → %s\n%s", ccID, d.Session.CCSessionID, eventsDump(ev))
+	}
+	// Either way the transcript is one conversation: the first prompt is
+	// still there alongside the resumed answer.
+	if !hasEvent(ev, managedagent.EventUserMessage, "think hard") {
+		t.Fatalf("the task lost its earlier turns across the interrupt\n%s", eventsDump(ev))
 	}
 
 	// Archive is final.
@@ -65,7 +74,7 @@ func TestJourney_ArchiveWhileRunning(t *testing.T) {
 	s := bootStack(t, up)
 	dir := newGitDir(t, "archive-mid-turn")
 
-	d := s.createSession(map[string]any{"local_path": dir, "prompt": "think hard"})
+	d := s.createSession(map[string]any{"path": dir, "prompt": "think hard"})
 	id := d.Session.ID
 	s.waitFor(id, turnTimeout, func(sessionDetail, []managedagent.Event) bool { return len(up.Requests()) > 0 })
 	if code := s.do(http.MethodPost, "/api/v1/agent/sessions/"+id+"/archive", nil, &d); code != 200 || d.Session.Status != managedagent.SessionArchived {

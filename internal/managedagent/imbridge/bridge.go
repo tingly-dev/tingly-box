@@ -134,8 +134,8 @@ func (b *Bridge) notify(e managedagent.Event, event string) {
 	if err != nil {
 		return
 	}
-	ws, _ := b.svc.GetWorkspace(ctx, sess.WorkspaceID)
-	title, body := render(event, sess, ws)
+	folder, _ := b.svc.GetFolder(ctx, sess.FolderID)
+	title, body := render(event, sess, folder)
 	if event == EventFinished {
 		// Like the @cc bridge: the agent's last words, with the turn's
 		// activity folded into one line under them.
@@ -240,20 +240,17 @@ func buildInteraction(e managedagent.Event, sess *managedagent.Session) interact
 	}
 }
 
-func render(event string, sess *managedagent.Session, ws *managedagent.Workspace) (title, body string) {
+func render(event string, sess *managedagent.Session, folder *managedagent.Folder) (title, body string) {
 	title = "Task · " + sess.Title
-	branch := sess.Artifact.Branch
-	if ws != nil && ws.Branch != "" {
-		branch = ws.Branch
+	where := ""
+	if folder != nil {
+		where = " in " + folder.Name
 	}
 	switch event {
 	case EventStarted:
-		body = "Started.\n" + sess.Prompt
+		body = "Started" + where + ".\n" + sess.Prompt
 	case EventFinished:
-		body = fmt.Sprintf("Finished its turn — %d changed file(s) on %s.", sess.Artifact.Changed, branch)
-		if sess.Artifact.Pushed {
-			body += "\nBranch pushed."
-		}
+		body = fmt.Sprintf("Finished its turn — %d changed file(s)%s.", sess.ChangedFiles, where)
 	case EventFailed:
 		body = "Failed"
 		if sess.Error != "" {

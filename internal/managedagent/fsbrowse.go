@@ -9,12 +9,11 @@ import (
 )
 
 // Folder browsing is an allowlist. The only directories tingly-box will
-// list are the ones the user has handed to it: the local sources (folders
-// a task has been started in, or that were added on purpose). Everything
-// else is opaque — a path outside the allowlist can still be *submitted*
-// (typed into the picker, sent as local_path) and thereby joins the list,
-// but it is never enumerated first. Nothing is inferred from the host
-// (no home listing, no Claude Code project history).
+// list are the Folders the user has handed to it. Everything else is opaque
+// — a path outside the allowlist can still be *submitted* (typed into the
+// picker, sent as a session's path) and thereby joins the list, but it is
+// never enumerated first. Nothing is inferred from the host (no home
+// listing, no Claude Code project history).
 
 // DirEntry is one sub-directory in a Browse listing.
 type DirEntry struct {
@@ -102,58 +101,27 @@ func isRepoDir(dir string) bool {
 	return err == nil
 }
 
-// RecentFolder is a folder the user has handed to tingly-box: a local
-// source. This is the browse allowlist, in the order it was added.
-type RecentFolder struct {
-	Path   string `json:"path"`
-	Name   string `json:"name"`
-	IsRepo bool   `json:"is_repo"`
-}
-
-// allowedFolders lists the local sources' paths, existing ones only.
-func (s *Service) allowedFolders(ctx context.Context) ([]string, error) {
-	sources, err := s.stores.Sources.ListSources(ctx)
+// allowedRoots is the browse allowlist: the folders the user has handed
+// over, existing ones only.
+func (s *Service) allowedRoots(ctx context.Context) ([]string, error) {
+	folders, err := s.stores.Folders.ListFolders(ctx)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var out []string
-	for i := range sources {
-		if sources[i].Kind != SourceKindLocal {
-			continue
+	out := make([]string, 0, len(folders))
+	for i := range folders {
+		clean := filepath.Clean(folders[i].Path)
+		if info, err := os.Stat(clean); err == nil && info.IsDir() {
+			out = append(out, clean)
 		}
-		clean := filepath.Clean(sources[i].URL)
-		if seen[clean] {
-			continue
-		}
-		if info, err := os.Stat(clean); err != nil || !info.IsDir() {
-			continue
-		}
-		seen[clean] = true
-		out = append(out, clean)
 	}
 	return out, nil
 }
 
-// RecentFolders returns the allowlist as folders for the picker.
-func (s *Service) RecentFolders(ctx context.Context, limit int) ([]RecentFolder, error) {
-	roots, err := s.allowedFolders(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]RecentFolder, 0, len(roots))
-	for _, r := range roots {
-		out = append(out, RecentFolder{Path: r, Name: filepath.Base(r), IsRepo: isRepoDir(r)})
-	}
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
-}
-
-// Browse lists directories within the allowlist; see Browse.
+// Browse lists directories within the allowlist; see the package-level
+// Browse for the rules.
 func (s *Service) Browse(ctx context.Context, path string) (*DirListing, error) {
-	roots, err := s.allowedFolders(ctx)
+	roots, err := s.allowedRoots(ctx)
 	if err != nil {
 		return nil, err
 	}

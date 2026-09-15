@@ -29,24 +29,6 @@ func NewHandler(svc *managedagent.Service) *Handler {
 
 // ---------- host folders ----------
 
-func (h *Handler) BrowseDirs(c *gin.Context) {
-	listing, err := h.svc.Browse(c.Request.Context(), c.Query("path"))
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, listing)
-}
-
-func (h *Handler) RecentFolders(c *gin.Context) {
-	folders, err := h.svc.RecentFolders(c.Request.Context(), 100)
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, RecentFoldersResponse{Folders: folders})
-}
-
 // sendError maps the domain's sentinel errors to HTTP statuses. The
 // sentinel's own text (": validation", ": forbidden", …) is dropped from the
 // message: the status already says it, and people read these in the UI.
@@ -82,158 +64,54 @@ func requireParam(c *gin.Context, name string) (string, bool) {
 	return v, true
 }
 
-// ---------- sources ----------
-
-func (h *Handler) ListSources(c *gin.Context) {
-	list, err := h.svc.ListSources(c.Request.Context())
+func (h *Handler) BrowseDirs(c *gin.Context) {
+	listing, err := h.svc.Browse(c.Request.Context(), c.Query("path"))
 	if err != nil {
 		sendError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, SourceListResponse{Sources: list})
+	c.JSON(http.StatusOK, listing)
 }
 
-func (h *Handler) CreateSource(c *gin.Context) {
-	var req SourceRequest
+// ---------- folders ----------
+
+func (h *Handler) ListFolders(c *gin.Context) {
+	folders, err := h.svc.ListFolders(c.Request.Context())
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, FolderListResponse{Folders: folders})
+}
+
+func (h *Handler) AddFolder(c *gin.Context) {
+	var req AddFolderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
 		return
 	}
-	src, err := h.svc.CreateSource(c.Request.Context(), sourceInput(req))
+	f, err := h.svc.AddFolder(c.Request.Context(), req.Path)
 	if err != nil {
 		sendError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, src)
+	c.JSON(http.StatusCreated, f)
 }
 
-func (h *Handler) GetSource(c *gin.Context) {
-	id, ok := requireParam(c, "source_id")
+func (h *Handler) RemoveFolder(c *gin.Context) {
+	id, ok := requireParam(c, "folder_id")
 	if !ok {
 		return
 	}
-	src, err := h.svc.GetSource(c.Request.Context(), id)
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, src)
-}
-
-func (h *Handler) UpdateSource(c *gin.Context) {
-	id, ok := requireParam(c, "source_id")
-	if !ok {
-		return
-	}
-	var req SourceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-		return
-	}
-	src, err := h.svc.UpdateSource(c.Request.Context(), id, sourceInput(req))
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, src)
-}
-
-func (h *Handler) DeleteSource(c *gin.Context) {
-	id, ok := requireParam(c, "source_id")
-	if !ok {
-		return
-	}
-	if err := h.svc.DeleteSource(c.Request.Context(), id); err != nil {
+	if err := h.svc.RemoveFolder(c.Request.Context(), id); err != nil {
 		sendError(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)
 }
 
-func sourceInput(r SourceRequest) managedagent.SourceInput {
-	return managedagent.SourceInput{Name: r.Name, URL: r.URL, DefaultBranch: r.DefaultBranch, CredentialID: r.CredentialID}
-}
-
-// ---------- environments ----------
-
-func (h *Handler) ListEnvironments(c *gin.Context) {
-	list, err := h.svc.ListEnvironments(c.Request.Context())
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	supported := make([]managedagent.Runtime, 0, len(managedagent.SupportedRuntimes))
-	for rt, ok := range managedagent.SupportedRuntimes {
-		if ok {
-			supported = append(supported, rt)
-		}
-	}
-	c.JSON(http.StatusOK, EnvironmentListResponse{Environments: list, SupportedRuntimes: supported, PermissionModes: managedagent.PermissionModes})
-}
-
-func (h *Handler) CreateEnvironment(c *gin.Context) {
-	var req EnvironmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-		return
-	}
-	env, err := h.svc.CreateEnvironment(c.Request.Context(), environmentInput(req))
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusCreated, env)
-}
-
-func (h *Handler) GetEnvironment(c *gin.Context) {
-	id, ok := requireParam(c, "environment_id")
-	if !ok {
-		return
-	}
-	env, err := h.svc.GetEnvironment(c.Request.Context(), id)
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, env)
-}
-
-func (h *Handler) UpdateEnvironment(c *gin.Context) {
-	id, ok := requireParam(c, "environment_id")
-	if !ok {
-		return
-	}
-	var req EnvironmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-		return
-	}
-	env, err := h.svc.UpdateEnvironment(c.Request.Context(), id, environmentInput(req))
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, env)
-}
-
-func (h *Handler) DeleteEnvironment(c *gin.Context) {
-	id, ok := requireParam(c, "environment_id")
-	if !ok {
-		return
-	}
-	if err := h.svc.DeleteEnvironment(c.Request.Context(), id); err != nil {
-		sendError(c, err)
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
-func environmentInput(r EnvironmentRequest) managedagent.EnvironmentInput {
-	return managedagent.EnvironmentInput{
-		Name: r.Name, Runtime: r.Runtime, Image: r.Image, SetupScript: r.SetupScript,
-		Env: r.Env, SecretRefs: r.SecretRefs, Network: r.Network, Resources: r.Resources,
-		CCProfile: r.CCProfile, PermissionMode: r.PermissionMode,
-	}
+func (h *Handler) PermissionModes(c *gin.Context) {
+	c.JSON(http.StatusOK, PermissionModeListResponse{PermissionModes: managedagent.PermissionModes})
 }
 
 // ---------- sessions ----------
@@ -245,10 +123,10 @@ func (h *Handler) ListSessions(c *gin.Context) {
 		return
 	}
 	list, err := h.svc.ListSessions(c.Request.Context(), managedagent.SessionFilter{
-		WorkspaceID: q.WorkspaceID,
-		Status:      managedagent.SessionStatus(q.Status),
-		Active:      q.Active,
-		Limit:       q.Limit,
+		FolderID: q.FolderID,
+		Status:   managedagent.SessionStatus(q.Status),
+		Active:   q.Active,
+		Limit:    q.Limit,
 	})
 	if err != nil {
 		sendError(c, err)
@@ -257,30 +135,21 @@ func (h *Handler) ListSessions(c *gin.Context) {
 	c.JSON(http.StatusOK, SessionListResponse{Sessions: h.listItems(c, list)})
 }
 
-// listItems resolves each session's workspace and source once per distinct
-// id. Lookups are best-effort: a row whose workspace is gone still lists.
+// listItems resolves each session's folder once per distinct id. Lookups are
+// best-effort: a row whose folder was removed still lists.
 func (h *Handler) listItems(c *gin.Context, list []managedagent.Session) []SessionListItem {
 	ctx := c.Request.Context()
-	workspaces := map[string]*managedagent.Workspace{}
-	sources := map[string]*managedagent.Source{}
+	folders := map[string]*managedagent.Folder{}
 	items := make([]SessionListItem, 0, len(list))
 	for i := range list {
 		item := SessionListItem{Session: list[i]}
-		ws, seen := workspaces[list[i].WorkspaceID]
+		f, seen := folders[list[i].FolderID]
 		if !seen {
-			ws, _ = h.svc.GetWorkspace(ctx, list[i].WorkspaceID)
-			workspaces[list[i].WorkspaceID] = ws
+			f, _ = h.svc.GetFolder(ctx, list[i].FolderID)
+			folders[list[i].FolderID] = f
 		}
-		if ws != nil {
-			item.Branch = ws.Branch
-			src, seen := sources[ws.SourceID]
-			if !seen {
-				src, _ = h.svc.GetSource(ctx, ws.SourceID)
-				sources[ws.SourceID] = src
-			}
-			if src != nil {
-				item.Source = &SourceRef{ID: src.ID, Name: src.Name}
-			}
+		if f != nil {
+			item.Folder = &FolderRef{ID: f.ID, Name: f.Name, Path: f.Path}
 		}
 		items = append(items, item)
 	}
@@ -294,9 +163,8 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 	sess, err := h.svc.CreateSession(c.Request.Context(), managedagent.CreateSessionInput{
-		SourceID: req.SourceID, EnvironmentID: req.EnvironmentID, WorkspaceID: req.WorkspaceID,
-		BaseRef: req.BaseRef, Prompt: req.Prompt, Title: req.Title, CreatedBy: "web",
-		PermissionMode: req.PermissionMode, LocalPath: req.LocalPath,
+		FolderID: req.FolderID, Path: req.Path, Prompt: req.Prompt, Title: req.Title,
+		PermissionMode: req.PermissionMode, CreatedBy: "web",
 	})
 	if err != nil {
 		sendError(c, err)
@@ -318,12 +186,12 @@ func (h *Handler) GetSession(c *gin.Context) {
 	c.JSON(http.StatusOK, h.detail(c, sess))
 }
 
-// detail attaches the workspace; a workspace lookup failure degrades to a
-// session-only response rather than hiding the session.
+// detail attaches the folder; a lookup failure degrades to a session-only
+// response rather than hiding the session.
 func (h *Handler) detail(c *gin.Context, sess *managedagent.Session) SessionDetail {
 	d := SessionDetail{Session: *sess}
-	if ws, err := h.svc.GetWorkspace(c.Request.Context(), sess.WorkspaceID); err == nil {
-		d.Workspace = ws
+	if f, err := h.svc.GetFolder(c.Request.Context(), sess.FolderID); err == nil {
+		d.Folder = f
 	}
 	return d
 }
@@ -410,39 +278,6 @@ func (h *Handler) Archive(c *gin.Context) {
 
 // ---------- workspaces ----------
 
-func (h *Handler) ListWorkspaces(c *gin.Context) {
-	list, err := h.svc.ListWorkspaces(c.Request.Context(), managedagent.WorkspaceFilter{
-		SourceID:      c.Query("source_id"),
-		EnvironmentID: c.Query("environment_id"),
-		State:         managedagent.WorkspaceState(c.Query("state")),
-	})
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, WorkspaceListResponse{Workspaces: list})
-}
-
-func (h *Handler) ReclaimWorkspace(c *gin.Context) {
-	id, ok := requireParam(c, "workspace_id")
-	if !ok {
-		return
-	}
-	var req ReclaimWorkspaceRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-			return
-		}
-	}
-	ws, err := h.svc.ReclaimWorkspace(c.Request.Context(), id, req.Force)
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, ws)
-}
-
 func (h *Handler) Diff(c *gin.Context) {
 	id, ok := requireParam(c, "session_id")
 	if !ok {
@@ -456,23 +291,6 @@ func (h *Handler) Diff(c *gin.Context) {
 	c.JSON(http.StatusOK, d)
 }
 
-func (h *Handler) Push(c *gin.Context) {
-	id, ok := requireParam(c, "session_id")
-	if !ok {
-		return
-	}
-	sess, err := h.svc.Push(c.Request.Context(), id)
-	if err != nil {
-		sendError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, h.detail(c, sess))
-}
-
-// Events serves a session's log. With `Accept: text/event-stream` it keeps
-// the connection open and pushes new events as they are appended; otherwise
-// it returns one JSON page. Same data, same `after` cursor, so a client can
-// fall back from streaming to polling without a second endpoint.
 func (h *Handler) Events(c *gin.Context) {
 	id, ok := requireParam(c, "session_id")
 	if !ok {

@@ -17,7 +17,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
@@ -44,9 +43,14 @@ func (s *Server) Start(port int) error {
 	}
 
 	// Managed agent sessions: reconcile what the previous process left
-	// behind, then sweep idle checkouts hourly (.design/managed-agent.md).
+	// behind. There is nothing on disk to sweep — the agent works in the
+	// user's own folders (.design/managed-agent.md §13).
 	if s.managedAgent != nil {
-		go s.managedAgent.RunMaintenance(ctx, managedagent.DefaultWorkspaceTTL, time.Hour)
+		go func() {
+			if err := s.managedAgent.RecoverOnStart(ctx); err != nil {
+				logrus.WithError(err).Warn("managed agent: recovery finished with errors")
+			}
+		}()
 	}
 
 	// Hourly tiny request to each OAuth provider keeps quota windows moving

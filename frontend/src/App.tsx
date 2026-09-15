@@ -37,8 +37,6 @@ const VirtualModelsPage = lazy(() => import('./pages/VirtualModelsPage'));
 const TasksPage = lazy(() => import('./pages/tasks/TasksPage'));
 const TaskDetailPage = lazy(() => import('./pages/tasks/TaskDetailPage'));
 const TaskFoldersPage = lazy(() => import('./pages/tasks/FoldersPage'));
-const TaskSourcesPage = lazy(() => import('./pages/tasks/SourcesPage'));
-const TaskEnvironmentsPage = lazy(() => import('./pages/tasks/EnvironmentsPage'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
 const UseCodexPage = lazy(() => import('./pages/scenario/UseCodexPage'));
@@ -318,9 +316,6 @@ function AppContent() {
                     {/* Tasks — managed agent sessions (.design/managed-agent.md). */}
                     <Route path="/tasks" element={<ExperimentalFeatureGate feature="managed_agent"><TasksPage /></ExperimentalFeatureGate>} />
                     <Route path="/tasks/folders" element={<ExperimentalFeatureGate feature="managed_agent"><TaskFoldersPage /></ExperimentalFeatureGate>} />
-                    {/* Parked pages (repository + environment phases): kept working, not in the rail. */}
-                    <Route path="/tasks/sources" element={<ExperimentalFeatureGate feature="managed_agent"><TaskSourcesPage /></ExperimentalFeatureGate>} />
-                    <Route path="/tasks/environments" element={<ExperimentalFeatureGate feature="managed_agent"><TaskEnvironmentsPage /></ExperimentalFeatureGate>} />
                     <Route path="/tasks/:sessionId" element={<ExperimentalFeatureGate feature="managed_agent"><TaskDetailPage /></ExperimentalFeatureGate>} />
                     {/* Guardrails */}
                     <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />

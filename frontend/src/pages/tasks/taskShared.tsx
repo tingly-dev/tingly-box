@@ -10,7 +10,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Box, Chip, CircularProgress, FormControl, InputLabel, ListItemText, MenuItem, OutlinedInput, Select, Typography, type ChipProps, type SxProps, type Theme} from '@mui/material';
 import {formatDistanceToNowStrict} from 'date-fns';
-import {agentApi, isActiveStatus, type AgentEvent, type AgentSession, type AgentWorkspace, type PermissionMode} from '@/services/agentApi';
+import {agentApi, isActiveStatus, type AgentEvent, type AgentFolder, type AgentSession, type PermissionMode} from '@/services/agentApi';
 
 export const STATUS_COLOR: Record<string, ChipProps['color']> = {
     queued: 'default',
@@ -65,7 +65,7 @@ const SETTLED_INTERVAL_MS = 8000;
 
 export interface SessionPoll {
     session?: AgentSession;
-    workspace?: AgentWorkspace;
+    folder?: AgentFolder;
     events: AgentEvent[];
     loading: boolean;
     error?: string;
@@ -76,7 +76,7 @@ export interface SessionPoll {
 
 export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
     const [session, setSession] = useState<AgentSession>();
-    const [workspace, setWorkspace] = useState<AgentWorkspace>();
+    const [folder, setFolder] = useState<AgentFolder>();
     const [events, setEvents] = useState<AgentEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string>();
@@ -104,7 +104,7 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
             setError(undefined);
             statusRef.current = detail.data.session.status;
             setSession(detail.data.session);
-            setWorkspace(detail.data.workspace);
+            setFolder(detail.data.folder);
             if (page.ok && page.data.events.length > 0) {
                 cursor.current = page.data.next;
                 setEvents((prev) => [...prev, ...page.data.events]);
@@ -138,7 +138,7 @@ export const useSessionPoll = (sessionId: string | undefined): SessionPoll => {
         };
     }, [sessionId, refresh]);
 
-    return {session, workspace, events, loading, error, notFound, refresh, setSession};
+    return {session, folder, events, loading, error, notFound, refresh, setSession};
 };
 
 // The modes in the order the backend lists them; the empty value inherits

@@ -27,7 +27,7 @@ func TestJourney_TurnDetailsRecorded(t *testing.T) {
 	s := bootStack(t, up)
 	dir := newGitDir(t, "details")
 
-	d := s.createSession(map[string]any{"local_path": dir, "prompt": "create a marker file", "permission_mode": "bypassPermissions"})
+	d := s.createSession(map[string]any{"path": dir, "prompt": "create a marker file", "permission_mode": "bypassPermissions"})
 	_, ev := s.waitIdle(d.Session.ID)
 
 	// The order the turn happened in, as the user would read it.

@@ -3,11 +3,8 @@ package managedagent
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -21,379 +18,120 @@ type Service struct {
 	stores   Stores
 	launcher Launcher
 	git      Git
-	// workspacesDir is the host directory checkouts are materialised under
-	// (~/.tingly-box/agent/workspaces).
-	workspacesDir string
-	now           func() time.Time
+	now      func() time.Time
 }
 
 // Config configures a Service.
 type Config struct {
-	Stores        Stores
-	Launcher      Launcher // optional; nil leaves sessions queued
-	Git           Git      // optional; nil disables diff / push
-	WorkspacesDir string
+	Stores   Stores
+	Launcher Launcher // optional; nil leaves sessions queued
+	Git      Git      // optional; nil disables the change summary
 }
 
-// NewService builds a Service. It does not touch the stores; call
-// EnsureDefaults once at startup.
+// NewService builds a Service. It does not touch the stores.
 func NewService(cfg Config) *Service {
-	return &Service{
-		stores:        cfg.Stores,
-		launcher:      cfg.Launcher,
-		git:           cfg.Git,
-		workspacesDir: cfg.WorkspacesDir,
-		now:           time.Now,
-	}
+	return &Service{stores: cfg.Stores, launcher: cfg.Launcher, git: cfg.Git, now: time.Now}
 }
 
-// EnsureDefaults creates the auto-provided local environment if it does not
-// exist yet. The row is idempotent on its fixed id, so an operator's rename
-// survives restarts.
-func (s *Service) EnsureDefaults(ctx context.Context) error {
-	_, err := s.stores.Environments.GetEnvironment(ctx, DefaultLocalEnvironmentID)
-	if err == nil {
-		return nil
+// ---------- folders ----------
+
+// AddFolder hands a directory to the agent. This is the grant: from here on
+// the agent may work in it and the picker may browse inside it. Adding the
+// same path twice returns the existing folder rather than failing — the
+// grant is the point, not the row.
+func (s *Service) AddFolder(ctx context.Context, path string) (*Folder, error) {
+	clean, err := cleanFolderPath(path)
+	if err != nil {
+		return nil, err
 	}
-	if !errors.Is(err, ErrNotFound) {
-		return err
+	if existing, err := s.stores.Folders.GetFolderByPath(ctx, clean); err == nil {
+		return existing, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, err
 	}
 	now := s.now()
-	return s.stores.Environments.CreateEnvironment(ctx, &Environment{
-		ID:        DefaultLocalEnvironmentID,
-		Name:      "Local",
-		Runtime:   RuntimeLocal,
-		IsDefault: true,
-		CreatedAt: now,
-		UpdatedAt: now,
-	})
-}
-
-// ---------- Sources ----------
-
-// SourceInput is the caller-editable part of a Source.
-type SourceInput struct {
-	Name          string
-	URL           string
-	DefaultBranch string
-	CredentialID  string
-}
-
-func (s *Service) CreateSource(ctx context.Context, in SourceInput) (*Source, error) {
-	src := &Source{ID: uuid.NewString(), Kind: SourceKindGit, CreatedAt: s.now()}
-	if err := applySourceInput(src, in); err != nil {
+	f := &Folder{ID: uuid.NewString(), Path: clean, Name: filepath.Base(clean), CreatedAt: now, LastUsedAt: now}
+	if err := s.stores.Folders.CreateFolder(ctx, f); err != nil {
 		return nil, err
 	}
-	src.UpdatedAt = src.CreatedAt
-	if err := s.stores.Sources.CreateSource(ctx, src); err != nil {
-		return nil, err
+	return f, nil
+}
+
+// cleanFolderPath validates a folder path the way every entry point needs it:
+// absolute, existing, a directory.
+func cleanFolderPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", invalid("a folder path is required")
 	}
-	return src, nil
-}
-
-func (s *Service) GetSource(ctx context.Context, id string) (*Source, error) {
-	return s.stores.Sources.GetSource(ctx, id)
-}
-
-func (s *Service) ListSources(ctx context.Context) ([]Source, error) {
-	return s.stores.Sources.ListSources(ctx)
-}
-
-func (s *Service) UpdateSource(ctx context.Context, id string, in SourceInput) (*Source, error) {
-	src, err := s.stores.Sources.GetSource(ctx, id)
+	if !filepath.IsAbs(path) {
+		return "", invalid("folder path must be absolute, got %q", path)
+	}
+	clean := filepath.Clean(path)
+	info, err := os.Stat(clean)
 	if err != nil {
-		return nil, err
+		return "", invalid("%s: %v", clean, err)
 	}
-	if err := applySourceInput(src, in); err != nil {
-		return nil, err
+	if !info.IsDir() {
+		return "", invalid("%s is not a directory", clean)
 	}
-	src.UpdatedAt = s.now()
-	if err := s.stores.Sources.UpdateSource(ctx, src); err != nil {
-		return nil, err
-	}
-	return src, nil
+	return clean, nil
 }
 
-// localSource returns the local Source for a directory, creating it on
-// first use. Matching is on the cleaned absolute path.
-func (s *Service) localSource(ctx context.Context, path string) (*Source, error) {
-	if !filepath.IsAbs(strings.TrimSpace(path)) {
-		return nil, invalid("local_path must be an absolute directory path")
-	}
-	clean := filepath.Clean(strings.TrimSpace(path))
-	all, err := s.stores.Sources.ListSources(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for i := range all {
-		if all[i].Kind == SourceKindLocal && all[i].URL == clean {
-			return &all[i], nil
-		}
-	}
-	return s.CreateSource(ctx, SourceInput{URL: clean})
+func (s *Service) GetFolder(ctx context.Context, id string) (*Folder, error) {
+	return s.stores.Folders.GetFolder(ctx, id)
 }
 
-// DeleteSource refuses while any non-reclaimed workspace still references
-// the source: the checkout on disk would otherwise be orphaned with no way
-// back to its remote.
-func (s *Service) DeleteSource(ctx context.Context, id string) error {
-	if _, err := s.stores.Sources.GetSource(ctx, id); err != nil {
-		return err
-	}
-	live, err := s.liveWorkspaces(ctx, WorkspaceFilter{SourceID: id})
+func (s *Service) ListFolders(ctx context.Context) ([]Folder, error) {
+	return s.stores.Folders.ListFolders(ctx)
+}
+
+// RemoveFolder withdraws the grant. The directory itself is never touched:
+// tingly-box only forgets it (.design/managed-agent.md §13). Sessions that
+// ran there keep their logs; an active one has to end first, because it is
+// working in that directory right now.
+func (s *Service) RemoveFolder(ctx context.Context, id string) error {
+	f, err := s.stores.Folders.GetFolder(ctx, id)
 	if err != nil {
 		return err
 	}
-	if live > 0 {
-		return conflict("source has %d live workspace(s); archive their sessions first", live)
-	}
-	return s.stores.Sources.DeleteSource(ctx, id)
-}
-
-func applySourceInput(src *Source, in SourceInput) error {
-	in.Name = strings.TrimSpace(in.Name)
-	in.URL = strings.TrimSpace(in.URL)
-	in.DefaultBranch = strings.TrimSpace(in.DefaultBranch)
-	if in.URL == "" {
-		return invalid("url is required")
-	}
-	// An absolute path is a local directory to work in, in place. A copy of
-	// a local repository is still reachable through file://.
-	if filepath.IsAbs(in.URL) {
-		dir := filepath.Clean(in.URL)
-		info, err := os.Stat(dir)
-		if err != nil {
-			return invalid("directory %q: %v", dir, err)
-		}
-		if !info.IsDir() {
-			return invalid("%q is not a directory", dir)
-		}
-		if in.Name == "" {
-			in.Name = filepath.Base(dir)
-		}
-		src.Kind = SourceKindLocal
-		src.Name = in.Name
-		src.URL = dir
-		src.DefaultBranch = ""
-		src.CredentialID = ""
-		return nil
-	}
-	if !looksLikeGitURL(in.URL) {
-		return invalid("url %q is not a git URL or an absolute directory path", in.URL)
-	}
-	if in.Name == "" {
-		in.Name = repoNameFromURL(in.URL)
-	}
-	if in.DefaultBranch == "" {
-		in.DefaultBranch = "main"
-	}
-	src.Kind = SourceKindGit
-	src.Name = in.Name
-	src.URL = in.URL
-	src.DefaultBranch = in.DefaultBranch
-	src.CredentialID = strings.TrimSpace(in.CredentialID)
-	return nil
-}
-
-var scpLikeGitURL = regexp.MustCompile(`^[\w.-]+@[\w.-]+:[\w./-]+$`)
-
-func looksLikeGitURL(raw string) bool {
-	if scpLikeGitURL.MatchString(raw) {
-		return true
-	}
-	// file:// is a local repository cloned like any other remote (an
-	// absolute path, by contrast, is a SourceKindLocal directory).
-	if strings.HasPrefix(raw, "file://") {
-		return true
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return false
-	}
-	switch u.Scheme {
-	case "https", "http", "ssh", "git":
-		return true
-	}
-	return false
-}
-
-// repoNameFromURL turns ".../org/repo.git" into "repo".
-func repoNameFromURL(raw string) string {
-	trimmed := strings.TrimSuffix(strings.TrimRight(raw, "/"), ".git")
-	if i := strings.LastIndexAny(trimmed, "/:"); i >= 0 {
-		trimmed = trimmed[i+1:]
-	}
-	if trimmed == "" {
-		return "repo"
-	}
-	return trimmed
-}
-
-// ---------- Environments ----------
-
-// EnvironmentInput is the caller-editable part of an Environment.
-type EnvironmentInput struct {
-	Name           string
-	Runtime        Runtime
-	Image          string
-	SetupScript    string
-	Env            map[string]string
-	SecretRefs     []string
-	Network        NetworkPolicy
-	Resources      Resources
-	CCProfile      string
-	PermissionMode PermissionMode
-}
-
-func (s *Service) CreateEnvironment(ctx context.Context, in EnvironmentInput) (*Environment, error) {
-	env := &Environment{ID: uuid.NewString(), CreatedAt: s.now()}
-	if err := applyEnvironmentInput(env, in); err != nil {
-		return nil, err
-	}
-	env.UpdatedAt = env.CreatedAt
-	if err := s.stores.Environments.CreateEnvironment(ctx, env); err != nil {
-		return nil, err
-	}
-	return env, nil
-}
-
-func (s *Service) GetEnvironment(ctx context.Context, id string) (*Environment, error) {
-	return s.stores.Environments.GetEnvironment(ctx, id)
-}
-
-func (s *Service) ListEnvironments(ctx context.Context) ([]Environment, error) {
-	return s.stores.Environments.ListEnvironments(ctx)
-}
-
-func (s *Service) UpdateEnvironment(ctx context.Context, id string, in EnvironmentInput) (*Environment, error) {
-	env, err := s.stores.Environments.GetEnvironment(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if err := applyEnvironmentInput(env, in); err != nil {
-		return nil, err
-	}
-	env.UpdatedAt = s.now()
-	if err := s.stores.Environments.UpdateEnvironment(ctx, env); err != nil {
-		return nil, err
-	}
-	return env, nil
-}
-
-// DeleteEnvironment refuses for the default environment (there must always
-// be one place to run) and while live workspaces reference it.
-func (s *Service) DeleteEnvironment(ctx context.Context, id string) error {
-	env, err := s.stores.Environments.GetEnvironment(ctx, id)
+	live, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{FolderID: f.ID, Active: true})
 	if err != nil {
 		return err
 	}
-	if env.IsDefault {
-		return conflict("the default environment cannot be deleted")
+	if len(live) > 0 {
+		return conflict("%s still has an active task; archive it first", f.Name)
 	}
-	live, err := s.liveWorkspaces(ctx, WorkspaceFilter{EnvironmentID: id})
-	if err != nil {
-		return err
-	}
-	if live > 0 {
-		return conflict("environment has %d live workspace(s); archive their sessions first", live)
-	}
-	return s.stores.Environments.DeleteEnvironment(ctx, id)
+	return s.stores.Folders.DeleteFolder(ctx, f.ID)
 }
 
-// SupportedRuntimes lists what the Service accepts today. Docker is modelled
-// but rejected until its process factory exists, so a user gets a clear
-// "not yet" instead of a session that never starts.
-var SupportedRuntimes = map[Runtime]bool{RuntimeLocal: true}
-
-func applyEnvironmentInput(env *Environment, in EnvironmentInput) error {
-	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" {
-		return invalid("name is required")
-	}
-	if in.Runtime == "" {
-		in.Runtime = RuntimeLocal
-	}
-	switch in.Runtime {
-	case RuntimeLocal, RuntimeDocker:
-	default:
-		return invalid("unknown runtime %q", in.Runtime)
-	}
-	if !SupportedRuntimes[in.Runtime] {
-		return invalid("runtime %q is not available yet", in.Runtime)
-	}
-	if in.Runtime == RuntimeDocker {
-		if strings.TrimSpace(in.Image) == "" {
-			return invalid("image is required for the docker runtime")
-		}
-		if in.Network == "" {
-			in.Network = NetworkProxy
-		}
-		switch in.Network {
-		case NetworkNone, NetworkProxy, NetworkFull:
-		default:
-			return invalid("unknown network policy %q", in.Network)
-		}
-	} else {
-		// Container-only settings are dropped rather than stored, so a local
-		// environment never shows a network policy it does not enforce.
-		in.Image, in.Network, in.Resources = "", "", Resources{}
-	}
-	for k := range in.Env {
-		if strings.TrimSpace(k) == "" || strings.ContainsAny(k, "= \t\n") {
-			return invalid("invalid env var name %q", k)
-		}
-	}
-	env.Name = in.Name
-	env.Runtime = in.Runtime
-	env.Image = strings.TrimSpace(in.Image)
-	env.SetupScript = in.SetupScript
-	env.Env = in.Env
-	env.SecretRefs = in.SecretRefs
-	env.Network = in.Network
-	env.Resources = in.Resources
-	env.CCProfile = strings.TrimSpace(in.CCProfile)
-	if !ValidPermissionMode(in.PermissionMode) {
-		return invalid("unknown permission mode %q", in.PermissionMode)
-	}
-	env.PermissionMode = in.PermissionMode
-	return nil
+// touchFolder records that a session started here, which is also the order
+// the picker offers folders in.
+func (s *Service) touchFolder(ctx context.Context, f *Folder) {
+	f.LastUsedAt = s.now()
+	_ = s.stores.Folders.UpdateFolder(ctx, f)
 }
 
-func (s *Service) liveWorkspaces(ctx context.Context, f WorkspaceFilter) (int, error) {
-	list, err := s.stores.Workspaces.ListWorkspaces(ctx, f)
-	if err != nil {
-		return 0, err
-	}
-	n := 0
-	for i := range list {
-		if list[i].State != WorkspaceReclaimed {
-			n++
-		}
-	}
-	return n, nil
-}
+// ---------- sessions ----------
 
-// ---------- Sessions ----------
-
-// CreateSessionInput opens a new session. WorkspaceID continues in an
-// existing checkout; otherwise SourceID (+ optional EnvironmentID, defaulting
-// to the default environment) materialises a fresh one.
+// CreateSessionInput is the composer's request: a folder (by id, or by path
+// which adds it) and what the agent should do.
 type CreateSessionInput struct {
-	SourceID      string
-	EnvironmentID string
-	WorkspaceID   string
-	BaseRef       string
-	Prompt        string
-	Title         string
-	CreatedBy     string
-	// PermissionMode overrides the environment's default; empty inherits.
+	FolderID       string
+	Path           string
+	Prompt         string
+	Title          string
 	PermissionMode PermissionMode
-	// LocalPath starts a task directly in a directory on this host. The
-	// matching local Source is found or created behind the scenes: the
-	// user picks a folder, never "registers a repository".
-	LocalPath string
+	CreatedBy      string
 }
 
+// CreateSession opens a conversation in a folder and asks the Launcher to
+// run its first turn.
+//
+// One active session per folder: the agent edits the directory in place, so
+// two live sessions would be two processes writing the same files (and two
+// Claude Code sessions keyed on the same cwd). A second task has to wait for
+// the first to be archived — the conflict says so.
 func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Session, error) {
 	in.Prompt = strings.TrimSpace(in.Prompt)
 	if in.Prompt == "" {
@@ -407,131 +145,41 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}
 
 	var (
-		ws  *Workspace
-		err error
+		folder *Folder
+		err    error
 	)
-	if in.WorkspaceID != "" {
-		ws, err = s.stores.Workspaces.GetWorkspace(ctx, in.WorkspaceID)
-		if err != nil {
-			return nil, err
-		}
-		switch ws.State {
-		case WorkspaceReclaimed:
-			return nil, conflict("workspace %s has been reclaimed; start from its source instead", ws.ID)
-		case WorkspaceFailed:
-			return nil, conflict("workspace %s failed to provision (%s); start from its source instead", ws.ID, ws.Error)
-		}
-	}
-
-	var src *Source
 	switch {
-	case ws != nil:
-		src, err = s.stores.Sources.GetSource(ctx, ws.SourceID)
-	case strings.TrimSpace(in.LocalPath) != "":
-		src, err = s.localSource(ctx, in.LocalPath)
-	case in.SourceID != "":
-		src, err = s.stores.Sources.GetSource(ctx, in.SourceID)
+	case strings.TrimSpace(in.Path) != "":
+		folder, err = s.AddFolder(ctx, in.Path)
+	case in.FolderID != "":
+		folder, err = s.stores.Folders.GetFolder(ctx, in.FolderID)
 	default:
-		return nil, invalid("source_id, local_path or workspace_id is required")
+		return nil, invalid("folder_id or path is required")
 	}
 	if err != nil {
+		return nil, err
+	}
+	if _, err := cleanFolderPath(folder.Path); err != nil {
 		return nil, err
 	}
 
-	envID := in.EnvironmentID
-	if ws != nil {
-		envID = ws.EnvironmentID
-	} else if envID == "" {
-		envID = DefaultLocalEnvironmentID
-	}
-	env, err := s.stores.Environments.GetEnvironment(ctx, envID)
+	live, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{FolderID: folder.ID, Active: true})
 	if err != nil {
 		return nil, err
 	}
-	if !SupportedRuntimes[env.Runtime] {
-		return nil, invalid("environment %q uses runtime %q, which is not available yet", env.Name, env.Runtime)
+	if len(live) > 0 {
+		return nil, conflict("%s already has an active task (%q); archive it or keep steering it", folder.Name, live[0].Title)
 	}
 
 	now := s.now()
-	if ws == nil && src.Kind == SourceKindLocal {
-		if env.Runtime != RuntimeLocal {
-			return nil, invalid("a local directory can only run in a local environment")
-		}
-		// One workspace per local directory: the directory IS the workspace.
-		existing, err := s.stores.Workspaces.ListWorkspaces(ctx, WorkspaceFilter{SourceID: src.ID, State: WorkspaceReady})
-		if err != nil {
-			return nil, err
-		}
-		if len(existing) > 0 {
-			ws = &existing[0]
-			// Resume the directory's most recent Claude Code session.
-			in.WorkspaceID = ws.ID
-		} else {
-			ws = &Workspace{
-				ID:            uuid.NewString(),
-				SourceID:      src.ID,
-				EnvironmentID: env.ID,
-				Path:          src.URL,
-				AgentCwd:      src.URL,
-				BaseRef:       "HEAD",
-				State:         WorkspaceReady,
-				CreatedAt:     now,
-				LastActiveAt:  now,
-			}
-			if err := s.stores.Workspaces.CreateWorkspace(ctx, ws); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if ws == nil {
-		baseRef := strings.TrimSpace(in.BaseRef)
-		if baseRef == "" {
-			baseRef = src.DefaultBranch
-		}
-		ws = &Workspace{
-			ID:            uuid.NewString(),
-			SourceID:      src.ID,
-			EnvironmentID: env.ID,
-			BaseRef:       baseRef,
-			State:         WorkspaceProvisioning,
-			CreatedAt:     now,
-			LastActiveAt:  now,
-		}
-		ws.Path = filepath.Join(s.workspacesDir, ws.ID, "repo")
-		ws.AgentCwd = ws.Path // RuntimeLocal; the docker runtime substitutes its mount point
-		ws.Branch = branchName(in.Title, in.Prompt, ws.ID)
-		if err := s.stores.Workspaces.CreateWorkspace(ctx, ws); err != nil {
-			return nil, err
-		}
-	}
-
-	// A workspace resumes its most recent session's Claude Code session so
-	// the agent keeps its context across tb sessions.
-	ccSessionID := ""
-	if in.WorkspaceID != "" {
-		prev, err := s.stores.Sessions.ListSessions(ctx, SessionFilter{WorkspaceID: ws.ID, Limit: 1})
-		if err != nil {
-			return nil, err
-		}
-		if len(prev) > 0 {
-			ccSessionID = prev[0].CCSessionID
-		}
-	}
-
-	mode := in.PermissionMode
-	if mode == PermissionInherit {
-		mode = env.PermissionMode
-	}
 	sess := &Session{
 		ID:             uuid.NewString(),
 		Title:          sessionTitle(in.Title, in.Prompt),
-		WorkspaceID:    ws.ID,
+		FolderID:       folder.ID,
 		Status:         SessionQueued,
 		Prompt:         in.Prompt,
-		PermissionMode: mode,
-		CCSessionID:    ccSessionID,
+		PermissionMode: in.PermissionMode,
 		CreatedBy:      in.CreatedBy,
-		Artifact:       Artifact{Branch: ws.Branch},
 		CreatedAt:      now,
 		LastActiveAt:   now,
 	}
@@ -543,14 +191,12 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*Se
 	}); err != nil {
 		return nil, err
 	}
-
-	if s.launcher != nil {
-		if err := s.launcher.Start(ctx, Run{Session: sess, Workspace: ws, Environment: env, Source: src}); err != nil {
-			sess.Status = SessionFailed
-			sess.Error = err.Error()
-			_ = s.stores.Sessions.UpdateSession(ctx, sess)
-			return sess, fmt.Errorf("start session: %w", err)
-		}
+	s.touchFolder(ctx, folder)
+	if s.launcher == nil {
+		return sess, nil
+	}
+	if err := s.launcher.Start(ctx, Run{Session: sess, Folder: folder}); err != nil {
+		return nil, err
 	}
 	return sess, nil
 }
@@ -561,10 +207,6 @@ func (s *Service) GetSession(ctx context.Context, id string) (*Session, error) {
 
 func (s *Service) ListSessions(ctx context.Context, f SessionFilter) ([]Session, error) {
 	return s.stores.Sessions.ListSessions(ctx, f)
-}
-
-func (s *Service) GetWorkspace(ctx context.Context, id string) (*Workspace, error) {
-	return s.stores.Workspaces.GetWorkspace(ctx, id)
 }
 
 func (s *Service) ListEvents(ctx context.Context, sessionID string, after int64, limit int) ([]Event, error) {
@@ -587,7 +229,7 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, text string) error
 		return err
 	}
 	if !s.canRetry(ctx, sess) {
-		return conflict("session is %s; create a new session in its workspace instead", sess.Status)
+		return conflict("session is %s; start a new task in the folder instead", sess.Status)
 	}
 	// Only the event is written here. The index row is the Launcher's to
 	// update (status, activity) — a second writer racing it on the whole
@@ -604,10 +246,9 @@ func (s *Service) SendMessage(ctx context.Context, sessionID, text string) error
 }
 
 // canRetry reports whether a session can take another message: active, or
-// failed with its checkout still in place (a failed turn — a rejected
-// permission mode, an upstream error — is retried by changing what caused
-// it and sending again; done ≠ locked). A failed provisioning is not
-// retryable here: the workspace itself is failed.
+// failed with its folder still there (a failed turn — a rejected permission
+// mode, an upstream error — is retried by changing what caused it and
+// sending again; done ≠ locked).
 func (s *Service) canRetry(ctx context.Context, sess *Session) bool {
 	if sess.Status.IsActive() {
 		return true
@@ -615,8 +256,12 @@ func (s *Service) canRetry(ctx context.Context, sess *Session) bool {
 	if sess.Status != SessionFailed {
 		return false
 	}
-	ws, err := s.stores.Workspaces.GetWorkspace(ctx, sess.WorkspaceID)
-	return err == nil && ws.State == WorkspaceReady
+	f, err := s.stores.Folders.GetFolder(ctx, sess.FolderID)
+	if err != nil {
+		return false
+	}
+	_, err = cleanFolderPath(f.Path)
+	return err == nil
 }
 
 // Respond answers a pending approval or ask request.
@@ -685,9 +330,8 @@ func (s *Service) Interrupt(ctx context.Context, sessionID string) error {
 	return s.launcher.Interrupt(ctx, sess.ID)
 }
 
-// Archive ends a session for good. The workspace and its branch are left in
-// place (the branch may already be pushed); reclaiming the directory is a
-// separate, later sweep.
+// Archive ends a session for good. Nothing on disk is touched: the folder,
+// its files and the conversation log all stay (.design/managed-agent.md §13).
 func (s *Service) Archive(ctx context.Context, sessionID string) (*Session, error) {
 	sess, err := s.stores.Sessions.GetSession(ctx, sessionID)
 	if err != nil {
@@ -723,134 +367,57 @@ func (s *Service) Archive(ctx context.Context, sessionID string) (*Session, erro
 	return sess, nil
 }
 
-// ---------- artifacts ----------
+// ---------- changes ----------
 
-// Diff returns the session workspace's change summary against its base ref.
+// Diff summarises what the agent changed in the folder. A folder that is not
+// a git work tree has no baseline, so the answer is an empty diff rather
+// than an error — working in a plain directory is a legitimate use.
 func (s *Service) Diff(ctx context.Context, sessionID string) (*Diff, error) {
-	sess, ws, err := s.sessionWorkspace(ctx, sessionID)
+	sess, folder, err := s.sessionFolder(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if s.git == nil {
-		return nil, conflict("git is not configured")
-	}
-	if ws.State != WorkspaceReady {
-		return nil, conflict("workspace is %s", ws.State)
-	}
-	if !s.ownsPath(ws) && !s.git.IsRepo(ctx, ws) {
-		// A plain directory has no baseline to diff against.
+	if s.git == nil || !s.git.IsRepo(ctx, folder.Path) {
 		return &Diff{}, nil
 	}
-	d, err := s.git.Diff(ctx, ws)
+	d, err := s.git.Diff(ctx, folder.Path, sess.BaseCommit)
 	if err != nil {
 		return nil, err
 	}
 	// Refresh the cached count only while nothing else is writing the row.
-	if d.ChangedFiles != sess.Artifact.Changed && sess.Status != SessionRunning && sess.Status != SessionQueued {
-		sess.Artifact.Changed = d.ChangedFiles
+	if d.ChangedFiles != sess.ChangedFiles && sess.Status != SessionRunning && sess.Status != SessionQueued {
+		sess.ChangedFiles = d.ChangedFiles
 		_ = s.stores.Sessions.UpdateSession(ctx, sess)
 	}
 	return d, nil
 }
 
-// Push pushes the workspace branch to its origin and records the fact on the
-// session's artifact. Push is an explicit control-plane action, never
-// something the agent does from inside the checkout (§5.3).
-func (s *Service) Push(ctx context.Context, sessionID string) (*Session, error) {
-	sess, ws, err := s.sessionWorkspace(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	if s.git == nil {
-		return nil, conflict("git is not configured")
-	}
-	if ws.State != WorkspaceReady {
-		return nil, conflict("workspace is %s", ws.State)
-	}
-	if !s.ownsPath(ws) {
-		return nil, conflict("this task works in place in %s; commit and push from that checkout yourself", ws.Path)
-	}
-	if sess.Status == SessionRunning {
-		return nil, conflict("session is running; interrupt it or wait for the turn to finish before pushing")
-	}
-	now := s.now()
-	logLine := func(line string) {
-		_ = s.stores.Events.AppendEvent(ctx, &Event{SessionID: sess.ID, Kind: EventSystem, Text: line, At: s.now()})
-	}
-	if err := s.git.Push(ctx, ws, logLine); err != nil {
-		logLine("push failed: " + err.Error())
-		return nil, err
-	}
-	sess.Artifact.Pushed = true
-	sess.Artifact.Branch = ws.Branch
-	sess.LastActiveAt = now
-	if err := s.stores.Sessions.UpdateSession(ctx, sess); err != nil {
-		return nil, err
-	}
-	logLine("pushed " + ws.Branch)
-	return sess, nil
-}
-
-// ownsPath reports whether a workspace's directory was created by tb (under
-// the workspaces dir) and may therefore be deleted, as opposed to a user's
-// own directory the agent works in in place.
-func (s *Service) ownsPath(ws *Workspace) bool {
-	if ws == nil || ws.Path == "" || s.workspacesDir == "" {
-		return false
-	}
-	rel, err := filepath.Rel(s.workspacesDir, ws.Path)
-	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
-}
-
-func (s *Service) sessionWorkspace(ctx context.Context, sessionID string) (*Session, *Workspace, error) {
+// sessionFolder resolves a session and the folder it works in.
+func (s *Service) sessionFolder(ctx context.Context, sessionID string) (*Session, *Folder, error) {
 	sess, err := s.stores.Sessions.GetSession(ctx, sessionID)
 	if err != nil {
 		return nil, nil, err
 	}
-	ws, err := s.stores.Workspaces.GetWorkspace(ctx, sess.WorkspaceID)
+	folder, err := s.stores.Folders.GetFolder(ctx, sess.FolderID)
 	if err != nil {
 		return nil, nil, err
 	}
-	return sess, ws, nil
+	return sess, folder, nil
 }
 
-// ---------- naming ----------
-
-var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-
-// branchName derives "tb/<slug>-<short id>" from the title or prompt. The
-// short id keeps two sessions on the same task from colliding on the remote.
-func branchName(title, prompt, wsID string) string {
-	base := title
-	if strings.TrimSpace(base) == "" {
-		base = prompt
-	}
-	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(base), "-"), "-")
-	if len(slug) > 40 {
-		slug = strings.TrimRight(slug[:40], "-")
-	}
-	if slug == "" {
-		slug = "task"
-	}
-	short := strings.ReplaceAll(wsID, "-", "")
-	if len(short) > 8 {
-		short = short[:8]
-	}
-	return "tb/" + slug + "-" + short
-}
-
-// sessionTitle is the explicit title, or the prompt's first line clipped.
+// sessionTitle is the list's label: the given title, else the prompt's first
+// line, trimmed to something a row can show.
 func sessionTitle(title, prompt string) string {
-	if t := strings.TrimSpace(title); t != "" {
-		return t
+	t := strings.TrimSpace(title)
+	if t == "" {
+		t = strings.TrimSpace(strings.SplitN(prompt, "\n", 2)[0])
 	}
-	first := prompt
-	if i := strings.IndexByte(first, '\n'); i >= 0 {
-		first = first[:i]
+	const max = 80
+	if len(t) > max {
+		t = strings.TrimSpace(t[:max]) + "…"
 	}
-	first = strings.TrimSpace(first)
-	if r := []rune(first); len(r) > 80 {
-		return string(r[:77]) + "..."
+	if t == "" {
+		t = "Task"
 	}
-	return first
+	return t
 }

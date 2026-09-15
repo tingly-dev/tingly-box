@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/managedagent"
-	"github.com/tingly-dev/tingly-box/internal/managedagent/gitrepo"
 )
 
 // Routing resolves how Claude Code reaches the gateway for one session:
@@ -40,19 +38,21 @@ func (f RoutingFunc) Resolve(ctx context.Context, p string) ([]string, string, e
 	return f(ctx, p)
 }
 
-// Provisioner materialises a workspace checkout. gitrepo.Git satisfies it.
-type Provisioner interface {
-	Provision(ctx context.Context, req gitrepo.ProvisionRequest) error
+// Changes is the read-only git view the launcher needs after a turn.
+// gitrepo.Git satisfies it.
+type Changes interface {
+	IsRepo(ctx context.Context, dir string) bool
+	Head(ctx context.Context, dir string) (string, error)
 	// ChangedFiles is the cheap count used after every turn; the full Diff
 	// (with the patch) is only produced when a caller asks for it.
-	ChangedFiles(ctx context.Context, dir, baseRef string) (int, error)
+	ChangedFiles(ctx context.Context, dir, base string) (int, error)
 }
 
 // Config wires a Launcher.
 type Config struct {
 	Stores  managedagent.Stores
 	Agent   agentboot.Agent
-	Git     Provisioner
+	Git     Changes
 	Routing Routing // optional
 	// TurnTimeout bounds one model turn. Zero uses agentboot's default;
 	// negative disables it.
@@ -79,7 +79,7 @@ func New(cfg Config) (*Launcher, error) {
 	if cfg.Git == nil {
 		return nil, errors.New("agentrun: git provisioner is required")
 	}
-	if cfg.Stores.Sessions == nil || cfg.Stores.Workspaces == nil || cfg.Stores.Events == nil {
+	if cfg.Stores.Sessions == nil || cfg.Stores.Folders == nil || cfg.Stores.Events == nil {
 		return nil, errors.New("agentrun: stores are required")
 	}
 	logger := cfg.Logger
@@ -96,10 +96,6 @@ const (
 	pendingApproval pendingKind = iota + 1
 	pendingAsk
 )
-
-// provisionTimeout bounds clone + branch creation. A remote that never
-// answers must not hold a run open forever.
-const provisionTimeout = 30 * time.Minute
 
 // run is one live session: at most one turn at a time, steering messages
 // queued for the next turn, and the control requests awaiting an answer.
@@ -140,11 +136,8 @@ func (rn *run) release() {
 // returns once the run is registered; provisioning and execution happen on
 // a goroutine and report through the stores.
 func (l *Launcher) Start(ctx context.Context, r managedagent.Run) error {
-	if r.Session == nil || r.Workspace == nil || r.Source == nil || r.Environment == nil {
+	if r.Session == nil || r.Folder == nil {
 		return errors.New("agentrun: incomplete run")
-	}
-	if r.Environment.Runtime != managedagent.RuntimeLocal {
-		return fmt.Errorf("agentrun: runtime %q is not available yet", r.Environment.Runtime)
 	}
 	rn := l.register(r.Session.ID)
 	if !rn.claim() {
@@ -280,23 +273,14 @@ func (l *Launcher) load(ctx context.Context, sessionID string) (managedagent.Run
 	if err != nil {
 		return managedagent.Run{}, err
 	}
-	ws, err := l.cfg.Stores.Workspaces.GetWorkspace(ctx, sess.WorkspaceID)
+	folder, err := l.cfg.Stores.Folders.GetFolder(ctx, sess.FolderID)
 	if err != nil {
 		return managedagent.Run{}, err
 	}
-	env, err := l.cfg.Stores.Environments.GetEnvironment(ctx, ws.EnvironmentID)
-	if err != nil {
-		return managedagent.Run{}, err
-	}
-	src, err := l.cfg.Stores.Sources.GetSource(ctx, ws.SourceID)
-	if err != nil {
-		return managedagent.Run{}, err
-	}
-	return managedagent.Run{Session: sess, Workspace: ws, Environment: env, Source: src}, nil
+	return managedagent.Run{Session: sess, Folder: folder}, nil
 }
 
-// drive runs provisioning (once) and then turns until the steer queue is
-// empty. It owns rn.busy.
+// drive runs turns until the steer queue is empty. It owns rn.busy.
 func (l *Launcher) drive(rn *run, r managedagent.Run, prompt string) {
 	ctx := rn.ctx
 	// idle marks the run free for the next Send. It runs on every exit
@@ -306,24 +290,6 @@ func (l *Launcher) drive(rn *run, r managedagent.Run, prompt string) {
 		rn.mu.Lock()
 		rn.busy = false
 		rn.mu.Unlock()
-	}
-
-	if r.Workspace.State == managedagent.WorkspaceProvisioning {
-		pCtx, cancel := context.WithTimeout(ctx, provisionTimeout)
-		err := l.provision(pCtx, r)
-		cancel()
-		if err != nil {
-			if ctx.Err() == nil { // not a Stop
-				l.setStatus(ctx, r.Session.ID, managedagent.SessionFailed, err.Error())
-			}
-			idle()
-			return
-		}
-	}
-	if r.Workspace.State != managedagent.WorkspaceReady {
-		l.setStatus(ctx, r.Session.ID, managedagent.SessionFailed, "workspace is "+string(r.Workspace.State))
-		idle()
-		return
 	}
 
 	for {
@@ -345,50 +311,22 @@ func (l *Launcher) drive(rn *run, r managedagent.Run, prompt string) {
 	}
 }
 
-func (l *Launcher) provision(ctx context.Context, r managedagent.Run) error {
-	ws := r.Workspace
-	l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem,
-		Text: fmt.Sprintf("provisioning workspace from %s (%s)", gitrepo.RedactURL(r.Source.URL), ws.BaseRef)})
-	logLine := func(line string) {
-		l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem, Text: gitrepo.RedactURL(line)})
-	}
-	// A previous attempt cut short (crash mid-clone) leaves a directory the
-	// clone would refuse; the workspace is still "provisioning", so nothing
-	// in it is worth keeping.
-	if _, statErr := os.Stat(ws.Path); statErr == nil {
-		logLine("removing incomplete checkout from a previous attempt")
-		if rmErr := os.RemoveAll(ws.Path); rmErr != nil {
-			return fmt.Errorf("clean incomplete checkout: %w", rmErr)
-		}
-	}
-	err := l.cfg.Git.Provision(ctx, gitrepo.ProvisionRequest{
-		URL: r.Source.URL, BaseRef: ws.BaseRef, Branch: ws.Branch, Dir: ws.Path, Log: logLine,
-	})
-	now := time.Now()
-	// Persist with a fresh context: the provisioning one may be the very
-	// timeout / cancellation that just failed the clone.
-	fin := context.Background()
-	if err != nil {
-		ws.State, ws.Error, ws.LastActiveAt = managedagent.WorkspaceFailed, err.Error(), now
-		if uerr := l.cfg.Stores.Workspaces.UpdateWorkspace(fin, ws); uerr != nil {
-			l.log.WithError(uerr).WithField("workspace", ws.ID).Warn("failed to persist workspace failure")
-		}
-		return fmt.Errorf("provision workspace: %w", err)
-	}
-	ws.State, ws.Error, ws.LastActiveAt = managedagent.WorkspaceReady, "", now
-	if err := l.cfg.Stores.Workspaces.UpdateWorkspace(fin, ws); err != nil {
-		return err
-	}
-	l.append(ctx, managedagent.Event{SessionID: r.Session.ID, Kind: managedagent.EventSystem,
-		Text: "workspace ready on branch " + ws.Branch})
-	return nil
-}
-
 // noConversationMarker is what the CLI answers to --resume when the session
 // file was never written: the previous turn died (interrupt, crash) before
 // the CLI persisted anything. There is nothing to resume, so the turn is
 // re-run once on a fresh Claude session id.
 const noConversationMarker = "No conversation found with session ID"
+
+// noConversation reports whether this turn failed only because there was
+// nothing to resume. The CLI surfaces that through any of the three
+// channels a turn can fail on, so all three are checked: the result event,
+// the wait error, and stderr.
+func noConversation(resultErr string, werr error, stderrTail string) bool {
+	if strings.Contains(resultErr, noConversationMarker) || strings.Contains(stderrTail, noConversationMarker) {
+		return true
+	}
+	return werr != nil && strings.Contains(werr.Error(), noConversationMarker)
+}
 
 // turn executes one prompt and consumes its event stream.
 func (l *Launcher) turn(ctx context.Context, rn *run, r managedagent.Run, prompt string) {
@@ -410,6 +348,14 @@ func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, pro
 	resume := sess.CCSessionID != ""
 	if !resume {
 		sess.CCSessionID = uuid.NewString()
+		// Record where the folder stood before the agent touched it, so
+		// this session's changes can be told apart from what was already
+		// there — including work the agent commits itself.
+		if l.cfg.Git != nil && l.cfg.Git.IsRepo(ctx, r.Folder.Path) {
+			if head, err := l.cfg.Git.Head(ctx, r.Folder.Path); err == nil {
+				sess.BaseCommit = head
+			}
+		}
 	}
 	sess.Status, sess.Error, sess.LastActiveAt = managedagent.SessionRunning, "", time.Now()
 	if err := l.cfg.Stores.Sessions.UpdateSession(ctx, sess); err != nil {
@@ -420,14 +366,11 @@ func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, pro
 	var env []string
 	var settings string
 	if l.cfg.Routing != nil {
-		env, settings, err = l.cfg.Routing.Resolve(ctx, r.Environment.CCProfile)
+		env, settings, err = l.cfg.Routing.Resolve(ctx, "")
 		if err != nil {
 			l.append(ctx, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventError,
 				Text: "gateway routing unavailable, running with host defaults: " + err.Error()})
 		}
-	}
-	for k, v := range r.Environment.Env {
-		env = append(env, k+"="+v)
 	}
 
 	turnCtx, cancel := context.WithCancel(ctx)
@@ -435,7 +378,7 @@ func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, pro
 	stderr := newTailBuffer(stderrTailBytes)
 	handle, err := l.cfg.Agent.Execute(turnCtx, prompt, agentboot.ExecutionOptions{
 		Stderr:               stderr,
-		ProjectPath:          r.Workspace.AgentCwd,
+		ProjectPath:          r.Folder.Path,
 		OutputFormat:         agentboot.OutputFormatStreamJSON,
 		SessionID:            sess.CCSessionID,
 		Resume:               resume,
@@ -510,7 +453,7 @@ func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, pro
 	// context: the run's may already be cancelled by Stop.
 	fin := context.Background()
 	usage, resultErr := foldResult(res)
-	if resume && mayRestart && ctx.Err() == nil && strings.Contains(resultErr, noConversationMarker) {
+	if resume && mayRestart && ctx.Err() == nil && noConversation(resultErr, werr, stderr.String()) {
 		l.append(fin, managedagent.Event{SessionID: sess.ID, Kind: managedagent.EventSystem,
 			Text: "claude code session " + sess.CCSessionID + " was never saved (the previous turn ended before its first reply); starting a fresh one"})
 		if cur, gerr := l.cfg.Stores.Sessions.GetSession(fin, r.Session.ID); gerr == nil {
@@ -532,8 +475,8 @@ func (l *Launcher) runTurn(ctx context.Context, rn *run, r managedagent.Run, pro
 	sess.Usage.OutputTokens += usage.OutputTokens
 	sess.Usage.CacheReadTokens += usage.CacheReadTokens
 	sess.Usage.Cost += usage.Cost
-	if n, derr := l.cfg.Git.ChangedFiles(fin, r.Workspace.Path, r.Workspace.BaseRef); derr == nil {
-		sess.Artifact.Changed = n
+	if n, derr := l.cfg.Git.ChangedFiles(fin, r.Folder.Path, sess.BaseCommit); derr == nil {
+		sess.ChangedFiles = n
 	}
 	sess.LastActiveAt = time.Now()
 	rn.mu.Lock()

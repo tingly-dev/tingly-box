@@ -11,6 +11,13 @@
 > [`afk.md`](afk.md)、[`bot-interaction-api.md`](bot-interaction-api.md)、
 > [`team.md`](team.md)、[`security.md`](security.md)、[`ux-principles.md`](ux-principles.md)。
 
+> **当前范围（2026-09-15，读之前先看这里）**：产品先只做一件事——**一个可用的
+> Claude Code web remote，完全操作本地环境**。领域模型已经收窄成两层：
+> **Folder（你交给 agent 的本机目录）+ Session（在目录里的一次对话）**。
+> 仓库 clone → 分支 → push、容器运行时、Environment 实体都已从代码中移出，
+> 保留在分支 `claude/managed-agent-git-source-parked` 上，等本地这条路跑稳再谈。
+> 见 §18；§3～§12 记录的是当初完整方案的推演，读作历史，不是现状。
+
 目录：
 
 1. 一句话目标与边界
@@ -633,3 +640,48 @@ tb 的原则：
 
 mirror 是优化不是事实来源：mirror 失败退化为直接 clone，workspace 永远是普通目录。
 磁盘不共享是有意的代价；将来 local 可以单独做 alternates 优化，不影响 docker。
+
+## 18. 范围收窄：先做"完全操作本地环境"（2026-09-15）
+
+用户的判断：仓库那条路现在不必做完，先保证 tb 是一个**可用的 Claude Code web
+remote**——本机目录、就地工作、网页和 IM 远程推进。不是砍功能，是拆分：仓库那条
+路的全部代码（gitrepo 的 mirror/clone/push、Source(git)、Workspace 供给、
+Environment/Runtime、push 与 PR、full-stack git journey）原样保留在分支
+`claude/managed-agent-git-source-parked`，等这条路稳了再合回来。
+
+### 18.1 领域模型只剩两层
+
+| 之前 | 现在 | 为什么 |
+|---|---|---|
+| Source(git\|local) → Workspace → Session | **Folder → Session** | 本地场景里 Workspace 恒等于那个目录（Path=AgentCwd、State 永远 ready、Branch/BaseRef 恒空），一层纯粹的间接 |
+| Environment(local\|docker, image, network, resources, cc_profile) | 无 | 只有一个 local 环境，UI 里本来就藏着；CC profile 用默认 scenario，权限模式落到 session 上 |
+| Artifact{branch, pushed, pr_url, changed} | `Session.ChangedFiles` | 没有分支也没有 push，只剩"改了几个文件" |
+| 表 agent_sources / agent_environments / agent_workspaces / agent_sessions | **agent_folders / agent_sessions** | 功能尚未发布，直接改表，不做迁移 |
+
+`Folder`：`{id, path, name, created_at, last_used_at}`——同时就是浏览白名单（§13）。
+`Session` 新增 `BaseCommit`：会话开始时目录的 HEAD，这样"这次任务改了什么"能和
+"目录里本来就有的改动"分开，**包括 agent 自己提交的 commit**（对着 HEAD 比会把它们
+算作没改）。
+
+### 18.2 本地这条路补齐的两件事
+
+| | 规则 |
+|---|---|
+| 一个目录同时只跑一个任务 | agent 就地改文件，两个活动会话就是两个进程写同一批文件，且 Claude Code 的会话键是 (config dir, cwd)。第二个任务返回 409 并说清楚：先归档或继续现有任务 |
+| 目录消失 | 开任务前校验路径；跑的过程中目录被删，turn 失败并带原因，不会在不存在的目录里起 CLI |
+
+### 18.3 API 与页面
+
+`/api/v1/agent/*`：`folders`（增删查）、`fs/dirs`（白名单浏览）、
+`permission-modes`、`sessions`（创建/查询/事件/steer/respond/权限模式/中断/归档/diff）。
+没有 sources、environments、workspaces、push。
+
+页面：Tasks（提交框 + 任务列表）、Folders（白名单）、任务详情（对话 + 改动面板）。
+Repositories / Environments 两个页面已删除（在 parked 分支上）。
+
+### 18.4 tb 在本地不产生任何自己的目录
+
+`~/.tingly-box/agent/` 下只剩 `events/`（每个 session 一个 JSONL）。没有
+workspaces、没有 mirrors，因此也没有"回收 checkout"这回事——`RunMaintenance` /
+`ReclaimWorkspace` / TTL 清扫全部删除，启动时只做 `RecoverOnStart`（running →
+idle、queued → 重启）。这同时把"tb 可能删掉用户东西"的面缩到了零（§13）。

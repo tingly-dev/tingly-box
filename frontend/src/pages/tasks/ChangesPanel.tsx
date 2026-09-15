@@ -1,95 +1,56 @@
-// What the task produced: branch, change summary, push state, and the diff.
-// This is the artifact panel — it hands over what the next action needs
-// (the branch name, the patch) rather than describing it.
+// What the task changed in the folder: the folder itself, a change summary
+// and the patch. Read-only by design — committing and publishing stay with
+// the person who owns the folder (.design/managed-agent.md §13).
 import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Box, Button, Chip, CircularProgress, Divider, Stack, Typography} from '@mui/material';
+import {Box, Button, CircularProgress, Divider, Stack, Typography} from '@mui/material';
 import CodeBlock from '@/components/CodeBlock';
-import {Refresh as IconRefresh, Upload as IconUpload} from '@/components/icons';
-import {agentApi, type AgentDiff, type AgentSession, type AgentWorkspace} from '@/services/agentApi';
+import {Refresh as IconRefresh} from '@/components/icons';
+import {agentApi, type AgentDiff, type AgentFolder, type AgentSession} from '@/services/agentApi';
 
 interface Props {
     session: AgentSession;
-    workspace?: AgentWorkspace;
-    onPushed: (s: AgentSession) => void;
-    onError: (msg: string) => void;
+    folder?: AgentFolder;
 }
 
-const ChangesPanel = ({session, workspace, onPushed, onError}: Props) => {
+const ChangesPanel = ({session, folder}: Props) => {
     const {t} = useTranslation();
     const [diff, setDiff] = useState<AgentDiff>();
     const [loading, setLoading] = useState(false);
-    const [pushing, setPushing] = useState(false);
-
-    const ready = workspace?.state === 'ready';
-    // No branch means the agent works in the user's own directory: there
-    // is nothing for tb to push.
-    const inPlace = ready && !workspace?.branch;
 
     const load = useCallback(async () => {
-        if (!ready) return;
         setLoading(true);
         const res = await agentApi.diff(session.id);
         setLoading(false);
         if (res.ok) setDiff(res.data);
-    }, [session.id, ready]);
+    }, [session.id]);
 
-    // Refresh whenever the agent settles (idle/done) — that is when the diff changes.
+    // Refresh whenever the agent settles — that is when the diff changes.
     useEffect(() => {
         load();
-    }, [load, session.status, session.artifact?.changed_files]);
-
-    const push = async () => {
-        setPushing(true);
-        const res = await agentApi.push(session.id);
-        setPushing(false);
-        if (!res.ok) {
-            onError(res.error);
-            return;
-        }
-        onPushed(res.data.session);
-    };
-
-    const canPush = ready && !inPlace && session.status !== 'running' && (diff?.changed_files ?? 0) > 0;
+    }, [load, session.status, session.changed_files]);
 
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
-                <Typography variant="overline" color="text.secondary">{inPlace ? t('tasks.detail.folder') : t('tasks.list.branch')}</Typography>
+                <Typography variant="overline" color="text.secondary">{t('tasks.detail.folder')}</Typography>
                 <Typography variant="body2" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
-                    {inPlace ? workspace?.path : (workspace?.branch || session.artifact?.branch || '—')}
+                    {folder?.path ?? '—'}
                 </Typography>
-                <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5}}>
-                    {session.artifact?.pushed && <Chip size="small" color="success" variant="outlined" label={t('tasks.detail.pushed')} />}
-                    {(diff?.changed_files ?? 0) > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                            {t('tasks.list.changedFiles', {count: diff?.changed_files ?? 0})}
-                        </Typography>
-                    )}
-                </Stack>
+                {(diff?.changed_files ?? 0) > 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                        {t('tasks.list.changedFiles', {count: diff?.changed_files ?? 0})}
+                    </Typography>
+                )}
             </Stack>
 
-            <Stack direction={{xs: 'column', sm: 'row'}} spacing={1}>
-                {!inPlace && (
-                    <Button
-                        variant="contained"
-                        startIcon={pushing ? <CircularProgress size={16} color="inherit" /> : <IconUpload />}
-                        disabled={!canPush || pushing}
-                        onClick={push}
-                    >
-                        {pushing ? t('tasks.detail.pushing') : t('tasks.detail.push')}
-                    </Button>
-                )}
-                <Button variant="outlined" startIcon={<IconRefresh />} disabled={!ready || loading} onClick={load}>
+            <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                <Button variant="outlined" size="small" startIcon={<IconRefresh />} disabled={loading} onClick={load}>
                     {t('tasks.detail.refreshDiff')}
                 </Button>
+                {loading && <CircularProgress size={14} />}
             </Stack>
-            {inPlace && (
-                <Typography variant="caption" color="text.secondary">{t('tasks.detail.inPlaceNote')}</Typography>
-            )}
-            {session.artifact?.pushed && !session.artifact?.pr_url && (
-                <Typography variant="caption" color="text.secondary">{t('tasks.detail.noPROnBranch')}</Typography>
-            )}
+            <Typography variant="caption" color="text.secondary">{t('tasks.detail.inPlaceNote')}</Typography>
 
             <Divider />
 

@@ -230,11 +230,8 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.tasks'),
                 defaultPath: '/tasks',
                 children: [
-                    { path: '/tasks', label: t('layout.tasks'), icon: <IconTasks sx={{ fontSize: 20 }} />, match: (p) => p === '/tasks' || (p.startsWith('/tasks/') && !p.startsWith('/tasks/folders') && !p.startsWith('/tasks/sources') && !p.startsWith('/tasks/environments')) },
+                    { path: '/tasks', label: t('layout.tasks'), icon: <IconTasks sx={{ fontSize: 20 }} />, match: (p) => p === '/tasks' || (p.startsWith('/tasks/') && !p.startsWith('/tasks/folders')) },
                     { type: 'divider' },
-                    // Local-first: only Folders in the rail. Repositories and
-                    // Environments stay routed (/tasks/sources, /tasks/environments)
-                    // but hidden until their phase (.design/managed-agent.md §15).
                     { path: '/tasks/folders', label: t('layout.taskFolders'), icon: <IconFolderOpen sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),

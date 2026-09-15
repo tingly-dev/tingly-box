@@ -143,7 +143,7 @@ func (s *Server) UseManagedAgentEndpoints() {
 	}
 	bus := managedagent.NewEventBus(eventLog)
 	stores := sm.ManagedAgent().Stores(bus)
-	git := &gitrepo.Git{MirrorsDir: constant.GetAgentMirrorsDir(base)}
+	git := &gitrepo.Git{}
 
 	tb := tbclient.NewTBClient(s.config)
 	routing := agentrun.RoutingFunc(func(ctx context.Context, ccProfile string) ([]string, string, error) {
@@ -193,14 +193,10 @@ func (s *Server) UseManagedAgentEndpoints() {
 		return
 	}
 	svc := managedagent.NewService(managedagent.Config{
-		Stores:        stores,
-		Launcher:      launcher,
-		Git:           agentrun.GitAdapter{Git: git},
-		WorkspacesDir: constant.GetAgentWorkspacesDir(base),
+		Stores:   stores,
+		Launcher: launcher,
+		Git:      agentrun.GitAdapter{Git: git},
 	})
-	if err := svc.EnsureDefaults(context.Background()); err != nil {
-		logrus.WithError(err).Error("managed agent: failed to ensure default environment")
-	}
 	s.managedAgent = svc
 	s.managedAgentBus = bus
 

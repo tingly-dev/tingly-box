@@ -6,40 +6,34 @@
 import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
-    Button, Card, Chip, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
+    Button, Card, Dialog, DialogActions, DialogContent, IconButton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {PageLayout} from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DialogHeader from '@/components/DialogHeader';
-import {Add as IconAdd, FolderOpen as IconFolder, GitHub as IconRepo, LinkOff as IconRemove} from '@/components/icons';
+import {Add as IconAdd, FolderOpen as IconFolder, LinkOff as IconRemove} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
-import {agentApi, type AgentSource, type RecentFolder} from '@/services/agentApi';
+import {agentApi, type AgentFolder} from '@/services/agentApi';
 
 const isAbsolutePath = (v: string): boolean => /^(\/|[A-Za-z]:[\\/])/.test(v.trim());
 
 const FoldersPage = () => {
     const {t} = useTranslation();
     const notify = useNotify();
-    const [folders, setFolders] = useState<AgentSource[]>([]);
-    const [repoFlags, setRepoFlags] = useState<Record<string, boolean>>({});
+    const [folders, setFolders] = useState<AgentFolder[]>([]);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [path, setPath] = useState('');
     const [saving, setSaving] = useState(false);
-    const [removing, setRemoving] = useState<AgentSource>();
+    const [removing, setRemoving] = useState<AgentFolder>();
     const [removeBusy, setRemoveBusy] = useState(false);
 
     const load = useCallback(async () => {
-        const [src, recent] = await Promise.all([agentApi.listSources(), agentApi.recentFolders()]);
-        if (src.ok) setFolders((src.data.sources ?? []).filter((s) => s.kind === 'local'));
-        else notify.error(src.error);
-        if (recent.ok) {
-            const flags: Record<string, boolean> = {};
-            for (const f of (recent.data.folders ?? []) as RecentFolder[]) flags[f.path] = f.is_repo;
-            setRepoFlags(flags);
-        }
+        const res = await agentApi.listFolders();
+        if (res.ok) setFolders(res.data.folders ?? []);
+        else notify.error(res.error);
         setLoading(false);
     }, [notify]);
 
@@ -49,7 +43,7 @@ const FoldersPage = () => {
 
     const add = async () => {
         setSaving(true);
-        const res = await agentApi.createSource({url: path.trim(), name: '', default_branch: '', credential_id: ''});
+        const res = await agentApi.addFolder(path.trim());
         setSaving(false);
         if (!res.ok) {
             notify.error(res.error);
@@ -64,7 +58,7 @@ const FoldersPage = () => {
     const remove = async () => {
         if (!removing) return;
         setRemoveBusy(true);
-        const res = await agentApi.deleteSource(removing.id);
+        const res = await agentApi.removeFolder(removing.id);
         setRemoveBusy(false);
         if (!res.ok) {
             notify.error(res.error);
@@ -104,17 +98,14 @@ const FoldersPage = () => {
                                     <Stack sx={{flex: 1, minWidth: 0}}>
                                         <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                                             <Typography variant="subtitle1" sx={{fontWeight: 600}}>{f.name}</Typography>
-                                            {repoFlags[f.url] && (
-                                                <Chip size="small" variant="outlined" icon={<IconRepo />} label={t('tasks.folder.gitRepo')} />
-                                            )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>
-                                            {f.url}
+                                            {f.path}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">{t('tasks.folders.inPlace')}</Typography>
                                     </Stack>
-                                    <Tooltip title={t('tasks.sources.remove')}>
-                                        <IconButton size="small" onClick={() => setRemoving(f)} aria-label={t('tasks.sources.remove')}><IconRemove fontSize="small" /></IconButton>
+                                    <Tooltip title={t('tasks.folders.remove')}>
+                                        <IconButton size="small" onClick={() => setRemoving(f)} aria-label={t('tasks.folders.remove')}><IconRemove fontSize="small" /></IconButton>
                                     </Tooltip>
                                 </Stack>
                             </Card>
@@ -149,9 +140,9 @@ const FoldersPage = () => {
 
             <ConfirmDialog
                 open={!!removing}
-                title={t('tasks.sources.removeLocalTitle')}
-                description={t('tasks.sources.removeLocalConfirm')}
-                confirmLabel={t('tasks.sources.remove')}
+                title={t('tasks.folders.removeTitle')}
+                description={t('tasks.folders.removeConfirm')}
+                confirmLabel={t('tasks.folders.remove')}
                 loading={removeBusy}
                 onClose={() => setRemoving(undefined)}
                 onConfirm={remove}

@@ -28,7 +28,7 @@ Without `task`:
 
 ```bash
 TB_MANAGED_AGENT_E2E=1 go test -count=1 -v -timeout 30m \
-  ./internal/managedagent/e2e/ ./internal/managedagent/agentrun/ -run 'Journey|RealCLI|FullStack'
+  ./internal/managedagent/e2e/ ./internal/managedagent/agentrun/ -run 'Journey|RealCLI'
 ```
 
 Prerequisites (each missing one is reported as a *skip*, never a pass — read
@@ -52,14 +52,13 @@ Server logs are noisy under `-v`; filter with `| grep -v 'level='`.
 
 | Test | File | What it proves |
 |---|---|---|
-| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | allowlist: nothing listable before the folder is handed over (403, top level empty) → start with `local_path` (that is the grant) → answer → diff shows the edit → push refused (in place) → folder is recent + a local source → only it is browsable, its parent stays 403 → second task reuses the workspace → non-git folder works with an empty diff → missing folder is 400 |
+| `TestJourney_LocalFolderInPlace` | `local_folder_test.go` | allowlist: nothing listable before the folder is handed over (403, top level empty) → start with a `path` (that is the grant) → answer → diff shows the edit → the folder is on the allowlist and only it is browsable, its parent stays 403 → a second task in a busy folder is 409 → after archiving the folder is free → removing the folder keeps its files and withdraws browsing → non-git folder works with an empty diff → missing folder is 400 |
 | `TestJourney_PermissionPrompt` | `permission_test.go` | a write command → `approval_request` → `waiting_input` → approve → command ran, output in the log **and** back to the model → deny → nothing ran, model told → `bypassPermissions` → no question → bad mode is 400 |
 | `TestJourney_InterruptThenResume` | `interrupt_test.go` | slow model → interrupt → `idle` (not failed) → next message continues → archive is final |
 | `TestJourney_ArchiveWhileRunning` | `interrupt_test.go` | archive mid-turn stops the CLI and stays archived |
 | `TestJourney_FailureThenRetry` | `failure_test.go` | model 400 → `failed` with the reason → send again → `idle`, error cleared |
 | `TestJourney_AllPermissionModesStart` | `failure_test.go` | every advertised mode starts a turn on the installed CLI |
 | `TestJourney_Browser` | `browser_test.go` + `browser/managed_agent.mjs` | the built UI: type a path in the dialog → told it is outside the allowlist → use it anyway → Start → answer on the detail page → steer → **Allow** a command → result → Folders page lists the folder → the dialog now browses it (and only it). Screenshots per step in `TB_E2E_OUT` |
-| `TestFullStack_SessionOverHTTP` | `agentrun/full_stack_test.go` | git repository source: clone → answer → resume → diff → push lands the branch on origin → archive |
 | `TestRealCLI_SessionRoundTrip` | `agentrun/real_cli_test.go` | the Launcher alone with the real CLI and the virtual upstream |
 
 ## How the model is controlled
@@ -84,6 +83,8 @@ Facts that bit us, keep them in mind when scripting:
   `status` event), not on the status field, which lags a beat when a new
   turn starts.
 - Every journey boots its own stack; never share sessions across tests.
+- A folder runs one task at a time, so a journey that wants several tasks
+  either archives between them or uses one folder per task.
 
 ## Adding a journey
 
@@ -93,6 +94,8 @@ Facts that bit us, keep them in mind when scripting:
 2. Script the model with `upstreamTurn`s; drive only the HTTP API (or the
    UI); assert on events, status, files on disk, and `LastRequestJSON()`.
 3. Add it to the table above and to `.design/managed-agent.md` §14.
+   The product is local-only for now (§18): a journey that needs a cloned
+   repository, a branch or a push belongs on the parked branch, not here.
 4. Run the whole set, not just the new one.
 
 ## When a journey fails

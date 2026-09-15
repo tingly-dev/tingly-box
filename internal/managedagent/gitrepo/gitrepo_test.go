@@ -5,130 +5,110 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func sh(t *testing.T, dir string, args ...string) string {
+// newRepo builds a work tree with one commit and returns its path.
+func newRepo(t *testing.T) (*Git, string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return string(out)
-}
-
-// newOrigin builds a bare "remote" with one commit on main.
-func newOrigin(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	work := filepath.Join(root, "work")
-	sh(t, root, "init", "-q", "-b", "main", work)
-	os.WriteFile(filepath.Join(work, "README.md"), []byte("hello\n"), 0o644)
-	sh(t, work, "add", ".")
-	sh(t, work, "commit", "-q", "-m", "init")
-	bare := filepath.Join(root, "origin.git")
-	sh(t, root, "clone", "-q", "--bare", work, bare)
-	return bare
-}
-
-func TestProvisionDiffPush(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
 	}
+	dir := t.TempDir()
+	g := &Git{Env: []string{
+		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+	}}
 	ctx := context.Background()
-	origin := newOrigin(t)
-	g := &Git{MirrorsDir: filepath.Join(t.TempDir(), "mirrors")}
-	var lines []string
-	log := func(s string) { lines = append(lines, s) }
-
-	ws := filepath.Join(t.TempDir(), "ws", "repo")
-	if err := g.Provision(ctx, ProvisionRequest{URL: origin, BaseRef: "main", Branch: "tb/x", Dir: ws, Log: log}); err != nil {
-		t.Fatalf("provision: %v\n%s", err, strings.Join(lines, "\n"))
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "."}} {
+		if args[0] == "add" {
+			if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# repo\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := g.run(ctx, dir, nil, args...); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(g.MirrorPath(origin), "HEAD")); err != nil {
-		t.Fatalf("mirror not created: %v", err)
-	}
-	if got := strings.TrimSpace(sh(t, ws, "rev-parse", "--abbrev-ref", "HEAD")); got != "tb/x" {
-		t.Fatalf("branch = %q", got)
-	}
-	// Dissociated: no alternates file pointing at the mirror.
-	if _, err := os.Stat(filepath.Join(ws, ".git", "objects", "info", "alternates")); err == nil {
-		t.Fatal("workspace still borrows objects from the mirror")
-	}
-
-	// A second workspace hits the existing mirror (remote update path).
-	ws2 := filepath.Join(t.TempDir(), "ws2", "repo")
-	if err := g.Provision(ctx, ProvisionRequest{URL: origin, BaseRef: "main", Branch: "tb/y", Dir: ws2}); err != nil {
+	if _, err := g.run(ctx, dir, nil, "commit", "-q", "-m", "init"); err != nil {
 		t.Fatal(err)
 	}
+	return g, dir
+}
 
-	// Changes: one committed, one working-tree edit, one untracked.
-	os.WriteFile(filepath.Join(ws, "a.txt"), []byte("a\n"), 0o644)
-	sh(t, ws, "add", "a.txt")
-	sh(t, ws, "commit", "-q", "-m", "add a")
-	os.WriteFile(filepath.Join(ws, "README.md"), []byte("hello world\n"), 0o644)
-	os.WriteFile(filepath.Join(ws, "new.txt"), []byte("n\n"), 0o644)
+// The diff answers the question the UI asks: what changed since the session
+// started — tracked edits, new files, and work the agent committed itself.
+func TestDiffSinceBase(t *testing.T) {
+	ctx := context.Background()
+	g, dir := newRepo(t)
 
-	d, err := g.Diff(ctx, ws, "main")
-	if err != nil {
+	if !g.IsRepo(ctx, dir) {
+		t.Fatal("IsRepo should be true for a work tree")
+	}
+	base, err := g.Head(ctx, dir)
+	if err != nil || base == "" {
+		t.Fatalf("head: %q %v", base, err)
+	}
+
+	// Nothing has happened yet.
+	d, err := g.Diff(ctx, dir, base)
+	if err != nil || d.ChangedFiles != 0 {
+		t.Fatalf("clean tree: %+v %v", d, err)
+	}
+
+	// An edit, an untracked file, and a commit: all three belong to this
+	// session and must be in the summary.
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# repo\nedited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if d.ChangedFiles != 3 || len(d.Untracked) != 1 || !strings.Contains(d.Patch, "hello world") || !strings.Contains(d.Stat, "a.txt") {
-		t.Fatalf("diff = %+v", d)
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if dirty, _ := g.HasUncommitted(ctx, ws); !dirty {
-		t.Fatal("expected uncommitted changes")
+	d, err = g.Diff(ctx, dir, base)
+	if err != nil || d.ChangedFiles != 2 || len(d.Untracked) != 1 || d.Untracked[0] != "new.txt" {
+		t.Fatalf("dirty tree: %+v %v", d, err)
 	}
-
-	if err := g.Push(ctx, ws, "tb/x", log); err != nil {
-		t.Fatalf("push: %v\n%s", err, strings.Join(lines, "\n"))
-	}
-	if out := sh(t, origin, "branch", "--list", "tb/x"); !strings.Contains(out, "tb/x") {
-		t.Fatalf("branch not on origin: %q", out)
+	if n, _ := g.ChangedFiles(ctx, dir, base); n != 2 {
+		t.Fatalf("ChangedFiles = %d, want 2", n)
 	}
 
-	if n, err := g.ChangedFiles(ctx, ws, "main"); err != nil || n != 3 {
-		t.Fatalf("ChangedFiles = %d, %v", n, err)
+	if _, err := g.run(ctx, dir, nil, "add", "."); err != nil {
+		t.Fatal(err)
 	}
-
-	// A commit id as the base ref is checked out after the clone.
-	sha := strings.TrimSpace(sh(t, ws, "rev-parse", "main"))
-	ws3 := filepath.Join(t.TempDir(), "ws3", "repo")
-	if err := g.Provision(ctx, ProvisionRequest{URL: origin, BaseRef: sha, Branch: "tb/z", Dir: ws3}); err != nil {
-		t.Fatalf("provision at sha: %v", err)
+	if _, err := g.run(ctx, dir, nil, "commit", "-q", "-m", "agent work"); err != nil {
+		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(sh(t, ws3, "rev-parse", "HEAD")); got != sha {
-		t.Fatalf("HEAD = %s, want %s", got, sha)
+	d, err = g.Diff(ctx, dir, base)
+	if err != nil || d.ChangedFiles != 2 {
+		t.Fatalf("committed work must stay in the session's diff: %+v %v", d, err)
 	}
-	if got := strings.TrimSpace(sh(t, ws3, "rev-parse", "--abbrev-ref", "HEAD")); got != "tb/z" {
-		t.Fatalf("branch = %q", got)
-	}
-
-	// Existing dir is refused.
-	if err := g.Provision(ctx, ProvisionRequest{URL: origin, Branch: "b", Dir: ws}); err == nil {
-		t.Fatal("expected error for existing dir")
-	}
-	// Bad URL with mirroring falls back and still fails cleanly.
-	if err := g.Provision(ctx, ProvisionRequest{URL: filepath.Join(t.TempDir(), "nope.git"), Branch: "b", Dir: filepath.Join(t.TempDir(), "x")}); err == nil {
-		t.Fatal("expected clone failure")
+	// Against HEAD, the same tree is clean again — that is the difference
+	// the base commit buys.
+	if d, err = g.Diff(ctx, dir, ""); err != nil || d.ChangedFiles != 0 {
+		t.Fatalf("against HEAD: %+v %v", d, err)
 	}
 }
 
-func TestRedactURL(t *testing.T) {
-	in := "$ git clone -- https://alice:ghp_secret@github.com/o/r.git /tmp/x and ssh://bob@host/r"
-	got := RedactURL(in)
-	if strings.Contains(got, "ghp_secret") || strings.Contains(got, "alice") || strings.Contains(got, "bob@") {
-		t.Fatalf("credential leaked: %s", got)
+// A base commit that no longer resolves (a reset, a fresh clone) falls back
+// to HEAD instead of failing the page.
+func TestDiffUnknownBaseFallsBackToHead(t *testing.T) {
+	ctx := context.Background()
+	g, dir := newRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(got, "https://***@github.com/o/r.git") {
-		t.Fatalf("unexpected redaction: %s", got)
+	d, err := g.Diff(ctx, dir, "0000000000000000000000000000000000000000")
+	if err != nil || d.ChangedFiles != 1 {
+		t.Fatalf("unknown base: %+v %v", d, err)
 	}
-	if RedactURL("https://github.com/o/r.git") != "https://github.com/o/r.git" {
-		t.Fatal("plain URL must be unchanged")
+}
+
+func TestIsRepoFalseForPlainDirectory(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	g := &Git{}
+	if g.IsRepo(context.Background(), t.TempDir()) {
+		t.Fatal("a plain directory is not a repo")
 	}
 }

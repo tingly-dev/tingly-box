@@ -41,7 +41,7 @@ const TaskDetailPage = () => {
     const theme = useTheme();
     const isPhone = useMediaQuery(theme.breakpoints.down('md'));
 
-    const {session, workspace, events, loading, notFound, refresh, setSession} = useSessionPoll(sessionId);
+    const {session, folder, events, loading, notFound, refresh, setSession} = useSessionPoll(sessionId);
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const [archiveOpen, setArchiveOpen] = useState(false);
@@ -51,7 +51,7 @@ const TaskDetailPage = () => {
     const bottomRef = useRef<HTMLDivElement>(null);
     const lastCount = useRef(0);
 
-    const changed = session?.artifact?.changed_files ?? 0;
+    const changed = session?.changed_files ?? 0;
     // Desktop: open by itself once there is something to look at; the user's
     // own toggle wins after that. Phone: closed until asked.
     const panelOpen = panelChoice ?? (!isPhone && changed > 0);
@@ -133,10 +133,10 @@ const TaskDetailPage = () => {
 
     const active = isActiveStatus(session?.status);
     const working = session?.status === 'running' || session?.status === 'queued';
-    const retryable = session?.status === 'failed' && workspace?.state === 'ready';
+    const retryable = session?.status === 'failed';
     const canSteer = (active && session?.status !== 'waiting_input') || retryable;
     const showComposer = !!session && session.status !== 'archived' && (active || retryable);
-    const folderName = workspace?.path ? workspace.path.split(/[\\/]/).filter(Boolean).pop() : undefined;
+    const folderName = folder?.name;
     const modeKey = permissionModeKey(session?.permission_mode);
 
     const topBar = session && (
@@ -154,7 +154,7 @@ const TaskDetailPage = () => {
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                     {folderName && (
-                        <Tooltip title={workspace?.path ?? ''}>
+                        <Tooltip title={folder?.path ?? ''}>
                             <Typography variant="caption" color="text.secondary" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0}}>
                                 <IconFolder sx={{fontSize: 14}} />
                                 <Box component="span" sx={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{folderName}</Box>
@@ -275,23 +275,9 @@ const TaskDetailPage = () => {
 
     const panel = session && (
         <Stack spacing={2}>
-            <ChangesPanel
-                session={session}
-                workspace={workspace}
-                onPushed={(s) => {
-                    setSession(s);
-                    notify.success(t('tasks.detail.pushDone', {branch: workspace?.branch ?? s.artifact?.branch ?? ''}));
-                }}
-                onError={(m) => notify.error(m)}
-            />
+            <ChangesPanel session={session} folder={folder} />
             <Divider />
             <Stack spacing={0.5}>
-                {workspace?.branch && (
-                    <>
-                        <Typography variant="overline" color="text.secondary">{t('tasks.detail.checkout')}</Typography>
-                        <Typography variant="caption" sx={{fontFamily: 'monospace', wordBreak: 'break-all'}}>{workspace.path}</Typography>
-                    </>
-                )}
                 {session.cc_session_id && (
                     <>
                         <Typography variant="overline" color="text.secondary">{t('tasks.detail.claudeSession')}</Typography>

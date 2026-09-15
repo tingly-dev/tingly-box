@@ -134,8 +134,8 @@ func (s *stack) do(method, path string, body any, out any) int {
 }
 
 type sessionDetail struct {
-	Session   managedagent.Session   `json:"session"`
-	Workspace managedagent.Workspace `json:"workspace"`
+	Session managedagent.Session `json:"session"`
+	Folder  managedagent.Folder  `json:"folder"`
 }
 
 // createSession posts the composer request and fails on anything but 201.
@@ -289,18 +289,6 @@ func newGitDir(t *testing.T, name string) string {
 	run("add", ".")
 	run("commit", "-q", "-m", "init")
 	return dir
-}
-
-// newOriginRepo creates a bare repository with one commit, usable as a
-// file:// source.
-func newOriginRepo(t *testing.T) string {
-	t.Helper()
-	work := newGitDir(t, "origin-work")
-	bare := filepath.Join(t.TempDir(), "origin.git")
-	if out, err := exec.Command("git", "clone", "-q", "--bare", work, bare).CombinedOutput(); err != nil {
-		t.Fatalf("bare clone: %v %s", err, out)
-	}
-	return bare
 }
 
 // ─── scripted upstream ──────────────────────────────────────────────────

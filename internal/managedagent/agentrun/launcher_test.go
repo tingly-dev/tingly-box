@@ -30,17 +30,30 @@ func sh(t *testing.T, dir string, args ...string) {
 	}
 }
 
-func newOrigin(t *testing.T) string {
+func newFolder(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	work := filepath.Join(root, "work")
-	sh(t, root, "init", "-q", "-b", "main", work)
-	os.WriteFile(filepath.Join(work, "README.md"), []byte("hi\n"), 0o644)
-	sh(t, work, "add", ".")
-	sh(t, work, "commit", "-q", "-m", "init")
-	bare := filepath.Join(root, "origin.git")
-	sh(t, root, "clone", "-q", "--bare", work, bare)
-	return bare
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# project\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+	return dir
 }
 
 func writeLine(t *testing.T, h *process.FakeHandle, v map[string]any) {
@@ -69,7 +82,7 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	ctx := context.Background()
-	origin := newOrigin(t)
+	folder := newFolder(t)
 
 	factory := process.NewFakeFactory()
 	handles := make(chan *process.FakeHandle, 4)
@@ -83,7 +96,7 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 	agent := claude.NewAgentWithFactory(claude.Config{}, factory)
 
 	_, stores := managedagent.NewMemStores()
-	git := &gitrepo.Git{MirrorsDir: filepath.Join(t.TempDir(), "mirrors")}
+	git := &gitrepo.Git{}
 	launcher, err := New(Config{
 		Stores: stores, Agent: agent, Git: git,
 		Routing: RoutingFunc(func(context.Context, string) ([]string, string, error) {
@@ -93,19 +106,13 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := managedagent.NewService(managedagent.Config{
-		Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: filepath.Join(t.TempDir(), "ws"),
-	})
-	if err := svc.EnsureDefaults(ctx); err != nil {
-		t.Fatal(err)
-	}
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "do the thing"})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: folder, Prompt: "do the thing"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Provisioning happens first, then the agent process starts.
+	// The agent process starts straight away: there is nothing to provision.
 	var h *process.FakeHandle
 	select {
 	case h = <-handles:
@@ -113,9 +120,8 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 		t.Fatal("agent never started")
 	}
 	spec := h.Spec()
-	ws, _ := svc.GetWorkspace(ctx, sess.WorkspaceID)
-	if ws.State != managedagent.WorkspaceReady || spec.WorkDir != ws.AgentCwd {
-		t.Fatalf("workspace %+v, workdir %q", ws, spec.WorkDir)
+	if spec.WorkDir != folder {
+		t.Fatalf("the agent must run in the folder itself: workdir %q, folder %q", spec.WorkDir, folder)
 	}
 	if !strings.Contains(strings.Join(spec.Env, "\n"), "ANTHROPIC_BASE_URL=http://gateway") {
 		t.Fatalf("gateway env not injected: %v", spec.Env)
@@ -171,8 +177,8 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The agent commits a file and finishes the turn.
-	os.WriteFile(filepath.Join(ws.Path, "a.txt"), []byte("a\n"), 0o644)
+	// The agent writes a file and finishes the turn.
+	os.WriteFile(filepath.Join(folder, "a.txt"), []byte("a\n"), 0o644)
 	writeLine(t, h, map[string]any{"type": claude.SDKResultMessage, "subtype": claude.ResultSubtypeSuccess,
 		"is_error": false, "total_cost_usd": 0.25, "usage": map[string]any{"input_tokens": 100, "output_tokens": 20}})
 	h.FinishOutput()
@@ -199,21 +205,16 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 		return s.Status == managedagent.SessionIdle
 	})
 	final, _ := svc.GetSession(ctx, sess.ID)
-	if final.Usage.InputTokens != 100 || final.Usage.Cost != 0.25 || final.Artifact.Changed != 1 {
-		t.Fatalf("usage/artifact not folded: %+v", final)
+	if final.Usage.InputTokens != 100 || final.Usage.Cost != 0.25 || final.ChangedFiles != 1 {
+		t.Fatalf("usage / change count not folded: %+v", final)
+	}
+	if final.BaseCommit == "" {
+		t.Fatal("the folder's starting commit must be recorded")
 	}
 
 	d, err := svc.Diff(ctx, sess.ID)
 	if err != nil || d.ChangedFiles != 1 || len(d.Untracked) != 1 {
 		t.Fatalf("diff = %+v, %v", d, err)
-	}
-
-	// Push from idle works (branch only; the untracked file is not pushed).
-	if _, err := svc.Push(ctx, sess.ID); err != nil {
-		t.Fatalf("push: %v", err)
-	}
-	if s, _ := svc.GetSession(ctx, sess.ID); !s.Artifact.Pushed {
-		t.Fatal("artifact not marked pushed")
 	}
 
 	// Archive stops the run for good.
@@ -225,30 +226,41 @@ func TestLauncher_FullTurnWithApprovalAndSteer(t *testing.T) {
 	}
 }
 
-func TestLauncher_ProvisionFailureFailsSession(t *testing.T) {
+// A folder that is gone by the time the turn starts fails the session with
+// a reason, and never starts a CLI in a directory that does not exist.
+func TestLauncher_MissingFolderFailsSession(t *testing.T) {
 	ctx := context.Background()
 	factory := process.NewFakeFactory()
 	agent := claude.NewAgentWithFactory(claude.Config{}, factory)
 	_, stores := managedagent.NewMemStores()
-	git := &gitrepo.Git{}
-	launcher, _ := New(Config{Stores: stores, Agent: agent, Git: git})
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "https://127.0.0.1:1/nope/repo.git"})
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "x"})
+	launcher, _ := New(Config{Stores: stores, Agent: agent, Git: &gitrepo.Git{}})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{&gitrepo.Git{}}})
+
+	dir := filepath.Join(t.TempDir(), "vanishing")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	folder, err := svc.AddFolder(ctx, dir)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	// Creating from the id skips the path check the composer would do.
+	sess := &managedagent.Session{ID: "s-missing", FolderID: folder.ID, Status: managedagent.SessionQueued, Prompt: "x", Title: "x"}
+	if err := stores.Sessions.CreateSession(ctx, sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := launcher.Start(ctx, managedagent.Run{Session: sess, Folder: folder}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "failed", func() bool {
 		s, _ := svc.GetSession(ctx, sess.ID)
-		return s.Status == managedagent.SessionFailed
+		return s.Status == managedagent.SessionFailed && s.Error != ""
 	})
-	ws, _ := svc.GetWorkspace(ctx, sess.WorkspaceID)
-	if ws.State != managedagent.WorkspaceFailed || ws.Error == "" {
-		t.Fatalf("workspace = %+v", ws)
-	}
 	if len(factory.Starts()) != 0 {
-		t.Fatal("agent must not start when provisioning fails")
+		t.Fatal("the agent must not start in a folder that is gone")
 	}
 }
 
@@ -303,7 +315,7 @@ func newLiveSession(t *testing.T) (*managedagent.Service, *Launcher, *managedage
 		t.Skip("git not installed")
 	}
 	ctx := context.Background()
-	origin := newOrigin(t)
+	folder := newFolder(t)
 	factory := process.NewFakeFactory()
 	handles := make(chan *process.FakeHandle, 4)
 	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
@@ -317,10 +329,8 @@ func newLiveSession(t *testing.T) (*managedagent.Service, *Launcher, *managedage
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "work"})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: folder, Prompt: "work"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +405,7 @@ func TestLauncher_BypassPermissionsAutoApproves(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	ctx := context.Background()
-	origin := newOrigin(t)
+	folder := newFolder(t)
 	factory := process.NewFakeFactory()
 	handles := make(chan *process.FakeHandle, 4)
 	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
@@ -406,11 +416,9 @@ func TestLauncher_BypassPermissionsAutoApproves(t *testing.T) {
 	_, stores := managedagent.NewMemStores()
 	git := &gitrepo.Git{}
 	launcher, _ := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}})
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{
-		SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionBypassPermissions,
+		Path: folder, Prompt: "go", PermissionMode: managedagent.PermissionBypassPermissions,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -478,10 +486,8 @@ func TestLauncher_CLIStderrReachesSessionError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
-	src, _ := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + newOrigin(t)})
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "go", PermissionMode: managedagent.PermissionAuto})
+	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}})
+	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{Path: newFolder(t), Prompt: "go", PermissionMode: managedagent.PermissionAuto})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,49 +506,4 @@ func TestLauncher_CLIStderrReachesSessionError(t *testing.T) {
 	if err := svc.SendMessage(ctx, sess.ID, "retry"); err != nil {
 		t.Fatalf("retry after failure: %v", err)
 	}
-}
-
-func TestLauncher_LocalDirectoryRunsInPlace(t *testing.T) {
-	ctx := context.Background()
-	factory := process.NewFakeFactory()
-	handles := make(chan *process.FakeHandle, 2)
-	stdins := &stdinLog{buf: map[*process.FakeHandle]*bytes.Buffer{}}
-	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
-		stdins.track(h)
-		handles <- h
-	}
-	_, stores := managedagent.NewMemStores()
-	git := &gitrepo.Git{MirrorsDir: filepath.Join(t.TempDir(), "mirrors")}
-	launcher, _ := New(Config{Stores: stores, Agent: claude.NewAgentWithFactory(claude.Config{}, factory), Git: git})
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, Launcher: launcher, Git: GitAdapter{git}, WorkspacesDir: t.TempDir()})
-	_ = svc.EnsureDefaults(ctx)
-	dir := t.TempDir()
-	src, err := svc.CreateSource(ctx, managedagent.SourceInput{URL: dir})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{SourceID: src.ID, Prompt: "hi"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var h *process.FakeHandle
-	select {
-	case h = <-handles:
-	case <-time.After(10 * time.Second):
-		t.Fatal("agent never started")
-	}
-	if h.Spec().WorkDir != dir {
-		t.Fatalf("agent must run in the user's directory: %q", h.Spec().WorkDir)
-	}
-	if _, err := os.Stat(git.MirrorsDir); err == nil {
-		t.Fatal("no mirror must be created for an in-place directory")
-	}
-	events, _ := svc.ListEvents(ctx, sess.ID, 0, 0)
-	for _, e := range events {
-		if e.Kind == managedagent.EventSystem && strings.Contains(e.Text, "provisioning") {
-			t.Fatalf("no provisioning for an in-place directory: %+v", e)
-		}
-	}
-	h.FinishOutput()
-	h.SignalExit(nil)
 }

@@ -2,6 +2,7 @@ package managedagent
 
 import (
 	"context"
+	"path/filepath"
 	"sort"
 	"sync"
 )
@@ -10,168 +11,83 @@ import (
 // that have no database (harness, examples). It applies the same ordering
 // rules as the SQLite stores so handler tests see production-shaped output.
 type MemStores struct {
-	mu           sync.Mutex
-	sources      map[string]Source
-	environments map[string]Environment
-	workspaces   map[string]Workspace
-	sessions     map[string]Session
-	events       map[string][]Event
-	seq          map[string]int64
+	mu       sync.Mutex
+	folders  map[string]Folder
+	sessions map[string]Session
+	events   map[string][]Event
+	seq      map[string]int64
 }
 
 // NewMemStores returns an empty MemStores bundled as Stores.
 func NewMemStores() (*MemStores, Stores) {
 	m := &MemStores{
-		sources:      map[string]Source{},
-		environments: map[string]Environment{},
-		workspaces:   map[string]Workspace{},
-		sessions:     map[string]Session{},
-		events:       map[string][]Event{},
-		seq:          map[string]int64{},
+		folders:  map[string]Folder{},
+		sessions: map[string]Session{},
+		events:   map[string][]Event{},
+		seq:      map[string]int64{},
 	}
-	return m, Stores{Sources: m, Environments: m, Workspaces: m, Sessions: m, Events: m}
+	return m, Stores{Folders: m, Sessions: m, Events: m}
 }
 
-func (m *MemStores) CreateSource(_ context.Context, s *Source) error {
+func (m *MemStores) CreateFolder(_ context.Context, f *Folder) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.sources[s.ID] = *s
+	m.folders[f.ID] = *f
 	return nil
 }
 
-func (m *MemStores) GetSource(_ context.Context, id string) (*Source, error) {
+func (m *MemStores) GetFolder(_ context.Context, id string) (*Folder, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s, ok := m.sources[id]
+	f, ok := m.folders[id]
 	if !ok {
-		return nil, notFound("source", id)
+		return nil, notFound("folder", id)
 	}
-	return &s, nil
+	return &f, nil
 }
 
-func (m *MemStores) ListSources(_ context.Context) ([]Source, error) {
+func (m *MemStores) GetFolderByPath(_ context.Context, path string) (*Folder, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]Source, 0, len(m.sources))
-	for _, s := range m.sources {
-		out = append(out, s)
+	clean := filepath.Clean(path)
+	for _, f := range m.folders {
+		if f.Path == clean {
+			return &f, nil
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return nil, notFound("folder", path)
+}
+
+// ListFolders orders by most recently used, which is the order the picker
+// and the composer offer them in.
+func (m *MemStores) ListFolders(_ context.Context) ([]Folder, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Folder, 0, len(m.folders))
+	for _, f := range m.folders {
+		out = append(out, f)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].LastUsedAt.After(out[j].LastUsedAt) })
 	return out, nil
 }
 
-func (m *MemStores) UpdateSource(_ context.Context, s *Source) error {
+func (m *MemStores) UpdateFolder(_ context.Context, f *Folder) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.sources[s.ID]; !ok {
-		return notFound("source", s.ID)
+	if _, ok := m.folders[f.ID]; !ok {
+		return notFound("folder", f.ID)
 	}
-	m.sources[s.ID] = *s
+	m.folders[f.ID] = *f
 	return nil
 }
 
-func (m *MemStores) DeleteSource(_ context.Context, id string) error {
+func (m *MemStores) DeleteFolder(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.sources[id]; !ok {
-		return notFound("source", id)
+	if _, ok := m.folders[id]; !ok {
+		return notFound("folder", id)
 	}
-	delete(m.sources, id)
-	return nil
-}
-
-func (m *MemStores) CreateEnvironment(_ context.Context, e *Environment) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.environments[e.ID] = *e
-	return nil
-}
-
-func (m *MemStores) GetEnvironment(_ context.Context, id string) (*Environment, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	e, ok := m.environments[id]
-	if !ok {
-		return nil, notFound("environment", id)
-	}
-	return &e, nil
-}
-
-func (m *MemStores) ListEnvironments(_ context.Context) ([]Environment, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]Environment, 0, len(m.environments))
-	for _, e := range m.environments {
-		out = append(out, e)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out, nil
-}
-
-func (m *MemStores) UpdateEnvironment(_ context.Context, e *Environment) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.environments[e.ID]; !ok {
-		return notFound("environment", e.ID)
-	}
-	m.environments[e.ID] = *e
-	return nil
-}
-
-func (m *MemStores) DeleteEnvironment(_ context.Context, id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.environments[id]; !ok {
-		return notFound("environment", id)
-	}
-	delete(m.environments, id)
-	return nil
-}
-
-func (m *MemStores) CreateWorkspace(_ context.Context, w *Workspace) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.workspaces[w.ID] = *w
-	return nil
-}
-
-func (m *MemStores) GetWorkspace(_ context.Context, id string) (*Workspace, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	w, ok := m.workspaces[id]
-	if !ok {
-		return nil, notFound("workspace", id)
-	}
-	return &w, nil
-}
-
-func (m *MemStores) ListWorkspaces(_ context.Context, f WorkspaceFilter) ([]Workspace, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var out []Workspace
-	for _, w := range m.workspaces {
-		if f.SourceID != "" && w.SourceID != f.SourceID {
-			continue
-		}
-		if f.EnvironmentID != "" && w.EnvironmentID != f.EnvironmentID {
-			continue
-		}
-		if f.State != "" && w.State != f.State {
-			continue
-		}
-		out = append(out, w)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].LastActiveAt.After(out[j].LastActiveAt) })
-	return out, nil
-}
-
-func (m *MemStores) UpdateWorkspace(_ context.Context, w *Workspace) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.workspaces[w.ID]; !ok {
-		return notFound("workspace", w.ID)
-	}
-	m.workspaces[w.ID] = *w
+	delete(m.folders, id)
 	return nil
 }
 
@@ -197,7 +113,7 @@ func (m *MemStores) ListSessions(_ context.Context, f SessionFilter) ([]Session,
 	defer m.mu.Unlock()
 	var out []Session
 	for _, s := range m.sessions {
-		if f.WorkspaceID != "" && s.WorkspaceID != f.WorkspaceID {
+		if f.FolderID != "" && s.FolderID != f.FolderID {
 			continue
 		}
 		if f.Status != "" && s.Status != f.Status {

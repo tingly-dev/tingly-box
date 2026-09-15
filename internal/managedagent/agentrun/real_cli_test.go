@@ -62,8 +62,8 @@ func TestRealCLI_SessionRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A local origin the agent is pointed at.
-	origin := newOriginRepo(t)
+	// The folder the agent is pointed at.
+	folder := newWorkFolder(t)
 
 	base := t.TempDir()
 	eventLog, err := managedagent.NewEventLog(filepath.Join(base, "events"))
@@ -72,7 +72,7 @@ func TestRealCLI_SessionRoundTrip(t *testing.T) {
 	}
 	_, stores := managedagent.NewMemStores()
 	stores.Events = eventLog
-	git := &gitrepo.Git{MirrorsDir: filepath.Join(base, "sources")}
+	git := &gitrepo.Git{}
 	cfg := claude.DefaultConfig()
 	cfg.DefaultExecutionTimeout = 3 * time.Minute
 	launcher, err := agentrun.New(agentrun.Config{
@@ -88,18 +88,10 @@ func TestRealCLI_SessionRoundTrip(t *testing.T) {
 	}
 	svc := managedagent.NewService(managedagent.Config{
 		Stores: stores, Launcher: launcher, Git: agentrun.GitAdapter{Git: git},
-		WorkspacesDir: filepath.Join(base, "workspaces"),
 	})
-	if err := svc.EnsureDefaults(ctx); err != nil {
-		t.Fatal(err)
-	}
-	src, err := svc.CreateSource(ctx, managedagent.SourceInput{URL: "file://" + origin})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	sess, err := svc.CreateSession(ctx, managedagent.CreateSessionInput{
-		SourceID: src.ID, Prompt: "What is the capital of France?",
+		Path: folder, Prompt: "What is the capital of France?",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -203,23 +195,23 @@ func eventsDump(events []managedagent.Event) string {
 	return b.String()
 }
 
-func newOriginRepo(t *testing.T) string {
+// newWorkFolder is a git work tree the agent works in, in place.
+func newWorkFolder(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	work := filepath.Join(root, "work")
-	run := func(dir string, args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
+	dir := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
-	run(root, "init", "-q", "-b", "main", work)
-	os.WriteFile(filepath.Join(work, "README.md"), []byte("hi\n"), 0o644)
-	run(work, "add", ".")
-	run(work, "commit", "-q", "-m", "init")
-	bare := filepath.Join(root, "origin.git")
-	run(root, "clone", "-q", "--bare", work, bare)
-	return bare
+	run("init", "-q", "-b", "main")
+	os.WriteFile(filepath.Join(dir, "README.md"), []byte("hi\n"), 0o644)
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+	return dir
 }

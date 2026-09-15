@@ -1,80 +1,43 @@
-// Package managedagent is the HTTP surface of the managed agent control
-// plane: /api/v1/agent/* behind UserAuth. Request and response models are
-// the swagger source for the frontend SDK (task codegen).
 package managedagent
 
-import (
-	"github.com/tingly-dev/tingly-box/internal/managedagent"
-)
+import "github.com/tingly-dev/tingly-box/internal/managedagent"
 
-// ---------- sources ----------
+// Request and response models for /api/v1/agent/*. They are the swagger
+// source of truth, so the generated client mirrors them exactly.
 
-// SourceRequest creates or fully replaces a Source.
-type SourceRequest struct {
-	Name          string `json:"name"`
-	URL           string `json:"url" binding:"required"`
-	DefaultBranch string `json:"default_branch"`
-	CredentialID  string `json:"credential_id"`
+// ---------- folders ----------
+
+// AddFolderRequest hands a directory on this host to the agent. That is the
+// grant: from here on the agent may work in it and the picker may browse
+// inside it.
+type AddFolderRequest struct {
+	Path string `json:"path" binding:"required"`
 }
 
-// SourceListResponse lists sources.
-type SourceListResponse struct {
-	Sources []managedagent.Source `json:"sources"`
+// FolderListResponse lists the folders the agent may work in, most recently
+// used first.
+type FolderListResponse struct {
+	Folders []managedagent.Folder `json:"folders"`
 }
 
-// ---------- environments ----------
-
-// EnvironmentRequest creates or fully replaces an Environment. Runtime
-// defaults to "local"; "docker" is accepted by the schema but rejected until
-// the docker runtime ships.
-type EnvironmentRequest struct {
-	Name        string                     `json:"name" binding:"required"`
-	Runtime     managedagent.Runtime       `json:"runtime"`
-	Image       string                     `json:"image"`
-	SetupScript string                     `json:"setup_script"`
-	Env         map[string]string          `json:"env"`
-	SecretRefs  []string                   `json:"secret_refs"`
-	Network     managedagent.NetworkPolicy `json:"network"`
-	Resources   managedagent.Resources     `json:"resources"`
-	CCProfile   string                     `json:"cc_profile"`
-	// PermissionMode is the default for sessions started here: "" (inherit
-	// the settings file), default, plan, acceptEdits, dontAsk,
-	// bypassPermissions or auto.
-	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
-}
-
-// EnvironmentListResponse lists environments, default first.
-type EnvironmentListResponse struct {
-	Environments []managedagent.Environment `json:"environments"`
-	// SupportedRuntimes tells the UI which runtimes can be selected today so
-	// it can explain "docker: not yet" instead of offering a dead option.
-	SupportedRuntimes []managedagent.Runtime `json:"supported_runtimes"`
-	// PermissionModes lists the selectable Claude Code permission modes.
+// PermissionModeListResponse advertises the modes this build offers, in
+// display order, so the UI never hardcodes them.
+type PermissionModeListResponse struct {
 	PermissionModes []managedagent.PermissionMode `json:"permission_modes"`
 }
 
 // ---------- sessions ----------
 
-// CreateSessionRequest opens a session. Give workspace_id to continue in an
-// existing checkout, or source_id (+ optional environment_id, defaulting to
-// the default environment) for a fresh one.
+// CreateSessionRequest starts a task. Give a folder that was added before
+// (folder_id) or a path, which adds it and starts in one step.
 type CreateSessionRequest struct {
-	SourceID      string `json:"source_id"`
-	EnvironmentID string `json:"environment_id"`
-	WorkspaceID   string `json:"workspace_id"`
-	BaseRef       string `json:"base_ref"`
-	Prompt        string `json:"prompt" binding:"required"`
-	Title         string `json:"title"`
-	// PermissionMode overrides the environment's default; empty inherits.
+	FolderID string `json:"folder_id"`
+	Path     string `json:"path"`
+	Prompt   string `json:"prompt" binding:"required"`
+	Title    string `json:"title"`
+	// PermissionMode overrides the Claude Code profile's default; empty
+	// inherits it.
 	PermissionMode managedagent.PermissionMode `json:"permission_mode"`
-	// LocalPath starts the task directly in a folder on this host (in
-	// place); the local source behind it is created on first use.
-	LocalPath string `json:"local_path"`
-}
-
-// RecentFoldersResponse lists folders the user has worked in before.
-type RecentFoldersResponse struct {
-	Folders []managedagent.RecentFolder `json:"folders"`
 }
 
 // SetPermissionModeRequest changes an active session's mode from the next turn.
@@ -84,25 +47,23 @@ type SetPermissionModeRequest struct {
 
 // SessionListQuery filters GET /agent/sessions.
 type SessionListQuery struct {
-	WorkspaceID string `form:"workspace_id"`
-	Status      string `form:"status"`
-	Active      bool   `form:"active"`
-	Limit       int    `form:"limit"`
+	FolderID string `form:"folder_id"`
+	Status   string `form:"status"`
+	Active   bool   `form:"active"`
+	Limit    int    `form:"limit"`
 }
 
-// SessionListItem is one row of the sessions list: the session plus the
-// two things the list renders from its workspace, so the page needs no
-// second round trip per row.
-type SessionListItem struct {
-	Session managedagent.Session `json:"session"`
-	Source  *SourceRef           `json:"source,omitempty"`
-	Branch  string               `json:"branch,omitempty"`
-}
-
-// SourceRef names a source without its credential or URL details.
-type SourceRef struct {
+// FolderRef names the folder a session works in without a second round trip.
+type FolderRef struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// SessionListItem is one row of the sessions list.
+type SessionListItem struct {
+	Session managedagent.Session `json:"session"`
+	Folder  *FolderRef           `json:"folder,omitempty"`
 }
 
 // SessionListResponse lists sessions, most recently active first.
@@ -110,11 +71,11 @@ type SessionListResponse struct {
 	Sessions []SessionListItem `json:"sessions"`
 }
 
-// SessionDetail is a session with its workspace resolved, so the detail page
-// needs one request to render repo, branch and status together.
+// SessionDetail is a session with its folder resolved, so the detail page
+// renders the task and where it runs in one request.
 type SessionDetail struct {
-	Session   managedagent.Session    `json:"session"`
-	Workspace *managedagent.Workspace `json:"workspace,omitempty"`
+	Session managedagent.Session `json:"session"`
+	Folder  *managedagent.Folder `json:"folder,omitempty"`
 }
 
 // SendMessageRequest appends a user turn (steering).
@@ -142,17 +103,4 @@ type EventListResponse struct {
 	Events []managedagent.Event `json:"events"`
 	// Next is the seq to pass as `after` on the next call.
 	Next int64 `json:"next"`
-}
-
-// WorkspaceListResponse lists checkouts, most recently active first.
-type WorkspaceListResponse struct {
-	Workspaces []managedagent.Workspace `json:"workspaces"`
-}
-
-// ReclaimWorkspaceRequest is the optional body of POST /agent/workspaces/:id/reclaim.
-type ReclaimWorkspaceRequest struct {
-	// Force discards a checkout that still holds uncommitted or unpushed
-	// work. Without it such a checkout is refused (409): tingly-box never
-	// deletes work on the user's behalf.
-	Force bool `json:"force"`
 }

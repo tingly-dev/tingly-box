@@ -6,24 +6,19 @@ import type {components} from '@/client';
 import {getControlApiClient, getControlApiHeaders} from './openapi';
 
 type Schemas = components['schemas'];
-export type AgentSource = Schemas['Source'];
-export type AgentEnvironment = Schemas['Environment'];
-export type AgentWorkspace = Schemas['Workspace'];
+export type AgentFolder = Schemas['Folder'];
 export type AgentSession = Schemas['Session'];
 export type AgentEvent = Schemas['Event'];
 export type AgentDiff = Schemas['Diff'];
 export type SessionDetail = Schemas['SessionDetail'];
 export type SessionListItem = Schemas['SessionListItem'];
 export type DirListing = Schemas['DirListing'];
-export type RecentFolder = Schemas['RecentFolder'];
-export type SourceRequest = Schemas['SourceRequest'];
-export type EnvironmentRequest = Schemas['EnvironmentRequest'];
 export type CreateSessionRequest = Schemas['CreateSessionRequest'];
 
 export type PermissionMode = '' | 'default' | 'plan' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | 'auto';
 
 export type SessionStatus =
-    | 'queued' | 'running' | 'waiting_input' | 'idle' | 'done' | 'failed' | 'archived';
+    | 'queued' | 'running' | 'waiting_input' | 'idle' | 'failed' | 'archived';
 
 export const isActiveStatus = (s: string | undefined): boolean =>
     s === 'queued' || s === 'running' || s === 'waiting_input' || s === 'idle';
@@ -57,43 +52,22 @@ async function call<T>(
 }
 
 export const agentApi = {
-    // ---- sources
-    listSources: () =>
-        call<{sources: AgentSource[]}>((c, headers) => c.GET('/api/v1/agent/sources', {headers})),
-    createSource: (body: SourceRequest) =>
-        call<AgentSource>((c, headers) => c.POST('/api/v1/agent/sources', {headers, body})),
-    updateSource: (id: string, body: SourceRequest) =>
-        call<AgentSource>((c, headers) => c.PUT('/api/v1/agent/sources/{source_id}', {
-            headers, params: {path: {source_id: id}}, body,
+    // ---- folders the agent may work in (also the browse allowlist)
+    listFolders: () =>
+        call<{folders: AgentFolder[]}>((c, headers) => c.GET('/api/v1/agent/folders', {headers})),
+    addFolder: (path: string) =>
+        call<AgentFolder>((c, headers) => c.POST('/api/v1/agent/folders', {headers, body: {path}})),
+    removeFolder: (id: string) =>
+        call<unknown>((c, headers) => c.DELETE('/api/v1/agent/folders/{folder_id}', {
+            headers, params: {path: {folder_id: id}},
         })),
-    deleteSource: (id: string) =>
-        call<unknown>((c, headers) => c.DELETE('/api/v1/agent/sources/{source_id}', {
-            headers, params: {path: {source_id: id}},
-        })),
-
-    // ---- environments
-    listEnvironments: () =>
-        call<{environments: AgentEnvironment[]; supported_runtimes: string[]; permission_modes: string[]}>(
-            (c, headers) => c.GET('/api/v1/agent/environments', {headers})),
-    createEnvironment: (body: EnvironmentRequest) =>
-        call<AgentEnvironment>((c, headers) => c.POST('/api/v1/agent/environments', {headers, body})),
-    updateEnvironment: (id: string, body: EnvironmentRequest) =>
-        call<AgentEnvironment>((c, headers) => c.PUT('/api/v1/agent/environments/{environment_id}', {
-            headers, params: {path: {environment_id: id}}, body,
-        })),
-    deleteEnvironment: (id: string) =>
-        call<unknown>((c, headers) => c.DELETE('/api/v1/agent/environments/{environment_id}', {
-            headers, params: {path: {environment_id: id}},
-        })),
-
-    // ---- host folders (pick a directory to work in directly)
     browseDirs: (path: string) =>
         call<DirListing>((c, headers) => c.GET('/api/v1/agent/fs/dirs', {headers, params: {query: {path}}})),
-    recentFolders: () =>
-        call<{folders: RecentFolder[]}>((c, headers) => c.GET('/api/v1/agent/fs/recent', {headers})),
+    permissionModes: () =>
+        call<{permission_modes: string[]}>((c, headers) => c.GET('/api/v1/agent/permission-modes', {headers})),
 
     // ---- sessions
-    listSessions: (query: {active?: boolean; workspace_id?: string; limit?: number} = {}) =>
+    listSessions: (query: {active?: boolean; folder_id?: string; limit?: number} = {}) =>
         call<{sessions: SessionListItem[]}>((c, headers) => c.GET('/api/v1/agent/sessions', {
             headers, params: {query},
         })),
@@ -129,10 +103,6 @@ export const agentApi = {
         })),
     diff: (id: string) =>
         call<AgentDiff>((c, headers) => c.GET('/api/v1/agent/sessions/{session_id}/diff', {
-            headers, params: {path: {session_id: id}},
-        })),
-    push: (id: string) =>
-        call<SessionDetail>((c, headers) => c.POST('/api/v1/agent/sessions/{session_id}/push', {
             headers, params: {path: {session_id: id}},
         })),
 };

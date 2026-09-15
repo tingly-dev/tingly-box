@@ -63,21 +63,21 @@
         }
       }
     },
-    "/api/v1/agent/environments": {
+    "/api/v1/agent/folders": {
       "get": {
         "tags": [
           "agent"
         ],
-        "summary": "List environments (default first) and the runtimes available today",
-        "description": "List environments (default first) and the runtimes available today",
-        "operationId": "apiV1AgentEnvironmentsGet",
+        "summary": "List the folders the agent may work in, most recently used first",
+        "description": "List the folders the agent may work in, most recently used first",
+        "operationId": "apiV1AgentFoldersGet",
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                  "$ref": "#/components/schemas/FolderListResponse"
                 }
               }
             }
@@ -88,16 +88,16 @@
         "tags": [
           "agent"
         ],
-        "summary": "Create an environment",
-        "description": "Create an environment",
-        "operationId": "apiV1AgentEnvironmentsPost",
+        "summary": "Hand a folder on this host to the agent; adding the same path twice returns the existing folder",
+        "description": "Hand a folder on this host to the agent; adding the same path twice returns the existing folder",
+        "operationId": "apiV1AgentFoldersPost",
         "requestBody": {
           "description": "Request body",
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EnvironmentRequest"
+                "$ref": "#/components/schemas/AddFolderRequest"
               }
             }
           }
@@ -108,7 +108,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment"
+                  "$ref": "#/components/schemas/Folder"
                 }
               }
             }
@@ -116,90 +116,17 @@
         }
       }
     },
-    "/api/v1/agent/environments/{environment_id}": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Get an environment",
-        "description": "Get an environment",
-        "operationId": "apiV1AgentEnvironmentsEnvironment_idGet",
-        "parameters": [
-          {
-            "name": "environment_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Environment"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Update an environment",
-        "description": "Update an environment",
-        "operationId": "apiV1AgentEnvironmentsEnvironment_idPut",
-        "parameters": [
-          {
-            "name": "environment_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnvironmentRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Environment"
-                }
-              }
-            }
-          }
-        }
-      },
+    "/api/v1/agent/folders/{folder_id}": {
       "delete": {
         "tags": [
           "agent"
         ],
-        "summary": "Delete a non-default environment that has no live workspaces",
-        "description": "Delete a non-default environment that has no live workspaces",
-        "operationId": "apiV1AgentEnvironmentsEnvironment_idDelete",
+        "summary": "Withdraw a folder. The directory and everything in it stay untouched; a folder with an active task is refused",
+        "description": "Withdraw a folder. The directory and everything in it stay untouched; a folder with an active task is refused",
+        "operationId": "apiV1AgentFoldersFolder_idDelete",
         "parameters": [
           {
-            "name": "environment_id",
+            "name": "folder_id",
             "in": "path",
             "description": "Resource ID",
             "required": true,
@@ -227,8 +154,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
-        "description": "List sub-directories of a folder the user has added (allowlist: the local sources); empty path lists the added folders themselves; anything outside is 403",
+        "summary": "List sub-directories inside an added folder; an empty path lists the added folders themselves, anything outside them is 403",
+        "description": "List sub-directories inside an added folder; an empty path lists the added folders themselves, anything outside them is 403",
         "operationId": "apiV1AgentFsDirsGet",
         "parameters": [
           {
@@ -255,21 +182,21 @@
         }
       }
     },
-    "/api/v1/agent/fs/recent": {
+    "/api/v1/agent/permission-modes": {
       "get": {
         "tags": [
           "agent"
         ],
-        "summary": "Folders worked in before: local task folders and Claude Code's recent projects",
-        "description": "Folders worked in before: local task folders and Claude Code's recent projects",
-        "operationId": "apiV1AgentFsRecentGet",
+        "summary": "Claude Code permission modes this build offers, in display order",
+        "description": "Claude Code permission modes this build offers, in display order",
+        "operationId": "apiV1AgentPermission-modesGet",
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecentFoldersResponse"
+                  "$ref": "#/components/schemas/PermissionModeListResponse"
                 }
               }
             }
@@ -287,9 +214,9 @@
         "operationId": "apiV1AgentSessionsGet",
         "parameters": [
           {
-            "name": "workspace_id",
+            "name": "folder_id",
             "in": "query",
-            "description": "Query parameter workspace_id",
+            "description": "Filter by folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -298,7 +225,7 @@
           {
             "name": "status",
             "in": "query",
-            "description": "Query parameter status",
+            "description": "Filter by status",
             "required": false,
             "schema": {
               "type": "string"
@@ -307,7 +234,7 @@
           {
             "name": "active",
             "in": "query",
-            "description": "Query parameter active",
+            "description": "Only sessions that can still be given work",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -316,11 +243,10 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Query parameter limit",
+            "description": "Maximum rows",
             "required": false,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "integer"
             }
           }
         ],
@@ -341,8 +267,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Open a session: materialise a workspace from a source (or reuse one) and queue the prompt",
-        "description": "Open a session: materialise a workspace from a source (or reuse one) and queue the prompt",
+        "summary": "Start a task in a folder. Give folder_id, or a path to add the folder and start in one step. A folder runs one task at a time",
+        "description": "Start a task in a folder. Give folder_id, or a path to add the folder and start in one step. A folder runs one task at a time",
         "operationId": "apiV1AgentSessionsPost",
         "requestBody": {
           "description": "Request body",
@@ -374,8 +300,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Get a session with its workspace",
-        "description": "Get a session with its workspace",
+        "summary": "Get a session with its folder",
+        "description": "Get a session with its folder",
         "operationId": "apiV1AgentSessionsSession_idGet",
         "parameters": [
           {
@@ -407,8 +333,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "End a session; its branch and log are kept",
-        "description": "End a session; its branch and log are kept",
+        "summary": "End the session for good. Nothing on disk is touched: the folder, its files and the log all stay",
+        "description": "End the session for good. Nothing on disk is touched: the folder, its files and the log all stay",
         "operationId": "apiV1AgentSessionsSession_idArchivePost",
         "parameters": [
           {
@@ -440,8 +366,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
-        "description": "Change summary of the session's workspace against its base ref (stat, patch, untracked)",
+        "summary": "What the agent changed in the folder since this session started; an empty diff when the folder is not a git work tree",
+        "description": "What the agent changed in the folder since this session started; an empty diff when the folder is not a git work tree",
         "operationId": "apiV1AgentSessionsSession_idDiffGet",
         "parameters": [
           {
@@ -473,8 +399,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Page a session's event log (JSON), or stream it with Accept: text/event-stream",
-        "description": "Page a session's event log (JSON), or stream it with Accept: text/event-stream",
+        "summary": "Page the session's conversation log; Accept: text/event-stream streams it instead",
+        "description": "Page the session's conversation log; Accept: text/event-stream streams it instead",
         "operationId": "apiV1AgentSessionsSession_idEventsGet",
         "parameters": [
           {
@@ -489,21 +415,19 @@
           {
             "name": "after",
             "in": "query",
-            "description": "Query parameter after",
+            "description": "Return events with seq greater than this",
             "required": false,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "integer"
             }
           },
           {
             "name": "limit",
             "in": "query",
-            "description": "Query parameter limit",
+            "description": "Maximum events",
             "required": false,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "integer"
             }
           }
         ],
@@ -559,8 +483,8 @@
         "tags": [
           "agent"
         ],
-        "summary": "Append a user message (steer the agent)",
-        "description": "Append a user message (steer the agent)",
+        "summary": "Steer the agent: append a user turn",
+        "description": "Steer the agent: append a user turn",
         "operationId": "apiV1AgentSessionsSession_idMessagesPost",
         "parameters": [
           {
@@ -642,46 +566,13 @@
         }
       }
     },
-    "/api/v1/agent/sessions/{session_id}/push": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
-        "description": "Push the workspace branch to origin (host-side git; an explicit action, never the agent's)",
-        "operationId": "apiV1AgentSessionsSession_idPushPost",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetail"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/agent/sessions/{session_id}/respond": {
       "post": {
         "tags": [
           "agent"
         ],
-        "summary": "Answer a pending approval or ask request",
-        "description": "Answer a pending approval or ask request",
+        "summary": "Answer a pending permission request or question",
+        "description": "Answer a pending permission request or question",
         "operationId": "apiV1AgentSessionsSession_idRespondPost",
         "parameters": [
           {
@@ -712,260 +603,6 @@
               "application/json": {
                 "schema": {
                   "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/agent/sources": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "List git sources the agent can work on",
-        "description": "List git sources the agent can work on",
-        "operationId": "apiV1AgentSourcesGet",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SourceListResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Add a git source",
-        "description": "Add a git source",
-        "operationId": "apiV1AgentSourcesPost",
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SourceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Source"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/agent/sources/{source_id}": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Get a source",
-        "description": "Get a source",
-        "operationId": "apiV1AgentSourcesSource_idGet",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Source"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Update a source",
-        "description": "Update a source",
-        "operationId": "apiV1AgentSourcesSource_idPut",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SourceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Source"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Delete a source that has no live workspaces",
-        "description": "Delete a source that has no live workspaces",
-        "operationId": "apiV1AgentSourcesSource_idDelete",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/agent/workspaces": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "List checkouts, most recently active first",
-        "description": "List checkouts, most recently active first",
-        "operationId": "apiV1AgentWorkspacesGet",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "description": "Filter by source",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "environment_id",
-            "in": "query",
-            "description": "Filter by environment",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "description": "Filter by state: provisioning | ready | failed | reclaimed",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceListResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/agent/workspaces/{workspace_id}/reclaim": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
-        "description": "Remove a checkout's directory; refused while a session in it is active, and (409) while it holds uncommitted or unpushed work unless force is set. Session logs are kept; a user's own folder is never deleted.",
-        "operationId": "apiV1AgentWorkspacesWorkspace_idReclaimPost",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReclaimWorkspaceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workspace"
                 }
               }
             }
@@ -8898,6 +8535,18 @@
           "updated_at"
         ]
       },
+      "AddFolderRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
       "AddSkillLocationRequest": {
         "type": "object",
         "properties": {
@@ -9336,32 +8985,6 @@
         "required": [
           "success",
           "message"
-        ]
-      },
-      "Artifact": {
-        "type": "object",
-        "properties": {
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
-          },
-          "changed_files": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field changed_files"
-          },
-          "pr_url": {
-            "type": "string",
-            "description": "Field pr_url"
-          },
-          "pushed": {
-            "type": "boolean",
-            "description": "Field pushed"
-          }
-        },
-        "required": [
-          "pushed",
-          "changed_files"
         ]
       },
       "AuthorizationDecision": {
@@ -10387,17 +10010,13 @@
       "CreateSessionRequest": {
         "type": "object",
         "properties": {
-          "base_ref": {
+          "folder_id": {
             "type": "string",
-            "description": "Field base_ref"
+            "description": "Field folder_id"
           },
-          "environment_id": {
+          "path": {
             "type": "string",
-            "description": "Field environment_id"
-          },
-          "local_path": {
-            "type": "string",
-            "description": "Field local_path"
+            "description": "Field path"
           },
           "permission_mode": {
             "type": "string",
@@ -10407,28 +10026,17 @@
             "type": "string",
             "description": "Field prompt"
           },
-          "source_id": {
-            "type": "string",
-            "description": "Field source_id"
-          },
           "title": {
             "type": "string",
             "description": "Field title"
-          },
-          "workspace_id": {
-            "type": "string",
-            "description": "Field workspace_id"
           }
         },
         "required": [
-          "source_id",
-          "environment_id",
-          "workspace_id",
-          "base_ref",
+          "folder_id",
+          "path",
           "prompt",
           "title",
-          "permission_mode",
-          "local_path"
+          "permission_mode"
         ]
       },
       "CurlData": {
@@ -11152,175 +10760,6 @@
           "verdict"
         ]
       },
-      "Environment": {
-        "type": "object",
-        "properties": {
-          "cc_profile": {
-            "type": "string",
-            "description": "Field cc_profile"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field created_at"
-          },
-          "env": {
-            "type": "object",
-            "description": "Field env",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "image": {
-            "type": "string",
-            "description": "Field image"
-          },
-          "is_default": {
-            "type": "boolean",
-            "description": "Field is_default"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "network": {
-            "type": "string",
-            "description": "Field network"
-          },
-          "permission_mode": {
-            "type": "string",
-            "description": "Field permission_mode"
-          },
-          "resources": {
-            "$ref": "#/components/schemas/Resources"
-          },
-          "runtime": {
-            "type": "string",
-            "description": "Field runtime"
-          },
-          "secret_refs": {
-            "type": "array",
-            "description": "Field secret_refs",
-            "items": {
-              "type": "string"
-            }
-          },
-          "setup_script": {
-            "type": "string",
-            "description": "Field setup_script"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field updated_at"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "runtime",
-          "is_default",
-          "created_at",
-          "updated_at"
-        ]
-      },
-      "EnvironmentListResponse": {
-        "type": "object",
-        "properties": {
-          "environments": {
-            "type": "array",
-            "description": "Field environments",
-            "items": {
-              "$ref": "#/components/schemas/Environment"
-            }
-          },
-          "permission_modes": {
-            "type": "array",
-            "description": "Field permission_modes",
-            "items": {
-              "type": "string"
-            }
-          },
-          "supported_runtimes": {
-            "type": "array",
-            "description": "Field supported_runtimes",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "environments",
-          "supported_runtimes",
-          "permission_modes"
-        ]
-      },
-      "EnvironmentRequest": {
-        "type": "object",
-        "properties": {
-          "cc_profile": {
-            "type": "string",
-            "description": "Field cc_profile"
-          },
-          "env": {
-            "type": "object",
-            "description": "Field env",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "image": {
-            "type": "string",
-            "description": "Field image"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "network": {
-            "type": "string",
-            "description": "Field network"
-          },
-          "permission_mode": {
-            "type": "string",
-            "description": "Field permission_mode"
-          },
-          "resources": {
-            "$ref": "#/components/schemas/Resources"
-          },
-          "runtime": {
-            "type": "string",
-            "description": "Field runtime"
-          },
-          "secret_refs": {
-            "type": "array",
-            "description": "Field secret_refs",
-            "items": {
-              "type": "string"
-            }
-          },
-          "setup_script": {
-            "type": "string",
-            "description": "Field setup_script"
-          }
-        },
-        "required": [
-          "name",
-          "runtime",
-          "image",
-          "setup_script",
-          "env",
-          "secret_refs",
-          "network",
-          "resources",
-          "cc_profile",
-          "permission_mode"
-        ]
-      },
       "ErrorDetail": {
         "type": "object",
         "properties": {
@@ -11375,25 +10814,6 @@
           "session_id",
           "kind",
           "at"
-        ]
-      },
-      "EventListQuery": {
-        "type": "object",
-        "properties": {
-          "After": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field After"
-          },
-          "Limit": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field Limit"
-          }
-        },
-        "required": [
-          "After",
-          "Limit"
         ]
       },
       "EventListResponse": {
@@ -11785,6 +11205,77 @@
           "description",
           "type",
           "category"
+        ]
+      },
+      "Folder": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_used_at"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "name",
+          "created_at",
+          "last_used_at"
+        ]
+      },
+      "FolderListResponse": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "description": "Field folders",
+            "items": {
+              "$ref": "#/components/schemas/Folder"
+            }
+          }
+        },
+        "required": [
+          "folders"
+        ]
+      },
+      "FolderRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
         ]
       },
       "GenerateTokenRequest": {
@@ -14129,6 +13620,21 @@
           "updated_at"
         ]
       },
+      "PermissionModeListResponse": {
+        "type": "object",
+        "properties": {
+          "permission_modes": {
+            "type": "array",
+            "description": "Field permission_modes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "permission_modes"
+        ]
+      },
       "PermissionUpdateRequest": {
         "type": "object",
         "properties": {
@@ -15055,55 +14561,6 @@
           "success"
         ]
       },
-      "RecentFolder": {
-        "type": "object",
-        "properties": {
-          "is_repo": {
-            "type": "boolean",
-            "description": "Field is_repo"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
-          }
-        },
-        "required": [
-          "path",
-          "name",
-          "is_repo"
-        ]
-      },
-      "RecentFoldersResponse": {
-        "type": "object",
-        "properties": {
-          "folders": {
-            "type": "array",
-            "description": "Field folders",
-            "items": {
-              "$ref": "#/components/schemas/RecentFolder"
-            }
-          }
-        },
-        "required": [
-          "folders"
-        ]
-      },
-      "ReclaimWorkspaceRequest": {
-        "type": "object",
-        "properties": {
-          "force": {
-            "type": "boolean",
-            "description": "Field force"
-          }
-        },
-        "required": [
-          "force"
-        ]
-      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -15162,26 +14619,6 @@
             "items": {
               "type": "string"
             }
-          }
-        }
-      },
-      "Resources": {
-        "type": "object",
-        "properties": {
-          "cpu": {
-            "type": "number",
-            "format": "double",
-            "description": "Field cpu"
-          },
-          "disk_mb": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field disk_mb"
-          },
-          "memory_mb": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field memory_mb"
           }
         }
       },
@@ -16106,12 +15543,18 @@
       "Session": {
         "type": "object",
         "properties": {
-          "artifact": {
-            "$ref": "#/components/schemas/Artifact"
+          "base_commit": {
+            "type": "string",
+            "description": "Field base_commit"
           },
           "cc_session_id": {
             "type": "string",
             "description": "Field cc_session_id"
+          },
+          "changed_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field changed_files"
           },
           "created_at": {
             "type": "string",
@@ -16130,6 +15573,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field finished_at"
+          },
+          "folder_id": {
+            "type": "string",
+            "description": "Field folder_id"
           },
           "id": {
             "type": "string",
@@ -16158,21 +15605,17 @@
           },
           "usage": {
             "$ref": "#/components/schemas/Usage"
-          },
-          "workspace_id": {
-            "type": "string",
-            "description": "Field workspace_id"
           }
         },
         "required": [
           "id",
           "title",
-          "workspace_id",
+          "folder_id",
           "status",
           "prompt",
           "created_by",
           "usage",
-          "artifact",
+          "changed_files",
           "created_at",
           "last_active_at"
         ]
@@ -16180,11 +15623,11 @@
       "SessionDetail": {
         "type": "object",
         "properties": {
+          "folder": {
+            "$ref": "#/components/schemas/Folder"
+          },
           "session": {
             "$ref": "#/components/schemas/Session"
-          },
-          "workspace": {
-            "$ref": "#/components/schemas/Workspace"
           }
         },
         "required": [
@@ -16194,47 +15637,15 @@
       "SessionListItem": {
         "type": "object",
         "properties": {
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
+          "folder": {
+            "$ref": "#/components/schemas/FolderRef"
           },
           "session": {
             "$ref": "#/components/schemas/Session"
-          },
-          "source": {
-            "$ref": "#/components/schemas/SourceRef"
           }
         },
         "required": [
           "session"
-        ]
-      },
-      "SessionListQuery": {
-        "type": "object",
-        "properties": {
-          "Active": {
-            "type": "boolean",
-            "description": "Field Active"
-          },
-          "Limit": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field Limit"
-          },
-          "Status": {
-            "type": "string",
-            "description": "Field Status"
-          },
-          "WorkspaceID": {
-            "type": "string",
-            "description": "Field WorkspaceID"
-          }
-        },
-        "required": [
-          "WorkspaceID",
-          "Status",
-          "Active",
-          "Limit"
         ]
       },
       "SessionListResponse": {
@@ -16677,113 +16088,6 @@
           "description",
           "ops",
           "services"
-        ]
-      },
-      "Source": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field created_at"
-          },
-          "credential_id": {
-            "type": "string",
-            "description": "Field credential_id"
-          },
-          "default_branch": {
-            "type": "string",
-            "description": "Field default_branch"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "kind": {
-            "type": "string",
-            "description": "Field kind"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field updated_at"
-          },
-          "url": {
-            "type": "string",
-            "description": "Field url"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "kind",
-          "url",
-          "default_branch",
-          "created_at",
-          "updated_at"
-        ]
-      },
-      "SourceListResponse": {
-        "type": "object",
-        "properties": {
-          "sources": {
-            "type": "array",
-            "description": "Field sources",
-            "items": {
-              "$ref": "#/components/schemas/Source"
-            }
-          }
-        },
-        "required": [
-          "sources"
-        ]
-      },
-      "SourceRef": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ]
-      },
-      "SourceRequest": {
-        "type": "object",
-        "properties": {
-          "credential_id": {
-            "type": "string",
-            "description": "Field credential_id"
-          },
-          "default_branch": {
-            "type": "string",
-            "description": "Field default_branch"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "url": {
-            "type": "string",
-            "description": "Field url"
-          }
-        },
-        "required": [
-          "name",
-          "url",
-          "default_branch",
-          "credential_id"
         ]
       },
       "StatusResponse": {
@@ -18402,88 +17706,6 @@
         "required": [
           "provider",
           "model"
-        ]
-      },
-      "Workspace": {
-        "type": "object",
-        "properties": {
-          "agent_cwd": {
-            "type": "string",
-            "description": "Field agent_cwd"
-          },
-          "base_ref": {
-            "type": "string",
-            "description": "Field base_ref"
-          },
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
-          },
-          "container_id": {
-            "type": "string",
-            "description": "Field container_id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field created_at"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "Field environment_id"
-          },
-          "error": {
-            "type": "string",
-            "description": "Field error"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "last_active_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field last_active_at"
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
-          },
-          "source_id": {
-            "type": "string",
-            "description": "Field source_id"
-          },
-          "state": {
-            "type": "string",
-            "description": "Field state"
-          }
-        },
-        "required": [
-          "id",
-          "source_id",
-          "environment_id",
-          "path",
-          "agent_cwd",
-          "base_ref",
-          "branch",
-          "state",
-          "created_at",
-          "last_active_at"
-        ]
-      },
-      "WorkspaceListResponse": {
-        "type": "object",
-        "properties": {
-          "workspaces": {
-            "type": "array",
-            "description": "Field workspaces",
-            "items": {
-              "$ref": "#/components/schemas/Workspace"
-            }
-          }
-        },
-        "required": [
-          "workspaces"
         ]
       },
       "errorDetail": {

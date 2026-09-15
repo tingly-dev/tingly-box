@@ -6,37 +6,16 @@ import "context"
 // the others, and so the SQLite implementation in internal/db can be wired
 // through StoreManager like every other store. A missing row is ErrNotFound.
 
-// SourceStore persists Sources.
-type SourceStore interface {
-	CreateSource(ctx context.Context, s *Source) error
-	GetSource(ctx context.Context, id string) (*Source, error)
-	ListSources(ctx context.Context) ([]Source, error)
-	UpdateSource(ctx context.Context, s *Source) error
-	DeleteSource(ctx context.Context, id string) error
-}
-
-// EnvironmentStore persists Environments.
-type EnvironmentStore interface {
-	CreateEnvironment(ctx context.Context, e *Environment) error
-	GetEnvironment(ctx context.Context, id string) (*Environment, error)
-	ListEnvironments(ctx context.Context) ([]Environment, error)
-	UpdateEnvironment(ctx context.Context, e *Environment) error
-	DeleteEnvironment(ctx context.Context, id string) error
-}
-
-// WorkspaceStore persists Workspaces.
-type WorkspaceStore interface {
-	CreateWorkspace(ctx context.Context, w *Workspace) error
-	GetWorkspace(ctx context.Context, id string) (*Workspace, error)
-	ListWorkspaces(ctx context.Context, f WorkspaceFilter) ([]Workspace, error)
-	UpdateWorkspace(ctx context.Context, w *Workspace) error
-}
-
-// WorkspaceFilter narrows ListWorkspaces. Zero values match everything.
-type WorkspaceFilter struct {
-	SourceID      string
-	EnvironmentID string
-	State         WorkspaceState
+// FolderStore persists the folders the agent may work in.
+type FolderStore interface {
+	CreateFolder(ctx context.Context, f *Folder) error
+	GetFolder(ctx context.Context, id string) (*Folder, error)
+	// GetFolderByPath finds a folder by its cleaned absolute path;
+	// ErrNotFound when the path was never handed over.
+	GetFolderByPath(ctx context.Context, path string) (*Folder, error)
+	ListFolders(ctx context.Context) ([]Folder, error)
+	UpdateFolder(ctx context.Context, f *Folder) error
+	DeleteFolder(ctx context.Context, id string) error
 }
 
 // SessionStore persists the session INDEX. The conversation itself is in
@@ -51,10 +30,10 @@ type SessionStore interface {
 // SessionFilter narrows ListSessions. Zero values match everything; the
 // result is ordered by last_active_at DESC and capped at Limit (0 = default).
 type SessionFilter struct {
-	WorkspaceID string
-	Status      SessionStatus
-	Active      bool // only statuses for which IsActive() is true
-	Limit       int
+	FolderID string
+	Status   SessionStatus
+	Active   bool // only statuses for which IsActive() is true
+	Limit    int
 }
 
 // EventStore is the append-only per-session log. Append assigns Seq.
@@ -67,9 +46,7 @@ type EventStore interface {
 
 // Stores bundles everything the Service needs.
 type Stores struct {
-	Sources      SourceStore
-	Environments EnvironmentStore
-	Workspaces   WorkspaceStore
-	Sessions     SessionStore
-	Events       EventStore
+	Folders  FolderStore
+	Sessions SessionStore
+	Events   EventStore
 }

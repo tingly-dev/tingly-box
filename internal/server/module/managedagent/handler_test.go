@@ -19,10 +19,7 @@ func newTestRouter(t *testing.T) (*gin.Engine, *Handler) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	_, stores := managedagent.NewMemStores()
-	svc := managedagent.NewService(managedagent.Config{Stores: stores, WorkspacesDir: t.TempDir()})
-	if err := svc.EnsureDefaults(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	svc := managedagent.NewService(managedagent.Config{Stores: stores})
 	engine := gin.New()
 	h := NewHandler(svc)
 	h.ssePoll = 10 * time.Millisecond
@@ -33,13 +30,7 @@ func newTestRouter(t *testing.T) (*gin.Engine, *Handler) {
 
 func do(t *testing.T, engine *gin.Engine, method, path, body string, out any) *httptest.ResponseRecorder {
 	t.Helper()
-	var rd *strings.Reader
-	if body != "" {
-		rd = strings.NewReader(body)
-	} else {
-		rd = strings.NewReader("")
-	}
-	req := httptest.NewRequest(method, path, rd)
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -51,87 +42,97 @@ func do(t *testing.T, engine *gin.Engine, method, path, body string, out any) *h
 	return rec
 }
 
+// The whole local surface over HTTP: add a folder, start a task in it, read
+// it back, steer it, archive it.
 func TestSessionFlow(t *testing.T) {
 	engine, _ := newTestRouter(t)
+	dir := t.TempDir()
 
-	var envs EnvironmentListResponse
-	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/environments", "", &envs); rec.Code != 200 {
-		t.Fatalf("list environments: %d %s", rec.Code, rec.Body)
-	}
-	if len(envs.Environments) != 1 || !envs.Environments[0].IsDefault || len(envs.SupportedRuntimes) != 1 || len(envs.PermissionModes) == 0 {
-		t.Fatalf("unexpected environments: %+v", envs)
+	var modes PermissionModeListResponse
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/permission-modes", "", &modes); rec.Code != 200 || len(modes.PermissionModes) == 0 {
+		t.Fatalf("permission modes: %d %s", rec.Code, rec.Body)
 	}
 
-	// Docker is in the schema but rejected with a 400 that says so.
-	rec := do(t, engine, http.MethodPost, "/api/v1/agent/environments", `{"name":"box","runtime":"docker","image":"x"}`, nil)
-	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "not available yet") {
-		t.Fatalf("docker env: %d %s", rec.Code, rec.Body)
+	var folder managedagent.Folder
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/folders", `{"path":"`+dir+`"}`, &folder); rec.Code != 201 {
+		t.Fatalf("add folder: %d %s", rec.Code, rec.Body)
 	}
-
-	var src managedagent.Source
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sources", `{"url":"https://github.com/org/repo.git"}`, &src); rec.Code != 201 {
-		t.Fatalf("create source: %d %s", rec.Code, rec.Body)
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/folders", `{"path":"relative"}`, nil); rec.Code != 400 {
+		t.Fatalf("relative path: want 400, got %d", rec.Code)
 	}
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sources", `{"url":"nope"}`, nil); rec.Code != 400 {
-		t.Fatalf("invalid source: %d", rec.Code)
+	var folders FolderListResponse
+	do(t, engine, http.MethodGet, "/api/v1/agent/folders", "", &folders)
+	if len(folders.Folders) != 1 || folders.Folders[0].Path != dir {
+		t.Fatalf("folders = %+v", folders.Folders)
 	}
 
 	var detail SessionDetail
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"source_id":"`+src.ID+`","prompt":"Add tests"}`, &detail); rec.Code != 201 {
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"folder_id":"`+folder.ID+`","prompt":"add tests"}`, &detail); rec.Code != 201 {
 		t.Fatalf("create session: %d %s", rec.Code, rec.Body)
 	}
-	if detail.Session.Status != managedagent.SessionQueued || detail.Workspace == nil || detail.Workspace.SourceID != src.ID {
-		t.Fatalf("unexpected detail: %+v", detail)
+	if detail.Folder == nil || detail.Folder.Path != dir || detail.Session.Status != managedagent.SessionQueued {
+		t.Fatalf("detail = %+v", detail)
 	}
 	id := detail.Session.ID
 
-	if rec := do(t, engine, http.MethodDelete, "/api/v1/agent/sources/"+src.ID, "", nil); rec.Code != 409 {
-		t.Fatalf("delete source with live workspace: %d", rec.Code)
+	// A second task in the same folder waits for the first.
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"folder_id":"`+folder.ID+`","prompt":"another"}`, nil); rec.Code != 409 {
+		t.Fatalf("second task in the same folder: want 409, got %d", rec.Code)
 	}
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/messages", `{"text":"and docs"}`, nil); rec.Code != 202 {
-		t.Fatalf("send message: %d %s", rec.Code, rec.Body)
-	}
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/respond", `{"request_id":"r"}`, nil); rec.Code != 409 {
-		t.Fatalf("respond while queued: %d %s", rec.Code, rec.Body)
-	}
-
-	var page EventListResponse
-	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/sessions/"+id+"/events?after=1", "", &page); rec.Code != 200 {
-		t.Fatalf("events: %d %s", rec.Code, rec.Body)
-	}
-	if len(page.Events) != 1 || page.Events[0].Text != "and docs" || page.Next != 2 {
-		t.Fatalf("events page: %+v", page)
-	}
-
-	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"auto"}`, &detail); rec.Code != 200 || detail.Session.PermissionMode != managedagent.PermissionAuto {
-		t.Fatalf("set permission mode: %d %s", rec.Code, rec.Body)
-	}
-	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"yolo"}`, nil); rec.Code != 400 {
-		t.Fatalf("bad permission mode: %d", rec.Code)
+	// So does removing the folder it works in.
+	if rec := do(t, engine, http.MethodDelete, "/api/v1/agent/folders/"+folder.ID, "", nil); rec.Code != 409 {
+		t.Fatalf("removing a busy folder: want 409, got %d", rec.Code)
 	}
 
 	var list SessionListResponse
 	do(t, engine, http.MethodGet, "/api/v1/agent/sessions?active=true", "", &list)
-	if len(list.Sessions) != 1 || list.Sessions[0].Source == nil || list.Sessions[0].Source.ID != src.ID || list.Sessions[0].Branch == "" {
-		t.Fatalf("active list: %+v", list)
+	if len(list.Sessions) != 1 || list.Sessions[0].Folder == nil || list.Sessions[0].Folder.Name != folder.Name {
+		t.Fatalf("list = %+v", list.Sessions)
 	}
+
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/messages", `{"text":"and docs"}`, nil); rec.Code != 202 {
+		t.Fatalf("send message: %d %s", rec.Code, rec.Body)
+	}
+	var page EventListResponse
+	do(t, engine, http.MethodGet, "/api/v1/agent/sessions/"+id+"/events?after=0", "", &page)
+	if len(page.Events) != 2 || page.Events[0].Text != "add tests" || page.Events[1].Text != "and docs" {
+		t.Fatalf("events = %+v", page.Events)
+	}
+
+	// A plain folder has no baseline, so the diff is empty rather than an error.
+	var diff managedagent.Diff
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/sessions/"+id+"/diff", "", &diff); rec.Code != 200 || diff.ChangedFiles != 0 {
+		t.Fatalf("diff: %d %+v", rec.Code, diff)
+	}
+
+	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"bypassPermissions"}`, &detail); rec.Code != 200 || detail.Session.PermissionMode != managedagent.PermissionBypassPermissions {
+		t.Fatalf("set mode: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, engine, http.MethodPut, "/api/v1/agent/sessions/"+id+"/permission-mode", `{"permission_mode":"yolo"}`, nil); rec.Code != 400 {
+		t.Fatalf("bad mode: want 400, got %d", rec.Code)
+	}
+
 	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/archive", "", &detail); rec.Code != 200 || detail.Session.Status != managedagent.SessionArchived {
 		t.Fatalf("archive: %d %s", rec.Code, rec.Body)
 	}
-	do(t, engine, http.MethodGet, "/api/v1/agent/sessions?active=true", "", &list)
-	if len(list.Sessions) != 0 {
-		t.Fatalf("active list after archive: %+v", list)
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions/"+id+"/messages", `{"text":"too late"}`, nil); rec.Code != 409 {
+		t.Fatalf("steer after archive: want 409, got %d", rec.Code)
 	}
-	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/sessions/missing", "", nil); rec.Code != 404 {
-		t.Fatalf("missing session: %d", rec.Code)
+	// With the task ended, the folder can be withdrawn.
+	if rec := do(t, engine, http.MethodDelete, "/api/v1/agent/folders/"+folder.ID, "", nil); rec.Code != 204 {
+		t.Fatalf("remove folder: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/sessions/does-not-exist", "", nil); rec.Code != 404 {
+		t.Fatalf("missing session: want 404, got %d", rec.Code)
 	}
 }
 
-func TestLocalFolderEndpoints(t *testing.T) {
+// Browsing is an allowlist: nothing is listable until a folder is handed
+// over, and then only inside it.
+func TestBrowseIsAnAllowlist(t *testing.T) {
 	engine, _ := newTestRouter(t)
 	dir := t.TempDir()
 
-	// Nothing added yet: the allowlist is empty and every path is closed.
 	var listing managedagent.DirListing
 	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs", "", &listing); rec.Code != 200 || len(listing.Entries) != 0 {
 		t.Fatalf("empty allowlist: %d %s", rec.Code, rec.Body)
@@ -140,52 +141,34 @@ func TestLocalFolderEndpoints(t *testing.T) {
 		t.Fatalf("browse before adding: want 403, got %d", rec.Code)
 	}
 	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs?path=nope", "", nil); rec.Code != 400 {
-		t.Fatalf("browse relative: %d", rec.Code)
+		t.Fatalf("relative path: want 400, got %d", rec.Code)
 	}
-	// Start a task straight from a folder: that submission is the grant.
+
+	// Starting a task from a path is itself the grant.
 	var detail SessionDetail
-	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"local_path":"`+dir+`","prompt":"go"}`, &detail); rec.Code != 201 {
-		t.Fatalf("create from local_path: %d %s", rec.Code, rec.Body)
-	}
-	if detail.Workspace == nil || detail.Workspace.Path != dir || detail.Workspace.Branch != "" {
-		t.Fatalf("in-place workspace expected: %+v", detail.Workspace)
+	if rec := do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"path":"`+dir+`","prompt":"go"}`, &detail); rec.Code != 201 {
+		t.Fatalf("create from path: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs?path="+dir, "", &listing); rec.Code != 200 || listing.Path != dir {
 		t.Fatalf("browse after adding: %d %s", rec.Code, rec.Body)
 	}
-	var recent RecentFoldersResponse
-	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/recent", "", &recent); rec.Code != 200 || len(recent.Folders) != 1 || recent.Folders[0].Path != dir {
-		t.Fatalf("recent: %d %s", rec.Code, rec.Body)
+	if rec := do(t, engine, http.MethodGet, "/api/v1/agent/fs/dirs?path=/", "", nil); rec.Code != 403 {
+		t.Fatalf("outside the allowlist: want 403, got %d", rec.Code)
 	}
 }
 
 func TestEventsStream(t *testing.T) {
 	engine, _ := newTestRouter(t)
-	var src managedagent.Source
-	do(t, engine, http.MethodPost, "/api/v1/agent/sources", `{"url":"https://github.com/org/repo.git"}`, &src)
 	var detail SessionDetail
-	do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"source_id":"`+src.ID+`","prompt":"hi"}`, &detail)
+	do(t, engine, http.MethodPost, "/api/v1/agent/sessions", `{"path":"`+t.TempDir()+`","prompt":"hi"}`, &detail)
 
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/sessions/"+detail.Session.ID+"/events", nil)
+	req.Header.Set("Accept", "text/event-stream")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/sessions/"+detail.Session.ID+"/events", nil).WithContext(ctx)
-	req.Header.Set("Accept", "text/event-stream")
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
-		t.Fatalf("content type = %q", ct)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "event:event") || !strings.Contains(body, `"text":"hi"`) || !strings.Contains(body, "event:ping") {
-		t.Fatalf("stream body:\n%s", body)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/agent/sessions/missing/events", nil)
-	req.Header.Set("Accept", "text/event-stream")
-	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-	if rec.Code != 404 {
-		t.Fatalf("stream on missing session: %d", rec.Code)
+	engine.ServeHTTP(rec, req.WithContext(ctx))
+	if !strings.Contains(rec.Body.String(), "event:event") || !strings.Contains(rec.Body.String(), "hi") {
+		t.Fatalf("stream body = %q", rec.Body.String())
 	}
 }

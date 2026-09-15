@@ -1,3 +1,12 @@
+// Package managedagent is the control plane for agent sessions running on
+// this host: a folder you hand over, a prompt, and Claude Code working in
+// that folder while you steer it from the web or from IM.
+//
+// The model is deliberately two entities deep — a Folder the agent may work
+// in, and a Session in it — because that is the whole of the local story.
+// Cloning a repository into a throwaway checkout, branches, pushes and
+// container runtimes are a later phase and are not modelled here
+// (.design/managed-agent.md §18).
 package managedagent
 
 import (
@@ -5,88 +14,24 @@ import (
 	"time"
 )
 
-// ---------- Source ----------
+// ---------- Folder ----------
 
-// SourceKind is where code comes from.
-type SourceKind string
-
-const (
-	// SourceKindGit is a repository URL: each workspace is a fresh clone.
-	SourceKindGit SourceKind = "git"
-	// SourceKindLocal is a directory on this host: the agent works in it
-	// in place — no clone, no branch, no push. One workspace per source,
-	// reused by every session, so Claude Code sessions resume naturally.
-	// Only the local runtime can serve it.
-	SourceKindLocal SourceKind = "local"
-)
-
-// Source is a repository the agent can be pointed at. The credential is a
-// reference into the secret store, never the secret itself, so a Source can be
-// listed and rendered without ever touching the token.
-type Source struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Kind          SourceKind `json:"kind"`
-	URL           string     `json:"url"`
-	DefaultBranch string     `json:"default_branch"`
-	CredentialID  string     `json:"credential_id,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+// Folder is a directory on this host the agent is allowed to work in. It is
+// also the allowlist for browsing: nothing outside a Folder is ever listed
+// (.design/managed-agent.md §13). The agent edits the directory in place —
+// tingly-box never copies it, never branches it and never deletes anything
+// inside it.
+type Folder struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	// Name is the last path segment, kept denormalised so a list renders
+	// without touching the filesystem.
+	Name       string    `json:"name"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
 }
 
-// ---------- Environment ----------
-
-// Runtime is where an agent process runs. Local is the only runtime the
-// Service accepts today; Docker is declared so its configuration can be
-// modelled and validated now and switched on when the docker process factory
-// lands (.design/managed-agent.md §5.2).
-type Runtime string
-
-const (
-	RuntimeLocal  Runtime = "local"
-	RuntimeDocker Runtime = "docker"
-)
-
-// NetworkPolicy is the container's network access. Ignored for RuntimeLocal.
-type NetworkPolicy string
-
-const (
-	NetworkNone  NetworkPolicy = "none"
-	NetworkProxy NetworkPolicy = "proxy" // egress only through the host gateway
-	NetworkFull  NetworkPolicy = "full"
-)
-
-// Resources are container limits. Zero means "runtime default".
-type Resources struct {
-	CPU      float64 `json:"cpu,omitempty"`
-	MemoryMB int     `json:"memory_mb,omitempty"`
-	DiskMB   int     `json:"disk_mb,omitempty"`
-}
-
-// Environment describes where the agent runs and what it is given. The
-// docker-only fields (Image, Network, Resources) are part of the model from
-// day one so the local → docker step is a Runtime switch, not a schema change.
-type Environment struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Runtime     Runtime           `json:"runtime"`
-	Image       string            `json:"image,omitempty"`
-	SetupScript string            `json:"setup_script,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	SecretRefs  []string          `json:"secret_refs,omitempty"`
-	Network     NetworkPolicy     `json:"network,omitempty"`
-	Resources   Resources         `json:"resources,omitempty"`
-	// CCProfile selects the Claude Code configuration, in the same
-	// "claude_code" / "claude_code:<id>" grammar as a bot's default_agent
-	// (.design/remote-cc-profile.md §1). Empty means the main scenario.
-	CCProfile string `json:"cc_profile,omitempty"`
-	// PermissionMode is the default for sessions started in this
-	// environment; a session may override it.
-	PermissionMode PermissionMode `json:"permission_mode,omitempty"`
-	IsDefault      bool           `json:"is_default"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-}
+// ---------- Permission modes ----------
 
 // PermissionMode is Claude Code's permission mode for a session, passed as
 // --permission-mode. Empty means "not overridden": the settings file's
@@ -131,46 +76,6 @@ func ValidPermissionMode(m PermissionMode) bool {
 // (same policy as the @cc executor's noApprovalModes).
 func (m PermissionMode) AutoApproves() bool { return m == PermissionBypassPermissions }
 
-// DefaultLocalEnvironmentID is stable so the auto-created local environment
-// can be found across restarts without a name lookup.
-const DefaultLocalEnvironmentID = "00000000-0000-0000-0000-00000000a001"
-
-// ---------- Workspace ----------
-
-// WorkspaceState is the materialisation state of a checkout.
-type WorkspaceState string
-
-const (
-	WorkspaceProvisioning WorkspaceState = "provisioning"
-	WorkspaceReady        WorkspaceState = "ready"
-	WorkspaceFailed       WorkspaceState = "failed"
-	WorkspaceReclaimed    WorkspaceState = "reclaimed"
-)
-
-// Workspace is one materialised checkout of a Source inside an Environment:
-// a directory on the host (bind-mounted into a container under
-// RuntimeDocker) plus the agent's working branch. It is short-lived; the
-// branch is pushed out before the directory is reclaimed.
-type Workspace struct {
-	ID            string `json:"id"`
-	SourceID      string `json:"source_id"`
-	EnvironmentID string `json:"environment_id"`
-	Path          string `json:"path"`
-	// AgentCwd is the checkout as the agent sees it: equal to Path under
-	// RuntimeLocal, a fixed mount point (e.g. /workspace) under RuntimeDocker.
-	// Claude Code keys its own session files on this path together with its
-	// config dir, so it must stay constant for the workspace's lifetime for
-	// --resume to work (.design/managed-agent.md §12).
-	AgentCwd     string         `json:"agent_cwd"`
-	BaseRef      string         `json:"base_ref"`
-	Branch       string         `json:"branch"`
-	ContainerID  string         `json:"container_id,omitempty"`
-	State        WorkspaceState `json:"state"`
-	Error        string         `json:"error,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	LastActiveAt time.Time      `json:"last_active_at"`
-}
-
 // ---------- Session ----------
 
 // SessionStatus is the agent conversation's lifecycle.
@@ -181,7 +86,6 @@ const (
 	SessionRunning      SessionStatus = "running"
 	SessionWaitingInput SessionStatus = "waiting_input"
 	SessionIdle         SessionStatus = "idle"
-	SessionDone         SessionStatus = "done"
 	SessionFailed       SessionStatus = "failed"
 	SessionArchived     SessionStatus = "archived"
 )
@@ -204,33 +108,30 @@ type Usage struct {
 	Cost            float64 `json:"cost"`
 }
 
-// Artifact is what a session hands the user for the next step: the working
-// branch, whether it was pushed, and the pull request if one was opened.
-type Artifact struct {
-	Branch  string `json:"branch,omitempty"`
-	Pushed  bool   `json:"pushed"`
-	PRURL   string `json:"pr_url,omitempty"`
-	Changed int    `json:"changed_files"`
-}
-
-// Session is one conversation with the agent inside a Workspace. A Workspace
-// may hold several sessions over time; a new one resumes the previous Claude
-// Code session by CCSessionID.
+// Session is one conversation with the agent in a Folder. A folder may hold
+// many sessions over time but only one active at a time; each new one
+// resumes its own Claude Code session by CCSessionID.
 type Session struct {
-	ID          string        `json:"id"`
-	Title       string        `json:"title"`
-	WorkspaceID string        `json:"workspace_id"`
-	Status      SessionStatus `json:"status"`
-	Prompt      string        `json:"prompt"`
+	ID       string        `json:"id"`
+	Title    string        `json:"title"`
+	FolderID string        `json:"folder_id"`
+	Status   SessionStatus `json:"status"`
+	Prompt   string        `json:"prompt"`
 	// CCSessionID is Claude Code's own session id, used for --resume.
 	CCSessionID    string         `json:"cc_session_id,omitempty"`
 	PermissionMode PermissionMode `json:"permission_mode,omitempty"`
 	// CreatedBy records the surface that opened the session:
 	// "web", "im:<bot>:<chat>", "trigger:<id>".
-	CreatedBy    string     `json:"created_by"`
-	Error        string     `json:"error,omitempty"`
-	Usage        Usage      `json:"usage"`
-	Artifact     Artifact   `json:"artifact"`
+	CreatedBy string `json:"created_by"`
+	Error     string `json:"error,omitempty"`
+	Usage     Usage  `json:"usage"`
+	// BaseCommit is the folder's HEAD when this session started, so the
+	// changes it made can be told apart from what was already there. Empty
+	// when the folder is not a git work tree.
+	BaseCommit string `json:"base_commit,omitempty"`
+	// ChangedFiles is how many files differ in the folder, refreshed at the
+	// end of each turn. Zero when the folder is not a git work tree.
+	ChangedFiles int        `json:"changed_files"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastActiveAt time.Time  `json:"last_active_at"`
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`

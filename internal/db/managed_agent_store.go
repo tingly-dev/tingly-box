@@ -20,20 +20,13 @@ type ManagedAgentStore struct {
 }
 
 var (
-	_ managedagent.SourceStore      = (*ManagedAgentStore)(nil)
-	_ managedagent.EnvironmentStore = (*ManagedAgentStore)(nil)
-	_ managedagent.WorkspaceStore   = (*ManagedAgentStore)(nil)
-	_ managedagent.SessionStore     = (*ManagedAgentStore)(nil)
+	_ managedagent.FolderStore  = (*ManagedAgentStore)(nil)
+	_ managedagent.SessionStore = (*ManagedAgentStore)(nil)
 )
 
-// NewManagedAgentStore migrates the four tables and returns the store.
+// NewManagedAgentStore migrates the two tables and returns the store.
 func NewManagedAgentStore(db *gorm.DB) (*ManagedAgentStore, error) {
-	if err := db.AutoMigrate(
-		&AgentSourceRecord{},
-		&AgentEnvironmentRecord{},
-		&AgentWorkspaceRecord{},
-		&AgentSessionRecord{},
-	); err != nil {
+	if err := db.AutoMigrate(&AgentFolderRecord{}, &AgentSessionRecord{}); err != nil {
 		return nil, fmt.Errorf("migrate managed agent tables: %w", err)
 	}
 	return &ManagedAgentStore{db: db}, nil
@@ -41,7 +34,7 @@ func NewManagedAgentStore(db *gorm.DB) (*ManagedAgentStore, error) {
 
 // Stores bundles this store with a file event log into managedagent.Stores.
 func (s *ManagedAgentStore) Stores(events managedagent.EventStore) managedagent.Stores {
-	return managedagent.Stores{Sources: s, Environments: s, Workspaces: s, Sessions: s, Events: events}
+	return managedagent.Stores{Folders: s, Sessions: s, Events: events}
 }
 
 func wrapNotFound(err error, entity, id string) error {
@@ -77,129 +70,60 @@ func (s *ManagedAgentStore) updateOne(ctx context.Context, rec any, entity, id s
 
 // ---------- sources ----------
 
-func (s *ManagedAgentStore) CreateSource(ctx context.Context, src *managedagent.Source) error {
-	if err := s.db.WithContext(ctx).Create(toAgentSourceRecord(src)).Error; err != nil {
-		return fmt.Errorf("create source: %w", err)
+// defaultSessionListLimit caps a list page when the caller asks for no
+// specific limit.
+const defaultSessionListLimit = 200
+
+// ---------- folders ----------
+
+func (s *ManagedAgentStore) CreateFolder(ctx context.Context, f *managedagent.Folder) error {
+	if err := s.db.WithContext(ctx).Create(toAgentFolderRecord(f)).Error; err != nil {
+		return fmt.Errorf("create folder: %w", err)
 	}
 	return nil
 }
 
-func (s *ManagedAgentStore) GetSource(ctx context.Context, id string) (*managedagent.Source, error) {
-	var rec AgentSourceRecord
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&rec).Error; err != nil {
-		return nil, wrapNotFound(err, "source", id)
+func (s *ManagedAgentStore) GetFolder(ctx context.Context, id string) (*managedagent.Folder, error) {
+	var rec AgentFolderRecord
+	if err := s.db.WithContext(ctx).First(&rec, "id = ?", id).Error; err != nil {
+		return nil, wrapNotFound(err, "folder", id)
 	}
-	out := fromAgentSourceRecord(&rec)
-	return &out, nil
+	f := fromAgentFolderRecord(&rec)
+	return &f, nil
 }
 
-func (s *ManagedAgentStore) ListSources(ctx context.Context) ([]managedagent.Source, error) {
-	var recs []AgentSourceRecord
-	if err := s.db.WithContext(ctx).Order("created_at ASC").Find(&recs).Error; err != nil {
-		return nil, fmt.Errorf("list sources: %w", err)
+func (s *ManagedAgentStore) GetFolderByPath(ctx context.Context, path string) (*managedagent.Folder, error) {
+	var rec AgentFolderRecord
+	if err := s.db.WithContext(ctx).First(&rec, "path = ?", path).Error; err != nil {
+		return nil, wrapNotFound(err, "folder", path)
 	}
-	out := make([]managedagent.Source, 0, len(recs))
+	f := fromAgentFolderRecord(&rec)
+	return &f, nil
+}
+
+// ListFolders orders by most recently used: that is the order the composer
+// and the picker offer them in.
+func (s *ManagedAgentStore) ListFolders(ctx context.Context) ([]managedagent.Folder, error) {
+	var recs []AgentFolderRecord
+	if err := s.db.WithContext(ctx).Order("last_used_at DESC").Find(&recs).Error; err != nil {
+		return nil, fmt.Errorf("list folders: %w", err)
+	}
+	out := make([]managedagent.Folder, 0, len(recs))
 	for i := range recs {
-		out = append(out, fromAgentSourceRecord(&recs[i]))
+		out = append(out, fromAgentFolderRecord(&recs[i]))
 	}
 	return out, nil
 }
 
-func (s *ManagedAgentStore) UpdateSource(ctx context.Context, src *managedagent.Source) error {
-	return s.updateOne(ctx, toAgentSourceRecord(src), "source", src.ID)
+func (s *ManagedAgentStore) UpdateFolder(ctx context.Context, f *managedagent.Folder) error {
+	return s.updateOne(ctx, toAgentFolderRecord(f), "folder", f.ID)
 }
 
-func (s *ManagedAgentStore) DeleteSource(ctx context.Context, id string) error {
-	return s.deleteOne(ctx, &AgentSourceRecord{}, "source", id)
-}
-
-// ---------- environments ----------
-
-func (s *ManagedAgentStore) CreateEnvironment(ctx context.Context, e *managedagent.Environment) error {
-	if err := s.db.WithContext(ctx).Create(toAgentEnvironmentRecord(e)).Error; err != nil {
-		return fmt.Errorf("create environment: %w", err)
-	}
-	return nil
-}
-
-func (s *ManagedAgentStore) GetEnvironment(ctx context.Context, id string) (*managedagent.Environment, error) {
-	var rec AgentEnvironmentRecord
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&rec).Error; err != nil {
-		return nil, wrapNotFound(err, "environment", id)
-	}
-	out := fromAgentEnvironmentRecord(&rec)
-	return &out, nil
-}
-
-func (s *ManagedAgentStore) ListEnvironments(ctx context.Context) ([]managedagent.Environment, error) {
-	var recs []AgentEnvironmentRecord
-	if err := s.db.WithContext(ctx).Order("is_default DESC, created_at ASC").Find(&recs).Error; err != nil {
-		return nil, fmt.Errorf("list environments: %w", err)
-	}
-	out := make([]managedagent.Environment, 0, len(recs))
-	for i := range recs {
-		out = append(out, fromAgentEnvironmentRecord(&recs[i]))
-	}
-	return out, nil
-}
-
-func (s *ManagedAgentStore) UpdateEnvironment(ctx context.Context, e *managedagent.Environment) error {
-	return s.updateOne(ctx, toAgentEnvironmentRecord(e), "environment", e.ID)
-}
-
-func (s *ManagedAgentStore) DeleteEnvironment(ctx context.Context, id string) error {
-	return s.deleteOne(ctx, &AgentEnvironmentRecord{}, "environment", id)
-}
-
-// ---------- workspaces ----------
-
-func (s *ManagedAgentStore) CreateWorkspace(ctx context.Context, w *managedagent.Workspace) error {
-	if err := s.db.WithContext(ctx).Create(toAgentWorkspaceRecord(w)).Error; err != nil {
-		return fmt.Errorf("create workspace: %w", err)
-	}
-	return nil
-}
-
-func (s *ManagedAgentStore) GetWorkspace(ctx context.Context, id string) (*managedagent.Workspace, error) {
-	var rec AgentWorkspaceRecord
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&rec).Error; err != nil {
-		return nil, wrapNotFound(err, "workspace", id)
-	}
-	out := fromAgentWorkspaceRecord(&rec)
-	return &out, nil
-}
-
-func (s *ManagedAgentStore) ListWorkspaces(ctx context.Context, f managedagent.WorkspaceFilter) ([]managedagent.Workspace, error) {
-	q := s.db.WithContext(ctx).Model(&AgentWorkspaceRecord{})
-	if f.SourceID != "" {
-		q = q.Where("source_id = ?", f.SourceID)
-	}
-	if f.EnvironmentID != "" {
-		q = q.Where("environment_id = ?", f.EnvironmentID)
-	}
-	if f.State != "" {
-		q = q.Where("state = ?", string(f.State))
-	}
-	var recs []AgentWorkspaceRecord
-	if err := q.Order("last_active_at DESC").Find(&recs).Error; err != nil {
-		return nil, fmt.Errorf("list workspaces: %w", err)
-	}
-	out := make([]managedagent.Workspace, 0, len(recs))
-	for i := range recs {
-		out = append(out, fromAgentWorkspaceRecord(&recs[i]))
-	}
-	return out, nil
-}
-
-func (s *ManagedAgentStore) UpdateWorkspace(ctx context.Context, w *managedagent.Workspace) error {
-	return s.updateOne(ctx, toAgentWorkspaceRecord(w), "workspace", w.ID)
+func (s *ManagedAgentStore) DeleteFolder(ctx context.Context, id string) error {
+	return s.deleteOne(ctx, &AgentFolderRecord{}, "folder", id)
 }
 
 // ---------- sessions ----------
-
-// defaultSessionListLimit caps an unbounded ListSessions: the sessions page
-// wants the recent tail, not the whole history.
-const defaultSessionListLimit = 200
 
 func (s *ManagedAgentStore) CreateSession(ctx context.Context, sess *managedagent.Session) error {
 	if err := s.db.WithContext(ctx).Create(toAgentSessionRecord(sess)).Error; err != nil {
@@ -219,8 +143,8 @@ func (s *ManagedAgentStore) GetSession(ctx context.Context, id string) (*managed
 
 func (s *ManagedAgentStore) ListSessions(ctx context.Context, f managedagent.SessionFilter) ([]managedagent.Session, error) {
 	q := s.db.WithContext(ctx).Model(&AgentSessionRecord{})
-	if f.WorkspaceID != "" {
-		q = q.Where("workspace_id = ?", f.WorkspaceID)
+	if f.FolderID != "" {
+		q = q.Where("folder_id = ?", f.FolderID)
 	}
 	if f.Status != "" {
 		q = q.Where("status = ?", string(f.Status))

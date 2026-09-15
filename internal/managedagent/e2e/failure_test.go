@@ -18,7 +18,7 @@ func TestJourney_FailureThenRetry(t *testing.T) {
 	s := bootStack(t, up)
 	dir := newGitDir(t, "flaky")
 
-	d := s.createSession(map[string]any{"local_path": dir, "prompt": "hello"})
+	d := s.createSession(map[string]any{"path": dir, "prompt": "hello"})
 	id := d.Session.ID
 	d, ev := s.waitSettled(id)
 	if d.Session.Status != managedagent.SessionFailed {
@@ -48,19 +48,20 @@ func TestJourney_FailureThenRetry(t *testing.T) {
 func TestJourney_AllPermissionModesStart(t *testing.T) {
 	requireE2E(t)
 	s := bootStack(t, nil)
-	dir := newGitDir(t, "modes")
 
 	var envs struct {
 		PermissionModes []string `json:"permission_modes"`
 	}
-	s.do(http.MethodGet, "/api/v1/agent/environments", nil, &envs)
+	s.do(http.MethodGet, "/api/v1/agent/permission-modes", nil, &envs)
 	if len(envs.PermissionModes) == 0 || !strings.Contains(strings.Join(envs.PermissionModes, ","), "bypassPermissions") {
 		t.Fatalf("permission modes not advertised: %v", envs.PermissionModes)
 	}
 	// Every advertised mode must at least start a turn without the CLI
-	// rejecting the flag outright.
+	// rejecting the flag outright. Each gets its own folder: a folder runs
+	// one task at a time.
 	for _, mode := range envs.PermissionModes {
-		d := s.createSession(map[string]any{"local_path": dir, "prompt": "hi", "permission_mode": mode})
+		dir := newGitDir(t, "modes-"+mode)
+		d := s.createSession(map[string]any{"path": dir, "prompt": "hi", "permission_mode": mode})
 		d, ev := s.waitSettled(d.Session.ID)
 		if d.Session.Status != managedagent.SessionIdle {
 			t.Errorf("mode %s: %s %q\n%s", mode, d.Session.Status, d.Session.Error, eventsDump(ev))

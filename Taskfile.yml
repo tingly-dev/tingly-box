@@ -60,7 +60,7 @@ tasks:
     summary: Managed Agent API journeys (real claude CLI, scripted model)
     cmds:
       - go build ./...
-      - TB_MANAGED_AGENT_E2E=1 go test -count=1 -v -timeout 30m ./internal/managedagent/e2e/ ./internal/managedagent/agentrun/ -run 'Journey|RealCLI|FullStack' -skip 'Journey_Browser'
+      - TB_MANAGED_AGENT_E2E=1 go test -count=1 -v -timeout 30m ./internal/managedagent/e2e/ ./internal/managedagent/agentrun/ -run 'Journey|RealCLI' -skip 'Journey_Browser'
 
   # The browser journey drives the built web UI (embedded, as shipped) with
   # Playwright. Builds the UI first so the test binary embeds a current one.
