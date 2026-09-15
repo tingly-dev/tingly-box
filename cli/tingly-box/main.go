@@ -58,7 +58,7 @@ type CLI struct {
 
 	// Claude Code
 	CC      command.CCmdKong       `kong:"cmd,help='Launch Claude Code'"`
-	Profile command.ProfileCmdKong `kong:"cmd,help='Manage and use Claude Code profiles'"`
+	Profile command.ProfileCmdKong `kong:"cmd,aliases='use',help='Manage and use Claude Code profiles'"`
 
 	// Other commands
 	Swagger    command.SwaggerCmdKong    `kong:"cmd,hidden,help='Generate OpenAPI schema'"`
