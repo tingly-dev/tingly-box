@@ -1176,7 +1176,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/BotInteractStartResponse"
                 }
               }
             }
@@ -1240,6 +1240,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "description": "Long-poll budget, e.g. 45s (default 45s, capped at 50s)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1248,7 +1257,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/BotInteractWaitResponse"
                 }
               }
             }
@@ -1263,8 +1272,28 @@
               }
             }
           },
+          "410": {
+            "description": "Prompt timed out or ended in error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Interaction registry unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "No reply yet — retry (long-poll pending)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1312,7 +1341,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/BotNotifyResponse"
                 }
               }
             }
@@ -1699,6 +1728,39 @@
         }
       }
     },
+    "/api/v1/config/apply/dsh": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Generate and apply DeepSeek Harness (dsh) configuration from system state",
+        "description": "Generate and apply DeepSeek Harness (dsh) configuration from system state",
+        "operationId": "apiV1ConfigApplyDshPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDshConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyDshConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/apply/opencode": {
       "post": {
         "tags": [
@@ -1743,6 +1805,28 @@
         }
       }
     },
+    "/api/v1/config/claude/env": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get the environment variables for routing Claude Code CLI through the tingly-box gateway",
+        "description": "Get the environment variables for routing Claude Code CLI through the tingly-box gateway",
+        "operationId": "apiV1ConfigClaudeEnvGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeEnvResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/codex": {
       "get": {
         "tags": [
@@ -1758,6 +1842,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CodexConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/dsh": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get the currently applied DeepSeek Harness (dsh) preferences",
+        "description": "Get the currently applied DeepSeek Harness (dsh) preferences",
+        "operationId": "apiV1ConfigDshGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DshConfigResponse"
                 }
               }
             }
@@ -1791,6 +1897,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CodexConfigPreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/preview/dsh": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Generate DeepSeek Harness (dsh) configuration preview from system state",
+        "description": "Generate DeepSeek Harness (dsh) configuration preview from system state",
+        "operationId": "apiV1ConfigPreviewDshPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDshConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DshConfigPreviewResponse"
                 }
               }
             }
@@ -1850,6 +1989,28 @@
         "summary": "Restore Codex configuration from the most recent backup",
         "description": "Restore Codex configuration from the most recent backup",
         "operationId": "apiV1ConfigRestoreCodexPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/restore/dsh": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Restore DeepSeek Harness (dsh) configuration from the most recent backup",
+        "description": "Restore DeepSeek Harness (dsh) configuration from the most recent backup",
+        "operationId": "apiV1ConfigRestoreDshPost",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2600,6 +2761,28 @@
         }
       }
     },
+    "/api/v1/imagegen/info": {
+      "get": {
+        "tags": [
+          "imagegen"
+        ],
+        "summary": "Get read-only info about the imagegen scenario, including the local output directory",
+        "description": "Get read-only info about the imagegen scenario, including the local output directory",
+        "operationId": "apiV1ImagegenInfoGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imbot-admin/reload": {
       "post": {
         "tags": [
@@ -2774,7 +2957,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListResponse"
+                  "$ref": "#/components/schemas/ImBotSettingsListResponse"
                 }
               }
             }
@@ -2804,7 +2987,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRequest"
+                "$ref": "#/components/schemas/ImBotSettingsCreateRequest"
               }
             }
           }
@@ -2899,7 +3082,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateRequest"
+                "$ref": "#/components/schemas/ImBotSettingsUpdateRequest"
               }
             }
           }
@@ -4642,6 +4825,173 @@
         }
       }
     },
+    "/api/v1/provider-quota": {
+      "get": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "List cached quota for every provider that has a quota fetcher",
+        "description": "List cached quota for every provider that has a quota fetcher",
+        "operationId": "apiV1Provider-quotaGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListQuotaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-quota/batch": {
+      "post": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Fetch quota for a specific set of providers in one call",
+        "description": "Fetch quota for a specific set of providers in one call",
+        "operationId": "apiV1Provider-quotaBatchPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchGetQuotaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchGetQuotaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-quota/refresh": {
+      "post": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Force a refresh of every provider's quota from upstream",
+        "description": "Force a refresh of every provider's quota from upstream",
+        "operationId": "apiV1Provider-quotaRefreshPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListQuotaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-quota/summary": {
+      "get": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Aggregate quota summary across all providers",
+        "description": "Aggregate quota summary across all providers",
+        "operationId": "apiV1Provider-quotaSummaryGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-quota/{uuid}": {
+      "get": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Quota for one provider, served from cache when fresh",
+        "description": "Quota for one provider, served from cache when fresh",
+        "operationId": "apiV1Provider-quotaUuidGet",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderUsage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-quota/{uuid}/refresh": {
+      "post": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "Force a refresh of one provider's quota from upstream",
+        "description": "Force a refresh of one provider's quota from upstream",
+        "operationId": "apiV1Provider-quotaUuidRefreshPost",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderUsage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/requests": {
       "get": {
         "tags": [
@@ -5697,6 +6047,59 @@
         }
       }
     },
+    "/api/v1/shortcut": {
+      "get": {
+        "tags": [
+          "shortcut"
+        ],
+        "summary": "Check whether a desktop / start-menu shortcut already exists",
+        "description": "Check whether a desktop / start-menu shortcut already exists",
+        "operationId": "apiV1ShortcutGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortcutStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "shortcut"
+        ],
+        "summary": "Create (or refresh) a desktop / start-menu shortcut that launches Tingly Box",
+        "description": "Create (or refresh) a desktop / start-menu shortcut that launches Tingly Box",
+        "operationId": "apiV1ShortcutPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortcutCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortcutCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/status": {
       "get": {
         "tags": [
@@ -5827,6 +6230,200 @@
         }
       }
     },
+    "/api/v1/teams": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "List teams",
+        "description": "List teams",
+        "operationId": "apiV1TeamsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Create a team",
+        "description": "Create a team",
+        "operationId": "apiV1TeamsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{team_id}": {
+      "put": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Update a team",
+        "description": "Update a team",
+        "operationId": "apiV1TeamsTeam_idPut",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Delete an empty, non-default team",
+        "description": "Delete an empty, non-default team",
+        "operationId": "apiV1TeamsTeam_idDelete",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{team_id}/disable": {
+      "put": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Disable a team and all of its sharing keys",
+        "description": "Disable a team and all of its sharing keys",
+        "operationId": "apiV1TeamsTeam_idDisablePut",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{team_id}/enable": {
+      "put": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Enable a team and its sharing keys",
+        "description": "Enable a team and its sharing keys",
+        "operationId": "apiV1TeamsTeam_idEnablePut",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/token": {
       "get": {
         "tags": [
@@ -5893,6 +6490,15 @@
             "name": "user_id",
             "in": "query",
             "description": "Query parameter user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "description": "Query parameter team_id",
             "required": false,
             "schema": {
               "type": "string"
@@ -6129,6 +6735,83 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TokenCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens/{token_id}/team": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Move a shared API token to another team",
+        "description": "Move a shared API token to another team",
+        "operationId": "apiV1TokensToken_idTeamPut",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenMoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APITokenInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/traces/{trace_id}": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get the spans of one trace by trace id. 404 means the trace was never sampled or has been evicted from the in-memory buffer.",
+        "description": "Get the spans of one trace by trace id. 404 means the trace was never sampled or has been evicted from the in-memory buffer.",
+        "operationId": "apiV1TracesTrace_idGet",
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceDetailResponse"
                 }
               }
             }
@@ -6719,6 +7402,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/E2EResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/probe/curl": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Generate the curl command equivalent to a probe request without executing it (secrets as placeholder env vars)",
+        "description": "Generate the curl command equivalent to a probe request without executing it (secrets as placeholder env vars)",
+        "operationId": "apiV2ProbeCurlPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/E2ERequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurlResponse"
                 }
               }
             }
@@ -7492,6 +8208,10 @@
             "format": "date-time",
             "description": "Field last_used_at"
           },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          },
           "token_id": {
             "type": "string",
             "description": "Field token_id"
@@ -7504,6 +8224,7 @@
         "required": [
           "token_id",
           "user_id",
+          "team_id",
           "display_name",
           "enabled",
           "created_at"
@@ -7776,6 +8497,12 @@
             "description": "Field provider_uuid",
             "example": "uuid-123"
           },
+          "reasoning_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field reasoning_tokens",
+            "example": 12000
+          },
           "request_count": {
             "type": "integer",
             "format": "int64",
@@ -7837,7 +8564,8 @@
           "streamed_count",
           "streamed_rate",
           "cache_read_tokens",
-          "cache_write_tokens"
+          "cache_write_tokens",
+          "reasoning_tokens"
         ]
       },
       "ApplyClaudeConfigRequest": {
@@ -7853,6 +8581,10 @@
           },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
+          },
+          "showThinkingSummaries": {
+            "type": "boolean",
+            "description": "Field showThinkingSummaries"
           }
         },
         "required": [
@@ -7962,6 +8694,49 @@
           "createdFiles",
           "updatedFiles",
           "backupPaths"
+        ]
+      },
+      "ApplyDshConfigRequest": {
+        "type": "object",
+        "properties": {
+          "preferences": {
+            "$ref": "#/components/schemas/DshPrefs"
+          }
+        },
+        "required": [
+          "preferences"
+        ]
+      },
+      "ApplyDshConfigResponse": {
+        "type": "object",
+        "properties": {
+          "credentialsResult": {
+            "$ref": "#/components/schemas/ApplyResult"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "models": {
+            "type": "array",
+            "description": "Field models",
+            "items": {
+              "type": "string"
+            }
+          },
+          "settingsResult": {
+            "$ref": "#/components/schemas/ApplyResult"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "settingsResult",
+          "credentialsResult",
+          "models"
         ]
       },
       "ApplyOpenCodeConfigResponse": {
@@ -8127,6 +8902,36 @@
           "data"
         ]
       },
+      "BatchGetQuotaRequest": {
+        "type": "object",
+        "properties": {
+          "provider_uuids": {
+            "type": "array",
+            "description": "Field provider_uuids",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "provider_uuids"
+        ]
+      },
+      "BatchGetQuotaResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Field data",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderUsage"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "BlockedUpdateRequest": {
         "type": "object",
         "properties": {
@@ -8242,6 +9047,54 @@
           "title"
         ]
       },
+      "BotInteractStartResponse": {
+        "type": "object",
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "description": "Field expires_at",
+            "example": "2026-07-25T12:02:00Z"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id",
+            "example": "a1b2c3d4"
+          },
+          "wait_url": {
+            "type": "string",
+            "description": "Field wait_url",
+            "example": "/api/v1/bots/abc/interact/a1b2c3d4"
+          }
+        },
+        "required": [
+          "request_id",
+          "wait_url",
+          "expires_at"
+        ]
+      },
+      "BotInteractWaitResponse": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "object",
+            "description": "Field decision",
+            "additionalProperties": {}
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason",
+            "example": "no reply within timeout"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status",
+            "example": "answered"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "BotNotifyRequest": {
         "type": "object",
         "properties": {
@@ -8267,6 +9120,19 @@
         "required": [
           "target",
           "body"
+        ]
+      },
+      "BotNotifyResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok",
+            "example": true
+          }
+        },
+        "required": [
+          "ok"
         ]
       },
       "CapabilityListResponse": {
@@ -8324,6 +9190,29 @@
           "bot_running"
         ]
       },
+      "ClaudeCodeEnvResponse": {
+        "type": "object",
+        "properties": {
+          "env": {
+            "type": "array",
+            "description": "Field env",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
@@ -8355,9 +9244,17 @@
             "type": "string",
             "description": "Field BASH_MAX_TIMEOUT_MS"
           },
+          "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS": {
+            "type": "string",
+            "description": "Field CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS"
+          },
           "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": {
             "type": "string",
             "description": "Field CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
+          },
+          "CLAUDE_AUTO_BACKGROUND_TASKS": {
+            "type": "string",
+            "description": "Field CLAUDE_AUTO_BACKGROUND_TASKS"
           },
           "CLAUDE_CODE_AUTO_COMPACT_WINDOW": {
             "type": "string",
@@ -8366,6 +9263,14 @@
           "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": {
             "type": "string",
             "description": "Field CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+          },
+          "CLAUDE_CODE_MAX_ACTIVE_TASKS": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_MAX_ACTIVE_TASKS"
+          },
+          "CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_MAX_LONG_RUNNING_TASK_TIME_MS"
           },
           "CLAUDE_CODE_MAX_OUTPUT_TOKENS": {
             "type": "string",
@@ -8439,6 +9344,10 @@
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
           },
+          "showThinkingSummaries": {
+            "type": "boolean",
+            "description": "Field showThinkingSummaries"
+          },
           "success": {
             "type": "boolean",
             "description": "Field success"
@@ -8449,7 +9358,8 @@
           "exists",
           "preferences",
           "defaultMode",
-          "installStatusLine"
+          "installStatusLine",
+          "showThinkingSummaries"
         ]
       },
       "ClientListResponse": {
@@ -8886,85 +9796,13 @@
       "CreateRequest": {
         "type": "object",
         "properties": {
-          "auth": {
-            "type": "object",
-            "description": "Field auth",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "auth_type": {
-            "type": "string",
-            "description": "Field auth_type"
-          },
-          "bash_allowlist": {
-            "type": "array",
-            "description": "Field bash_allowlist",
-            "items": {
-              "type": "string"
-            }
-          },
-          "capabilities": {
-            "type": "object",
-            "description": "Field capabilities",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/CapabilityUpdateRequest"
-            }
-          },
-          "chat_id_lock": {
-            "type": "string",
-            "description": "Field chat_id_lock"
-          },
-          "default_agent": {
-            "type": "string",
-            "description": "Field default_agent"
-          },
-          "default_cwd": {
-            "type": "string",
-            "description": "Field default_cwd"
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Field enabled"
-          },
           "name": {
             "type": "string",
             "description": "Field name"
-          },
-          "platform": {
-            "type": "string",
-            "description": "Field platform"
-          },
-          "proxy_url": {
-            "type": "string",
-            "description": "Field proxy_url"
-          },
-          "require_pairing": {
-            "type": "boolean",
-            "description": "Field require_pairing"
-          },
-          "smartguide_model": {
-            "type": "string",
-            "description": "Field smartguide_model"
-          },
-          "smartguide_provider": {
-            "type": "string",
-            "description": "Field smartguide_provider"
-          },
-          "token": {
-            "type": "string",
-            "description": "Field token"
-          },
-          "uuid": {
-            "type": "string",
-            "description": "Field uuid"
           }
         },
         "required": [
-          "platform",
-          "auth_type",
-          "auth",
-          "enabled"
+          "name"
         ]
       },
       "CreateRuleRequest": {
@@ -9029,6 +9867,68 @@
           "lb_tactic",
           "active",
           "smart_enabled"
+        ]
+      },
+      "CurlData": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body"
+          },
+          "command": {
+            "type": "string",
+            "description": "Field command",
+            "example": "curl -N http://localhost:9999/tingly/openai/v1/chat/completions …"
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "key_env_var": {
+            "type": "string",
+            "description": "Field key_env_var",
+            "example": "$TB_API_KEY"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method",
+            "example": "POST"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url",
+            "example": "http://localhost:9999/tingly/openai/v1/chat/completions"
+          }
+        },
+        "required": [
+          "command",
+          "method",
+          "url",
+          "headers",
+          "body",
+          "key_env_var"
+        ]
+      },
+      "CurlResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CurlData"
+          },
+          "error": {
+            "$ref": "#/components/schemas/errorDetail"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
         ]
       },
       "DecisionFacts": {
@@ -9357,6 +10257,74 @@
           "locations"
         ]
       },
+      "DshConfigPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "credentialsYaml": {
+            "type": "string",
+            "description": "Field credentialsYaml"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "models": {
+            "type": "array",
+            "description": "Field models",
+            "items": {
+              "type": "string"
+            }
+          },
+          "settingsYaml": {
+            "type": "string",
+            "description": "Field settingsYaml"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "settingsYaml",
+          "credentialsYaml",
+          "models"
+        ]
+      },
+      "DshConfigResponse": {
+        "type": "object",
+        "properties": {
+          "exists": {
+            "type": "boolean",
+            "description": "Field exists"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/DshPrefs"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "exists",
+          "preferences"
+        ]
+      },
+      "DshPrefs": {
+        "type": "object",
+        "properties": {
+          "default_input": {
+            "type": "string",
+            "description": "Field default_input"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Field protocol"
+          }
+        }
+      },
       "E2ERequest": {
         "type": "object",
         "properties": {
@@ -9372,11 +10340,6 @@
             "type": "boolean",
             "description": "Field direct"
           },
-          "endpoint": {
-            "type": "string",
-            "description": "Field endpoint",
-            "example": "responses"
-          },
           "message": {
             "type": "string",
             "description": "Field message"
@@ -9388,6 +10351,11 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Field protocol",
+            "example": "openai_responses"
           },
           "provider_uuid": {
             "type": "string",
@@ -9402,22 +10370,37 @@
             "description": "Field scenario",
             "example": "anthropic"
           },
+          "stream": {
+            "type": "boolean",
+            "description": "Field stream",
+            "example": true
+          },
           "target_type": {
             "type": "string",
             "description": "Field target_type"
           },
-          "test_mode": {
+          "thinking": {
             "type": "string",
-            "description": "Field test_mode"
+            "description": "Field thinking",
+            "example": "medium"
           },
           "token": {
             "type": "string",
             "description": "Field token"
+          },
+          "tool": {
+            "type": "boolean",
+            "description": "Field tool",
+            "example": false
+          },
+          "vision": {
+            "type": "string",
+            "description": "Field vision",
+            "example": "user"
           }
         },
         "required": [
-          "target_type",
-          "test_mode"
+          "target_type"
         ]
       },
       "E2EResponse": {
@@ -10168,6 +11151,196 @@
           "data"
         ]
       },
+      "ImBotSettingsCreateRequest": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "type": "object",
+            "description": "Field auth",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "bash_allowlist": {
+            "type": "array",
+            "description": "Field bash_allowlist",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "Field capabilities",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CapabilityUpdateRequest"
+            }
+          },
+          "chat_id_lock": {
+            "type": "string",
+            "description": "Field chat_id_lock"
+          },
+          "default_agent": {
+            "type": "string",
+            "description": "Field default_agent"
+          },
+          "default_cwd": {
+            "type": "string",
+            "description": "Field default_cwd"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "platform": {
+            "type": "string",
+            "description": "Field platform"
+          },
+          "proxy_url": {
+            "type": "string",
+            "description": "Field proxy_url"
+          },
+          "require_pairing": {
+            "type": "boolean",
+            "description": "Field require_pairing"
+          },
+          "smartguide_model": {
+            "type": "string",
+            "description": "Field smartguide_model"
+          },
+          "smartguide_provider": {
+            "type": "string",
+            "description": "Field smartguide_provider"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "Field uuid"
+          }
+        },
+        "required": [
+          "platform",
+          "auth_type",
+          "auth",
+          "enabled"
+        ]
+      },
+      "ImBotSettingsListResponse": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "array",
+            "description": "Field settings",
+            "items": {
+              "$ref": "#/components/schemas/Settings"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "settings"
+        ]
+      },
+      "ImBotSettingsUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "type": "object",
+            "description": "Field auth",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "bash_allowlist": {
+            "type": "array",
+            "description": "Field bash_allowlist",
+            "items": {
+              "type": "string"
+            }
+          },
+          "chat_id_lock": {
+            "type": "string",
+            "description": "Field chat_id_lock"
+          },
+          "default_agent": {
+            "type": "string",
+            "description": "Field default_agent"
+          },
+          "default_cwd": {
+            "type": "string",
+            "description": "Field default_cwd"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "platform": {
+            "type": "string",
+            "description": "Field platform"
+          },
+          "proxy_url": {
+            "type": "string",
+            "description": "Field proxy_url"
+          },
+          "require_pairing": {
+            "type": "boolean",
+            "description": "Field require_pairing"
+          },
+          "smartguide_model": {
+            "type": "string",
+            "description": "Field smartguide_model"
+          },
+          "smartguide_provider": {
+            "type": "string",
+            "description": "Field smartguide_provider"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          }
+        }
+      },
+      "ImageGenInfoResponse": {
+        "type": "object",
+        "properties": {
+          "output_dir": {
+            "type": "string",
+            "description": "Field output_dir",
+            "example": "/home/user/.tingly-box/image"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "output_dir"
+        ]
+      },
       "ImportOpenAISessionsRequest": {
         "type": "object",
         "properties": {
@@ -10320,16 +11493,10 @@
             "type": "string",
             "description": "Base64 encoded provider export data",
             "example": "TGB64:1.0:..."
-          },
-          "on_provider_conflict": {
-            "type": "string",
-            "description": "How to handle provider conflicts",
-            "example": "use"
           }
         },
         "required": [
-          "data",
-          "on_provider_conflict"
+          "data"
         ]
       },
       "ImportProvidersResponse": {
@@ -10351,17 +11518,10 @@
                 "format": "int64",
                 "description": "Field providers_created",
                 "example": 1
-              },
-              "providers_used": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Field providers_used",
-                "example": 0
               }
             },
             "required": [
-              "providers_created",
-              "providers_used"
+              "providers_created"
             ]
           },
           "message": {
@@ -10671,24 +11831,38 @@
           "success"
         ]
       },
-      "ListResponse": {
+      "ListQuotaResponse": {
         "type": "object",
         "properties": {
-          "settings": {
+          "data": {
             "type": "array",
-            "description": "Field settings",
+            "description": "Field data",
             "items": {
-              "$ref": "#/components/schemas/Settings"
+              "$ref": "#/components/schemas/ProviderUsage"
             }
           },
-          "success": {
-            "type": "boolean",
-            "description": "Field success"
+          "meta": {
+            "$ref": "#/components/schemas/MetaData"
           }
         },
         "required": [
-          "success",
-          "settings"
+          "meta",
+          "data"
+        ]
+      },
+      "ListResponse": {
+        "type": "object",
+        "properties": {
+          "teams": {
+            "type": "array",
+            "description": "Field teams",
+            "items": {
+              "$ref": "#/components/schemas/TeamInfo"
+            }
+          }
+        },
+        "required": [
+          "teams"
         ]
       },
       "LogEntry": {
@@ -11095,6 +12269,25 @@
           "gc_forced"
         ]
       },
+      "MetaData": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "total",
+          "updated_at"
+        ]
+      },
       "ModelInfo": {
         "type": "object",
         "properties": {
@@ -11195,6 +12388,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field time"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
           }
         },
         "required": [
@@ -11309,6 +12506,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field time"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
           }
         },
         "required": [
@@ -12523,6 +13724,11 @@
             "description": "Field name",
             "example": "openai"
           },
+          "renamed": {
+            "type": "boolean",
+            "description": "Field renamed",
+            "example": false
+          },
           "uuid": {
             "type": "string",
             "description": "Field uuid",
@@ -12532,7 +13738,8 @@
         "required": [
           "uuid",
           "name",
-          "action"
+          "action",
+          "renamed"
         ]
       },
       "ProviderModelInfo": {
@@ -13156,6 +14363,10 @@
             "type": "string",
             "description": "Field content"
           },
+          "direct": {
+            "type": "boolean",
+            "description": "Field direct"
+          },
           "error_message": {
             "type": "string",
             "description": "Field error_message"
@@ -13181,6 +14392,10 @@
           "message": {
             "type": "string",
             "description": "Field message"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Field protocol"
           },
           "request_url": {
             "type": "string",
@@ -13210,6 +14425,14 @@
             "type": "boolean",
             "description": "Field success"
           },
+          "thinking": {
+            "type": "string",
+            "description": "Field thinking"
+          },
+          "tool": {
+            "type": "boolean",
+            "description": "Field tool"
+          },
           "tool_calls": {
             "type": "array",
             "description": "Field tool_calls",
@@ -13227,6 +14450,10 @@
           },
           "usage": {
             "$ref": "#/components/schemas/TokenUsage"
+          },
+          "vision": {
+            "type": "string",
+            "description": "Field vision"
           }
         },
         "required": [
@@ -13486,9 +14713,20 @@
             "type": "string",
             "description": "Field custom_user_agent"
           },
+          "extra_headers": {
+            "type": "object",
+            "description": "Field extra_headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "openai_endpoint_override": {
             "type": "string",
             "description": "Field openai_endpoint_override"
+          },
+          "recording": {
+            "type": "string",
+            "description": "Field recording"
           },
           "session_affinity": {
             "type": "integer",
@@ -14110,6 +15348,79 @@
           "settings"
         ]
       },
+      "ShortcutCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "Tingly Box"
+          }
+        }
+      },
+      "ShortcutCreateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ShortcutInfo"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ShortcutInfo": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "description": "Field created",
+            "items": {
+              "type": "string"
+            }
+          },
+          "script_path": {
+            "type": "string",
+            "description": "Field script_path",
+            "example": "/home/user/.local/bin/tingly-box.sh"
+          }
+        },
+        "required": [
+          "created"
+        ]
+      },
+      "ShortcutStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ShortcutInfo"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Field exists",
+            "example": false
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data",
+          "exists"
+        ]
+      },
       "Skill": {
         "type": "object",
         "properties": {
@@ -14401,6 +15712,114 @@
           "data"
         ]
       },
+      "StoredSpan": {
+        "type": "object",
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "description": "Field attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field end_time"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "parent_span_id": {
+            "type": "string",
+            "description": "Field parent_span_id"
+          },
+          "span_id": {
+            "type": "string",
+            "description": "Field span_id"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field start_time"
+          },
+          "status_code": {
+            "type": "string",
+            "description": "Field status_code"
+          },
+          "status_message": {
+            "type": "string",
+            "description": "Field status_message"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "span_id",
+          "name",
+          "kind",
+          "start_time",
+          "end_time",
+          "status_code"
+        ]
+      },
+      "Summary": {
+        "type": "object",
+        "properties": {
+          "by_status": {
+            "type": "object",
+            "description": "Field by_status",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "by_type": {
+            "type": "object",
+            "description": "Field by_type",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "error_providers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field error_providers"
+          },
+          "ok_providers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field ok_providers"
+          },
+          "total_providers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total_providers"
+          },
+          "warning_providers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field warning_providers"
+          }
+        },
+        "required": [
+          "total_providers",
+          "ok_providers",
+          "error_providers",
+          "warning_providers",
+          "by_status",
+          "by_type"
+        ]
+      },
       "SystemLogEntry": {
         "type": "object",
         "properties": {
@@ -14512,6 +15931,50 @@
           "id"
         ]
       },
+      "TeamInfo": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Field is_default"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Field slug"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "enabled",
+          "is_default",
+          "created_at",
+          "updated_at"
+        ]
+      },
       "TemplateResponse": {
         "type": "object",
         "properties": {
@@ -14578,6 +16041,12 @@
             "description": "Field output_tokens",
             "example": 20000
           },
+          "reasoning_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field reasoning_tokens",
+            "example": 800
+          },
           "request_count": {
             "type": "integer",
             "format": "int64",
@@ -14604,6 +16073,7 @@
           "output_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "reasoning_tokens",
           "error_count",
           "avg_latency_ms"
         ]
@@ -14731,6 +16201,10 @@
           "display_name": {
             "type": "string",
             "description": "Field display_name"
+          },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
           }
         },
         "required": [
@@ -14749,6 +16223,10 @@
             "type": "string",
             "description": "Field display_name"
           },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          },
           "token": {
             "type": "string",
             "description": "Field token"
@@ -14766,6 +16244,7 @@
           "token",
           "token_id",
           "user_id",
+          "team_id",
           "display_name",
           "created_at"
         ]
@@ -14811,6 +16290,10 @@
             "format": "int64",
             "description": "Field offset"
           },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          },
           "user_id": {
             "type": "string",
             "description": "Field user_id"
@@ -14836,6 +16319,18 @@
         "required": [
           "tokens",
           "total"
+        ]
+      },
+      "TokenMoveRequest": {
+        "type": "object",
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          }
+        },
+        "required": [
+          "team_id"
         ]
       },
       "TokenResponse": {
@@ -14917,6 +16412,31 @@
           "id",
           "name",
           "input"
+        ]
+      },
+      "TraceDetailResponse": {
+        "type": "object",
+        "properties": {
+          "dropped_spans": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field dropped_spans"
+          },
+          "spans": {
+            "type": "array",
+            "description": "Field spans",
+            "items": {
+              "$ref": "#/components/schemas/StoredSpan"
+            }
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "spans"
         ]
       },
       "UpdateClientRequest": {
@@ -15097,69 +16617,14 @@
       "UpdateRequest": {
         "type": "object",
         "properties": {
-          "auth": {
-            "type": "object",
-            "description": "Field auth",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "auth_type": {
-            "type": "string",
-            "description": "Field auth_type"
-          },
-          "bash_allowlist": {
-            "type": "array",
-            "description": "Field bash_allowlist",
-            "items": {
-              "type": "string"
-            }
-          },
-          "chat_id_lock": {
-            "type": "string",
-            "description": "Field chat_id_lock"
-          },
-          "default_agent": {
-            "type": "string",
-            "description": "Field default_agent"
-          },
-          "default_cwd": {
-            "type": "string",
-            "description": "Field default_cwd"
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Field enabled"
-          },
           "name": {
             "type": "string",
             "description": "Field name"
-          },
-          "platform": {
-            "type": "string",
-            "description": "Field platform"
-          },
-          "proxy_url": {
-            "type": "string",
-            "description": "Field proxy_url"
-          },
-          "require_pairing": {
-            "type": "boolean",
-            "description": "Field require_pairing"
-          },
-          "smartguide_model": {
-            "type": "string",
-            "description": "Field smartguide_model"
-          },
-          "smartguide_provider": {
-            "type": "string",
-            "description": "Field smartguide_provider"
-          },
-          "token": {
-            "type": "string",
-            "description": "Field token"
           }
-        }
+        },
+        "required": [
+          "name"
+        ]
       },
       "UpdateRuleRequest": {
         "type": "object",
@@ -15539,6 +17004,12 @@
             "description": "Field provider_uuid",
             "example": "uuid-123"
           },
+          "reasoning_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field reasoning_tokens",
+            "example": 50
+          },
           "request_model": {
             "type": "string",
             "description": "Field request_model",
@@ -15605,6 +17076,7 @@
           "total_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "reasoning_tokens",
           "status",
           "latency_ms",
           "ttft_ms",
@@ -15716,6 +17188,15 @@
           "allowed": {
             "type": "boolean",
             "description": "Field allowed"
+          },
+          "available": {
+            "type": "number",
+            "format": "double",
+            "description": "Field available"
+          },
+          "currency_code": {
+            "type": "string",
+            "description": "Field currency_code"
           },
           "description": {
             "type": "string",
@@ -16726,6 +18207,10 @@
       "description": "Operations related to history"
     },
     {
+      "name": "imagegen",
+      "description": "Operations related to imagegen"
+    },
+    {
       "name": "imbot-admin",
       "description": "Operations related to imbot-admin"
     },
@@ -16770,6 +18255,10 @@
       "description": "Operations related to peer-data"
     },
     {
+      "name": "provider-quota",
+      "description": "Operations related to provider-quota"
+    },
+    {
       "name": "providers",
       "description": "Operations related to providers"
     },
@@ -16790,12 +18279,20 @@
       "description": "Operations related to server"
     },
     {
+      "name": "shortcut",
+      "description": "Operations related to shortcut"
+    },
+    {
       "name": "skills",
       "description": "Operations related to skills"
     },
     {
       "name": "system-logs",
       "description": "Operations related to system-logs"
+    },
+    {
+      "name": "teams",
+      "description": "Operations related to teams"
     },
     {
       "name": "testing",
@@ -16808,6 +18305,10 @@
     {
       "name": "tokens",
       "description": "Operations related to tokens"
+    },
+    {
+      "name": "traces",
+      "description": "Operations related to traces"
     },
     {
       "name": "usage",
