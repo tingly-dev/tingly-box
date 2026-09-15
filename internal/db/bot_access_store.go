@@ -413,6 +413,7 @@ func (s *BotAccessStore) SetDirectChatBlocked(ctx context.Context, botUUID, id s
 	}
 	return nil
 }
+
 // SetDirectChatPermissions writes a set of explicit permission rows for one
 // Direct Chat in a single transaction. Presets use it so a partial network
 // failure can never leave a half-applied permission state (e.g. start=allow

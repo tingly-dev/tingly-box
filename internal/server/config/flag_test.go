@@ -187,3 +187,29 @@ func TestBuiltInRulesSessionAffinity(t *testing.T) {
 		}
 	}
 }
+
+// The web UI's experimental toggles write through SetScenarioFlag, whose
+// switch is a whitelist: a flag missing from it fails with "unknown flag
+// name" and the page shows "Could not enable this feature". Every extension
+// the UI offers must round-trip here.
+func TestExperimentalExtensionFlagsRoundTrip(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	for _, flag := range []string{
+		constant.ExtensionSkillUser, constant.ExtensionSkillIDE, constant.ExtensionGuardrails,
+		constant.ExtensionMCP, constant.ExtensionManagedAgent,
+	} {
+		if cfg.GetScenarioFlag(typ.ScenarioGlobal, flag) {
+			t.Errorf("%s: expected off by default", flag)
+		}
+		if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, flag, true); err != nil {
+			t.Errorf("%s: SetScenarioFlag error: %v", flag, err)
+			continue
+		}
+		if !cfg.GetScenarioFlag(typ.ScenarioGlobal, flag) {
+			t.Errorf("%s: not readable after set", flag)
+		}
+	}
+}

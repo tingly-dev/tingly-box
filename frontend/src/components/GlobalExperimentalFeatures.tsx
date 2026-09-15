@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import type {ExperimentalFeature} from '@/components/ExperimentalFeatureGate';
-import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
+import { Psychology as IconBrain, Shield as IconShield, SettingsApplications, Terminal as IconTerminal } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import {alpha} from '@mui/material/styles';
 import React, {useEffect, useState} from 'react';
@@ -33,6 +33,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
+    const [managedAgentEnabled, setManagedAgentEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const [updatingFeature, setUpdatingFeature] = useState<ExperimentalFeature>();
     const [actionError, setActionError] = useState(false);
@@ -58,6 +59,10 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             // Load MCP flag
             const mcpResult = await api.getScenarioFlag('_global', 'mcp');
             setMCPEnabled(mcpResult?.data?.value || false);
+
+            // Load Managed Agent (Tasks) flag
+            const managedAgentResult = await api.getScenarioFlag('_global', 'managed_agent');
+            setManagedAgentEnabled(managedAgentResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -108,6 +113,11 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const toggleMCP = () => {
         const newValue = !mcpEnabled;
         return finishUpdate('mcp', newValue, () => setMCPEnabled(newValue));
+    };
+
+    const toggleManagedAgent = () => {
+        const newValue = !managedAgentEnabled;
+        return finishUpdate('managed_agent', newValue, () => setManagedAgentEnabled(newValue));
     };
 
     useEffect(() => {
@@ -180,6 +190,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             skill_ide: t('system.experimentalFeatures.skills'),
             guardrails: t('system.experimentalFeatures.guardrails'),
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
+            managed_agent: t('system.experimentalFeatures.managedAgent'),
         }[requestedFeature]
         : undefined;
 
@@ -251,6 +262,25 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
                         {t('system.experimentalFeatures.mcpEnabledInfo')}
+                    </Typography>
+                </Alert>
+            )}
+
+            {/* Managed Agent (Tasks) Section — full edition only: it runs the
+                Claude Code CLI on the host through agentboot. */}
+            {isFullEdition && featureRow(
+                'managed_agent',
+                <IconTerminal sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.managedAgent'),
+                t('system.experimentalFeatures.enableManagedAgent'),
+                managedAgentEnabled,
+                toggleManagedAgent,
+            )}
+
+            {isFullEdition && managedAgentEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        {t('system.experimentalFeatures.managedAgentEnabledInfo')}
                     </Typography>
                 </Alert>
             )}

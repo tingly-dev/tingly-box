@@ -42,6 +42,17 @@ func (s *Server) Start(port int) error {
 		log.Println("Provider quota auto-refresh started")
 	}
 
+	// Managed agent sessions: reconcile what the previous process left
+	// behind. There is nothing on disk to sweep — the agent works in the
+	// user's own folders (.design/managed-agent.md §13).
+	if s.managedAgent != nil {
+		go func() {
+			if err := s.managedAgent.RecoverOnStart(ctx); err != nil {
+				logrus.WithError(err).Warn("managed agent: recovery finished with errors")
+			}
+		}()
+	}
+
 	// Hourly tiny request to each OAuth provider keeps quota windows moving
 	if s.probeE2e != nil {
 		qctx, qcancel := context.WithCancel(context.Background())
@@ -284,6 +295,11 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	// Stop remote control if running
 	s.StopRemoteCoder()
+
+	// Stop managed agent runs so no claude process outlives the server.
+	if s.managedAgent != nil {
+		s.managedAgent.Shutdown(ctx)
+	}
 
 	// Shutdown ImBot settings handler
 	if s.imbotSettingsHandler != nil {

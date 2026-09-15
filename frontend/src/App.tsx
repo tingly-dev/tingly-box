@@ -34,6 +34,9 @@ import { api } from './services/api';
 const HelpPage = lazy(() => import('./pages/HelpPage'));
 const SharingKeysPage = lazy(() => import('./pages/SharingKeysPage.tsx'));
 const VirtualModelsPage = lazy(() => import('./pages/VirtualModelsPage'));
+const TasksPage = lazy(() => import('./pages/tasks/TasksPage'));
+const TaskDetailPage = lazy(() => import('./pages/tasks/TaskDetailPage'));
+const TaskFoldersPage = lazy(() => import('./pages/tasks/FoldersPage'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
 const UseCodexPage = lazy(() => import('./pages/scenario/UseCodexPage'));
@@ -310,6 +313,10 @@ function AppContent() {
                     {/* Back-compat: old /remote-control/* (the pre-split combined pages) → /remote-agent/* */}
                     <Route path="/remote-control" element={<Navigate to="/remote-agent" replace />} />
                     <Route path="/remote-control/*" element={<LegacyBotSectionRedirect />} />
+                    {/* Tasks — managed agent sessions (.design/managed-agent.md). */}
+                    <Route path="/tasks" element={<ExperimentalFeatureGate feature="managed_agent"><TasksPage /></ExperimentalFeatureGate>} />
+                    <Route path="/tasks/folders" element={<ExperimentalFeatureGate feature="managed_agent"><TaskFoldersPage /></ExperimentalFeatureGate>} />
+                    <Route path="/tasks/:sessionId" element={<ExperimentalFeatureGate feature="managed_agent"><TaskDetailPage /></ExperimentalFeatureGate>} />
                     {/* Guardrails */}
                     <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />
                     <Route path="/guardrails/groups" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsGroupsPage /></ExperimentalFeatureGate>} />
