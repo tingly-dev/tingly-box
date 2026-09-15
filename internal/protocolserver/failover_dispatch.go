@@ -62,6 +62,8 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
+	// The 500 below is ours, not the upstream's verdict on the endpoint.
+	MarkAttemptSetupFailed(c)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
 			Message: err.Error(),
@@ -214,6 +216,19 @@ func (g *firstChunkGate) Committed() bool {
 	return g.committed
 }
 
+// BufferedBody exposes the captured (not yet written) body so the
+// orchestrator can read *why* an attempt failed, not just its status.
+// Endpoint learning needs the upstream's message text: the same "wrong
+// endpoint for this model" condition arrives as 401, 500-with-marker, or
+// bare 500 depending on the vendor behind the model. Empty once committed —
+// there is nothing left to inspect and nothing left to retry.
+func (g *firstChunkGate) BufferedBody() []byte {
+	if g.committed {
+		return nil
+	}
+	return g.buf.Bytes()
+}
+
 // CommitFirstChunk is the producer's "first real chunk arrived" signal.
 // It flushes captured headers + status + buffered body to the real
 // writer and switches to pass-through. Idempotent.
@@ -363,8 +378,12 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	attempt dispatchAttempt,
 ) {
 	activeServices := rule.GetActiveServices()
-	if len(activeServices) <= 1 {
+	// Nothing to iterate and nothing to retry: dispatch once, unbuffered.
+	// (An empty service list reaches here from the probe paths that pin a
+	// service by header.)
+	if len(activeServices) == 0 || !DispatchMayRetry(rule, initialProvider, initialModel) {
 		attempt(initialProvider, initialModel)
+		forgetStaleEndpoint(c, initialProvider, initialModel, c.Writer.Status())
 		return
 	}
 
@@ -386,6 +405,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 
 	for i := 0; i < len(activeServices); i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)
+		endpointDecisionFor(c).reset()
 		tried[serviceID] = true
 
 		// Update context before logging/dispatch so request-scoped observability
@@ -426,6 +446,15 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			return
 		}
 		status := gate.Status()
+
+		// Endpoint learning: on a per-model provider, a failure that looks
+		// like "wrong endpoint for this model" earns one retry on the other
+		// endpoint against the same service. It runs before any failure is
+		// charged to the service — the service is not sick, the endpoint
+		// guess was wrong — so it costs neither a failover tier nor a
+		// breaker strike.
+		status = ph.retryOnAlternateEndpoint(c, gate, provider, model, status, i+1, attempt)
+
 		if !isRetryableStatus(status) {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_terminal"
