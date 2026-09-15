@@ -601,8 +601,84 @@ Applied as sequential commits on one branch, each independently green:
    says what it is instead of "common".
 
 Resulting tree: root engine+service, `history/`, `process/`, `protocol/`,
-`claude/` (+`claude/session`, `claude/fixture`). Still open from the §9 plan:
-the optional move of `claude/formatter.go` + `tool_renderer.go` (IM text
-rendering, only consumer is `remoteagent/stream.go`) out of the claude
-adapter — deliberately deferred pending a decision on where rendering should
-live (`remote/control/render` vs a `claude/render` subpackage).
+`claude/` (+`claude/session`, `claude/fixture`).
+
+## 10. IM rendering extraction (2026-08-15)
+
+The §9 open item is resolved: `claude/formatter.go` + `tool_renderer.go`
+moved to `remote/control/render` (package `render`), the only consumer's
+side of the decision — `remoteagent/stream.go` was the sole caller and now
+imports `render.TextFormatter` / `render.NewTextFormatter` instead of
+`claude.TextFormatter`. The `claude` package keeps the message-type
+hierarchy (`Message`, `SystemMessage`, `AssistantMessage`, …) that rendering
+operates on; `render` imports `agentboot/claude` for those types, preserving
+the one-way dependency direction (`agentboot` never imports back into
+`tingly-box`).
+
+Two small surface changes fell out of the move:
+
+- `SystemMessage`'s retry-notice accessors (`retryAttempt`/`retryDelayMS`/
+  `retryReason`) are now exported (`RetryAttempt`/`RetryDelayMS`/
+  `RetryReason`) — the CLI-version-spelling fallback logic they encapsulate
+  belongs with the message model, not duplicated in the rendering package,
+  so the accessors had to become part of `claude`'s public surface rather
+  than being reimplemented across the package boundary.
+- `render`'s own `getStr`/`getInt`/`getBool` map-access helpers are a small,
+  intentional duplication of `claude/utils.go`'s private equivalents rather
+  than newly-exported `claude` API — those helpers are also used by
+  `claude/transport.go` (core engine code), and exporting them purely to
+  serve the rendering package would have widened the module's public
+  surface for no reason beyond convenience.
+
+This is the library-vs-product-presentation boundary the module's
+"internal-first, Claude-honest" positioning (§8) calls for: `agentboot`
+owns the Claude wire protocol and message model, `tingly-box` owns how that
+data is shown to a user (IM formatting is chat-surface specific, not a
+concern of a Claude Code CLI wrapper). Verified: `go build`, `go vet`, and
+`go test` green in both the `agentboot` module and the root module's
+`remote/control/...` tree.
+
+## 11. Public API elevation (2026-08-15)
+
+§8 judged API existence by "used by tingly-box or by tests" — an informal,
+easy-to-drift rule enforced only by whoever remembers to check before adding
+an export. With a second production consumer of the Claude integration now
+on the table (team-wide reuse, not just the remote-control bot), that rule
+needed to become a checkable contract instead of tribal knowledge.
+
+**Tried and reverted: `internal/` for `process`/`protocol`/`history`/
+`claude/session`.** All four had zero consumers outside this module —
+confirmed by grepping every `agentboot` import site in the root `tingly-box`
+module, not assumed. They were moved under `internal/process`,
+`internal/protocol`, `internal/history`, `claude/internal/session` (later
+consolidated to a single `internal/` root: `internal/claude/session`) to
+make the boundary compiler-enforced. On review this didn't clear its own
+bar: the packages have no consumer today, so the move blocked a purely
+hypothetical future violation, not an observed one, at the cost of directory
+nesting on a module that already has no external distribution (it's
+consumed exclusively via `go.work` path replacement, by one repo's worth of
+engineers, under the same `.design/` review discipline as everything else
+here). Reverted back to flat `process/`, `protocol/`, `history/`,
+`claude/session/`. If a real drift shows up in review — someone genuinely
+reaching past `AgentService` into engine internals — reconsider `internal/`
+at that point, backed by an actual instance instead of a hypothetical one.
+
+**Kept: the README `## Public API` section**, listing exactly what
+`tingly-box` imports today: the `AgentService` façade +
+`ExecutionHandle`/`StreamEvent` surface, the Claude message model
+(`MessageEvent.Raw`'s concrete types, accepted as non-neutral per §8),
+Claude production config (`Config`/`PermissionMode`/`ContextKey*`), and the
+`NewAgentWithFactory`/`Driver`/`Transport`/`claude/fixture` test-harness
+seam. This is the reviewable contract, kept by documentation and code review
+rather than the compiler — consistent with how the rest of this repo governs
+itself (`.design/*.md` + review, per `CLAUDE.md`).
+
+Deliberately not done: no semver git tag. `agentboot` is consumed exclusively
+through the repo's `go.work` path replacement, never `go get` at a pinned
+version, so a tag would track nothing a consumer's build actually resolves
+against. If `agentboot` is ever published or consumed via a real module
+version, revisit this.
+
+Verified: `go build`, `go vet`, and `go test` green in both the `agentboot`
+module and the root module (`go build ./...`,
+`go test ./remote/control/...`).
