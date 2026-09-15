@@ -1,6 +1,8 @@
 // Peer — an external tool registered on tingly-box as if tingly-box were an
-// IM platform (.design/peer.md). Mirrors peerapi.PeerView; swap to the
-// generated schema types once the client SDK exposes them.
+// IM platform (.design/peer.md). Mirrors the generated PeerView schema, kept
+// as its own stable type rather than a components['schemas'] alias — same
+// reasoning as types/bot.ts: callers shouldn't churn when the wire schema
+// does. peerApi.ts casts the generated client's result onto this type.
 
 export interface Peer {
     uuid: string;
