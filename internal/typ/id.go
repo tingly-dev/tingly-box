@@ -192,6 +192,53 @@ func GetClientUserAgent(ctx context.Context) string {
 	return ""
 }
 
+// ClaudeCodeClientHints carries the inbound request facts the Claude OAuth
+// chain replays upstream when it re-signs a request as Claude Code. They are
+// request facts, not rule flags (same reasoning as ClientUserAgentKey):
+//
+//   - Betas: the inbound anthropic-beta flags. The chain composes its own
+//     version-correct baseline and only lets an allowlisted subset of these
+//     through (per-turn-control, fast-mode, ...), so a real Claude Code
+//     client keeps the request-scoped flags it negotiated while a foreign
+//     client cannot push an off-profile header shape upstream.
+//   - AgentID / ParentAgentID: the x-claude-code-agent-id and
+//     x-claude-code-parent-agent-id headers a Claude Code subagent sends;
+//     forwarded so subagent traffic keeps its lineage.
+type ClaudeCodeClientHints struct {
+	Betas         []string
+	AgentID       string
+	ParentAgentID string
+}
+
+// IsZero reports whether no hint was captured.
+func (h ClaudeCodeClientHints) IsZero() bool {
+	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == ""
+}
+
+// ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.
+const ClaudeCodeClientHintsKey contextKey = "claude_code_client_hints"
+
+// WithClaudeCodeClientHints attaches the inbound Claude Code hints. A zero
+// value is not attached.
+func WithClaudeCodeClientHints(ctx context.Context, hints ClaudeCodeClientHints) context.Context {
+	if hints.IsZero() {
+		return ctx
+	}
+	return context.WithValue(ctx, ClaudeCodeClientHintsKey, hints)
+}
+
+// GetClaudeCodeClientHints returns the inbound Claude Code hints, or the zero
+// value when none were attached.
+func GetClaudeCodeClientHints(ctx context.Context) ClaudeCodeClientHints {
+	if ctx == nil {
+		return ClaudeCodeClientHints{}
+	}
+	if h, ok := ctx.Value(ClaudeCodeClientHintsKey).(ClaudeCodeClientHints); ok {
+		return h
+	}
+	return ClaudeCodeClientHints{}
+}
+
 // ClaudeOrgIDAuto is the sentinel claude_org_id value that attaches the
 // organization captured at OAuth login
 // (OAuthDetail.ExtraFields["organization_id"]) as anthropic-organization-id.
