@@ -31,6 +31,13 @@ const (
 //     EndpointModeChat                 → Chat
 //     EndpointModeResponses            → Responses
 //     EndpointModeBoth                 → mirror incoming
+//     EndpointModePerModel             → learned, else Chat
+//
+// learned carries what the dispatch loop has observed for this exact
+// provider+model (see endpointMemory); "" means nothing is known. It is
+// consulted only under EndpointModePerModel, where per-model variance is the
+// declared reality — no other mode can produce an extra round-trip, learned or
+// not. Passing it in keeps this function pure: the caller owns the lookup.
 //
 // Rule override is honored unconditionally (per design intent). When an override
 // conflicts with the provider's declared mode, a warning is logged but the override
@@ -46,12 +53,12 @@ const (
 // Anthropic→Chat downgrades. The user accepts this by declaring the mode.
 //
 // Pure function: no Server state, no probe lookups, no I/O.
-func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType) (protocol.APIType, error) {
+func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, learned protocol.APIType) (protocol.APIType, error) {
 	if provider == nil {
 		return "", fmt.Errorf("provider is required for endpoint selection")
 	}
 
-	mode := provider.OpenAIEndpointMode
+	mode := EffectiveEndpointMode(provider)
 
 	// Rule override takes first priority (per design intent from .design/openai-endpoint-routing.md)
 	// Log warning when override conflicts with provider's declared mode
@@ -76,6 +83,17 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 	case ai.EndpointModeBoth:
 		if incoming == IncomingAPIResponses {
 			return protocol.TypeOpenAIResponses, nil
+		}
+		return protocol.TypeOpenAIChat, nil
+	case ai.EndpointModePerModel:
+		// A verified observation beats the guess; with none, guess Chat
+		// rather than mirroring the client. Mirroring would send every
+		// Anthropic-shaped request (which this gateway treats as Responses
+		// incoming) to /responses, and on a relay like OpenCode Zen most
+		// models are Chat-only — the common case would pay a failed
+		// round-trip to learn what the safe default already gets right.
+		if learned != "" {
+			return learned, nil
 		}
 		return protocol.TypeOpenAIChat, nil
 	default: // EndpointModeChat / zero value
