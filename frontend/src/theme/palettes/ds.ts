@@ -1,13 +1,19 @@
 import type { ThemePalette } from '../types';
 
-// DS theme color tokens — deepseek.com's actual brand palette
-// (`--ds-color-brand`/`-light-reverse`/`-deep`/`-medium-reverse` in its shipped
-// CSS), a single blue hue rather than an invented primary+secondary pair — the
-// real site has no purple/secondary accent, so `secondary` below reuses the
-// same hue family instead of making one up.
+// DS theme color tokens — primary is deepseek.com's actual brand blue
+// (`--ds-color-brand`/`-light-reverse`/`-deep` in its shipped CSS). The site
+// itself has no second accent hue (it leans on neutrals instead), but reusing
+// blue everywhere here read as monochrome/flat once applied across a whole
+// admin UI — chart series in particular need to be tellable apart. `secondary`
+// is a teal, analogous to the brand blue (same cool family, so it stays
+// harmonious) but distinct enough to carry contrast on its own.
 export const dsPrimary = '#4D6BFE';
 export const dsPrimaryLight = '#6799FE';
 export const dsPrimaryDark = '#3A65C2';
+
+export const dsSecondary = '#14B8A6';
+export const dsSecondaryLight = '#5EEAD4';
+export const dsSecondaryDark = '#0F9488';
 
 // Matches deepseek.com's actual hero recipe (inspected from its shipped CSS/JS):
 // a near-white page base (`--ds-color-bg-page: #f9f8f8`) with a sky-blue wash
@@ -32,9 +38,9 @@ export const dsPalette: ThemePalette = {
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#73A3D2', // --ds-color-brand-light-reverse
-    light: '#9CC1E7', // same wash tone as the hero background
-    dark: '#4176E6', // --ds-color-brand-medium-reverse
+    main: dsSecondary,
+    light: dsSecondaryLight,
+    dark: dsSecondaryDark,
     contrastText: '#ffffff',
   },
   success: {
@@ -76,7 +82,7 @@ export const dsPalette: ThemePalette = {
   dashboard: {
     token: {
       input: { main: dsPrimary, gradient: 'rgba(77, 107, 254, 0.75)' },
-      output: { main: '#4176E6', gradient: 'rgba(65, 118, 230, 0.75)' },
+      output: { main: dsSecondary, gradient: 'rgba(20, 184, 166, 0.75)' },
       cache: { main: '#94a3b8', gradient: 'rgba(148, 163, 184, 0.65)' },
     },
     chart: {
