@@ -91,6 +91,7 @@ export default {
       "system": "System",
       "sunlit": "Sunlit",
       "claude": "Claude",
+      "ds": "DS",
       "click": "Click",
       "feedback": "Feedback",
       "feedbackTooltip": "Send Feedback (opens GitHub Issues)"

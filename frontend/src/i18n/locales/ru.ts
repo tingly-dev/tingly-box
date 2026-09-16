@@ -91,6 +91,7 @@ export default {
       "system": "Системная",
       "sunlit": "Солнечная",
       "claude": "Claude",
+      "ds": "DS",
       "click": "Нажмите",
       "feedback": "Обратная связь",
       "feedbackTooltip": "Отправить отзыв (откроется GitHub Issues)"

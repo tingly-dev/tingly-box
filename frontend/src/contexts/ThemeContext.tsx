@@ -72,7 +72,7 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
   }, [mode]);
 
   useEffect(() => {
-    document.documentElement.classList.remove('light', 'dark', 'system', 'sunlit', 'claude');
+    document.documentElement.classList.remove('light', 'dark', 'system', 'sunlit', 'claude', 'ds');
     document.documentElement.classList.add(effectiveMode);
     if (mode === 'system') {
       document.documentElement.classList.add('system');
