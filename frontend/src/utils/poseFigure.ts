@@ -1374,22 +1374,14 @@ const projectOnSegment = (point: CanvasPoint, a: CanvasPoint, b: CanvasPoint): {
 export const distanceToSegment = (point: CanvasPoint, a: CanvasPoint, b: CanvasPoint): number =>
     projectOnSegment(point, a, b).distance;
 
+// A tapered capsule on screen: the thing a projected bone is.
+export interface Segment { from: CanvasPoint; to: CanvasPoint; fromRadius: number; toRadius: number }
+
 const insideSegment = (point: CanvasPoint, segment: Segment, tolerance: number): boolean => {
     const { t, distance } = projectOnSegment(point, segment.from, segment.to);
     return distance <= segment.fromRadius + (segment.toRadius - segment.fromRadius) * t + tolerance;
 };
 
-// The point taken back into the ellipse's own frame, where "inside" is the
-// unit circle.
-const insideEllipse = (point: CanvasPoint, ellipse: Ellipse, tolerance: number): boolean => {
-    const cos = Math.cos(-ellipse.angle);
-    const sin = Math.sin(-ellipse.angle);
-    const dx = point.x - ellipse.center.x;
-    const dy = point.y - ellipse.center.y;
-    const x = (dx * cos - dy * sin) / Math.max(ellipse.radiusX + tolerance, 1e-6);
-    const y = (dx * sin + dy * cos) / Math.max(ellipse.radiusY + tolerance, 1e-6);
-    return x * x + y * y <= 1;
-};
 
 // Joints are grabbed where they are drawn — the projected position — and the
 // nearest one to the camera wins a tie, which is the one the pointer is
@@ -1505,21 +1497,35 @@ export const hitTestJoint = (
 };
 
 // True when the point is on the mannequin's silhouette, which is what "grab
-// the body and move it" means. Tested against `figureParts` — the shapes that
-// are actually drawn — rather than against a second table of limb widths: two
-// tables of the same physical fact drift, and then what you can grab stops
-// matching what you can see.
+// the body and move it" means. Tested against the same solids the renderer
+// draws, projected the same way, so what you can grab cannot drift from what
+// you can see. A block is tested as the capsule along its axis at its widest,
+// which errs a hair generous — the right way for a grab to err.
 export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 0): boolean => {
-    const parts = figureParts(figure);
-    // The torso is tested against the outline that is actually drawn, so what
-    // you can grab and what you can see cannot drift apart.
-    if (parts.torso.some((block) => inPolygon(point, block)) || inPolygon(point, parts.head)) return true;
-    if (parts.limbs.some((limb) => limb.outlines.some((outline) => inPolygon(point, outline)))) return true;
-    if (parts.sockets
-        .some((ball) => Math.hypot(point.x - ball.center.x, point.y - ball.center.y) <= ball.radius + tolerance)) {
-        return true;
+    const projection = projectionOf(figure);
+    const at = (p: Vec3) => projectPoint(p, projection);
+    for (const solid of figureSolids(figure)) {
+        if (solid.kind === 'sphere') {
+            const c = at(solid.center);
+            const radius = (solid.scale ? Math.max(solid.scale.x, solid.scale.y) : solid.radius) * c.scale;
+            if (Math.hypot(point.x - c.x, point.y - c.y) <= radius + tolerance) return true;
+            continue;
+        }
+        const [from, to, fromRadius, toRadius] = solid.kind === 'capsule'
+            ? [at(solid.from), at(solid.to), solid.fromRadius, solid.toRadius]
+            : (() => {
+                const top = solid.profile[solid.profile.length - 1][0] * solid.unit;
+                const widest = Math.max(...solid.profile.map(([, w]) => w)) * solid.unit;
+                return [at(solid.base), at(add3(solid.base, mul3(solid.axis, top))), widest, widest] as const;
+            })();
+        const segment: Segment = {
+            from, to,
+            fromRadius: fromRadius * from.scale,
+            toRadius: toRadius * to.scale,
+        };
+        if (insideSegment(point, segment, tolerance)) return true;
     }
-    return insideSegment(point, parts.neck, tolerance);
+    return false;
 };
 
 // Bottom-right of the visual box: the familiar corner grip, so scaling does
@@ -1553,704 +1559,134 @@ export const isTurnHandleHit = (figure: PoseFigure, point: CanvasPoint, radius: 
 // finding it a chore.
 export const TURN_DEGREES_PER_PIXEL = 0.55;
 
-// --- the wooden manikin ------------------------------------------------------
+// --- the manikin -------------------------------------------------------------
 //
-// Everything below is derived from the fifteen joints; there are no extra
-// handles. The shape follows an artist's wooden manikin rather than a flat
-// pictogram: a peg neck under an egg head, a chest and a pelvis as two
-// separate volumes joined at the waist, visible ball joints, and tapered limb
-// segments. That is not decoration — the chest takes its angle from the
-// shoulder line and the pelvis from the hip line, so dragging one shoulder
-// twists the torso and the figure reads as having a front and a back.
+// What the figure is made of, as solids in world space: spheres, tapered
+// capsules and two turned blocks. This list is the *only* description of the
+// body. The renderer (`poseFigure3d`) turns it into meshes, hit testing
+// projects it, and the bounds pad by it — one geometry, never two tables, so
+// what you can grab cannot drift from what you can see.
 //
-// Every shape here is already projected: its position is where it lands on
-// screen, its girth is scaled by how near it is to the camera, and its extent
-// along the body is the *projected* distance, which is what makes a thigh
-// pointing at the viewer come out short and fat instead of long and thin.
+// It used to be drawn by hand in 2D: outlines offset from the bones, depth
+// sorted, shaded with gradients, seamed at the joints. Every one of those was
+// a way of faking a third dimension the data already had, and every "that
+// looks odd" was that fake showing through. A wooden manikin *is* a dozen
+// spheres and cones in real light; drawing it as such is the whole fix.
 
-export interface Ellipse { center: CanvasPoint; radiusX: number; radiusY: number; angle: number }
-export interface Segment { from: CanvasPoint; to: CanvasPoint; fromRadius: number; toRadius: number }
-export interface Ball { center: CanvasPoint; radius: number }
+// Sizes as fractions of the figure's height, so a body keeps its build at any
+// scale. Slim on purpose: a manikin is a light thing, and the first 3D pass
+// was heavy enough in the torso to read as armour.
+export const MANIKIN = {
+    head: { wide: 0.058, long: 0.066, deep: 0.060 },
+    neck: 0.027,
+    upperArm: 0.030, elbow: 0.026, wrist: 0.019,
+    thigh: 0.041, knee: 0.029, calf: 0.033, ankle: 0.022,
+    shoulderBall: 0.027, hipBall: 0.028, waistBall: 0.030,
+    // A hand is a small ball just past the wrist, not a blade: the blade read
+    // as a spike. A foot is a rounded pad pointing the way the body faces.
+    hand: 0.025,
+    foot: { long: 0.062, wide: 0.024 },
+    // Both blocks are turned from a profile — (height along the axis, half
+    // width), as fractions of the figure's height, measured from the block's
+    // base. The chest runs from the waist up to the neck, widest at the
+    // shoulder line and closing just above it: shoulders are the *top* of a
+    // manikin's chest, not a ledge under the neck. The pelvis is a bucket,
+    // widest at the crest and closing onto the hip joints.
+    chest: {
+        base: 0.32, depth: 0.56,
+        profile: [[0, 0], [0.006, 0.040], [0.05, 0.058], [0.10, 0.072], [0.15, 0.084], [0.20, 0.092], [0.225, 0.090], [0.24, 0.066], [0.248, 0]],
+    },
+    pelvis: {
+        base: -0.13, depth: 0.60,
+        profile: [[0, 0], [0.008, 0.046], [0.03, 0.072], [0.06, 0.080], [0.085, 0.076], [0.11, 0.058], [0.13, 0.032], [0.14, 0]],
+    },
+    waist: 0.275,
+} as const;
 
-export interface FigureLimb {
-    key: 'armL' | 'armR' | 'legL' | 'legR';
-    // Closed, projected, and the same arrays the renderer fills and the hit
-    // test runs on — so what you can grab cannot drift from what you can see.
-    // One piece for a limb that reads as one run; two where it folds back on
-    // itself far enough that a single outline would cross itself, which fills
-    // as a fin. An artist splits there too: the forearm is drawn *over* the
-    // upper arm, not merged into it.
-    outlines: CanvasPoint[][];
-    // The bend, as the two points where it crosses the limb plus a control
-    // point bowed toward the far side. A full circle here reads as a dot drawn
-    // on the arm; this reads as two turned pieces meeting. Absent once the
-    // limb is split, where the overlap of the two pieces *is* the joint.
-    seam?: { from: CanvasPoint; to: CanvasPoint; bow: CanvasPoint };
-    depth: number;
-    // Per piece, in the same order as `outlines`.
-    depths: number[];
-}
-
-export type ShapeTone = 'body' | 'joint' | 'head';
-
-// A drawable with the depth it is at, so the renderer can sort. Parts are
-// grouped rather than sorted one by one: a body is a handful of solids that
-// overlap each other, and a chest, its waist ball and its pelvis have a
-// drawing order that comes from anatomy, not from depth.
-// `tint` lightens a shape above its tone without adding a fourth colour to
-// every shade table — used for the one surface that is not a volume, the flat
-// plane of the face. `marking` says the same thing to the renderer: this is a
-// mark *on* a form, not a form, so it gets the seam's hairline rather than the
-// contour every solid part is drawn with. A full contour round the face turns
-// the head into an egg with a ring on it.
-export type FigureShape =
-    | { kind: 'ellipse'; ellipse: Ellipse; tone: ShapeTone; depth: number; tint?: number; marking?: true }
-    | { kind: 'segment'; segment: Segment; tone: ShapeTone; depth: number; tint?: number }
-    | { kind: 'ball'; ball: Ball; tone: ShapeTone; depth: number; tint?: number }
-    | { kind: 'polygon'; points: CanvasPoint[]; tone: ShapeTone; depth: number; tint?: number };
-
-export interface FigureCluster {
-    key: 'torso' | 'head' | 'armL' | 'armR' | 'legL' | 'legR';
-    // Drawn as a hairline after the cluster's body, where it has one.
-    seam?: { from: CanvasPoint; to: CanvasPoint; bow: CanvasPoint };
-    depth: number;
-    // Fixed for the torso, where the order encodes anatomy (hip balls under
-    // the pelvis); by depth inside a limb, where a fold really does put the
-    // forearm in front of the upper arm.
-    order: 'authored' | 'depth';
-    shapes: FigureShape[];
-}
-
-export interface FigureParts {
-    // An ovoid with a jaw, as an outline. An ellipse is an egg, and an egg on
-    // a peg is the single most toy-like thing a mannequin can have on its
-    // shoulders — a head reads as a head because it is wide at the cranium and
-    // narrows to a chin.
-    head: CanvasPoint[];
-    // The flat plane of the face, or null when the figure is looking away.
-    // A wooden manikin has no features, and without this a back view is
-    // pixel-for-pixel a front view — which makes "turn it round" a control
-    // that does nothing a model could ever read.
-    face: Ellipse | null;
-    neck: Segment;
-    // The torso, as one closed outline rather than a ribcage, a waist ball and
-    // a pelvis stacked on a spine. That was the single biggest thing making
-    // Two blocks: the chest down to the waist, and the pelvis bucket, with the
-    // waist ball showing between them — a manikin's torso, and the only way
-    // the waist actually *reads*. An earlier version was three convex blobs,
-    // each shaded on its own, and announced its seams however carefully they
-    // were fitted; the one after it was a single outline, which held together
-    // but could only imply a waist with a line, and a line across a form is a
-    // crease rather than a joint. Each block is a profile rather than an egg,
-    // takes one light across the whole of it, and still twists: the chest's
-    // top edge follows the shoulder line, the pelvis's bottom edge the hips.
-    torso: CanvasPoint[][];
-    // Each limb is one closed outline from the shoulder or hip all the way
-    // into the mitten or the foot, with the bend showing only as a seam drawn
-    // *across* it.
-    //
-    // This replaces a chain of tapered capsules with a ball at every joint,
-    // which was the single thing making the mannequin read as assembled parts.
-    // The ball is not a drawing convention at all — it is how a physical
-    // wooden manikin has to be *manufactured* to rotate, and copying it is why
-    // people say that drawing from one gives you wooden figures. The art-school
-    // construction narrows a limb at its joints instead.
-    limbs: FigureLimb[];
-    // The ball-and-socket joints — two shoulders, two hips — drawn *under*
-    // the torso so each shows only the sliver the limb leaves uncovered. The
-    // hinges are not here: they are a narrowing in the limb's own outline.
-    // Two shoulders, the waist, two hips.
-    sockets: Ball[];
-    // The same shapes again, grouped and carrying their depth: hit testing
-    // wants them by name, the renderer wants them in order. One geometry,
-    // two views of it — never two tables.
-    clusters: FigureCluster[];
-}
+// The canon's unit of measure: crown to chin, as a fraction of the figure's
+// height. Eight of these is the whole body, two of them the shoulders.
+export const HEAD_LENGTH_RATIO = MANIKIN.head.long * 2;
 
 const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => ({
     x: a.x + (b.x - a.x) * t,
     y: a.y + (b.y - a.y) * t,
     z: zOf(a) + (zOf(b) - zOf(a)) * t,
 });
-const mid3 = (a: Vec3, b: Vec3): Vec3 => lerp3(a, b, 0.5);
-const angleOf = (a: CanvasPoint, b: CanvasPoint): number => Math.atan2(b.y - a.y, b.x - a.x);
-const spanOf = (a: CanvasPoint, b: CanvasPoint): number => Math.hypot(b.x - a.x, b.y - a.y);
 
-// Radii as fractions of the figure's height, so proportions survive scaling.
-const R = {
-    headLong: 0.068, headWide: 0.046,
-    // A column, not a peg. The old one was so thin, and the old head so large,
-    // that no neck was visible at all and the skull sat straight on the chest.
-    neck: 0.027,
-    // The width of a limb at each node, from the shoulder or hip down. Two
-    // rules from the art-school construction, both of which the first version
-    // had backwards: an upper arm "stays about the same width from top to
-    // bottom", and a lower leg is "widest at the calf, about two thirds of the
-    // way up" rather than tapering straight from the knee to the ankle. And
-    // limbs **narrow** at a joint rather than bulging — see `limbOutline`.
-    upperArm: 0.031, elbow: 0.028, wrist: 0.019,
-    thigh: 0.043, knee: 0.030, calf: 0.034, ankle: 0.023,
-    // The two ball-and-socket joints a wooden manikin really does show as
-    // balls. The hinges — elbow, knee, wrist, ankle — do not: look at a
-    // manikin and the upper arm *narrows* into the elbow pin.
-    hipBall: 0.031, shoulderBall: 0.030,
-    // The waist ball, which on a manikin is the joint you see *through the
-    // gap* between the chest block and the pelvis block.
-    waistBall: 0.040,
-    // Longer and narrower than they were: a mitten only a little wider than
-    // the wrist reads as a hand, while one much wider reads as an oven glove.
-    handLong: 0.052, handWide: 0.021,
-    footLong: 0.058, footWide: 0.019,
-    // A body is not a cut-out: seen from the side the chest and pelvis are as
-    // deep as they are wide, so their on-screen width can never fall below
-    // this however far the shoulders foreshorten.
-    chestDepth: 0.058, pelvisDepth: 0.044,
-} as const;
+export type Solid =
+    | { kind: 'sphere'; center: Vec3; radius: number; scale?: Vec3; axis?: Vec3 }
+    | { kind: 'capsule'; from: Vec3; to: Vec3; fromRadius: number; toRadius: number }
+    | { kind: 'block'; base: Vec3; axis: Vec3; profile: readonly (readonly [number, number])[]; unit: number; depth: number };
 
-// The canon's unit of measure: crown to chin, as a fraction of the figure's
-// height. Eight of these is the whole body, two of them the shoulders. Exported
-// because it is the ruler the proportions are checked against, and a ruler kept
-// privately is a ruler that drifts.
-export const HEAD_LENGTH_RATIO = R.headLong * 2;
+// Radii are in world pixels here; the renderer and the hit test both scale
+// them by perspective the same way they scale positions.
+export const figureSolids = (figure: PoseFigure): Solid[] => {
+    const J = figure.joints;
+    const u = figureUnit(figure);
+    const M = MANIKIN;
+    const out: Solid[] = [];
+    const sphere = (center: Vec3, radius: number, scale?: Vec3, axis?: Vec3) => out.push({ kind: 'sphere', center, radius: radius * u, scale, axis });
+    const capsule = (from: Vec3, to: Vec3, fromRadius: number, toRadius: number) => out.push({
+        kind: 'capsule', from, to, fromRadius: fromRadius * u, toRadius: toRadius * u,
+    });
+    const spine = norm3(sub3(J.neck, J.hip));
 
-// A closed outline through the given points, smoothed. Catmull-Rom rather
-// than straight edges because a torso has no corners, and sampled to a
-// polygon rather than left as curves because the same array then serves both
-// the fill and the hit test — one geometry, never two tables.
-const SMOOTH_STEPS = 6;
+    out.push({ kind: 'block', base: lerp3(J.hip, J.neck, M.chest.base), axis: spine, profile: M.chest.profile, unit: u, depth: M.chest.depth });
+    sphere(lerp3(J.hip, J.neck, M.waist), M.waistBall);
+    out.push({ kind: 'block', base: lerp3(J.hip, J.neck, M.pelvis.base), axis: spine, profile: M.pelvis.profile, unit: u, depth: M.pelvis.depth });
 
-const smoothLoop = (points: readonly CanvasPoint[]): CanvasPoint[] => {
-    const count = points.length;
-    if (count < 3) return [...points];
-    const out: CanvasPoint[] = [];
-    for (let i = 0; i < count; i += 1) {
-        const p0 = points[(i - 1 + count) % count];
-        const p1 = points[i];
-        const p2 = points[(i + 1) % count];
-        const p3 = points[(i + 2) % count];
-        for (let step = 0; step < SMOOTH_STEPS; step += 1) {
-            const t = step / SMOOTH_STEPS;
-            const t2 = t * t;
-            const t3 = t2 * t;
-            out.push({
-                x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t
-                    + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
-                    + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-                y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t
-                    + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
-                    + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-            });
-        }
+    capsule(J.neck, J.head, M.neck, M.neck);
+    sphere(J.head, 1, { x: M.head.wide * u, y: M.head.long * u, z: M.head.deep * u }, norm3(sub3(J.head, J.neck)));
+
+    for (const key of ['shoulderL', 'shoulderR'] as const) sphere(J[key], M.shoulderBall);
+    for (const key of ['hipL', 'hipR'] as const) sphere(J[key], M.hipBall);
+
+    const forward = bodyForwardOf(J);
+    for (const side of ['L', 'R'] as const) {
+        const shoulder = J[`shoulder${side}`], elbow = J[`elbow${side}`], wrist = J[`wrist${side}`];
+        capsule(shoulder, elbow, M.upperArm, M.elbow);
+        sphere(elbow, M.elbow);
+        capsule(elbow, wrist, M.elbow, M.wrist);
+        sphere(wrist, M.wrist);
+        const reach = norm3(sub3(wrist, elbow));
+        sphere(add3(wrist, mul3(reach, M.hand * u * 0.9)), M.hand);
+
+        const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
+        capsule(hip, knee, M.thigh, M.knee);
+        sphere(knee, M.knee);
+        const calf = lerp3(knee, ankle, 0.33);
+        capsule(knee, calf, M.knee, M.calf);
+        capsule(calf, ankle, M.calf, M.ankle);
+        sphere(ankle, M.ankle);
+        // The foot points the way the body faces, squared to the shin, and
+        // sits a little below the ankle.
+        const shin = norm3(sub3(ankle, knee));
+        const toe = squareTo(forward, shin);
+        const foot = add3(add3(ankle, mul3(toe, M.foot.long * u * 0.42)), mul3(shin, M.ankle * u * 0.9));
+        sphere(foot, 1, { x: M.foot.wide * u, y: M.foot.long * u * 0.5, z: M.foot.wide * u * 0.75 }, toe);
     }
     return out;
 };
 
-// The torso's profile, as fractions down the neck→hip axis and fractions of
-// the half-width at that height. Read it as a body seen from the front: the
-// trapezius tucking under the neck, the deltoid, the ribcage narrowing, the
-// waist, the hip, the seat. The numbers are the shape of the mannequin, and
-// they are the difference between a person and three stacked eggs.
-// Crown to chin, as fractions of the head's length and of its half-width.
-const HEAD_PROFILE: readonly (readonly [number, number])[] = [
-    [0.00, 0.18],
-    [0.10, 0.68],
-    [0.28, 1.00],   // the cranium, the widest part
-    [0.54, 0.96],
-    [0.76, 0.72],   // the cheek
-    [0.92, 0.40],   // the jaw
-    [1.00, 0.15],   // the chin
-];
-
-// The torso is two blocks, not one form: a chest that carries the ribcage down
-// to the waist, and a pelvis bucket under it, with the waist ball showing in
-// the gap. That is what a manikin is, and it is what makes the waist *read* —
-// one continuous outline can only imply it with a line, and a line across a
-// form is a crease, not a joint.
-//
-// Both tables are fractions down the neck→hip axis, and fractions of that
-// block's half-width at that height.
-const CHEST_PROFILE: readonly (readonly [number, number])[] = [
-    [-0.06, 0.50],              // behind the neck, so there is no notch there
-    [0.02, 0.86],               // the slope of the trapezius
-    [0.10, 1.00],               // the top corner, level with the shoulder joint
-    [0.30, 0.94],
-    [0.48, 0.78],               // the ribcage drawing in
-    [0.62, 0.56],               // the waist — where the block stops
-];
-
-const PELVIS_PROFILE: readonly (readonly [number, number])[] = [
-    [0.76, 0.58],               // the top of the bucket, narrow
-    [0.90, 1.00],               // the iliac crest — the widest the pelvis gets
-    [1.00, 0.94],
-    // The pelvis *narrows onto* the hip joints (t≈1.06) and stops. Carrying it
-    // wider and lower than the joints was the "skirt": the legs then left
-    // through a slot in the middle of it instead of pivoting on its bottom
-    // corners, which is what a manikin actually does.
-    [1.05, 0.74],
-    [1.09, 0.34],
-];
-
-// Where the waist ball sits on that axis — in the gap, bridging both blocks.
-const WAIST_T = 0.69;
-
-// One limb, as a closed outline through its nodes. Each side is offset by the
-// node's radius along the bisector, and both ends are capped with a half
-// circle — the torso's idea, applied to an arm.
-interface LimbNode { point: CanvasPoint; radius: number }
-
-const CAP_STEPS = 9;
-
-// Seen end-on — a shin under a cross-legged figure viewed from above — a
-// segment projects to almost nothing. Its direction is then noise, and
-// offsetting along it throws the two rails across each other as a fin. So
-// fold any node that lands on top of its predecessor into it, keeping the
-// wider radius: a limb pointing at the camera is a disc, which is what it
-// looks like.
-const foldDegenerate = (nodes: readonly LimbNode[]): LimbNode[] => {
-    const kept: LimbNode[] = [];
-    for (const node of nodes) {
-        const last = kept[kept.length - 1];
-        if (last && Math.hypot(node.point.x - last.point.x, node.point.y - last.point.y)
-            < Math.max(last.radius, node.radius) * 0.35) {
-            kept[kept.length - 1] = {
-                point: node.point,
-                radius: Math.max(last.radius, node.radius),
-            };
-            continue;
-        }
-        kept.push(node);
-    }
-    return kept;
-};
-
-const limbOutline = (input: readonly LimbNode[]): {
-    outline: CanvasPoint[];
-    right: CanvasPoint[];
-    left: CanvasPoint[];
-} => {
-    const nodes = foldDegenerate(input);
-    if (nodes.length < 2) {
-        // A limb aimed straight at the camera. One circle, no rails.
-        const only = nodes[0] ?? input[0];
-        const ring: CanvasPoint[] = [];
-        for (let step = 0; step < CAP_STEPS * 2; step += 1) {
-            const angle = (step / (CAP_STEPS * 2)) * Math.PI * 2;
-            ring.push({
-                x: only.point.x + Math.cos(angle) * only.radius,
-                y: only.point.y + Math.sin(angle) * only.radius,
-            });
-        }
-        return { outline: ring, right: [only.point], left: [only.point] };
-    }
-    const normals: CanvasPoint[] = [];
-    for (let i = 0; i < nodes.length - 1; i += 1) {
-        const dx = nodes[i + 1].point.x - nodes[i].point.x;
-        const dy = nodes[i + 1].point.y - nodes[i].point.y;
-        const length = Math.hypot(dx, dy) || 1;
-        normals.push({ x: -dy / length, y: dx / length });
-    }
-    const sideways: CanvasPoint[] = nodes.map((_, i) => {
-        if (i === 0) return normals[0];
-        if (i === nodes.length - 1) return normals[normals.length - 1];
-        const a = normals[i - 1];
-        const b = normals[i];
-        let x = a.x + b.x;
-        let y = a.y + b.y;
-        const length = Math.hypot(x, y);
-        if (length < 1e-6) return b;
-        x /= length;
-        y /= length;
-        // Mitred, with a limit — an arm folded right back would otherwise
-        // throw a spike out of the inside of the elbow.
-        const cos = Math.max(0.45, x * b.x + y * b.y);
-        return { x: x / cos, y: y / cos };
-    });
-    const right = nodes.map((node, i) => ({
-        x: node.point.x + sideways[i].x * node.radius,
-        y: node.point.y + sideways[i].y * node.radius,
-    }));
-    const left = nodes.map((node, i) => ({
-        x: node.point.x - sideways[i].x * node.radius,
-        y: node.point.y - sideways[i].y * node.radius,
-    }));
-    const cap = (node: LimbNode, from: CanvasPoint): CanvasPoint[] => {
-        const start = Math.atan2(from.y - node.point.y, from.x - node.point.x);
-        const arc: CanvasPoint[] = [];
-        for (let step = 1; step < CAP_STEPS; step += 1) {
-            const angle = start - Math.PI * (step / CAP_STEPS);
-            arc.push({
-                x: node.point.x + Math.cos(angle) * node.radius,
-                y: node.point.y + Math.sin(angle) * node.radius,
-            });
-        }
-        return arc;
-    };
-    const last = nodes.length - 1;
-    return {
-        outline: [
-            ...right,
-            ...cap(nodes[last], right[last]),
-            ...[...left].reverse(),
-            ...[...cap(nodes[0], left[0])].reverse(),
-        ],
-        right,
-        left,
-    };
-};
-
-// How far a limb may turn on screen before one outline stops working. Straight
-// is 1 and doubled right back is -1; this sits at about 110 degrees off
-// straight, past which the two rails cross and the fill grows a fin.
-const FOLD_LIMIT = -0.35;
-
-const foldIndex = (nodes: readonly LimbNode[]): number => {
-    for (let i = 1; i < nodes.length - 1; i += 1) {
-        const inX = nodes[i].point.x - nodes[i - 1].point.x;
-        const inY = nodes[i].point.y - nodes[i - 1].point.y;
-        const outX = nodes[i + 1].point.x - nodes[i].point.x;
-        const outY = nodes[i + 1].point.y - nodes[i].point.y;
-        const lengths = Math.hypot(inX, inY) * Math.hypot(outX, outY);
-        if (lengths < 1e-6) continue;
-        if ((inX * outX + inY * outY) / lengths < FOLD_LIMIT) return i;
-    }
-    return -1;
-};
-
-// Which rail point stands for a given joint. Folding degenerate nodes away can
-// shorten the rails, so the index is looked up rather than assumed.
-const nearestRail = (rail: readonly CanvasPoint[], point: CanvasPoint): number => {
-    let best = 0;
-    let bestGap = Infinity;
-    for (let i = 0; i < rail.length; i += 1) {
-        const gap = Math.hypot(rail[i].x - point.x, rail[i].y - point.y);
-        if (gap < bestGap) {
-            bestGap = gap;
-            best = i;
-        }
-    }
-    return best;
-};
-
-export const inPolygon = (point: CanvasPoint, polygon: readonly CanvasPoint[]): boolean => {
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-        const a = polygon[i];
-        const b = polygon[j];
-        if ((a.y > point.y) !== (b.y > point.y)
-            && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) {
-            inside = !inside;
-        }
-    }
-    return inside;
-};
-
-export const figureParts = (figure: PoseFigure): FigureParts => {
-    const joints = figure.joints;
-    const projection = projectionOf(figure);
-    const at = projectFigure(figure);
-    const unit = figureUnit(figure);
-    // Girth scales with nearness; length is whatever the projection says.
-    const u = (ratio: number, scale: number) => unit * ratio * scale;
-    const place = (point: Vec3) => projectPoint(point, projection);
-
-    const hipMid = place(mid3(joints.hipL, joints.hipR));
-
-    const forward = bodyForwardOf(joints);
-
-    // Where each limb's outline changes width. The bend node is deliberately
-    // the *narrowest* point between the two segments: a limb narrows at a
-    // joint. The calf node exists because a lower leg is widest two thirds of
-    // the way up, not at the knee.
-    const limbSpec = [
-        ['armL', 'shoulderL', 'elbowL', 'wristL'],
-        ['armR', 'shoulderR', 'elbowR', 'wristR'],
-        ['legL', 'hipL', 'kneeL', 'ankleL'],
-        ['legR', 'hipR', 'kneeR', 'ankleR'],
-    ] as const;
-
-    const limbs: FigureLimb[] = limbSpec.map(([key, root, bend, tip]) => {
-        const leg = key.startsWith('leg');
-        const scale = (joint: JointKey) => at[joint].scale;
-        // The root node is pulled a little way down the limb so its cap tucks
-        // under the torso instead of standing proud of the shoulder line as a
-        // bump — the arm is its own cluster, so its outline would otherwise
-        // draw a dome on top of the deltoid.
-        const rootRadius = u(leg ? R.thigh : R.upperArm, scale(root));
-        const inward = norm3(sub3(joints[bend], joints[root]));
-        // An arm hangs off the *outer face* of its ball, not out of the joint's
-        // centre: on a manikin the ball stands proud of the chest and the upper
-        // arm rests against its outside. Started at the centre instead, half
-        // the arm is sunk into the chest block and the shoulder reads as one
-        // lump. Legs need none of this — a thigh really does come out from
-        // under the pelvis.
-        const outward = leg ? ORIGIN : mul3(
-            norm3(sub3(joints[root], joints.neck)),
-            unit * R.shoulderBall * 0.75,
-        );
-        const rootPoint = add3(add3(joints[root], outward), mul3(inward, rootRadius * (leg ? 0.25 : 0.18)));
-        const nodes: LimbNode[] = [
-            { point: place(rootPoint), radius: rootRadius },
-            { point: at[bend], radius: u(leg ? R.knee : R.elbow, scale(bend)) },
-        ];
-        if (leg) {
-            const calf = place(lerp3(joints[bend], joints[tip], 0.33));
-            nodes.push({ point: calf, radius: u(R.calf, calf.scale) });
-        }
-        nodes.push({ point: at[tip], radius: u(leg ? R.ankle : R.wrist, scale(tip)) });
-
-        // The hand and the foot are the end of the limb, not a lozenge stuck
-        // on it: a mitten that swells past the wrist, a block that points the
-        // way the body faces.
-        const long = leg ? R.footLong : R.handLong;
-        const wide = leg ? R.footWide : R.handWide;
-        const direction = leg
-            ? squareTo(forward, norm3(sub3(joints[tip], joints[bend])))
-            : norm3(sub3(joints[tip], joints[bend]));
-        const mid = place(add3(joints[tip], mul3(direction, unit * long * 0.45)));
-        const far = place(add3(joints[tip], mul3(direction, unit * long * 0.95)));
-        nodes.push({ point: mid, radius: u(wide, mid.scale) });
-        nodes.push({ point: far, radius: u(wide, far.scale) * 0.82 });
-
-        // Where does the chain double back on itself? Not at the joint's real
-        // angle — a knee bent flat to the floor still reads as one run when
-        // seen from the front — but at its angle *on screen*, which is what
-        // the outline is built in.
-        const fold = foldIndex(nodes);
-        const depth = (at[root].depth + at[bend].depth + at[tip].depth) / 3;
-        if (fold >= 0) {
-            const near = limbOutline(nodes.slice(0, fold + 1));
-            const far = limbOutline(nodes.slice(fold));
-            return {
-                key,
-                outlines: [smoothLoop(near.outline), smoothLoop(far.outline)],
-                depths: [
-                    (at[root].depth + at[bend].depth) / 2,
-                    (at[bend].depth + at[tip].depth) / 2,
-                ],
-                depth,
-            };
-        }
-        const built = limbOutline(nodes);
-        const bendRail = nearestRail(built.right, at[bend]);
-        const after = nodes[Math.min(bendRail + 1, nodes.length - 1)].point;
-        const bow = {
-            x: at[bend].x + (after.x - at[bend].x) * 0.24,
-            y: at[bend].y + (after.y - at[bend].y) * 0.24,
-        };
-        return {
-            key,
-            outlines: [smoothLoop(built.outline)],
-            depths: [depth],
-            seam: { from: built.right[bendRail], to: built.left[bendRail], bow },
-            depth,
-        };
-    });
-
-    // The torso, as one outline. No spine segment underneath any more: the
-    // outline itself spans neck to hip, so the figure cannot come apart
-    // The facial plane sits on the front of the skull and is simply absent
-    // once it has turned away. It is lighter rather than darker: the light is
-    // in front, so the flat of the face is the part of the head that catches
-    // it — and a dark patch on a head reads as a mask.
-    const facing = norm3(sub3(joints.face, joints.head));
-    const facingCamera = zOf(facing);
-    const face: Ellipse | null = facingCamera > 0.06 ? (() => {
-        const center = place(add3(joints.head, mul3(facing, unit * R.headWide * 0.42)));
-        return {
-            center,
-            radiusX: u(R.headWide, center.scale) * 0.66 * facingCamera,
-            radiusY: u(R.headLong, center.scale) * 0.62,
-            angle: angleOf(at.neck, at.head) - Math.PI / 2,
-        };
-    })() : null;
-
-    // however hard a shoulder is dragged, and there is nothing to show through.
-    const { blocks: torso, waist: waistCentre } = (() => {
-        const axis = { x: hipMid.x - at.neck.x, y: hipMid.y - at.neck.y };
-        const axisLength = Math.hypot(axis.x, axis.y) || 1;
-        const spineAt = (t: number): CanvasPoint => (
-            { x: at.neck.x + axis.x * t, y: at.neck.y + axis.y * t }
-        );
-        // A block's half-width is measured *per side, toward the real joint*,
-        // not as one span mirrored about the spine. Under perspective a turned
-        // body's two shoulders are not equidistant from its spine, and mirroring
-        // one number leaves the far ball floating off the edge as a loose disc.
-        // Floored on the body's own depth, so a torso seen edge-on narrows to
-        // its own thickness and no further — a person is not a cut-out.
-        const toward = (joint: CanvasPoint, anchor: number, reach: number, floor: number, sign: number): CanvasPoint => {
-            const spine = spineAt(anchor);
-            const dx = (joint.x - spine.x) * reach;
-            const dy = (joint.y - spine.y) * reach;
-            if (Math.hypot(dx, dy) >= floor) return { x: dx, y: dy };
-            return { x: (-axis.y / axisLength) * floor * sign, y: (axis.x / axisLength) * floor * sign };
-        };
-        // The block stops short of the joint so the ball stands proud at the
-        // corner and the limb *rests on the edge* instead of sinking in. The
-        // shoulders you see are the chest plus its two balls, not the chest.
-        const CHEST_REACH = 0.92;
-        const PELVIS_REACH = 1.28;
-        const chestFloor = u(R.chestDepth, at.neck.scale) * 1.15;
-        const pelvisFloor = u(R.pelvisDepth, hipMid.scale);
-        const block = (
-            profile: readonly (readonly [number, number])[],
-            right: CanvasPoint,
-            left: CanvasPoint,
-        ) => {
-            const near: CanvasPoint[] = [];
-            const far: CanvasPoint[] = [];
-            for (const [t, scale] of profile) {
-                const spine = spineAt(t);
-                near.push({ x: spine.x + right.x * scale, y: spine.y + right.y * scale });
-                far.push({ x: spine.x + left.x * scale, y: spine.y + left.y * scale });
-            }
-            return smoothLoop([...near, ...far.reverse()]);
-        };
-        const chest = block(
-            CHEST_PROFILE,
-            toward(at.shoulderR, CHEST_PROFILE[2][0], CHEST_REACH, chestFloor, 1),
-            toward(at.shoulderL, CHEST_PROFILE[2][0], CHEST_REACH, chestFloor, -1),
-        );
-        const pelvisAnchor = PELVIS_PROFILE[3][0];
-        const pelvis = block(
-            PELVIS_PROFILE,
-            toward(at.hipR, pelvisAnchor, PELVIS_REACH, pelvisFloor, 1),
-            toward(at.hipL, pelvisAnchor, PELVIS_REACH, pelvisFloor, -1),
-        );
-        return {
-            blocks: [chest, pelvis],
-            waist: place(lerp3(joints.neck, joints.hip, WAIST_T)),
-        };
-    })();
-
-    const head: CanvasPoint[] = (() => {
-        const scale = at.head.scale;
-        const long = u(R.headLong, scale);
-        const wide = u(R.headWide, scale);
-        // Down the head's own axis, crown first. The width is constant about
-        // that axis rather than following the face: a skull is about as deep
-        // as it is broad, so turning it should not narrow it — the facial
-        // plane is what says which way it looks.
-        let ax = at.head.x - at.neck.x;
-        let ay = at.head.y - at.neck.y;
-        const length = Math.hypot(ax, ay);
-        if (length < 1e-6) { ax = 0; ay = -1; } else { ax /= length; ay /= length; }
-        const crown = { x: at.head.x + ax * long * 0.72, y: at.head.y + ay * long * 0.72 };
-        const drop = long * 1.86;
-        const right: CanvasPoint[] = [];
-        const left: CanvasPoint[] = [];
-        for (const [t, halfScale] of HEAD_PROFILE) {
-            const spine = { x: crown.x - ax * drop * t, y: crown.y - ay * drop * t };
-            const half = wide * halfScale;
-            right.push({ x: spine.x - ay * half, y: spine.y + ax * half });
-            left.push({ x: spine.x + ay * half, y: spine.y - ax * half });
-        }
-        return smoothLoop([...right, ...left.reverse()]);
-    })();
-    const neck: Segment = {
-        from: at.neck,
-        to: at.head,
-        fromRadius: u(R.neck, at.neck.scale),
-        toRadius: u(R.neck, at.head.scale),
-    };
-    // Drawn *under* the torso, always: a ball on top of the block reads as a
-    // buttock or a pauldron, while one behind it shows only where the limb
-    // comes out, which is what the wooden joint actually looks like.
-    const sockets: Ball[] = [
-        { center: at.shoulderL, radius: u(R.shoulderBall, at.shoulderL.scale) },
-        { center: at.shoulderR, radius: u(R.shoulderBall, at.shoulderR.scale) },
-        { center: waistCentre, radius: u(R.waistBall, waistCentre.scale) },
-        { center: at.hipL, radius: u(R.hipBall, at.hipL.scale) },
-        { center: at.hipR, radius: u(R.hipBall, at.hipR.scale) },
-    ];
-
-    const mean = (...depths: number[]) => depths.reduce((sum, d) => sum + d, 0) / depths.length;
-
-    const clusters: FigureCluster[] = [
-        {
-            key: 'torso',
-            order: 'authored',
-            depth: mean(at.neck.depth, hipMid.depth),
-            // Authored, not depth-sorted: every ball belongs *under* its
-            // block whatever the depths say, or a shoulder ball lands on top
-            // of the chest as a dark disc. Only the two blocks are sorted
-            // against each other, which is what a bend forward or back needs.
-            shapes: [
-                { kind: 'ball', ball: sockets[0], tone: 'joint', depth: at.shoulderL.depth },
-                { kind: 'ball', ball: sockets[1], tone: 'joint', depth: at.shoulderR.depth },
-                { kind: 'ball', ball: sockets[2], tone: 'joint', depth: waistCentre.depth },
-                { kind: 'ball', ball: sockets[3], tone: 'joint', depth: at.hipL.depth },
-                { kind: 'ball', ball: sockets[4], tone: 'joint', depth: at.hipR.depth },
-                ...([
-                    { kind: 'polygon' as const, points: torso[0], tone: 'body' as const, depth: mean(at.neck.depth, waistCentre.depth) },
-                    { kind: 'polygon' as const, points: torso[1], tone: 'body' as const, depth: mean(waistCentre.depth, hipMid.depth) },
-                ].sort((a, b) => a.depth - b.depth)),
-            ],
-        },
-        {
-            key: 'head',
-            order: 'authored',
-            depth: at.head.depth,
-            shapes: [
-                { kind: 'segment', segment: neck, tone: 'body', depth: mean(at.neck.depth, at.head.depth) },
-                { kind: 'polygon', points: head, tone: 'head', depth: at.head.depth },
-                ...(face ? [{ kind: 'ellipse' as const, ellipse: face, tone: 'head' as const, tint: 0.34, marking: true as const, depth: at.head.depth }] : []),
-            ],
-        },
-        ...limbs.map((limb): FigureCluster => ({
-            key: limb.key,
-            // A split limb's two pieces overlap, so which one is in front is a
-            // question about depth — the whole reason the split is allowed to
-            // look like an overlap rather than a merge.
-            order: limb.outlines.length > 1 ? 'depth' : 'authored',
-            depth: limb.depth,
-            seam: limb.seam,
-            shapes: limb.outlines.map((points, i): FigureShape => ({
-                kind: 'polygon', points, tone: 'body', depth: limb.depths[i],
-            })),
-        })),
-    ];
-
-    return { head, face, neck, torso, limbs, sockets, clusters };
-};
-
 // --- drawing -----------------------------------------------------------------
 //
-// Three tones per figure, no wood: the body, the joint balls a step darker so
-// the articulation reads, and the head a step lighter so it does not merge into
-// the chest. Neutral grey — the manikin's structure is the message, and a wood
-// colour only invites the model to paint a wooden doll.
+// Colour lives here; the drawing itself lives in `poseFigure3d`, which needs
+// three.js and is kept out of this module so the geometry stays cheap to test.
 //
-// The three shades exist for crowds: two figures in one grey merge into a
-// single blob where they overlap, and the model then has no way to tell how
-// many people are in the frame. Lightness only, so they still read as the same
-// material, and the selected figure keeps its own cool tint on top of this.
-// `rim` is a hairline round the silhouette. Without it a figure dissolves
-// into white paper at its edges and two overlapping figures merge into one
-// shape; with it each body reads as a separate solid object.
-export interface FigureTone {
-    body: string; joint: string; head: string;
-    // The contour. Every part is drawn with one, and it — not the shading —
-    // is what carries the form: an illustration of a manikin reads by its
-    // line, and at thumbnail size a gradient is just grey.
-    line: string;
-    // The seam across a bend, drawn lighter than the contour so a plane change
-    // never competes with a silhouette.
-    rim: string;
-}
+// Neutral grey, no wood: the manikin's structure is the message, and a wood
+// colour only invites the model to paint a wooden doll. Three lightnesses
+// exist for crowds — two figures in one grey merge into a single blob where
+// they overlap, and the model then cannot tell how many people are in the
+// frame — and the selected figure wears its own cool tint on top.
+export interface FigureTone { body: string }
 
-// The joint tone is only a hair darker than the body. It used to be a full
-// step, which turned every elbow, knee and ankle into a dark disc stuck on the
-// limb — on a real manikin the joint is the same wood, and you see it because
-// of its edge, not its colour.
 const FIGURE_SHADES: readonly FigureTone[] = [
-    { body: '#b9bdc2', joint: '#aeb2b7', head: '#c2c6cb', line: '#5b6066', rim: '#8b9096' },
-    { body: '#9aa0a7', joint: '#90969d', head: '#a3a9b0', line: '#474c52', rim: '#70767d' },
-    { body: '#ced3d8', joint: '#c3c8cd', head: '#d6dbe0', line: '#6e747a', rim: '#9ba0a6' },
+    { body: '#c3c7cc' },
+    { body: '#a4aab1' },
+    { body: '#d8dce1' },
 ];
 
-const SELECTED_TONE: FigureTone = {
-    body: '#aab3c4', joint: '#a0a9bb', head: '#b3bbcb', line: '#4e5568', rim: '#7b8598',
-};
+const SELECTED_TONE: FigureTone = { body: '#b3bccf' };
 
 // Which tone the next figure should wear. Least-used rather than "one past
 // the count": after a delete, counting the list hands out a shade another
@@ -2263,280 +1699,12 @@ export const leastUsedShade = (figures: readonly PoseFigure[]): number => {
     return counts.indexOf(Math.min(...counts));
 };
 
-const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
+export const toneFor = (figure: PoseFigure, selected = false): FigureTone => (selected
     ? SELECTED_TONE
     : FIGURE_SHADES[(figure.shade ?? 0) % FIGURE_SHADES.length]);
+
 const HANDLE_FILL = '#2563eb';
 const HANDLE_STROKE = '#ffffff';
-
-// One fixed light, up and to the left and in front of the figure — the studio
-// default, and the one every artist's reference photo already uses. The first
-// version deliberately had none: flat colour, structure only. That was right
-// for a flat figure, where a gradient could only have been decoration. It is
-// wrong for this one. On a body that has depth, the shading *is* structure:
-// which way a volume turns is exactly what the light says and what the
-// silhouette cannot.
-const LIGHT = { x: -0.42, y: -0.72, z: 0.55 };
-const LIGHT_SCREEN = (() => {
-    const length = Math.hypot(LIGHT.x, LIGHT.y);
-    return { x: LIGHT.x / length, y: LIGHT.y / length };
-})();
-const SHADOW_TINT = '#4d535b';
-const HIGHLIGHT_TINT = '#ffffff';
-
-// Accepts both spellings this module produces: the authored `#rrggbb` tones
-// and the `rgb()` a previous mix returned, so shading steps can be composed.
-const parseColor = (color: string): readonly [number, number, number] => {
-    if (color.startsWith('#')) {
-        return [
-            parseInt(color.slice(1, 3), 16),
-            parseInt(color.slice(3, 5), 16),
-            parseInt(color.slice(5, 7), 16),
-        ];
-    }
-    const parts = color.replace(/[^0-9.,-]/g, '').split(',');
-    return [Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0];
-};
-
-const mixColor = (from: string, to: string, amount: number): string => {
-    const a = parseColor(from);
-    const b = parseColor(to);
-    const t = Math.max(0, Math.min(1, amount));
-    const channel = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
-    return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
-};
-
-// Aerial perspective, in miniature: the far side of a body goes a touch
-// darker, the near side a touch lighter. Small enough that nobody reads it as
-// a colour, big enough that two crossed limbs are never ambiguous.
-const DEPTH_TINT = 0.11;
-
-const shadeOfShape = (base: string, depth: number, unit: number): string => {
-    const t = Math.max(-1, Math.min(1, depth / Math.max(unit * 0.5, 1)));
-    return t >= 0
-        ? mixColor(base, HIGHLIGHT_TINT, t * DEPTH_TINT)
-        : mixColor(base, SHADOW_TINT, -t * DEPTH_TINT);
-};
-
-// Small on purpose. An earlier version leaned on the gradient for structure,
-// which was right when the figure had no contour to lean on instead; with one,
-// the same amount of shading only muddies it. The line says where the form is,
-// the shading says which way it turns.
-const LIT_AMOUNT = 0.13;
-const DARK_AMOUNT = 0.15;
-
-const shapeFill = (
-    ctx: CanvasRenderingContext2D,
-    shape: FigureShape,
-    tone: FigureTone,
-    unit: number,
-): string | CanvasGradient => {
-    const hex = shape.tint ? mixColor(tone[shape.tone], HIGHLIGHT_TINT, shape.tint) : tone[shape.tone];
-    const base = shadeOfShape(hex, shape.depth, unit);
-    // Lit and dark are mixed from the untinted hex — the depth-tinted base is
-    // already an `rgb()` string, which `mixColor` does not parse — and then
-    // carried to the same depth so all three stops agree.
-    const litColor = shadeOfShape(mixColor(hex, HIGHLIGHT_TINT, LIT_AMOUNT), shape.depth, unit);
-    const darkColor = shadeOfShape(mixColor(hex, SHADOW_TINT, DARK_AMOUNT), shape.depth, unit);
-
-    if (shape.kind === 'segment') {
-        const { from, to, fromRadius, toRadius } = shape.segment;
-        const dx = to.x - from.x;
-        const dy = to.y - from.y;
-        const length = Math.hypot(dx, dy);
-        const radius = Math.max(fromRadius, toRadius);
-        if (length < 1e-6 || radius < 0.5) return base;
-        // Across the limb, never along it: a cylinder is lit on one side and
-        // dark on the other, and a gradient running down its length would
-        // read as the limb fading out.
-        let px = -dy / length;
-        let py = dx / length;
-        if (px * LIGHT_SCREEN.x + py * LIGHT_SCREEN.y < 0) { px = -px; py = -py; }
-        const cx = (from.x + to.x) / 2;
-        const cy = (from.y + to.y) / 2;
-        const gradient = ctx.createLinearGradient(
-            cx + px * radius, cy + py * radius,
-            cx - px * radius, cy - py * radius,
-        );
-        gradient.addColorStop(0, litColor);
-        gradient.addColorStop(0.46, base);
-        gradient.addColorStop(1, darkColor);
-        return gradient;
-    }
-
-    if (shape.kind === 'polygon') {
-        // One light across the whole torso, along the light direction. This is
-        // the other half of drawing it as a single outline: a gradient per
-        // volume is exactly what told the eye where the volumes were.
-        let minX = Infinity; let maxX = -Infinity; let minY = Infinity; let maxY = -Infinity;
-        for (const point of shape.points) {
-            if (point.x < minX) minX = point.x;
-            if (point.x > maxX) maxX = point.x;
-            if (point.y < minY) minY = point.y;
-            if (point.y > maxY) maxY = point.y;
-        }
-        const cx = (minX + maxX) / 2;
-        const cy = (minY + maxY) / 2;
-        const reach = Math.max(Math.hypot(maxX - minX, maxY - minY) * 0.42, 1);
-        const gradient = ctx.createLinearGradient(
-            cx + LIGHT_SCREEN.x * reach, cy + LIGHT_SCREEN.y * reach,
-            cx - LIGHT_SCREEN.x * reach, cy - LIGHT_SCREEN.y * reach,
-        );
-        gradient.addColorStop(0, litColor);
-        gradient.addColorStop(0.5, base);
-        gradient.addColorStop(1, darkColor);
-        return gradient;
-    }
-
-    const center = shape.kind === 'ball' ? shape.ball.center : shape.ellipse.center;
-    const radius = shape.kind === 'ball'
-        ? shape.ball.radius
-        : Math.max(shape.ellipse.radiusX, shape.ellipse.radiusY);
-    if (radius < 0.5) return base;
-    const gradient = ctx.createRadialGradient(
-        center.x + LIGHT_SCREEN.x * radius * 0.45,
-        center.y + LIGHT_SCREEN.y * radius * 0.45,
-        radius * 0.05,
-        center.x + LIGHT_SCREEN.x * radius * 0.1,
-        center.y + LIGHT_SCREEN.y * radius * 0.1,
-        radius * 1.3,
-    );
-    gradient.addColorStop(0, litColor);
-    gradient.addColorStop(0.42, base);
-    gradient.addColorStop(1, darkColor);
-    return gradient;
-};
-
-const fillEllipse = (ctx: CanvasRenderingContext2D, ellipse: Ellipse, grow = 0): void => {
-    ctx.beginPath();
-    ctx.ellipse(
-        ellipse.center.x,
-        ellipse.center.y,
-        Math.max(ellipse.radiusX + grow, 0.5),
-        Math.max(ellipse.radiusY + grow, 0.5),
-        ellipse.angle,
-        0,
-        Math.PI * 2,
-    );
-    ctx.fill();
-};
-
-const fillBall = (ctx: CanvasRenderingContext2D, ball: Ball, grow = 0): void => {
-    ctx.beginPath();
-    ctx.arc(ball.center.x, ball.center.y, Math.max(ball.radius + grow, 0.5), 0, Math.PI * 2);
-    ctx.fill();
-};
-
-// A tapered capsule: the quad between the two end circles plus the circles
-// themselves. Close enough to a turned wooden limb, and it degrades to a
-// plain capsule when the radii match.
-const fillSegment = (ctx: CanvasRenderingContext2D, segment: Segment, grow = 0): void => {
-    const fromRadius = segment.fromRadius + grow;
-    const toRadius = segment.toRadius + grow;
-    const dx = segment.to.x - segment.from.x;
-    const dy = segment.to.y - segment.from.y;
-    const length = Math.hypot(dx, dy);
-    if (length > 1e-6) {
-        const px = -dy / length;
-        const py = dx / length;
-        ctx.beginPath();
-        ctx.moveTo(segment.from.x + px * fromRadius, segment.from.y + py * fromRadius);
-        ctx.lineTo(segment.to.x + px * toRadius, segment.to.y + py * toRadius);
-        ctx.lineTo(segment.to.x - px * toRadius, segment.to.y - py * toRadius);
-        ctx.lineTo(segment.from.x - px * fromRadius, segment.from.y - py * fromRadius);
-        ctx.closePath();
-        ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.arc(segment.from.x, segment.from.y, Math.max(fromRadius, 0.5), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(segment.to.x, segment.to.y, Math.max(toRadius, 0.5), 0, Math.PI * 2);
-    ctx.fill();
-};
-
-// Grown outward by stroking the outline at twice the rim and filling: an
-// exact offset, and simpler than offsetting the polygon by hand.
-const fillPolygon = (ctx: CanvasRenderingContext2D, points: readonly CanvasPoint[], grow = 0): void => {
-    if (points.length < 3) return;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
-    ctx.closePath();
-    if (grow > 0) {
-        const lineWidth = ctx.lineWidth;
-        const lineJoin = ctx.lineJoin;
-        ctx.lineWidth = grow * 2;
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = ctx.fillStyle as string;
-        ctx.stroke();
-        ctx.lineWidth = lineWidth;
-        ctx.lineJoin = lineJoin;
-    }
-    ctx.fill();
-};
-
-const fillShape = (ctx: CanvasRenderingContext2D, shape: FigureShape, grow = 0): void => {
-    if (shape.kind === 'segment') fillSegment(ctx, shape.segment, grow);
-    else if (shape.kind === 'ball') fillBall(ctx, shape.ball, grow);
-    else if (shape.kind === 'polygon') fillPolygon(ctx, shape.points, grow);
-    else fillEllipse(ctx, shape.ellipse, grow);
-};
-
-// How thick the contour is, as a fraction of the figure's height. Thin enough
-// to stay a line at dialog size, thick enough to survive a 46x64 thumbnail.
-const LINE_RATIO = 0.0075;
-
-// Back to front, one body part at a time, each part filled and then outlined.
-// The contour is what makes this read as a manikin rather than as grey soup:
-// an earlier version drew a pale halo around each group instead and leaned on
-// gradients for the form, which dissolved at thumbnail size and looked muddy
-// at full size. Grouping still matters for occlusion — a near arm crossing the
-// chest has to cut into it, which is the most direct evidence of depth there
-// is — and inside a group the drawing order puts each ball under its block.
-export const drawFigure = (
-    ctx: CanvasRenderingContext2D,
-    figure: PoseFigure,
-    options: { selected?: boolean } = {},
-): void => {
-    const parts = figureParts(figure);
-    const tone = toneFor(figure, options.selected === true);
-    const unit = figureUnit(figure);
-    const line = Math.max(unit * LINE_RATIO, 1);
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    const clusters = [...parts.clusters].sort((a, b) => a.depth - b.depth);
-    for (const cluster of clusters) {
-        const ordered = cluster.order === 'depth'
-            ? [...cluster.shapes].sort((a, b) => a.depth - b.depth)
-            : cluster.shapes;
-        for (const shape of ordered) {
-            ctx.fillStyle = shapeFill(ctx, shape, tone, unit);
-            // `fillShape` leaves its path current, so the contour is the same
-            // path — the outline can never drift from the thing it outlines.
-            fillShape(ctx, shape);
-            const marking = shape.kind === 'ellipse' && shape.marking === true;
-            ctx.strokeStyle = marking ? tone.rim : tone.line;
-            ctx.lineWidth = marking ? line * 0.55 : line;
-            ctx.stroke();
-        }
-        if (cluster.seam) {
-            // Across the limb, bowed toward the far side of the bend: the
-            // articulation as a plane change rather than a lump. Lighter than
-            // the contour, so it never competes with a silhouette.
-            ctx.strokeStyle = tone.rim;
-            ctx.lineWidth = line * 0.7;
-            ctx.beginPath();
-            ctx.moveTo(cluster.seam.from.x, cluster.seam.from.y);
-            ctx.quadraticCurveTo(cluster.seam.bow.x, cluster.seam.bow.y, cluster.seam.to.x, cluster.seam.to.y);
-            ctx.stroke();
-        }
-    }
-    ctx.restore();
-};
 
 // Handles are overlay-only: they are drawn on the interaction layer, never on
 // the surface that is exported, so the model never sees the blue dots.

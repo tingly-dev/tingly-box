@@ -41,7 +41,6 @@ import {
     applyPreset,
     clampScaleFactor,
     createFigure,
-    drawFigure,
     drawFigureHandles,
     figureBounds,
     figureTurn,
@@ -67,6 +66,7 @@ import {
     type PosePresetKey,
     type ViewPresetKey,
 } from '@/utils/poseFigure';
+import { drawFigure } from '@/utils/poseFigure3d';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 

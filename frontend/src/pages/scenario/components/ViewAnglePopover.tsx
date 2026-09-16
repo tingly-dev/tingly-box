@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { Box, ButtonBase, Popover, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
-    drawFigure,
     figureTurn,
     fitFigureIntoTile,
     setFigureTurn,
@@ -12,6 +11,7 @@ import {
     type PoseFigure,
     type ViewPresetKey,
 } from '@/utils/poseFigure';
+import { drawFigure } from '@/utils/poseFigure3d';
 
 // Where the figure is looked at from. Deliberately not more entries in the
 // pose grid: the same body seen from the side is the same body, and folding a

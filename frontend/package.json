@@ -43,6 +43,7 @@
     "react-router-dom": "^7.18.1",
     "react-transition-group": "^4.4.5",
     "recharts": "^3.10.0",
+    "three": "0.170.0",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
@@ -53,6 +54,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/react-transition-group": "^4.4.12",
+    "@types/three": "0.170.0",
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",

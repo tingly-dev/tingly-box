@@ -3,12 +3,12 @@ import { Box, ButtonBase, Popover, Stack, Tooltip, Typography } from '@mui/mater
 import { useTranslation } from 'react-i18next';
 import {
     createFigure,
-    drawFigure,
     fitFigureIntoTile,
     POSE_LIBRARY,
     type FigureTurn,
     type PosePresetKey,
 } from '@/utils/poseFigure';
+import { drawFigure } from '@/utils/poseFigure3d';
 
 // Thumbnails are drawn by the same renderer as the canvas, not by hand-drawn
 // icons: a library of poses is only useful if what you pick is what you get,
