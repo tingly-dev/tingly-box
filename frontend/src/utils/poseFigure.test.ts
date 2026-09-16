@@ -19,6 +19,7 @@ import {
     distanceToSegment,
     figureBounds,
     figureParts,
+    constrainFigure,
     figureUnit,
     HANDLE_KEYS,
     handlePointOf,
@@ -136,13 +137,41 @@ describe('transforms', () => {
     });
 
     it('moves a single joint to where the pointer is, at the depth it had', () => {
+        // Alt detaches a joint from its bone length — odd proportions are a
+        // drawing choice. The target has to be somewhere the elbow can
+        // actually reach, though: Alt escapes the skeleton, not the rig.
         const figure = createFigure('standing', DIMS);
-        const moved = moveJoint(figure, 'wristL', { x: 1, y: 2 });
+        const at = projectFigure(figure);
+        const target = { x: at.wristL.x - 24, y: at.wristL.y - 30 };
+        const moved = moveJoint(figure, 'wristL', target);
         const landed = projectFigure(moved).wristL;
-        expect(landed.x).toBeCloseTo(1, 4);
-        expect(landed.y).toBeCloseTo(2, 4);
+        expect(landed.x).toBeCloseTo(target.x, 4);
+        expect(landed.y).toBeCloseTo(target.y, 4);
         expect(moved.joints.wristL.z).toBeCloseTo(figure.joints.wristL.z, 6);
         expect(moved.joints.wristR).toEqual(figure.joints.wristR);
+        // ...and the bone really did change length, which is the point of Alt.
+        const before = Math.hypot(
+            figure.joints.wristL.x - figure.joints.elbowL.x,
+            figure.joints.wristL.y - figure.joints.elbowL.y,
+            figure.joints.wristL.z - figure.joints.elbowL.z,
+        );
+        const after = Math.hypot(
+            moved.joints.wristL.x - moved.joints.elbowL.x,
+            moved.joints.wristL.y - moved.joints.elbowL.y,
+            moved.joints.wristL.z - moved.joints.elbowL.z,
+        );
+        expect(Math.abs(after - before)).toBeGreaterThan(1);
+    });
+
+    it('will not let Alt put a joint somewhere the rig forbids', () => {
+        // The escape hatch is an escape from bone length, not from anatomy.
+        const figure = createFigure('standing', DIMS);
+        const at = projectFigure(figure);
+        // Straight up past the shoulder: that folds the elbow backwards.
+        const moved = moveJoint(figure, 'wristL', { x: at.elbowL.x, y: at.shoulderL.y - 200 });
+        const landed = projectFigure(moved).wristL;
+        expect(Math.hypot(landed.x - at.elbowL.x, landed.y - (at.shoulderL.y - 200)))
+            .toBeGreaterThan(1);
     });
 
     it('scales about the centre, leaving it fixed', () => {
@@ -253,6 +282,117 @@ const limbWidthAt = (
     if (!below.length || !above.length) return 0;
     return Math.min(...above) - Math.max(...below);
 };
+
+describe('the rig', () => {
+    // What the mannequin knows about itself. Before this there was nothing
+    // anywhere that knew an elbow is a hinge: a pose was a table of absolute
+    // angles and a drag was a free rotation, so both the authored library and
+    // the user could make a body no body can make.
+    const bones = (figure: PoseFigure) => JOINT_KEYS
+        .filter((key) => JOINT_PARENT[key])
+        .map((key) => {
+            const parent = JOINT_PARENT[key]!;
+            return Math.hypot(
+                figure.joints[key].x - figure.joints[parent].x,
+                figure.joints[key].y - figure.joints[parent].y,
+                figure.joints[key].z - figure.joints[parent].z,
+            );
+        });
+
+    // Which way a hinge folded, as a signed number along the body's own
+    // left-right axis. Both reference signs are taken from poses that are
+    // right by eye rather than derived: the canvas y axis points down, which
+    // flips the handedness of every cross product, and the hand-derived sign
+    // for this was wrong the first time it was written.
+    const foldOf = (figure: PoseFigure, root: JointKey, joint: JointKey, tip: JointKey) => {
+        const J = figure.joints;
+        const sub = (a: typeof J.hip, b: typeof J.hip) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+        const norm = (a: { x: number; y: number; z: number }) => {
+            const l = Math.hypot(a.x, a.y, a.z) || 1;
+            return { x: a.x / l, y: a.y / l, z: a.z / l };
+        };
+        const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => a.x * b.x + a.y * b.y + a.z * b.z;
+        const cross = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => ({
+            x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x,
+        });
+        const up = norm(sub(J.neck, J.hip));
+        const span = sub(J.shoulderR, J.shoulderL);
+        const across = norm({
+            x: span.x - up.x * dot(span, up), y: span.y - up.y * dot(span, up), z: span.z - up.z * dot(span, up),
+        });
+        const u = norm(sub(J[joint], J[root]));
+        const d = norm(sub(J[tip], J[joint]));
+        return { bend: Math.acos(Math.max(-1, Math.min(1, dot(u, d)))) * 180 / Math.PI, fold: dot(norm(cross(u, d)), across) };
+    };
+
+    it('leaves a straight limb alone instead of jittering it', () => {
+        // The first version of this had the deadband's sense inverted — it
+        // read as "skip anything bent less than 83 degrees", which switched
+        // the whole rig off for almost every pose while looking like it ran.
+        const figure = createFigure('tPose', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const again = constrainFigure(figure);
+        for (const key of JOINT_KEYS) {
+            expect(Math.hypot(
+                again.joints[key].x - figure.joints[key].x,
+                again.joints[key].y - figure.joints[key].y,
+                again.joints[key].z - figure.joints[key].z,
+            )).toBeLessThan(figureUnit(figure) * 0.001);
+        }
+    });
+
+    it('folds a knee backwards and an elbow forwards, in every pose in the library', () => {
+        // The whole library, measured. Before the rig this split roughly
+        // seven to one on the knee and three to one on the elbow — and a
+        // cross-legged knee folded a full ninety degrees out of its plane.
+        for (const pose of POSE_LIBRARY.flatMap((group) => group.poses)) {
+            const figure = createFigure(pose, DIMS);
+            for (const side of ['L', 'R'] as const) {
+                const knee = foldOf(figure, `hip${side}` as JointKey, `knee${side}` as JointKey, `ankle${side}` as JointKey);
+                if (knee.bend > 20) expect(knee.fold, `${pose} knee${side}`).toBeLessThan(0);
+                const elbow = foldOf(figure, `shoulder${side}` as JointKey, `elbow${side}` as JointKey, `wrist${side}` as JointKey);
+                if (elbow.bend > 20) expect(elbow.fold, `${pose} elbow${side}`).toBeGreaterThan(0);
+            }
+        }
+    });
+
+    it('pulls an elbow bent the wrong way back to one it can reach', () => {
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
+        // Swinging the wrist up past the shoulder folds the forearm backwards.
+        const wrong = swingJoint(figure, 'wristL', { x: at.elbowL.x, y: at.shoulderL.y - 120 });
+        const after = foldOf(wrong, 'shoulderL', 'elbowL', 'wristL');
+        if (after.bend > 20) expect(after.fold).toBeGreaterThan(0);
+    });
+
+    it('never stretches a bone to satisfy a limit', () => {
+        // A constraint that lengthens a bone has traded one impossible body
+        // for another.
+        for (const pose of POSE_LIBRARY.flatMap((group) => group.poses)) {
+            const figure = createFigure(pose, DIMS);
+            const before = bones(figure);
+            const after = bones(constrainFigure(figure));
+            for (let i = 0; i < before.length; i += 1) {
+                expect(after[i]).toBeCloseTo(before[i], 3);
+            }
+        }
+    });
+
+    it('is settled: constraining an already legal figure changes nothing', () => {
+        // Otherwise every drag frame would creep, and a pose would drift while
+        // the pointer stood still.
+        for (const pose of ['crossLegged', 'sitting', 'running', 'reclining'] as PosePresetKey[]) {
+            const figure = createFigure(pose, DIMS);
+            const again = constrainFigure(figure);
+            for (const key of JOINT_KEYS) {
+                expect(Math.hypot(
+                    again.joints[key].x - figure.joints[key].x,
+                    again.joints[key].y - figure.joints[key].y,
+                    again.joints[key].z - figure.joints[key].z,
+                ), `${pose} ${key}`).toBeLessThan(figureUnit(figure) * 0.002);
+            }
+        }
+    });
+});
 
 describe('handles you can actually grab', () => {
     // Measured, because "it feels hard to control" is otherwise unfalsifiable.

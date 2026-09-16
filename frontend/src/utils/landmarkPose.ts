@@ -13,6 +13,7 @@
 // and what is still undecided.
 
 import {
+    constrainFigure,
     centerFigureAt,
     completeFigure,
     figureCenter,
@@ -391,7 +392,11 @@ export const figureFromLandmarks = (
     // Our body, our size, where the figure already was: importing a pose
     // changes the pose, not who the person is or where they stand.
     const sized = scaleFigure(raw, figureUnit(reference) / figureUnit(raw));
-    const placed = centerFigureAt(sized, figureCenter(reference));
+    // ...and through the rig, like every other way a pose can arrive. An
+    // estimator is perfectly capable of handing back a back-folded elbow — it
+    // is fitting landmarks, not a body — and a photograph is exactly the entry
+    // path where nobody authored the angles and nobody can check them.
+    const placed = constrainFigure(centerFigureAt(sized, figureCenter(reference)));
 
     const used = JOINT_KEYS.map((key) => read.seen[key]).filter((v): v is number => v !== undefined);
     return {
