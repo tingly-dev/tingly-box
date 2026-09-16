@@ -4,9 +4,9 @@ import { primaryGradientButton } from './buttonVariants';
 
 // DS reusable tokens for component overrides
 const dsTokens = {
-  border: '1px solid rgba(79, 110, 247, 0.15)',
-  borderSoft: '1px solid rgba(79, 110, 247, 0.1)',
-  divider: 'rgba(79, 110, 247, 0.12)',
+  border: '1px solid rgba(77, 107, 254, 0.15)',
+  borderSoft: '1px solid rgba(77, 107, 254, 0.1)',
+  divider: 'rgba(77, 107, 254, 0.12)',
   paperBg: 'rgba(255, 255, 255, 0.88)',
   paperBgLight: 'rgba(255, 255, 255, 0.78)',
   paperBgMedium: 'rgba(255, 255, 255, 0.82)',
@@ -16,23 +16,23 @@ const dsTokens = {
   inputBgHover: 'rgba(255, 255, 255, 0.85)',
   inputBgFocus: 'rgba(255, 255, 255, 0.92)',
   inputBgDisabled: 'rgba(255, 255, 255, 0.5)',
-  borderInput: 'rgba(79, 110, 247, 0.25)',
-  borderInputHover: 'rgba(79, 110, 247, 0.4)',
-  borderInputDisabled: 'rgba(79, 110, 247, 0.12)',
-  hover: 'rgba(79, 110, 247, 0.08)',
-  selected: 'rgba(79, 110, 247, 0.16)',
-  selectedHover: 'rgba(79, 110, 247, 0.22)',
-  rowHover: 'rgba(79, 110, 247, 0.04)',
-  tableHeadBg: 'rgba(79, 110, 247, 0.06)',
-  scrollbarTrack: 'rgba(79, 110, 247, 0.05)',
-  scrollbarThumb: 'rgba(79, 110, 247, 0.25)',
-  scrollbarThumbHover: 'rgba(79, 110, 247, 0.4)',
-  scrollbarThumbInner: 'rgba(79, 110, 247, 0.2)',
-  scrollbarThumbInnerHover: 'rgba(79, 110, 247, 0.35)',
+  borderInput: 'rgba(77, 107, 254, 0.25)',
+  borderInputHover: 'rgba(77, 107, 254, 0.4)',
+  borderInputDisabled: 'rgba(77, 107, 254, 0.12)',
+  hover: 'rgba(77, 107, 254, 0.08)',
+  selected: 'rgba(77, 107, 254, 0.16)',
+  selectedHover: 'rgba(77, 107, 254, 0.22)',
+  rowHover: 'rgba(77, 107, 254, 0.04)',
+  tableHeadBg: 'rgba(77, 107, 254, 0.06)',
+  scrollbarTrack: 'rgba(77, 107, 254, 0.05)',
+  scrollbarThumb: 'rgba(77, 107, 254, 0.25)',
+  scrollbarThumbHover: 'rgba(77, 107, 254, 0.4)',
+  scrollbarThumbInner: 'rgba(77, 107, 254, 0.2)',
+  scrollbarThumbInnerHover: 'rgba(77, 107, 254, 0.35)',
 };
 
-const cardShadow = '0 2px 16px rgba(79, 110, 247, 0.12), 0 1px 6px rgba(0, 0, 0, 0.04)';
-const buttonHoverShadow = '0 2px 8px rgba(79, 110, 247, 0.2)';
+const cardShadow = '0 2px 16px rgba(77, 107, 254, 0.12), 0 1px 6px rgba(0, 0, 0, 0.04)';
+const buttonHoverShadow = '0 2px 8px rgba(77, 107, 254, 0.2)';
 
 export const dsComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -72,15 +72,15 @@ export const dsComponents: ThemeOptions['components'] = {
         '&:hover': { boxShadow: buttonHoverShadow },
       },
       outlined: {
-        borderColor: 'rgba(79, 110, 247, 0.3)',
-        color: '#3b54d4',
+        borderColor: 'rgba(77, 107, 254, 0.3)',
+        color: '#3a65c2',
         '&:hover': {
-          borderColor: 'rgba(79, 110, 247, 0.5)',
+          borderColor: 'rgba(77, 107, 254, 0.5)',
           backgroundColor: dsTokens.hover,
         },
       },
     },
-    variants: primaryGradientButton(dsPrimary, dsPrimaryDark, dsPrimaryDark, '#3b54d4'),
+    variants: primaryGradientButton(dsPrimary, dsPrimaryDark, dsPrimaryDark, '#3a65c2'),
   },
   MuiOutlinedInput: {
     styleOverrides: {
@@ -109,7 +109,7 @@ export const dsComponents: ThemeOptions['components'] = {
         },
       },
       input: {
-        '&::placeholder': { color: '#565f7e', opacity: 1 },
+        '&::placeholder': { color: '#565f70', opacity: 1 },
       },
     },
   },
@@ -125,15 +125,15 @@ export const dsComponents: ThemeOptions['components'] = {
   MuiInputBase: {
     styleOverrides: {
       input: {
-        color: '#1e2338',
-        '&::placeholder': { color: '#565f7e', opacity: 1 },
+        color: '#1e232c',
+        '&::placeholder': { color: '#565f70', opacity: 1 },
       },
     },
   },
   MuiInputLabel: {
     styleOverrides: {
       root: {
-        color: '#565f7e',
+        color: '#565f70',
         '&.Mui-focused': { color: dsPrimary },
       },
     },
@@ -141,14 +141,14 @@ export const dsComponents: ThemeOptions['components'] = {
   MuiFormHelperText: {
     styleOverrides: {
       root: {
-        color: '#565f7e',
+        color: '#565f70',
         '&.Mui-error': { color: '#ef4444' },
       },
     },
   },
   MuiSelect: {
     styleOverrides: {
-      icon: { color: '#565f7e' },
+      icon: { color: '#565f70' },
     },
   },
   MuiMenu: {
@@ -157,7 +157,7 @@ export const dsComponents: ThemeOptions['components'] = {
         backgroundColor: dsTokens.paperBgSolid,
         backgroundImage: 'none',
         border: dsTokens.border,
-        boxShadow: '0 10px 24px rgba(30, 35, 56, 0.1)',
+        boxShadow: '0 10px 24px rgba(30, 35, 44, 0.1)',
       },
     },
   },
@@ -194,7 +194,7 @@ export const dsComponents: ThemeOptions['components'] = {
       root: {
         backgroundColor: dsTokens.paperBgMedium,
         backgroundImage: 'none',
-        color: '#1e2338',
+        color: '#1e232c',
         borderBottom: dsTokens.border,
         boxShadow: 'none',
       },
@@ -220,10 +220,10 @@ export const dsComponents: ThemeOptions['components'] = {
     styleOverrides: {
       tooltip: {
         backgroundColor: '#ffffff',
-        color: '#1e2338',
+        color: '#1e232c',
         fontSize: '0.75rem',
         border: '1px solid #e2e6f5',
-        boxShadow: '0 4px 12px rgba(30, 35, 56, 0.08)',
+        boxShadow: '0 4px 12px rgba(30, 35, 44, 0.08)',
       },
       arrow: { color: '#ffffff' },
     },
@@ -281,7 +281,7 @@ export const dsComponents: ThemeOptions['components'] = {
         },
       },
       track: {
-        backgroundColor: 'rgba(79, 110, 247, 0.3)',
+        backgroundColor: 'rgba(77, 107, 254, 0.3)',
       },
     },
   },
@@ -290,7 +290,7 @@ export const dsComponents: ThemeOptions['components'] = {
       root: { color: dsPrimary },
       thumb: {
         '&:hover, &.Mui-focusVisible': {
-          boxShadow: '0 0 0 8px rgba(79, 110, 247, 0.16)',
+          boxShadow: '0 0 0 8px rgba(77, 107, 254, 0.16)',
         },
       },
       track: {
@@ -301,7 +301,7 @@ export const dsComponents: ThemeOptions['components'] = {
   MuiLinearProgress: {
     styleOverrides: {
       root: {
-        backgroundColor: 'rgba(79, 110, 247, 0.15)',
+        backgroundColor: 'rgba(77, 107, 254, 0.15)',
         borderRadius: 4,
       },
       bar: {
@@ -320,7 +320,7 @@ export const dsComponents: ThemeOptions['components'] = {
       root: {
         borderColor: dsTokens.borderInput,
         '&.Mui-selected': {
-          backgroundColor: 'rgba(79, 110, 247, 0.15)',
+          backgroundColor: 'rgba(77, 107, 254, 0.15)',
           color: dsPrimary,
           '&:hover': { backgroundColor: dsTokens.selectedHover },
         },

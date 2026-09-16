@@ -1,10 +1,13 @@
 import type { ThemePalette } from '../types';
 
-// DS theme color tokens — soft indigo-blue over a misty gradient,
-// inspired by deepseek.com's hero background.
-export const dsPrimary = '#4F6EF7';
-export const dsPrimaryLight = '#7B93FA';
-export const dsPrimaryDark = '#3B54D4';
+// DS theme color tokens — deepseek.com's actual brand palette
+// (`--ds-color-brand`/`-light-reverse`/`-deep`/`-medium-reverse` in its shipped
+// CSS), a single blue hue rather than an invented primary+secondary pair — the
+// real site has no purple/secondary accent, so `secondary` below reuses the
+// same hue family instead of making one up.
+export const dsPrimary = '#4D6BFE';
+export const dsPrimaryLight = '#6799FE';
+export const dsPrimaryDark = '#3A65C2';
 
 // Matches deepseek.com's actual hero recipe (inspected from its shipped CSS/JS):
 // a near-white page base (`--ds-color-bg-page: #f9f8f8`) with a sky-blue wash
@@ -29,9 +32,9 @@ export const dsPalette: ThemePalette = {
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#8B5CF6',
-    light: '#A78BFA',
-    dark: '#6D28D9',
+    main: '#73A3D2', // --ds-color-brand-light-reverse
+    light: '#9CC1E7', // same wash tone as the hero background
+    dark: '#4176E6', // --ds-color-brand-medium-reverse
     contrastText: '#ffffff',
   },
   success: {
@@ -50,7 +53,7 @@ export const dsPalette: ThemePalette = {
     dark: '#d97706',
   },
   info: {
-    main: '#6A9BFF',
+    main: dsPrimaryLight,
   },
   background: {
     default: 'transparent',
@@ -59,32 +62,32 @@ export const dsPalette: ThemePalette = {
     gradient: dsBackgroundGradient,
   },
   text: {
-    primary: '#1e2338',
-    secondary: '#565f7e',
-    disabled: '#9aa3c2',
+    primary: '#1e232c', // --ds-color-text-primary
+    secondary: '#565f70',
+    disabled: '#9aa3ac',
   },
-  divider: 'rgba(79, 110, 247, 0.12)',
+  divider: 'rgba(77, 107, 254, 0.12)',
   action: {
-    hover: 'rgba(79, 110, 247, 0.08)',
-    selected: 'rgba(79, 110, 247, 0.15)',
-    disabled: 'rgba(79, 110, 247, 0.04)',
-    focus: 'rgba(79, 110, 247, 0.12)',
+    hover: 'rgba(77, 107, 254, 0.08)',
+    selected: 'rgba(77, 107, 254, 0.15)',
+    disabled: 'rgba(77, 107, 254, 0.04)',
+    focus: 'rgba(77, 107, 254, 0.12)',
   },
   dashboard: {
     token: {
-      input: { main: dsPrimary, gradient: 'rgba(79, 110, 247, 0.75)' },
-      output: { main: '#8B5CF6', gradient: 'rgba(139, 92, 246, 0.75)' },
+      input: { main: dsPrimary, gradient: 'rgba(77, 107, 254, 0.75)' },
+      output: { main: '#4176E6', gradient: 'rgba(65, 118, 230, 0.75)' },
       cache: { main: '#94a3b8', gradient: 'rgba(148, 163, 184, 0.65)' },
     },
     chart: {
-      grid: 'rgba(79, 110, 247, 0.08)',
-      axis: 'rgba(79, 110, 247, 0.15)',
+      grid: 'rgba(77, 107, 254, 0.08)',
+      axis: 'rgba(77, 107, 254, 0.15)',
       tooltipBg: 'rgba(255, 255, 255, 0.96)',
-      tooltipBorder: 'rgba(79, 110, 247, 0.2)',
+      tooltipBorder: 'rgba(77, 107, 254, 0.2)',
     },
     statCard: {
-      boxShadow: '0 2px 12px rgba(79, 110, 247, 0.12), 0 1px 4px rgba(0, 0, 0, 0.04)',
-      emptyIconBg: 'rgba(79, 110, 247, 0.1)',
+      boxShadow: '0 2px 12px rgba(77, 107, 254, 0.12), 0 1px 4px rgba(0, 0, 0, 0.04)',
+      emptyIconBg: 'rgba(77, 107, 254, 0.1)',
     },
   },
   isSunlit: false,
