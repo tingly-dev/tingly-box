@@ -294,7 +294,7 @@ const BONE = {
     // Wide enough that the shoulder joint sits *on* the deltoid corner and the
     // hip joint on the pelvis's lower corner. Tucked inside the body instead,
     // a limb reads as hanging off a shelf, and every raised arm cuts a notch.
-    shoulderSpan: 0.118, shoulderDrop: 0.035,
+    shoulderSpan: 0.115, shoulderDrop: 0.035,
     upperArm: 0.155, foreArm: 0.145,
     hipSpan: 0.070, hipDrop: 0.022,
     thigh: 0.235, shin: 0.225,
@@ -1172,7 +1172,7 @@ export const hitTestBody = (figure: PoseFigure, point: CanvasPoint, tolerance = 
     const parts = figureParts(figure);
     // The torso is tested against the outline that is actually drawn, so what
     // you can grab and what you can see cannot drift apart.
-    if (inPolygon(point, parts.torso) || inPolygon(point, parts.head)) return true;
+    if (parts.torso.some((block) => inPolygon(point, block)) || inPolygon(point, parts.head)) return true;
     if (parts.limbs.some((limb) => limb.outlines.some((outline) => inPolygon(point, outline)))) return true;
     if (parts.sockets
         .some((ball) => Math.hypot(point.x - ball.center.x, point.y - ball.center.y) <= ball.radius + tolerance)) {
@@ -1291,13 +1291,16 @@ export interface FigureParts {
     neck: Segment;
     // The torso, as one closed outline rather than a ribcage, a waist ball and
     // a pelvis stacked on a spine. That was the single biggest thing making
-    // the mannequin read as assembled parts instead of a body: three convex
-    // blobs, each shaded on its own, announce their seams however carefully
-    // they are fitted together. One outline — broad at the shoulders, drawn in
-    // at the waist, flared at the hips — reads as a torso at a glance, takes
-    // one light across the whole of it, and still twists, because its top edge
-    // follows the shoulder line and its bottom edge follows the hip line.
-    torso: CanvasPoint[];
+    // Two blocks: the chest down to the waist, and the pelvis bucket, with the
+    // waist ball showing between them — a manikin's torso, and the only way
+    // the waist actually *reads*. An earlier version was three convex blobs,
+    // each shaded on its own, and announced its seams however carefully they
+    // were fitted; the one after it was a single outline, which held together
+    // but could only imply a waist with a line, and a line across a form is a
+    // crease rather than a joint. Each block is a profile rather than an egg,
+    // takes one light across the whole of it, and still twists: the chest's
+    // top edge follows the shoulder line, the pelvis's bottom edge the hips.
+    torso: CanvasPoint[][];
     // Each limb is one closed outline from the shoulder or hip all the way
     // into the mitten or the foot, with the bend showing only as a seam drawn
     // *across* it.
@@ -1312,6 +1315,7 @@ export interface FigureParts {
     // The ball-and-socket joints — two shoulders, two hips — drawn *under*
     // the torso so each shows only the sliver the limb leaves uncovered. The
     // hinges are not here: they are a narrowing in the limb's own outline.
+    // Two shoulders, the waist, two hips.
     sockets: Ball[];
     // The same shapes again, grouped and carrying their depth: hit testing
     // wants them by name, the renderer wants them in order. One geometry,
@@ -1345,7 +1349,10 @@ const R = {
     // The two ball-and-socket joints a wooden manikin really does show as
     // balls. The hinges — elbow, knee, wrist, ankle — do not: look at a
     // manikin and the upper arm *narrows* into the elbow pin.
-    hipBall: 0.031, shoulderBall: 0.034,
+    hipBall: 0.031, shoulderBall: 0.030,
+    // The waist ball, which on a manikin is the joint you see *through the
+    // gap* between the chest block and the pelvis block.
+    waistBall: 0.040,
     // Longer and narrower than they were: a mitten only a little wider than
     // the wrist reads as a hand, while one much wider reads as an oven glove.
     handLong: 0.052, handWide: 0.021,
@@ -1353,7 +1360,7 @@ const R = {
     // A body is not a cut-out: seen from the side the chest and pelvis are as
     // deep as they are wide, so their on-screen width can never fall below
     // this however far the shoulders foreshorten.
-    chestDepth: 0.070, pelvisDepth: 0.050,
+    chestDepth: 0.058, pelvisDepth: 0.044,
 } as const;
 
 // The canon's unit of measure: crown to chin, as a fraction of the figure's
@@ -1410,25 +1417,37 @@ const HEAD_PROFILE: readonly (readonly [number, number])[] = [
     [1.00, 0.15],   // the chin
 ];
 
-const TORSO_PROFILE: readonly (readonly [number, number, 'shoulder' | 'waist' | 'hip'])[] = [
-    [-0.05, 0.54, 'shoulder'],  // behind the neck, so there is no notch there
-    [0.02, 0.88, 'shoulder'],   // the slope of the trapezius
-    [0.10, 1.00, 'shoulder'],   // deltoid — level with the shoulder joint
-    [0.37, 0.78, 'shoulder'],   // the ribcage drawing in
-    [0.62, 1.00, 'waist'],
-    [0.88, 1.00, 'hip'],        // the iliac crest — the widest the pelvis gets
-    [1.00, 0.94, 'hip'],
-    // The pelvis is a trapezoid that *narrows onto* the hip joints (t≈1.06)
-    // and stops. Carrying it wider and lower than the joints was the "skirt":
-    // the legs then leave through a slot in the middle of it instead of
-    // pivoting on its bottom corners, which is what a manikin actually does.
-    [1.05, 0.72, 'hip'],
-    [1.09, 0.32, 'hip'],
+// The torso is two blocks, not one form: a chest that carries the ribcage down
+// to the waist, and a pelvis bucket under it, with the waist ball showing in
+// the gap. That is what a manikin is, and it is what makes the waist *read* —
+// one continuous outline can only imply it with a line, and a line across a
+// form is a crease, not a joint.
+//
+// Both tables are fractions down the neck→hip axis, and fractions of that
+// block's half-width at that height.
+const CHEST_PROFILE: readonly (readonly [number, number])[] = [
+    [-0.06, 0.50],              // behind the neck, so there is no notch there
+    [0.02, 0.86],               // the slope of the trapezius
+    [0.10, 1.00],               // the top corner, level with the shoulder joint
+    [0.30, 0.94],
+    [0.48, 0.78],               // the ribcage drawing in
+    [0.62, 0.56],               // the waist — where the block stops
 ];
 
-// Which row of that table is the waist — where the ribcage stops and the
-// pelvis starts, and so where the torso gets its one seam.
-const WAIST_ROW = 4;
+const PELVIS_PROFILE: readonly (readonly [number, number])[] = [
+    [0.76, 0.58],               // the top of the bucket, narrow
+    [0.90, 1.00],               // the iliac crest — the widest the pelvis gets
+    [1.00, 0.94],
+    // The pelvis *narrows onto* the hip joints (t≈1.06) and stops. Carrying it
+    // wider and lower than the joints was the "skirt": the legs then left
+    // through a slot in the middle of it instead of pivoting on its bottom
+    // corners, which is what a manikin actually does.
+    [1.05, 0.74],
+    [1.09, 0.34],
+];
+
+// Where the waist ball sits on that axis — in the gap, bridging both blocks.
+const WAIST_T = 0.69;
 
 // One limb, as a closed outline through its nodes. Each side is offset by the
 // node's radius along the bisector, and both ends are capped with a half
@@ -1614,10 +1633,19 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
         // draw a dome on top of the deltoid.
         const rootRadius = u(leg ? R.thigh : R.upperArm, scale(root));
         const inward = norm3(sub3(joints[bend], joints[root]));
+        // An arm hangs off the *outer face* of its ball, not out of the joint's
+        // centre: on a manikin the ball stands proud of the chest and the upper
+        // arm rests against its outside. Started at the centre instead, half
+        // the arm is sunk into the chest block and the shoulder reads as one
+        // lump. Legs need none of this — a thigh really does come out from
+        // under the pelvis.
+        const outward = leg ? ORIGIN : mul3(
+            norm3(sub3(joints[root], joints.neck)),
+            unit * R.shoulderBall * 0.75,
+        );
+        const rootPoint = add3(add3(joints[root], outward), mul3(inward, rootRadius * (leg ? 0.25 : 0.18)));
         const nodes: LimbNode[] = [
-            // Further in for an arm than for a leg: a hip sits deep inside the
-            // pelvis already, while a shoulder sits right at the torso's edge.
-            { point: place(add3(joints[root], mul3(inward, rootRadius * (leg ? 0.25 : 0.35)))), radius: rootRadius },
+            { point: place(rootPoint), radius: rootRadius },
             { point: at[bend], radius: u(leg ? R.knee : R.elbow, scale(bend)) },
         ];
         if (leg) {
@@ -1693,55 +1721,61 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
     })() : null;
 
     // however hard a shoulder is dragged, and there is nothing to show through.
-    const { outline: torso, seam: waistSeam } = (() => {
+    const { blocks: torso, waist: waistCentre } = (() => {
         const axis = { x: hipMid.x - at.neck.x, y: hipMid.y - at.neck.y };
         const axisLength = Math.hypot(axis.x, axis.y) || 1;
-        // Across the body. Floored on the body's own depth, so a torso turned
-        // side-on narrows to a torso seen edge-on and no further — a person is
-        // not a cut-out.
-        const sideways = (a: CanvasPoint, b: CanvasPoint, floor: number, stretch = 1, pad = 0): CanvasPoint => {
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const span = Math.hypot(dx, dy);
-            const half = Math.max(span / 2, floor) * stretch + pad;
-            if (span < 1e-6) return { x: (-axis.y / axisLength) * half, y: (axis.x / axisLength) * half };
-            return { x: (dx / span) * half, y: (dy / span) * half };
+        const spineAt = (t: number): CanvasPoint => (
+            { x: at.neck.x + axis.x * t, y: at.neck.y + axis.y * t }
+        );
+        // A block's half-width is measured *per side, toward the real joint*,
+        // not as one span mirrored about the spine. Under perspective a turned
+        // body's two shoulders are not equidistant from its spine, and mirroring
+        // one number leaves the far ball floating off the edge as a loose disc.
+        // Floored on the body's own depth, so a torso seen edge-on narrows to
+        // its own thickness and no further — a person is not a cut-out.
+        const toward = (joint: CanvasPoint, anchor: number, reach: number, floor: number, sign: number): CanvasPoint => {
+            const spine = spineAt(anchor);
+            const dx = (joint.x - spine.x) * reach;
+            const dy = (joint.y - spine.y) * reach;
+            if (Math.hypot(dx, dy) >= floor) return { x: dx, y: dy };
+            return { x: (-axis.y / axisLength) * floor * sign, y: (axis.x / axisLength) * floor * sign };
         };
-        const shoulder = sideways(at.shoulderL, at.shoulderR, u(R.chestDepth, at.neck.scale) * 1.15, 1.15);
-        // The hip *joints* sit well inside the pelvis — they are where the
-        // thighs pivot, not where the body ends — so the flare is built out
-        // past them. Taking the joint span as the width was what made the
-        // torso a tube: it came out narrower at the hip than at the waist,
-        // which is not a shape any person has.
-        const hip = sideways(at.hipL, at.hipR, u(R.pelvisDepth, hipMid.scale), 1.46);
-        const waistScale = 0.58;
-        const widths = {
-            shoulder,
-            waist: { x: shoulder.x * waistScale, y: shoulder.y * waistScale },
-            hip,
+        // The block stops short of the joint so the ball stands proud at the
+        // corner and the limb *rests on the edge* instead of sinking in. The
+        // shoulders you see are the chest plus its two balls, not the chest.
+        const CHEST_REACH = 0.92;
+        const PELVIS_REACH = 1.28;
+        const chestFloor = u(R.chestDepth, at.neck.scale) * 1.15;
+        const pelvisFloor = u(R.pelvisDepth, hipMid.scale);
+        const block = (
+            profile: readonly (readonly [number, number])[],
+            right: CanvasPoint,
+            left: CanvasPoint,
+        ) => {
+            const near: CanvasPoint[] = [];
+            const far: CanvasPoint[] = [];
+            for (const [t, scale] of profile) {
+                const spine = spineAt(t);
+                near.push({ x: spine.x + right.x * scale, y: spine.y + right.y * scale });
+                far.push({ x: spine.x + left.x * scale, y: spine.y + left.y * scale });
+            }
+            return smoothLoop([...near, ...far.reverse()]);
         };
-        const right: CanvasPoint[] = [];
-        const left: CanvasPoint[] = [];
-        for (const [t, scale, band] of TORSO_PROFILE) {
-            const spine = { x: at.neck.x + axis.x * t, y: at.neck.y + axis.y * t };
-            const width = widths[band];
-            right.push({ x: spine.x + width.x * scale, y: spine.y + width.y * scale });
-            left.push({ x: spine.x - width.x * scale, y: spine.y - width.y * scale });
-        }
-        // The ribcage meets the pelvis at the waist. On a wooden manikin that
-        // is a real gap with the waist ball showing through it; on one closed
-        // outline it is the same thing an elbow gets — a line across the form,
-        // bowed downward because the ribcage sits *in front of* the pelvis
-        // when the body bends toward you.
-        const seam = {
-            from: right[WAIST_ROW],
-            to: left[WAIST_ROW],
-            bow: {
-                x: at.neck.x + axis.x * (TORSO_PROFILE[WAIST_ROW][0] + 0.06),
-                y: at.neck.y + axis.y * (TORSO_PROFILE[WAIST_ROW][0] + 0.06),
-            },
+        const chest = block(
+            CHEST_PROFILE,
+            toward(at.shoulderR, CHEST_PROFILE[2][0], CHEST_REACH, chestFloor, 1),
+            toward(at.shoulderL, CHEST_PROFILE[2][0], CHEST_REACH, chestFloor, -1),
+        );
+        const pelvisAnchor = PELVIS_PROFILE[3][0];
+        const pelvis = block(
+            PELVIS_PROFILE,
+            toward(at.hipR, pelvisAnchor, PELVIS_REACH, pelvisFloor, 1),
+            toward(at.hipL, pelvisAnchor, PELVIS_REACH, pelvisFloor, -1),
+        );
+        return {
+            blocks: [chest, pelvis],
+            waist: place(lerp3(joints.neck, joints.hip, WAIST_T)),
         };
-        return { outline: smoothLoop([...right, ...left.reverse()]), seam };
     })();
 
     const head: CanvasPoint[] = (() => {
@@ -1780,6 +1814,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
     const sockets: Ball[] = [
         { center: at.shoulderL, radius: u(R.shoulderBall, at.shoulderL.scale) },
         { center: at.shoulderR, radius: u(R.shoulderBall, at.shoulderR.scale) },
+        { center: waistCentre, radius: u(R.waistBall, waistCentre.scale) },
         { center: at.hipL, radius: u(R.hipBall, at.hipL.scale) },
         { center: at.hipR, radius: u(R.hipBall, at.hipR.scale) },
     ];
@@ -1791,13 +1826,20 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             key: 'torso',
             order: 'authored',
             depth: mean(at.neck.depth, hipMid.depth),
-            seam: waistSeam,
+            // Authored, not depth-sorted: every ball belongs *under* its
+            // block whatever the depths say, or a shoulder ball lands on top
+            // of the chest as a dark disc. Only the two blocks are sorted
+            // against each other, which is what a bend forward or back needs.
             shapes: [
                 { kind: 'ball', ball: sockets[0], tone: 'joint', depth: at.shoulderL.depth },
                 { kind: 'ball', ball: sockets[1], tone: 'joint', depth: at.shoulderR.depth },
-                { kind: 'ball', ball: sockets[2], tone: 'joint', depth: at.hipL.depth },
-                { kind: 'ball', ball: sockets[3], tone: 'joint', depth: at.hipR.depth },
-                { kind: 'polygon', points: torso, tone: 'body', depth: mean(at.neck.depth, hipMid.depth) },
+                { kind: 'ball', ball: sockets[2], tone: 'joint', depth: waistCentre.depth },
+                { kind: 'ball', ball: sockets[3], tone: 'joint', depth: at.hipL.depth },
+                { kind: 'ball', ball: sockets[4], tone: 'joint', depth: at.hipR.depth },
+                ...([
+                    { kind: 'polygon' as const, points: torso[0], tone: 'body' as const, depth: mean(at.neck.depth, waistCentre.depth) },
+                    { kind: 'polygon' as const, points: torso[1], tone: 'body' as const, depth: mean(waistCentre.depth, hipMid.depth) },
+                ].sort((a, b) => a.depth - b.depth)),
             ],
         },
         {

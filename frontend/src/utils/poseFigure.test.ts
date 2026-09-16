@@ -259,7 +259,7 @@ describe('figureParts', () => {
         const at = projectFigure(figure);
         const hipMid = { x: (at.hipL.x + at.hipR.x) / 2, y: (at.hipL.y + at.hipR.y) / 2 };
         const y = at.neck.y + (hipMid.y - at.neck.y) * t;
-        const near = torso.filter((point) => Math.abs(point.y - y) < figureUnit(figure) * 0.02);
+        const near = torso.flat().filter((point) => Math.abs(point.y - y) < figureUnit(figure) * 0.02);
         if (near.length < 2) return 0;
         const xs = near.map((point) => point.x);
         return Math.max(...xs) - Math.min(...xs);
@@ -281,11 +281,12 @@ describe('figureParts', () => {
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
         const { torso } = figureParts(figure);
         const at = projectFigure(figure);
-        expect(torso.length).toBeGreaterThan(24);
-        // The chest is inside it; a point out beside the waist is not.
+        expect(torso).toHaveLength(2);           // the chest block and the pelvis
+        for (const block of torso) expect(block.length).toBeGreaterThan(24);
+        // The chest is inside the upper block; a point out beside it is not.
         const chest = { x: at.neck.x, y: at.neck.y + (at.hip.y - at.neck.y) * 0.3 };
-        expect(inPolygon(chest, torso)).toBe(true);
-        expect(inPolygon({ x: chest.x + figureUnit(figure) * 0.3, y: chest.y }, torso)).toBe(false);
+        expect(inPolygon(chest, torso[0])).toBe(true);
+        expect(inPolygon({ x: chest.x + figureUnit(figure) * 0.3, y: chest.y }, torso[0])).toBe(false);
     });
 
     it('hangs the top of the torso off the shoulders and the bottom off the hips', () => {
@@ -399,7 +400,7 @@ describe('figureParts', () => {
         // No skirt: the pelvis stops at the hip joints rather than hanging
         // below them, so the legs pivot on its bottom corners.
         const hipY = Math.max(at.hipL.y, at.hipR.y);
-        const lowest = Math.max(...torso.map((point) => point.y));
+        const lowest = Math.max(...torso.flat().map((point) => point.y));
         expect(lowest - hipY).toBeLessThan(figureUnit(figure) * 0.04);
     });
 
@@ -408,12 +409,21 @@ describe('figureParts', () => {
         // that. Measured, because "looks about right" is how it drifted.
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
         const head = HEAD_LENGTH_RATIO * figureUnit(figure);
-        const shoulders = torsoWidthAt(figure, 0.10);
-        const hips = torsoWidthAt(figure, 0.88);   // the iliac crest, the widest
+        // Measured across the balls, not across the block: the shoulders you
+        // *see* are the chest plus its two balls, and the hips the pelvis plus
+        // its two. The block alone is deliberately narrower than the joints.
+        const { sockets } = figureParts(figure);
+        const across = (a: typeof sockets[number], b: typeof sockets[number]) =>
+            Math.abs(a.center.x - b.center.x) + a.radius + b.radius;
+        const shoulders = across(sockets[0], sockets[1]);
+        const hips = across(sockets[3], sockets[4]);
         expect(shoulders / head).toBeGreaterThan(1.8);
-        expect(shoulders / head).toBeLessThan(2.2);
-        expect(hips / shoulders).toBeGreaterThan(0.68);
+        expect(shoulders / head).toBeLessThan(2.3);
+        expect(hips / shoulders).toBeGreaterThan(0.62);
         expect(hips / shoulders).toBeLessThan(0.86);
+        // And the chest block itself stays well inside them, so the arm rests
+        // on the edge instead of sinking into the body.
+        expect(torsoWidthAt(figure, 0.10)).toBeLessThan(shoulders * 0.8);
     });
 
     it('puts a ball on the sockets and nothing on the hinges', () => {
@@ -422,9 +432,29 @@ describe('figureParts', () => {
         // ball onto the hinges is what made ours read as a toy; dropping it
         // from the sockets too was over-correcting the other way.
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const at = projectFigure(figure);
         const { sockets, torso, clusters } = figureParts(figure);
-        expect(sockets).toHaveLength(4);
-        for (const ball of sockets) expect(inPolygon(ball.center, torso)).toBe(true);
+        const [shoulderL, shoulderR, waist, hipL, hipR] = sockets;
+        expect(sockets).toHaveLength(5);
+        // Each ball stands proud at its block's corner — its centre is outside
+        // the block, which is exactly what makes a limb rest on the edge — but
+        // it is still *anchored* on it: walk from the centre toward the spine
+        // by no more than its own radius and you are inside the block.
+        const spineX = (at.neck.x + at.hip.x) / 2;
+        const anchored = (ball: typeof sockets[number], block: typeof torso[number]) => {
+            const toward = Math.sign(spineX - ball.center.x) || 1;
+            for (let step = 0.2; step <= 1.001; step += 0.2) {
+                const probe = { x: ball.center.x + toward * ball.radius * step, y: ball.center.y };
+                if (inPolygon(probe, block)) return true;
+            }
+            return false;
+        };
+        for (const ball of [shoulderL, shoulderR]) expect(anchored(ball, torso[0])).toBe(true);
+        for (const ball of [hipL, hipR]) expect(anchored(ball, torso[1])).toBe(true);
+        // The waist ball is in neither: it lives in the gap between the two
+        // blocks, which is the whole point of it — that gap is what makes a
+        // waist read as a joint rather than a crease.
+        expect(torso.some((block) => inPolygon(waist.center, block))).toBe(false);
         // Drawn once, under the torso. Drawn again with the limb, a socket
         // lands on top of the thigh as a dark disc and reads as a kneecap in
         // the wrong place.
@@ -433,15 +463,17 @@ describe('figureParts', () => {
         expect(limbShapes.some((shape) => shape.kind === 'ball')).toBe(false);
     });
 
-    it('draws one seam across the torso, where the ribcage meets the pelvis', () => {
-        const { clusters } = parts();
-        const torso = clusters.find((cluster) => cluster.key === 'torso')!;
-        expect(torso.seam).toBeDefined();
-        // Across the body, not along it: the two ends sit on opposite sides.
+    it('leaves a real gap at the waist rather than a line drawn on a form', () => {
+        // The waist used to be a hairline across one continuous outline. A
+        // line across a form reads as a crease; the gap reads as a joint,
+        // which is what it is. So the blocks must not touch.
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
-        const at = projectFigure(figure);
-        const { seam } = figureParts(figure).clusters.find((cluster) => cluster.key === 'torso')!;
-        expect(Math.sign(seam!.from.x - at.neck.x)).toBe(-Math.sign(seam!.to.x - at.neck.x));
+        const [chest, pelvis] = figureParts(figure).torso;
+        const chestBottom = Math.max(...chest.map((point) => point.y));
+        const pelvisTop = Math.min(...pelvis.map((point) => point.y));
+        expect(pelvisTop).toBeGreaterThan(chestBottom);
+        // ...and no point of one block falls inside the other.
+        expect(chest.some((point) => inPolygon(point, pelvis))).toBe(false);
     });
 
     it('runs the foot out the way the body faces', () => {
@@ -467,7 +499,7 @@ describe('figureParts', () => {
         const big = figureParts(scaleFigure(base, 2));
         const span = (points: { x: number }[]) => Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x));
         expect(span(big.head)).toBeCloseTo(span(small.head) * 2, 3);
-        expect(span(big.torso)).toBeCloseTo(span(small.torso) * 2, 3);
+        expect(span(big.torso.flat())).toBeCloseTo(span(small.torso.flat()) * 2, 3);
         expect(span(big.limbs[0].outlines[0])).toBeCloseTo(span(small.limbs[0].outlines[0]) * 2, 3);
     });
 
