@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Stack } from '@mui/material';
+import { Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
 import type { ProbeProtocol, ProbeRouting } from '@/types/probe';
@@ -66,7 +66,6 @@ export const BenchAxes: React.FC<{
 }> = ({ axes, onChange, availability, targetKind, routing, onRoutingChange, rawProtocol }) => {
     const { t } = useTranslation();
     const rawMode = !!rawProtocol;
-    const rawHint = t('bench.knobOwnedByRaw', { defaultValue: 'Set by your raw request, not by this knob.' });
     const set = (patch: Partial<ProbeAxes>) => onChange({ ...axes, ...patch });
     const { protocol } = availability;
     const protocolOptions = protocol.options.length ? protocol.options : protocol.value ? [protocol.value] : [];
@@ -110,54 +109,59 @@ export const BenchAxes: React.FC<{
                     disabled={targetKind === null}
                 />
             </Axis>
-            <Axis label={t('probe.tool')} hint={rawMode ? rawHint : t('probe.toolHint')}>
-                <ExclusiveToggle
-                    value={axes.tool ? 'on' : 'off'}
-                    onChange={(v) => set({ tool: v === 'on' })}
-                    options={[
-                        { value: 'off', label: t('probe.toolOff') },
-                        { value: 'on', label: t('probe.toolOn') },
-                    ]}
-                    disabled={rawMode}
-                />
-            </Axis>
-            <Axis label={t('probe.vision')} hint={rawMode ? rawHint : availability.visionHint}>
-                <ExclusiveToggle
-                    value={axes.vision}
-                    onChange={(v) => set({ vision: v })}
-                    options={[
-                        { value: 'none', label: t('probe.visionNone') },
-                        { value: 'user', label: t('probe.visionUser') },
-                        { value: 'tool', label: t('probe.visionTool') },
-                    ]}
-                    disabled={rawMode || availability.visionDisabled}
-                />
-            </Axis>
-            <Axis label={t('probe.thinking')} hint={rawMode ? rawHint : t('probe.thinkingHint')}>
-                <Box sx={{ opacity: rawMode ? 0.4 : 1, pointerEvents: rawMode ? 'none' : 'auto' }}>
-                    <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
-                </Box>
-            </Axis>
-            <Axis
-                label={t('probe.protocol')}
-                hint={
-                    rawMode
-                        ? t('bench.protocolFromRaw', { defaultValue: "The raw request's protocol — change it in the request editor." })
-                        : protocol.locked || protocol.disabled
-                          ? protocol.lockHint
-                          : `${PROTOCOL_META[protocol.value]?.full || ''} · ${t('probe.protocolHint')}`
-                }
-            >
-                <ExclusiveToggle
-                    value={rawMode ? rawProtocol! : protocol.value}
-                    onChange={(v) => set({ protocol: v as ProbeProtocol })}
-                    options={(rawMode ? [rawProtocol!] : protocolOptions).map((p) => ({
-                        value: p,
-                        label: ((rawMode || protocolOptions.length === 1) ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
-                    }))}
-                    disabled={rawMode || protocol.locked || protocol.disabled || protocolOptions.length === 0}
-                />
-            </Axis>
+            {/* Tool / Vision / Thinking / Protocol only apply to the probe's own
+                fixture. A raw request owns all four itself (tools, image
+                blocks, a thinking field, the wire shape are yours to write) —
+                so once you've written one, these rows aren't disabled, they
+                don't render at all. Nothing here is "yours but greyed out";
+                it's simply not this view's concern (.design/bench.md §6). */}
+            {!rawMode && (
+                <>
+                    <Axis label={t('probe.tool')} hint={t('probe.toolHint')}>
+                        <ExclusiveToggle
+                            value={axes.tool ? 'on' : 'off'}
+                            onChange={(v) => set({ tool: v === 'on' })}
+                            options={[
+                                { value: 'off', label: t('probe.toolOff') },
+                                { value: 'on', label: t('probe.toolOn') },
+                            ]}
+                        />
+                    </Axis>
+                    <Axis label={t('probe.vision')} hint={availability.visionHint}>
+                        <ExclusiveToggle
+                            value={axes.vision}
+                            onChange={(v) => set({ vision: v })}
+                            options={[
+                                { value: 'none', label: t('probe.visionNone') },
+                                { value: 'user', label: t('probe.visionUser') },
+                                { value: 'tool', label: t('probe.visionTool') },
+                            ]}
+                            disabled={availability.visionDisabled}
+                        />
+                    </Axis>
+                    <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
+                        <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
+                    </Axis>
+                    <Axis
+                        label={t('probe.protocol')}
+                        hint={
+                            protocol.locked || protocol.disabled
+                                ? protocol.lockHint
+                                : `${PROTOCOL_META[protocol.value]?.full || ''} · ${t('probe.protocolHint')}`
+                        }
+                    >
+                        <ExclusiveToggle
+                            value={protocol.value}
+                            onChange={(v) => set({ protocol: v as ProbeProtocol })}
+                            options={protocolOptions.map((p) => ({
+                                value: p,
+                                label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
+                            }))}
+                            disabled={protocol.locked || protocol.disabled || protocolOptions.length === 0}
+                        />
+                    </Axis>
+                </>
+            )}
         </Stack>
     );
 };

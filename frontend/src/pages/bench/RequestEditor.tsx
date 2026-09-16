@@ -122,20 +122,32 @@ export const RequestEditor: React.FC<{
     return (
         <Stack spacing={1.25}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                <Select
-                    size="small"
-                    value={raw.protocol}
-                    onChange={(e) => onRawChange({ ...raw, protocol: e.target.value as ProbeProtocol })}
-                    sx={{ fontSize: '0.78rem', minWidth: 190 }}
-                    inputProps={{ 'aria-label': t('probe.protocol') }}
-                >
-                    {protocolOptions.map((p) => (
-                        <MenuItem key={p} value={p} sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(p)}</MenuItem>
-                    ))}
-                    {!protocolOptions.includes(raw.protocol) && (
-                        <MenuItem value={raw.protocol} disabled sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(raw.protocol)}</MenuItem>
-                    )}
-                </Select>
+                {/* Protocol is chosen once, when you start writing — changing
+                    it is the same move as picking a different template: the
+                    body is a specific protocol's shape, so a new protocol
+                    means a new starting body, not a relabeled old one (this
+                    used to just swap the tag and leave a mismatched body
+                    behind — .design/bench.md §6). */}
+                <Tooltip title={t('bench.rawProtocolSwitchHint', { defaultValue: "Switching protocol replaces the body below with that protocol's starting template." })}>
+                    <Select
+                        size="small"
+                        value={raw.protocol}
+                        onChange={(e) => {
+                            const nextProtocol = e.target.value as ProbeProtocol;
+                            if (nextProtocol === raw.protocol) return;
+                            onRawChange({ protocol: nextProtocol, body: JSON.stringify(TEMPLATES[nextProtocol][0].body, null, 2) });
+                        }}
+                        sx={{ fontSize: '0.78rem', minWidth: 190 }}
+                        inputProps={{ 'aria-label': t('probe.protocol') }}
+                    >
+                        {protocolOptions.map((p) => (
+                            <MenuItem key={p} value={p} sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(p)}</MenuItem>
+                        ))}
+                        {!protocolOptions.includes(raw.protocol) && (
+                            <MenuItem value={raw.protocol} disabled sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(raw.protocol)}</MenuItem>
+                        )}
+                    </Select>
+                </Tooltip>
                 <Box sx={{ flex: 1 }} />
                 {seedBody && (
                     <Tooltip title={t('bench.startFromBuilderHint', { defaultValue: "Replace the text with the request the probe's builder would send right now." })}>

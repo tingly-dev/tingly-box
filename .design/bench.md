@@ -256,6 +256,28 @@ inherited 态展示的是**解析后的具体值**而不是 "默认" 字样（ux
 
 ## 6. Request：写你自己的客户端请求（三种协议）
 
+Request 面板做两件不同的事，故意不把它们合并成一件：**固定场景检查**（默认视图，
+和 Probe 弹窗共用同一套轴——Tool/Vision/Thinking/Protocol/Message，同一批
+builder）回答"TB 已知的兼容性矩阵，对这个目标现在还成立吗"；**自定义请求**
+（写你自己的完整请求）回答"我发这个具体的东西，TB 会怎么处理"。前者故意固化——
+它的价值就是"小、快、可反复用同一套维度验证任意目标"，不该随手加轴；后者故意
+不受限——任何轴表达不了的形态，直接在协议原生的 JSON 里写。
+
+这条边界曾经含混过：早期实现里 raw 只**禁用**部分轴而不是彻底不显示，Protocol
+下拉在 raw 模式下还能"切换"却只改标签不改 body，这类半耦合正是混乱的来源——两
+边都不是完整的自己。现在的规则很简单：**一份请求 body 只有一个作者**，要么是
+固定场景的 builder，要么是你写的 JSON，从不"部分借用"对方。进入自定义请求是一
+个单向动作（"Write the request yourself"），不是一个可以来回切的 tab——回去的
+唯一方式是重新开始，因为自定义 JSON 没法自动逆推回轴的状态，假装可以双向切换
+只会制造一种不存在的对称感。
+
+**这个自由度只属于 Bench，不属于 Probe 弹窗。** Probe 弹窗永远只有固定场景那一
+半（轴 + Message 覆盖），没有自定义请求编辑器、没有 flags overlay、没有 header
+覆盖、没有 routing pin——弹窗的价值是"就地、两次点击拿结论"，塞入任何这些都会
+稀释它。弹窗唯一新增的出口是"在 Bench 中打开"：带着当前 target/axes/message 跳
+到 Bench 的默认视图（和弹窗长得一样），自定义请求这道门只在 Bench 页面里才有。
+这是设计约束，不是待办——复杂操作不会因为"顺手"就加回弹窗。
+
 ### 6.1 为什么必须能自己写请求
 
 很多 flag / 转换行为**只在特定请求形态下发生**，单条 message 根本测不到：
@@ -303,17 +325,26 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
 
 ### 6.3 编辑器 UI 与模板
 
-- 中栏 Request 面板默认是 **fixture 模式**：一个 message 输入框（即 probe 的 override），
-  加两条出口：**Write the request yourself**（空白起步）和 **Edit the builder's request**
-  （把 Payload 面板当前显示的 body 复制进来改——右栏的 Edit 按钮是同一动作）。
-- **raw 模式**：协议下拉（rule target 只列 scenario 家族允许的协议；provider target 列
-  它会说的协议）+ 等宽 JSON 文本域 + 即时解析错误 + **Back to the fixture**。Tool / Vision /
-  Thinking 轴变灰并注明"由请求本身决定"；Protocol 轴锁定为请求的协议。
+- 中栏 Request 面板默认是**固定场景模式**：一个 message 输入框（即 probe 的
+  override），加两条出口：**Write the request yourself**（空白起步）和 **Edit the
+  builder's request**（把 Payload 面板当前显示的 body 复制进来改——右栏的 Edit
+  按钮是同一动作）。两条出口通向同一个目的地，只是起始内容不同。
+- **自定义请求模式**：协议下拉（rule target 只列 scenario 家族允许的协议；provider
+  target 列它会说的协议）+ 等宽 JSON 文本域 + 即时解析错误 + **Back to the
+  fixture**。Tool / Vision / Thinking / Protocol 这几个轴**不渲染**，不是变灰禁
+  用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接跳过这
+  几个 `Axis` 块，不是给它们传 `disabled`）。Scope / Stream / Routing 保持可见：
+  它们是传输层开关，和 body 怎么拼出来的无关，固定场景和自定义请求都用得到。
+- **切换协议 = 重新开始，不是重新贴标签**：协议下拉的 onChange 把 body 换成新
+  协议的起始模板，而不是只改 `request_protocol` 这个字段——旧实现只改标签、
+  不改 body，会产出一份标签和内容对不上的请求，这是已修的 bug，不是特性。和
+  点 Templates 菜单是同一套语义（直接替换，不做确认弹窗，因为这个页面的受众
+  本来就习惯"重来"这个动作）。
 - **Templates 下拉**（ux-principles #8：教育内嵌产品）：按协议各备一组"教材式"形态一键
   填充——`Multi-turn`、`Tool round-trip`（tools + tool_use + tool_result）、`Image`；
   Anthropic 额外有 `Mid-conversation system`（claude_code_compat 的测试形态）。模板名旁一
   句话说明它测什么。模板就是把 harness `flagBaseRequest` 的知识透给用户。
-- 切换 target 时清空 raw 请求（它是针对旧 target 协议写的）。
+- 切换 target 时清空自定义请求（它是针对旧 target 协议写的）。
 
 ---
 

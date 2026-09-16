@@ -91,36 +91,108 @@ Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed
   suppressing clean_header shows up THERE, not as a UI prediction.
 ```
 
-## 4. Request editor: fixture vs raw (three protocols)
+## 4. Request editor: two jobs, one-way door between them (not tabs)
+
+Fixed-scenario testing and custom-request testing are different jobs, not two
+states of the same control — the confusion in earlier drafts came from half-
+coupling them (raw disabling *some* axes, Protocol pretending to stay live).
+The fix isn't a smarter coupling, it's no coupling: one default view, one
+one-way action into a self-contained second view, never a peer switch.
 
 ```
-  fixture mode (default)                raw mode
-  ┌ REQUEST ───────────────┐            ┌ REQUEST ──────────────────────┐
-  │ Message                │            │ Protocol [Anthropic Messages▾]│
-  │ [say hi and nothing…]  │  ───────▶  │ ┌ JSON ────────────────────┐  │
-  │                        │  "write it │ │ {"messages":[…]}         │  │
-  │ [Write the request     │   yourself"│ └──────────────────────────┘  │
-  │  yourself]             │      or    │ [templates ▾] [← back to fixture]
-  │ [Edit the builder's    │  "edit the │                               │
-  │  request]              │   builder's│ Tool / Vision / Thinking axes │
-  └────────────────────────┘   request" │ greyed: "owned by the request"│
-                                        └───────────────────────────────┘
-
-  Raw body goes out as E2ERequest.request + request_protocol; the probe only
-  fills `model` (and max_tokens / stream_options defaults). Protocol choices
-  are constrained by the target: a rule's scenario family, or what the
-  provider speaks. PAYLOAD's [Edit] is the same door: it copies the current
-  body into raw mode — no separate body-override layer.
-
-  [templates ▾]  (one set per protocol)
-    Multi-turn            — user→assistant→user; conversion fidelity baseline
-    Tool round-trip       — tools + assistant tool_use/tool_calls → tool result
-    Image                 — user message with an image block
-    Mid-convo system      — Anthropic only: the claude_code_compat shape
-
-  Insert = replace the body. Each entry's caption says what it exercises —
-  the harness fixture knowledge, surfaced.
+  default view (= the Probe dialog, unlabeled — it's just the page)
+  ┌ REQUEST ───────────────────────────────┐
+  │ Message                                 │
+  │ [Hello, this is a test message. …]      │
+  │                                          │
+  │ Tool       ▤ Off │ On                   │
+  │ Vision     ▤ Off │ User │ Tool          │
+  │ Thinking   ──●──────────────            │
+  │ Protocol   ▤ OpenAI Chat│Responses│Ant  │
+  │                                          │
+  │ Need something the knobs can't express?  │
+  │ [ Write the request yourself → ]         │
+  └──────────────────────────────────────────┘
+        │  click "Write the request yourself"     (one-way)
+        │  (PAYLOAD's [Edit] is the other door — same
+        │   destination, pre-seeded with the current body)
+        ▼
+  ┌ REQUEST ──────────────────────────────────────┐
+  │ Starting point:                                │
+  │  ○ Blank             ○ Multi-turn              │
+  │  ○ Tool round-trip   ○ Image                   │
+  │  ○ Mid-convo system (Anthropic only)           │
+  │  ○ Copy what the fixture currently shows       │
+  │                                                 │
+  │ Protocol: Anthropic Messages ▾  ← chosen here; picking a
+  │                                    different one REPLACES the
+  │                                    body with ITS starting
+  │                                    template (same move as a
+  │                                    template pick — never just
+  │                                    a relabel)
+  │ ┌ JSON ───────────────────────────────────┐    │
+  │ │ {                                       │    │
+  │ │   "messages": [ … ]                     │    │
+  │ │ }                                       │    │
+  │ └───────────────────────────────────────────┘    │
+  │ [templates ▾]              [← back to the fixture]│
+  └─────────────────────────────────────────────────┘
+    No Tool / Vision / Thinking / Protocol rows in the Compose
+    column while this view is active — not disabled, not rendered.
+    They aren't this view's knobs.
 ```
+
+State diagram — why this is a door, not a tab bar:
+
+```
+        ┌──────────────┐   click "Write the      ┌──────────────┐
+        │ default view  │   request yourself"      │ custom request│
+        │ (= the Probe  ├─────────────────────────▶│ editor        │
+        │  dialog)      │        (one-way)          │               │
+        └──────────────┘                            └──────────────┘
+              ▲                                             │
+              │        pick a new target / start over        │
+              └────────────────────────────────────────────┘
+
+  ✗ Rejected: two named tabs you flip between, each keeping its own
+    state. Nobody actually toggles back and forth mid-session — once
+    you've written custom JSON, the axes have nothing to resync to.
+    Tabs would dress up the same binary choice with a false symmetry;
+    a one-way door names what people actually do.
+```
+
+The Probe dialog never gets a door of its own — it stays exactly the
+left-hand box, forever, with one new exit:
+
+```
+   ┌ Probe dialog ────────┐
+   │ axes + Message        │
+   │ (in-place, 2 clicks    │
+   │  to a conclusion)      │
+   │                        │
+   │ [Open in Bench →]      │
+   └────────────────────────┘
+              │  carries target + axes + message
+              ▼
+       Bench's default view (above) — never straight into the
+       custom editor. Complex operations only exist on Bench;
+       the dialog gets a signpost to them, not the operations
+       themselves.
+```
+
+Raw body goes out as E2ERequest.request + request_protocol; the probe only
+fills `model` (and max_tokens / stream_options defaults). Protocol choices
+are constrained by the target: a rule's scenario family, or what the
+provider speaks.
+
+[templates ▾]  (one set per protocol; doubles as "starting point" list)
+  Multi-turn            — user→assistant→user; conversion fidelity baseline
+  Tool round-trip       — tools + assistant tool_use/tool_calls → tool result
+  Image                 — user message with an image block
+  Mid-convo system      — Anthropic only: the claude_code_compat shape
+
+Insert = replace the body, same as a protocol switch. Each entry's caption
+says what it exercises — the harness fixture knowledge, surfaced.
 
 ## 5. Flags overlay data flow (through-TB only)
 
