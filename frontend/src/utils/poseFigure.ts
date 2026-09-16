@@ -1145,22 +1145,114 @@ const insideEllipse = (point: CanvasPoint, ellipse: Ellipse, tolerance: number):
 // Joints are grabbed where they are drawn — the projected position — and the
 // nearest one to the camera wins a tie, which is the one the pointer is
 // actually over.
-export const hitTestJoint = (figure: PoseFigure, point: CanvasPoint, radius: number): JointKey | null => {
-    const projected = projectFigure(figure);
-    let best: JointKey | null = null;
-    let bestDistance = radius;
-    let bestDepth = -Infinity;
+// Which joints get a handle. Every joint except the hip root: dragging that
+// one translates the whole figure, which dragging the *body* already does and
+// does more discoverably — so it was a handle that did nothing new, sitting
+// right between hipL and hipR, where it turned the pelvis into a pile of three
+// dots you could not pick apart (principle 9).
+export const HANDLE_KEYS: readonly JointKey[] = JOINT_KEYS.filter((key) => key !== 'hip');
+
+// How far down the chain a joint is. Used to break a tie between two handles
+// that land on top of each other: the one further out is the finer control and
+// is always the one meant — a wrist over an elbow, the face over the head.
+const CHAIN_DEPTH: Record<JointKey, number> = (() => {
+    const depths = {} as Record<JointKey, number>;
     for (const key of JOINT_KEYS) {
-        const joint = projected[key];
-        const distance = Math.hypot(point.x - joint.x, point.y - joint.y);
-        if (distance > bestDistance) continue;
-        if (distance < bestDistance - 1e-9 || joint.depth > bestDepth) {
-            best = key;
-            bestDistance = distance;
-            bestDepth = joint.depth;
+        let steps = 0;
+        let walk: JointKey | null = JOINT_PARENT[key];
+        while (walk) {
+            steps += 1;
+            walk = JOINT_PARENT[walk];
         }
+        depths[key] = steps;
     }
-    return best;
+    return depths;
+})();
+
+// The face handle is pushed out to a minimum distance from the head's, in
+// handle radii. Its bone points out of the skull, so the moment the head faces
+// toward or away from the camera the two project onto the same pixel — on our
+// own library that happens in more than half of all pose-and-view combinations,
+// which is most of what "the handles are hard to grab" was.
+const FACE_HANDLE_GAP = 2.4;
+
+// The face bone's full length on screen, which is also the radius of the ball
+// the drag reads depth inside. Distances are remapped into [gap, reach] for
+// drawing and back again for dragging, so pushing the handle out costs none of
+// that: dragging it to the gap still means "looking straight at the camera".
+const faceDial = (figure: PoseFigure, handleRadius: number) => {
+    const at = projectFigure(figure);
+    const reach = Math.max(figureUnit(figure) * BONE.face * at.face.scale, 1);
+    const gap = Math.min(handleRadius * FACE_HANDLE_GAP, reach * 0.75);
+    let dx = at.face.x - at.head.x;
+    let dy = at.face.y - at.head.y;
+    let length = Math.hypot(dx, dy);
+    if (length < 1e-6) {
+        // Pointing straight at or away from the camera: there is no direction
+        // on screen to use, so the dial parks above the crown. Which of the two
+        // it is stays the same question it is everywhere else in this tool, and
+        // has the same answer — Shift.
+        dx = at.head.x - at.neck.x;
+        dy = at.head.y - at.neck.y;
+        length = Math.hypot(dx, dy);
+        if (length < 1e-6) { dx = 0; dy = -1; length = 1; }
+    }
+    return { head: at.head, dir: { x: dx / length, y: dy / length }, out: length, reach, gap };
+};
+
+export const handlePointOf = (
+    figure: PoseFigure,
+    key: JointKey,
+    handleRadius: number,
+): CanvasPoint => {
+    if (key !== 'face') return projectFigure(figure)[key];
+    const { head, dir, out, reach, gap } = faceDial(figure, handleRadius);
+    const drawn = gap + Math.min(out / reach, 1) * (reach - gap);
+    return { x: head.x + dir.x * drawn, y: head.y + dir.y * drawn };
+};
+
+// The inverse: a pointer on the dial, back to the point `swingJoint` should aim
+// at. Identity for every joint whose handle is drawn where it actually is.
+export const swingTargetOf = (
+    figure: PoseFigure,
+    key: JointKey,
+    pointer: CanvasPoint,
+    handleRadius: number,
+): CanvasPoint => {
+    if (key !== 'face') return pointer;
+    const { head, reach, gap } = faceDial(figure, handleRadius);
+    const dx = pointer.x - head.x;
+    const dy = pointer.y - head.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1e-6) return pointer;
+    const inner = Math.max(0, (length - gap) * reach / Math.max(reach - gap, 1e-6));
+    return { x: head.x + (dx / length) * inner, y: head.y + (dy / length) * inner };
+};
+
+export const hitTestJoint = (
+    figure: PoseFigure,
+    point: CanvasPoint,
+    radius: number,
+    handleRadius = radius / 2,
+): JointKey | null => {
+    const hits = HANDLE_KEYS
+        .map((key) => {
+            const at = handlePointOf(figure, key, handleRadius);
+            return { key, gap: Math.hypot(point.x - at.x, point.y - at.y) };
+        })
+        .filter((hit) => hit.gap <= radius);
+    if (hits.length === 0) return null;
+    const closest = Math.min(...hits.map((hit) => hit.gap));
+    // Anything this close to the closest is a tie rather than a choice — the
+    // pointer is not accurate to a third of the pick radius anyway. Among ties
+    // the joint further down the chain wins, then the nearer one, then the one
+    // in front.
+    const projected = projectFigure(figure);
+    const ties = hits.filter((hit) => hit.gap <= closest + radius * 0.33);
+    ties.sort((a, b) => (CHAIN_DEPTH[b.key] - CHAIN_DEPTH[a.key])
+        || (a.gap - b.gap)
+        || (projected[b.key].depth - projected[a.key].depth));
+    return ties[0].key;
 };
 
 // True when the point is on the mannequin's silhouette, which is what "grab
@@ -2210,14 +2302,15 @@ export const drawFigureHandles = (
     ctx.lineWidth = Math.max(1, handleRadius * 0.35);
     // Nearer joints get bigger dots. It costs nothing and it means the depth
     // of a pose is legible from the handles alone, before anything is dragged.
-    const ordered = [...JOINT_KEYS].sort((a, b) => projected[a].depth - projected[b].depth);
+    const ordered = [...HANDLE_KEYS].sort((a, b) => projected[a].depth - projected[b].depth);
     for (const key of ordered) {
-        const joint = projected[key];
+        const joint = handlePointOf(figure, key, handleRadius);
+        const scaleOf = projected[key];
         // The face handle is smaller and hollow: it aims the head rather than
         // placing a bone, and it should not compete with the fifteen that
         // carry the pose (principle 9).
         const aim = key === 'face';
-        const radius = handleRadius * (aim ? 0.66 : 1) * Math.max(0.7, Math.min(1.4, joint.scale));
+        const radius = handleRadius * (aim ? 0.66 : 1) * Math.max(0.7, Math.min(1.4, scaleOf.scale));
         ctx.fillStyle = aim ? HANDLE_STROKE : HANDLE_FILL;
         ctx.strokeStyle = aim ? HANDLE_FILL : HANDLE_STROKE;
         ctx.beginPath();

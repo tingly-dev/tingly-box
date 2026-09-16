@@ -20,6 +20,8 @@ import {
     figureBounds,
     figureParts,
     figureUnit,
+    HANDLE_KEYS,
+    handlePointOf,
     HEAD_LENGTH_RATIO,
     figureVisualBounds,
     flipFigure,
@@ -30,6 +32,9 @@ import {
     JOINT_PARENT,
     leastUsedShade,
     POSE_LIBRARY,
+    swingTargetOf,
+    VIEW_PRESET_KEYS,
+    type PosePresetKey,
     MIN_FIGURE_UNIT,
     moveJoint,
     nextFigureAt,
@@ -248,6 +253,98 @@ const limbWidthAt = (
     if (!below.length || !above.length) return 0;
     return Math.min(...above) - Math.max(...below);
 };
+
+describe('handles you can actually grab', () => {
+    // Measured, because "it feels hard to control" is otherwise unfalsifiable.
+    // The dialog draws handles at 7 screen px and picks within 14; on a 1024
+    // canvas shown at about 800 css px that is roughly 9 and 18 canvas px.
+    const DRAWN = 9;
+    const PICK = 18;
+
+    const tightest = (pose: PosePresetKey, view: keyof typeof VIEW_PRESETS) => {
+        const figure = createFigure(pose, DIMS, undefined, 0, VIEW_PRESETS[view]);
+        let worst = Infinity;
+        let pair = '';
+        for (let i = 0; i < HANDLE_KEYS.length; i += 1) {
+            for (let j = i + 1; j < HANDLE_KEYS.length; j += 1) {
+                const a = handlePointOf(figure, HANDLE_KEYS[i], DRAWN);
+                const b = handlePointOf(figure, HANDLE_KEYS[j], DRAWN);
+                const gap = Math.hypot(a.x - b.x, a.y - b.y);
+                if (gap < worst) {
+                    worst = gap;
+                    pair = `${HANDLE_KEYS[i]}/${HANDLE_KEYS[j]}`;
+                }
+            }
+        }
+        return { worst, pair };
+    };
+
+    it('does not give the hip root a handle of its own', () => {
+        // Dragging it translated the figure, which dragging the body already
+        // does; it sat between hipL and hipR and made the pelvis a pile of
+        // three dots. A handle that does nothing new is noise (principle 9).
+        expect(HANDLE_KEYS).not.toContain('hip');
+        expect(HANDLE_KEYS).toHaveLength(JOINT_KEYS.length - 1);
+    });
+
+    it('keeps the face handle clear of the head it points out of', () => {
+        // The face bone points out of the skull, so a head turned toward or
+        // away from the camera used to project the two handles onto the same
+        // pixel — on this library, in more than half of every pose and view.
+        for (const view of VIEW_PRESET_KEYS) {
+            for (const pose of ['standing', 'lying', 'sitting', 'lookingBack'] as PosePresetKey[]) {
+                const figure = createFigure(pose, DIMS, undefined, 0, VIEW_PRESETS[view]);
+                const head = handlePointOf(figure, 'head', DRAWN);
+                const face = handlePointOf(figure, 'face', DRAWN);
+                expect(Math.hypot(head.x - face.x, head.y - face.y)).toBeGreaterThan(DRAWN * 2);
+            }
+        }
+    });
+
+    it('carries a pointer on the face dial back to the aim it means', () => {
+        // Pushing the handle out must not cost the depth the drag reads inside
+        // the bone's ball: dragging it all the way in still means "looking
+        // straight at the camera".
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.threeQuarter);
+        const head = projectFigure(figure).head;
+        const handle = handlePointOf(figure, 'face', DRAWN);
+        const target = swingTargetOf(figure, 'face', handle, DRAWN);
+        // The handle's own position maps back to where the face really is.
+        const face = projectFigure(figure).face;
+        expect(Math.hypot(target.x - face.x, target.y - face.y)).toBeLessThan(1);
+        // ...and the inner end of the dial maps to the head itself, which is
+        // the bone pointing at the camera.
+        const dir = { x: handle.x - head.x, y: handle.y - head.y };
+        const len = Math.hypot(dir.x, dir.y);
+        const inner = { x: head.x + (dir.x / len) * 1, y: head.y + (dir.y / len) * 1 };
+        const aimed = swingTargetOf(figure, 'face', inner, DRAWN);
+        expect(Math.hypot(aimed.x - head.x, aimed.y - head.y)).toBeLessThan(1);
+    });
+
+    it('picks the joint further down the chain when two handles coincide', () => {
+        // A wrist over an elbow, a knee over a hip: the finer control is always
+        // the one meant, and without this rule a foreshortened limb hands you
+        // the wrong one at random.
+        const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.front);
+        const wrist = handlePointOf(figure, 'wristR', DRAWN);
+        expect(hitTestJoint(figure, wrist, PICK, DRAWN)).toBe('wristR');
+        const head = handlePointOf(figure, 'head', DRAWN);
+        expect(hitTestJoint(figure, head, PICK, DRAWN)).toBe('head');
+    });
+
+    it('leaves few enough collisions across the whole library to matter', () => {
+        // The number this replaces: 53% of pose-and-view combinations had a
+        // pair of handles closer than the pick radius, and 41 of 216 had two
+        // within half of it. Those are the ones you simply cannot separate.
+        const rows = POSE_LIBRARY.flatMap((group) => group.poses).flatMap(
+            (pose) => VIEW_PRESET_KEYS.map((view) => tightest(pose, view)),
+        );
+        const ambiguous = rows.filter((row) => row.worst < PICK).length;
+        const unpickable = rows.filter((row) => row.worst < PICK / 2).length;
+        expect(ambiguous / rows.length).toBeLessThan(0.3);
+        expect(unpickable).toBeLessThan(12);
+    });
+});
 
 describe('figureParts', () => {
     const parts = () => figureParts(createFigure('standing', DIMS));

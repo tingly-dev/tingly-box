@@ -52,6 +52,7 @@ import {
     TURN_DEGREES_PER_PIXEL,
     VIEW_PRESETS,
     hitTestJoint,
+    swingTargetOf,
     nextFigureAt,
     placeNewFigure,
     isScaleHandleHit,
@@ -136,6 +137,11 @@ interface SketchCanvasDialogProps {
     onSubmit: (result: SketchResult) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
+
+// How big a handle is drawn, in screen pixels. Picking uses twice this, and
+// the face's dial keeps itself clear of the head's by a multiple of it — one
+// number so the three can never disagree.
+const HANDLE_RADIUS_PX = 7;
 
 const loadDataUrl = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
     const image = new Image();
@@ -314,7 +320,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             drawFigure(ctx, figure, { selected: tool === 'pose' && figure.id === selectedId });
         }
         if (tool === 'pose' && selectedFigure) {
-            drawFigureHandles(ctx, selectedFigure, toCanvasPx(7));
+            drawFigureHandles(ctx, selectedFigure, toCanvasPx(HANDLE_RADIUS_PX));
         }
     }, [open, overlayEl, dims, figures, selectedId, selectedFigure, tool, toCanvasPx]);
 
@@ -492,7 +498,8 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         if (event.button !== 0 || poseDragRef.current) return;
         event.preventDefault();
         const point = pointFromEvent(event);
-        const jointRadius = toCanvasPx(14);
+        const jointRadius = toCanvasPx(HANDLE_RADIUS_PX * 2);
+        const handleRadius = toCanvasPx(HANDLE_RADIUS_PX);
 
         if (selectedFigure && isTurnHandleHit(selectedFigure, point, toCanvasPx(14))) {
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -531,7 +538,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         // Joints of the selected figure only: handles are drawn for that one
         // alone, and grabbing an invisible joint on a figure you have not
         // selected swings its limb when you meant to move it.
-        const joint = selectedFigure ? hitTestJoint(selectedFigure, point, jointRadius) : null;
+        const joint = selectedFigure ? hitTestJoint(selectedFigure, point, jointRadius, handleRadius) : null;
         if (selectedFigure && joint) {
             event.currentTarget.setPointerCapture(event.pointerId);
             poseDragRef.current = {
@@ -577,11 +584,14 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         }
         const point = pointFromEvent(event);
         if (drag.mode === 'joint') {
+            const handleRadius = toCanvasPx(HANDLE_RADIUS_PX);
             updateFigure(drag.figureId, (figure) => (drag.detached
                 ? moveJoint(figure, drag.joint, point)
                 // A pointer on screen names a circle of 3D positions, not a
                 // point; Shift is how you say "the other side of the body".
-                : swingJoint(figure, drag.joint, point, { away: event.shiftKey })));
+                // The face's handle is drawn out on a dial so it never lands
+                // on the head's; `swingTargetOf` maps the pointer back.
+                : swingJoint(figure, drag.joint, swingTargetOf(figure, drag.joint, point, handleRadius), { away: event.shiftKey })));
             return;
         }
         if (drag.mode === 'turn') {
