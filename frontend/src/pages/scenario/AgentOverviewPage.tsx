@@ -96,10 +96,7 @@ const AgentOverviewPage: React.FC = () => {
                                         },
                                         '&:hover': {
                                             borderColor: 'primary.main',
-                                            // Layered on top of the card's own background rather
-                                            // than replacing it, so a non-flat page background
-                                            // (the ds theme) doesn't bleed through on hover.
-                                            backgroundImage: (theme) => `linear-gradient(${alpha(theme.palette.primary.main, 0.04)}, ${alpha(theme.palette.primary.main, 0.04)})`,
+                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                                         },
                                     }}
                                 >
