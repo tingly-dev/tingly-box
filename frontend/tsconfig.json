@@ -39,7 +39,8 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "src"
+    "src",
+    "packages/*/src"
   ],
   "exclude": [
     "src/client/**"
