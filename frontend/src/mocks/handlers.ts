@@ -2162,7 +2162,8 @@ export const handlers = [
         const url = new URL(request.url)
         const scenario = url.searchParams.get('scenario')
 
-        const rules = scenario ? getMockRulesForScenario(scenario) : []
+        // No scenario = every rule, matching the real handler (it only filters when the query is present).
+        const rules = scenario ? getMockRulesForScenario(scenario) : Object.values(mockV1Rules).flat()
         return HttpResponse.json({ success: true, data: rules })
     }),
 

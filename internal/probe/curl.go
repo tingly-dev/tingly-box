@@ -102,6 +102,13 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 	default:
 		headers["Authorization"] = "Bearer " + keyEnv
 	}
+	// Through-TB probes pin their target (and carry the flag overlay) via
+	// probe headers; without them the rendered command would route like
+	// ordinary traffic instead of reproducing the probe.
+	for k, v := range probeHeaders {
+		headers[k] = v
+	}
+	applyCurlHeaderOverrides(headers, req.Headers)
 
 	return &CurlData{
 		Command:   renderCurl(url, headers, body, stream),
@@ -111,6 +118,27 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 		Body:      body,
 		KeyEnvVar: keyEnv,
 	}, nil
+}
+
+// applyCurlHeaderOverrides mirrors client.ApplyHeaderOverrides for the
+// rendered header map: an override replaces any existing header of the same
+// name (case-insensitively), and an empty value removes it.
+func applyCurlHeaderOverrides(headers map[string]string, overrides map[string]string) {
+	names := make([]string, 0, len(overrides))
+	for name := range overrides {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for existing := range headers {
+			if strings.EqualFold(existing, name) {
+				delete(headers, existing)
+			}
+		}
+		if v := overrides[name]; v != "" {
+			headers[name] = v
+		}
+	}
 }
 
 // marshalStreamAware marshals an SDK params struct and, for streaming probes,
