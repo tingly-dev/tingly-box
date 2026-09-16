@@ -92,6 +92,7 @@ export default {
       "system": "跟随系统",
       "sunlit": "日光",
       "claude": "Claude",
+      "ds": "DS",
       "click": "点击",
       "feedback": "反馈",
       "feedbackTooltip": "发送反馈（跳转到 GitHub Issues）"

@@ -1,11 +1,11 @@
 import React from 'react';
-import { Computer, DarkMode, LightMode, WbTwilight } from '@/components/icons';
+import { Cloud, Computer, DarkMode, LightMode, WbTwilight } from '@/components/icons';
 import { SvgIcon } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import type { SvgIconComponent } from '@/components/icons';
 import type { ThemeMode, ResolvedThemeMode } from './types';
 
-export const THEME_MODE_VALUES = ['light', 'dark', 'sunlit', 'claude', 'system'] as const satisfies readonly ThemeMode[];
+export const THEME_MODE_VALUES = ['light', 'dark', 'sunlit', 'claude', 'ds', 'system'] as const satisfies readonly ThemeMode[];
 export const SYSTEM_THEME_MODE_VALUES = ['light', 'dark'] as const satisfies readonly ResolvedThemeMode[];
 
 type ThemeLabelResolver = (key: string) => string;
@@ -38,5 +38,6 @@ export const getThemeOptions = (t: ThemeLabelResolver) => [
     { value: 'dark', label: t('layout.activityBar.dark'), renderIcon: createMuiThemeIcon(DarkMode) },
     { value: 'sunlit', label: t('layout.activityBar.sunlit'), renderIcon: createMuiThemeIcon(WbTwilight) },
     { value: 'claude', label: t('layout.activityBar.claude'), renderIcon: ClaudeThemeIcon },
+    { value: 'ds', label: t('layout.activityBar.ds'), renderIcon: createMuiThemeIcon(Cloud) },
     { value: 'system', label: t('layout.activityBar.system'), renderIcon: createMuiThemeIcon(Computer) },
 ] as const;
