@@ -62,7 +62,12 @@ export default function ModelCard({
                     ? getModelCardStateStyles(theme, true)
                     : {
                         borderColor: theme.palette.warning.main,
-                        backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                        // Composited over the theme's own paper color rather than
+                        // replacing it — on a theme with a non-flat page background
+                        // (ds), a bare `backgroundColor: alpha(...)` would let that
+                        // background bleed through instead of reading as a tinted card.
+                        backgroundColor: theme.palette.background.paper,
+                        backgroundImage: `linear-gradient(${alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.14 : 0.08)}, ${alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.14 : 0.08)})`,
                         boxShadow: 'none',
                         transform: 'translateY(0)',
                     }),
