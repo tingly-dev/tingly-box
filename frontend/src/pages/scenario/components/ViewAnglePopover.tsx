@@ -11,7 +11,7 @@ import {
     type PoseFigure,
     type ViewPresetKey,
     drawFigure,
-} from '@/mannequin';
+} from '@tingly/mannequin';
 
 // Where the figure is looked at from. Deliberately not more entries in the
 // pose grid: the same body seen from the side is the same body, and folding a

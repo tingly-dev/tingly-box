@@ -23,6 +23,9 @@ importers:
       '@tabler/icons-react':
         specifier: ^3.45.0
         version: 3.45.0(react@19.2.7)
+      '@tingly/mannequin':
+        specifier: workspace:*
+        version: link:packages/mannequin
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -68,9 +71,6 @@ importers:
       recharts:
         specifier: ^3.10.0
         version: 3.10.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react-is@19.2.7)(react@19.2.7)(redux@5.0.1)
-      three:
-        specifier: 0.170.0
-        version: 0.170.0
       uuid:
         specifier: ^14.0.1
         version: 14.0.1
@@ -96,9 +96,6 @@ importers:
       '@types/react-transition-group':
         specifier: ^4.4.12
         version: 4.4.12(@types/react@19.2.17)
-      '@types/three':
-        specifier: 0.170.0
-        version: 0.170.0
       '@vitejs/plugin-react':
         specifier: ^6.0.5
         version: 6.0.5(vite@8.1.5(@types/node@26.1.1)(esbuild@0.27.4))
@@ -148,6 +145,16 @@ importers:
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
+
+  packages/mannequin:
+    dependencies:
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
 packages:
 

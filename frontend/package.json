@@ -16,8 +16,8 @@
     "build:wails:lite": "vite build --mode production-wails-lite --config vite.config.wails.ts",
     "preview": "vite preview",
     "gen:api": "openapi-typescript ../openapi.json -o ./src/client/schema.d.ts",
-    "lint": "oxlint src",
-    "lint:fix": "oxlint src --fix",
+    "lint": "oxlint src packages",
+    "lint:fix": "oxlint src packages --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -28,6 +28,7 @@
     "@mui/material": "^9.2.0",
     "@mui/x-date-pickers": "^9.10.0",
     "@tabler/icons-react": "^3.45.0",
+    "@tingly/mannequin": "workspace:*",
     "date-fns": "^4.4.0",
     "devicons-react": "^1.5.0",
     "i18next": "^26.3.6",
@@ -43,7 +44,6 @@
     "react-router-dom": "^7.18.1",
     "react-transition-group": "^4.4.5",
     "recharts": "^3.10.0",
-    "three": "0.170.0",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
@@ -54,7 +54,6 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/react-transition-group": "^4.4.12",
-    "@types/three": "0.170.0",
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",

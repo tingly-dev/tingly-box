@@ -66,7 +66,7 @@ import {
     type PosePresetKey,
     type ViewPresetKey,
     drawFigure,
-} from '@/mannequin';
+} from '@tingly/mannequin';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 

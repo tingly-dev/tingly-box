@@ -8,7 +8,7 @@ import {
     type FigureTurn,
     type PosePresetKey,
     drawFigure,
-} from '@/mannequin';
+} from '@tingly/mannequin';
 
 // Thumbnails are drawn by the same renderer as the canvas, not by hand-drawn
 // icons: a library of poses is only useful if what you pick is what you get,
