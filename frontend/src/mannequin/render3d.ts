@@ -26,15 +26,9 @@ import {
     Vector3,
     WebGLRenderer,
 } from 'three';
-import {
-    figureSolids,
-    figureUnit,
-    projectionOf,
-    projectPoint,
-    toneFor,
-    type PoseFigure,
-    type Solid,
-} from './poseFigure';
+import { figureSolids, toneFor } from './body';
+import { projectionOf, projectPoint } from './camera';
+import { figureUnit, type PoseFigure } from './skeleton';
 
 // The projection is in canvas pixels with y down; three's is y up. Nothing
 // else differs, so the mapping is one sign.

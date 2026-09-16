@@ -10,8 +10,8 @@ import {
     viewPresetOf,
     type PoseFigure,
     type ViewPresetKey,
-} from '@/utils/poseFigure';
-import { drawFigure } from '@/utils/poseFigure3d';
+    drawFigure,
+} from '@/mannequin';
 
 // Where the figure is looked at from. Deliberately not more entries in the
 // pose grid: the same body seen from the side is the same body, and folding a

@@ -345,8 +345,15 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 | 文件 | 职责 |
 |------|------|
 | `frontend/src/utils/sketchCanvas.ts` | 尺寸解析、fit、坐标映射、笔宽、撤销栈;笔画的数据结构与重放 |
-| `frontend/src/utils/poseFigure.ts` | 人偶:三维骨架与 FK、rig、透视投影与机位、命中测试、变换、姿势库(角度+深度声明)、`figureSolids`(身体的实体清单)与配色 |
-| `frontend/src/utils/poseFigure3d.ts` | 把实体清单交给 three.js 渲染:与 `projectionOf` 一致的相机、共享的 WebGL 上下文、无 WebGL 时的平涂回退 |
+| `frontend/src/mannequin/` | **人偶是一个独立的库**,只依赖 `three`,不认识画布和应用。`index.ts` 是唯一入口 |
+| `mannequin/skeleton.ts` | 关节、父子关系、骨长(`BONE`)、朝向推导 |
+| `mannequin/rig.ts` | 关节限制:`constrainFigure` |
+| `mannequin/camera.ts` / `view.ts` | 每个人偶自己的透视相机;转身、视角预设 |
+| `mannequin/poses/spec.ts` / `library.ts` | **形态库**:姿势的写法(角度 → 关节)和 36 个预设本身,纯数据 |
+| `mannequin/body.ts` | **模型库**:`MANIKIN` 尺寸、`figureSolids` 实体清单、配色 |
+| `mannequin/render3d.ts` | 把实体清单交给 three.js:与相机一致的投影、共享 WebGL 上下文、无 WebGL 回退 |
+| `mannequin/figure.ts` / `transform.ts` / `interact.ts` | 造人偶、变换与边界、拖拽/命中/手柄/落点 |
+| `mannequin/landmarks.ts` | MediaPipe 关键点 ⇄ 人偶 |
 | `frontend/src/pages/scenario/components/SketchCanvasDialog.tsx` | 画布工作面:两层 canvas、工具、指针交互、undo、提交合成 |
 | `frontend/src/pages/scenario/components/PoseLibraryPopover.tsx` | 姿势库网格(缩略图走同一个渲染器,按当前机位画) |
 | `frontend/src/pages/scenario/components/ViewAnglePopover.tsx` | 机位网格(每格是这个人偶在该角度下的样子)+ 角度读数 |

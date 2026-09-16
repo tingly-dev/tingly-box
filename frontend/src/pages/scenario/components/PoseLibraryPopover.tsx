@@ -7,8 +7,8 @@ import {
     POSE_LIBRARY,
     type FigureTurn,
     type PosePresetKey,
-} from '@/utils/poseFigure';
-import { drawFigure } from '@/utils/poseFigure3d';
+    drawFigure,
+} from '@/mannequin';
 
 // Thumbnails are drawn by the same renderer as the canvas, not by hand-drawn
 // icons: a library of poses is only useful if what you pick is what you get,

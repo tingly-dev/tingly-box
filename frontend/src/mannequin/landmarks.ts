@@ -25,7 +25,7 @@ import {
     type JointKey,
     type PoseFigure,
     type Vec3,
-} from './poseFigure';
+} from './index';
 
 // The 33 landmarks, by the index every BlazePose-family model uses. Named here
 // once so nothing downstream has to remember that 31 is a toe.

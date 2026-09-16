@@ -8,7 +8,7 @@ import {
     VIEW_PRESETS,
     type JointKey,
     type PoseFigure,
-} from './poseFigure';
+} from './index';
 import {
     bodyForward,
     figureFromLandmarks,
@@ -17,7 +17,7 @@ import {
     landmarksFromFigure,
     turnOfBody,
     type Landmark,
-} from './landmarkPose';
+} from './landmarks';
 
 const DIMS = { width: 1024, height: 1024 };
 const FRAME = { width: 1024, height: 1024 };

@@ -3,7 +3,7 @@
 配套阅读:`sketch-canvas.md` §4(人偶本身)。这份文档回答的是它 §6 里留的那条
 "从照片提取姿势"——**关键点人偶怎么设计**,以及**要不要引入模型**这个还没做的决定。
 
-代码:`frontend/src/utils/landmarkPose.ts` + 单测。**它不依赖任何模型**,这是故意的,
+代码:`frontend/src/mannequin/landmarks.ts` + 单测。**它不依赖任何模型**,这是故意的,
 理由见 §3。
 
 ---

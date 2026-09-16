@@ -65,8 +65,8 @@ import {
     type PoseFigure,
     type PosePresetKey,
     type ViewPresetKey,
-} from '@/utils/poseFigure';
-import { drawFigure } from '@/utils/poseFigure3d';
+    drawFigure,
+} from '@/mannequin';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 

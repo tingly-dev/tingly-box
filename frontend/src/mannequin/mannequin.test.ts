@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { JointKey, PoseFigure } from './poseFigure';
+import type { JointKey, PoseFigure } from './index';
 import {
     applyPreset,
     figureTurn,
@@ -47,7 +47,7 @@ import {
     swingJoint,
     transformFigures,
     translateFigure,
-} from './poseFigure';
+} from './index';
 
 const DIMS = { width: 1024, height: 1024 };
 

@@ -4,7 +4,7 @@
 > (从照片导入)。这份文档只回答一件事:**人偶应该长成什么样,以及为什么**。
 > 它是画法的**基准**——任何一次改人偶的形,先改这里,再改 `poseFigure.ts`。
 >
-> 唯一的事实源是 `frontend/src/utils/poseFigure.ts` 里的 `BONE`(骨长)和 `MANIKIN`
+> 唯一的事实源是 `frontend/src/mannequin/` 里的 `BONE`(`skeleton.ts`,骨长)和 `MANIKIN`(`body.ts`)
 > (每个实体的尺寸和两块躯干的旋转截面)。下面的数值是它们的说明,不是副本——
 > 数字对不上时,以代码为准,并回来修这份文档。
 
