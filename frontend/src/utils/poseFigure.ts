@@ -1258,9 +1258,12 @@ export type ShapeTone = 'body' | 'joint' | 'head';
 // drawing order that comes from anatomy, not from depth.
 // `tint` lightens a shape above its tone without adding a fourth colour to
 // every shade table — used for the one surface that is not a volume, the flat
-// plane of the face.
+// plane of the face. `marking` says the same thing to the renderer: this is a
+// mark *on* a form, not a form, so it gets the seam's hairline rather than the
+// contour every solid part is drawn with. A full contour round the face turns
+// the head into an egg with a ring on it.
 export type FigureShape =
-    | { kind: 'ellipse'; ellipse: Ellipse; tone: ShapeTone; depth: number; tint?: number }
+    | { kind: 'ellipse'; ellipse: Ellipse; tone: ShapeTone; depth: number; tint?: number; marking?: true }
     | { kind: 'segment'; segment: Segment; tone: ShapeTone; depth: number; tint?: number }
     | { kind: 'ball'; ball: Ball; tone: ShapeTone; depth: number; tint?: number }
     | { kind: 'polygon'; points: CanvasPoint[]; tone: ShapeTone; depth: number; tint?: number };
@@ -1849,7 +1852,7 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
             shapes: [
                 { kind: 'segment', segment: neck, tone: 'body', depth: mean(at.neck.depth, at.head.depth) },
                 { kind: 'polygon', points: head, tone: 'head', depth: at.head.depth },
-                ...(face ? [{ kind: 'ellipse' as const, ellipse: face, tone: 'head' as const, tint: 0.34, depth: at.head.depth }] : []),
+                ...(face ? [{ kind: 'ellipse' as const, ellipse: face, tone: 'head' as const, tint: 0.34, marking: true as const, depth: at.head.depth }] : []),
             ],
         },
         ...limbs.map((limb): FigureCluster => ({
@@ -1883,19 +1886,30 @@ export const figureParts = (figure: PoseFigure): FigureParts => {
 // `rim` is a hairline round the silhouette. Without it a figure dissolves
 // into white paper at its edges and two overlapping figures merge into one
 // shape; with it each body reads as a separate solid object.
-export interface FigureTone { body: string; joint: string; head: string; rim: string }
+export interface FigureTone {
+    body: string; joint: string; head: string;
+    // The contour. Every part is drawn with one, and it — not the shading —
+    // is what carries the form: an illustration of a manikin reads by its
+    // line, and at thumbnail size a gradient is just grey.
+    line: string;
+    // The seam across a bend, drawn lighter than the contour so a plane change
+    // never competes with a silhouette.
+    rim: string;
+}
 
 // The joint tone is only a hair darker than the body. It used to be a full
 // step, which turned every elbow, knee and ankle into a dark disc stuck on the
 // limb — on a real manikin the joint is the same wood, and you see it because
 // of its edge, not its colour.
 const FIGURE_SHADES: readonly FigureTone[] = [
-    { body: '#aeb2b6', joint: '#a5a9ad', head: '#b6babe', rim: '#7c8085' },
-    { body: '#8d9298', joint: '#858a90', head: '#959aa0', rim: '#5d6268' },
-    { body: '#c0c5ca', joint: '#b7bcc1', head: '#c8cdd2', rim: '#8e9399' },
+    { body: '#b9bdc2', joint: '#aeb2b7', head: '#c2c6cb', line: '#5b6066', rim: '#8b9096' },
+    { body: '#9aa0a7', joint: '#90969d', head: '#a3a9b0', line: '#474c52', rim: '#70767d' },
+    { body: '#ced3d8', joint: '#c3c8cd', head: '#d6dbe0', line: '#6e747a', rim: '#9ba0a6' },
 ];
 
-const SELECTED_TONE: FigureTone = { body: '#a2abbd', joint: '#99a2b4', head: '#aab2c2', rim: '#6d7789' };
+const SELECTED_TONE: FigureTone = {
+    body: '#aab3c4', joint: '#a0a9bb', head: '#b3bbcb', line: '#4e5568', rim: '#7b8598',
+};
 
 // Which tone the next figure should wear. Least-used rather than "one past
 // the count": after a delete, counting the list hands out a shade another
@@ -1963,8 +1977,12 @@ const shadeOfShape = (base: string, depth: number, unit: number): string => {
         : mixColor(base, SHADOW_TINT, -t * DEPTH_TINT);
 };
 
-const LIT_AMOUNT = 0.30;
-const DARK_AMOUNT = 0.32;
+// Small on purpose. An earlier version leaned on the gradient for structure,
+// which was right when the figure had no contour to lean on instead; with one,
+// the same amount of shading only muddies it. The line says where the form is,
+// the shading says which way it turns.
+const LIT_AMOUNT = 0.13;
+const DARK_AMOUNT = 0.15;
 
 const shapeFill = (
     ctx: CanvasRenderingContext2D,
@@ -2124,13 +2142,17 @@ const fillShape = (ctx: CanvasRenderingContext2D, shape: FigureShape, grow = 0):
     else fillEllipse(ctx, shape.ellipse, grow);
 };
 
-const RIM_RATIO = 0.006;
+// How thick the contour is, as a fraction of the figure's height. Thin enough
+// to stay a line at dialog size, thick enough to survive a 46x64 thumbnail.
+const LINE_RATIO = 0.0075;
 
-// Back to front, one body part at a time. The rim is drawn per group rather
-// than once for the whole figure, and that is the change depth forced: a
-// single flat rim pass welds an arm crossing the chest into the chest, which
-// is the one thing the near arm has to not do. Inside a group the rim is still
-// one flat union, so a limb has no seam where its own segments meet.
+// Back to front, one body part at a time, each part filled and then outlined.
+// The contour is what makes this read as a manikin rather than as grey soup:
+// an earlier version drew a pale halo around each group instead and leaned on
+// gradients for the form, which dissolved at thumbnail size and looked muddy
+// at full size. Grouping still matters for occlusion — a near arm crossing the
+// chest has to cut into it, which is the most direct evidence of depth there
+// is — and inside a group the drawing order puts each ball under its block.
 export const drawFigure = (
     ctx: CanvasRenderingContext2D,
     figure: PoseFigure,
@@ -2139,33 +2161,37 @@ export const drawFigure = (
     const parts = figureParts(figure);
     const tone = toneFor(figure, options.selected === true);
     const unit = figureUnit(figure);
-    const rim = Math.max(unit * RIM_RATIO, 1);
+    const line = Math.max(unit * LINE_RATIO, 1);
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
     const clusters = [...parts.clusters].sort((a, b) => a.depth - b.depth);
     for (const cluster of clusters) {
-        ctx.fillStyle = tone.rim;
-        for (const shape of cluster.shapes) fillShape(ctx, shape, rim);
         const ordered = cluster.order === 'depth'
             ? [...cluster.shapes].sort((a, b) => a.depth - b.depth)
             : cluster.shapes;
         for (const shape of ordered) {
             ctx.fillStyle = shapeFill(ctx, shape, tone, unit);
+            // `fillShape` leaves its path current, so the contour is the same
+            // path — the outline can never drift from the thing it outlines.
             fillShape(ctx, shape);
+            const marking = shape.kind === 'ellipse' && shape.marking === true;
+            ctx.strokeStyle = marking ? tone.rim : tone.line;
+            ctx.lineWidth = marking ? line * 0.55 : line;
+            ctx.stroke();
         }
         if (cluster.seam) {
-            // Across the limb, bowed toward the far side of the bend. The
-            // articulation as an edge rather than a lump: the whole reason the
-            // joints stopped being balls.
+            // Across the limb, bowed toward the far side of the bend: the
+            // articulation as a plane change rather than a lump. Lighter than
+            // the contour, so it never competes with a silhouette.
             ctx.strokeStyle = tone.rim;
-            ctx.globalAlpha = 0.4;
-            ctx.lineWidth = Math.max(unit * 0.0045, 0.8);
+            ctx.lineWidth = line * 0.7;
             ctx.beginPath();
             ctx.moveTo(cluster.seam.from.x, cluster.seam.from.y);
             ctx.quadraticCurveTo(cluster.seam.bow.x, cluster.seam.bow.y, cluster.seam.to.x, cluster.seam.to.y);
             ctx.stroke();
-            ctx.globalAlpha = 1;
         }
     }
     ctx.restore();
