@@ -6,10 +6,18 @@ export const dsPrimary = '#4F6EF7';
 export const dsPrimaryLight = '#7B93FA';
 export const dsPrimaryDark = '#3B54D4';
 
+// Matches deepseek.com's actual hero recipe (inspected from its shipped CSS/JS):
+// a near-white page base (`--ds-color-bg-page: #f9f8f8`) with a sky-blue wash
+// (`linear-gradient(180deg, #9cc1e7 0%, rgba(250,250,250,0) 100%)`) faded in from
+// the top, plus an animated canvas "flow field" in `#8AA3D6`/`#9cc1e7`/white for
+// the misty texture. We approximate the flow field's organic variation with
+// several overlapping soft blobs (static — no canvas/animation, see MuiCssBaseline
+// in components/ds.ts) instead of reproducing the single flat diagonal band this
+// theme originally shipped with.
 export const dsBackgroundGradient = {
-  start: '#F4F6FC',
-  middle: '#DCE3F5',
-  end: '#B9C6EC',
+  base: '#F9F8F8',
+  wash: '#9CC1E7',
+  accent: '#8AA3D6',
 };
 
 export const dsPalette: ThemePalette = {

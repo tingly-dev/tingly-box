@@ -351,7 +351,21 @@ export const dsComponents: ThemeOptions['components'] = {
         // The deepseek.com-style misty background this theme is named for —
         // painted on <body> since every surface above it (Paper/Card/Drawer/
         // AppBar) is translucent, unlike the other themes' opaque ones.
-        backgroundImage: `linear-gradient(165deg, ${dsBackgroundGradient.start} 0%, ${dsBackgroundGradient.middle} 55%, ${dsBackgroundGradient.end} 100%)`,
+        //
+        // deepseek.com's real hero is a near-white page (`dsBackgroundGradient.base`)
+        // with an animated <canvas> "flow field" drawing moving wisps in
+        // `dsBackgroundGradient.wash`/`.accent`/white on top. We can't reasonably run
+        // that canvas behind every dashboard/table page here, so this approximates a
+        // freeze-frame of it: several soft, overlapping radial blobs near the top
+        // (their real streak colors, just static) fading into the near-white base,
+        // instead of one flat linear band.
+        backgroundColor: dsBackgroundGradient.base,
+        backgroundImage: [
+          'radial-gradient(52% 40% at 20% -8%, rgba(156, 193, 231, 0.55) 0%, rgba(156, 193, 231, 0) 72%)',
+          'radial-gradient(46% 36% at 58% -6%, rgba(138, 163, 214, 0.5) 0%, rgba(138, 163, 214, 0) 72%)',
+          'radial-gradient(58% 38% at 90% 2%, rgba(156, 193, 231, 0.4) 0%, rgba(156, 193, 231, 0) 74%)',
+          `linear-gradient(180deg, ${dsBackgroundGradient.wash}59 0%, rgba(249, 248, 248, 0) 45%)`,
+        ].join(', '),
         backgroundAttachment: 'fixed',
         backgroundRepeat: 'no-repeat',
         '&::-webkit-scrollbar': { width: 8, height: 8 },
