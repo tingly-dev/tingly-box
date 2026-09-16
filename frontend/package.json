@@ -25,6 +25,7 @@
   "dependencies": {
     "@ant-design/x-markdown": "^2.8.0",
     "@lobehub/icons-static-svg": "^1.94.0",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@mui/material": "^9.2.0",
     "@mui/x-date-pickers": "^9.10.0",
     "@tabler/icons-react": "^3.45.0",

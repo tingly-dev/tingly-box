@@ -14,6 +14,7 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	posemodel "github.com/tingly-dev/tingly-box/internal/server/module/posemodel"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
@@ -132,4 +133,7 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// request time (there is no request time here).
 	quotaHandler := providerQuotaModule.NewHandler(nil, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+
+	// Pose estimator runtime/model management (file route is not an API route).
+	posemodel.RegisterRoutes(apiV1, posemodel.NewHandler(cfg.ConfigDir))
 }

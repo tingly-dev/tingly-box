@@ -17,6 +17,7 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	posemodel "github.com/tingly-dev/tingly-box/internal/server/module/posemodel"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
@@ -235,6 +236,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// whether quota tracking happens to be configured on this build.
 	quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+
+	// Pose estimator runtime + model: downloaded on first use into the config
+	// directory (authenticated), then served same-origin so the browser never
+	// needs a CDN — see .design/pose-from-image.md §6. The file route is
+	// unauthenticated on purpose: MediaPipe fetches its wasm with a bare
+	// fetch() that cannot carry our token, and the files are public.
+	poseModelHandler := posemodel.NewHandler(s.config.ConfigDir)
+	posemodel.RegisterRoutes(apiV1, poseModelHandler)
+	posemodel.RegisterFileRoute(s.engine, poseModelHandler)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)

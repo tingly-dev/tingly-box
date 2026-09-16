@@ -4456,6 +4456,50 @@
         }
       }
     },
+    "/api/v1/pose/model": {
+      "get": {
+        "tags": [
+          "pose"
+        ],
+        "summary": "Report whether the pose estimator's runtime and model are downloaded and ready to serve",
+        "description": "Report whether the pose estimator's runtime and model are downloaded and ready to serve",
+        "operationId": "apiV1PoseModelGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pose/model/ensure": {
+      "post": {
+        "tags": [
+          "pose"
+        ],
+        "summary": "Download the pose estimator's runtime and model into the config directory if they are missing, verifying each against its pinned checksum",
+        "description": "Download the pose estimator's runtime and model into the config directory if they are missing, verifying each against its pinned checksum",
+        "operationId": "apiV1PoseModelEnsurePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/provider-quota": {
       "get": {
         "tags": [
@@ -10373,6 +10417,33 @@
           "helperText"
         ]
       },
+      "FileStatus": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          }
+        },
+        "required": [
+          "name",
+          "size",
+          "ready"
+        ]
+      },
       "FlagOption": {
         "type": "object",
         "properties": {
@@ -15100,57 +15171,37 @@
       "StatusResponse": {
         "type": "object",
         "properties": {
-          "data": {
-            "type": "object",
-            "description": "Field data",
-            "properties": {
-              "port": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Field port",
-                "example": 12580
-              },
-              "providers_enabled": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Field providers_enabled",
-                "example": 2
-              },
-              "providers_total": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Field providers_total",
-                "example": 3
-              },
-              "request_count": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Field request_count",
-                "example": 100
-              },
-              "server_running": {
-                "type": "boolean",
-                "description": "Field server_running",
-                "example": true
-              }
-            },
-            "required": [
-              "server_running",
-              "port",
-              "providers_total",
-              "providers_enabled",
-              "request_count"
-            ]
+          "base_url": {
+            "type": "string",
+            "description": "Field base_url"
+          },
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/FileStatus"
+            }
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
           },
           "success": {
             "type": "boolean",
-            "description": "Field success",
-            "example": true
+            "description": "Field success"
+          },
+          "total_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total_bytes"
           }
         },
         "required": [
           "success",
-          "data"
+          "ready",
+          "files",
+          "base_url",
+          "total_bytes"
         ]
       },
       "StoredSpan": {
@@ -17592,6 +17643,10 @@
     {
       "name": "onboarding",
       "description": "Operations related to onboarding"
+    },
+    {
+      "name": "pose",
+      "description": "Operations related to pose"
     },
     {
       "name": "provider-quota",

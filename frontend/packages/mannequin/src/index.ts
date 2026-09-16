@@ -15,3 +15,4 @@ export * from './poses/library';
 export * from './body';
 export * from './interact';
 export * from './render3d';
+export * from './landmarks';

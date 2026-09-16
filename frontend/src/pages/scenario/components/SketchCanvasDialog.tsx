@@ -15,7 +15,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo } from '@/components/icons';
+import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo, Photo } from '@/components/icons';
 import PoseLibraryPopover from './PoseLibraryPopover';
 import ViewAnglePopover from './ViewAnglePopover';
 import {
@@ -66,7 +66,10 @@ import {
     type PosePresetKey,
     type ViewPresetKey,
     drawFigure,
+    figureFromLandmarks,
 } from '@tingly/mannequin';
+import { ensurePoseModel, getPoseModelStatus } from '@/services/poseModel';
+import { detectPoses, loadImageFile, PoseEstimatorUnsupported } from '@/utils/poseEstimator';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 
@@ -369,6 +372,91 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         setSelectedId(figure.id);
         setTool('pose');
     }, [dims, figures, snapshot]);
+
+    // Pose from a photograph. The photo is never drawn: the figure takes the
+    // pose and nothing else, which is what a pose reference is for. First use
+    // downloads the estimator into the gateway's config directory; after that
+    // everything happens in this browser.
+    const photoInputRef = useRef<HTMLInputElement | null>(null);
+    const [posing, setPosing] = useState(false);
+    const handlePoseFromPhoto = useCallback(async (file: File) => {
+        setPosing(true);
+        try {
+            let status = await getPoseModelStatus();
+            if (!status.ready) {
+                showNotification(t('playground.sketch.pose.downloading', {
+                    defaultValue: 'Downloading the pose model ({{mb}} MB)…',
+                    mb: Math.round(status.totalBytes / 1048576),
+                }), 'info');
+                status = await ensurePoseModel();
+                if (!status.ready) {
+                    showNotification(t('playground.sketch.pose.downloadFailed', {
+                        defaultValue: 'Could not download the pose model — check the network and try again',
+                    }), 'error');
+                    return;
+                }
+            }
+            let image: HTMLImageElement;
+            try {
+                image = await loadImageFile(file);
+            } catch {
+                showNotification(t('playground.sketch.pose.badImage', { defaultValue: 'That file is not an image' }), 'warning');
+                return;
+            }
+            const { poses, frame } = await detectPoses(image, status.baseUrl);
+            if (poses.length === 0) {
+                showNotification(t('playground.sketch.pose.noPerson', { defaultValue: 'No person found in that photo' }), 'warning');
+                return;
+            }
+            snapshot();
+            // One person and a figure selected: that figure takes the pose,
+            // keeping its place, size and shade. Otherwise each person becomes
+            // a new figure — a group photo becomes a group.
+            if (selectedFigure && poses.length === 1) {
+                const result = figureFromLandmarks(poses[0].landmarks, { frame, reference: selectedFigure });
+                if (!result) {
+                    showNotification(t('playground.sketch.pose.noPerson', { defaultValue: 'No person found in that photo' }), 'warning');
+                    return;
+                }
+                updateFigure(selectedFigure.id, () => ({ ...result.figure, id: selectedFigure.id }));
+                showNotification(result.fellBack.length > 0
+                    ? t('playground.sketch.pose.estimated', {
+                        defaultValue: '{{count}} joints were hidden in the photo and estimated',
+                        count: result.fellBack.length,
+                    })
+                    : t('playground.sketch.pose.applied', { defaultValue: 'Pose taken from the photo' }), 'success');
+                return;
+            }
+            const added: PoseFigure[] = [];
+            let existing = figures;
+            for (const pose of poses) {
+                const reference = createFigure('standing', dims, placeNewFigure(existing, dims), leastUsedShade(existing));
+                const result = figureFromLandmarks(pose.landmarks, { frame, reference });
+                if (!result) continue;
+                const figure = { ...result.figure, id: reference.id };
+                added.push(figure);
+                existing = [...existing, figure];
+            }
+            if (added.length === 0) {
+                showNotification(t('playground.sketch.pose.noPerson', { defaultValue: 'No person found in that photo' }), 'warning');
+                return;
+            }
+            setFigures((current) => [...current, ...added]);
+            setSelectedId(added[0].id);
+            setTool('pose');
+            showNotification(added.length === 1
+                ? t('playground.sketch.pose.applied', { defaultValue: 'Pose taken from the photo' })
+                : t('playground.sketch.pose.appliedMany', { defaultValue: '{{count}} figures added from the photo', count: added.length }), 'success');
+        } catch (error) {
+            showNotification(error instanceof PoseEstimatorUnsupported
+                ? t('playground.sketch.pose.unsupported', { defaultValue: 'This browser cannot run the pose estimator' })
+                : t('playground.sketch.pose.downloadFailed', {
+                    defaultValue: 'Could not download the pose model — check the network and try again',
+                }), 'error');
+        } finally {
+            setPosing(false);
+        }
+    }, [dims, figures, selectedFigure, showNotification, snapshot, t, updateFigure]);
 
     const handleRemoveFigure = useCallback(() => {
         if (!selectedFigure) return;
@@ -718,6 +806,32 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                         <Add fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
+                                <Tooltip title={t('playground.sketch.pose.fromPhotoHint', {
+                                    defaultValue: 'Pick a photo of a person; the figure takes their pose. The photo itself is not used.',
+                                })}>
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            disabled={posing}
+                                            onClick={() => photoInputRef.current?.click()}
+                                            aria-label={t('playground.sketch.pose.fromPhoto', { defaultValue: 'From photo' })}
+                                        >
+                                            <Photo fontSize="small" />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                                <input
+                                    ref={photoInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    hidden
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        // Reset so picking the same photo twice fires again.
+                                        event.target.value = '';
+                                        if (file) void handlePoseFromPhoto(file);
+                                    }}
+                                />
                                 {selectedFigure ? (
                                     <>
                                         <Button
