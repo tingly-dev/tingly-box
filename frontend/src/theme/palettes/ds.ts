@@ -1,15 +1,23 @@
 import type { ThemePalette } from '../types';
 
-// DS theme color tokens — primary is deepseek.com's actual brand blue
-// (`--ds-color-brand`/`-light-reverse`/`-deep` in its shipped CSS). The site
-// itself has no second accent hue (it leans on neutrals instead), but reusing
-// blue everywhere here read as monochrome/flat once applied across a whole
-// admin UI — chart series in particular need to be tellable apart. `secondary`
-// is a teal, analogous to the brand blue (same cool family, so it stays
-// harmonious) but distinct enough to carry contrast on its own.
-export const dsPrimary = '#4D6BFE';
-export const dsPrimaryLight = '#6799FE';
-export const dsPrimaryDark = '#3A65C2';
+// DS theme color tokens — built from deepseek.com's actual brand blue
+// (`--ds-color-brand: #4d6bfe`, `-light-reverse`, `-deep` in its shipped CSS).
+// The real site only ever uses that full-saturation blue on small, high-contrast
+// surfaces (a button's fill, white text on top) — never as a thin outline against
+// a large pastel area. This app's shared hover/selection styling does exactly
+// that (`borderColor: 'primary.main'` on card hover), so the raw brand blue read
+// as a harsh neon ring against the soft misty background. `dsPrimary` is a step
+// softer than the real brand color for that reason; the true saturated brand
+// blue survives as `dsPrimaryDark`, for anything that still wants the punch.
+//
+// The site itself has no second accent hue (it leans on neutrals instead), but
+// reusing blue everywhere here read as monochrome/flat once applied across a
+// whole admin UI — chart series in particular need to be tellable apart.
+// `secondary` is a teal, analogous to the brand blue (same cool family, so it
+// stays harmonious) but distinct enough to carry contrast on its own.
+export const dsPrimary = '#6799FE';
+export const dsPrimaryLight = '#93B4FF';
+export const dsPrimaryDark = '#4D6BFE'; // the real, full-saturation deepseek.com brand blue
 
 export const dsSecondary = '#14B8A6';
 export const dsSecondaryLight = '#5EEAD4';
@@ -72,28 +80,28 @@ export const dsPalette: ThemePalette = {
     secondary: '#565f70',
     disabled: '#9aa3ac',
   },
-  divider: 'rgba(77, 107, 254, 0.12)',
+  divider: 'rgba(103, 153, 254, 0.12)',
   action: {
-    hover: 'rgba(77, 107, 254, 0.08)',
-    selected: 'rgba(77, 107, 254, 0.15)',
-    disabled: 'rgba(77, 107, 254, 0.04)',
-    focus: 'rgba(77, 107, 254, 0.12)',
+    hover: 'rgba(103, 153, 254, 0.08)',
+    selected: 'rgba(103, 153, 254, 0.15)',
+    disabled: 'rgba(103, 153, 254, 0.04)',
+    focus: 'rgba(103, 153, 254, 0.12)',
   },
   dashboard: {
     token: {
-      input: { main: dsPrimary, gradient: 'rgba(77, 107, 254, 0.75)' },
+      input: { main: dsPrimary, gradient: 'rgba(103, 153, 254, 0.75)' },
       output: { main: dsSecondary, gradient: 'rgba(20, 184, 166, 0.75)' },
       cache: { main: '#94a3b8', gradient: 'rgba(148, 163, 184, 0.65)' },
     },
     chart: {
-      grid: 'rgba(77, 107, 254, 0.08)',
-      axis: 'rgba(77, 107, 254, 0.15)',
+      grid: 'rgba(103, 153, 254, 0.08)',
+      axis: 'rgba(103, 153, 254, 0.15)',
       tooltipBg: 'rgba(255, 255, 255, 0.96)',
-      tooltipBorder: 'rgba(77, 107, 254, 0.2)',
+      tooltipBorder: 'rgba(103, 153, 254, 0.2)',
     },
     statCard: {
-      boxShadow: '0 2px 12px rgba(77, 107, 254, 0.12), 0 1px 4px rgba(0, 0, 0, 0.04)',
-      emptyIconBg: 'rgba(77, 107, 254, 0.1)',
+      boxShadow: '0 2px 12px rgba(103, 153, 254, 0.12), 0 1px 4px rgba(0, 0, 0, 0.04)',
+      emptyIconBg: 'rgba(103, 153, 254, 0.1)',
     },
   },
   isSunlit: false,

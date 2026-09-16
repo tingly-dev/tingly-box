@@ -4,9 +4,9 @@ import { primaryGradientButton } from './buttonVariants';
 
 // DS reusable tokens for component overrides
 const dsTokens = {
-  border: '1px solid rgba(77, 107, 254, 0.15)',
-  borderSoft: '1px solid rgba(77, 107, 254, 0.1)',
-  divider: 'rgba(77, 107, 254, 0.12)',
+  border: '1px solid rgba(103, 153, 254, 0.15)',
+  borderSoft: '1px solid rgba(103, 153, 254, 0.1)',
+  divider: 'rgba(103, 153, 254, 0.12)',
   paperBg: 'rgba(255, 255, 255, 0.88)',
   paperBgLight: 'rgba(255, 255, 255, 0.78)',
   paperBgMedium: 'rgba(255, 255, 255, 0.82)',
@@ -16,23 +16,23 @@ const dsTokens = {
   inputBgHover: 'rgba(255, 255, 255, 0.85)',
   inputBgFocus: 'rgba(255, 255, 255, 0.92)',
   inputBgDisabled: 'rgba(255, 255, 255, 0.5)',
-  borderInput: 'rgba(77, 107, 254, 0.25)',
-  borderInputHover: 'rgba(77, 107, 254, 0.4)',
-  borderInputDisabled: 'rgba(77, 107, 254, 0.12)',
-  hover: 'rgba(77, 107, 254, 0.08)',
-  selected: 'rgba(77, 107, 254, 0.16)',
-  selectedHover: 'rgba(77, 107, 254, 0.22)',
-  rowHover: 'rgba(77, 107, 254, 0.04)',
-  tableHeadBg: 'rgba(77, 107, 254, 0.06)',
-  scrollbarTrack: 'rgba(77, 107, 254, 0.05)',
-  scrollbarThumb: 'rgba(77, 107, 254, 0.25)',
-  scrollbarThumbHover: 'rgba(77, 107, 254, 0.4)',
-  scrollbarThumbInner: 'rgba(77, 107, 254, 0.2)',
-  scrollbarThumbInnerHover: 'rgba(77, 107, 254, 0.35)',
+  borderInput: 'rgba(103, 153, 254, 0.25)',
+  borderInputHover: 'rgba(103, 153, 254, 0.4)',
+  borderInputDisabled: 'rgba(103, 153, 254, 0.12)',
+  hover: 'rgba(103, 153, 254, 0.08)',
+  selected: 'rgba(103, 153, 254, 0.16)',
+  selectedHover: 'rgba(103, 153, 254, 0.22)',
+  rowHover: 'rgba(103, 153, 254, 0.04)',
+  tableHeadBg: 'rgba(103, 153, 254, 0.06)',
+  scrollbarTrack: 'rgba(103, 153, 254, 0.05)',
+  scrollbarThumb: 'rgba(103, 153, 254, 0.25)',
+  scrollbarThumbHover: 'rgba(103, 153, 254, 0.4)',
+  scrollbarThumbInner: 'rgba(103, 153, 254, 0.2)',
+  scrollbarThumbInnerHover: 'rgba(103, 153, 254, 0.35)',
 };
 
-const cardShadow = '0 2px 16px rgba(77, 107, 254, 0.12), 0 1px 6px rgba(0, 0, 0, 0.04)';
-const buttonHoverShadow = '0 2px 8px rgba(77, 107, 254, 0.2)';
+const cardShadow = '0 2px 16px rgba(103, 153, 254, 0.12), 0 1px 6px rgba(0, 0, 0, 0.04)';
+const buttonHoverShadow = '0 2px 8px rgba(103, 153, 254, 0.2)';
 
 export const dsComponents: ThemeOptions['components'] = {
   MuiCard: {
@@ -72,15 +72,15 @@ export const dsComponents: ThemeOptions['components'] = {
         '&:hover': { boxShadow: buttonHoverShadow },
       },
       outlined: {
-        borderColor: 'rgba(77, 107, 254, 0.3)',
-        color: '#3a65c2',
+        borderColor: 'rgba(103, 153, 254, 0.3)',
+        color: dsPrimaryDark,
         '&:hover': {
-          borderColor: 'rgba(77, 107, 254, 0.5)',
+          borderColor: 'rgba(103, 153, 254, 0.5)',
           backgroundColor: dsTokens.hover,
         },
       },
     },
-    variants: primaryGradientButton(dsPrimary, dsPrimaryDark, dsPrimaryDark, '#3a65c2'),
+    variants: primaryGradientButton(dsPrimary, dsPrimaryDark, dsPrimaryDark, dsPrimaryDark),
   },
   MuiOutlinedInput: {
     styleOverrides: {
@@ -281,7 +281,7 @@ export const dsComponents: ThemeOptions['components'] = {
         },
       },
       track: {
-        backgroundColor: 'rgba(77, 107, 254, 0.3)',
+        backgroundColor: 'rgba(103, 153, 254, 0.3)',
       },
     },
   },
@@ -290,7 +290,7 @@ export const dsComponents: ThemeOptions['components'] = {
       root: { color: dsPrimary },
       thumb: {
         '&:hover, &.Mui-focusVisible': {
-          boxShadow: '0 0 0 8px rgba(77, 107, 254, 0.16)',
+          boxShadow: '0 0 0 8px rgba(103, 153, 254, 0.16)',
         },
       },
       track: {
@@ -301,7 +301,7 @@ export const dsComponents: ThemeOptions['components'] = {
   MuiLinearProgress: {
     styleOverrides: {
       root: {
-        backgroundColor: 'rgba(77, 107, 254, 0.15)',
+        backgroundColor: 'rgba(103, 153, 254, 0.15)',
         borderRadius: 4,
       },
       bar: {
@@ -320,7 +320,7 @@ export const dsComponents: ThemeOptions['components'] = {
       root: {
         borderColor: dsTokens.borderInput,
         '&.Mui-selected': {
-          backgroundColor: 'rgba(77, 107, 254, 0.15)',
+          backgroundColor: 'rgba(103, 153, 254, 0.15)',
           color: dsPrimary,
           '&:hover': { backgroundColor: dsTokens.selectedHover },
         },
