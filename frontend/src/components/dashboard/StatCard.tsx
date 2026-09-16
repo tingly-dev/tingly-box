@@ -65,14 +65,20 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                 border: '1px solid',
                 borderColor: alpha(colors.text, 0.18),
                 height: '100%',
-                transition: 'border-color 0.18s ease-out, background-color 0.18s ease-out',
-                backgroundColor: alpha(colors.text, baseBgAlpha),
+                transition: 'border-color 0.18s ease-out, background-image 0.18s ease-out',
+                // Layered on top of the theme's own Paper backdrop (solid on most
+                // themes, translucent-over-gradient on ds) rather than replacing it —
+                // otherwise this low-alpha tint reveals whatever's behind the page
+                // itself instead of reading as a flat color, which is invisible on a
+                // solid page background but shows through visibly on ds's gradient one.
+                backgroundColor: 'background.paper',
+                backgroundImage: `linear-gradient(${alpha(colors.text, baseBgAlpha)}, ${alpha(colors.text, baseBgAlpha)})`,
                 boxShadow: 'none',
                 position: 'relative',
                 overflow: 'hidden',
                 '&:hover': {
                     borderColor: alpha(colors.text, 0.55),
-                    backgroundColor: alpha(colors.text, hoverBgAlpha),
+                    backgroundImage: `linear-gradient(${alpha(colors.text, hoverBgAlpha)}, ${alpha(colors.text, hoverBgAlpha)})`,
                 },
             }}
         >
