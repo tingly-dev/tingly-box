@@ -106,7 +106,7 @@ export const RequestEditor: React.FC<{
                     slotProps={{ htmlInput: { sx: { fontSize: '0.82rem' } }, inputLabel: { shrink: true } }}
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
-                    {t('bench.fixtureHint', { defaultValue: "The probe's built-in request: one message, shaped by the Tool / Vision / Thinking knobs. To send anything else — multi-turn, images, tool results, provider-specific fields — write the request yourself." })}
+                    {t('bench.presetHint', { defaultValue: "The preset request: one message, shaped by the Tool / Vision / Thinking knobs — it's the probe itself, materialized. To send anything else — multi-turn, images, tool results, provider-specific fields — write the request yourself." })}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Button size="small" variant="outlined" onClick={() => startRaw(seedBody ?? JSON.stringify(TEMPLATES[defaultProtocol][0].body, null, 2))}>
@@ -186,11 +186,11 @@ export const RequestEditor: React.FC<{
                 slotProps={{ htmlInput: { sx: { fontFamily: 'monospace', fontSize: '0.74rem', lineHeight: 1.5 }, spellCheck: false } }}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
-                {t('bench.rawHint', { protocol: PROTOCOL_LABEL(raw.protocol), defaultValue: 'Exactly what a client speaking {{protocol}} would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs only shape the fixture.' })}
+                {t('bench.rawHint', { protocol: PROTOCOL_LABEL(raw.protocol), defaultValue: 'Exactly what a client speaking {{protocol}} would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs only shape the preset request.' })}
             </Typography>
             <Box>
                 <Button size="small" onClick={() => onRawChange(null)} sx={{ fontSize: '0.72rem' }}>
-                    {t('bench.backToFixture', { defaultValue: 'Back to the fixture' })}
+                    {t('bench.backToPreset', { defaultValue: 'Back to the preset request' })}
                 </Button>
             </Box>
         </Stack>

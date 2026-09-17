@@ -20,7 +20,7 @@ TB 已有两类端到端验证能力：
 
 1. **原始请求**——直接写一份 Anthropic Messages / OpenAI Chat / OpenAI Responses 形态的
    客户端请求发进去（§6），多轮、system、tools、图片、任意参数都是请求本身的一部分，
-   不再只有固定 fixture + 单条 message override；
+   不再只有预设请求 + 单条 message override；
 2. **Flags overlay**——任选 rule flag 组合**临时**应用于本次请求，不落库、不改动任何 rule；
 3. **Header 覆盖**——直接改最终发出的 header（§7），入站特征类的中间件也能触发。
 
@@ -39,6 +39,36 @@ TB 已有两类端到端验证能力：
   > 又已有真正 playground 语义的 "Image Playground" 卡片。也不叫 Develop：System → Develop
   > 是给 TB 自己的前端开发者用的工具页，受众不同。"Bench"（测试台）取 test bench 的工程
   > 含义——受控激励打进被测对象、观察输出。唯一歧义是 benchmark，靠中文标签与副标题压住。
+
+### 三种粒度
+
+Probe / Bench / Server 三者不是并列的三个工具，是同一件事在三种**粒度**下的样子：
+
+| 粒度 | 载体 | 问的问题 | 词汇表 |
+|------|------|----------|--------|
+| 场景 | 探针（Probe） | "这类行为（工具调用/图片/thinking…）能不能存活" | 封闭、协议无关的一组断言 |
+| 请求 | Bench | "发这个具体的东西，TB 会怎么处理" | 开放，一份具体的文档 |
+| 协议 | Server | "字段怎么从一种 wire 形态映射到另一种" | `internal/protocol/request/*` 那套转换器 |
+
+三者是一条投影链，不是三个孤立的抽屈：**探针的本质就是预设**——一组封闭的、协议无关
+的断言；把探针materialize 成一份具体的请求，得到的正是 Bench 默认视图里的那份
+**预设请求**（§6 用这个词，不再用"固定场景"/"fixture"）。所以 Bench 的默认视图长得
+和 Probe 弹窗一模一样，不是"复用了 Probe 的组件"这种实现细节——它是同一件事：预设
+请求就是探针在请求粒度上的投影。而 Bench 的**自定义请求**，是请求粒度上不背靠任何
+探针的内容，就是它字面的样子。协议粒度的转换（Anthropic ↔ OpenAI Chat ↔ Responses）
+是 Server 的职责，不属于 Bench——Bench 只管"在一个协议里写一份具体的东西"，不管"把
+这份东西翻译到另一个协议还讲不讲得通"；真要测跨协议的场景保真度，那问题已经回到了
+场景粒度，答案是探针（它的 Protocol 轴 + 其它场景轴组合起来，正是在跑真实转换代码、
+观察场景保真度），不是 Bench 该操心的事（这也是 §6 里"切换协议 = 换一份新协议的起始
+模板，而不是翻译现有 body"这个决定的根本原因，不只是图省事）。
+
+Scope / Stream / Routing / Flags overlay / Header 覆盖不在这条投影链上——它们是"Server
+怎么处理这次运行"的配置，和请求内容长什么样无关，预设请求和自定义请求两种模式都用
+得到（§7）。
+
+> 术语提醒：TB 代码里 `scenario` 另有一个具体含义（路由用的产品面家族，`rule.Scenario`、
+> `/tingly/{scenario}` 入口），和这里说的"场景粒度"不是同一件事——后者是更宽泛的
+> "一组协议无关的兼容性断言"。
 
 ### 与线上运转的差异边界
 
@@ -77,14 +107,14 @@ Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次
 ┌─ rail ─┬────────────────────────────────────────────────────────────────────┐
 │        │  Bench                                              [▶ Run]   │
 │  nav   │ ┌─ Compose ────┐ ┌─ Request ──────────────┐ ┌─ Payload ─────────┐ │
-│        │ │ Target        │ │ fixture: message [...] │ │ ▤ Request │ cURL  │ │
+│        │ │ Target        │ │ preset: message [...]  │ │ ▤ Request │ cURL  │ │
 │  ▷ PG  │ │  [rule/provider│ │   or                   │ │ POST /tingly/...  │ │
-│        │ │   unified pick]│ │ raw: [Anthropic ▾]     │ │ headers…  [+ hdr] │ │
+│        │ │   unified pick]│ │ custom: [Anthropic ▾]  │ │ headers…  [+ hdr] │ │
 │        │ │ Axes (全展开)  │ │ {                      │ │ {                 │ │
 │        │ │  Shape Scope   │ │   "messages": […]      │ │   "model": …      │ │
 │        │ │  Tool Vision   │ │ }                      │ │   "messages": […] │ │
 │        │ │  Thinking      │ │ [templates ▾]          │ │ }         [Edit]⧉ │ │
-│        │ │  Protocol      │ │ [back to fixture]      │ │ (debounced live)  │ │
+│        │ │  Protocol      │ │ [back to preset]        │ │ (debounced live)  │ │
 │        │ │ Plugins overlay│ ├─ Result ─────────────┤ └───────────────────┘ │
 │        │ │  (registry-    │ │ ✅ 850ms · 43 tok    │                       │
 │        │ │   driven 三态) │ │ Journey (默认展开)   │                       │
@@ -256,23 +286,24 @@ inherited 态展示的是**解析后的具体值**而不是 "默认" 字样（ux
 
 ## 6. Request：写你自己的客户端请求（三种协议）
 
-Request 面板做两件不同的事，故意不把它们合并成一件：**固定场景检查**（默认视图，
+Request 面板做两件不同的事，故意不把它们合并成一件：**预设请求**（默认视图，
 和 Probe 弹窗共用同一套轴——Tool/Vision/Thinking/Protocol/Message，同一批
-builder）回答"TB 已知的兼容性矩阵，对这个目标现在还成立吗"；**自定义请求**
-（写你自己的完整请求）回答"我发这个具体的东西，TB 会怎么处理"。前者故意固化——
-它的价值就是"小、快、可反复用同一套维度验证任意目标"，不该随手加轴；后者故意
-不受限——任何轴表达不了的形态，直接在协议原生的 JSON 里写。
+builder——它就是探针在请求粒度上的投影，见 §1"三种粒度"）回答"TB 已知的兼容
+性矩阵，对这个目标现在还成立吗"；**自定义请求**（写你自己的完整请求，不背靠
+任何探针）回答"我发这个具体的东西，TB 会怎么处理"。前者故意固化——它的价值
+就是"小、快、可反复用同一套维度验证任意目标"，不该随手加轴；后者故意不受
+限——任何轴表达不了的形态，直接在协议原生的 JSON 里写。
 
-这条边界曾经含混过：早期实现里 raw 只**禁用**部分轴而不是彻底不显示，Protocol
-下拉在 raw 模式下还能"切换"却只改标签不改 body，这类半耦合正是混乱的来源——两
-边都不是完整的自己。现在的规则很简单：**一份请求 body 只有一个作者**，要么是
-固定场景的 builder，要么是你写的 JSON，从不"部分借用"对方。进入自定义请求是一
-个单向动作（"Write the request yourself"），不是一个可以来回切的 tab——回去的
-唯一方式是重新开始，因为自定义 JSON 没法自动逆推回轴的状态，假装可以双向切换
-只会制造一种不存在的对称感。
+这条边界曾经含混过：早期实现里自定义请求只**禁用**部分轴而不是彻底不显示，
+Protocol 下拉在自定义请求模式下还能"切换"却只改标签不改 body，这类半耦合正
+是混乱的来源——两边都不是完整的自己。现在的规则很简单：**一份请求 body 只有
+一个作者**，要么是预设请求的 builder，要么是你写的 JSON，从不"部分借用"对方。
+进入自定义请求是一个单向动作（"Write the request yourself"），不是一个可以来
+回切的 tab——回去的唯一方式是重新开始，因为自定义 JSON 没法自动逆推回轴的状
+态，假装可以双向切换只会制造一种不存在的对称感。
 
-**这个自由度只属于 Bench，不属于 Probe 弹窗。** Probe 弹窗永远只有固定场景那一
-半（轴 + Message 覆盖），没有自定义请求编辑器、没有 flags overlay、没有 header
+**这个自由度只属于 Bench，不属于 Probe 弹窗。** Probe 弹窗永远只产出预设请求
+（轴 + Message 覆盖，这就是它自己），没有自定义请求编辑器、没有 flags overlay、没有 header
 覆盖、没有 routing pin——弹窗的价值是"就地、两次点击拿结论"，塞入任何这些都会
 稀释它。弹窗唯一新增的出口是"在 Bench 中打开"：带着当前 target/axes/message 跳
 到 Bench 的默认视图（和弹窗长得一样），自定义请求这道门只在 Bench 页面里才有。
@@ -314,9 +345,9 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
   `protocol.PreprocessInputData`，与生产 handler 同一路径），解析结果原样交给现有
   param builder 短路发出——探测只补 `model`（Anthropic 缺省 `max_tokens`、流式时
   chat 的 `stream_options.include_usage`）。请求体是什么形态，发出去就是什么形态。
-- **向后兼容**：`request` 为空时行为与今天完全一致（fixture + `message` override）；
+- **向后兼容**：`request` 为空时行为与今天完全一致（预设请求 + `message` override）；
   probe dialog 不受影响。`request` 与 `message` / tool / vision / thinking 轴互斥
-  （校验拒绝，不猜）：这些轴都是"合成 fixture 的旋钮"，请求既然是你写的，就整份归你。
+  （校验拒绝，不猜）：这些轴都是"合成预设请求的旋钮"，请求既然是你写的，就整份归你。
 - 协议一致性由校验守住：provider target 的 `protocol` 必须等于 `request_protocol`；
   rule target 的 scenario 家族（`ScenarioEndpoint`）必须与之相符。跨协议的"错投"
   不在 Bench 的范围（它测的是 TB 的转换，不是 TB 的 400）。
@@ -325,16 +356,17 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
 
 ### 6.3 编辑器 UI 与模板
 
-- 中栏 Request 面板默认是**固定场景模式**：一个 message 输入框（即 probe 的
+- 中栏 Request 面板默认是**预设请求模式**：一个 message 输入框（即 probe 的
   override），加两条出口：**Write the request yourself**（空白起步）和 **Edit the
   builder's request**（把 Payload 面板当前显示的 body 复制进来改——右栏的 Edit
   按钮是同一动作）。两条出口通向同一个目的地，只是起始内容不同。
 - **自定义请求模式**：协议下拉（rule target 只列 scenario 家族允许的协议；provider
   target 列它会说的协议）+ 等宽 JSON 文本域 + 即时解析错误 + **Back to the
-  fixture**。Tool / Vision / Thinking / Protocol 这几个轴**不渲染**，不是变灰禁
-  用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接跳过这
-  几个 `Axis` 块，不是给它们传 `disabled`）。Scope / Stream / Routing 保持可见：
-  它们是传输层开关，和 body 怎么拼出来的无关，固定场景和自定义请求都用得到。
+  preset request**。Tool / Vision / Thinking / Protocol 这几个轴**不渲染**，不是
+  变灰禁用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接
+  跳过这几个 `Axis` 块，不是给它们传 `disabled`）。Scope / Stream / Routing 保持
+  可见：它们是传输层开关，和 body 怎么拼出来的无关，预设请求和自定义请求都用
+  得到。
 - **切换协议 = 重新开始，不是重新贴标签**：协议下拉的 onChange 把 body 换成新
   协议的起始模板，而不是只改 `request_protocol` 这个字段——旧实现只改标签、
   不改 body，会产出一份标签和内容对不上的请求，这是已修的 bug，不是特性。和

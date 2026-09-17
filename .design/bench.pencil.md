@@ -13,22 +13,22 @@ Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed
 │      │ Bench                                   [history: ✅851ms ❌ ✅790ms]  [▶ Run] │
 │  …   ├──────────────┬───────────────────────────────┬───────────────────────────────┤
 │ ▷ 🧪 │ ┌ COMPOSE ──┐│ ┌ REQUEST ──────────────────┐ │ ┌ PAYLOAD ── ▤ Request│cURL ┐ │
-│      │ │ Target     ││ │ Protocol [Anthropic ▾]    │ │ │ POST http://localhost:9999│ │
+│      │ │ Target     ││ │ Protocol: Anthropic ▾     │ │ │ POST http://localhost:9999│ │
 │  …   │ │ [CC rule ▾]││ │ ┌───────────────────────┐ │ │ │   /tingly/claude_code     │ │
 │      │ │            ││ │ │ {                     │ │ │ │   /v1/messages            │ │
 │      │ │ Shape      ││ │ │  "system": "…",       │ │ │ │ ── headers ──  [+ header] │ │
 │      │ │ ▤ NS │ Str ││ │ │  "messages": [        │ │ │ │ x-api-key: $TB_API_KEY    │ │
 │      │ │ Scope      ││ │ │   {"role":"user", …}, │ │ │ │ anthropic-version: …      │ │
 │      │ │ ▤ TB │ Dir ││ │ │   {"role":"system",…} │ │ │ │ ── body ──         [Edit] │ │
-│      │ │ Tool  (raw)││ │ │  ]                    │ │ │ │ {                         │ │
-│      │ │ ▤ Off │ On ││ │ │ }                     │ │ │ │  "model": "…",            │ │
-│      │ │ Vision(raw)││ │ └───────────────────────┘ │ │ │  "max_completion_tokens":…│ │
-│      │ │ ▤ N │ U │ T ││ │ [templates ▾]             │ │ │  "messages": [ … ],       │ │
-│      │ │ Thinking   ││ │ [← back to the fixture]   │ │ │  "stream": true           │ │
-│      │ │ ──●────    ││ ├ RESULT ───────────────────┤ │ │ }                      ⧉  │ │
-│      │ │ Protocol   ││ │ ✅ Success · 850ms · 43tok │ │ │ (rebuilds, 500ms debounce)│ │
-│      │ │ ▤ OC│OR│ A ││ │ ▾ Journey (default OPEN)  │ │ └───────────────────────────┘ │
-│      │ │────────────││ │   Rule    cc-rule · c_c   │ │                               │
+│      │ │────────────││ │ │  ]                    │ │ │ │ {                         │ │
+│      │ │ (this is a ││ │ │ }                     │ │ │ │  "model": "…",            │ │
+│      │ │ custom      ││ │ └───────────────────────┘ │ │ │  "max_completion_tokens":…│ │
+│      │ │ request:    ││ │ [templates ▾]             │ │ │  "messages": [ … ],       │ │
+│      │ │ Tool/Vision/││ │ [← back to the preset req]│ │ │  "stream": true           │ │
+│      │ │ Thinking/   ││ ├ RESULT ───────────────────┤ │ │ }                      ⧉  │ │
+│      │ │ Protocol    ││ │ ✅ Success · 850ms · 43tok │ │ │ (rebuilds, 500ms debounce)│ │
+│      │ │ rows don't  ││ │ ▾ Journey (default OPEN)  │ │ └───────────────────────────┘ │
+│      │ │ render, §4) ││ │   Rule    cc-rule · c_c   │ │                               │
 │      │ │ PLUGINS    ││ │   Flags   applied: think= │ │   narrow viewport: PAYLOAD    │
 │      │ │ 2 overridden│ │           high, max_c_t   │ │   drops below RESULT as a     │
 │      │ │ [Reset all]││ │   Routing load_balancer   │ │   full-width collapsible      │
@@ -91,16 +91,20 @@ Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed
   suppressing clean_header shows up THERE, not as a UI prediction.
 ```
 
-## 4. Request editor: two jobs, one-way door between them (not tabs)
+## 4. Request editor: a preset request, or a custom one (not tabs)
 
-Fixed-scenario testing and custom-request testing are different jobs, not two
-states of the same control — the confusion in earlier drafts came from half-
-coupling them (raw disabling *some* axes, Protocol pretending to stay live).
-The fix isn't a smarter coupling, it's no coupling: one default view, one
-one-way action into a self-contained second view, never a peer switch.
+A preset request and a custom request are different jobs, not two states of
+the same control — the confusion in earlier drafts came from half-coupling
+them (raw disabling *some* axes, Protocol pretending to stay live). A preset
+request isn't "Bench borrowing Probe's UI" — it's literally the probe (the
+scenario granularity) projected down onto a request: a probe is by nature a
+preset, so materializing one *is* a preset request (bench.md §1 "三种粒度").
+The fix isn't a smarter coupling, it's no coupling: one default view (the
+preset request), one one-way action into a self-contained second view (the
+custom request), never a peer switch.
 
 ```
-  default view (= the Probe dialog, unlabeled — it's just the page)
+  default view: a preset request (= the Probe dialog, unlabeled — it's just the page)
   ┌ REQUEST ───────────────────────────────┐
   │ Message                                 │
   │ [Hello, this is a test message. …]      │
@@ -122,7 +126,7 @@ one-way action into a self-contained second view, never a peer switch.
   │  ○ Blank             ○ Multi-turn              │
   │  ○ Tool round-trip   ○ Image                   │
   │  ○ Mid-convo system (Anthropic only)           │
-  │  ○ Copy what the fixture currently shows       │
+  │  ○ Copy what the preset request currently shows│
   │                                                 │
   │ Protocol: Anthropic Messages ▾  ← chosen here; picking a
   │                                    different one REPLACES the
@@ -135,7 +139,7 @@ one-way action into a self-contained second view, never a peer switch.
   │ │   "messages": [ … ]                     │    │
   │ │ }                                       │    │
   │ └───────────────────────────────────────────┘    │
-  │ [templates ▾]              [← back to the fixture]│
+  │ [templates ▾]         [← back to the preset request]│
   └─────────────────────────────────────────────────┘
     No Tool / Vision / Thinking / Protocol rows in the Compose
     column while this view is active — not disabled, not rendered.
@@ -146,7 +150,7 @@ State diagram — why this is a door, not a tab bar:
 
 ```
         ┌──────────────┐   click "Write the      ┌──────────────┐
-        │ default view  │   request yourself"      │ custom request│
+        │ preset request│   request yourself"      │ custom request│
         │ (= the Probe  ├─────────────────────────▶│ editor        │
         │  dialog)      │        (one-way)          │               │
         └──────────────┘                            └──────────────┘
@@ -174,7 +178,7 @@ left-hand box, forever, with one new exit:
    └────────────────────────┘
               │  carries target + axes + message
               ▼
-       Bench's default view (above) — never straight into the
+       Bench's preset request (above) — never straight into the
        custom editor. Complex operations only exist on Bench;
        the dialog gets a signpost to them, not the operations
        themselves.
