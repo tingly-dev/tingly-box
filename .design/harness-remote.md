@@ -178,3 +178,17 @@ should match on the stable substring (`"CC:"`) rather than hardcoding
   real (or mock-upstream) gateway → `harness-agent-testing.md`.
 - Verifying the gateway's protocol-transform correctness (not chat/agent
   behavior at all) → `harness-matrix.md`.
+- **Verifying against the real, unmocked `claude` CLI** — none of the above
+  (including this harness's own fixture/fake-factory tests) prove the real
+  binary actually behaves the way the fake does; they only prove our own
+  protocol plumbing is internally consistent. `agentboot/persistent_e2e_test.go`
+  (`TestE2E_ClaudePersistentSession`, alongside the pre-existing
+  `TestE2E_ClaudeRun`) is the permanent, `//go:build e2e`-gated test for
+  this — same convention every other real-credential e2e test in this repo
+  uses (`imbot/platform/telegram/telegram_test.go`,
+  `imbot/tests/telegram_e2e_test/*`, etc.): excluded from the default
+  `go test ./...`/CI run, opted into with `go test -tags e2e ./agentboot/...`,
+  self-skips (`t.Skip`) if the `claude` CLI isn't on `PATH`/available. It
+  makes two real, minimal (`"Reply with exactly the single word: ALPHA"`)
+  model calls, so it costs a small amount of real usage and needs real
+  credentials — run it deliberately, not as part of routine `go test ./...`.
