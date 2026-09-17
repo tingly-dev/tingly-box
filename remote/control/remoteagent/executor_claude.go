@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -284,8 +285,28 @@ func (e *ClaudeCodeExecutor) runPersistentTurn(
 		return nil, nil, false
 	}
 
+	// A one-shot run is always bounded by opts.Timeout or the runner's
+	// configured default (30 min in production) — Runner.Execute applies it
+	// to the whole process. Runner.Open deliberately does not (§5.1: it
+	// would kill a session that's legitimately idle between turns), so
+	// nothing else bounds a single persistent turn. Apply the same
+	// zero/negative/positive semantics as ExecutionOptions.Timeout
+	// documents, scoped to just this turn via RunTurnWithPrompter's own
+	// ctx.Done() handling (which ends the whole session on timeout, same as
+	// a one-shot's process getting killed).
+	turnCtx := ctx
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = e.deps.AgentService.Config().DefaultExecutionTimeout
+	}
+	if timeout > 0 {
+		var turnCancel context.CancelFunc
+		turnCtx, turnCancel = context.WithTimeout(ctx, timeout)
+		defer turnCancel()
+	}
+
 	e.deps.SessionMgr.SetRunning(sessionID)
-	result, err = agentboot.RunTurnWithPrompter(ctx, persistentSession, prompter, sink)
+	result, err = agentboot.RunTurnWithPrompter(turnCtx, persistentSession, prompter, sink)
 	if err != nil && persistentSession.Status() == agentboot.SessionStateTerminated {
 		e.deps.SessionPool.Remove(poolKey)
 	} else {
@@ -298,11 +319,34 @@ func (e *ClaudeCodeExecutor) runPersistentTurn(
 }
 
 // persistentPoolKey identifies a persistent session's slot in the shared,
-// process-wide pool. It must be unique across every bot/chat/project this
-// process serves — platform+bot avoids two different bots' chats
-// colliding on the same numeric chat ID.
+// process-wide pool. BotUUID alone already uniquely identifies one bot on
+// one platform (it's the imbot_settings primary key), so it — not
+// platform — is what has to lead the key: EvictPersistentSessionsForBot
+// matches on a "<botUUID>|" prefix to drop every session belonging to one
+// bot, e.g. when that bot's persistent-session setting is turned off or the
+// bot stops (see internal/server/module/imbot's BotManager).
 func persistentPoolKey(hCtx HandlerContext, projectPath string) string {
-	return strings.Join([]string{string(hCtx.Platform), hCtx.BotUUID, hCtx.ChatID, projectPath}, "|")
+	return strings.Join([]string{hCtx.BotUUID, hCtx.ChatID, projectPath}, "|")
+}
+
+// EvictPersistentSessionsForBot closes and removes every persistent session
+// belonging to botUUID from sessionPool. Callers: the bot's
+// persistent-session setting was turned off (the abandoned process would
+// otherwise keep the Claude on-disk session file open while the next
+// message resumes it in a separate one-shot process — a
+// session-file-conflict race), or the bot is stopping/restarting/being
+// deleted. sessionPool may be nil (persistent sessions disabled
+// process-wide); a nil pool has nothing to evict.
+func EvictPersistentSessionsForBot(sessionPool *pool.Pool, botUUID string) int {
+	if sessionPool == nil {
+		return 0
+	}
+	prefix := botUUID + "|"
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return sessionPool.CloseAllWhere(ctx, func(key string) bool {
+		return strings.HasPrefix(key, prefix)
+	})
 }
 
 // ccProfileID extracts the Claude Code profile ID from a bot's DefaultAgent

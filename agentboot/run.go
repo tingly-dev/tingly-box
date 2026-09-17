@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -125,54 +126,79 @@ var ErrSessionEventsClosedMidTurn = errors.New("agentboot: persistent session ev
 // whatever registry (e.g. an [github.com/tingly-dev/tingly-box/agentboot/pool.Pool])
 // tracks it — see .design/claude-code.md §5.3/§5.4.
 //
+// ctx bounds the turn: unlike a one-shot [ExecutionHandle], a
+// [PersistentSession]'s process is deliberately detached from any single
+// caller's ctx (see [Runner.Open]'s doc comment) so that it survives past
+// the call that opened it. That means nothing else stops a runaway or
+// unwanted turn — ctx.Done() here is it. There is no way to interrupt just
+// the in-flight turn without ending the process (the CLI's stream-json
+// protocol has no documented per-turn interrupt), so on ctx.Done()
+// RunTurnWithPrompter closes the whole session — the same effect ctx
+// cancellation has on a one-shot Execute — and returns ctx.Err(). Callers
+// driving a cancelable request (a timeout, a user "/stop") should expect
+// the session to be gone afterward, not just this one turn.
+//
 // Dispatch for MessageEvent/ApprovalRequestEvent/AskRequestEvent/ErrorEvent
 // mirrors RunWithPrompter exactly.
 func RunTurnWithPrompter(ctx context.Context, session PersistentSession, prompter Prompter, sink MessageSink) (*Result, error) {
-	for ev := range session.Events() {
-		switch e := ev.(type) {
-		case MessageEvent:
-			if sink != nil {
-				sink(e.Raw)
-			}
+	events := session.Events()
+	for {
+		select {
+		case <-ctx.Done():
+			// ctx just fired, so it must not also be what bounds how long
+			// we're willing to wait for the session to actually close.
+			closeCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			_ = session.Close(closeCtx)
+			cancel()
+			return nil, ctx.Err()
 
-		case ApprovalRequestEvent:
-			res, perr := prompter.OnApproval(ctx, e)
-			if perr != nil {
-				logrus.WithError(perr).Warn("agentboot.RunTurnWithPrompter: prompter.OnApproval error; denying")
-				res = ApprovalResponse{Approved: false, Reason: perr.Error()}
+		case ev, ok := <-events:
+			if !ok {
+				return nil, ErrSessionEventsClosedMidTurn
 			}
-			if rerr := session.Respond(e.ID, res); rerr != nil {
-				logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
-			}
+			switch e := ev.(type) {
+			case MessageEvent:
+				if sink != nil {
+					sink(e.Raw)
+				}
 
-		case AskRequestEvent:
-			res, aerr := prompter.OnAsk(ctx, e)
-			if aerr != nil {
-				logrus.WithError(aerr).Warn("agentboot.RunTurnWithPrompter: prompter.OnAsk error; denying")
-				res = AskResponse{Approved: false, Reason: aerr.Error()}
-			}
-			if rerr := session.Respond(e.ID, res); rerr != nil {
-				logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
-			}
+			case ApprovalRequestEvent:
+				res, perr := prompter.OnApproval(ctx, e)
+				if perr != nil {
+					logrus.WithError(perr).Warn("agentboot.RunTurnWithPrompter: prompter.OnApproval error; denying")
+					res = ApprovalResponse{Approved: false, Reason: perr.Error()}
+				}
+				if rerr := session.Respond(e.ID, res); rerr != nil {
+					logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
+				}
 
-		case ErrorEvent:
-			logrus.WithError(e.Err).Warn("agentboot.RunTurnWithPrompter: agent ErrorEvent")
-			if sink != nil {
-				sink(e)
-			}
+			case AskRequestEvent:
+				res, aerr := prompter.OnAsk(ctx, e)
+				if aerr != nil {
+					logrus.WithError(aerr).Warn("agentboot.RunTurnWithPrompter: prompter.OnAsk error; denying")
+					res = AskResponse{Approved: false, Reason: aerr.Error()}
+				}
+				if rerr := session.Respond(e.ID, res); rerr != nil {
+					logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
+				}
 
-		case TurnCompleteEvent:
-			if e.Result != nil && e.Result.Error != "" {
-				return e.Result, errors.New(e.Result.Error)
-			}
-			return e.Result, nil
+			case ErrorEvent:
+				logrus.WithError(e.Err).Warn("agentboot.RunTurnWithPrompter: agent ErrorEvent")
+				if sink != nil {
+					sink(e)
+				}
 
-		case SessionStateEvent:
-			if e.State == SessionStateTerminated {
-				return nil, fmt.Errorf("agentboot: persistent session terminated before this turn completed: %s", e.Reason)
+			case TurnCompleteEvent:
+				if e.Result != nil && e.Result.Error != "" {
+					return e.Result, errors.New(e.Result.Error)
+				}
+				return e.Result, nil
+
+			case SessionStateEvent:
+				if e.State == SessionStateTerminated {
+					return nil, fmt.Errorf("agentboot: persistent session terminated before this turn completed: %s", e.Reason)
+				}
 			}
 		}
 	}
-
-	return nil, ErrSessionEventsClosedMidTurn
 }

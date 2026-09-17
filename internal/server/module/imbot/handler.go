@@ -402,6 +402,14 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after settings update")
 				}
+				// StopBot (the else branch) already evicts on its way out;
+				// here the bot keeps running, so turning persistent_session
+				// off needs its own eviction or the abandoned session stays
+				// resident racing the next, one-shot-mode message against
+				// the same on-disk session file.
+				if req.PersistentSession != nil && !*req.PersistentSession {
+					h.botMgr.EvictPersistentSessions(uuid)
+				}
 			} else {
 				if err := h.botMgr.StopBot(uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after settings update")

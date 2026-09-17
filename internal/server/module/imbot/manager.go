@@ -220,6 +220,12 @@ func (bm *BotManager) StopBot(uuid string) error {
 	bm.manager.WaitForStop(uuid, 5*time.Second)
 	bm.mu.Lock()
 
+	// A stopped bot must not leave a persistent @cc session resident: the
+	// abandoned process would keep the Claude on-disk session file open
+	// while a later restart resumes it in a separate process, racing on
+	// that same file.
+	bm.EvictPersistentSessions(uuid)
+
 	logrus.WithFields(logrus.Fields{
 		"uuid":     uuid,
 		"name":     settings.Name,
@@ -227,6 +233,22 @@ func (bm *BotManager) StopBot(uuid string) error {
 	}).Info("Bot stopped successfully")
 
 	return nil
+}
+
+// EvictPersistentSessions closes and removes every resident persistent @cc
+// session belonging to uuid from the shared pool, without touching whether
+// the bot itself is running. Callers: StopBot (the bot is going away
+// entirely) and the settings handler (the bot keeps running but its
+// persistent_session setting was just turned off) — see
+// remoteagent.EvictPersistentSessionsForBot's doc comment for why an
+// abandoned session must not be left resident. Returns the number of
+// sessions evicted; a nil sessionPool (persistent sessions disabled
+// process-wide) evicts nothing.
+func (bm *BotManager) EvictPersistentSessions(uuid string) int {
+	if bm == nil {
+		return 0
+	}
+	return remoteagent.EvictPersistentSessionsForBot(bm.sessionPool, uuid)
 }
 
 // RestartBot stops a single bot and starts it again, preserving its UUID.
