@@ -1,6 +1,7 @@
 import type { ThemeOptions } from '@mui/material/styles';
 import { dsPrimary, dsPrimaryLight, dsPrimaryDark, dsBackgroundGradient } from '../palettes/ds';
 import { primaryGradientButton } from './buttonVariants';
+import { dsCloudTextureUrl } from '../assets/dsCloudTexture';
 
 // DS reusable tokens for component overrides
 const dsTokens = {
@@ -353,19 +354,22 @@ export const dsComponents: ThemeOptions['components'] = {
         // AppBar) is translucent, unlike the other themes' opaque ones.
         //
         // deepseek.com's real hero is a near-white page (`dsBackgroundGradient.base`)
-        // with an animated <canvas> "flow field" drawing moving wisps in
+        // with an animated <canvas> "flow field" drawing moving cloud wisps in
         // `dsBackgroundGradient.wash`/`.accent`/white on top. We can't reasonably run
         // that canvas behind every dashboard/table page here, so this approximates a
-        // freeze-frame of it: several soft, overlapping radial blobs near the top
-        // (their real streak colors, just static) fading into the near-white base,
-        // instead of one flat linear band.
+        // freeze-frame of it: a static SVG cloud texture (see dsCloudTexture.ts —
+        // real puffy cloud shapes, not a smooth blur) over a soft blue wash, both
+        // fading into the near-white base toward the bottom.
         backgroundColor: dsBackgroundGradient.base,
         backgroundImage: [
+          dsCloudTextureUrl,
           'radial-gradient(52% 40% at 20% -8%, rgba(156, 193, 231, 0.55) 0%, rgba(156, 193, 231, 0) 72%)',
           'radial-gradient(46% 36% at 58% -6%, rgba(138, 163, 214, 0.5) 0%, rgba(138, 163, 214, 0) 72%)',
           'radial-gradient(58% 38% at 90% 2%, rgba(156, 193, 231, 0.4) 0%, rgba(156, 193, 231, 0) 74%)',
-          `linear-gradient(180deg, ${dsBackgroundGradient.wash}59 0%, rgba(249, 248, 248, 0) 45%)`,
+          `linear-gradient(180deg, ${dsBackgroundGradient.wash}66 0%, rgba(249, 248, 248, 0) 45%)`,
         ].join(', '),
+        backgroundPosition: ['top center', '0 0', '0 0', '0 0', '0 0'].join(', '),
+        backgroundSize: ['100% 640px', 'auto', 'auto', 'auto', 'auto'].join(', '),
         backgroundAttachment: 'fixed',
         backgroundRepeat: 'no-repeat',
         '&::-webkit-scrollbar': { width: 8, height: 8 },
