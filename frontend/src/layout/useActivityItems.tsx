@@ -43,7 +43,7 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
@@ -199,13 +199,15 @@ export function useActivityItems(): ActivityItem[] {
             // Bench — the customizable end-to-end test workbench
             // (.design/bench.md). Sits with Usage in the "observe &
             // verify" domain; a single page, so no sidebar children.
-            {
-                key: 'bench',
+            // Experimental, off by default (system.experimental "bench"
+            // flag) — same gating as Guardrails/MCP below.
+            ...(enableBench ? [{
+                key: 'bench' as const,
                 icon: <IconTestPipe sx={{ fontSize: 22 }} />,
                 label: t('layout.bench', { defaultValue: 'Bench' }),
                 path: '/bench',
                 defaultPath: '/bench',
-            },
+            }] as ActivityItem[] : []),
             ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <IconBrain sx={{ fontSize: 22 }} />,
@@ -297,5 +299,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, profiles, teams, botSummary, hiddenScenarios]);
 }

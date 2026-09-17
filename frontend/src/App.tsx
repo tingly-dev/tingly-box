@@ -231,7 +231,7 @@ function AppContent() {
                         everyone else to their last-active activity. */}
                     <Route index element={<OnboardingGate />} />
                     <Route path="/help" element={<HelpPage />} />
-                    <Route path="/bench" element={<BenchPage />} />
+                    <Route path="/bench" element={<ExperimentalFeatureGate feature="bench"><BenchPage /></ExperimentalFeatureGate>} />
                     {/* Back-compat: the old standalone Onboarding page was folded into
                         Help as ProvidersCard — keep old bookmarks/links working. */}
                     <Route path="/onboarding" element={<Navigate to="/help" replace />} />
