@@ -109,11 +109,13 @@ custom request), never a peer switch.
   │ Message                                 │
   │ [Hello, this is a test message. …]      │
   │                                          │
-  │ Tool       ▤ Off │ On                   │
-  │ Vision     ▤ Off │ User │ Tool          │
-  │ Thinking   ──●──────────────            │
-  │ Protocol   ▤ OpenAI Chat│Responses│Ant  │
-  │                                          │
+  │ PARAMETERS ───────────────────────────  │  ← AxisGroup: a real,
+  │ Thinking   ──●──────────────            │     independently-valued field
+  │ Protocol   ▤ OpenAI Chat│Responses│Ant  │     (bench.md §1 "四种归类")
+  │ CONTENT ──────────────────────────────  │  ← AxisGroup: a fixed blob,
+  │ Tool       ▤ Off │ On                   │     toggled on/off — same kind
+  │ Vision     ▤ Off │ User │ Tool          │     of thing as a Template,
+  │                                          │     just fragment-sized
   │ Need something the knobs can't express?  │
   │ [ Write the request yourself → ]         │
   └──────────────────────────────────────────┘
@@ -122,12 +124,6 @@ custom request), never a peer switch.
         │   destination, pre-seeded with the current body)
         ▼
   ┌ REQUEST ──────────────────────────────────────┐
-  │ Starting point:                                │
-  │  ○ Blank             ○ Multi-turn              │
-  │  ○ Tool round-trip   ○ Image                   │
-  │  ○ Mid-convo system (Anthropic only)           │
-  │  ○ Copy what the preset request currently shows│
-  │                                                 │
   │ Protocol: Anthropic Messages ▾  ← chosen here; picking a
   │                                    different one REPLACES the
   │                                    body with ITS starting
@@ -139,10 +135,23 @@ custom request), never a peer switch.
   │ │   "messages": [ … ]                     │    │
   │ │ }                                       │    │
   │ └───────────────────────────────────────────┘    │
-  │ [templates ▾]         [← back to the preset request]│
+  │              [← back to the preset request] [Change starting point ▾]│
   └─────────────────────────────────────────────────┘
-    No Tool / Vision / Thinking / Protocol rows in the Compose
-    column while this view is active — not disabled, not rendered.
+    [Change starting point ▾] opens the exact same StartingPointMenu the
+    door did — one mechanism, two trigger points, not three separate
+    controls (Edit the builder's request / Templates used to be split):
+        ○ Copy the preset request   (only when seeded — see below)
+        ○ Blank
+        ○ Multi-turn      ○ Tool round-trip
+        ○ Image           ○ Mid-convo system (Anthropic only)
+    "Copy the preset request" must stay correct even after crossing the
+    door — Payload's own curl reflects whatever's CURRENTLY active (the
+    custom body, once one exists), so it can't source this. BenchPage runs
+    a second, independent curl fetch with raw forced off, only while a
+    custom request is active (bench.md §6.3).
+
+    No Parameters / Content AxisGroup in the Compose column while this view
+    is active — not disabled, not rendered.
     They aren't this view's knobs.
 ```
 

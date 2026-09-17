@@ -62,13 +62,48 @@ Probe / Bench / Server 三者不是并列的三个工具，是同一件事在三
 观察场景保真度），不是 Bench 该操心的事（这也是 §6 里"切换协议 = 换一份新协议的起始
 模板，而不是翻译现有 body"这个决定的根本原因，不只是图省事）。
 
-Scope / Stream / Routing / Flags overlay / Header 覆盖不在这条投影链上——它们是"Server
-怎么处理这次运行"的配置，和请求内容长什么样无关，预设请求和自定义请求两种模式都用
-得到（§7）。
+Scope / Routing / Flags overlay / Header 覆盖不在这条投影链上——它们不在请求 body
+里，是"Server 怎么处理这次运行"的配置，和请求内容长什么样无关，预设请求和自定义
+请求两种模式都用得到（§7）。Stream 不在此列，见下——它在 body 里，是一个真参数。
 
 > 术语提醒：TB 代码里 `scenario` 另有一个具体含义（路由用的产品面家族，`rule.Scenario`、
 > `/tingly/{scenario}` 入口），和这里说的"场景粒度"不是同一件事——后者是更宽泛的
 > "一组协议无关的兼容性断言"。
+
+### 四种归类：场景粒度内部也不是铁板一块
+
+"探针的所有旋钮都是预设"这句话过粗——Tool/Vision 轴打开后注入的是**完全写死**的内容
+（`internal/probe/helper.go` 里 `getVisionToolOpenAI()`/`getVisionToolAnthropic()` 返回
+固定 schema，没有任何参数传入），没有"选哪个工具"这种取值空间，和 Thinking（真实的
+effort/budget 取值）、Protocol（决定一切怎么写的坐标系）完全不是一回事。按"这东西到底
+是什么"重新归类，不按"UI 上像不像轴"分：
+
+| 归类 | 成员 | 特征 |
+|------|------|------|
+| 坐标系 | Protocol | 决定其它一切"写出来长什么样"，不是坐标系里的一个点，和别的归类不平级 |
+| 真参数 | Stream、Thinking | body 里的具体字段，有真实取值范围，不含任何"内容" |
+| 内容预设 · 片段级 | Tool、Vision、Message | 写死的一段东西，只有"塞不塞"这个开关，塞进去的内容不可调 |
+| 内容预设 · 整体级 | Bench Templates | 同上，只是范围是整份 body 而不是一个片段 |
+| 传输配置 | Scope、Routing、Flags overlay、Header 覆盖 | 不在 body 里，"Server 怎么处理这次运行"，和内容无关 |
+
+**内容预设的两个粒度是同一种东西**：Tool 轴给的固定工具交换，和 Bench Templates 里
+的 "Tool round-trip" 概念上是一回事，只是前者局部（一个片段）、后者整体（一份 body）。
+这就是为什么 Bench 的"从哪开始"菜单（§6.3）能把两者列进同一份清单，不用发明第三种
+机制——它们本来就是同一类，只是粒度不同。
+
+Probe 弹窗和 Bench 的轴面板按这个分类可视化分组（`AxisGroup`，共享组件）：**参数**
+（Thinking、Protocol）、**内容**（Tool、Vision、Message）。Shape（Stream）和 Scope
+常驻不分组——常驻的理由是触碰频率，不是归类，它们恰好一个是真参数、一个是传输配置。
+
+不完全正交的两处，已经在代码里处理，只是没点破：
+1. **Protocol 收窄其它轴的值域**——不是取值互相干扰，是某些组合压根不存在（provider
+   只讲 OpenAI 时 Anthropic Messages 不该出现；Direct 模式下 Protocol 被 provider 能力
+   锁死）。`protocolAvailability`/`AxisAvailability` 一直在做这件事，是坐标系限定了
+   点集，不是 bug。
+2. **内容预设覆盖不到真实场景需要的空间**——例如"assistant 带 thinking 的历史轮"需要
+   多轮对话 + thinking 内容同时出现在历史里，但 Thinking 轴只管这次请求要不要带
+   thinking 配置，不管历史消息里有没有 thinking block。这正是要有 Templates、要有
+   自定义请求这条退路的理由，不是这次发现的新问题。
 
 ### 与线上运转的差异边界
 
@@ -354,28 +389,50 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
 - 这一层单独成 PR（"accept a raw client request in any of the three protocols"），
   Bench 叠在它之上。详见 probe.md "Raw client requests"。
 
-### 6.3 编辑器 UI 与模板
+### 6.3 编辑器 UI：一份"从哪开始"菜单，不是三处分散的入口
 
-- 中栏 Request 面板默认是**预设请求模式**：一个 message 输入框（即 probe 的
-  override），加两条出口：**Write the request yourself**（空白起步）和 **Edit the
-  builder's request**（把 Payload 面板当前显示的 body 复制进来改——右栏的 Edit
-  按钮是同一动作）。两条出口通向同一个目的地，只是起始内容不同。
-- **自定义请求模式**：协议下拉（rule target 只列 scenario 家族允许的协议；provider
-  target 列它会说的协议）+ 等宽 JSON 文本域 + 即时解析错误 + **Back to the
-  preset request**。Tool / Vision / Thinking / Protocol 这几个轴**不渲染**，不是
-  变灰禁用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接
-  跳过这几个 `Axis` 块，不是给它们传 `disabled`）。Scope / Stream / Routing 保持
-  可见：它们是传输层开关，和 body 怎么拼出来的无关，预设请求和自定义请求都用
-  得到。
+早期实现里，"决定自定义请求的 body 从哪来"这件事散落在三处：进门按钮（文案随
+`seedBody` 是否存在在 "Write the request yourself" / "Edit the builder's request"
+之间切换，靠文案隐晦地告诉用户点了会拿到什么）、进门之后的第二个同名按钮（把
+body 重新同步成预设请求现在的样子）、以及一个独立的 Templates 菜单。三处入口、
+两个不同的出现时机，服务的却是同一件事。
+
+`StartingPointMenu`（`pages/bench/RequestEditor.tsx`）把它们收成一份菜单，两个
+触发点共用：
+
+- **门**（预设请求模式）：按钮文案固定为 **Write the request yourself**，不再随
+  `seedBody` 变化。点开是同一份菜单。
+- **Change starting point**（自定义请求模式内）：已经在自定义视图里想换起点时，
+  打开同一份菜单，替换掉原来分开的"Edit the builder's request"按钮和"Templates"
+  按钮。
+
+菜单内容两处完全一致（§1"四种归类"——它们都是内容预设，粒度不同而已）：
+
+| 选项 | 是什么 |
+|------|--------|
+| Copy the preset request | 预设请求（探针）现在会发出的样子；`seedBody` 存在才显示 |
+| Blank | 该协议形态下的一份空请求（`{messages:[]}`/`{input:[]}`），不是隐式回退到第一个模板 |
+| Multi-turn / Tool round-trip / Image / Mid-conversation system | 按协议各备的"教材式"整体内容预设（ux-principles #8），Anthropic 独有 Mid-conversation system（claude_code_compat 的测试形态） |
+
+选中任何一项都是**整体替换**，不做确认弹窗——这个页面的受众本来就习惯"重来"这个
+动作，和"切换协议 = 重新开始"（下一条）是同一套语义。
+
+`seedBody`（"Copy the preset request"用到的值）必须在**两个触发点都准确**：门那
+一侧好办（此刻确实没有自定义请求，Payload 面板显示的就是预设请求）；但已经进了
+自定义视图之后，Payload 面板显示的是**当前的自定义请求**，不能再拿来当"预设请求
+现在的样子"——那样"Copy the preset request"会变成把自己抄一遍的空操作。所以
+`BenchPage.tsx` 维护了第二条独立的、`raw:null` 构造的 curl 请求（`presetPreviewCurl`），
+只在自定义请求处于活跃状态时才发起，预设请求模式下直接复用已有的 curl 结果，不重复
+请求。
+
 - **切换协议 = 重新开始，不是重新贴标签**：协议下拉的 onChange 把 body 换成新
   协议的起始模板，而不是只改 `request_protocol` 这个字段——旧实现只改标签、
-  不改 body，会产出一份标签和内容对不上的请求，这是已修的 bug，不是特性。和
-  点 Templates 菜单是同一套语义（直接替换，不做确认弹窗，因为这个页面的受众
-  本来就习惯"重来"这个动作）。
-- **Templates 下拉**（ux-principles #8：教育内嵌产品）：按协议各备一组"教材式"形态一键
-  填充——`Multi-turn`、`Tool round-trip`（tools + tool_use + tool_result）、`Image`；
-  Anthropic 额外有 `Mid-conversation system`（claude_code_compat 的测试形态）。模板名旁一
-  句话说明它测什么。模板就是把 harness `flagBaseRequest` 的知识透给用户。
+  不改 body，会产出一份标签和内容对不上的请求，这是已修的 bug，不是特性。
+- Tool / Vision / Thinking / Protocol 这几个轴在自定义请求模式下**不渲染**，不是
+  变灰禁用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接
+  跳过这几个 `AxisGroup`，不是给它们传 `disabled`）。Shape（Stream）/ Scope /
+  Routing 保持可见：Scope/Routing 是传输配置，Stream 是 body 里的真参数，三者的
+  共同点只是"和内容无关"，预设请求和自定义请求两种模式都用得到（§1"四种归类"）。
 - 切换 target 时清空自定义请求（它是针对旧 target 协议写的）。
 
 ---
@@ -469,8 +526,8 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
 | 1 | `pages/bench/BenchPage.tsx` | 页面（lazy），三栏布局编排、run history、⌘/Ctrl+Enter、localStorage 持久化、深链消费 |
 | 2 | `pages/bench/benchLink.ts` | URL 契约（`?target=rule:{uuid}&scenario=` / `?target=provider:{uuid}&model=` + 轴参数）；独立小模块，供 ProbeDialog 的 "Open in Bench" 使用而不拖入页面 chunk |
 | 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签 |
-| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra` |
-| 5 | `pages/bench/` 内部组件 | `TargetPicker`（统一目标选择）、`BenchAxes`（全展开轴 + 可用性归约，raw 模式下归 raw 的轴禁用）、`PluginsPanel`（registry-driven 三态）、`RequestEditor`（fixture / raw 两态、按协议的模板）、`PayloadPanel`（只读 body + Edit→raw、header 覆盖）、`RunHistory` |
+| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组，与 PluginsPanel 同一套 overline+分割线样式、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
+| 5 | `pages/bench/` 内部组件 | `TargetPicker`（统一目标选择）、`BenchAxes`（全展开轴、Parameters/Content 分组，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、`PluginsPanel`（registry-driven 三态）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
 | 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
 | 7 | `services/api.ts` | `getAllRules`（不带 scenario 即全部规则） |
 | 8 | i18n | `bench.*` en/zh；`probe.openInBench`；`layout.bench` |
