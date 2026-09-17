@@ -6,7 +6,8 @@ import (
 	"maps"
 	"net/http"
 	"sort"
-	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -120,7 +121,7 @@ func setAnthropicSSEHeaders(c *gin.Context) {
 
 // sendMessageStart emits the message_start SSE event with the given id/model.
 func sendMessageStart(c *gin.Context, flusher http.Flusher, model string, inputTokens int64) {
-	event := newAnthropicMessageStartEvent(fmt.Sprintf("msg_%d", time.Now().Unix()), model, inputTokens)
+	event := newAnthropicMessageStartEvent(ids.Message(), model, inputTokens)
 	sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 }
 

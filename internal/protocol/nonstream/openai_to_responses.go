@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -56,7 +58,7 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 		output = append(output, wire.ResponsesOutputItemWire{
 			// The real Responses API always assigns output items an id;
 			// strict clients (AI SDK zod) require it.
-			ID:     "msg_" + resp.ID,
+			ID:     ids.Message(),
 			Type:   "message",
 			Role:   "assistant",
 			Status: itemStatus,
@@ -71,7 +73,7 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 		for _, toolCall := range resp.Choices[0].Message.ToolCalls {
 			arguments := toolCall.Function.Arguments
 			output = append(output, wire.ResponsesOutputItemWire{
-				ID:        toolCall.ID,
+				ID:        ids.FunctionCall(),
 				CallID:    toolCall.ID,
 				Type:      "function_call",
 				Name:      toolCall.Function.Name,
@@ -86,7 +88,7 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 	usageWire := usage.ToResponsesUsageWire(usage.FromOpenAIChatCompletion(resp.Usage))
 
 	result := wire.ResponsesWireResponse{
-		ID:        resp.ID,
+		ID:        ids.Response(),
 		Object:    "response",
 		CreatedAt: time.Now().Unix(),
 		Model:     model,
@@ -146,7 +148,7 @@ func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseMo
 
 	if len(textParts) > 0 {
 		msgItem := wire.ResponsesOutputItemWire{
-			ID:      "msg_" + resp.ID,
+			ID:      ids.Message(),
 			Type:    "message",
 			Role:    "assistant",
 			Status:  status,
@@ -167,7 +169,7 @@ func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseMo
 		}
 		output = append(output, wire.ResponsesOutputItemWire{
 			Type:      "function_call",
-			ID:        block.ID,
+			ID:        ids.FunctionCall(),
 			CallID:    block.ID,
 			Name:      block.Name,
 			Arguments: &argsJSON,
@@ -182,7 +184,7 @@ func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseMo
 	usageWire := usage.ToResponsesUsageWire(usage.FromAnthropicBetaMessage(resp.Usage))
 
 	result := wire.ResponsesWireResponse{
-		ID:        resp.ID,
+		ID:        ids.Response(),
 		Object:    "response",
 		CreatedAt: time.Now().Unix(),
 		Model:     model,

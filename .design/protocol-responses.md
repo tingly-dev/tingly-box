@@ -72,3 +72,52 @@ documentation; no live Anthropic probe was run.
 - The same class of bug in other projects: LiteLLM #32992 / message
   sanitization (`modify_params`), cc-switch #7074 / #7400, opencodex #4870
   ("adjacency repair"), gptme #3846 (merge dropped parallel results).
+
+## 2. Ids minted by the gateway
+
+When the upstream is not a Responses API, every Responses object the
+client sees is synthesized here, including its ids. Clients such as Codex
+persist them and replay them verbatim, possibly into a native Responses
+upstream, where OpenAI validates replayed `input[i].id`: type prefix
+(`fc_`, `msg_`, `rs_`; "Expected an ID that begins with 'rs_'"), charset
+`[A-Za-z0-9_-]`, at most 64 characters, and no duplicates within one
+request ("Duplicate item found with id"). Under `store: false` nobody
+resolves them, so well-formed and unique is the whole requirement. The
+model never sees item ids; it does see the `call_id`, which is the
+correlation key and is passed through from the upstream unchanged.
+
+Rules (`internal/protocol/ids`):
+
+| Object | Id | Source |
+|---|---|---|
+| response | `resp_<32 hex>` | minted |
+| message item | `msg_<32 hex>` | minted |
+| function_call item | `fc_<32 hex>` | minted |
+| function_call `call_id` | upstream tool call id (`call_00_…`, `toolu_…`) | passthrough; `call_<32 hex>` only if the upstream gave none |
+| Anthropic `message_start.id` | `msg_<32 hex>` | minted, same helper |
+
+The suffix is a random uuid v4. This is the canonical OpenAI shape, it is
+what OpenAI itself and vLLM issue, and it meets every replay constraint
+without post-processing. Rejected alternatives:
+
+- **timestamps** (previous behaviour): two responses in one second collide,
+  and `item_`/`call_`/`toolu_` prefixes were leaking into item ids on some
+  paths;
+- **derived from upstream ids** (`fc_` + tool call id, `msg_` + response
+  id): leaks the provider's shape into the gateway's wire form and has no
+  length bound (LiteLLM #41534: Gemini thought-signatures pushed such an
+  id past 64 chars);
+- **content hash**: deterministic and canonical, but nobody in the field
+  does it and the determinism is only useful in tests and recording
+  replays, which inject a fixed generator instead.
+
+Invariants the code keeps:
+
+- an id is minted **once per object**; the same id appears in
+  `output_item.added`, `output_item.done` and the final
+  `response.completed` output (vLLM shipped a bug where these disagreed and
+  Codex could not pair them);
+- ids on replayed **input** items are never rewritten. Preprocessing only
+  adds `type` and flattens `output_text`; the chat and Anthropic
+  converters drop item ids entirely and keep `call_id`; the native
+  Responses passthrough forwards input untouched.

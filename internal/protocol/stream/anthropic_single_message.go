@@ -3,9 +3,9 @@ package stream
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -61,7 +61,7 @@ func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseMod
 		stopReason = anthropicStopReasonToolUse
 	}
 	sendMessageDelta(c, state, stopReason, flusher)
-	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
+	sendMessageStop(c, ids.Message(), model, state, stopReason, flusher)
 	return nil
 }
 
@@ -115,6 +115,6 @@ func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, res
 		stopReason = anthropicStopReasonToolUse
 	}
 	sendMessageDelta(c, state, stopReason, flusher)
-	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
+	sendMessageStop(c, ids.Message(), model, state, stopReason, flusher)
 	return nil
 }

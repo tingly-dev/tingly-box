@@ -1,9 +1,10 @@
 package assembler
 
 import (
-	"fmt"
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/openai/openai-go/v3/responses"
 )
@@ -284,7 +285,7 @@ func (a *ResponsesAssembler) ResponseID() string {
 		return ""
 	}
 	if a.responseID == "" {
-		return fmt.Sprintf("resp_%d", a.createdAt)
+		a.responseID = ids.Response()
 	}
 	return a.responseID
 }
@@ -436,18 +437,18 @@ func (a *ResponsesAssembler) syntheticOutputItems(status responses.ResponseStatu
 
 // GetOrCreateResponseID returns the response ID, generating one if not set.
 func (a *ResponsesAssembler) GetOrCreateResponseID() string {
-	if a.responseID != "" {
-		return a.responseID
+	if a.responseID == "" {
+		a.responseID = ids.Response()
 	}
-	return fmt.Sprintf("resp_%d", a.createdAt)
+	return a.responseID
 }
 
 // GetOrCreateItemID returns the item ID, generating one if not set.
 func (a *ResponsesAssembler) GetOrCreateItemID() string {
-	if a.itemID != "" {
-		return a.itemID
+	if a.itemID == "" {
+		a.itemID = ids.Message()
 	}
-	return fmt.Sprintf("item_%d", a.createdAt)
+	return a.itemID
 }
 
 // SetResponseID sets a custom response ID.

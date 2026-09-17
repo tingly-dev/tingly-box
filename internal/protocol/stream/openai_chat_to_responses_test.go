@@ -415,3 +415,55 @@ func parseResponsesSSEEvents(t *testing.T, body string) map[string]map[string]in
 
 	return events
 }
+
+// TestChatToResponsesConverter_ItemIDsAreCanonicalAndStable verifies the id
+// rules Codex relies on (see .design/codex.md): function_call items carry a
+// canonical fc_ id distinct from the upstream call_id, parallel calls get
+// distinct ids, and output_item.added, output_item.done and the final
+// response.completed output all agree on the same id.
+func TestChatToResponsesConverter_ItemIDsAreCanonicalAndStable(t *testing.T) {
+	conv := NewChatToResponsesConverter(nil, "deepseek-chat")
+	conv.hasSentCreated = true
+
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{Delta: openai.ChatCompletionChunkChoiceDelta{
+				ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+					{Index: 0, ID: "call_00_U1b2d3AQCK8kijYksjUn7696", Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{Name: "shell", Arguments: `{"cmd":"ls"}`}},
+					{Index: 1, ID: "call_01_RvsMG2LRfuzuduZWkC4Q4980", Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{Name: "shell", Arguments: `{"cmd":"pwd"}`}},
+				},
+			}},
+		},
+	})
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{{FinishReason: "tool_calls"}},
+	})
+
+	added := map[string]string{} // call_id -> item id
+	done := map[string]string{}
+	var final []wire.ResponsesOutputItemWire
+	for _, evt := range conv.pending {
+		switch e := evt.(type) {
+		case wire.ResponsesOutputItemAddedEvent:
+			added[e.Item.CallID] = e.Item.ID
+		case wire.ResponsesOutputItemDoneEvent:
+			done[e.Item.CallID] = e.Item.ID
+		case wire.ResponsesCompletedEvent:
+			final = e.Response.Output
+		}
+	}
+
+	require.Len(t, added, 2)
+	require.Len(t, done, 2)
+	require.Len(t, final, 2)
+	assert.Regexp(t, `^resp_[0-9a-f]{32}$`, conv.responseID)
+	for callID, itemID := range added {
+		assert.Regexp(t, `^fc_[0-9a-f]{32}$`, itemID)
+		assert.NotEqual(t, callID, itemID)
+		assert.Equal(t, itemID, done[callID], "output_item.done must reuse the added id")
+	}
+	assert.NotEqual(t, added["call_00_U1b2d3AQCK8kijYksjUn7696"], added["call_01_RvsMG2LRfuzuduZWkC4Q4980"])
+	for _, item := range final {
+		assert.Equal(t, added[item.CallID], item.ID, "final output must reuse the streamed id")
+	}
+}

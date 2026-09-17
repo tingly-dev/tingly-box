@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
@@ -540,7 +542,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 	usage := protocol.ZeroTokenUsage()
 
 	// Generate message ID for Anthropic format
-	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+	messageID := ids.Message()
 
 	// Send message_start event
 	sendAnthropicV1MessageStart(c, messageID, responseModel, flusher)
