@@ -1,7 +1,7 @@
 import type { ThemeOptions } from '@mui/material/styles';
 import { dsPrimary, dsPrimaryLight, dsPrimaryDark, dsBackgroundGradient } from '../palettes/ds';
 import { primaryGradientButton } from './buttonVariants';
-import { dsCloudTextureUrl } from '../assets/dsCloudTexture';
+import { dsCloudTextureUrl, dsCloudTextureTileHeight } from '../assets/dsCloudTexture';
 
 // DS reusable tokens for component overrides
 const dsTokens = {
@@ -360,6 +360,13 @@ export const dsComponents: ThemeOptions['components'] = {
         // freeze-frame of it: a static SVG cloud texture (see dsCloudTexture.ts —
         // real puffy cloud shapes, not a smooth blur) over a soft blue wash, both
         // fading into the near-white base toward the bottom.
+        //
+        // The cloud layer repeats horizontally at its native aspect ratio
+        // (`repeat-x` + a fixed pixel height) instead of stretching to
+        // `100% <height>` — a straight width:100% stretch would smear the puffs
+        // into thin streaks on an ultrawide screen and squash them on a narrow
+        // one. The SVG tile is seamless (`stitchTiles="stitch"`), so the repeat
+        // itself is invisible.
         backgroundColor: dsBackgroundGradient.base,
         backgroundImage: [
           dsCloudTextureUrl,
@@ -369,9 +376,9 @@ export const dsComponents: ThemeOptions['components'] = {
           `linear-gradient(180deg, ${dsBackgroundGradient.wash}66 0%, rgba(249, 248, 248, 0) 45%)`,
         ].join(', '),
         backgroundPosition: ['top center', '0 0', '0 0', '0 0', '0 0'].join(', '),
-        backgroundSize: ['100% 640px', 'auto', 'auto', 'auto', 'auto'].join(', '),
+        backgroundSize: [`auto ${dsCloudTextureTileHeight}px`, 'auto', 'auto', 'auto', 'auto'].join(', '),
         backgroundAttachment: 'fixed',
-        backgroundRepeat: 'no-repeat',
+        backgroundRepeat: ['repeat-x', 'no-repeat', 'no-repeat', 'no-repeat', 'no-repeat'].join(', '),
         '&::-webkit-scrollbar': { width: 8, height: 8 },
         '&::-webkit-scrollbar-track': {
           backgroundColor: dsTokens.scrollbarTrack,
