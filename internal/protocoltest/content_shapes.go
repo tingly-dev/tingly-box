@@ -2,6 +2,7 @@ package protocoltest
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
@@ -260,6 +261,109 @@ func anthropicToolResultImageData(body map[string]any) (string, bool) {
 
 // ─── Cases ─────────────────────────────────────────────────────────────────
 
+// chatToolSequence renders the forwarded Chat Completions message list as a
+// compact shape string, e.g.
+// "user;assistant[call_a,call_b];tool:call_a;tool:call_b;user", so a case
+// can assert the tool-call adjacency invariant DeepSeek/OpenAI enforce
+// (every tool_calls id answered right after, no dangling tool message).
+func chatToolSequence(body map[string]any) (string, bool) {
+	msgs, ok := body["messages"].([]any)
+	if !ok {
+		return "", false
+	}
+	var parts []string
+	for _, m := range msgs {
+		msg, _ := m.(map[string]any)
+		role, _ := msg["role"].(string)
+		switch role {
+		case "assistant":
+			var ids []string
+			if calls, ok := msg["tool_calls"].([]any); ok {
+				for _, c := range calls {
+					call, _ := c.(map[string]any)
+					id, _ := call["id"].(string)
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) > 0 {
+				parts = append(parts, "assistant["+strings.Join(ids, ",")+"]")
+			} else {
+				parts = append(parts, "assistant")
+			}
+		case "tool":
+			id, _ := msg["tool_call_id"].(string)
+			parts = append(parts, "tool:"+id)
+		default:
+			parts = append(parts, role)
+		}
+	}
+	return strings.Join(parts, ";"), true
+}
+
+// anthropicToolSequence is chatToolSequence for the forwarded Anthropic
+// message list: "user;assistant[tool_use:a,tool_use:b];user[tool_result:a,
+// tool_result:b];user". Text-only messages render as their role.
+func anthropicToolSequence(body map[string]any) (string, bool) {
+	msgs, ok := body["messages"].([]any)
+	if !ok {
+		return "", false
+	}
+	var parts []string
+	for _, m := range msgs {
+		msg, _ := m.(map[string]any)
+		role, _ := msg["role"].(string)
+		var blocks []string
+		if content, ok := msg["content"].([]any); ok {
+			for _, b := range content {
+				block, _ := b.(map[string]any)
+				switch block["type"] {
+				case "tool_use":
+					id, _ := block["id"].(string)
+					blocks = append(blocks, "tool_use:"+id)
+				case "tool_result":
+					id, _ := block["tool_use_id"].(string)
+					blocks = append(blocks, "tool_result:"+id)
+				}
+			}
+		}
+		if len(blocks) > 0 {
+			parts = append(parts, role+"["+strings.Join(blocks, ",")+"]")
+		} else {
+			parts = append(parts, role)
+		}
+	}
+	return strings.Join(parts, ";"), true
+}
+
+// chatFirstMessageContent returns the string content of the first forwarded
+// Chat Completions message.
+func chatFirstMessageContent(body map[string]any) (string, bool) {
+	msgs, ok := body["messages"].([]any)
+	if !ok || len(msgs) == 0 {
+		return "", false
+	}
+	msg, _ := msgs[0].(map[string]any)
+	s, ok := msg["content"].(string)
+	return s, ok
+}
+
+// anthropicFirstMessageText returns the first text block of the first
+// forwarded Anthropic message.
+func anthropicFirstMessageText(body map[string]any) (string, bool) {
+	msgs, ok := body["messages"].([]any)
+	if !ok || len(msgs) == 0 {
+		return "", false
+	}
+	msg, _ := msgs[0].(map[string]any)
+	content, ok := msg["content"].([]any)
+	if !ok || len(content) == 0 {
+		return "", false
+	}
+	block, _ := content[0].(map[string]any)
+	s, ok := block["text"].(string)
+	return s, ok
+}
+
 func contentShapeCases() []contentShapeCase {
 	const secretWord = "The secret word is ZANZIBAR"
 	const parisAnswer = "The capital of France is Paris."
@@ -362,6 +466,37 @@ func contentShapeCases() []contentShapeCase {
 		}
 	}
 
+	// Tool-call adjacency fixtures (issue #1752): Codex replays Responses
+	// history that the Responses API allows but Chat Completions and
+	// Anthropic reject — a parallel call interrupted after its first result,
+	// and an injected function_call_output with no call at all. The gateway
+	// must repair the shape before forwarding (RepairResponsesToolCalls,
+	// .design/protocol-responses.md §1).
+	shellTool := []map[string]any{{"type": "function", "name": "shell",
+		"parameters": map[string]any{"type": "object", "properties": map[string]any{"cmd": map[string]any{"type": "string"}}}}}
+	interruptedParallelBody := func() map[string]any {
+		return map[string]any{
+			"tools": shellTool,
+			"input": []map[string]any{
+				{"type": "message", "role": "user", "content": "run both"},
+				{"type": "function_call", "call_id": "call_a", "name": "shell", "arguments": `{"cmd":"ls"}`},
+				{"type": "function_call", "call_id": "call_b", "name": "shell", "arguments": `{"cmd":"pwd"}`},
+				{"type": "function_call_output", "call_id": "call_a", "output": "a.txt"},
+				{"type": "message", "role": "user", "content": "stop"},
+			},
+		}
+	}
+	orphanOutputBody := func() map[string]any {
+		return map[string]any{
+			"tools": shellTool,
+			"input": []map[string]any{
+				{"type": "function_call_output", "id": "fco_01", "name": "automation_update", "output": "automation: nightly"},
+				{"type": "message", "role": "user", "content": "do the task"},
+			},
+		}
+	}
+	const orphanAsUserText = "[tool output: automation_update]\nautomation: nightly"
+
 	assistantContent := func(body map[string]any) (string, bool) { return responsesMessageContent(body, "assistant") }
 	toolImageURL := func(body map[string]any) (string, bool) { return chatMessageImageURL(body, "tool") }
 	userImageURL := func(body map[string]any) (string, bool) { return chatMessageImageURL(body, "user") }
@@ -411,6 +546,31 @@ func contentShapeCases() []contentShapeCase {
 		{name: "chat_to_anthropic/system_array_content", run: func(t flagTB, env *TestEnv) {
 			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
 				systemArrayBody(), anthropicSystemText, systemPrompt)
+		}},
+
+		// ── Responses → Chat / Anthropic tool-call adjacency (issue #1752) ──
+		{name: "responses_to_chat/interrupted_parallel_tool_call", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat, EndpointChat,
+				interruptedParallelBody(), chatToolSequence, "user;assistant[call_a,call_b];tool:call_a;tool:call_b;user")
+		}},
+
+		{name: "responses_to_chat/orphan_tool_output_becomes_user_text", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat, EndpointChat,
+				orphanOutputBody(), chatToolSequence, "user;user")
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat, EndpointChat,
+				orphanOutputBody(), chatFirstMessageContent, orphanAsUserText)
+		}},
+
+		{name: "responses_to_anthropic/interrupted_parallel_tool_call", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				interruptedParallelBody(), anthropicToolSequence, "user;assistant[tool_use:call_a,tool_use:call_b];user[tool_result:call_a,tool_result:call_b];user")
+		}},
+
+		{name: "responses_to_anthropic/orphan_tool_output_becomes_user_text", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				orphanOutputBody(), anthropicToolSequence, "user;user")
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				orphanOutputBody(), anthropicFirstMessageText, orphanAsUserText)
 		}},
 
 		// ── Image content shapes (issue #1606) ─────────────────────────
