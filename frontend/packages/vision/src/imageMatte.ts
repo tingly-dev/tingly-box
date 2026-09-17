@@ -16,7 +16,12 @@ export interface RGBAImage {
     height: number;
 }
 
-export type BackgroundKind = 'none' | 'checker' | 'green';
+// 'custom' is never returned by `analyzeBackground` — it only exists once the
+// user has clicked a pixel themselves, for the backdrops detection is
+// deliberately blind to (a flat or gently gradient studio backdrop has no
+// alternation and no green to key on, so it reads as 'none' above even though
+// a person can point at it in one click).
+export type BackgroundKind = 'none' | 'checker' | 'green' | 'custom';
 
 export interface BackgroundAnalysis {
     kind: BackgroundKind;
@@ -217,7 +222,11 @@ export interface RemoveBackgroundOptions {
     kind: BackgroundKind;
     /** 0..1; higher keys out more of the near-background fringe. */
     tolerance?: number;
-    /** Checker tones, when already known from `analyzeBackground`. */
+    /**
+     * Checker tones, when already known from `analyzeBackground` — or, for
+     * `kind: 'custom'`, the single colour a click sampled. There is nothing
+     * to fall back on for 'custom', so the caller always supplies it.
+     */
     colors?: [number, number, number][];
 }
 
@@ -266,6 +275,9 @@ export const removeBackground = (image: RGBAImage, options: RemoveBackgroundOpti
     // The checkerboard is the opposite case, and stays a flood fill from the
     // edges: its tones are ordinary greys that the artwork itself uses, so
     // only the grey actually connected to the border is background (§5.3).
+    // A user-picked colour ('custom') takes the same path for the same
+    // reason — the point they clicked names a plain backdrop colour, not a
+    // studio key, so only the region it actually borders should go.
     const visited = new Uint8Array(pixels);
     const stack = new Int32Array(pixels);
     let top = 0;

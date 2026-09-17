@@ -99,6 +99,24 @@ describe('removeBackground', () => {
         const cleaned = removeBackground(image, { kind: 'none' });
         expect(cleaned.data).toEqual(image.data);
     });
+
+    it('clears a flat backdrop a click picked, which detection deliberately ignores', () => {
+        // A plain cream studio backdrop: analyzeBackground reports 'none' for
+        // this on purpose (§5.1 — not every solid background is fair game),
+        // so the only way in is the colour a user clicked.
+        const image = blank(64, 64);
+        for (let y = 0; y < 64; y += 1) {
+            for (let x = 0; x < 64; x += 1) paint(image, x, y, [245, 242, 235, 255]);
+        }
+        expect(analyzeBackground(image).kind).toBe('none');
+        for (let y = 24; y < 40; y += 1) {
+            for (let x = 24; x < 40; x += 1) paint(image, x, y, [200, 30, 30, 255]);
+        }
+        const cleaned = removeBackground(image, { kind: 'custom', colors: [[245, 242, 235]] });
+        expect(alphaAt(cleaned, 0, 0)).toBe(0);
+        expect(alphaAt(cleaned, 63, 63)).toBe(0);
+        expect(alphaAt(cleaned, 32, 32)).toBe(255);
+    });
 });
 
 describe('a green screen with effects painted over it', () => {
