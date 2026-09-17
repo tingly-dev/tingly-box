@@ -4,19 +4,19 @@ import EmptyState from '@/components/EmptyState';
 import type {MessageInfo, SessionInfo} from '@/services/managedAgentApi';
 import {findPendingRequest, isBusyStatus, STATUS_COLOR} from './managedAgentUtils';
 import MessageItem from './MessageItem';
+import PermissionModeSelect from './PermissionModeSelect';
 import {
     Alert,
     Box,
     Button,
     Chip,
     IconButton,
-    MenuItem,
     Stack,
     TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 
 interface TranscriptPanelProps {
@@ -47,7 +47,7 @@ const TranscriptPanel = ({
         bottomRef.current?.scrollIntoView({block: 'end'});
     }, [messages.length]);
 
-    const pendingRequest = findPendingRequest(messages);
+    const pendingRequest = useMemo(() => findPendingRequest(messages), [messages]);
     const isClosed = session.status === 'closed';
     const turnInFlight = isBusyStatus(session.status);
     const canSend = !isClosed && !turnInFlight && text.trim() !== '' && !sending;
@@ -83,17 +83,7 @@ const TranscriptPanel = ({
             )}
             rightAction={(
                 <Stack direction="row" spacing={1}>
-                    <TextField
-                        select
-                        size="small"
-                        label={t('managedAgent.permissionMode', {defaultValue: 'Permission'})}
-                        value={session.permission_mode}
-                        onChange={(e) => onPermissionModeChange(e.target.value)}
-                        sx={{minWidth: 160}}
-                    >
-                        <MenuItem value="">{t('managedAgent.permissionInherit', {defaultValue: 'Inherit (default)'})}</MenuItem>
-                        {permissionModes.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-                    </TextField>
+                    <PermissionModeSelect value={session.permission_mode} permissionModes={permissionModes} onChange={onPermissionModeChange}/>
                     {turnInFlight && (
                         <Tooltip title={t('managedAgent.interrupt', {defaultValue: 'Stop the current turn'})}>
                             <Button size="small" color="warning" variant="outlined" startIcon={<PlayerStop/>} onClick={onInterrupt}>

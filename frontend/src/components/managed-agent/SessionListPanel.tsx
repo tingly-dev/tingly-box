@@ -4,6 +4,7 @@ import EmptyState from '@/components/EmptyState';
 import type {RecentFolder, SessionInfo} from '@/services/managedAgentApi';
 import {folderName, isBusyStatus, STATUS_COLOR, timeAgo} from './managedAgentUtils';
 import FolderPicker from './FolderPicker';
+import PermissionModeSelect from './PermissionModeSelect';
 import {
     Box,
     Button,
@@ -11,7 +12,6 @@ import {
     List,
     ListItemButton,
     ListItemText,
-    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -86,17 +86,7 @@ const SessionListPanel = ({sessions, recentFolders, permissionModes, selectedId,
                         }}
                     />
                     <Stack direction="row" spacing={1} sx={{alignItems: "center"}}>
-                        <TextField
-                            select
-                            size="small"
-                            label={t('managedAgent.permissionMode', {defaultValue: 'Permission'})}
-                            value={permissionMode}
-                            onChange={(e) => setPermissionMode(e.target.value)}
-                            sx={{minWidth: 160}}
-                        >
-                            <MenuItem value="">{t('managedAgent.permissionInherit', {defaultValue: 'Inherit (default)'})}</MenuItem>
-                            {permissionModes.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-                        </TextField>
+                        <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={setPermissionMode}/>
                         <Box sx={{flex: 1}}/>
                         <Button
                             variant="contained"

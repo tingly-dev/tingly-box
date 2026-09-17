@@ -9,8 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	managedagentsvc "github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
@@ -240,25 +242,35 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
 
-	// Managed Agent — a web front door onto the same remote/session +
-	// agentboot machinery @cc already drives, not a separate domain model
-	// (.design/managed-agent.md). It gets its own control.Core, an
-	// independent in-memory session.Manager cache over the SAME session
-	// store @cc uses (sm.RemoteSessions()) — the sanctioned pattern every
-	// remote-host entry point follows (see remote/control.Core).
-	if sm != nil {
-		if maCore, err := control.NewCore(sm.RemoteSessions()); err != nil {
-			logrus.WithError(err).Warn("Failed to create managed-agent control core, managed agent APIs will not be available")
-		} else {
-			maSvc := managedagentsvc.NewService(managedagentsvc.Config{
-				Sessions: maCore.Session,
-				Agent:    maCore.Agent,
-				Routing:  tbclient.NewTBClient(s.config),
-			})
-			managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc))
-		}
-	}
+	registerManagedAgentRoutes(apiV1, sm, s.config, s.managedAgentEnabled)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)
+}
+
+// registerManagedAgentRoutes wires the Managed Agent HTTP surface — a web
+// front door onto the same remote/session + agentboot machinery @cc already
+// drives, not a separate domain model (.design/managed-agent.md). It builds
+// its own control.Core, an independent in-memory session.Manager cache over
+// the SAME session store @cc uses (sm.RemoteSessions()) — the sanctioned
+// pattern every remote-host entry point follows (see remote/control.Core).
+//
+// Shared by both UseUIEndpoints (the running server) and
+// registerAllAPIRoutes (OpenAPI schema generation, in swagger.go) so this
+// wiring — including the enabled gate — cannot drift between the two paths.
+func registerManagedAgentRoutes(apiV1 *swagger.RouteGroup, sm *db.StoreManager, cfg *config.Config, enabled func() bool) {
+	if sm == nil {
+		return
+	}
+	maCore, err := control.NewCore(sm.RemoteSessions())
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create managed-agent control core, managed agent APIs will not be available")
+		return
+	}
+	maSvc := managedagentsvc.NewService(managedagentsvc.Config{
+		Sessions: maCore.Session,
+		Agent:    maCore.Agent,
+		Routing:  tbclient.NewTBClient(cfg),
+	})
+	managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc), enabled)
 }

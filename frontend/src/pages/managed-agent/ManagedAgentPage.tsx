@@ -38,16 +38,22 @@ const ManagedAgentPage = () => {
 
     const loadSessions = useCallback(async () => {
         try {
-            const [list, folders] = await Promise.all([
-                managedAgentApi.listSessions(),
-                managedAgentApi.listRecentFolders(),
-            ]);
-            setSessions(list);
-            setRecentFolders(folders);
+            setSessions(await managedAgentApi.listSessions());
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('managedAgent.loadFailed', {defaultValue: 'Failed to load sessions'}));
         }
     }, [notify, t]);
+
+    // Recent folders only change when a session starts in a new one
+    // (handleCreate re-fetches it directly), so this never needs to be part
+    // of the session-list poll.
+    const loadRecentFolders = useCallback(async () => {
+        try {
+            setRecentFolders(await managedAgentApi.listRecentFolders());
+        } catch {
+            // Non-critical: the composer still works with an empty recent list.
+        }
+    }, []);
 
     useEffect(() => {
         managedAgentApi.listPermissionModes().then(setPermissionModes).catch(() => {});
@@ -55,8 +61,8 @@ const ManagedAgentPage = () => {
 
     useEffect(() => {
         setLoading(true);
-        loadSessions().finally(() => setLoading(false));
-    }, [loadSessions]);
+        Promise.all([loadSessions(), loadRecentFolders()]).finally(() => setLoading(false));
+    }, [loadSessions, loadRecentFolders]);
 
     // A slow background refresh keeps statuses in the list current even
     // while the user is reading a different session's transcript — scoped
@@ -82,6 +88,19 @@ const ManagedAgentPage = () => {
         void loadMessages(selectedId);
     }, [selectedId, loadMessages]);
 
+    // Refreshes only the selected session's own row (a GET by id) rather than
+    // the whole list — the fast poll below runs every 1.5s while a turn is
+    // busy, so refetching every session on that cadence would be wasted work
+    // for the N-1 sessions that aren't the one being watched.
+    const refreshSelectedSession = useCallback(async (id: string) => {
+        try {
+            const updated = await managedAgentApi.getSession(id);
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('managedAgent.loadFailed', {defaultValue: 'Failed to load session'}));
+        }
+    }, [notify, t]);
+
     // Fast polling only while there's actually something moving — a turn
     // running or an approval waiting — so an idle, completed session
     // doesn't keep polling forever.
@@ -89,10 +108,10 @@ const ManagedAgentPage = () => {
         if (!selectedId || !selectedSession || !isBusyStatus(selectedSession.status)) return;
         const id = setInterval(() => {
             void loadMessages(selectedId);
-            void loadSessions();
+            void refreshSelectedSession(selectedId);
         }, MESSAGES_POLL_MS);
         return () => clearInterval(id);
-    }, [selectedId, selectedSession, loadMessages, loadSessions]);
+    }, [selectedId, selectedSession, loadMessages, refreshSelectedSession]);
 
     const selectSession = (id: string) => {
         setSearchParams((prev) => {
@@ -106,7 +125,9 @@ const ManagedAgentPage = () => {
         setCreating(true);
         try {
             const session = await managedAgentApi.createSession(path, prompt, permissionMode || undefined);
-            await loadSessions();
+            // A brand-new session (and possibly a brand-new folder) needs the
+            // full lists, unlike the single-session refreshes below.
+            await Promise.all([loadSessions(), loadRecentFolders()]);
             selectSession(session.id);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('managedAgent.startFailed', {defaultValue: 'Failed to start session'}));
@@ -119,7 +140,7 @@ const ManagedAgentPage = () => {
         if (!selectedId) return;
         try {
             await managedAgentApi.sendMessage(selectedId, text);
-            await Promise.all([loadMessages(selectedId), loadSessions()]);
+            await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('managedAgent.sendFailed', {defaultValue: 'Failed to send message'}));
         }
@@ -139,7 +160,7 @@ const ManagedAgentPage = () => {
         if (!selectedId) return;
         try {
             await managedAgentApi.interrupt(selectedId);
-            await Promise.all([loadMessages(selectedId), loadSessions()]);
+            await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('managedAgent.interruptFailed', {defaultValue: 'Failed to interrupt'}));
         }
@@ -149,7 +170,7 @@ const ManagedAgentPage = () => {
         if (!selectedId) return;
         try {
             await managedAgentApi.archive(selectedId);
-            await loadSessions();
+            await refreshSelectedSession(selectedId);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('managedAgent.archiveFailed', {defaultValue: 'Failed to archive'}));
         }

@@ -220,15 +220,28 @@ func (m *Manager) Snapshot(id string) (Session, bool) {
 	return *sess, true
 }
 
-// SnapshotOrLoad is GetOrLoad but returns a safe copy; see Snapshot.
+// SnapshotOrLoad is GetOrLoad but returns a safe copy, taken under the same
+// lock acquisition that resolves the pointer rather than a second one; see
+// Snapshot.
 func (m *Manager) SnapshotOrLoad(id string) (Session, bool) {
-	sess, ok := m.GetOrLoad(id)
-	if !ok {
+	m.mu.RLock()
+	sess, exists := m.sessions[id]
+	if exists {
+		defer m.mu.RUnlock()
+		return *sess, true
+	}
+	m.mu.RUnlock()
+	if m.store == nil {
 		return Session{}, false
 	}
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return *sess, true
+	stored, err := m.store.Get(id)
+	if err != nil || stored == nil {
+		return Session{}, false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions[id] = stored
+	return *stored, true
 }
 
 // SnapshotsByChat is ListByChat but returns copies made under the lock; see
@@ -237,27 +250,11 @@ func (m *Manager) SnapshotsByChat(chatID string) []Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var result []Session
-	seen := make(map[string]bool)
-
-	for _, sess := range m.sessions {
-		if sess.ChatID == chatID && !seen[sess.ID] {
-			result = append(result, *sess)
-			seen[sess.ID] = true
-		}
+	sessions := m.listByChatLocked(chatID)
+	result := make([]Session, len(sessions))
+	for i, sess := range sessions {
+		result[i] = *sess
 	}
-
-	if m.store != nil {
-		if stored, err := m.store.ListByChat(chatID); err == nil {
-			for _, sess := range stored {
-				if !seen[sess.ID] {
-					result = append(result, *sess)
-					seen[sess.ID] = true
-				}
-			}
-		}
-	}
-
 	return result
 }
 
@@ -316,7 +313,14 @@ func (m *Manager) FindBy(chatID, agent, project string) *Session {
 func (m *Manager) ListByChat(chatID string) []*Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.listByChatLocked(chatID)
+}
 
+// listByChatLocked is ListByChat's merge-in-memory-and-store body, factored
+// out so SnapshotsByChat can reuse it under its own single lock acquisition
+// instead of recursively RLock-ing (which Go's RWMutex does not guarantee is
+// safe when a writer is also waiting).
+func (m *Manager) listByChatLocked(chatID string) []*Session {
 	var result []*Session
 	seen := make(map[string]bool) // Deduplicate by session ID
 

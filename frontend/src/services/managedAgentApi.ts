@@ -25,10 +25,15 @@ async function call<T>(fn: ClientCall<T>): Promise<T> {
     const client = await getClient();
     const headers = await getAuthHeaders();
     const {data, error, response} = await fn(client, headers);
-    if (data === undefined || error !== undefined) {
+    // Only `error` means failure. Several endpoints here (send/respond/
+    // interrupt) reply 202/204 with no body, which openapi-fetch reports as
+    // a successful `data: undefined` — treating that as a failure (as
+    // botAccessCall's copy of this check does) would make every one of
+    // those calls throw despite the request succeeding.
+    if (error !== undefined) {
         throw new Error(errorMessage(error) || `request failed (${response.status})`);
     }
-    return data;
+    return data as T;
 }
 
 export const listRecentFolders = (limit?: number): Promise<RecentFolder[]> =>

@@ -231,7 +231,15 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 		return conflict("session is %s", sess.Status)
 	}
 	s.appendUserMessage(id, text)
-	s.startTurn(id, sess.Project, text, sess.PermissionMode, true)
+	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
+	// the atomic one (see its doc comment). Two SendMessage calls racing for
+	// the same session can both pass canSteer, so the loser's startTurn
+	// returning false must still surface as a conflict here — otherwise its
+	// message sits in the transcript with no turn ever picking it up, while
+	// the caller is told it succeeded.
+	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, true) {
+		return conflict("session is %s", sess.Status)
+	}
 	return nil
 }
 
@@ -278,14 +286,23 @@ func (s *Service) Respond(id, requestID string, approved bool, answer string) er
 
 // Interrupt stops the current turn; the session stays resumable.
 func (s *Service) Interrupt(id string) error {
+	if !s.cancelRun(id) {
+		return conflict("session has no turn in progress")
+	}
+	return nil
+}
+
+// cancelRun cancels id's in-flight turn, if any. Returns false if there was
+// none to cancel.
+func (s *Service) cancelRun(id string) bool {
 	s.mu.Lock()
 	r, ok := s.runs[id]
 	s.mu.Unlock()
 	if !ok {
-		return conflict("session has no turn in progress")
+		return false
 	}
 	r.cancel()
-	return nil
+	return true
 }
 
 // Archive ends a session for good. Nothing on disk is touched: the folder
@@ -296,12 +313,7 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		return nil, notFound("session", id)
 	}
 	if snap.Status != session.StatusClosed {
-		s.mu.Lock()
-		r, ok2 := s.runs[id]
-		s.mu.Unlock()
-		if ok2 {
-			r.cancel()
-		}
+		s.cancelRun(id)
 		// Close removes the session from the manager's live index (it stays
 		// only in the store), so re-reading it via Snapshot afterward would
 		// spuriously find nothing; the transition is known here, so just

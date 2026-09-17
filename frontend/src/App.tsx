@@ -306,7 +306,7 @@ function AppContent() {
                     <Route path="/notify" element={<NotifyPage />} />
                     {/* Managed Agent — a web-side twin of local `claude`, no IM bot
                         involved. See useActivityItems for the nav row. */}
-                    <Route path="/managed-agent" element={<ManagedAgentPage />} />
+                    <Route path="/managed-agent" element={<ExperimentalFeatureGate feature="managed_agent"><ManagedAgentPage /></ExperimentalFeatureGate>} />
                     {/* Remote Control — the purpose pages. One nav row (see useActivityItems);
                         platform selection is an in-page picker (RemoteAgentPage) instead
                         of a route per platform in the sidebar. The routes themselves are
