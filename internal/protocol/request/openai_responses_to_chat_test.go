@@ -529,6 +529,27 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 		assert.Equal(t, "b-out", getMessageContent(t, messages[3]))
 	})
 
+	t.Run("parallel calls interrupted after the first output are all answered", func(t *testing.T) {
+		// Codex ran two parallel tool calls, only the first finished before the
+		// user interrupted and sent a new prompt. Previously this produced
+		// assistant(a,b) followed by a single tool message, which DeepSeek
+		// rejects as "insufficient tool messages following tool_calls message".
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run both"),
+			fnCall("call_a", "shell"),
+			fnCall("call_b", "shell"),
+			fnOutput("call_a", "a-out"),
+			userMsg("stop"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool", "tool", "user"}, roles(messages))
+		require.Len(t, getToolCalls(t, messages[1]), 2)
+		assert.Equal(t, "call_a", getToolCallID(t, messages[2]))
+		assert.Equal(t, "a-out", getMessageContent(t, messages[2]))
+		assert.Equal(t, "call_b", getToolCallID(t, messages[3]))
+		assert.Equal(t, missingToolOutputPlaceholder, getMessageContent(t, messages[3]))
+	})
+
 	t.Run("output without a preceding call is forwarded in place", func(t *testing.T) {
 		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
 			userMsg("hi"),
