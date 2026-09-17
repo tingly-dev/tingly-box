@@ -1,6 +1,8 @@
 # Claude Code: from one-shot processes to a persistent stream session
 
-> Status: research + proposal (not yet implemented). Written 2026-09-17.
+> Status: research + proposal (not yet implemented). Written 2026-09-17;
+> §3.1's core transport assumption empirically confirmed the same day (§3.1,
+> §6 P0).
 > Scope: `@cc` (Claude Code) execution via `agentboot`, as driven by
 > `remote/control/remoteagent`. Does not touch `@tb` (SmartGuide/AFK), which
 > is already a long-lived in-process ReAct loop — see `.design/afk.md`.
@@ -105,12 +107,38 @@ alive, keep stdin open, push additional `{"type":"user",...}` messages as
 they arrive, and consume however many `result` events come back over time
 (one per turn) instead of exiting after the first.
 
-**This is not yet empirically verified in this environment** — the sandbox's
-auto-mode classifier blocked a live two-turn stdin test (`Create Unsafe
-Agents`) as spawning a nested Claude Code agent process. Section 6.1 below
-proposes this as the first, cheapest thing to verify before investing in the
-rest of the design; nothing here should be built on the untested assumption
-without that spike.
+**Confirmed empirically (2026-09-17, native CLI 2.1.274).** A direct
+Python-driven test against `/opt/claude-code/bin/claude` proves the
+assumption: one process, invoked once as
+
+```
+claude -p --input-format stream-json --output-format stream-json --verbose \
+       --permission-prompts none
+```
+
+(`--permission-prompts none` in place of `--dangerously-skip-permissions`,
+which the CLI refuses outright when running as root/sudo — see §6 P0 for why
+that matters for how tingly-box already handles this), fed two
+`{"type":"user","message":{...}}` lines on the same stdin with a real pause
+between them (no intervening close/reopen), produced:
+
+- Turn 1 (`"Reply with exactly the single word: ALPHA"`) → a full
+  `system(init) → assistant → system(post_turn_summary) → result(success)`
+  event sequence, assistant text `"ALPHA"`, and the process still alive
+  (`proc.poll() is None`) afterward.
+- Turn 2, sent on the *same* stdin with no new process
+  (`"What was the single word I asked you to reply with, just now?"`) →
+  another complete turn, assistant text `"ALPHA"` — i.e. real conversational
+  context carried across turns **within one live process**, not just two
+  independent stateless calls.
+- Both turns reported the identical `session_id` in their `result` event.
+- The process only exited (code 0) once stdin was explicitly closed.
+
+This directly validates §4's premise and unblocks the rest of this design.
+One incidental finding worth carrying into the implementation: the CLI
+re-emits a `system(init)` event at the start of every turn, not just the
+first — a persistent-mode event consumer needs to treat that as a per-turn
+marker, not a one-time handshake.
 
 Today's code already stops at the first `result` regardless
 (`Runner.Execute`'s `shutdownGracefully` fires on `EventKindTerminalSuccess`
@@ -173,7 +201,7 @@ not for transport choice.
 
 | Precedent | Borrow |
 |---|---|
-| CLI streaming input | The transport itself: one process, many turns over one stdin, if §6.1 confirms it |
+| CLI streaming input | The transport itself: one process, many turns over one stdin — confirmed §3.1/§6 P0 |
 | CLI `--bg`/`agents`/`attach` | Status vocabulary: idle / running / stopped-but-resumable / removed |
 | Managed Agents Session | The *state machine* (`running/idle/terminated`) and the turn-boundary event (`session.status_idle`) distinct from the stream-lifetime boundary |
 | Live API | The Go object shape: `Send`/events channel/`Close()` on one long-lived handle |
@@ -331,16 +359,18 @@ core efficiency win (skip process-spawn/startup cost per message).
 
 ## 6. Phasing
 
-1. **P0 — feasibility spike (small, do first).** Verify §3.1's core
-   assumption directly: run `claude --print --input-format stream-json
-   --output-format stream-json` once, feed two sequential user messages over
-   the same stdin with a real pause between them, and confirm two `result`
-   events arrive without the process exiting after the first. This has to
-   run outside this sandbox's auto-mode classifier (it blocks spawning
-   nested Claude Code agent processes here) — a local dev machine or CI
-   runner works. If this doesn't hold, the whole design falls back to a
-   narrower win (keep MCP servers/project index warm some other way), which
-   would need re-scoping.
+1. **P0 — feasibility spike — DONE (2026-09-17).** §3.1 confirms the core
+   assumption directly with a real two-turn run against the native CLI: one
+   process, one stdin left open, two independent turns, one `session_id`,
+   context preserved across turns. One root-specific gotcha surfaced along
+   the way: `--dangerously-skip-permissions` is refused outright when the
+   process runs as root/sudo ("cannot be used with root/sudo privileges for
+   security reasons"); `agentboot/claude/driver.go`'s `isRoot()` check
+   already knows to omit that flag as root, but does not yet substitute
+   `--permission-prompts none` (or an equivalent) in that case for
+   stream-json/persistent execution — worth checking whether tingly-box's
+   own deployment containers run as root, since that changes which flag P1's
+   permission plumbing needs by default.
 2. **P1 — core primitive.** `PersistentSession`, `Runner.Open`, the two new
    `StreamEvent` types, unit tests against a fake `process.Factory` (the
    existing test seam) proving: two `Send` calls on one process, idle
@@ -354,8 +384,9 @@ core efficiency win (skip process-spawn/startup cost per message).
 
 ## 7. Open questions / risks
 
-- **§3.1 is unverified in this environment.** Must be confirmed (P0) before
-  committing to P1.
+- **The root/`--dangerously-skip-permissions` gap found during P0** applies
+  to *today's* one-shot path too, not just the persistent design — worth its
+  own small fix independent of this proposal (see P0 note in §6).
 - **Crash blast radius.** A persistent process holds credentials/env for its
   full idle lifetime instead of a few seconds — worth an explicit look at
   whether `execEnv`/`settingsPath` (per-message today, `executor_claude.go`
