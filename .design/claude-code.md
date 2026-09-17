@@ -374,7 +374,7 @@ through the runner-internal wiring the one-shot path relies on.
 `ClaudeCodeExecutor.Execute` (`executor_claude.go`) now branches on
 `e.deps.SessionPool != nil && bot.IsPersistentSession()`:
 
-- **No pool entry for this `(platform, botUUID, chatID, projectPath)` key**
+- **No pool entry for this `(botUUID, chatID, projectPath)` key**
   (`persistentPoolKey`) → `AgentService.Open` starts a new
   `PersistentSession` with this message as its first turn, then
   `pool.Pool.Open` registers it.
@@ -423,6 +423,68 @@ processes stay resident" is exactly the kind of thing that deserves an
 explicit, discoverable setting rather than a silent behavior change, at
 least until the idle/eviction/crash-recovery paths have real production
 mileage).
+
+**Hardening found by code review (2026-09-17).** Three gaps surfaced once
+this wiring existed to review, each fixed at the primitive it actually
+belongs to rather than patched at the call site that noticed it:
+
+- **`/stop` (or any caller `ctx` cancellation) could not interrupt a
+  persistent turn.** `Execute`'s process is tied to its caller's `ctx`, so
+  cancelling that `ctx` kills the process; a `PersistentSession`'s process is
+  deliberately detached from any one caller's `ctx` (§5.2), so nothing
+  bounded a persistent turn at all — the underlying `claude` process just
+  kept running after the request that started the turn gave up on it. Fixed
+  in the shared primitive: `RunTurnWithPrompter` (`agentboot/run.go`) now
+  selects on `ctx.Done()` and closes the *whole session* on cancellation —
+  there is no way to interrupt just the in-flight turn without ending the
+  process, so this is the same effect `ctx` cancellation already has on a
+  one-shot `Execute`, just applied consistently to the persistent path.
+- **No execution timeout on a persistent turn**, unlike one-shot execution's
+  30-minute default (`Runner.Execute` applies `defaultTimeout`/`opts.Timeout`
+  to the whole process). `runPersistentTurn` now applies the same
+  `ExecutionOptions.Timeout` zero/negative/positive semantics to a single
+  turn, sourced from `AgentService.Config().DefaultExecutionTimeout`, via a
+  shared `agentboot.ResolveTimeout` helper `Runner.Execute` also uses now
+  (one resolution rule, not two hand-rolled copies).
+- **Turning `persistent_session` off, or stopping the bot, left the resident
+  pool session running.** The abandoned process kept the on-disk Claude
+  session file open while a later message resumed the same session ID in a
+  fresh one-shot process — a session-file-conflict race, the same failure
+  mode §5.3's "any failure falls back to one-shot" already treats as
+  recoverable, except here nothing ever told the pool to let go. Fixed by
+  giving `pool.Pool` a `CloseAllWhere(ctx, match func(key string) bool) int`
+  (bulk, predicate-based eviction — `Pool` still has no notion of what a key
+  *means*, so the predicate is the caller's) and a new exported
+  `remoteagent.EvictPersistentSessionsForBot(pool, botUUID)` /
+  `BotManager.EvictPersistentSessions(uuid)` pair that call it from
+  `BotManager.StopBot` and from `Handler.UpdateSettings` when
+  `persistent_session` is explicitly turned off while the bot keeps running.
+  This is also why `persistentPoolKey` dropped the `platform` segment:
+  `BotUUID` alone already uniquely identifies one bot on one platform (it's
+  the `imbot_settings` primary key), so leading the key with it — instead of
+  `platform` — is what makes a `"<botUUID>|"` prefix match possible.
+
+All three were caught by a dedicated `code-review` pass over this branch's
+diff, not by the existing unit/e2e tests — `TestRunTurnWithPrompter_CtxCancelClosesSession`
+(`agentboot/run_turn_test.go`) and `TestPool_CloseAllWhere`
+(`agentboot/pool/pool_test.go`) now cover the first and third directly. A
+follow-up `simplify` pass (four review agents: reuse, simplification,
+efficiency, altitude) on the same diff found and fixed: the same
+zero/negative/positive timeout logic duplicated between `Runner.Execute` and
+`runPersistentTurn` (→ `agentboot.ResolveTimeout`); three independent copies
+of the same 15-second "give a session time to close" literal (→
+`agentboot.SessionCloseTimeout`); `ClaudeCodeExecutor.Execute` fetching the
+bot setting twice per message via a call that hits the DB, not an actual
+cache; and `BotManager.StopBot` holding its instance-wide mutex across the
+new `EvictPersistentSessions` call, which can block for
+`SessionCloseTimeout` waiting on a session's process — serializing an
+unrelated bot's start/stop behind this one's teardown. One suggestion from
+that pass was deliberately not taken: replacing `persistentPoolKey`'s opaque
+`"|"`-joined string with a structured `pool.Key`/owner index so eviction
+doesn't need to reverse-engineer a prefix. That's a real design
+improvement, but it changes `pool.Pool`'s already-published public API
+surface for a benefit (avoiding one documented prefix convention) that
+doesn't yet justify the churn — worth revisiting alongside §6 P3.
 
 ### 5.5 Explicitly out of scope for the first version
 
