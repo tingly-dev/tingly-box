@@ -269,5 +269,3 @@ export const PluginsPanel: React.FC<{
         </Stack>
     );
 };
-
-export default PluginsPanel;

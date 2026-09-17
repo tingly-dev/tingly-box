@@ -78,13 +78,15 @@ export const TargetPicker: React.FC<{
                 <TextField
                     {...params}
                     placeholder={t('bench.targetPlaceholder', { defaultValue: 'Search rules & providers…' })}
-                    error={missing}
+                    error={missing || !!catalog.error}
                     helperText={
-                        missing
-                            ? t('bench.targetMissing', { defaultValue: 'The saved target no longer exists — pick another.' })
-                            : !value
-                              ? t('bench.targetEmpty', { defaultValue: 'Pick a rule or a provider model to start.' })
-                              : undefined
+                        catalog.error
+                            ? catalog.error
+                            : missing
+                              ? t('bench.targetMissing', { defaultValue: 'The saved target no longer exists — pick another.' })
+                              : !value
+                                ? t('bench.targetEmpty', { defaultValue: 'Pick a rule or a provider model to start.' })
+                                : undefined
                     }
                 />
             )}
@@ -113,5 +115,3 @@ export const TargetPicker: React.FC<{
         />
     );
 };
-
-export default TargetPicker;

@@ -98,7 +98,7 @@ export function targetKey(t: BenchTarget | null): string {
 export const isDirect = (state: BenchState): boolean =>
     state.target?.kind === 'provider' && state.axes.direct;
 
-export const overlayCount = (state: BenchState): number => Object.keys(state.flags).length;
+const overlayCount = (state: BenchState): number => Object.keys(state.flags).length;
 
 // parseRawBody turns the edited text into the JSON object the API takes, or
 // says why it cannot — the payload panel shows that as build feedback.

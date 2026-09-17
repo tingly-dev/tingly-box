@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';
 import type { FlagSpec } from '@/components/RoutingGraphTypes';
 import type { Provider } from '@/types/provider';
-import type { ProbeResult } from '@/types/probe';
+import type { ProbeRequest, ProbeResult } from '@/types/probe';
 import { runProbe, buildProbeCurl, type ProbeCurlResult } from '@/components/probe/runProbe';
 import { protocolAvailability, visionAvailable } from '@/components/probe/probeConfig';
 import type { ProbeProtocol } from '@/types/probe';
@@ -41,6 +41,30 @@ import { RunHistory } from './RunHistory';
 // written to any rule or scenario.
 
 const MAX_RUNS = 10;
+
+// useDebouncedCurl: rebuild the curl preview 500 ms after the last change to
+// `request` — pure construction, so debouncing just avoids redundant work,
+// never a stale result. Shared by the live payload and the preset-preview
+// fetch below, which differ only in which request they track.
+function useDebouncedCurl(request: ProbeRequest | null): { data: ProbeCurlResult | null; loading: boolean } {
+    const [data, setData] = useState<ProbeCurlResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const key = useMemo(() => JSON.stringify(request), [request]);
+    useEffect(() => {
+        if (!request) { setData(null); setLoading(false); return; }
+        let cancelled = false;
+        setLoading(true);
+        const timer = setTimeout(async () => {
+            const res = await buildProbeCurl(request);
+            if (cancelled) return;
+            setData(res);
+            setLoading(false);
+        }, 500);
+        return () => { cancelled = true; clearTimeout(timer); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]);
+    return { data, loading };
+}
 
 const prettyBody = (raw: string): string => {
     try {
@@ -118,15 +142,6 @@ const BenchPage: React.FC = () => {
     const [registry, setRegistry] = useState<FlagSpec[]>([]);
     const [registryLoading, setRegistryLoading] = useState(true);
     const [scenarioFlags, setScenarioFlags] = useState<Record<string, unknown> | undefined>();
-    const [curl, setCurl] = useState<ProbeCurlResult | null>(null);
-    const [curlLoading, setCurlLoading] = useState(false);
-    // A second, independent curl fetch: the preset request's body, computed
-    // even while a custom request is active. `curl` above always reflects
-    // whatever is CURRENTLY going out (raw once raw is active), so it can't
-    // seed "Copy the preset request" once you're already past the door —
-    // only fetched while raw is active, since otherwise `curl` already is
-    // the preset request.
-    const [presetPreviewCurl, setPresetPreviewCurl] = useState<ProbeCurlResult | null>(null);
     const [running, setRunning] = useState(false);
     const [shown, setShown] = useState<{ result: ProbeResult; snapshot: BenchState } | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -199,7 +214,6 @@ const BenchPage: React.FC = () => {
 
     const built = useMemo(() => buildProbeRequest(state), [state]);
     const request = built.request;
-    const requestKey = useMemo(() => JSON.stringify(request), [request]);
     const direct = isDirect(state);
 
     // Protocols a hand-written request may be in for this target: a rule's
@@ -212,37 +226,15 @@ const BenchPage: React.FC = () => {
         return avail.options.length ? avail.options : ['openai_chat', 'openai_responses', 'anthropic_v1'];
     }, [target, provider]);
 
-    // Live payload: rebuild 500 ms after the last change. Pure construction.
-    useEffect(() => {
-        if (!request) { setCurl(null); setCurlLoading(false); return; }
-        let cancelled = false;
-        setCurlLoading(true);
-        const timer = setTimeout(async () => {
-            const res = await buildProbeCurl(request);
-            if (cancelled) return;
-            setCurl(res);
-            setCurlLoading(false);
-        }, 500);
-        return () => { cancelled = true; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [requestKey]);
+    // Live payload: pure construction, so debouncing just avoids redundant work.
+    const { data: curl, loading: curlLoading } = useDebouncedCurl(request);
 
     // Preset preview: the same construction, but with raw forced off, so
     // "Copy the preset request" stays accurate once a custom request is
     // active. Only runs while raw is active — otherwise `request` above
     // already is the preset request and this would just duplicate the fetch.
     const presetPreviewRequest = useMemo(() => (state.raw ? buildProbeRequest({ ...state, raw: null }).request : null), [state]);
-    const presetPreviewKey = useMemo(() => JSON.stringify(presetPreviewRequest), [presetPreviewRequest]);
-    useEffect(() => {
-        if (!presetPreviewRequest) { setPresetPreviewCurl(null); return; }
-        let cancelled = false;
-        const timer = setTimeout(async () => {
-            const res = await buildProbeCurl(presetPreviewRequest);
-            if (!cancelled) setPresetPreviewCurl(res);
-        }, 500);
-        return () => { cancelled = true; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [presetPreviewKey]);
+    const { data: presetPreviewCurl } = useDebouncedCurl(presetPreviewRequest);
 
     const seedBody = state.raw
         ? (presetPreviewCurl?.success && presetPreviewCurl.data?.body ? prettyBody(presetPreviewCurl.data.body) : undefined)

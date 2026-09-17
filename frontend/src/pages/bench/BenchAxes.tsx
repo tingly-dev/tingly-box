@@ -57,7 +57,7 @@ export function useAxisAvailability(target: BenchTarget | null, provider: Provid
 // chooses between going through TB (service pinned, middleware intact) and
 // calling the upstream directly. Same question — "how much of TB is in the
 // path?" — so it stays one control (.design/bench.md §3).
-export type ScopeValue = 'natural' | 'pinned' | 'tb' | 'direct';
+type ScopeValue = 'natural' | 'pinned' | 'tb' | 'direct';
 
 export const BenchAxes: React.FC<{
     axes: ProbeAxes;
@@ -204,5 +204,3 @@ export const BenchAxes: React.FC<{
         </Stack>
     );
 };
-
-export default BenchAxes;

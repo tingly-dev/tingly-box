@@ -181,5 +181,3 @@ export const PayloadPanel: React.FC<{
         </Stack>
     );
 };
-
-export default PayloadPanel;

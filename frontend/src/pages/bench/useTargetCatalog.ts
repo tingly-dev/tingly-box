@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '@/services/api';
 import type { Provider } from '@/types/provider';
 import type { Rule } from '@/components/RoutingGraphTypes';
@@ -14,7 +14,6 @@ export interface TargetCatalog {
     modelsByProvider: Record<string, string[]>;
     loading: boolean;
     error?: string;
-    reload: () => void;
 }
 
 const modelsOf = (info: any): string[] => {
@@ -29,9 +28,6 @@ export function useTargetCatalog(): TargetCatalog {
     const [modelsByProvider, setModelsByProvider] = useState<Record<string, string[]>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | undefined>();
-    const [tick, setTick] = useState(0);
-
-    const reload = useCallback(() => setTick((n) => n + 1), []);
 
     useEffect(() => {
         let cancelled = false;
@@ -68,7 +64,7 @@ export function useTargetCatalog(): TargetCatalog {
         return () => {
             cancelled = true;
         };
-    }, [tick]);
+    }, []);
 
-    return { rules, providers, modelsByProvider, loading, error, reload };
+    return { rules, providers, modelsByProvider, loading, error };
 }

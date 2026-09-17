@@ -186,5 +186,3 @@ export const RequestEditor: React.FC<{
         </Stack>
     );
 };
-
-export default RequestEditor;

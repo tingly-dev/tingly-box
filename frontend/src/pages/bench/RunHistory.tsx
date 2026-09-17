@@ -47,5 +47,3 @@ export const RunHistory: React.FC<{
         </Box>
     );
 };
-
-export default RunHistory;
