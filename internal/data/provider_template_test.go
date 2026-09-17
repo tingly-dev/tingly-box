@@ -728,3 +728,87 @@ func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
 		}
 	}
 }
+
+// TestOpenCodeTemplateDisambiguation guards the failure mode discovered while
+// building per-model endpoint routing: "opencode-ai" (Zen) and "opencode-go"
+// share canonical_domain "opencode.ai" and neither sets api_style (both speak
+// plain OpenAI-style Chat), so matchProviderTemplate's old first-match-wins
+// scan over the (map-backed, order-randomized) template set could return
+// either one for a given provider — verified to flip within 50 tries before
+// the base-URL-specificity tiebreak. This must resolve to the template whose
+// own base URL is the more specific prefix of the provider's, deterministically.
+func TestOpenCodeTemplateDisambiguation(t *testing.T) {
+	tm := NewEmbeddedOnlyTemplateManager()
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	goProvider := &typ.Provider{APIBase: "https://opencode.ai/zen/go/v1"}
+	zenProvider := &typ.Provider{APIBase: "https://opencode.ai/zen/v1"}
+
+	for i := 0; i < 25; i++ {
+		if tmpl := tm.findTemplateByProvider(goProvider); tmpl == nil || tmpl.ID != "opencode-go" {
+			t.Fatalf("iteration %d: opencode-go provider matched %v, want opencode-go", i, tmpl)
+		}
+		if tmpl := tm.findTemplateByProvider(zenProvider); tmpl == nil || tmpl.ID != "opencode-ai" {
+			t.Fatalf("iteration %d: opencode-ai provider matched %v, want opencode-ai", i, tmpl)
+		}
+	}
+}
+
+// TestGetOpenAIEndpointOverrideForModel exercises the per-model routing table
+// (data.ModelInfo.OpenAIEndpoint) end to end against the real embedded
+// providers.json, so a future edit to that file that breaks the shape (or a
+// typo in the endpoint string) fails a test instead of surfacing as a live
+// 500 for whichever model it broke.
+func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
+	tm := NewEmbeddedOnlyTemplateManager()
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	goProvider := &typ.Provider{APIBase: "https://opencode.ai/zen/go/v1"}
+
+	tests := []struct {
+		name     string
+		provider *typ.Provider
+		model    string
+		want     protocol.APIType
+	}{
+		{"responses-only model, confirmed live 2026-09-08", goProvider, "gpt-5.6-luna", protocol.TypeOpenAIResponses},
+		{"another responses-only model", goProvider, "grok-4.6", protocol.TypeOpenAIResponses},
+		{"grok-4.5 annotated in place", goProvider, "grok-4.5", protocol.TypeOpenAIResponses},
+		{"chat-only model has no override", goProvider, "kimi-k3", ""},
+		{"model absent from the table", goProvider, "some-future-model", ""},
+		{"unrelated provider, same model id would be a false positive if host-gating broke", &typ.Provider{APIBase: "https://api.openai.com/v1"}, "gpt-5.6-luna", ""},
+		{"nil provider", nil, "gpt-5.6-luna", ""},
+		{"empty model", goProvider, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tm.GetOpenAIEndpointOverrideForModel(tt.provider, tt.model); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue proves a typo in
+// providers.json degrades to "no override" instead of crashing or silently
+// routing to whichever protocol.APIType a bad string coerces to.
+func TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue(t *testing.T) {
+	tm := &TemplateManager{
+		templates: map[string]*ProviderTemplate{
+			"t": {
+				ID:              "t",
+				CanonicalDomain: "example.invalid",
+				BaseURLOpenAI:   "https://example.invalid/v1",
+				Models:          []ModelInfo{{ID: "m", OpenAIEndpoint: "carrier-pigeon"}},
+			},
+		},
+	}
+	provider := &typ.Provider{APIBase: "https://example.invalid/v1"}
+	if got := tm.GetOpenAIEndpointOverrideForModel(provider, "m"); got != "" {
+		t.Errorf("got %q for an unrecognized openai_endpoint value, want no override", got)
+	}
+}

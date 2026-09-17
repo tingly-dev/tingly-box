@@ -21,12 +21,18 @@ const (
 )
 
 // ResolveOpenAIEndpoint picks an OpenAI endpoint using the optional per-rule
-// override first, then the provider's declared OpenAIEndpointMode.
+// override first, then a per-model table entry, then the provider's declared
+// OpenAIEndpointMode.
 //
 // Precedence:
 //
-//  1. Rule flag (flags.OpenAIEndpointOverride). Overrides provider settings.
-//  2. provider.OpenAIEndpointMode:
+//  1. Rule flag (flags.OpenAIEndpointOverride). Overrides everything below.
+//  2. modelOverride: a per-model table entry (data.ModelInfo.OpenAIEndpoint)
+//     for relays whose catalog mixes vendors, which provider.OpenAIEndpointMode
+//     can't express (one value per provider). "" means no entry for this
+//     model. The caller looks it up (data.TemplateManager) and passes it in,
+//     keeping this function pure.
+//  3. provider.OpenAIEndpointMode:
 //     EndpointModeUnknown / zero value → Chat
 //     EndpointModeChat                 → Chat
 //     EndpointModeResponses            → Responses
@@ -46,7 +52,7 @@ const (
 // Anthropic→Chat downgrades. The user accepts this by declaring the mode.
 //
 // Pure function: no Server state, no probe lookups, no I/O.
-func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType) (protocol.APIType, error) {
+func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, modelOverride protocol.APIType) (protocol.APIType, error) {
 	if provider == nil {
 		return "", fmt.Errorf("provider is required for endpoint selection")
 	}
@@ -67,6 +73,11 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 			logrus.Warnf("Rule forces responses endpoint on chat-only provider %s", provider.UUID)
 		}
 		return protocol.TypeOpenAIResponses, nil
+	}
+
+	// Per-model table entry (see precedence #2 above).
+	if modelOverride != "" {
+		return modelOverride, nil
 	}
 
 	// Fall back to provider mode when no override specified

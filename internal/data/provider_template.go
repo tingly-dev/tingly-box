@@ -36,6 +36,15 @@ type ModelInfo struct {
 	Description string `json:"description,omitempty"`
 	Context     int    `json:"context,omitempty"`
 	MaxOutput   int    `json:"max_output,omitempty"`
+
+	// OpenAIEndpoint overrides which OpenAI endpoint THIS model uses, for a
+	// template whose catalog mixes vendors (OpenCode Zen: most models are
+	// Chat-only, a few are Responses-only) — a fact
+	// ProviderTemplate.OpenAIEndpointMode can't express since it's one value
+	// per provider. "" means no override. Static and hand-maintained: an
+	// unlisted model just falls through to the provider default (see
+	// .design/openai-endpoint-routing.md §10). Values: "chat" or "responses".
+	OpenAIEndpoint string `json:"openai_endpoint,omitempty"`
 }
 
 // NamingRules defines the naming conventions for provider IDs
@@ -611,11 +620,26 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTem
 	// Try matching by canonical_domain first (Schema V2). When a template
 	// declares an explicit APIStyle it must also match the provider's style so
 	// the right model family is chosen.
-	if result := search(func(tmpl *ProviderTemplate) bool {
-		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain) &&
-			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle))
-	}); result != nil {
-		return result
+	//
+	// More than one template can share a canonical_domain (OpenCode Zen:
+	// "opencode-ai" at /zen and "opencode-go" at /zen/go, neither setting
+	// api_style). Collect every match and prefer the one whose own base URL is
+	// the longest prefix of the provider's, rather than the first hit off the
+	// map — the latter picked a random one of the two on every process
+	// restart. A single match keeps the original behavior exactly.
+	var candidates []*ProviderTemplate
+	search(func(tmpl *ProviderTemplate) bool {
+		if tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain) &&
+			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle)) {
+			candidates = append(candidates, tmpl)
+		}
+		return false // keep scanning; never let search() short-circuit on first hit
+	})
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	if len(candidates) > 1 {
+		return mostSpecificTemplate(candidates, apiBase)
 	}
 
 	// Fallback: Determine which base URL field to match based on APIStyle
@@ -629,6 +653,28 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTem
 			return tmpl.BaseURLOpenAI == apiBase
 		})
 	}
+}
+
+// mostSpecificTemplate picks the template whose declared base URL is the
+// longest prefix of apiBase, among templates that matched on canonical_domain
+// alone. Falls back to the first candidate if none qualifies (malformed
+// template data — not expected in practice).
+func mostSpecificTemplate(candidates []*ProviderTemplate, apiBase string) *ProviderTemplate {
+	best := candidates[0]
+	bestLen := -1
+	for _, tmpl := range candidates {
+		for _, base := range []string{tmpl.BaseURLOpenAI, tmpl.BaseURLAnthropic} {
+			base = strings.TrimRight(base, "/")
+			if base == "" || !strings.HasPrefix(apiBase, base) {
+				continue
+			}
+			if len(base) > bestLen {
+				bestLen = len(base)
+				best = tmpl
+			}
+		}
+	}
+	return best
 }
 
 // cloudTemplateMatcher matches a multi-field cloud provider to its template by
@@ -820,6 +866,37 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 
 	// Fallback to global default
 	return constant.DefaultMaxTokens
+}
+
+// GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoint for this
+// model on this provider's template. "" means no override — resolve exactly
+// as if this function didn't exist. Matched by template like
+// GetMaxTokensForModelByProvider, so it works regardless of the provider's
+// display name.
+func (tm *TemplateManager) GetOpenAIEndpointOverrideForModel(provider *typ.Provider, model string) protocol.APIType {
+	if tm == nil || provider == nil || model == "" {
+		return ""
+	}
+	tmpl := tm.findTemplateByProvider(provider)
+	if tmpl == nil {
+		return ""
+	}
+	for _, m := range tmpl.Models {
+		if m.ID != model {
+			continue
+		}
+		switch m.OpenAIEndpoint {
+		case "chat":
+			return protocol.TypeOpenAIChat
+		case "responses":
+			return protocol.TypeOpenAIResponses
+		default:
+			// Empty or an unrecognized value: no override. A typo in the data
+			// file degrades to "resolve as usual", never to a wrong endpoint.
+			return ""
+		}
+	}
+	return ""
 }
 
 // GetWebSearchSchemaForProvider returns the web search capability schema for a provider

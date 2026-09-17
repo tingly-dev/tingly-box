@@ -14,11 +14,12 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 	both := &typ.Provider{UUID: "p-both", OpenAIEndpointMode: ai.EndpointModeBoth}
 
 	tests := []struct {
-		name     string
-		provider *typ.Provider
-		flags    typ.RuleFlags
-		incoming IncomingAPIType
-		want     protocol.APIType
+		name          string
+		provider      *typ.Provider
+		flags         typ.RuleFlags
+		incoming      IncomingAPIType
+		modelOverride protocol.APIType
+		want          protocol.APIType
 	}{
 		// Default mode (chat) — provider ignores client's incoming API
 		{
@@ -107,11 +108,43 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIResponses,
 		},
+
+		// Per-model table entry (data.ModelInfo.OpenAIEndpoint, looked up by
+		// the caller and passed in as modelOverride).
+		{
+			name:          "model override wins over the chat-only provider default",
+			provider:      chatOnly,
+			incoming:      IncomingAPIChat,
+			modelOverride: protocol.TypeOpenAIResponses,
+			want:          protocol.TypeOpenAIResponses,
+		},
+		{
+			name:          "model override wins over the both-mode provider's mirroring",
+			provider:      both,
+			incoming:      IncomingAPIChat,
+			modelOverride: protocol.TypeOpenAIResponses,
+			want:          protocol.TypeOpenAIResponses,
+		},
+		{
+			name:          "rule override still wins over a model override",
+			provider:      chatOnly,
+			flags:         typ.RuleFlags{OpenAIEndpointOverride: "chat"},
+			incoming:      IncomingAPIChat,
+			modelOverride: protocol.TypeOpenAIResponses,
+			want:          protocol.TypeOpenAIChat,
+		},
+		{
+			name:          "empty model override changes nothing",
+			provider:      chatOnly,
+			incoming:      IncomingAPIResponses,
+			modelOverride: "",
+			want:          protocol.TypeOpenAIChat,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ResolveOpenAIEndpoint(tt.provider, tt.flags, tt.incoming)
+			got, err := ResolveOpenAIEndpoint(tt.provider, tt.flags, tt.incoming, tt.modelOverride)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -123,7 +156,7 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 }
 
 func TestResolveOpenAIEndpointNilProviderErrors(t *testing.T) {
-	if _, err := ResolveOpenAIEndpoint(nil, typ.RuleFlags{}, IncomingAPIChat); err == nil {
+	if _, err := ResolveOpenAIEndpoint(nil, typ.RuleFlags{}, IncomingAPIChat, ""); err == nil {
 		t.Error("expected error for nil provider")
 	}
 }
@@ -138,7 +171,7 @@ func TestResolveOpenAIEndpointCodexOAuthSnapshot(t *testing.T) {
 		OAuthDetail:        &typ.OAuthDetail{Issuer: ai.IssuerCodex},
 		OpenAIEndpointMode: ai.EndpointModeResponses,
 	}
-	got, err := ResolveOpenAIEndpoint(codex, typ.RuleFlags{}, IncomingAPIChat)
+	got, err := ResolveOpenAIEndpoint(codex, typ.RuleFlags{}, IncomingAPIChat, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
