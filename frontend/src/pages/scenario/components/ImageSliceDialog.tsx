@@ -437,8 +437,16 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     // region at all.
     const surfaceRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef<{ mode: DragMode; startX: number; startY: number; origin: CropRect; moved: boolean } | null>(null);
-    // A drag that redrew the frame must not also toggle the tile it ended on.
+    // A drag that redrew the frame, or a click that just sampled a colour,
+    // must not also toggle the tile underneath. One primitive covers both:
+    // a drag's release always lands on a tile, whose onClick consumes this
+    // and clears it; a colour pick can land outside every tile (nothing
+    // there to consume it), so the timeout clears it either way.
     const suppressClickRef = useRef(false);
+    const suppressNextClick = useCallback(() => {
+        suppressClickRef.current = true;
+        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+    }, []);
 
     const beginDrag = useCallback((mode: DragMode, event: React.PointerEvent) => {
         const box = surfaceRef.current?.getBoundingClientRect();
@@ -464,12 +472,12 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         const handleUp = () => {
             window.removeEventListener('pointermove', handleMove);
             window.removeEventListener('pointerup', handleUp);
-            suppressClickRef.current = dragRef.current?.moved ?? false;
+            if (dragRef.current?.moved) suppressNextClick();
             dragRef.current = null;
         };
         window.addEventListener('pointermove', handleMove);
         window.addEventListener('pointerup', handleUp);
-    }, [crop]);
+    }, [crop, suppressNextClick]);
 
     // Keyboard equivalent of dragging a corner, so the frame is reachable
     // without a pointer (the slider it replaced was).
@@ -649,6 +657,34 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
 
     const naturalWidth = image?.naturalWidth ?? 1;
     const naturalHeight = image?.naturalHeight ?? 1;
+    const isCustom = cleanKind === 'custom';
+    // The key colour on display next to the tolerance slider: the one a
+    // click sampled for 'custom', or the one detection found for 'green'.
+    // Checker has none worth showing — its two tones are read off the image
+    // itself, not a single colour the user is keying against.
+    const keyColor = cleanKind === 'green' ? detectedColors[0] : (isCustom ? pickedColor : null);
+
+    // Samples the pixel under a click, in the sheet's own fractional
+    // coordinates, as the custom-matte key colour — named and pulled out of
+    // the canvas's onPointerDown the same way beginDrag is, rather than left
+    // as an inline block inside a JSX prop.
+    const handlePickClick = useCallback((fx: number, fy: number) => {
+        if (!image) return;
+        suppressNextClick();
+        try {
+            setPickedColor(sampleSheetColor(image, fx * naturalWidth, fy * naturalHeight));
+        } catch {
+            // Same CORS-tainted-canvas case `analyzeSheetBackground` already
+            // warns about via the load-failed message above.
+            showNotification(
+                t('playground.slice.pickFailed', {
+                    defaultValue: 'Could not read this image’s pixels to sample a colour.',
+                }),
+                'error',
+            );
+        }
+        setPicking(false);
+    }, [image, naturalHeight, naturalWidth, showNotification, suppressNextClick, t]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -715,33 +751,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     // surface but never overlap in time.
                                     if (picking) {
                                         event.preventDefault();
-                                        // The click both samples a colour and
-                                        // lands on a tile underneath; without
-                                        // this it also toggles that tile out,
-                                        // the same false-click a crop drag
-                                        // guards against below. A pick can
-                                        // also land outside the crop, where no
-                                        // tile exists to consume the flag —
-                                        // clear it right after this gesture
-                                        // regardless, so it never swallows a
-                                        // later, unrelated tile click.
-                                        suppressClickRef.current = true;
-                                        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
-                                        try {
-                                            setPickedColor(sampleSheetColor(image, x * naturalWidth, y * naturalHeight));
-                                        } catch {
-                                            // Same CORS-tainted-canvas case
-                                            // `analyzeSheetBackground` already
-                                            // warns about via the load-failed
-                                            // message above.
-                                            showNotification(
-                                                t('playground.slice.pickFailed', {
-                                                    defaultValue: 'Could not read this image’s pixels to sample a colour.',
-                                                }),
-                                                'error',
-                                            );
-                                        }
-                                        setPicking(false);
+                                        handlePickClick(x, y);
                                         return;
                                     }
                                     const inside = x >= crop.x && x <= crop.x + crop.width
@@ -1077,7 +1087,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             </MenuItem>
                                         </Select>
                                     </FormControl>
-                                    {cleanKind === 'custom' && (
+                                    {isCustom && (
                                         <Typography variant="caption" sx={{ color: picking ? 'primary.main' : 'text.secondary' }}>
                                             {picking
                                                 ? t('playground.slice.pickHint', {
@@ -1088,7 +1098,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 })}
                                         </Typography>
                                     )}
-                                    <Box sx={{ opacity: cleanKind === 'custom' && !pickedColor ? 0.5 : 1 }}>
+                                    <Box sx={{ opacity: isCustom && !pickedColor ? 0.5 : 1 }}>
                                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                                 {t('playground.slice.tolerance', { defaultValue: 'Tolerance' })} · {Math.round(tolerance * 100)}%
@@ -1098,36 +1108,32 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 and the user cannot judge the
                                                 margin without seeing the
                                                 colour it is around. */}
-                                            {(() => {
-                                                const keyColor = cleanKind === 'green' ? detectedColors[0] : (cleanKind === 'custom' ? pickedColor : null);
-                                                if (!keyColor) return null;
-                                                return (
-                                                    <>
-                                                        <Box
-                                                            sx={{
-                                                                width: 12,
-                                                                height: 12,
-                                                                borderRadius: '2px',
-                                                                border: '1px solid',
-                                                                borderColor: 'divider',
-                                                                bgcolor: `rgb(${keyColor.join(',')})`,
-                                                            }}
-                                                        />
-                                                        <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
-                                                            {`#${keyColor.map((value) => value.toString(16).padStart(2, '0')).join('')}`}
-                                                        </Typography>
-                                                        {cleanKind === 'custom' && (
-                                                            <Button
-                                                                size="small"
-                                                                onClick={() => setPicking(true)}
-                                                                sx={{ minWidth: 0, py: 0, textTransform: 'none' }}
-                                                            >
-                                                                {t('playground.slice.pickAgain', { defaultValue: 'Pick again' })}
-                                                            </Button>
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
+                                            {keyColor && (
+                                                <>
+                                                    <Box
+                                                        sx={{
+                                                            width: 12,
+                                                            height: 12,
+                                                            borderRadius: '2px',
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
+                                                            bgcolor: `rgb(${keyColor.join(',')})`,
+                                                        }}
+                                                    />
+                                                    <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
+                                                        {`#${keyColor.map((value) => value.toString(16).padStart(2, '0')).join('')}`}
+                                                    </Typography>
+                                                    {isCustom && (
+                                                        <Button
+                                                            size="small"
+                                                            onClick={() => setPicking(true)}
+                                                            sx={{ minWidth: 0, py: 0, textTransform: 'none' }}
+                                                        >
+                                                            {t('playground.slice.pickAgain', { defaultValue: 'Pick again' })}
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
                                         </Stack>
                                         <Slider
                                             size="small"
@@ -1135,7 +1141,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             min={0}
                                             max={1}
                                             step={0.02}
-                                            disabled={cleanKind === 'custom' && !pickedColor}
+                                            disabled={isCustom && !pickedColor}
                                             onChange={(_, value) => setTolerance(value as number)}
                                             aria-label={t('playground.slice.tolerance', { defaultValue: 'Tolerance' })}
                                         />

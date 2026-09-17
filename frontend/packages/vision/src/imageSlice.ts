@@ -298,14 +298,18 @@ export const analyzeSheetBackground = (image: HTMLImageElement): SheetAnalysis =
  * backdrop has neither, so the only way to name its colour is to point at it.
  */
 export const sampleSheetColor = (image: HTMLImageElement, x: number, y: number): [number, number, number] => {
+    const px = Math.min(image.naturalWidth - 1, Math.max(0, Math.round(x)));
+    const py = Math.min(image.naturalHeight - 1, Math.max(0, Math.round(y)));
+    // A 1x1 canvas plus the windowed drawImage overload asks the browser to
+    // sample the one source pixel a click named, rather than rasterising the
+    // whole sheet (as `analyzeSheetBackground` above genuinely needs to, to
+    // read every pixel) just to throw away all but one of them.
     const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
+    canvas.width = 1;
+    canvas.height = 1;
     const context = context2d(canvas);
-    context.drawImage(image, 0, 0);
-    const px = Math.min(canvas.width - 1, Math.max(0, Math.round(x)));
-    const py = Math.min(canvas.height - 1, Math.max(0, Math.round(y)));
-    const [r, g, b] = context.getImageData(px, py, 1, 1).data;
+    context.drawImage(image, px, py, 1, 1, 0, 0, 1, 1);
+    const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
     return [r, g, b];
 };
 
