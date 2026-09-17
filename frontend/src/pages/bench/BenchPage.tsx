@@ -14,6 +14,7 @@ import type { ProbeProtocol } from '@/types/probe';
 import { StatusBar, Journey, CollapsibleSection, CopyBlock, extractText, defaultMessage, ruleProtocolForScenario } from '@/components/probe/ResultSections';
 import { BENCH_PATH, parseBenchLink } from './benchLink';
 import {
+    BLANK_REQUEST,
     DEFAULT_STATE,
     buildProbeRequest,
     cloneState,
@@ -27,7 +28,7 @@ import {
 } from './benchState';
 import { useTargetCatalog } from './useTargetCatalog';
 import { TargetPicker, ruleLabel } from './TargetPicker';
-import { BenchAxes, useAxisAvailability } from './BenchAxes';
+import { BenchAxes, useAxisAvailability, type RequestMode } from './BenchAxes';
 import { PluginsPanel, isFlagSet, type FlagBaseline } from './PluginsPanel';
 import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
@@ -210,8 +211,6 @@ const BenchPage: React.FC = () => {
         const avail = protocolAvailability(provider);
         return avail.options.length ? avail.options : ['openai_chat', 'openai_responses', 'anthropic_v1'];
     }, [target, provider]);
-    const wireProtocol: ProbeProtocol = state.raw?.protocol
-        ?? (target?.kind === 'rule' ? ruleProtocolForScenario(target.scenario) : (state.axes.protocol || protocolAvailability(provider).default || 'openai_chat'));
 
     // Live payload: rebuild 500 ms after the last change. Pure construction.
     useEffect(() => {
@@ -248,6 +247,35 @@ const BenchPage: React.FC = () => {
     const seedBody = state.raw
         ? (presetPreviewCurl?.success && presetPreviewCurl.data?.body ? prettyBody(presetPreviewCurl.data.body) : undefined)
         : (curl?.success && curl.data?.body ? prettyBody(curl.data.body) : undefined);
+
+    // Request mode and Protocol are unified, single controls in Compose now
+    // (.design/bench.md §1) — mode is just whether raw is set; Protocol's
+    // value/options/onChange are resolved per mode here, since preset reads
+    // axes.protocol (via availability) and custom reads raw.protocol.
+    const mode: RequestMode = state.raw ? 'custom' : 'preset';
+    const protocolValue: ProbeProtocol = state.raw?.protocol
+        ?? (target?.kind === 'rule' ? ruleProtocolForScenario(target.scenario) : (state.axes.protocol || protocolAvailability(provider).default || 'openai_chat'));
+    const onModeChange = (next: RequestMode) => {
+        if (next === mode) return;
+        if (next === 'custom') {
+            patch({ raw: { protocol: protocolValue, body: seedBody ?? JSON.stringify(BLANK_REQUEST[protocolValue], null, 2) } });
+        } else {
+            // Carry the protocol forward so the unified control doesn't
+            // silently change value just because mode flipped back.
+            patch({ raw: null, axes: { ...state.axes, protocol: state.raw!.protocol } });
+        }
+    };
+    const onProtocolChange = (p: ProbeProtocol) => {
+        if (p === protocolValue) return;
+        if (state.raw) {
+            // Same move as picking a different template — a new protocol
+            // means a new starting body, never a relabeled old one
+            // (.design/bench.md §6.3).
+            patch({ raw: { protocol: p, body: JSON.stringify(BLANK_REQUEST[p], null, 2) } });
+        } else {
+            patch({ axes: { ...state.axes, protocol: p } });
+        }
+    };
 
     const run = useCallback(async () => {
         if (!request || running) return;
@@ -343,7 +371,11 @@ const BenchPage: React.FC = () => {
                                 targetKind={target?.kind ?? null}
                                 routing={state.routing}
                                 onRoutingChange={(routing) => patch({ routing })}
-                                rawProtocol={state.raw?.protocol ?? null}
+                                mode={mode}
+                                onModeChange={onModeChange}
+                                customProtocolOptions={rawProtocolOptions}
+                                protocolValue={protocolValue}
+                                onProtocolChange={onProtocolChange}
                             />
                         </Stack>
                     </Panel>
@@ -367,7 +399,6 @@ const BenchPage: React.FC = () => {
                             onMessageChange={(message) => patch({ message })}
                             raw={state.raw}
                             onRawChange={(raw) => patch({ raw })}
-                            protocolOptions={rawProtocolOptions}
                             seedBody={seedBody}
                             error={state.raw ? built.error : undefined}
                             messagePlaceholder={defaultMessage(state.axes.tool)}
@@ -435,7 +466,7 @@ const BenchPage: React.FC = () => {
                             buildError={built.error}
                             headers={state.headers}
                             onHeadersChange={(headers) => patch({ headers })}
-                            onEditBody={(body) => patch({ raw: { protocol: wireProtocol, body } })}
+                            onEditBody={(body) => patch({ raw: { protocol: protocolValue, body } })}
                         />
                     </Panel>
                 </Box>

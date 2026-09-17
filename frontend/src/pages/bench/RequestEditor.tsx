@@ -1,26 +1,16 @@
 import React, { useState } from 'react';
-import { Box, Button, ListItemText, Menu, MenuItem, Select, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Button, ListItemText, Menu, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { ProbeProtocol } from '@/types/probe';
-import { PROTOCOL_META } from '@/components/probe/AxisPrimitives';
-import type { RawRequest } from './benchState';
+import { BLANK_REQUEST, type RawRequest } from './benchState';
 
-// RequestEditor: what the client sends. The preset request keeps the probe's
-// own request and exposes only its message override; the custom request is
-// the request itself, written by hand in one of the three client protocols —
-// exactly what a client speaking that protocol would send, with the model
-// filled in by the probe (.design/bench.md §6).
-
-const PROTOCOL_LABEL = (p: ProbeProtocol) => PROTOCOL_META[p]?.full || p;
-
-// BLANK: the empty starting point per protocol — just the top-level key a
-// body in that protocol needs, so the shape is right even before anything
-// is typed.
-const BLANK: Record<ProbeProtocol, object> = {
-    anthropic_v1: { messages: [] },
-    openai_chat: { messages: [] },
-    openai_responses: { input: [] },
-};
+// RequestEditor: what the client sends. Protocol and Request mode (preset /
+// custom) are chosen in Compose now, not here (.design/bench.md §1, §6.3) —
+// this component only renders the content for whichever mode is active. The
+// preset request keeps the probe's own request and exposes only its message
+// override; the custom request is the request itself, written by hand in
+// Compose's chosen protocol — exactly what a client speaking it would send,
+// with the model filled in by the probe.
 
 // Templates carry the shapes that fixed fixtures cannot express — the
 // harness's test subjects, surfaced. One set per protocol; no model field
@@ -82,21 +72,17 @@ const TEMPLATES: Record<ProbeProtocol, { id: string; body: object }[]> = {
     ],
 };
 
-// StartingPointMenu: the one place "what should the custom request's body
-// start as" gets decided, used both to cross the door out of the preset
-// request and to change the starting point once already inside the custom
-// editor — same list either time, so there's exactly one mechanism instead
-// of three (a door button with a state-dependent label, a second in-editor
-// "edit the builder's request" button, and a separate Templates menu). Every
-// item here is a content preset in the .design/bench.md §1 sense: a fixed
-// blob you either take or don't, blank included.
-const StartingPointMenu: React.FC<{
+// startingPointItems: the menu content for "what should the custom
+// request's body start as" — a content preset either way (blank, a copy of
+// the preset request, or a Template), so there's exactly one mechanism, not
+// three (.design/bench.md §6.3).
+function StartingPointMenu({ label, protocol, seedBody, onPick }: {
     label: string;
     protocol: ProbeProtocol;
     /** The preset request's current body, if there's a target to build one from. */
     seedBody?: string;
     onPick: (body: string) => void;
-}> = ({ label, protocol, seedBody, onPick }) => {
+}) {
     const { t } = useTranslation();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const pick = (body: string) => {
@@ -127,7 +113,7 @@ const StartingPointMenu: React.FC<{
                     )}
                 {item(
                     'blank',
-                    JSON.stringify(BLANK[protocol], null, 2),
+                    JSON.stringify(BLANK_REQUEST[protocol], null, 2),
                     t('bench.template.blank', { defaultValue: 'Blank' }),
                     t('bench.template.blankDesc', { defaultValue: "An empty request in this protocol's shape." }),
                 )}
@@ -137,23 +123,20 @@ const StartingPointMenu: React.FC<{
             </Menu>
         </>
     );
-};
+}
 
 export const RequestEditor: React.FC<{
     message: string;
     onMessageChange: (message: string) => void;
     raw: RawRequest | null;
     onRawChange: (raw: RawRequest | null) => void;
-    /** Protocols the current target can be spoken to in (the raw request's protocol must be one). */
-    protocolOptions: ProbeProtocol[];
     /** The builder's current body — the natural starting point for a hand-written request. */
     seedBody?: string;
     /** Parse error of the current raw body, if any. */
     error?: string;
     messagePlaceholder: string;
-}> = ({ message, onMessageChange, raw, onRawChange, protocolOptions, seedBody, error, messagePlaceholder }) => {
+}> = ({ message, onMessageChange, raw, onRawChange, seedBody, error, messagePlaceholder }) => {
     const { t } = useTranslation();
-    const defaultProtocol = protocolOptions[0] ?? 'openai_chat';
 
     if (!raw) {
         return (
@@ -170,16 +153,8 @@ export const RequestEditor: React.FC<{
                     slotProps={{ htmlInput: { sx: { fontSize: '0.82rem' } }, inputLabel: { shrink: true } }}
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
-                    {t('bench.presetHint', { defaultValue: "The preset request: one message, shaped by the Tool / Vision / Thinking knobs — it's the probe itself, materialized. To send anything else — multi-turn, images, tool results, provider-specific fields — write the request yourself." })}
+                    {t('bench.presetHint', { defaultValue: "The preset request: one message, shaped by the Tool / Vision / Thinking knobs — it's the probe itself, materialized. To send anything else — multi-turn, images, tool results, provider-specific fields — switch Request mode to Custom." })}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <StartingPointMenu
-                        label={t('bench.writeYourself', { defaultValue: 'Write the request yourself' })}
-                        protocol={defaultProtocol}
-                        seedBody={seedBody}
-                        onPick={(body) => onRawChange({ protocol: defaultProtocol, body })}
-                    />
-                </Box>
             </Stack>
         );
     }
@@ -187,32 +162,6 @@ export const RequestEditor: React.FC<{
     return (
         <Stack spacing={1.25}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                {/* Protocol is chosen once, when you start writing — changing
-                    it is the same move as picking a different template: the
-                    body is a specific protocol's shape, so a new protocol
-                    means a new starting body, not a relabeled old one (this
-                    used to just swap the tag and leave a mismatched body
-                    behind — .design/bench.md §6). */}
-                <Tooltip title={t('bench.rawProtocolSwitchHint', { defaultValue: "Switching protocol replaces the body below with that protocol's starting template." })}>
-                    <Select
-                        size="small"
-                        value={raw.protocol}
-                        onChange={(e) => {
-                            const nextProtocol = e.target.value as ProbeProtocol;
-                            if (nextProtocol === raw.protocol) return;
-                            onRawChange({ protocol: nextProtocol, body: JSON.stringify(TEMPLATES[nextProtocol][0].body, null, 2) });
-                        }}
-                        sx={{ fontSize: '0.78rem', minWidth: 190 }}
-                        inputProps={{ 'aria-label': t('probe.protocol') }}
-                    >
-                        {protocolOptions.map((p) => (
-                            <MenuItem key={p} value={p} sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(p)}</MenuItem>
-                        ))}
-                        {!protocolOptions.includes(raw.protocol) && (
-                            <MenuItem value={raw.protocol} disabled sx={{ fontSize: '0.8rem' }}>{PROTOCOL_LABEL(raw.protocol)}</MenuItem>
-                        )}
-                    </Select>
-                </Tooltip>
                 <Box sx={{ flex: 1 }} />
                 <StartingPointMenu
                     label={t('bench.changeStartingPoint', { defaultValue: 'Change starting point' })}
@@ -232,13 +181,8 @@ export const RequestEditor: React.FC<{
                 slotProps={{ htmlInput: { sx: { fontFamily: 'monospace', fontSize: '0.74rem', lineHeight: 1.5 }, spellCheck: false } }}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.4 }}>
-                {t('bench.rawHint', { protocol: PROTOCOL_LABEL(raw.protocol), defaultValue: 'Exactly what a client speaking {{protocol}} would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs only shape the preset request.' })}
+                {t('bench.rawHint', { defaultValue: "Exactly what a client speaking this protocol would send. The probe fills in the model (and max_tokens for Anthropic); Stream still applies; tools, images and thinking are yours to set here — the Tool / Vision / Thinking knobs only shape the preset request." })}
             </Typography>
-            <Box>
-                <Button size="small" onClick={() => onRawChange(null)} sx={{ fontSize: '0.72rem' }}>
-                    {t('bench.backToPreset', { defaultValue: 'Back to the preset request' })}
-                </Button>
-            </Box>
         </Stack>
     );
 };

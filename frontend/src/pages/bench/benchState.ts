@@ -50,6 +50,16 @@ export const DEFAULT_STATE: BenchState = {
 
 const PROTOCOLS: ProbeProtocol[] = ['openai_chat', 'openai_responses', 'anthropic_v1'];
 
+// BLANK_REQUEST: the empty starting point per protocol, shared by the
+// Compose column's Request-mode toggle (switching to Custom with no
+// preset to copy from) and RequestEditor's "from where" menu — one
+// definition, not two.
+export const BLANK_REQUEST: Record<ProbeProtocol, object> = {
+    anthropic_v1: { messages: [] },
+    openai_chat: { messages: [] },
+    openai_responses: { input: [] },
+};
+
 export function loadState(): BenchState | null {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
