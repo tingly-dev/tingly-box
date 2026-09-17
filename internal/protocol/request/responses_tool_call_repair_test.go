@@ -157,6 +157,32 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		assert.Equal(t, "[tool output: call_a]\nsecond", repairUserText(t, out[2]))
 	})
 
+	t.Run("duplicate function_call in the same turn is dropped, not re-emitted", func(t *testing.T) {
+		// A call_id repeated within one assistant turn is corrupted/replayed
+		// history, not a second legitimate call: every downstream protocol
+		// rejects (or silently mispairs) two tool_calls/tool_use entries
+		// sharing one id in the same message.
+		items := parseCodexInput(t, `{"input":[
+		 {"type":"message","role":"user","content":"run"},
+		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
+		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
+		 {"type":"function_call_output","call_id":"call_a","output":"a"}]}`)
+		out := RepairResponsesToolCalls(items)
+		require.Equal(t, []string{"user", "fc:call_a", "fco:call_a"}, repairKinds(t, out))
+		assert.Equal(t, "a", repairOutputText(t, out[2]))
+	})
+
+	t.Run("duplicate function_call across separate call groups is dropped", func(t *testing.T) {
+		items := parseCodexInput(t, `{"input":[
+		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
+		 {"type":"function_call_output","call_id":"call_a","output":"a"},
+		 {"type":"message","role":"user","content":"again"},
+		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"}]}`)
+		out := RepairResponsesToolCalls(items)
+		require.Equal(t, []string{"fc:call_a", "fco:call_a", "user"}, repairKinds(t, out))
+		assert.Equal(t, "a", repairOutputText(t, out[1]))
+	})
+
 	t.Run("output listed before its call is placed after it once", func(t *testing.T) {
 		items := parseCodexInput(t, `{"input":[
 		 {"type":"function_call_output","call_id":"call_a","output":"early"},
