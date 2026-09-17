@@ -51,19 +51,13 @@ Item-level converters (`openai_responses_to_chat.go`,
 calls fold into one assistant message, outputs into tool messages / one user
 message of `tool_result` blocks.
 
-## Live verification (DeepSeek, 2026-09)
+## Live verification
 
-| Shape sent to `deepseek-chat` | Result |
-|---|---|
-| tool message with empty `tool_call_id` (pre-repair shape of a Codex automation orphan) | 400 |
-| assistant(a,b) + tool a + user (pre-repair shape of an interrupted parallel call) | 400 `insufficient tool messages` |
-| assistant(a,b) + tool a + tool b placeholder + user (repaired) | 200 |
-| bare tool message with a `call_id` but no `tool_calls` | 400 |
-| orphan rewritten as user text, then user (repaired) | 200 |
-| `deepseek-reasoner` / `thinking` enabled, assistant `tool_calls` with `reasoning_content` `""` or absent | 200 |
-
-Anthropic rules are taken from the official tool-use documentation; no live
-Anthropic probe was run.
+DeepSeek was probed with both the pre-repair and the repaired shapes, and
+with the real converter output for the three Codex histories: pre-repair
+shapes return 400, repaired shapes return 200. The full table is in
+`.design/deepseek.md`. Anthropic rules are taken from the official tool-use
+documentation; no live Anthropic probe was run.
 
 ## Related
 
