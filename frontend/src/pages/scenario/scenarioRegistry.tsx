@@ -7,7 +7,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Extension as IconExtension,
     Photo as IconPhoto,
-    Users as IconUsers,
     Vector as IconVector,
 } from '@/components/icons';
 import {
@@ -145,14 +144,6 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.imagegen',
         path: '/agent/image',
         icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
-        hideable: true,
-    },
-    {
-        id: 'team',
-        labelKey: 'layout.nav.useTeam',
-        descKey: 'scenarioOverview.descriptions.team',
-        path: '/agent/team',
-        icon: (size) => <IconUsers sx={{ fontSize: size }} />,
         hideable: true,
     },
 ];

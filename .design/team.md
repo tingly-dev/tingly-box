@@ -140,7 +140,14 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 
 ## 9. Product and UX contract
 
-- Team 像 Claude Code Profile 一样直接出现在 Agent layout；额外 Team 显示 `tN - name`。
+- Team 是导航一级入口（Activity Rail，紧跟 Home/Agent 之后），不再挂在 Agent/Home 的
+  scenario 分组里；其下的 Sidebar 展开方式与之前完全一致——默认 Team 打头，额外 Team 显示
+  `tN - name`，末尾是 `Add Team`。Team 与"接入某个 agent/SDK"是不同维度的授权边界（見 §1
+  的三个不变量），提升为一级入口让这个边界在导航层面也保持独立，而不是被归到 Agent 的众多
+  profile 分组之一。
+- Team 因此不再出现在 `/agent` scenario 总览网格和其"隐藏/显示某个 scenario"开关里
+  （`scenarioRegistry.tsx` 的 `SCENARIOS` 已移除 `team` 条目）；一级入口本身始终可见，与
+  Usage/Remote/Guardrails/Tools/Credentials/System 等其他一级入口的可见性规则一致。
 - `Add Team` 位于 layout，用户只输入 name，slug 由系统生成。
 - Team 页面、Sharing Key 列表和 Key 创建弹窗必须持续说明权限边界。
 - 提示必须展示真实允许端点 `/tingly/team`、`/tingly/team/v1`，并明确排除其他 Team、
