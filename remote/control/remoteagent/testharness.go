@@ -17,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/claude/fixture"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
@@ -47,6 +48,7 @@ type TestHarness struct {
 	ChatStore    bot.ChatStoreInterface
 	SessionMgr   *session.Manager
 	AgentService *agentboot.AgentService
+	SessionPool  *pool.Pool
 	Pairing      *bot.PairingManager
 	DataDir      string
 	Manager      *imbot.Manager
@@ -67,6 +69,13 @@ type TestBootOptions struct {
 	// When nil (default), no Claude agent is registered and tests that
 	// depend on agent execution must register their own.
 	FixtureScript fixture.Script
+
+	// SessionPool, when non-nil, is threaded into the BotHandler exactly
+	// like the production wiring — tests exercising persistent @cc sessions
+	// (BotSetting.PersistentSession) need a real *pool.Pool here. Nil
+	// (default) disables persistent sessions, matching every other harness
+	// user.
+	SessionPool *pool.Pool
 }
 
 // BootForTest spins up a production BotHandler against the given
@@ -130,7 +139,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 		chatStore,
 		sessionMgr,
 		agentService,
-		nil, // sessionPool — persistent @cc sessions not exercised by this harness
+		opt.SessionPool,
 		dirBrowser,
 		manager,
 		nil, // prompter — standalone: the handler creates (and routes) its own
@@ -147,6 +156,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 		ChatStore:    chatStore,
 		SessionMgr:   sessionMgr,
 		AgentService: agentService,
+		SessionPool:  opt.SessionPool,
 		Pairing:      pairing,
 		DataDir:      opt.DataDir,
 		Manager:      manager,
