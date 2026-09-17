@@ -400,23 +400,28 @@ func TestAnthropicResponsesPreservesToolCacheControls(t *testing.T) {
 			Model:     "claude-test",
 			MaxTokens: 256,
 			Messages: []anthropic.MessageParam{
+				anthropic.NewAssistantMessage(anthropic.NewToolUseBlock("call_1", map[string]any{}, "lookup")),
 				anthropic.NewUserMessage(toolResult),
 			},
 		}
 
 		responsesReq := ConvertAnthropicV1ToResponsesRequest(in)
 		require.Equal(t, "explicit", responsesReq.PromptCacheOptions.Mode)
-		require.Len(t, responsesReq.Input.OfInputItemList, 1)
-		output := responsesReq.Input.OfInputItemList[0].OfFunctionCallOutput
+		var output *responses.ResponseInputItemFunctionCallOutputParam
+		for _, item := range responsesReq.Input.OfInputItemList {
+			if item.OfFunctionCallOutput != nil {
+				output = item.OfFunctionCallOutput
+			}
+		}
 		require.NotNil(t, output)
 		require.Len(t, output.Output.OfResponseFunctionCallOutputItemArray, 1)
 		require.False(t, openaiparam.IsOmitted(
 			output.Output.OfResponseFunctionCallOutputItemArray[0].OfInputText.PromptCacheBreakpoint))
 
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
-		require.Len(t, out.Messages, 1)
-		require.NotNil(t, out.Messages[0].Content[0].OfToolResult)
-		require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfToolResult.CacheControl))
+		require.Len(t, out.Messages, 2)
+		require.NotNil(t, out.Messages[1].Content[0].OfToolResult)
+		require.False(t, anthropicparam.IsOmitted(out.Messages[1].Content[0].OfToolResult.CacheControl))
 	})
 }
 
@@ -438,6 +443,19 @@ func TestChatResponsesChatPreservesCacheControlsAndOptions(t *testing.T) {
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage([]openai.ChatCompletionContentPartTextParam{systemPart}),
 			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{{OfText: &userPart}}),
+			{
+				OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+					ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{{
+						OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+							ID: "call_1",
+							Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+								Name:      "get_weather",
+								Arguments: "{}",
+							},
+						},
+					}},
+				},
+			},
 			{
 				OfTool: &openai.ChatCompletionToolMessageParam{
 					ToolCallID: "call_1",
@@ -461,10 +479,14 @@ func TestChatResponsesChatPreservesCacheControlsAndOptions(t *testing.T) {
 	require.Equal(t, "30m", responsesReq.PromptCacheOptions.Ttl)
 	require.Equal(t, responses.ResponseNewParamsPromptCacheRetention24h, responsesReq.PromptCacheRetention)
 	require.False(t, responsesReq.Instructions.Valid())
-	require.Len(t, responsesReq.Input.OfInputItemList, 3)
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[0], "system")
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[1], "user")
-	toolOutput := responsesReq.Input.OfInputItemList[2].OfFunctionCallOutput
+	var toolOutput *responses.ResponseInputItemFunctionCallOutputParam
+	for _, item := range responsesReq.Input.OfInputItemList {
+		if item.OfFunctionCallOutput != nil {
+			toolOutput = item.OfFunctionCallOutput
+		}
+	}
 	require.NotNil(t, toolOutput)
 	require.Len(t, toolOutput.Output.OfResponseFunctionCallOutputItemArray, 1)
 	require.False(t, openaiparam.IsOmitted(
@@ -475,13 +497,19 @@ func TestChatResponsesChatPreservesCacheControlsAndOptions(t *testing.T) {
 	require.Equal(t, "explicit", out.PromptCacheOptions.Mode)
 	require.Equal(t, "30m", out.PromptCacheOptions.Ttl)
 	require.Equal(t, openai.ChatCompletionNewParamsPromptCacheRetention24h, out.PromptCacheRetention)
-	require.Len(t, out.Messages, 3)
 	require.False(t, openaiparam.IsOmitted(
 		out.Messages[0].OfSystem.Content.OfArrayOfContentParts[0].PromptCacheBreakpoint))
 	require.False(t, openaiparam.IsOmitted(
 		out.Messages[1].OfUser.Content.OfArrayOfContentParts[0].OfText.PromptCacheBreakpoint))
+	var toolMsg *openai.ChatCompletionToolMessageParam
+	for i := range out.Messages {
+		if out.Messages[i].OfTool != nil {
+			toolMsg = out.Messages[i].OfTool
+		}
+	}
+	require.NotNil(t, toolMsg)
 	require.False(t, openaiparam.IsOmitted(
-		out.Messages[2].OfTool.Content.OfArrayOfContentParts[0].OfText.PromptCacheBreakpoint))
+		toolMsg.Content.OfArrayOfContentParts[0].OfText.PromptCacheBreakpoint))
 }
 
 func requireResponsesTextBreakpoint(

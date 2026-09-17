@@ -129,7 +129,14 @@ func convertResponsesSystemInputToAnthropicBeta(inputItems responses.ResponseInp
 // message (all tool_use) and a single user message (all tool_result); otherwise
 // back-to-back tool_use messages get rejected upstream with "tool_use ids were
 // found without tool_result blocks immediately after".
+//
+// The input is first passed through RepairResponsesToolCalls so that every
+// tool_use is answered in the next user message (a missing output becomes a
+// placeholder tool_result) and no tool_result references an unknown id (an
+// orphan output becomes plain user text).
 func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseInputParam) []anthropic.BetaMessageParam {
+	inputItems = RepairResponsesToolCalls(inputItems)
+
 	var messages []anthropic.BetaMessageParam
 
 	for _, item := range inputItems {

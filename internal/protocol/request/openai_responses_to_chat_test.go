@@ -550,15 +550,18 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 		assert.Equal(t, missingToolOutputPlaceholder, getMessageContent(t, messages[3]))
 	})
 
-	t.Run("output without a preceding call is forwarded in place", func(t *testing.T) {
+	t.Run("output without a preceding call becomes a user message", func(t *testing.T) {
+		// A bare tool message is rejected by DeepSeek/OpenAI ("Messages with
+		// role 'tool' must be a response to a preceding message with
+		// 'tool_calls'"); plain user text carries no such constraint.
 		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
 			userMsg("hi"),
 			fnOutput("call_ghost", "stale"),
 			userMsg("again"),
 		})
 
-		require.Equal(t, []string{"user", "tool", "user"}, roles(messages))
-		assert.Equal(t, "call_ghost", getToolCallID(t, messages[1]))
+		require.Equal(t, []string{"user", "user", "user"}, roles(messages))
+		assert.Equal(t, "[tool output: call_ghost]\nstale", getMessageContent(t, messages[1]))
 	})
 }
 

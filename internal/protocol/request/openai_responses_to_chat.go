@@ -8,7 +8,6 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
-	"github.com/sirupsen/logrus"
 )
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
@@ -72,55 +71,29 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 
 // pendingToolCall holds a single tool call during input-to-message conversion.
 // Consecutive function_call input items are accumulated and flushed together
-// as a single assistant message with all tool_calls, so the resulting message
-// sequence satisfies providers (DeepSeek) that require tool messages to
-// immediately follow the assistant message that requested them.
+// as a single assistant message with all tool_calls.
 type pendingToolCall struct {
 	CallID    string
 	Name      string
 	Arguments string
 }
 
-// missingToolOutputPlaceholder is the tool message content synthesized for a
-// function_call that has no matching function_call_output in the input.
-//
-// Codex (and other Responses clients) can replay history where a call never
-// produced an output — e.g. the user interrupted the turn while the tool was
-// running. Chat Completions providers (DeepSeek, OpenAI) reject an assistant
-// message whose tool_calls are not each answered by a tool message, so the
-// gateway must fill the gap rather than forward a broken sequence.
-const missingToolOutputPlaceholder = "[tool call aborted: no output was recorded for this call]"
-
 // ConvertResponsesInputToMessages converts Responses API input items to Chat Completion messages.
 //
-// Tool-call sequencing invariant (required by DeepSeek / OpenAI chat):
-// every assistant message carrying tool_calls is immediately followed by
-// exactly one tool message per call, and no tool message appears without a
-// preceding assistant tool_calls message. The Responses input is not
-// guaranteed to be shaped that way (outputs may be missing or separated from
-// their call), so outputs are indexed up front and re-attached to their calls.
+// The input is first passed through RepairResponsesToolCalls, which
+// guarantees that every function_call group is immediately followed by one
+// function_call_output per call and that no output stands without a call.
+// Chat Completions providers (DeepSeek, OpenAI) require exactly that shape:
+// an assistant message carrying tool_calls must be followed by one tool
+// message per call, and a tool message must answer a preceding tool_calls
+// message. The conversion below therefore only has to preserve order.
 func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []openai.ChatCompletionMessageParamUnion {
+	items = RepairResponsesToolCalls(items)
+
 	var messages []openai.ChatCompletionMessageParamUnion
-
-	// Index tool outputs by call_id so each tool message can be emitted right
-	// after the assistant message that requested it, regardless of where the
-	// function_call_output item sits in the input. First occurrence wins.
-	outputs := make(map[string]openai.ChatCompletionMessageParamUnion)
-	for _, item := range items {
-		if param.IsOmitted(item.OfFunctionCallOutput) {
-			continue
-		}
-		callID := item.OfFunctionCallOutput.CallID.Value
-		if _, dup := outputs[callID]; dup {
-			continue
-		}
-		outputs[callID] = convertResponsesFunctionCallOutput(item.OfFunctionCallOutput)
-	}
-
 	var pendingCalls []pendingToolCall
 
-	// flushCalls emits the accumulated function_calls as one assistant
-	// message, immediately followed by one tool message per call.
+	// flushCalls emits the accumulated function_calls as one assistant message.
 	flushCalls := func() {
 		if len(pendingCalls) == 0 {
 			return
@@ -145,21 +118,10 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 		var assistant openai.ChatCompletionMessageParamUnion
 		_ = json.Unmarshal(msgBytes, &assistant)
 		messages = append(messages, assistant)
-
-		for _, tc := range pendingCalls {
-			if out, ok := outputs[tc.CallID]; ok {
-				messages = append(messages, out)
-				delete(outputs, tc.CallID)
-				continue
-			}
-			logrus.Debugf("ConvertResponsesInputToMessages: function_call %q (%s) has no function_call_output; inserting placeholder tool message", tc.CallID, tc.Name)
-			messages = append(messages, openai.ToolMessage(missingToolOutputPlaceholder, tc.CallID))
-		}
 		pendingCalls = nil
 	}
 
 	for _, item := range items {
-		// Accumulate consecutive function_call items into a single assistant message.
 		if !param.IsOmitted(item.OfFunctionCall) {
 			fnCall := item.OfFunctionCall
 			pendingCalls = append(pendingCalls, pendingToolCall{
@@ -170,21 +132,15 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			continue
 		}
 
-		// Any other item ends the assistant tool-call turn. Flushing here keeps
-		// assistant(tool_calls) + tool messages contiguous even when a message
-		// (or an unsupported item type) sits between a call and its output.
+		// Any other item ends the assistant tool-call turn.
 		flushCalls()
 
 		switch {
 		case !param.IsOmitted(item.OfMessage):
 			msg := item.OfMessage
 			role := string(msg.Role)
-
-			// Extract content based on type
 			if !param.IsOmitted(msg.Content.OfString) {
-				// Simple string content
-				content := msg.Content.OfString.Value
-				messages = append(messages, createMessage(role, content))
+				messages = append(messages, createMessage(role, msg.Content.OfString.Value))
 			} else if !param.IsOmitted(msg.Content.OfInputItemContentList) {
 				if converted, ok := createMessageFromResponsesContent(role, msg.Content.OfInputItemContentList); ok {
 					messages = append(messages, converted)
@@ -192,20 +148,9 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			}
 
 		case !param.IsOmitted(item.OfFunctionCallOutput):
-			// Normally already emitted right after its function_call by
-			// flushCalls. Anything still in the index has no preceding call
-			// in the input; pass it through in place rather than silently
-			// losing its content (round-trip converters rely on this).
-			callID := item.OfFunctionCallOutput.CallID.Value
-			if out, orphan := outputs[callID]; orphan {
-				logrus.Debugf("ConvertResponsesInputToMessages: function_call_output %q has no preceding function_call; forwarding as-is", callID)
-				messages = append(messages, out)
-				delete(outputs, callID)
-			}
+			messages = append(messages, convertResponsesFunctionCallOutput(item.OfFunctionCallOutput))
 		}
 	}
-
-	// Flush remaining pending calls at end of input
 	flushCalls()
 
 	return messages
