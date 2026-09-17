@@ -121,7 +121,7 @@ export function useActivityItems(): ActivityItem[] {
         const teamActivityItem: ActivityItem = {
             key: 'team',
             icon: <IconUsers sx={{ fontSize: 22 }} />,
-            label: t('layout.nav.useTeam', { defaultValue: 'Team' }),
+            label: t('layout.team', { defaultValue: 'Team' }),
             defaultPath: '/agent/team',
             children: teamNavItems,
         };

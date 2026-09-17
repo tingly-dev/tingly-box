@@ -58,13 +58,8 @@ export default {
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
       "useImageGen": "Image",
+      "useTeam": "Team",
       "useCustom": "Custom",
-      // Team is a top-level rail entry, not a scenario name, so this one nav
-      // label is translated. Everywhere else (teams.* — the Team page,
-      // Sharing Keys dialog, etc.) keeps "Team" untranslated: see
-      // .design/team.md §3 — "团队" reads as a generic org/people group,
-      // which is exactly the meaning Team must not carry there.
-      "useTeam": "团队",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",
       "credential": "凭证",
@@ -108,6 +103,9 @@ export default {
     },
     "easterEgg": "Hi，我是 Tingly-Box，为您掌控智能",
     "dashboard": "仪表盘",
+    // 只用于一级入口（Activity Rail）这一处的 label；侧栏行和 Team 页面自己的
+    // 标题继续用 nav.useTeam（全局统一保留英文 "Team"，见 .design/team.md §3）。
+    "team": "团队",
     "userUsage": "团队用量",
     "heatmap": "热力图",
     "today": "今天",
