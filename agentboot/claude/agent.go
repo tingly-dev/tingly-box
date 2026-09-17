@@ -81,6 +81,13 @@ func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.Execu
 	return a.runner.Execute(ctx, prompt, opts)
 }
 
+// Open starts a long-lived, multi-turn [agentboot.PersistentSession] instead
+// of a one-shot [agentboot.ExecutionHandle]. See [agentboot.Runner.Open] and
+// .design/claude-code.md.
+func (a *Agent) Open(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+	return a.runner.Open(ctx, prompt, opts)
+}
+
 // IsAvailable checks if Claude Code is available.
 func (a *Agent) IsAvailable() bool { return a.driver.IsAvailable() }
 

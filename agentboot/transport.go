@@ -66,6 +66,13 @@ type AgentTransport interface {
 	// an UpdatedInput.
 	EncodeControlResponse(reqID string, resp ControlResponse, originalInput map[string]any) any
 
+	// EncodeUserMessage converts a plain-text user turn into the wire value
+	// sent to the agent process's stdin via [protocol.Encoder]. Used by
+	// [PersistentSession.Send] for every turn after the first — the first
+	// turn is still delivered via the driver's InitialInput channel, exactly
+	// as for a one-shot Execute.
+	EncodeUserMessage(prompt string) any
+
 	// SetExecutionContext injects provider-neutral per-execution metadata.
 	SetExecutionContext(context ExecutionContext)
 }

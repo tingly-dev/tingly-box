@@ -1,8 +1,9 @@
 # Claude Code: from one-shot processes to a persistent stream session
 
-> Status: research + proposal (not yet implemented). Written 2026-09-17;
-> §3.1's core transport assumption empirically confirmed the same day (§3.1,
-> §6 P0).
+> Status: P0 (feasibility) and P1 (core primitive) done, 2026-09-17. P2
+> (registry + wiring into `@cc`) and P3 (observability) not started — see §6.
+> `@cc`'s actual execution path is unchanged; `PersistentSession`/
+> `Runner.Open` exist in `agentboot` but nothing calls them yet.
 > Scope: `@cc` (Claude Code) execution via `agentboot`, as driven by
 > `remote/control/remoteagent`. Does not touch `@tb` (SmartGuide/AFK), which
 > is already a long-lived in-process ReAct loop — see `.design/afk.md`.
@@ -371,11 +372,25 @@ core efficiency win (skip process-spawn/startup cost per message).
    stream-json/persistent execution — worth checking whether tingly-box's
    own deployment containers run as root, since that changes which flag P1's
    permission plumbing needs by default.
-2. **P1 — core primitive.** `PersistentSession`, `Runner.Open`, the two new
-   `StreamEvent` types, unit tests against a fake `process.Factory` (the
-   existing test seam) proving: two `Send` calls on one process, idle
-   timeout firing, `Close()` reusing `shutdownGracefully`, and a crash
-   mid-turn producing a `SessionStateEvent{Terminated}` rather than a hang.
+2. **P1 — core primitive — DONE (2026-09-17).** `PersistentSession`,
+   `Runner.Open` (`agentboot/persistent_session.go`,
+   `agentboot/runner_open.go`), the two new `StreamEvent` types, and
+   `AgentTransport.EncodeUserMessage` (+ `claude.Transport`'s
+   implementation and `claude.Agent.Open`), with unit tests against
+   `process.FakeFactory` (`agentboot/runner_open_test.go`) proving: two
+   `Send` calls complete on one process without a respawn, `ErrTurnInFlight`
+   while a turn is running, `Close()` reusing the same close-stdin/grace/
+   Kill sequence as `Execute`'s `shutdownGracefully`, and an unprompted
+   process exit producing `SessionStateEvent{Terminated}` (not a hang) with
+   `Send` afterward returning `ErrSessionClosed`. `go build`/`go vet`/
+   `go test -race` green in `agentboot` and in the root module's
+   `remote/...` tree (no other `AgentTransport` implementer existed to
+   update). One correction from the plan below: idle timeout is *not* part
+   of this primitive — `PersistentSession` only exposes `Close`/`Status`;
+   idle-timeout-driven `Close` calls are a P2/registry concern per §5.3, not
+   something the primitive enforces on itself.
+   Not yet wired to anything — `Runner.Execute`/`ExecutionHandle` are
+   untouched and remain the only path `@cc` actually uses.
 3. **P2 — registry + wiring.** `SessionPool`, eviction policy, wire into
    `ClaudeCodeExecutor` behind an opt-in setting.
 4. **P3 — observability.** Surface resident-process count / per-session
