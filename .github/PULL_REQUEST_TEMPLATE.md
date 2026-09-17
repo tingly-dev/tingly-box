@@ -7,20 +7,9 @@
 
 <!--
 Title — set it in GitHub's title field, not here (this comment doesn't render).
-
-  type(scope): description         e.g. fix(imagegen): stop invisible delete button
-  - type: feat / fix / refactor / perf / test / docs / chore / ci / security —
-    the dominant type across Key Changes below, never an area name (that's scope).
-  - scope: optional, lowercase, the package/feature area (imagegen, server, cli…).
-  - description: lowercase, imperative ("add", not "added"), no trailing period.
-
-  One theme per title — a multi-bullet PR still picks its ONE most significant
-  change; the rest live in Key Changes, not stacked in with em dashes/commas
-  (bad, 140 chars, real example: "feat(imagegen): playground UX — prompt that
-  scrolls and expands, steppers, failed-run cards, keyboard submit, session
-  persistence"). Cap ~70 chars — needing punctuation to fit it all means split
-  the PR, not lengthen the title. Never: branch names, "Claude"/session IDs/
-  model names, or a vague verb alone ("update", "misc changes").
+Format: type(scope): description   e.g. fix(imagegen): stop invisible delete button
+type = feat/fix/refactor/perf/test/docs/chore/ci/security; scope = area
+(imagegen, server, cli…) — an area name is the scope, never the type.
 -->
 
 ## Summary
