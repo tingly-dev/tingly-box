@@ -118,6 +118,14 @@ export function useActivityItems(): ActivityItem[] {
         const visible = (group: HideableScenario[]): NavItem[] =>
             group.filter(s => !hiddenScenarios.has(s.id)).map(s => s.nav);
 
+        const teamActivityItem: ActivityItem = {
+            key: 'team',
+            icon: <IconUsers sx={{ fontSize: 22 }} />,
+            label: t('layout.nav.useTeam', { defaultValue: 'Team' }),
+            defaultPath: '/agent/team',
+            children: teamNavItems,
+        };
+
         const codingTools = visible([
             // Claude Desktop leads so all Claude-branded scenarios stay grouped
             // at the front, right after the Claude Code block.
@@ -158,7 +166,6 @@ export function useActivityItems(): ActivityItem[] {
             if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
             scenarioChildren.push(...group);
         };
-        if (!hiddenScenarios.has('team')) pushGroup(teamNavItems);
         pushGroup(codingTools);
         pushGroup(sdkTools);
 
@@ -170,6 +177,7 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/agent',
                 children: scenarioChildren,
             },
+            teamActivityItem,
             {
                 key: 'dashboard',
                 icon: <IconChartBar sx={{ fontSize: 22 }} />,
