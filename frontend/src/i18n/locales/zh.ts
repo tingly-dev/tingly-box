@@ -1907,6 +1907,7 @@ export default {
       "pickHint": "点击图片上要去除的背景颜色。",
       "pickedHint": "从图片边缘开始、与该颜色相连的像素都会被清除。",
       "pickAgain": "重新点选",
+      "pickFailed": "无法读取这张图片的像素来取色。",
       "tolerance": "容差",
       "animate": "按顺序播放各格",
       "animationAlt": "动画预览",

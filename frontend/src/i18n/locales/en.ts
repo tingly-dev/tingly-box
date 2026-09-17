@@ -1911,6 +1911,7 @@ export default {
       "pickHint": "Click anywhere on the image to sample the background color to remove.",
       "pickedHint": "Any pixel that connects to this color, from the edge in, will be cleared.",
       "pickAgain": "Pick again",
+      "pickFailed": "Could not read this image’s pixels to sample a colour.",
       "tolerance": "Tolerance",
       "animate": "Play the tiles in order",
       "animationAlt": "Animation preview",

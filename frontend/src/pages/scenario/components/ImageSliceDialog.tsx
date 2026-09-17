@@ -719,9 +719,28 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         // lands on a tile underneath; without
                                         // this it also toggles that tile out,
                                         // the same false-click a crop drag
-                                        // guards against below.
+                                        // guards against below. A pick can
+                                        // also land outside the crop, where no
+                                        // tile exists to consume the flag —
+                                        // clear it right after this gesture
+                                        // regardless, so it never swallows a
+                                        // later, unrelated tile click.
                                         suppressClickRef.current = true;
-                                        setPickedColor(sampleSheetColor(image, x * naturalWidth, y * naturalHeight));
+                                        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+                                        try {
+                                            setPickedColor(sampleSheetColor(image, x * naturalWidth, y * naturalHeight));
+                                        } catch {
+                                            // Same CORS-tainted-canvas case
+                                            // `analyzeSheetBackground` already
+                                            // warns about via the load-failed
+                                            // message above.
+                                            showNotification(
+                                                t('playground.slice.pickFailed', {
+                                                    defaultValue: 'Could not read this image’s pixels to sample a colour.',
+                                                }),
+                                                'error',
+                                            );
+                                        }
                                         setPicking(false);
                                         return;
                                     }
