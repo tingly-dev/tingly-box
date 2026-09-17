@@ -470,6 +470,8 @@ export default {
     "copied": "Copied!",
     "requestConfig": "Request Config",
     "advanced": "Advanced",
+    "groupParameters": "Parameters",
+    "groupContent": "Content",
     "copy": "Copy",
     "emptyTitle": "Not run yet",
     "emptyBody": "Set the request config on the left, then Run Test — the verdict, request journey, and cURL appear here.",
