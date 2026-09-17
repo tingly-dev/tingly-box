@@ -344,8 +344,8 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 
 | 文件 | 职责 |
 |------|------|
-| `frontend/src/utils/sketchCanvas.ts` | 尺寸解析、fit、坐标映射、笔宽、撤销栈;笔画的数据结构与重放 |
-| `frontend/src/mannequin/` | **人偶是一个独立的库**,只依赖 `three`,不认识画布和应用。`index.ts` 是唯一入口 |
+| `frontend/packages/vision/src/sketchCanvas.ts` | 尺寸解析、fit、坐标映射、笔宽、撤销栈;笔画的数据结构与重放。原在 `frontend/src/utils/`,后与 `imageSlice.ts`/`imageMatte.ts`/`gif.ts`/`video.ts`/`zip.ts` 一起搬进 `@tingly/vision` workspace 包(见 `.design/image-slice.md` §10) |
+| `frontend/packages/mannequin/src/` | **人偶是一个独立的库**(`@tingly/mannequin` workspace 包),只依赖 `three`,不认识画布和应用。`index.ts` 是唯一入口 |
 | `mannequin/skeleton.ts` | 关节、父子关系、骨长(`BONE`)、朝向推导 |
 | `mannequin/rig.ts` | 关节限制:`constrainFigure` |
 | `mannequin/camera.ts` / `view.ts` | 每个人偶自己的透视相机;转身、视角预设 |
@@ -359,8 +359,8 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 | `frontend/src/pages/scenario/components/ViewAnglePopover.tsx` | 机位网格(每格是这个人偶在该角度下的样子)+ 角度读数 |
 | `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | 参考图列表、草图入口与 `layers` 的保管 |
 
-纯逻辑全部在两个 `utils/` 模块里,有单测;组件是这些 helper 加 2D context 调用的
-薄壳。canvas 渲染不进 jsdom 单测,靠 `.claude/skills/ui-preview` 的真实浏览器链路
+纯逻辑全部在 `@tingly/vision`(`sketchCanvas.ts`)和 `@tingly/mannequin` 两个
+workspace 包里,有单测;组件是这些 helper 加 2D context 调用的薄壳。canvas 渲染不进 jsdom 单测,靠 `.claude/skills/ui-preview` 的真实浏览器链路
 验证(落人偶 → 换姿势 → 拖关节 → 提交 → 重开 → 逐笔撤销)。
 
 ---

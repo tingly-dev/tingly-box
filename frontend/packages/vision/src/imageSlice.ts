@@ -7,7 +7,6 @@
 // user drags the frame the grid divides and nudges one gutter, with a live
 // overlay showing where every cut lands.
 
-import { fetchBlob } from './download';
 import {
     analyzeBackground,
     removeBackground,
@@ -16,6 +15,33 @@ import {
     type RGBAImage,
 } from './imageMatte';
 import type { GifFrame } from './gif';
+
+/**
+ * Reads any image source — a data URL or a provider's remote URL — as a blob.
+ * Going through fetch is what lets a remote image be drawn into a canvas
+ * later: an <img> pointed straight at a cross-origin URL taints it.
+ *
+ * Lives here rather than the host app's `utils/download.ts`: despite that
+ * module's name, this and `extensionForMime` below are the image-specific
+ * half of it — `download.ts` imports them back for its own `downloadImage`,
+ * composed there with the (genuinely generic, non-image) anchor-click save
+ * that also serves guardrails exports and rule fragments.
+ */
+export const fetchBlob = async (src: string): Promise<Blob> => {
+    const response = await fetch(src);
+    if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
+    return response.blob();
+};
+
+const MIME_EXTENSIONS: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+};
+
+/** Extension for a blob's own type — providers do not all hand back PNG. */
+export const extensionForMime = (mimeType: string): string => MIME_EXTENSIONS[mimeType] ?? 'png';
 
 /**
  * The part of the image the grid is cut out of, in fractions of the image's

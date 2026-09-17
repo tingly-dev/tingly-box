@@ -26,6 +26,9 @@ importers:
       '@tingly/mannequin':
         specifier: workspace:*
         version: link:packages/mannequin
+      '@tingly/vision':
+        specifier: workspace:*
+        version: link:packages/vision
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -38,9 +41,6 @@ importers:
       i18next-browser-languagedetector:
         specifier: ^8.2.1
         version: 8.2.1
-      mediabunny:
-        specifier: ^1.56.1
-        version: 1.56.1
       openai:
         specifier: ^6.48.0
         version: 6.48.0(ws@8.21.1)(zod@4.4.3)
@@ -155,6 +155,12 @@ importers:
       '@types/three':
         specifier: 0.170.0
         version: 0.170.0
+
+  packages/vision:
+    dependencies:
+      mediabunny:
+        specifier: ^1.56.1
+        version: 1.56.1
 
 packages:
 

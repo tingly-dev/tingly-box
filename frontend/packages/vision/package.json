@@ -1,0 +1,15 @@
+{
+  "name": "@tingly/vision",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-native image, video, GIF and zip processing — canvas sketch layers, background matting, sticker-sheet slicing, GIF encoding, video-to-GIF, zip archives. No React, no UI framework.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "sideEffects": false,
+  "dependencies": {
+    "mediabunny": "^1.56.1"
+  }
+}

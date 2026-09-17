@@ -36,7 +36,7 @@ import {
     type CanvasDimensions,
     type CanvasPoint,
     type Stroke,
-} from '@/utils/sketchCanvas';
+} from '@tingly/vision';
 import {
     applyPreset,
     clampScaleFactor,
