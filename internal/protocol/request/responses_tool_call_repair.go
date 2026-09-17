@@ -46,7 +46,7 @@ const missingToolOutputPlaceholder = "[tool call aborted: no output was recorded
 //     output, so its content survives without a dangling tool message.
 //
 // All other items pass through unchanged, in their original relative order.
-// See .design/responses-tool-call-repair.md for the live provider probes.
+// See .design/protocol-responses.md for the live provider probes.
 func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.ResponseInputParam {
 	if len(items) == 0 {
 		return items

@@ -1,10 +1,18 @@
-# Responses Tool-Call Repair
+# Responses Protocol Contract
+
+What tingly-box guarantees on the OpenAI Responses API wire when the
+upstream speaks a different protocol. Client-specific behaviour (Codex) is
+in `codex.md`; provider findings (DeepSeek) in `deepseek.md`; when a
+Responses request is downgraded to Chat at all is decided by
+`openai-endpoint-routing.md`.
+
+## 1. Tool-call repair
 
 `RepairResponsesToolCalls` (`internal/protocol/request/responses_tool_call_repair.go`)
 normalizes a Responses API input item list before it is converted to Chat
 Completions or Anthropic Messages. Both converters call it first.
 
-## Why
+### Why
 
 Codex speaks the Responses API. Its history only correlates `function_call`
 and `function_call_output` by `call_id`: the API has no adjacency rule, does
@@ -30,7 +38,7 @@ one-to-one pairing:
 Once a thread's history is dirty every later turn fails the same way, which
 is what users see as "Codex → tingly-box → DeepSeek fails sometimes".
 
-## What it does
+### What it does
 
 1. Outputs are indexed by `call_id` and re-emitted right after the call group
    (consecutive `function_call` items) that requested them, whatever their
@@ -51,7 +59,7 @@ Item-level converters (`openai_responses_to_chat.go`,
 calls fold into one assistant message, outputs into tool messages / one user
 message of `tool_result` blocks.
 
-## Live verification
+### Live verification
 
 DeepSeek was probed with both the pre-repair and the repaired shapes, and
 with the real converter output for the three Codex histories: pre-repair
@@ -59,10 +67,8 @@ shapes return 400, repaired shapes return 200. The full table is in
 `.design/deepseek.md`. Anthropic rules are taken from the official tool-use
 documentation; no live Anthropic probe was run.
 
-## Related
+### Related
 
 - The same class of bug in other projects: LiteLLM #32992 / message
   sanitization (`modify_params`), cc-switch #7074 / #7400, opencodex #4870
   ("adjacency repair"), gptme #3846 (merge dropped parallel results).
-- `.design/openai-endpoint-routing.md` decides when a Responses request is
-  downgraded to Chat in the first place.

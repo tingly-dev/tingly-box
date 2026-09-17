@@ -10,7 +10,7 @@ transforms live in `internal/protocol/ops/request_openai_deepseek.go` and
 DeepSeek validates the tool-call shape of the message list strictly. The
 gateway hit this when Codex (Responses API) is routed to DeepSeek and the
 history contains an interrupted or injected tool call; the general fix is
-`RepairResponsesToolCalls`, see `.design/responses-tool-call-repair.md`.
+`RepairResponsesToolCalls`, see `.design/protocol-responses.md`.
 
 Probe: hand-written message lists, `max_tokens: 16`, one `shell` function
 tool declared. `a`/`b` are two parallel tool calls in one assistant message.
@@ -48,7 +48,7 @@ Takeaways:
 
 ## Related
 
-- `.design/responses-tool-call-repair.md`: the repair step and the
+- `.design/protocol-responses.md`: the repair step and the
   protocol difference behind it.
 - Same class of failure in other gateways: LiteLLM #32992, cc-switch
   #7074 / #7400, opencodex #4870, gptme #3846.
