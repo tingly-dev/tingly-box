@@ -20,12 +20,15 @@ import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
+import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
 
 // First-run education: the Direct routing guide auto-opens once per user (new
 // and existing), then never again — the toolbar "?" stays as the manual
 // re-entry point. localStorage persists the dismissal across sessions; the
 // module flag guards against StrictMode double-invoke / quick remounts.
-const ROUTING_GUIDE_SEEN_KEY = 'tb.routingGuideAutoShown';
+// In mock mode this is off by default (see mocks/mockConfig.ts) so it
+// doesn't ambush automated tests/screenshots — pass ?mockOnboarding=on to
+// exercise the first-run experience on purpose.
 let routingGuideAutoOpenedThisSession = false;
 
 /**
