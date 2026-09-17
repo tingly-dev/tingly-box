@@ -113,6 +113,11 @@ const TileAction: React.FC<{
             onClick={onClick}
             aria-label={label}
             data-testid={testId}
+            // Shares the bottom row's `.tile-actions` class so the tile's own
+            // `&:hover .tile-actions` rule reveals it too — without this it
+            // never leaves opacity 0 on a pointer device (it was still
+            // clickable, just invisible).
+            className={corner === 'top' ? 'tile-actions' : undefined}
             sx={corner === 'top'
                 ? { ...overlayActionSx(28), position: 'absolute', top: 8, right: 8, ...hoverRevealSx }
                 : overlayActionSx(28)}

@@ -78,6 +78,12 @@ const MAX_EDIT_REFERENCE_IMAGES = 5;
 // Marks a drag as "one of this row's thumbnails moving", so the row's own
 // file-drop target can tell a reorder apart from images arriving from outside.
 const REFERENCE_DND_TYPE = 'application/x-tingly-reference-index';
+// The results strip is "what's happening right now", not a scrollback buffer —
+// dragging through dozens of past generations to find one belongs in the
+// overview (searchable, grid, newest first), not here. Capping the strip to
+// its most recent items and handing off anything older to a single "open the
+// overview" tile keeps the strip a status readout instead of a second archive.
+const HISTORY_STRIP_VISIBLE = 6;
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
@@ -1139,6 +1145,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const reuseLabel = t('playground.reuse.action', { defaultValue: 'Edit this request' });
     const copyPromptLabel = t('playground.copyPrompt', { defaultValue: 'Copy prompt' });
     const promptCopiedLabel = t('playground.promptCopied', { defaultValue: 'Copied' });
+    const removeRunLabel = t('playground.removeRun', { defaultValue: 'Remove this generation' });
 
     const renderRunActions = (run: GenerationRun, onRemove?: () => void) => (
         <Stack direction="row" spacing={0} sx={{ flexShrink: 0, alignItems: 'center' }}>
@@ -1162,14 +1169,20 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 </IconButton>
             </Tooltip>
             {onRemove && (
-                <IconButton
-                    size="small"
-                    onClick={onRemove}
-                    aria-label={t('playground.removeRun', { defaultValue: 'Remove this generation' })}
-                    sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                >
-                    <Close sx={{ fontSize: 16 }} />
-                </IconButton>
+                // A destructive action, so it gets its own hover colour
+                // (error, not the neutral text.primary the other two use) —
+                // that is also what makes it findable, not just clickable.
+                <Tooltip title={removeRunLabel}>
+                    <IconButton
+                        size="small"
+                        onClick={onRemove}
+                        aria-label={removeRunLabel}
+                        data-testid="imagegen-remove-run"
+                        sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                    >
+                        <Close sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </Tooltip>
             )}
         </Stack>
     );
@@ -1204,6 +1217,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         ...imported.map((item) => ({ kind: 'import' as const, at: item.createdAt, item })),
         ...runs.map((run) => ({ kind: 'run' as const, at: run.createdAt ?? 0, run })),
     ].sort((a, b) => a.at - b.at)), [imported, runs]);
+
+    // The strip only ever shows the tail (oldest-to-newest, so the newest —
+    // what the user just did — is the one nearest the "Generate" button it
+    // came from). Everything older collapses into the "view all" tile at the
+    // far end instead of staying draggable here.
+    const visibleTimeline = useMemo(
+        () => (timeline.length > HISTORY_STRIP_VISIBLE ? timeline.slice(-HISTORY_STRIP_VISIBLE) : timeline),
+        [timeline],
+    );
+    const olderTimelineCount = timeline.length - visibleTimeline.length;
 
     // The run behind the image currently in the lightbox, and every image that
     // run touched: what went in, then what came out. Without this an output on
@@ -1775,7 +1798,41 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
                                     }}
                                 >
-                                    {timeline.map((entry) => (entry.kind === 'import' ? (
+                                    {olderTimelineCount > 0 && (
+                                        <ButtonBase
+                                            onClick={() => setGalleryOpen(true)}
+                                            data-testid="imagegen-history-view-all"
+                                            aria-label={t('playground.gallery.viewOlderHint', {
+                                                defaultValue: 'View all {{count}} images in the overview',
+                                                count: timeline.length,
+                                            })}
+                                            sx={{
+                                                flex: '0 0 84px',
+                                                height: '100%',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 0.5,
+                                                borderRadius: 1.5,
+                                                border: '1px dashed',
+                                                borderColor: 'divider',
+                                                bgcolor: 'background.paper',
+                                                color: 'text.secondary',
+                                                scrollSnapAlign: 'start',
+                                                '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
+                                            }}
+                                        >
+                                            <ViewGallery fontSize="small" />
+                                            <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                                +{olderTimelineCount}
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ fontSize: 10, color: 'text.disabled' }}>
+                                                {t('playground.gallery.action', { defaultValue: 'Overview' })}
+                                            </Typography>
+                                        </ButtonBase>
+                                    )}
+                                    {visibleTimeline.map((entry) => (entry.kind === 'import' ? (
                                         <ImportedImageCard
                                             key={entry.item.id}
                                             item={entry.item}
