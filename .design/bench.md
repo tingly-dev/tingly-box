@@ -144,26 +144,36 @@ Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次
 │  nav   │ ┌─ Compose ────┐ ┌─ Request ──────────────┐ ┌─ Payload ─────────┐ │
 │        │ │ Target        │ │ preset: message [...]  │ │ ▤ Request │ cURL  │ │
 │  ▷ PG  │ │  [rule/provider│ │   or                   │ │ POST /tingly/...  │ │
-│        │ │   unified pick]│ │ custom: [Anthropic ▾]  │ │ headers…  [+ hdr] │ │
-│        │ │ Axes (全展开)  │ │ {                      │ │ {                 │ │
-│        │ │  Shape Scope   │ │   "messages": […]      │ │   "model": …      │ │
-│        │ │  Tool Vision   │ │ }                      │ │   "messages": […] │ │
-│        │ │  Thinking      │ │ [templates ▾]          │ │ }         [Edit]⧉ │ │
-│        │ │  Protocol      │ │ [back to preset]        │ │ (debounced live)  │ │
-│        │ │ Plugins overlay│ ├─ Result ─────────────┤ └───────────────────┘ │
-│        │ │  (registry-    │ │ ✅ 850ms · 43 tok    │                       │
-│        │ │   driven 三态) │ │ Journey (默认展开)   │                       │
-│        │ └───────────────┘ │ Response / Raw JSON  │                       │
-│        │                    └──────────────────────┘                       │
+│        │ │   unified pick]│ │ custom: JSON body       │ │ headers…  [+ hdr] │ │
+│        │ │ Protocol       │ │ {                      │ │ {                 │ │
+│        │ │ Request mode   │ │   "messages": […]      │ │   "model": …      │ │
+│        │ │ Scope          │ │ }                      │ │   "messages": […] │ │
+│        │ │ PARAMETERS     │ │ [Change starting point▾]│ │ }         [Edit]⧉ │ │
+│        │ │  Request Think.│ ├─ Result ─────────────┤ │ (debounced live)  │ │
+│        │ │ PRESETS        │ │ ✅ 850ms · 43 tok    │ └───────────────────┘ │
+│        │ │  Tool Vision   │ │ Journey (默认展开)   │                       │
+│        │ │ Plugins overlay│ │ Response / Raw JSON  │                       │
+│        │ │  (registry-    │ └──────────────────────┘                       │
+│        │ │   driven 三态) │                                                │
+│        │ └───────────────┘                                                │
 └────────┴────────────────────────────────────────────────────────────────────┘
 ```
 
+Compose 从上到下是一条序列，不是一堆并排的旋钮：**Protocol → Request mode → Scope →
+Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专门为 Bench 重新设计的，
+不是"复用 Probe 弹窗的布局再加两条"——Probe 弹窗保留它自己的频率优先结构（Shape/Scope
+常驻、其余收进 Advanced），只把 Protocol 挪到最上面（它是坐标系，不该混进"其余"里，
+即使多数诊断从不碰它）。两边共享同一套 `AxisPrimitives`（`Axis`/`AxisGroup`/
+`ExclusiveToggle`/`ThinkingSlider`），但**布局这次不再假装是同一个东西**——Bench 有自己
+的序列，Probe 弹窗有自己的频率分组，共享的是词汇表，不是版式。
+
 布局要点：
 
-- **左栏不再有 Advanced 折叠**。Probe dialog 把 Tool/Vision/Thinking/Protocol/Message 收进
-  Advanced 是因为 80% 的诊断只碰 Shape/Scope；Bench 的存在理由恰恰是"所有旋钮可见、
-  可叠加"，折叠反而违背页面使命。复用 `ProbeControls` 的 Axis / ExclusiveToggle / 滑杆原语
-  （抽出为共享组件），但布局参数不同（无 Collapse）。
+- **左栏不再有 Advanced 折叠**，这点沿用——Bench 的存在理由是"所有旋钮可见、可叠加"，
+  折叠违背页面使命。但内部不是一个扁平列表：Protocol/Request mode/Scope 常驻在顶部
+  （各自一行，前两者是这次新加的正式控件，不再是隐藏在 Request 面板里的按钮），下面
+  是 Parameters 和 Presets 两个 `AxisGroup`。切到 Custom 模式时，Parameters 组只剩
+  Request（Stream）——Thinking 只塑形预设 builder，不适用；Presets 组整块不渲染。
 - **Payload 常驻右侧**，不是折叠在底部（probe dialog 的 cURL 位置）。它是本页第二主角：
   用户每拨一个旋钮，右侧 payload 实时（debounce 500ms）重建，"这个轴改了 body 的哪个
   字段"当场可见。构造走现有 `POST /api/v2/probe/curl`（construct-only，与执行共用同一
@@ -389,50 +399,52 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
 - 这一层单独成 PR（"accept a raw client request in any of the three protocols"），
   Bench 叠在它之上。详见 probe.md "Raw client requests"。
 
-### 6.3 编辑器 UI：一份"从哪开始"菜单，不是三处分散的入口
+### 6.3 Request mode 是 Compose 里的正式控件，不是 Request 面板里的一扇门
 
-早期实现里，"决定自定义请求的 body 从哪来"这件事散落在三处：进门按钮（文案随
-`seedBody` 是否存在在 "Write the request yourself" / "Edit the builder's request"
-之间切换，靠文案隐晦地告诉用户点了会拿到什么）、进门之后的第二个同名按钮（把
-body 重新同步成预设请求现在的样子）、以及一个独立的 Templates 菜单。三处入口、
-两个不同的出现时机，服务的却是同一件事。
+早期实现里，"预设 vs 自定义"是一个单向门——一个藏在 Request 面板底部的按钮，文案
+随 `seedBody` 是否存在在两种说法间切换，靠文案隐晦地告诉用户点了会拿到什么。这版
+重新设计（不是在旧结构上加东西）：**Request mode 提升为 Compose 顶部一个正式的
+二选一控件**（`ExclusiveToggle<'preset'|'custom'>`，紧跟在 Protocol 后面，§1"四种
+归类"），和 Protocol / Scope 同级，不再是 Request 面板里一个需要被发现的按钮。
 
-`StartingPointMenu`（`pages/bench/RequestEditor.tsx`）把它们收成一份菜单，两个
-触发点共用：
+`Protocol`、`Request mode` 现在是 Bench 的两个"全局"控件——不管当前在哪个模式，
+两者的值都只有一份，显示在 Compose 顶部：
 
-- **门**（预设请求模式）：按钮文案固定为 **Write the request yourself**，不再随
-  `seedBody` 变化。点开是同一份菜单。
-- **Change starting point**（自定义请求模式内）：已经在自定义视图里想换起点时，
-  打开同一份菜单，替换掉原来分开的"Edit the builder's request"按钮和"Templates"
-  按钮。
+- **预设模式**：Protocol 读写 `axes.protocol`（沿用 Probe 的归约逻辑：rule target
+  锁定到 scenario 家族，provider target 按能力收窄）。
+- **自定义模式**：Protocol 读写 `raw.protocol`。切换协议时，body 重置为该协议的
+  空请求（`BLANK_REQUEST[protocol]`）——协议决定的是 body 的语法，换协议换的是
+  语法，不是内容，`Change starting point` 菜单负责选具体起点（下一条）。
+- **模式切换**（`BenchPage.tsx` 的 `onModeChange`）：预设→自定义时，`raw` 用
+  `seedBody ?? BLANK_REQUEST[protocol]` 初始化（有预设请求可抄就抄，没有就空白）；
+  自定义→预设时，把 `raw.protocol` 写回 `axes.protocol` 再清空 `raw`——这样切回去
+  再切过来，Protocol 显示的值不会因为模式切换本身跳变。
 
-菜单内容两处完全一致（§1"四种归类"——它们都是内容预设，粒度不同而已）：
+Request 面板内部只剩一个 **Change starting point** 菜单（`StartingPointMenu`，
+`pages/bench/RequestEditor.tsx`），在自定义模式下把 body 换成别的起点，选项都是
+内容预设（§1"四种归类"——粒度不同而已）：
 
 | 选项 | 是什么 |
 |------|--------|
 | Copy the preset request | 预设请求（探针）现在会发出的样子；`seedBody` 存在才显示 |
-| Blank | 该协议形态下的一份空请求（`{messages:[]}`/`{input:[]}`），不是隐式回退到第一个模板 |
+| Blank | 该协议形态下的一份空请求（`{messages:[]}`/`{input:[]}`） |
 | Multi-turn / Tool round-trip / Image / Mid-conversation system | 按协议各备的"教材式"整体内容预设（ux-principles #8），Anthropic 独有 Mid-conversation system（claude_code_compat 的测试形态） |
 
 选中任何一项都是**整体替换**，不做确认弹窗——这个页面的受众本来就习惯"重来"这个
-动作，和"切换协议 = 重新开始"（下一条）是同一套语义。
+动作。
 
-`seedBody`（"Copy the preset request"用到的值）必须在**两个触发点都准确**：门那
-一侧好办（此刻确实没有自定义请求，Payload 面板显示的就是预设请求）；但已经进了
-自定义视图之后，Payload 面板显示的是**当前的自定义请求**，不能再拿来当"预设请求
-现在的样子"——那样"Copy the preset request"会变成把自己抄一遍的空操作。所以
-`BenchPage.tsx` 维护了第二条独立的、`raw:null` 构造的 curl 请求（`presetPreviewCurl`），
-只在自定义请求处于活跃状态时才发起，预设请求模式下直接复用已有的 curl 结果，不重复
-请求。
+`seedBody`（"Copy the preset request"用到的值）必须在**两个触发点都准确**——模式
+切换那一刻，以及已经在自定义模式里打开菜单时。已经进了自定义模式之后，Payload
+面板显示的是**当前的自定义请求**，不能再拿来当"预设请求现在的样子"——那样会变成
+把自己抄一遍的空操作。所以 `BenchPage.tsx` 维护了第二条独立的、`raw:null` 构造的
+curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态时才发起，预设模式下
+直接复用已有的 curl 结果，不重复请求。
 
-- **切换协议 = 重新开始，不是重新贴标签**：协议下拉的 onChange 把 body 换成新
-  协议的起始模板，而不是只改 `request_protocol` 这个字段——旧实现只改标签、
-  不改 body，会产出一份标签和内容对不上的请求，这是已修的 bug，不是特性。
-- Tool / Vision / Thinking / Protocol 这几个轴在自定义请求模式下**不渲染**，不是
-  变灰禁用——它们不是这个视图的旋钮，压根不适用（`BenchAxes` 的 `rawMode` 直接
-  跳过这几个 `AxisGroup`，不是给它们传 `disabled`）。Shape（Stream）/ Scope /
-  Routing 保持可见：Scope/Routing 是传输配置，Stream 是 body 里的真参数，三者的
-  共同点只是"和内容无关"，预设请求和自定义请求两种模式都用得到（§1"四种归类"）。
+- Parameters / Presets 这两个 `AxisGroup` 在自定义模式下的行为不同：Presets（Tool/
+  Vision）整块**不渲染**——它们不是这个模式的旋钮，压根不适用；Parameters 只隐藏
+  Thinking（只塑形预设 builder），Request（Stream）保留——它是 body 里的真参数，
+  两种模式都用得到。Scope / Routing 也保留，它们是传输配置，和 body 怎么拼出来
+  无关（§1"四种归类"）。
 - 切换 target 时清空自定义请求（它是针对旧 target 协议写的）。
 
 ---
@@ -594,7 +606,7 @@ body 重新同步成预设请求现在的样子）、以及一个独立的 Templ
 | 1 | 按用户问题组织 IA | 三栏 = 我要发什么 / 实际发出什么 / 发生了什么（§1） |
 | 2 | 消解模式选择 | 统一 target picker；进页即工作面，无向导 |
 | 3 | 命名唯一 | Bench / Plugins / Probe 各指一物；轴词汇与 probe 完全共用 |
-| 4 | 正交维度分轴 | 轴 × flags overlay × request 三个正交面板；轴内沿用 probe 拆轴成果；raw 模式下归请求的轴明确禁用而非静默忽略 |
+| 4 | 正交维度分轴 | 轴 × flags overlay × request 三个正交面板；轴内按"四种归类"分组（Parameters/Presets）；自定义模式下归请求的轴整块不渲染而非静默忽略 |
 | 5 | 展示具体值 | inherited flag 显示解析后实际值；payload 展示真实 body；AppliedFlags 回显权威生效值 |
 | 6 | 聪明默认 | 轴默认沿用 probe（Stream/Through-TB/primary protocol）；flags 默认全 inherited；request 默认 fixture |
 | 7 | 诊断走真实链路 | 一切默认 loopback 生产路径；Direct 仅作对照且与 flags 互斥 |
