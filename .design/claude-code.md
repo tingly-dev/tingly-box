@@ -304,6 +304,26 @@ input channel after the first message.
 `shutdownGracefully` (stdin close → grace period → `Kill`) is reused verbatim
 for `Close()`.
 
+**Context lifetime is not the same as `Execute`'s, and getting this wrong is
+a silent, not a loud, failure.** `Execute`'s one-shot process correctly ties
+its whole life to the `ctx` its single caller passed in — that process
+*is* the request. `Open`'s process must not: its typical caller is a
+per-message request handler whose `ctx` is canceled the moment that one
+message finishes, but the session is meant to outlive that message. An
+early version of this code derived `runCtx` from the caller's `ctx`
+(`context.WithCancel(ctx)`), which — via both `Open`'s own
+"kill on `runCtx.Done()`" goroutine and, for the real OS factory,
+`exec.CommandContext`'s automatic kill — silently killed the process right
+after the first turn, before the *next* `Send` ever arrived. Every session
+degraded into a one-shot one on its second message, with no error: §5.3's
+transparent fallback (open a fresh session when the pool finds a dead one)
+papered over it perfectly. `runner_open_test.go`'s fake-process tests never
+caught this because their one `ctx` stayed alive for the whole test
+function — only an end-to-end test with independently-scoped,
+per-message contexts (§6 P2) surfaced it. Fixed by deriving `runCtx` from
+`context.Background()`: a persistent session's lifetime answers to `Close`
+alone, never to the `ctx` of whichever call happened to touch it.
+
 ### 5.3 Isolation moves from "process per call" to "session registry"
 
 A small registry (`agentboot.SessionPool` or similar), keyed by the same
