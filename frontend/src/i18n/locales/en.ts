@@ -926,6 +926,11 @@ export default {
       "direct": "Direct Routing Guide",
       "smart": "Smart Routing Guide",
       "tier": "Tier Guide"
+    },
+    "team": {
+      "title": "Team Guide",
+      "description": "What a Team is for, how it's isolated, and how to configure a Sharing Key — the same guide available on any Team page.",
+      "action": "How Team works"
     }
   },
   "serverInfo": {

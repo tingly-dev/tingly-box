@@ -927,6 +927,11 @@ export default {
       "direct": "直连路由指南",
       "smart": "智能路由指南",
       "tier": "分层（Tier）指南"
+    },
+    "team": {
+      "title": "Team 使用说明",
+      "description": "Team 是做什么的、怎么隔离、怎么配置共享密钥——和 Team 页面里的那份说明是同一份。",
+      "action": "Team 使用说明"
     }
   },
   "serverInfo": {

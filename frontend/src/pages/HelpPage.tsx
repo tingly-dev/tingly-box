@@ -8,6 +8,7 @@ import { ShortcutCard, shouldShowShortcutCard } from '@/components/ShortcutCard.
 import { ProvidersCard } from '@/components/ProvidersCard.tsx';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
+import TeamGuideDialog from '@/pages/scenario/components/TeamGuideDialog';
 
 // The Shortcut card spans full width like every other card; only its content
 // is capped, matching System settings cards. ProvidersCard is left uncapped —
@@ -19,7 +20,7 @@ const SHORTCUT_CONTENT_MAX_WIDTH = 720;
 // internally past this height instead of growing the page.
 const PROVIDERS_CONTENT_MAX_HEIGHT = 480;
 
-type HelpSectionId = 'shortcut' | 'providers' | 'routing';
+type HelpSectionId = 'shortcut' | 'providers' | 'routing' | 'team';
 
 /**
  * HelpPage — the lightbulb entry in the activity bar, replacing the old
@@ -54,6 +55,7 @@ const HelpPage = () => {
     const [entryGuideOpen, setEntryGuideOpen] = useState(false);
     const [entryGuideMode, setEntryGuideMode] = useState<'direct' | 'smart'>('direct');
     const [tierGuideOpen, setTierGuideOpen] = useState(false);
+    const [teamGuideOpen, setTeamGuideOpen] = useState(false);
     const openEntryGuide = (mode: 'direct' | 'smart') => {
         setEntryGuideMode(mode);
         setEntryGuideOpen(true);
@@ -103,10 +105,23 @@ const HelpPage = () => {
                         </Button>
                     </Stack>
                 </CollapsibleCard>
+
+                <CollapsibleCard
+                    title={t('help.team.title')}
+                    description={t('help.team.description')}
+                    expanded={expanded.has('team')}
+                    onToggle={() => toggle('team')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Button variant="outlined" size="small" onClick={() => setTeamGuideOpen(true)}>
+                        {t('help.team.action')}
+                    </Button>
+                </CollapsibleCard>
             </CardGrid>
 
             <EntryGuideDialog open={entryGuideOpen} onClose={() => setEntryGuideOpen(false)} mode={entryGuideMode} />
             <TierGuideDialog open={tierGuideOpen} onClose={() => setTierGuideOpen(false)} />
+            <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
         </PageLayout>
     );
 };
