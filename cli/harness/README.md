@@ -118,7 +118,7 @@ functions.
 - Defined by `protocoltest.DefaultMatrix()`; filter with
   `--scenario`, `--source`, `--target`, `--streaming`, `--non-streaming`.
 - Known-broken cells are centralized in
-  `protocoltest.skipSourceScenarios` (e.g. `openai_responses|tool_use`).
+  `protocoltest.skipSourceScenarios` (currently empty).
 - `--json` for CI; `-v` / `-vv` to raise log verbosity; `--record-dir` to dump
   request/response pairs; `--batch N` for stability runs.
 

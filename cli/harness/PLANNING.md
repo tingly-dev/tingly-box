@@ -16,11 +16,10 @@ derives its skips via `KnownDefectReason`. The goal is an empty registry.
 
 | entry                                 | root cause                                              | status |
 |---------------------------------------|----------------------------------------------------------|--------|
-| `openai_responses\|tool_use` (+ streaming) | Responses-API source path's tool_call conversion is incomplete | TODO   |
+| `openai_responses\|tool_use` (+ streaming) | Not a gateway defect after all: the harness's OpenAI stream assembly fell back from the Responses assembler to the Chat assembler whenever there was no text content, which discarded the tool calls of a tool-call-only Responses stream (`assembleFromEvents`, testenv.go). | closed |
 
-When the Responses→{Anthropic,Chat} tool_call conversion is completed, delete
-the registry entries — one place, and both the matrix cells and every
-`codex/tool_use` replay run come back automatically.
+The registry is empty. Both matrix cells and every `codex/tool_use` replay run
+are back in the cross-product.
 
 **Done when:** `replay batch --upstream {virtual,vmodel,real}` is fully green
 with an empty registry.
