@@ -20,7 +20,7 @@
 package ids
 
 import (
-	"strings"
+	"encoding/hex"
 
 	"github.com/google/uuid"
 )
@@ -37,7 +37,8 @@ const (
 var generate = randomHex
 
 func randomHex() string {
-	return strings.ReplaceAll(uuid.NewString(), "-", "")
+	id := uuid.New()
+	return hex.EncodeToString(id[:])
 }
 
 // New returns "<prefix>_<32 hex>".

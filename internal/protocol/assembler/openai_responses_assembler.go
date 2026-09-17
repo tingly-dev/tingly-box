@@ -279,15 +279,13 @@ func (a *ResponsesAssembler) CurrentRefusal() string {
 	return a.currentRefusal.String()
 }
 
-// ResponseID returns the response ID.
+// ResponseID returns the response ID, generating and caching one via
+// GetOrCreateResponseID if it hasn't been set yet.
 func (a *ResponsesAssembler) ResponseID() string {
 	if a == nil {
 		return ""
 	}
-	if a.responseID == "" {
-		a.responseID = ids.Response()
-	}
-	return a.responseID
+	return a.GetOrCreateResponseID()
 }
 
 // IsCompleted returns true if the response is completed.

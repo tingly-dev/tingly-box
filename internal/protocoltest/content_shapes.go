@@ -1,7 +1,6 @@
 package protocoltest
 
 import (
-	"encoding/json"
 	"slices"
 	"strings"
 
@@ -409,22 +408,13 @@ func assertResponsesToolCallIDs(t flagTB, env *TestEnv, target protocol.APIType,
 }
 
 // responsesFunctionCallItems returns the function_call output items of a
-// Responses round trip: from the body when non-streaming, from the terminal
-// response.completed/incomplete event when streaming.
+// Responses round trip, reading the terminal body via check.FinalResponsesBody
+// (shared with vmodel/benchmark/check.AssertResponsesItemIDsCanonical, so the
+// non-streaming/streaming terminal-event scan is implemented once).
 func responsesFunctionCallItems(res *RoundTripResult) []map[string]any {
-	var resp map[string]any
-	if !res.IsStreaming {
-		_ = json.Unmarshal(res.RawBody, &resp)
-	} else {
-		for _, line := range res.StreamEvents {
-			var ev map[string]any
-			if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev) != nil {
-				continue
-			}
-			if ev["type"] == "response.completed" || ev["type"] == "response.incomplete" {
-				resp, _ = ev["response"].(map[string]any)
-			}
-		}
+	resp, err := check.FinalResponsesBody(res)
+	if err != nil {
+		return nil
 	}
 	var out []map[string]any
 	if items, ok := resp["output"].([]any); ok {

@@ -342,14 +342,57 @@ func AssertUsagePropagated() Assertion {
 	}
 }
 
+// responsesIDShape is the canonical form for one Responses item type: its
+// id prefix and a compiled "<prefix>_<32 hex>" matcher built from it, so the
+// prefix used in an error message is the one value both were built from
+// rather than something re-derived from the regexp source.
+type responsesIDShape struct {
+	prefix string
+	re     *regexp.Regexp
+}
+
+func newResponsesIDShape(prefix string) responsesIDShape {
+	return responsesIDShape{prefix: prefix, re: regexp.MustCompile(`^` + prefix + `_[0-9a-f]{32}$`)}
+}
+
 // responsesIDShapes are the canonical id forms the gateway mints for a
 // Responses response it synthesizes from a non-Responses upstream
 // (.design/protocol-responses.md §2): "<prefix>_<32 lowercase hex>".
-var responsesIDShapes = map[string]*regexp.Regexp{
-	"response":      regexp.MustCompile(`^resp_[0-9a-f]{32}$`),
-	"message":       regexp.MustCompile(`^msg_[0-9a-f]{32}$`),
-	"function_call": regexp.MustCompile(`^fc_[0-9a-f]{32}$`),
-	"reasoning":     regexp.MustCompile(`^rs_[0-9a-f]{32}$`),
+var responsesIDShapes = map[string]responsesIDShape{
+	"response":      newResponsesIDShape("resp"),
+	"message":       newResponsesIDShape("msg"),
+	"function_call": newResponsesIDShape("fc"),
+	"reasoning":     newResponsesIDShape("rs"),
+}
+
+// FinalResponsesBody returns the terminal Responses API response body of a
+// round trip: RawBody parsed directly when the trip was not streaming, or
+// the "response" payload of the terminal response.completed /
+// response.incomplete SSE event when it was. Shared by this package's own
+// assertions and by harness test cases that need the same body (e.g.
+// internal/protocoltest/content_shapes.go), so the terminal-event scan is
+// implemented once.
+func FinalResponsesBody(r *RoundTripResult) (map[string]any, error) {
+	if !r.IsStreaming {
+		var resp map[string]any
+		if err := json.Unmarshal(r.RawBody, &resp); err != nil {
+			return nil, fmt.Errorf("responses body: %w", err)
+		}
+		return resp, nil
+	}
+	for _, line := range r.StreamEvents {
+		payload := strings.TrimPrefix(line, "data: ")
+		var ev map[string]any
+		if json.Unmarshal([]byte(payload), &ev) != nil {
+			continue
+		}
+		if ev["type"] == "response.completed" || ev["type"] == "response.incomplete" {
+			if resp, ok := ev["response"].(map[string]any); ok {
+				return resp, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("stream has no response.completed/incomplete event")
 }
 
 // AssertResponsesItemIDsCanonical returns an Assertion that a Responses
@@ -369,17 +412,19 @@ func AssertResponsesItemIDsCanonical() Assertion {
 			if r.SourceProtocol != protocol.TypeOpenAIResponses || r.TargetProtocol == protocol.TypeOpenAIResponses {
 				return nil
 			}
+			final, err := FinalResponsesBody(r)
+			if err != nil {
+				return err
+			}
+			if err := checkResponsesIDs(final); err != nil {
+				return err
+			}
 			if !r.IsStreaming {
-				var resp map[string]any
-				if err := json.Unmarshal(r.RawBody, &resp); err != nil {
-					return fmt.Errorf("responses body: %w", err)
-				}
-				return checkResponsesIDs(resp)
+				return nil
 			}
 
 			added := map[string]string{}
 			done := map[string]string{}
-			var final map[string]any
 			for _, line := range r.StreamEvents {
 				payload := strings.TrimPrefix(line, "data: ")
 				var ev map[string]any
@@ -393,15 +438,7 @@ func AssertResponsesItemIDsCanonical() Assertion {
 				case "response.output_item.done":
 					item, _ := ev["item"].(map[string]any)
 					done[str(item["id"])] = str(item["type"])
-				case "response.completed", "response.incomplete":
-					final, _ = ev["response"].(map[string]any)
 				}
-			}
-			if final == nil {
-				return fmt.Errorf("stream has no response.completed/incomplete event")
-			}
-			if err := checkResponsesIDs(final); err != nil {
-				return err
 			}
 			for id, typ := range added {
 				if _, ok := done[id]; !ok {
@@ -424,14 +461,14 @@ func AssertResponsesItemIDsCanonical() Assertion {
 }
 
 func checkResponsesIDs(resp map[string]any) error {
-	if id := str(resp["id"]); !responsesIDShapes["response"].MatchString(id) {
-		return fmt.Errorf("response id %q is not resp_<32 hex>", id)
+	if id := str(resp["id"]); !responsesIDShapes["response"].re.MatchString(id) {
+		return fmt.Errorf("response id %q is not %s_<32 hex>", id, responsesIDShapes["response"].prefix)
 	}
 	seen := map[string]bool{}
 	for _, item := range outputItems(resp) {
 		typ, id := str(item["type"]), str(item["id"])
-		if re, ok := responsesIDShapes[typ]; ok && !re.MatchString(id) {
-			return fmt.Errorf("%s item id %q is not %s_<32 hex>", typ, id, strings.TrimSuffix(re.String()[1:], `_[0-9a-f]{32}$`))
+		if shape, ok := responsesIDShapes[typ]; ok && !shape.re.MatchString(id) {
+			return fmt.Errorf("%s item id %q is not %s_<32 hex>", typ, id, shape.prefix)
 		}
 		if seen[id] {
 			return fmt.Errorf("duplicate output item id %q", id)
