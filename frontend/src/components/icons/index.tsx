@@ -89,6 +89,7 @@ import {
     IconSun,
     IconMoon,
     IconBrandGithub,
+    IconFolder,
     IconFolderOpen,
     IconPointFilled,
     IconBolt,
@@ -102,6 +103,9 @@ import {
     IconGauge,
     IconActivity,
     IconTool,
+    IconPlayerStop,
+    IconArchive,
+    IconGitCompare,
     IconStopwatch,
     IconCoin,
     IconRouter,
@@ -239,6 +243,7 @@ export const Logout = tablerMui(IconLogout);
 
 // --- Content / objects -------------------------------------------------------
 export const Description = tablerMui(IconFileDescription);
+export const Folder = tablerMui(IconFolder);
 export const FolderOpen = tablerMui(IconFolderOpen);
 export const ListAlt = tablerMui(IconListDetails);
 export const Code = tablerMui(IconCode);
@@ -288,6 +293,9 @@ export const FoldUp = tablerMui(IconFoldUp);
 export const Speed = tablerMui(IconGauge);
 export const Stream = tablerMui(IconActivity);
 export const Build = tablerMui(IconTool);
+export const PlayerStop = tablerMui(IconPlayerStop);
+export const Archive = tablerMui(IconArchive);
+export const GitCompare = tablerMui(IconGitCompare);
 export const Schedule = tablerMui(IconClock);
 export const Timer = tablerMui(IconStopwatch);
 export const Token = tablerMui(IconCoin);

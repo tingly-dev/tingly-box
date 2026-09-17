@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -47,12 +48,32 @@ type Session struct {
 // demand (Manager.GetMessages), so a conversation's text is never carried
 // through every status update, listing, or retention sweep. See Transcript.
 
-// Message represents a chat message within a session
+// Message represents one entry in a session's transcript.
+//
+// Role/Content/Summary are the original chat-message shape (still all a
+// text-only consumer like an IM bot needs). Kind/RequestID/Payload are an
+// additive, optional extension for a richer consumer (e.g. a web UI) that
+// wants to render a turn's actual structure — a tool call and its result,
+// a permission question and its answer — instead of only the aggregated
+// chat text. Kind is empty for a plain chat message, so every existing
+// on-disk transcript line still decodes unchanged; Kind non-empty is this
+// extension and Content carries that entry's text.
 type Message struct {
 	Role      string    // "user" or "assistant"
 	Content   string    // Full content
 	Summary   string    // Optional summary for assistant responses
 	Timestamp time.Time // When the message was created
+
+	// Kind classifies a structured entry (e.g. "thinking", "tool_use",
+	// "tool_result", "approval_request", "approval_response", "status",
+	// "error"); empty for a plain chat message.
+	Kind string `json:"kind,omitempty"`
+	// RequestID correlates an approval_request/ask_request with its
+	// approval_response/ask_response, and a tool_use with its tool_result.
+	RequestID string `json:"request_id,omitempty"`
+	// Payload is kind-specific structured data (e.g. a tool's input), kept
+	// opaque here so this package does not depend on any agent's types.
+	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
 // Manager handles session lifecycle
@@ -181,6 +202,63 @@ func (m *Manager) GetStatus(id string) (Status, bool) {
 		return "", false
 	}
 	return sess.Status, true
+}
+
+// Snapshot returns a point-in-time copy of a session: safe to read after the
+// call returns even while another goroutine concurrently Updates the live
+// session (see GetStatus's doc comment — Get/GetOrLoad hand back that same
+// live, mutably-shared *Session, which a caller holding onto it races). Use
+// Snapshot instead whenever the result crosses a goroutine or response
+// boundary rather than being read immediately.
+func (m *Manager) Snapshot(id string) (Session, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	sess, exists := m.sessions[id]
+	if !exists {
+		return Session{}, false
+	}
+	return *sess, true
+}
+
+// SnapshotOrLoad is GetOrLoad but returns a safe copy; see Snapshot.
+func (m *Manager) SnapshotOrLoad(id string) (Session, bool) {
+	sess, ok := m.GetOrLoad(id)
+	if !ok {
+		return Session{}, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return *sess, true
+}
+
+// SnapshotsByChat is ListByChat but returns copies made under the lock; see
+// Snapshot.
+func (m *Manager) SnapshotsByChat(chatID string) []Session {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []Session
+	seen := make(map[string]bool)
+
+	for _, sess := range m.sessions {
+		if sess.ChatID == chatID && !seen[sess.ID] {
+			result = append(result, *sess)
+			seen[sess.ID] = true
+		}
+	}
+
+	if m.store != nil {
+		if stored, err := m.store.ListByChat(chatID); err == nil {
+			for _, sess := range stored {
+				if !seen[sess.ID] {
+					result = append(result, *sess)
+					seen[sess.ID] = true
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // GetOrLoad retrieves a session by ID, falling back to the store if needed

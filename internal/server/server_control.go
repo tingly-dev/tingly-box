@@ -9,11 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	managedagentsvc "github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	managedagentmodule "github.com/tingly-dev/tingly-box/internal/server/module/managedagent"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
@@ -21,8 +23,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/control"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
@@ -235,6 +239,26 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// whether quota tracking happens to be configured on this build.
 	quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+
+	// Managed Agent — a web front door onto the same remote/session +
+	// agentboot machinery @cc already drives, not a separate domain model
+	// (.design/managed-agent.md). It gets its own control.Core, an
+	// independent in-memory session.Manager cache over the SAME session
+	// store @cc uses (sm.RemoteSessions()) — the sanctioned pattern every
+	// remote-host entry point follows (see remote/control.Core).
+	if sm != nil {
+		if maCore, err := control.NewCore(sm.RemoteSessions()); err != nil {
+			logrus.WithError(err).Warn("Failed to create managed-agent control core, managed agent APIs will not be available")
+		} else {
+			maSvc := managedagentsvc.NewService(managedagentsvc.Config{
+				Sessions: maCore.Session,
+				Agent:    maCore.Agent,
+				Routing:  tbclient.NewTBClient(s.config),
+				Git:      &managedagentsvc.Git{},
+			})
+			managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc))
+		}
+	}
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)

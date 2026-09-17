@@ -3689,6 +3689,453 @@
         }
       }
     },
+    "/api/v1/managed-agent/folders/recent": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "List folders web sessions have recently worked in",
+        "description": "List folders web sessions have recently worked in",
+        "operationId": "apiV1Managed-agentFoldersRecentGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum folders to return (0 = no limit)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentFoldersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/fs/dirs": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "List the subdirectories of a path, for picking a folder to work in",
+        "description": "List the subdirectories of a path, for picking a folder to work in",
+        "operationId": "apiV1Managed-agentFsDirsGet",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute directory to list; empty defaults to the home directory",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDirsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/permission-modes": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "List the selectable Claude Code permission modes",
+        "description": "List the selectable Claude Code permission modes",
+        "operationId": "apiV1Managed-agentPermission-modesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "List this web front door's own sessions, most recently active first",
+        "description": "List this web front door's own sessions, most recently active first",
+        "operationId": "apiV1Managed-agentSessionsGet",
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Only include sessions that are pending, running, completed, or failed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Open a session in a folder and start its first turn",
+        "description": "Open a session in a folder and start its first turn",
+        "operationId": "apiV1Managed-agentSessionsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Get a session",
+        "description": "Get a session",
+        "operationId": "apiV1Managed-agentSessionsSession_idGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/archive": {
+      "post": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "End a session for good; the folder and transcript are untouched",
+        "description": "End a session for good; the folder and transcript are untouched",
+        "operationId": "apiV1Managed-agentSessionsSession_idArchivePost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/diff": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Summarise what the agent changed in the folder",
+        "description": "Summarise what the agent changed in the folder",
+        "operationId": "apiV1Managed-agentSessionsSession_idDiffGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/interrupt": {
+      "post": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Stop the current turn; the session stays resumable",
+        "description": "Stop the current turn; the session stays resumable",
+        "operationId": "apiV1Managed-agentSessionsSession_idInterruptPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/messages": {
+      "get": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Get a session's transcript",
+        "description": "Get a session's transcript",
+        "operationId": "apiV1Managed-agentSessionsSession_idMessagesGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Send a message and start the next turn",
+        "description": "Send a message and start the next turn",
+        "operationId": "apiV1Managed-agentSessionsSession_idMessagesPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/permission-mode": {
+      "put": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Change a session's permission mode for its next turn",
+        "description": "Change a session's permission mode for its next turn",
+        "operationId": "apiV1Managed-agentSessionsSession_idPermission-modePut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-agent/sessions/{session_id}/respond": {
+      "post": {
+        "tags": [
+          "managed-agent"
+        ],
+        "summary": "Answer a pending approval or ask request",
+        "description": "Answer a pending approval or ask request",
+        "operationId": "apiV1Managed-agentSessionsSession_idRespondPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mcp/client": {
       "post": {
         "tags": [
@@ -9448,6 +9895,28 @@
           "smart_enabled"
         ]
       },
+      "CreateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Field prompt"
+          }
+        },
+        "required": [
+          "path",
+          "prompt",
+          "permission_mode"
+        ]
+      },
       "CurlData": {
         "type": "object",
         "properties": {
@@ -9680,6 +10149,68 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "Diff": {
+        "type": "object",
+        "properties": {
+          "changed_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field changed_files"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "stat": {
+            "type": "string",
+            "description": "Field stat"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          },
+          "untracked": {
+            "type": "array",
+            "description": "Field untracked",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "changed_files",
+          "stat",
+          "patch",
+          "truncated"
+        ]
+      },
+      "DirEntry": {
+        "type": "object",
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "Field hidden"
+          },
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "is_repo",
+          "hidden"
         ]
       },
       "DirectChat": {
@@ -11444,6 +11975,26 @@
           "success"
         ]
       },
+      "ListDirsResponse": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/DirEntry"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "entries"
+        ]
+      },
       "ListQuotaResponse": {
         "type": "object",
         "properties": {
@@ -11880,6 +12431,54 @@
           "num_gc",
           "num_goroutine",
           "gc_forced"
+        ]
+      },
+      "MessageInfo": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "payload": {
+            "description": "Field payload"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field timestamp"
+          }
+        },
+        "required": [
+          "content",
+          "timestamp"
+        ]
+      },
+      "MessageListResponse": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Field messages",
+            "items": {
+              "$ref": "#/components/schemas/MessageInfo"
+            }
+          }
+        },
+        "required": [
+          "messages"
         ]
       },
       "MetaData": {
@@ -12852,6 +13451,21 @@
           "updated_at"
         ]
       },
+      "PermissionModesResponse": {
+        "type": "object",
+        "properties": {
+          "modes": {
+            "type": "array",
+            "description": "Field modes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "modes"
+        ]
+      },
       "PermissionUpdateRequest": {
         "type": "object",
         "properties": {
@@ -13778,6 +14392,49 @@
           "success"
         ]
       },
+      "RecentFolder": {
+        "type": "object",
+        "properties": {
+          "is_repo": {
+            "type": "boolean",
+            "description": "Field is_repo"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_used_at"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "is_repo",
+          "last_used_at"
+        ]
+      },
+      "RecentFoldersResponse": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "description": "Field folders",
+            "items": {
+              "$ref": "#/components/schemas/RecentFolder"
+            }
+          }
+        },
+        "required": [
+          "folders"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -13838,6 +14495,28 @@
             }
           }
         }
+      },
+      "RespondRequest": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Field approved"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          }
+        },
+        "required": [
+          "request_id",
+          "approved",
+          "answer"
+        ]
       },
       "RestoreConfigResponse": {
         "type": "object",
@@ -14660,6 +15339,18 @@
           }
         }
       },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "ServerActionResponse": {
         "type": "object",
         "properties": {
@@ -14721,6 +15412,86 @@
           "weight",
           "active",
           "time_window"
+        ]
+      },
+      "SessionInfo": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "last_activity": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_activity"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "project": {
+            "type": "string",
+            "description": "Field project"
+          },
+          "request": {
+            "type": "string",
+            "description": "Field request"
+          },
+          "response": {
+            "type": "string",
+            "description": "Field response"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "id",
+          "project",
+          "status",
+          "request",
+          "response",
+          "permission_mode",
+          "created_at",
+          "last_activity"
+        ]
+      },
+      "SessionListResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "description": "Field sessions",
+            "items": {
+              "$ref": "#/components/schemas/SessionInfo"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
+      "SetPermissionModeRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Field mode"
+          }
+        },
+        "required": [
+          "mode"
         ]
       },
       "Settings": {
@@ -17623,6 +18394,10 @@
     {
       "name": "logs",
       "description": "Operations related to logs"
+    },
+    {
+      "name": "managed-agent",
+      "description": "Operations related to managed-agent"
     },
     {
       "name": "mcp",

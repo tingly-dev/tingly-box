@@ -6,11 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	managedagentsvc "github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	managedagentmodule "github.com/tingly-dev/tingly-box/internal/server/module/managedagent"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
@@ -20,6 +22,8 @@ import (
 	team "github.com/tingly-dev/tingly-box/internal/server/module/team"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
+	"github.com/tingly-dev/tingly-box/remote/control"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -132,4 +136,18 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// request time (there is no request time here).
 	quotaHandler := providerQuotaModule.NewHandler(nil, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+
+	// Managed Agent routes — see server_control.go's UseUIEndpoints for the
+	// runtime wiring this mirrors.
+	if sm != nil {
+		if maCore, err := control.NewCore(sm.RemoteSessions()); err == nil {
+			maSvc := managedagentsvc.NewService(managedagentsvc.Config{
+				Sessions: maCore.Session,
+				Agent:    maCore.Agent,
+				Routing:  tbclient.NewTBClient(cfg),
+				Git:      &managedagentsvc.Git{},
+			})
+			managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc))
+		}
+	}
 }
