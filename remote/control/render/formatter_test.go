@@ -1,4 +1,4 @@
-package claude
+package render
 
 import (
 	"encoding/json"
@@ -7,14 +7,16 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	// Test "init" subtype - should be rendered
-	initMsg := &SystemMessage{
-		Type:      SDKSystemMessage,
+	initMsg := &claude.SystemMessage{
+		Type:      claude.SDKSystemMessage,
 		SubType:   "init",
 		SessionID: "test-session-123",
 		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
@@ -34,8 +36,8 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	}
 
 	// Test non-"init" subtype - should be hidden
-	otherMsg := &SystemMessage{
-		Type:      SDKSystemMessage,
+	otherMsg := &claude.SystemMessage{
+		Type:      claude.SDKSystemMessage,
 		SubType:   "other",
 		SessionID: "test-session-456",
 		Timestamp: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
@@ -50,26 +52,26 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 func TestTextFormatter_TaskSubtypePolicy(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	started := formatter.Format(&SystemMessage{
-		Type:        SDKSystemMessage,
-		SubType:     SystemSubtypeTaskStarted,
+	started := formatter.Format(&claude.SystemMessage{
+		Type:        claude.SDKSystemMessage,
+		SubType:     claude.SystemSubtypeTaskStarted,
 		Description: "Inspect constants",
 	})
 	if !contains(started, "Inspect constants") {
 		t.Fatalf("task_started output = %q", started)
 	}
 
-	notification := formatter.Format(&SystemMessage{
-		Type:        SDKSystemMessage,
-		SubType:     SystemSubtypeTaskNotification,
+	notification := formatter.Format(&claude.SystemMessage{
+		Type:        claude.SDKSystemMessage,
+		SubType:     claude.SystemSubtypeTaskNotification,
 		Description: "Inspection complete",
 	})
 	if !contains(notification, "Inspection complete") {
 		t.Fatalf("task_notification output = %q", notification)
 	}
 
-	for _, subtype := range []string{SystemSubtypeTaskProgress, SystemSubtypeTaskUpdated} {
-		if output := formatter.Format(&SystemMessage{Type: SDKSystemMessage, SubType: subtype}); output != "" {
+	for _, subtype := range []string{claude.SystemSubtypeTaskProgress, claude.SystemSubtypeTaskUpdated} {
+		if output := formatter.Format(&claude.SystemMessage{Type: claude.SDKSystemMessage, SubType: subtype}); output != "" {
 			t.Errorf("%s should be retained as raw data but hidden from text output, got %q", subtype, output)
 		}
 	}
@@ -79,9 +81,9 @@ func TestTextFormatter_FormatAPIRetry(t *testing.T) {
 	formatter := NewTextFormatter()
 
 	// Typed fields populated (e.g. decoded into the struct directly).
-	typed := &SystemMessage{
-		Type:    SDKSystemMessage,
-		SubType: SystemSubtypeAPIRetry,
+	typed := &claude.SystemMessage{
+		Type:    claude.SDKSystemMessage,
+		SubType: claude.SystemSubtypeAPIRetry,
 		Attempt: 2,
 		DelayMS: 1500,
 		Error:   "Overloaded",
@@ -98,9 +100,9 @@ func TestTextFormatter_FormatAPIRetry(t *testing.T) {
 
 	// Fields only present in Raw under a camelCase spelling the struct does not
 	// declare: the accessors must still find them.
-	rawOnly := &SystemMessage{
-		Type:    SDKSystemMessage,
-		SubType: SystemSubtypeAPIRetry,
+	rawOnly := &claude.SystemMessage{
+		Type:    claude.SDKSystemMessage,
+		SubType: claude.SystemSubtypeAPIRetry,
 		Raw: map[string]interface{}{
 			"type":    "system",
 			"subtype": "api_retry",
@@ -117,7 +119,7 @@ func TestTextFormatter_FormatAPIRetry(t *testing.T) {
 	}
 
 	// rate_limit subtype renders with its own lead text.
-	rl := &SystemMessage{Type: SDKSystemMessage, SubType: SystemSubtypeRateLimit}
+	rl := &claude.SystemMessage{Type: claude.SDKSystemMessage, SubType: claude.SystemSubtypeRateLimit}
 	if out := formatter.Format(rl); !contains(out, "Rate limited") {
 		t.Errorf("Expected rate-limit lead in output: %s", out)
 	}
@@ -127,8 +129,8 @@ func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetShowToolDetails(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Hello, world!"},
@@ -148,18 +150,18 @@ func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 
 func TestTextFormatter_FormatServerToolBlocks(t *testing.T) {
 	formatter := NewTextFormatter()
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{
-					Type:  ContentBlockTypeServerToolUse,
+					Type:  claude.ContentBlockTypeServerToolUse,
 					ID:    "srv-1",
 					Name:  "web_search",
 					Input: json.RawMessage(`{"query":"Claude Code"}`),
 				},
 				{
-					Type:      ContentBlockTypeWebSearchToolResult,
+					Type:      claude.ContentBlockTypeWebSearchToolResult,
 					ToolUseID: "srv-1",
 				},
 			},
@@ -182,11 +184,11 @@ func TestUnmarshalCurrentContentBlockVariants(t *testing.T) {
 		`{"type":"web_search_tool_result","tool_use_id":"srv-1","content":[]}`,
 		`{"type":"container_upload","file_id":"file-1"}`,
 	} {
-		block, err := UnmarshalContentBlock([]byte(raw))
+		block, err := claude.UnmarshalContentBlock([]byte(raw))
 		if err != nil {
 			t.Fatalf("UnmarshalContentBlock(%s): %v", raw, err)
 		}
-		if _, unknown := block.(*UnknownBlock); unknown {
+		if _, unknown := block.(*claude.UnknownBlock); unknown {
 			t.Errorf("current content block decoded as unknown: %s", raw)
 		}
 	}
@@ -195,8 +197,8 @@ func TestUnmarshalCurrentContentBlockVariants(t *testing.T) {
 func TestTextFormatter_FormatUserMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &UserMessage{
-		Type:    SDKUserMessage,
+	msg := &claude.UserMessage{
+		Type:    claude.SDKUserMessage,
 		Message: "What is the weather?",
 	}
 
@@ -216,8 +218,8 @@ func TestTextFormatter_FormatUserMessage(t *testing.T) {
 func TestTextFormatter_FormatToolUseMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &ToolUseMessage{
-		Type:      SDKToolUseMessage,
+	msg := &claude.ToolUseMessage{
+		Type:      claude.SDKToolUseMessage,
 		ToolUseID: "toolu-123",
 		Name:      "Bash",
 		Input: map[string]interface{}{
@@ -241,8 +243,8 @@ func TestTextFormatter_FormatToolUseMessage(t *testing.T) {
 func TestTextFormatter_FormatToolResultMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &ToolResultMessage{
-		Type:      SDKToolResultMessage,
+	msg := &claude.ToolResultMessage{
+		Type:      claude.SDKToolResultMessage,
 		ToolUseID: "toolu-123",
 		Output:    "file1.txt\nfile2.txt",
 		IsError:   false,
@@ -264,13 +266,13 @@ func TestTextFormatter_FormatToolResultMessage(t *testing.T) {
 func TestTextFormatter_FormatResultMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &ResultMessage{
-		Type:         SDKResultMessage,
+	msg := &claude.ResultMessage{
+		Type:         claude.SDKResultMessage,
 		SubType:      "success",
 		DurationMS:   1234,
 		TotalCostUSD: 0.0123,
 		Result:       "Task completed successfully",
-		Usage: UsageInfo{
+		Usage: claude.UsageInfo{
 			InputTokens:  100,
 			OutputTokens: 50,
 		},
@@ -295,11 +297,11 @@ func TestTextFormatter_FormatResultMessage(t *testing.T) {
 func TestTextFormatter_FormatStreamEventMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &StreamEventMessage{
-		Type: SDKStreamEventMessage,
-		Event: StreamEvent{
+	msg := &claude.StreamEventMessage{
+		Type: claude.SDKStreamEventMessage,
+		Event: claude.StreamEvent{
 			Type: "content_block_delta",
-			Delta: &TextDelta{
+			Delta: &claude.TextDelta{
 				Type: "text_delta",
 				Text: "Hello",
 			},
@@ -323,8 +325,8 @@ func TestTextFormatter_VerboseMode(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetVerbose(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me think..."},
@@ -342,8 +344,8 @@ func TestTextFormatter_ShowToolDetails(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetShowToolDetails(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "toolu-123", Name: "Bash"},
@@ -368,8 +370,8 @@ func TestTextFormatter_ShowToolDetailsWithInput(t *testing.T) {
 
 	// Create tool_use with input
 	inputJSON := `{"command":"ls -la","description":"List files"}`
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{
@@ -396,8 +398,8 @@ func TestTextFormatter_ShowToolDetailsWithInput(t *testing.T) {
 func TestTextFormatter_EmptyFieldsNoOutput(t *testing.T) {
 	formatter := NewTextFormatter()
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: ""}, // Empty text
@@ -417,8 +419,8 @@ func TestTextFormatter_MultipleContentBlocks(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 	formatter.SetVerbose(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Let me check."},
@@ -444,8 +446,8 @@ func TestTextFormatter_ToolUseWithEmptyInput(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetShowToolDetails(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "call_123", Name: "Bash"},
@@ -463,8 +465,8 @@ func TestTextFormatter_ThinkingBlock(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetVerbose(true)
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me analyze this..."},
@@ -485,8 +487,8 @@ func TestTextFormatter_ThinkingBlockNonVerbose(t *testing.T) {
 	formatter := NewTextFormatter()
 	// Verbose is false by default
 
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "thinking", Thinking: "Let me analyze this..."},
@@ -549,7 +551,7 @@ func TestTextFormatter_RealWorldAssistantMessage(t *testing.T) {
 		"uuid": "a5bf87c2-a004-4b88-b8b2-119768bd81a1"
 	}`
 
-	var msg AssistantMessage
+	var msg claude.AssistantMessage
 	err := json.Unmarshal([]byte(rawJSON), &msg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
@@ -562,7 +564,7 @@ func TestTextFormatter_RealWorldAssistantMessage(t *testing.T) {
 		t.Errorf("Expected formatted Bash command in output: %s", output)
 	}
 	if contains(output, "msg_202602212021386647913f511e4f49") {
-		t.Errorf("Message ID should not leak into user-facing output: %s", output)
+		t.Errorf("claude.Message ID should not leak into user-facing output: %s", output)
 	}
 }
 
@@ -578,7 +580,7 @@ func TestTextFormatter_RealWorldEmptyUserMessage(t *testing.T) {
 		"timestamp": "2026-02-21T20:21:40+08:00"
 	}`
 
-	var msg UserMessage
+	var msg claude.UserMessage
 	err := json.Unmarshal([]byte(rawJSON), &msg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
@@ -605,7 +607,7 @@ func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
 		t.Fatalf("Failed to read test data file: %v", err)
 	}
 
-	var msg AssistantMessage
+	var msg claude.AssistantMessage
 	err = json.Unmarshal(data, &msg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
@@ -618,6 +620,6 @@ func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
 		t.Errorf("Expected text content in output: %s", output)
 	}
 	if contains(output, "msg_c09a5322-952b-4242-b743-94b1245f15ad") {
-		t.Errorf("Message ID should not leak into user-facing output: %s", output)
+		t.Errorf("claude.Message ID should not leak into user-facing output: %s", output)
 	}
 }
