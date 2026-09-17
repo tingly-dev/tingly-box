@@ -1,4 +1,4 @@
-package claude
+package render
 
 import (
 	"strings"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 func TestRenderToolUse_NativeTools(t *testing.T) {
@@ -312,49 +314,49 @@ func TestRenderToolResult_PerTool(t *testing.T) {
 	tests := []struct {
 		name         string
 		tool         string
-		msg          *ToolResultMessage
+		msg          *claude.ToolResultMessage
 		wantContains []string
 	}{
 		{
 			name:         "Read success",
 			tool:         "Read",
-			msg:          &ToolResultMessage{Output: "line1\nline2\nline3"},
+			msg:          &claude.ToolResultMessage{Output: "line1\nline2\nline3"},
 			wantContains: []string{"Read ✓", "3 lines"},
 		},
 		{
 			name:         "Read error",
 			tool:         "Read",
-			msg:          &ToolResultMessage{Output: "no such file", IsError: true},
+			msg:          &claude.ToolResultMessage{Output: "no such file", IsError: true},
 			wantContains: []string{"Read ✗", "no such file"},
 		},
 		{
 			name:         "Bash success short",
 			tool:         "Bash",
-			msg:          &ToolResultMessage{Output: "hello\nworld"},
+			msg:          &claude.ToolResultMessage{Output: "hello\nworld"},
 			wantContains: []string{"Bash ✓", "hello", "world"},
 		},
 		{
 			name:         "Bash success long truncated",
 			tool:         "Bash",
-			msg:          &ToolResultMessage{Output: "a\nb\nc\nd\ne\nf\ng"},
+			msg:          &claude.ToolResultMessage{Output: "a\nb\nc\nd\ne\nf\ng"},
 			wantContains: []string{"Bash ✓", "e", "f", "g", "+4 more"},
 		},
 		{
 			name:         "TodoWrite success",
 			tool:         "TodoWrite",
-			msg:          &ToolResultMessage{Output: "ignored noisy json"},
+			msg:          &claude.ToolResultMessage{Output: "ignored noisy json"},
 			wantContains: []string{"Todos updated"},
 		},
 		{
 			name:         "Grep with matches",
 			tool:         "Grep",
-			msg:          &ToolResultMessage{Output: "a.go\nb.go\nc.go\nd.go"},
+			msg:          &claude.ToolResultMessage{Output: "a.go\nb.go\nc.go\nd.go"},
 			wantContains: []string{"Grep ✓", "4 matches", "a.go", "+1 more"},
 		},
 		{
 			name:         "Edit success silent",
 			tool:         "Edit",
-			msg:          &ToolResultMessage{Output: "File edited"},
+			msg:          &claude.ToolResultMessage{Output: "File edited"},
 			wantContains: nil, // expects empty output — see direct check below
 		},
 	}
@@ -377,7 +379,7 @@ func TestRenderToolResult_PerTool(t *testing.T) {
 }
 
 func TestRenderToolResult_GenericFallback(t *testing.T) {
-	m := &ToolResultMessage{Output: strings.Repeat("line\n", 20)}
+	m := &claude.ToolResultMessage{Output: strings.Repeat("line\n", 20)}
 	got := renderToolResult("UnknownTool", m)
 	if !strings.Contains(got, "UnknownTool ✓") {
 		t.Errorf("expected tool name and ✓: %q", got)
@@ -386,14 +388,14 @@ func TestRenderToolResult_GenericFallback(t *testing.T) {
 		t.Errorf("expected truncation marker: %q", got)
 	}
 	// Error branch
-	got = renderToolResult("UnknownTool", &ToolResultMessage{Output: "boom", IsError: true})
+	got = renderToolResult("UnknownTool", &claude.ToolResultMessage{Output: "boom", IsError: true})
 	if !strings.Contains(got, "✗") {
 		t.Errorf("expected ✗ marker: %q", got)
 	}
 }
 
 func TestRenderToolResult_NoTrackedNameUsesGeneric(t *testing.T) {
-	got := renderToolResult("", &ToolResultMessage{Output: "ok"})
+	got := renderToolResult("", &claude.ToolResultMessage{Output: "ok"})
 	if !strings.Contains(got, "Result") {
 		t.Errorf("expected generic 'Result' prefix when name is empty: %q", got)
 	}
@@ -401,8 +403,8 @@ func TestRenderToolResult_NoTrackedNameUsesGeneric(t *testing.T) {
 
 func TestFormatter_AssistantBundlesTextAndTools(t *testing.T) {
 	f := NewTextFormatter()
-	msg := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	msg := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "text", Text: "Reading both files."},
@@ -430,8 +432,8 @@ func TestFormatter_AssistantBundlesTextAndTools(t *testing.T) {
 
 func TestFormatter_StandaloneToolUseSuppressedAfterAssistant(t *testing.T) {
 	f := NewTextFormatter()
-	asm := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	asm := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "TX", Name: "Read", Input: []byte(`{"file_path":"/x/a.go"}`)},
@@ -441,25 +443,25 @@ func TestFormatter_StandaloneToolUseSuppressedAfterAssistant(t *testing.T) {
 	if out := f.Format(asm); out == "" {
 		t.Fatalf("expected non-empty assistant output")
 	}
-	dup := &ToolUseMessage{ToolUseID: "TX", Name: "Read", Input: map[string]interface{}{"file_path": "/x/a.go"}}
+	dup := &claude.ToolUseMessage{ToolUseID: "TX", Name: "Read", Input: map[string]interface{}{"file_path": "/x/a.go"}}
 	if out := f.Format(dup); out != "" {
-		t.Errorf("expected duplicate standalone ToolUseMessage to be suppressed, got %q", out)
+		t.Errorf("expected duplicate standalone claude.ToolUseMessage to be suppressed, got %q", out)
 	}
 }
 
 func TestFormatter_StandaloneToolUseShownIfNotInAssistant(t *testing.T) {
 	f := NewTextFormatter()
-	msg := &ToolUseMessage{ToolUseID: "T_NEW", Name: "Bash", Input: map[string]interface{}{"command": "echo hi"}}
+	msg := &claude.ToolUseMessage{ToolUseID: "T_NEW", Name: "Bash", Input: map[string]interface{}{"command": "echo hi"}}
 	out := f.Format(msg)
 	if !strings.Contains(out, "$ echo hi") {
-		t.Errorf("expected standalone ToolUseMessage to render, got %q", out)
+		t.Errorf("expected standalone claude.ToolUseMessage to render, got %q", out)
 	}
 }
 
 func TestFormatter_ToolNameCorrelation(t *testing.T) {
 	f := NewTextFormatter()
-	asm := &AssistantMessage{
-		Type: SDKAssistantMessage,
+	asm := &claude.AssistantMessage{
+		Type: claude.SDKAssistantMessage,
 		Message: anthropic.Message{
 			Content: []anthropic.ContentBlockUnion{
 				{Type: "tool_use", ID: "T1", Name: "Read", Input: []byte(`{"file_path":"/x/a.go"}`)},
@@ -468,7 +470,7 @@ func TestFormatter_ToolNameCorrelation(t *testing.T) {
 	}
 	_ = f.Format(asm)
 
-	res := &ToolResultMessage{ToolUseID: "T1", Output: "line1\nline2"}
+	res := &claude.ToolResultMessage{ToolUseID: "T1", Output: "line1\nline2"}
 	got := f.Format(res)
 	if !strings.Contains(got, "Read ✓") {
 		t.Errorf("expected Read-specific result rendering, got %q", got)
@@ -478,7 +480,7 @@ func TestFormatter_ToolNameCorrelation(t *testing.T) {
 	}
 
 	// Unknown ID falls back to generic.
-	got = f.Format(&ToolResultMessage{ToolUseID: "UNKNOWN", Output: "ok"})
+	got = f.Format(&claude.ToolResultMessage{ToolUseID: "UNKNOWN", Output: "ok"})
 	if !strings.Contains(got, "Result") {
 		t.Errorf("expected generic fallback for unknown ID, got %q", got)
 	}
