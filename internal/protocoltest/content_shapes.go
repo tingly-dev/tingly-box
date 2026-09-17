@@ -347,23 +347,6 @@ func chatFirstMessageContent(body map[string]any) (string, bool) {
 	return s, ok
 }
 
-// anthropicFirstMessageText returns the first text block of the first
-// forwarded Anthropic message.
-func anthropicFirstMessageText(body map[string]any) (string, bool) {
-	msgs, ok := body["messages"].([]any)
-	if !ok || len(msgs) == 0 {
-		return "", false
-	}
-	msg, _ := msgs[0].(map[string]any)
-	content, ok := msg["content"].([]any)
-	if !ok || len(content) == 0 {
-		return "", false
-	}
-	block, _ := content[0].(map[string]any)
-	s, ok := block["text"].(string)
-	return s, ok
-}
-
 func contentShapeCases() []contentShapeCase {
 	const secretWord = "The secret word is ZANZIBAR"
 	const parisAnswer = "The capital of France is Paris."
@@ -570,7 +553,7 @@ func contentShapeCases() []contentShapeCase {
 			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
 				orphanOutputBody(), anthropicToolSequence, "user;user")
 			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
-				orphanOutputBody(), anthropicFirstMessageText, orphanAsUserText)
+				orphanOutputBody(), func(b map[string]any) (string, bool) { return anthropicMessageText(b, "user") }, orphanAsUserText)
 		}},
 
 		// ── Image content shapes (issue #1606) ─────────────────────────
