@@ -30,9 +30,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 	if opts.OutputFormat == "" {
 		opts.OutputFormat = OutputFormatStreamJSON
 	}
-	if opts.Timeout == 0 {
-		opts.Timeout = defaultTimeout
-	}
+	opts.Timeout = ResolveTimeout(opts.Timeout, defaultTimeout)
 
 	if !r.driver.IsAvailable() {
 		return nil, errors.New("agent CLI not available")

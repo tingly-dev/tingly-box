@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -147,7 +146,7 @@ func RunTurnWithPrompter(ctx context.Context, session PersistentSession, prompte
 		case <-ctx.Done():
 			// ctx just fired, so it must not also be what bounds how long
 			// we're willing to wait for the session to actually close.
-			closeCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			closeCtx, cancel := context.WithTimeout(context.Background(), SessionCloseTimeout)
 			_ = session.Close(closeCtx)
 			cancel()
 			return nil, ctx.Err()

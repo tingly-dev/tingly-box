@@ -77,11 +77,15 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		Timestamp: time.Now(),
 	})
 
+	// Read dynamically (not cached across the call) so a profile switch or a
+	// persistent_session toggle in the web UI applies from the next message
+	// without a bot restart.
+	botSetting := e.deps.GetBotSettingOrCache()
+
 	// The bot's default_agent setting decides which Claude Code configuration
 	// serves @cc: the main claude_code scenario or a profile
-	// ("claude_code:<id>"). Read dynamically so a profile switch in the web UI
-	// applies from the next message without a bot restart.
-	profileID := ccProfileID(e.deps.GetBotSettingOrCache())
+	// ("claude_code:<id>").
+	profileID := ccProfileID(botSetting)
 
 	statusMsg := "⏳ CC: Processing new session..."
 	if !req.IsNewSession {
@@ -185,7 +189,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	var result *agentboot.Result
 	var werr error
 	persistentHandled := false
-	if e.deps.SessionPool != nil && e.deps.GetBotSettingOrCache().IsPersistentSession() {
+	if e.deps.SessionPool != nil && botSetting.IsPersistentSession() {
 		result, werr, persistentHandled = e.runPersistentTurn(ctx, req, projectPath, sessionID, execOpts, prompter, sink)
 	}
 	if !persistentHandled {
@@ -289,16 +293,12 @@ func (e *ClaudeCodeExecutor) runPersistentTurn(
 	// configured default (30 min in production) — Runner.Execute applies it
 	// to the whole process. Runner.Open deliberately does not (§5.1: it
 	// would kill a session that's legitimately idle between turns), so
-	// nothing else bounds a single persistent turn. Apply the same
-	// zero/negative/positive semantics as ExecutionOptions.Timeout
-	// documents, scoped to just this turn via RunTurnWithPrompter's own
-	// ctx.Done() handling (which ends the whole session on timeout, same as
-	// a one-shot's process getting killed).
+	// nothing else bounds a single persistent turn. Apply
+	// ExecutionOptions.Timeout's usual semantics to just this turn via
+	// RunTurnWithPrompter's own ctx.Done() handling (which ends the whole
+	// session on timeout, same as a one-shot's process getting killed).
 	turnCtx := ctx
-	timeout := opts.Timeout
-	if timeout == 0 {
-		timeout = e.deps.AgentService.Config().DefaultExecutionTimeout
-	}
+	timeout := agentboot.ResolveTimeout(opts.Timeout, e.deps.AgentService.Config().DefaultExecutionTimeout)
 	if timeout > 0 {
 		var turnCancel context.CancelFunc
 		turnCtx, turnCancel = context.WithTimeout(ctx, timeout)
@@ -342,7 +342,7 @@ func EvictPersistentSessionsForBot(sessionPool *pool.Pool, botUUID string) int {
 		return 0
 	}
 	prefix := botUUID + "|"
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
 	defer cancel()
 	return sessionPool.CloseAllWhere(ctx, func(key string) bool {
 		return strings.HasPrefix(key, prefix)

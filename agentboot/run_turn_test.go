@@ -15,7 +15,11 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 )
 
-func TestRunTurnWithPrompter_CompletesAndReturnsResult(t *testing.T) {
+// newSingleTurnFactory returns a FakeFactory whose OnStart decodes exactly
+// one turn's message off stdin — failing the process the same way every
+// RunTurnWithPrompter test needs to on a decode error — before handing
+// control to afterFirstTurn for whatever that test wants to happen next.
+func newSingleTurnFactory(afterFirstTurn func(dec *json.Decoder, h *process.FakeHandle)) *process.FakeFactory {
 	factory := process.NewFakeFactory()
 	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
 		go func() {
@@ -25,12 +29,19 @@ func TestRunTurnWithPrompter_CompletesAndReturnsResult(t *testing.T) {
 				h.SignalExit(err)
 				return
 			}
-			writeResult(t, h, false)
-			_, _ = decodeOne(dec)
-			h.FinishOutput()
-			h.SignalExit(nil)
+			afterFirstTurn(dec, h)
 		}()
 	}
+	return factory
+}
+
+func TestRunTurnWithPrompter_CompletesAndReturnsResult(t *testing.T) {
+	factory := newSingleTurnFactory(func(dec *json.Decoder, h *process.FakeHandle) {
+		writeResult(t, h, false)
+		_, _ = decodeOne(dec)
+		h.FinishOutput()
+		h.SignalExit(nil)
+	})
 
 	agent := claude.NewAgentWithFactory(claude.Config{}, factory)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -51,20 +62,11 @@ func TestRunTurnWithPrompter_CompletesAndReturnsResult(t *testing.T) {
 }
 
 func TestRunTurnWithPrompter_SessionTerminatedMidTurnReturnsError(t *testing.T) {
-	factory := process.NewFakeFactory()
-	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
-		go func() {
-			dec := json.NewDecoder(h.StdinR)
-			if _, err := decodeOne(dec); err != nil {
-				h.FinishOutput()
-				h.SignalExit(err)
-				return
-			}
-			// Crash before ever emitting a result for this turn.
-			h.FinishOutput()
-			h.SignalExit(errors.New("boom"))
-		}()
-	}
+	factory := newSingleTurnFactory(func(_ *json.Decoder, h *process.FakeHandle) {
+		// Crash before ever emitting a result for this turn.
+		h.FinishOutput()
+		h.SignalExit(errors.New("boom"))
+	})
 
 	agent := claude.NewAgentWithFactory(claude.Config{}, factory)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -88,25 +90,16 @@ func TestRunTurnWithPrompter_SessionTerminatedMidTurnReturnsError(t *testing.T) 
 // must now end the whole session (there's no way to interrupt just the
 // in-flight turn) and RunTurnWithPrompter must return promptly.
 func TestRunTurnWithPrompter_CtxCancelClosesSession(t *testing.T) {
-	factory := process.NewFakeFactory()
 	started := make(chan struct{})
-	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
-		go func() {
-			dec := json.NewDecoder(h.StdinR)
-			if _, err := decodeOne(dec); err != nil {
-				h.FinishOutput()
-				h.SignalExit(err)
-				return
-			}
-			close(started)
-			// Hang: never reply to this turn — only stdin closing (from
-			// Close()) should ever make this process exit.
-			var next map[string]any
-			_ = dec.Decode(&next)
-			h.FinishOutput()
-			h.SignalExit(nil)
-		}()
-	}
+	factory := newSingleTurnFactory(func(dec *json.Decoder, h *process.FakeHandle) {
+		close(started)
+		// Hang: never reply to this turn — only stdin closing (from
+		// Close()) should ever make this process exit.
+		var next map[string]any
+		_ = dec.Decode(&next)
+		h.FinishOutput()
+		h.SignalExit(nil)
+	})
 
 	agent := claude.NewAgentWithFactory(claude.Config{}, factory)
 	openCtx, openCancel := context.WithTimeout(context.Background(), 2*time.Second)

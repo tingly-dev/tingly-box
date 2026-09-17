@@ -214,17 +214,19 @@ func (bm *BotManager) StopBot(uuid string) error {
 	// Stop the bot
 	bm.manager.Stop(uuid)
 
-	// Wait for bot to fully stop (with 5 second timeout)
-	// Do this outside the lock to avoid deadlock
+	// Wait for bot to fully stop (with 5 second timeout), then evict any
+	// resident persistent @cc session for it — an abandoned process would
+	// otherwise keep the Claude on-disk session file open while a later
+	// restart resumes it in a separate process, racing on that same file.
+	// Both happen outside the lock: WaitForStop to avoid deadlock, eviction
+	// because sessionPool is set once at construction and never mutated, so
+	// it needs no lock protection, and it may block for
+	// agentboot.SessionCloseTimeout waiting on the session's process — an
+	// unrelated bot's Start/Stop must not queue behind that.
 	bm.mu.Unlock()
 	bm.manager.WaitForStop(uuid, 5*time.Second)
-	bm.mu.Lock()
-
-	// A stopped bot must not leave a persistent @cc session resident: the
-	// abandoned process would keep the Claude on-disk session file open
-	// while a later restart resumes it in a separate process, racing on
-	// that same file.
 	bm.EvictPersistentSessions(uuid)
+	bm.mu.Lock()
 
 	logrus.WithFields(logrus.Fields{
 		"uuid":     uuid,
@@ -409,7 +411,7 @@ func (bm *BotManager) Shutdown() {
 	// Close every resident persistent @cc process before the server exits,
 	// rather than leaving them to be killed by process teardown.
 	if bm.sessionPool != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
 		bm.sessionPool.Shutdown(shutdownCtx)
 		cancel()
 	}
