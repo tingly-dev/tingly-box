@@ -3,6 +3,12 @@
 // Deliberately not part of any one feature: the anchor-click dance had already
 // been hand-rolled twice in this codebase before this module existed, and each
 // copy learned (or failed to learn) the revoke timing separately.
+//
+// `downloadImage` below is the one export that isn't generic: it composes the
+// anchor-click save here with `fetchBlob`/`extensionForMime` from
+// `@tingly/vision`, which own those two (image-specific) concerns.
+
+import { extensionForMime, fetchBlob } from '@tingly/vision';
 
 export const downloadBlob = (blob: Blob, fileName: string): void => {
     const url = URL.createObjectURL(blob);
@@ -28,27 +34,6 @@ export const slugify = (text: string, maxLength = 32): string => {
         .slice(0, maxLength)
         .replace(/-+$/g, '');
     return slug || 'image';
-};
-
-const MIME_EXTENSIONS: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/webp': 'webp',
-    'image/svg+xml': 'svg',
-};
-
-/** Extension for a blob's own type — providers do not all hand back PNG. */
-export const extensionForMime = (mimeType: string): string => MIME_EXTENSIONS[mimeType] ?? 'png';
-
-/**
- * Reads any image source — a data URL or a provider's remote URL — as a blob.
- * Going through fetch is what lets a remote image be drawn into a canvas
- * later: an <img> pointed straight at a cross-origin URL taints it.
- */
-export const fetchBlob = async (src: string): Promise<Blob> => {
-    const response = await fetch(src);
-    if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
-    return response.blob();
 };
 
 /** Fetches an image and saves it under `<stem>.<its own extension>`. */

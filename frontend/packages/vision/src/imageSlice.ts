@@ -16,15 +16,32 @@ import {
 } from './imageMatte';
 import type { GifFrame } from './gif';
 
-// Local rather than shared with the host app's `utils/download.ts`: that
-// module also serves app-wide, non-image downloads (guardrails exports, rule
-// fragments), so it stays in the app rather than becoming this package's
-// dependency. This is the one line of overlap.
-const fetchBlob = async (src: string): Promise<Blob> => {
+/**
+ * Reads any image source — a data URL or a provider's remote URL — as a blob.
+ * Going through fetch is what lets a remote image be drawn into a canvas
+ * later: an <img> pointed straight at a cross-origin URL taints it.
+ *
+ * Lives here rather than the host app's `utils/download.ts`: despite that
+ * module's name, this and `extensionForMime` below are the image-specific
+ * half of it — `download.ts` imports them back for its own `downloadImage`,
+ * composed there with the (genuinely generic, non-image) anchor-click save
+ * that also serves guardrails exports and rule fragments.
+ */
+export const fetchBlob = async (src: string): Promise<Blob> => {
     const response = await fetch(src);
     if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
     return response.blob();
 };
+
+const MIME_EXTENSIONS: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+};
+
+/** Extension for a blob's own type — providers do not all hand back PNG. */
+export const extensionForMime = (mimeType: string): string => MIME_EXTENSIONS[mimeType] ?? 'png';
 
 /**
  * The part of the image the grid is cut out of, in fractions of the image's

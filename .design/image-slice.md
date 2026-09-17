@@ -384,8 +384,8 @@ prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`
 | `frontend/packages/vision/src/imageMatte.ts` | 背景检测(棋盘格/绿幕)与清除 |
 | `frontend/src/utils/playgroundSession.ts` | run / 导入图的 IndexedDB 持久化(尽力而为、写入合并) |
 | `frontend/src/utils/promptFile.ts` | 文本文件 → prompt:分拣、读取、上限 |
-| `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug、MIME→扩展名、`fetchBlob` |
-| `frontend/packages/vision/src/imageSlice.ts` | 等分网格几何、图片加载、切片渲染 |
+| `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug;`downloadImage` 组合本地的存盘和 vision 的 `fetchBlob`/`extensionForMime` |
+| `frontend/packages/vision/src/imageSlice.ts` | 等分网格几何、图片加载(`fetchBlob`)、MIME→扩展名(`extensionForMime`)、切片渲染 |
 | `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |
 | `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口,以及参考图缩略图的打开入口(生成侧未改) |
 | `frontend/src/mocks/handlers.ts` | mock 侧识别 prompt 里的 `NxM grid`,以及 `checkerboard` / `green screen`,返回相应的网格图 |
@@ -397,11 +397,14 @@ prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`
 
 上面六个几何/编码/抠图模块后来又整体搬进了 `@tingly/vision` workspace 包
 (`frontend/packages/vision/`,与 `@tingly/mannequin` 同规格:零 React/MUI/i18n
-依赖,纯 Canvas2D/Blob 操作)。`imageSlice.ts` 因此不再从 `utils/download.ts`
-导入 `fetchBlob`——那个模块还服务着与图片无关的下载(guardrails 导出等),
-不适合成为 vision 包的依赖,所以 `imageSlice.ts` 自带了一份 4 行的本地
-`fetchBlob`。`ImageSliceDialog.tsx` / `ImageGenPlaygroundCard.tsx` /
-`SketchCanvasDialog.tsx` 改为从 `@tingly/vision` 导入这些模块。
+依赖,纯 Canvas2D/Blob 操作)。`fetchBlob` / `extensionForMime` 其实一直是图片
+专属的两个函数(前者的注释本就写着"让远程图片能被画进 canvas"),只是历史上
+放在 `utils/download.ts` 里,顺带被上面第 393 行说的"不适合做 vision 依赖"
+挡住了搬家——于是反过来搬:两者随 `imageSlice.ts` 一起进了 vision 包,
+`download.ts` 的 `downloadImage` 改为从 `@tingly/vision` 导入它们,和本地的
+`downloadBlob`(真正通用、不该进 vision 的那部分)组合。`ImageSliceDialog.tsx`
+/ `ImageGenPlaygroundCard.tsx` / `SketchCanvasDialog.tsx` 改为从 `@tingly/vision`
+导入切片/画布相关的导出。
 
 `DEFAULT_GRID` / `FULL_CROP` / `GUTTER_MAX` / `CROP_MIN` 由 `imageSlice.ts`
 导出,滑块上界、取景框的最小边长与 `computeTileRects` 的 clamp 用的是同一组

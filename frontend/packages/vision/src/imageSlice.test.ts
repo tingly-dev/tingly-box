@@ -3,6 +3,7 @@ import {
     clampFrameDelay,
     computeTileRects,
     DEFAULT_FRAME_DELAY,
+    extensionForMime,
     FRAME_DELAY_MAX,
     FRAME_DELAY_MIN,
     FULL_CROP,
@@ -10,6 +11,19 @@ import {
     normalizeCrop,
     tileFileName,
 } from './imageSlice';
+
+describe('extensionForMime', () => {
+    it('names the file after what the provider actually returned', () => {
+        expect(extensionForMime('image/jpeg')).toBe('jpg');
+        expect(extensionForMime('image/webp')).toBe('webp');
+        expect(extensionForMime('image/svg+xml')).toBe('svg');
+    });
+
+    it('falls back to png for an unknown or missing type', () => {
+        expect(extensionForMime('application/octet-stream')).toBe('png');
+        expect(extensionForMime('')).toBe('png');
+    });
+});
 
 describe('computeTileRects', () => {
     it('divides an image into rows x cols tiles covering the whole frame', () => {
