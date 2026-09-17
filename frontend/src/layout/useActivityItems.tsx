@@ -121,7 +121,7 @@ export function useActivityItems(): ActivityItem[] {
         const teamActivityItem: ActivityItem = {
             key: 'team',
             icon: <IconUsers sx={{ fontSize: 22 }} />,
-            label: t('layout.nav.useTeam', { defaultValue: 'Team' }),
+            label: t('layout.team', { defaultValue: 'Team' }),
             defaultPath: '/agent/team',
             children: teamNavItems,
         };
@@ -181,7 +181,7 @@ export function useActivityItems(): ActivityItem[] {
             {
                 key: 'dashboard',
                 icon: <IconChartBar sx={{ fontSize: 22 }} />,
-                label: t('layout.usage', { defaultValue: 'Usage' }),
+                label: t('layout.dashboard', { defaultValue: 'Dashboard' }),
                 path: '/dashboard/today',
                 defaultPath: '/dashboard/today',
                 children: [
