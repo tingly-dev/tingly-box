@@ -53,6 +53,7 @@ import {
     renderAnimationFrames,
     renderTile,
     renderTileDataUrl,
+    sampleSheetColor,
     tileFileName,
     type CropRect,
     type MatteSpec,
@@ -297,6 +298,10 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     const [detectedColors, setDetectedColors] = useState<[number, number, number][]>([]);
     const [cleanKind, setCleanKind] = useState<BackgroundKind>('none');
     const [tolerance, setTolerance] = useState(DEFAULT_TOLERANCE);
+    // 'custom': the colour a click sampled, and whether the next click on the
+    // sheet is that sample rather than the usual crop-frame drag.
+    const [pickedColor, setPickedColor] = useState<[number, number, number] | null>(null);
+    const [picking, setPicking] = useState(false);
     const [frameDelay, setFrameDelay] = useState(DEFAULT_FRAME_DELAY);
     const [playing, setPlaying] = useState(true);
     const [frame, setFrame] = useState(0);
@@ -377,6 +382,8 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
     // so it is read once per image rather than being a question put to the
     // user. The checkbox below then only has to say yes or no.
     useEffect(() => {
+        setPickedColor(null);
+        setPicking(false);
         if (!image) {
             setDetected('none');
             setDetectedColors([]);
@@ -410,10 +417,11 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
         return () => { cancelled = true; };
     }, [open]);
 
-    const matte = useMemo<MatteSpec | null>(
-        () => (cleanKind === 'none' ? null : { kind: cleanKind, tolerance, colors: detectedColors }),
-        [cleanKind, detectedColors, tolerance],
-    );
+    const matte = useMemo<MatteSpec | null>(() => {
+        if (cleanKind === 'none') return null;
+        if (cleanKind === 'custom') return pickedColor ? { kind: cleanKind, tolerance, colors: [pickedColor] } : null;
+        return { kind: cleanKind, tolerance, colors: detectedColors };
+    }, [cleanKind, detectedColors, pickedColor, tolerance]);
 
     const rects = useMemo(
         () => (image
@@ -701,6 +709,22 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     if (!box) return;
                                     const x = (event.clientX - box.left) / box.width;
                                     const y = (event.clientY - box.top) / box.height;
+                                    // While picking, a click names the key
+                                    // colour instead of moving the crop frame
+                                    // — the two gestures share the same
+                                    // surface but never overlap in time.
+                                    if (picking) {
+                                        event.preventDefault();
+                                        // The click both samples a colour and
+                                        // lands on a tile underneath; without
+                                        // this it also toggles that tile out,
+                                        // the same false-click a crop drag
+                                        // guards against below.
+                                        suppressClickRef.current = true;
+                                        setPickedColor(sampleSheetColor(image, x * naturalWidth, y * naturalHeight));
+                                        setPicking(false);
+                                        return;
+                                    }
                                     const inside = x >= crop.x && x <= crop.x + crop.width
                                         && y >= crop.y && y <= crop.y + crop.height;
                                     if (inside) beginDrag('move', event);
@@ -711,7 +735,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     maxWidth: '100%',
                                     overflow: 'hidden',
                                     touchAction: 'none',
-                                    cursor: 'move',
+                                    cursor: picking ? 'crosshair' : 'move',
                                     // Scoped to exactly the image's own box: a
                                     // checkerboard reads as "this part is
                                     // transparent", so any of it visible outside
@@ -757,6 +781,14 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         tabIndex={handle.corner ? 0 : -1}
                                         aria-label={t(handle.labelKey, { defaultValue: handle.label })}
                                         onPointerDown={(event) => {
+                                            // While picking a background
+                                            // colour, every click on the sheet
+                                            // is a sample — including one that
+                                            // lands on a handle, which sits
+                                            // right on the frame's corners.
+                                            // Falling through lets the
+                                            // surface's own handler see it.
+                                            if (picking) return;
                                             event.stopPropagation();
                                             beginDrag(handle.mode, event);
                                         }}
@@ -963,9 +995,20 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     <Checkbox
                                         size="small"
                                         checked={cleanKind !== 'none'}
-                                        onChange={(event) => setCleanKind(event.target.checked
-                                            ? (detected === 'none' ? 'checker' : detected)
-                                            : 'none')}
+                                        onChange={(event) => {
+                                            if (!event.target.checked) {
+                                                setCleanKind('none');
+                                                setPicking(false);
+                                                return;
+                                            }
+                                            // Nothing was auto-detected, so
+                                            // checker/green would find nothing
+                                            // either — a click is the only
+                                            // option that can possibly work,
+                                            // and it needs one right away.
+                                            setCleanKind(detected === 'none' ? 'custom' : detected);
+                                            if (detected === 'none' && !pickedColor) setPicking(true);
+                                        }}
                                     />
                                 )}
                                 label={(
@@ -998,7 +1041,11 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             labelId="slice-clean-label"
                                             label={t('playground.slice.cleanKind', { defaultValue: 'Background to clear' })}
                                             value={cleanKind}
-                                            onChange={(event) => setCleanKind(event.target.value as BackgroundKind)}
+                                            onChange={(event) => {
+                                                const next = event.target.value as BackgroundKind;
+                                                setCleanKind(next);
+                                                setPicking(next === 'custom' && !pickedColor);
+                                            }}
                                         >
                                             <MenuItem value="checker">
                                                 {t('playground.slice.cleanChecker', { defaultValue: 'Checkerboard' })}
@@ -1006,9 +1053,23 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             <MenuItem value="green">
                                                 {t('playground.slice.cleanGreen', { defaultValue: 'Green screen' })}
                                             </MenuItem>
+                                            <MenuItem value="custom">
+                                                {t('playground.slice.cleanCustom', { defaultValue: 'Pick a color…' })}
+                                            </MenuItem>
                                         </Select>
                                     </FormControl>
-                                    <Box>
+                                    {cleanKind === 'custom' && (
+                                        <Typography variant="caption" sx={{ color: picking ? 'primary.main' : 'text.secondary' }}>
+                                            {picking
+                                                ? t('playground.slice.pickHint', {
+                                                    defaultValue: 'Click anywhere on the image to sample the background color to remove.',
+                                                })
+                                                : t('playground.slice.pickedHint', {
+                                                    defaultValue: 'Any pixel that connects to this color, from the edge in, will be cleared.',
+                                                })}
+                                        </Typography>
+                                    )}
+                                    <Box sx={{ opacity: cleanKind === 'custom' && !pickedColor ? 0.5 : 1 }}>
                                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                                 {t('playground.slice.tolerance', { defaultValue: 'Tolerance' })} · {Math.round(tolerance * 100)}%
@@ -1018,23 +1079,36 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 and the user cannot judge the
                                                 margin without seeing the
                                                 colour it is around. */}
-                                            {cleanKind === 'green' && detectedColors[0] && (
-                                                <>
-                                                    <Box
-                                                        sx={{
-                                                            width: 12,
-                                                            height: 12,
-                                                            borderRadius: '2px',
-                                                            border: '1px solid',
-                                                            borderColor: 'divider',
-                                                            bgcolor: `rgb(${detectedColors[0].join(',')})`,
-                                                        }}
-                                                    />
-                                                    <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
-                                                        {`#${detectedColors[0].map((value) => value.toString(16).padStart(2, '0')).join('')}`}
-                                                    </Typography>
-                                                </>
-                                            )}
+                                            {(() => {
+                                                const keyColor = cleanKind === 'green' ? detectedColors[0] : (cleanKind === 'custom' ? pickedColor : null);
+                                                if (!keyColor) return null;
+                                                return (
+                                                    <>
+                                                        <Box
+                                                            sx={{
+                                                                width: 12,
+                                                                height: 12,
+                                                                borderRadius: '2px',
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                bgcolor: `rgb(${keyColor.join(',')})`,
+                                                            }}
+                                                        />
+                                                        <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
+                                                            {`#${keyColor.map((value) => value.toString(16).padStart(2, '0')).join('')}`}
+                                                        </Typography>
+                                                        {cleanKind === 'custom' && (
+                                                            <Button
+                                                                size="small"
+                                                                onClick={() => setPicking(true)}
+                                                                sx={{ minWidth: 0, py: 0, textTransform: 'none' }}
+                                                            >
+                                                                {t('playground.slice.pickAgain', { defaultValue: 'Pick again' })}
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </Stack>
                                         <Slider
                                             size="small"
@@ -1042,6 +1116,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                             min={0}
                                             max={1}
                                             step={0.02}
+                                            disabled={cleanKind === 'custom' && !pickedColor}
                                             onChange={(_, value) => setTolerance(value as number)}
                                             aria-label={t('playground.slice.tolerance', { defaultValue: 'Tolerance' })}
                                         />

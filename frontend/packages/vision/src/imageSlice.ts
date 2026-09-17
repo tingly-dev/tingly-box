@@ -291,6 +291,24 @@ export const analyzeSheetBackground = (image: HTMLImageElement): SheetAnalysis =
     return { ...analyzeBackground(pixels), hasAlpha: imageHasAlpha(pixels.data) };
 };
 
+/**
+ * The RGB colour at one point of the full sheet, in natural image pixels —
+ * the sample behind click-to-pick background removal. Detection (above)
+ * covers checkerboards and green screens; a flat or gently lit studio
+ * backdrop has neither, so the only way to name its colour is to point at it.
+ */
+export const sampleSheetColor = (image: HTMLImageElement, x: number, y: number): [number, number, number] => {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = context2d(canvas);
+    context.drawImage(image, 0, 0);
+    const px = Math.min(canvas.width - 1, Math.max(0, Math.round(x)));
+    const py = Math.min(canvas.height - 1, Math.max(0, Math.round(y)));
+    const [r, g, b] = context.getImageData(px, py, 1, 1).data;
+    return [r, g, b];
+};
+
 export const imageHasAlpha = (data: Uint8ClampedArray): boolean => {
     for (let i = 3; i < data.length; i += 4) {
         if (data[i] < 255) return true;
