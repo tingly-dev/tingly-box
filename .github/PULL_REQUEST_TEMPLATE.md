@@ -5,70 +5,64 @@
   Adapt headings/order to the change; never emit an empty or irrelevant section.
 -->
 
+<!--
+Title — set it in GitHub's title field, not here (this comment doesn't render).
+
+  type(scope): description         e.g. fix(imagegen): stop invisible delete button
+  - type: feat / fix / refactor / perf / test / docs / chore / ci / security —
+    the dominant type across Key Changes below, never an area name (that's scope).
+  - scope: optional, lowercase, the package/feature area (imagegen, server, cli…).
+  - description: lowercase, imperative ("add", not "added"), no trailing period.
+
+  One theme per title — a multi-bullet PR still picks its ONE most significant
+  change; the rest live in Key Changes, not stacked in with em dashes/commas
+  (bad, 140 chars, real example: "feat(imagegen): playground UX — prompt that
+  scrolls and expands, steppers, failed-run cards, keyboard submit, session
+  persistence"). Cap ~70 chars — needing punctuation to fit it all means split
+  the PR, not lengthen the title. Never: branch names, "Claude"/session IDs/
+  model names, or a vague verb alone ("update", "misc changes").
+-->
+
 ## Summary
 <!-- 1–2 sentences: the motivating problem and the resolved outcome.
      Adds the *why* the title cannot carry; do not repeat the title here. -->
--->
 
 ## Key Changes
 
 - **<!-- Theme -->**: <!-- behavior change, in one clause -->
-<!-- Theme rules:
-     - Themes are concrete functional boundaries: a user workflow, lifecycle,
-       compatibility boundary, migration, safety guarantee, or developer experience.
-     - Never use file names, class names, or vague labels ("Improvements",
-       "Miscellaneous", "Major", "Minor") as themes.
-     - Add a second clause only when it changes the meaning (a *why*,
-       a *so-what*, or a *before/after*). If a third clause is needed, split
-       into two bullets. Example:
-         - **Tool-call ID fidelity**: Responses→Anthropic tool-use now carries
-           the upstream `call_id`, fixing multi-turn tool-result correlation.
--->
+<!-- Theme = a concrete functional boundary (workflow, migration, safety
+     guarantee, dev experience) — never a file/class name or "Misc"/"Minor".
+     Add a second clause only if it adds a *why*/*before-after*; a third
+     clause means split into two bullets. Example:
+       - **Tool-call ID fidelity**: Responses→Anthropic tool-use now carries
+         the upstream `call_id`, fixing multi-turn tool-result correlation. -->
 
 <!--
-Optional sections — include only when they make the PR easier to evaluate.
-Never invent or demote content to fill them; omit when empty.
+Optional — include only when it helps evaluation; omit when empty, never pad:
 
 ## Minor
-  Genuinely incidental work done along the way (small cleanups, docs, tests).
-  Never core behavior, migrations, compatibility guarantees, or safety
-  protections — those stay in Key Changes even when small.
+  Genuinely incidental (small cleanups/docs/tests) — never core behavior,
+  migrations, or safety, even when small; those stay in Key Changes.
 
 ## Notes
-  Only what reviewers/operators must act on or watch: limitations, follow-ups,
-  rollout concerns. State the consequence and next action. Never echo Key Changes.
+  What reviewers/operators must act on or watch: limitations, follow-ups,
+  rollout concerns. State the consequence + next action, don't echo Key Changes.
 
-Other domain headings (Migration, Compatibility, Testing, Rollout, Risks,
-Screenshots, …) when relevant.
+Other domain headings (Migration, Compatibility, Testing, Risks, Screenshots…)
+when relevant.
 -->
 
 <!--
-────────────────────────────────────────────────────────────────────────────
-Brevity gate — check before submitting.
+Brevity gate — hard caps, not suggestions; default to the floor.
 
-Length budget — hard caps, not suggestions. Default to the floor of each range;
-only approach the cap when the diff genuinely demands it. When over budget,
-cut bullets, don't compress wording — merging two points into one dense line
-still fails the budget.
+| Diff size | Summary    | Key Changes | Optional          | Total |
+|-----------|------------|-------------|--------------------|-------|
+| Small     | 1 sentence | ≤ 3 bullets | none               | ≤ 8   |
+| Medium    | ≤ 2 sent.  | ≤ 5 bullets | ≤ 1 section, ≤ 2   | ≤ 15  |
+| Large     | ≤ 2 sent.  | ≤ 7 bullets | ≤ 2 sections, ≤ 3  | ≤ 25  |
+  (Small < ~100 lines/1–2 commits; Large = multi-feature/migration.)
 
-| Diff size | Summary    | Key Changes | Optional sections          | Total   |
-|-----------|------------|-------------|----------------------------|---------|
-| Small     | 1 sentence | ≤ 3 bullets | none                       | ≤ 8     |
-| Medium    | ≤ 2 sent.  | ≤ 5 bullets | ≤ 1 section, ≤ 2 bullets   | ≤ 15    |
-| Large     | ≤ 2 sent.  | ≤ 7 bullets | ≤ 2 sections, ≤ 3 each     | ≤ 25    |
-  (Small < ~100 lines or 1–2 commits; Large = multi-feature / migration.)
-
-- One bullet = one line after wrapping (~15 words after the colon). A bullet
-  that wraps to 3+ lines is a paragraph — rewrite or split.
-- The budget is the default output. Only exceed it when the reviewer
-  explicitly asks for a detailed description.
-
-Final checks:
-- Within budget. Count lines; if over, delete the weakest bullets until it fits.
-- One fact, one place. Nothing repeats across title / Summary / bullets / Notes.
-- Each bullet earns its line. No re-explanations, no "this is safe" reassurances,
-  no hedges; two bullets must not say the same thing at different altitudes.
-- Pick the shorter phrasing when two carry equal information.
-- Scannable. Reading only the bold themes reveals the shape of the PR.
-────────────────────────────────────────────────────────────────────────────
+One bullet = one line (~15 words after the colon); 3+ lines means rewrite or
+split. Over budget → cut the weakest bullets, don't compress wording. One
+fact, one place — nothing repeats across title/Summary/bullets/Notes.
 -->
