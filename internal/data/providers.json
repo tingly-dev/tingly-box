@@ -2754,7 +2754,16 @@
           "id": "mimo-v2.5-pro"
         },
         {
-          "id": "grok-4.5"
+          "id": "grok-4.5",
+          "openai_endpoint": "responses"
+        },
+        {
+          "id": "grok-4.6",
+          "openai_endpoint": "responses"
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "openai_endpoint": "responses"
         }
       ],
       "supports_models_endpoint": true,

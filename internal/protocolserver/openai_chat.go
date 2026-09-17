@@ -226,7 +226,8 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	case protocol.APIStyleOpenAI:
 		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
 		tempFlags := ResolveRuleFlags(c, rule)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
+		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, actualModel)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

@@ -256,7 +256,8 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
+		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return
@@ -381,7 +382,8 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
+		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

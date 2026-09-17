@@ -14,13 +14,17 @@ OpenAI 兼容生态里有两种 endpoint 形态：
 | `/v1/chat/completions` | 几乎所有 OpenAI-compat 厂商（Qwen、Deepseek、Mistral、GLM、MiniMax、xAI、本地 vLLM/llama.cpp 等）+ OpenAI 官方 |
 | `/v1/responses` | 仅 OpenAI 官方（gpt-5、o-series 等）+ Codex |
 
-Provider 实际能力组合**只有三种**：
+Provider 实际能力组合**通常只有三种**：
 
 | 类型 | 例子 | Chat | Responses |
 |---|---|:---:|:---:|
 | Chat-only | Qwen / Deepseek / Mistral / 本地模型 / 绝大多数厂商 | ✅ | ❌ |
 | Responses-only | Codex | ❌ | ✅ |
 | Both | OpenAI 官方 | ✅ | ✅ |
+
+例外是像 OpenCode Zen 这样的多厂商中转：provider 级两个 endpoint 都存在，但
+**每个模型只认其中一个**，不是 both 那种"同一模型两条路都行"。§10 讲这种情况
+怎么按模型查表处理。
 
 Gateway 收到客户端的 request 时（无论入站协议是 OpenAI Chat / OpenAI Responses / Anthropic Messages 经转换后等价的 OpenAI 形态），**必须知道**：上游用哪一个？
 
@@ -219,13 +223,12 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 ## 8. 关键文件
 
 - `ai/provider.go` —— `OpenAIEndpointMode` 类型 + 常量 + `Provider.OpenAIEndpointMode` 字段
-- `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（plain string）
-- `internal/data/providers.json` —— 出厂 template 的 mode 声明
-- `internal/server/endpoint_resolution.go` —— `ResolveOpenAIEndpoint` 纯函数
-- `internal/server/endpoint_override.go` —— `EndpointOverride` 枚举与 `ParseEndpointOverride`
-- `internal/server/openai_responses.go` —— Responses 入站的路由调用点
+- `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoint` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
+- `internal/data/providers.json` —— 出厂 template 的 mode 声明，以及 §10 的按模型 override 表
+- `internal/protocolserver/protocol_endpoint.go` —— `ResolveOpenAIEndpoint` 纯函数、`EndpointOverride` 枚举与 `ParseEndpointOverride`
+- `internal/protocolserver/openai_chat.go`、`openai_responses.go`、`anthropic_message.go` —— 三处入站路径的路由调用点，各自查表后传入 `ResolveOpenAIEndpoint`
 - `internal/server/module/oauth/handler.go`、`internal/command/oauth.go` —— Codex OAuth 实例化打 mode
-- `internal/server/config/migration_codex_endpoint_mode.go` —— 存量 Codex backfill 迁移
+- `internal/server/config/migration.go` —— 存量 Codex backfill 迁移（`normalizeCodexEndpointMode`）
 
 ---
 
@@ -240,7 +243,55 @@ PR #976 引入此设计。涉及行为变更的两个点：
 
 ---
 
-## 10. 不在本文档范围
+## 10. 按模型查表：OpenCode Zen 这类中转的过渡方案
+
+### 10.1 问题
+
+OpenCode Zen 是个多厂商中转：provider 级两个 endpoint 都存在，但每个模型只认
+其中一个。实测(2026-09-08，`/zen/go`)：35 个模型里 32 个只认 Chat，
+`gpt-5.6-luna`、`grok-4.5`、`grok-4.6` 只认 Responses。`OpenAIEndpointMode` 是
+provider 级单值，说不出这句话——Codex 客户端点 luna 被降级到 Chat，上游回一个
+不透明的裸 500。
+
+### 10.2 方案
+
+`providers.json` 每个 model 条目加一个可选字段：
+
+```json
+{"id": "gpt-5.6-luna", "openai_endpoint": "responses"}
+```
+
+`data.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, model)` 用
+`findTemplateByProvider` 同一套匹配规则找到 template，查这个字段。三种返回值：
+`""`(无覆盖)、`chat`、`responses`；未识别的字符串按 `""` 处理，数据笔误只会
+退化成"不生效"，不会路由错。
+
+`ResolveOpenAIEndpoint` 的优先级插在 rule override 之后、provider mode 之前：
+override > 按模型表 > provider mode。三个入站路径各自查一次表、把结果当参数
+传入，`ResolveOpenAIEndpoint` 本身保持纯函数。
+
+### 10.3 代价：静态表要人工维护
+
+- **不是真实模型目录**——`providers.json` 的 `models` 是精选子集，不是 provider
+  的 live catalog。`gpt-5.6-luna`、`grok-4.6` 加表之前压根不在清单里，是这次
+  为了让表生效才补进去的。
+- **新模型不在表里 = 默认 Chat**。OpenCode 模型代号化、会轮换，新上线的
+  responses-only 模型在有人补表之前会复现和 luna 一样的裸 500——这是方案主动
+  选择的失败模式：用可预测性换自动适应。
+
+### 10.4 顺带修的前置 bug
+
+`opencode-ai` 和 `opencode-go` 的 `canonical_domain` 都是 `opencode.ai`，都没设
+`api_style`。原来的匹配逻辑命中多个候选时"谁先命中用谁"，候选集合又是 Go
+map、遍历顺序不确定——同一个 provider，`GetMaxTokensForModelByProvider` 这类
+调用**每次进程重启都可能换一个模板**(实测 50 次里出现过 49/50 全错)。按模型
+查表依赖 `findTemplateByProvider` 拿到正确的 template，不修就是在不可靠的地基
+上盖房子。
+
+修法：多个候选命中同一 `canonical_domain` 时，选 base URL 是当前 `apiBase`
+更长前缀的那个，而不是拿到第一个就走。只有一个候选时行为不变。
+
+## 11. 不在本文档范围
 
 - Anthropic / Google provider 的路由（走各自原生 endpoint，不进 OpenAI resolver）
 - Smart routing / load balance 选哪个 service（在 endpoint 选择之前）
