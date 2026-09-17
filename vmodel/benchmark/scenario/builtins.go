@@ -21,6 +21,7 @@ func TextScenario() Scenario {
 			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []check.Assertion{
+			check.AssertResponsesItemIDsCanonical(),
 			check.AssertHTTPStatus(200),
 			check.AssertRoleEquals("assistant"),
 			check.AssertContentContains("Paris"),
@@ -125,6 +126,7 @@ func ToolUseScenario() Scenario {
 			FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []check.Assertion{
+			check.AssertResponsesItemIDsCanonical(),
 			check.AssertHTTPStatus(200),
 			check.AssertHasToolCalls(1),
 			check.AssertToolCallName(0, "get_weather"),
@@ -361,6 +363,7 @@ func StreamingTextScenario() Scenario {
 			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []check.Assertion{
+			check.AssertResponsesItemIDsCanonical(),
 			check.AssertHTTPStatus(200),
 			check.AssertStreamEventCount(3),
 			check.AssertRoleEquals("assistant"),
@@ -390,6 +393,7 @@ func StreamingToolUseScenario() Scenario {
 			FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []check.Assertion{
+			check.AssertResponsesItemIDsCanonical(),
 			check.AssertHTTPStatus(200),
 			check.AssertStreamEventCount(3),
 			check.AssertHasToolCalls(1),

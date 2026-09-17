@@ -1,11 +1,13 @@
 package protocoltest
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 // This file is the request-content-shape regression suite, shared by both the
@@ -347,6 +349,94 @@ func chatFirstMessageContent(body map[string]any) (string, bool) {
 	return s, ok
 }
 
+// toolUseShapeScenario is the tool-use mock (chat tool_calls / Anthropic
+// tool_use) under a suite-private name, for cases that assert on the
+// Responses response the gateway synthesizes rather than on the forwarded
+// request.
+func toolUseShapeScenario() Scenario {
+	s := ToolUseScenario()
+	s.Name = "content_shapes_tool_use"
+	s.Assertions = nil
+	return s
+}
+
+// sendResponsesWithScenario sends a bespoke Responses request (streaming or
+// not) through a (openai_responses → target) route that mocks scenario s,
+// and returns the parsed round trip.
+func sendResponsesWithScenario(t flagTB, env *TestEnv, target protocol.APIType, s Scenario, body map[string]any, streaming bool) *RoundTripResult {
+	t.Helper()
+	source := protocol.TypeOpenAIResponses
+	env.SetupRoute(source, target, s)
+	model := env.findRouteModel(source, target, s.Name)
+	if model == "" {
+		t.Fatalf("no route configured for source=%s target=%s", source, target)
+	}
+	body["model"] = model
+	body["stream"] = streaming
+	path, _ := buildRequest(source, model, streaming)
+	res, err := env.dispatch(source, target, s.Name, path, mustMarshal(body), nil, streaming)
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	return res
+}
+
+// assertResponsesToolCallIDs sends a tool-call-producing Responses request
+// to target and checks the synthesized response: canonical ids
+// (check.AssertResponsesItemIDsCanonical) and the upstream tool call id
+// preserved as call_id.
+func assertResponsesToolCallIDs(t flagTB, env *TestEnv, target protocol.APIType, streaming bool, wantCallID string) {
+	t.Helper()
+	body := map[string]any{
+		"tools": []map[string]any{{"type": "function", "name": "get_weather",
+			"parameters": map[string]any{"type": "object", "properties": map[string]any{"location": map[string]any{"type": "string"}}}}},
+		"input": []map[string]any{{"type": "message", "role": "user", "content": "What's the weather in Paris?"}},
+	}
+	res := sendResponsesWithScenario(t, env, target, toolUseShapeScenario(), body, streaming)
+	if res.HTTPStatus != 200 {
+		t.Fatalf("http status = %d, body %s", res.HTTPStatus, string(res.RawBody))
+	}
+	if err := check.AssertResponsesItemIDsCanonical().Check(res); err != nil {
+		t.Errorf("responses ids: %v", err)
+	}
+	// The harness parser reports the item id as ToolCallResult.ID; call_id
+	// (the correlation key, passed through from the upstream) is read from
+	// the response body itself.
+	calls := responsesFunctionCallItems(res)
+	if len(calls) != 1 || calls[0]["call_id"] != wantCallID {
+		t.Errorf("function_call items = %v, want one with call_id %q", calls, wantCallID)
+	}
+}
+
+// responsesFunctionCallItems returns the function_call output items of a
+// Responses round trip: from the body when non-streaming, from the terminal
+// response.completed/incomplete event when streaming.
+func responsesFunctionCallItems(res *RoundTripResult) []map[string]any {
+	var resp map[string]any
+	if !res.IsStreaming {
+		_ = json.Unmarshal(res.RawBody, &resp)
+	} else {
+		for _, line := range res.StreamEvents {
+			var ev map[string]any
+			if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev) != nil {
+				continue
+			}
+			if ev["type"] == "response.completed" || ev["type"] == "response.incomplete" {
+				resp, _ = ev["response"].(map[string]any)
+			}
+		}
+	}
+	var out []map[string]any
+	if items, ok := resp["output"].([]any); ok {
+		for _, it := range items {
+			if m, ok := it.(map[string]any); ok && m["type"] == "function_call" {
+				out = append(out, m)
+			}
+		}
+	}
+	return out
+}
+
 func contentShapeCases() []contentShapeCase {
 	const secretWord = "The secret word is ZANZIBAR"
 	const parisAnswer = "The capital of France is Paris."
@@ -554,6 +644,20 @@ func contentShapeCases() []contentShapeCase {
 				orphanOutputBody(), anthropicToolSequence, "user;user")
 			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, EndpointAnthropic,
 				orphanOutputBody(), func(b map[string]any) (string, bool) { return anthropicMessageText(b, "user") }, orphanAsUserText)
+		}},
+
+		// ── Responses ids minted by the gateway (.design/protocol-responses.md §2) ──
+		{name: "responses_to_chat/tool_call_ids_canonical", run: func(t flagTB, env *TestEnv) {
+			assertResponsesToolCallIDs(t, env, protocol.TypeOpenAIChat, false, "call_validate_weather_1")
+		}},
+		{name: "responses_to_chat/tool_call_ids_canonical_stream", run: func(t flagTB, env *TestEnv) {
+			assertResponsesToolCallIDs(t, env, protocol.TypeOpenAIChat, true, "call_validate_weather_1")
+		}},
+		{name: "responses_to_anthropic/tool_call_ids_canonical", run: func(t flagTB, env *TestEnv) {
+			assertResponsesToolCallIDs(t, env, protocol.TypeAnthropicBeta, false, "toolu_validate_weather_1")
+		}},
+		{name: "responses_to_anthropic/tool_call_ids_canonical_stream", run: func(t flagTB, env *TestEnv) {
+			assertResponsesToolCallIDs(t, env, protocol.TypeAnthropicBeta, true, "toolu_validate_weather_1")
 		}},
 
 		// ── Image content shapes (issue #1606) ─────────────────────────
