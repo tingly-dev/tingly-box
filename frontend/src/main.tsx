@@ -19,6 +19,11 @@ async function enableMocking() {
   if (!localStorage.getItem('user_auth_token')) {
     localStorage.setItem('user_auth_token', 'mock-token')
   }
+
+  // First-run guides default to off in mock mode; ?mockOnboarding=on opts a
+  // given run back in. See mocks/mockConfig.ts.
+  const { applyMockOnboardingOverride } = await import('./mocks/mockConfig')
+  applyMockOnboardingOverride()
 }
 
 enableMocking().then(() => {

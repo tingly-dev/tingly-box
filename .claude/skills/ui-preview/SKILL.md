@@ -63,6 +63,21 @@ await page.addInitScript(() => {
 });
 ```
 
+## First-run onboarding guides
+
+Mock mode defaults these **off** (`src/mocks/mockConfig.ts`), so a fresh browser
+context no longer pops the "Direct Routing Guide" dialog and steals focus/clicks —
+no Escape-key dismissal needed before interacting with the page. If a script
+specifically needs to screenshot or assert the first-run guide itself, force it on
+per-navigation with a query param (no code change, no shared state between runs):
+
+```js
+await page.goto('http://localhost:3000/agent/openai?mockOnboarding=on', { waitUntil: 'networkidle' });
+```
+
+`?mockOnboarding=off` is the (redundant) explicit default, useful when a test wants
+to assert the off state regardless of what a prior run left in localStorage.
+
 ## Scripts
 
 All scripts live here and are run from `frontend/`. They use `createRequire(cwd)` to
