@@ -96,8 +96,3 @@ type PermissionModesResponse struct {
 type RecentFoldersResponse struct {
 	Folders []managedagent.RecentFolder `json:"folders"`
 }
-
-type ListDirsResponse struct {
-	Path    string                  `json:"path"`
-	Entries []managedagent.DirEntry `json:"entries"`
-}

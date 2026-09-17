@@ -194,7 +194,6 @@ const ManagedAgentPage = () => {
                             onInterrupt={handleInterrupt}
                             onArchive={handleArchive}
                             onPermissionModeChange={handlePermissionModeChange}
-                            loadDiff={() => managedAgentApi.getDiff(selectedSession.id)}
                         />
                     ) : (
                         <UnifiedCard size="full">

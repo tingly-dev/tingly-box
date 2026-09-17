@@ -83,12 +83,14 @@ One package, no sub-packages, built directly on the pieces above:
 
 | concern | how |
 |---|---|
-| pick a folder | `RecentFolders` derives a live list from past web sessions (no separate CRUD store — "recent" just means "used"); `ListDirs`/`fsbrowse.go` browses any absolute path, no allowlist (same trust boundary as `@cc`'s own directory picker: host auth is the gate) |
+| pick a folder | `RecentFolders` derives a live list from past web sessions (no separate CRUD store — "recent" just means "used", and nothing here ever scans the filesystem: every path shown is one a session already started in) |
 | start a session | `CreateSession` → `session.Manager.CreateWith` + `startTurn`, which runs `agentboot.AgentService.Run` in a goroutine |
 | drive a turn | `turn.go`'s `runTurn`: converts agentboot events to transcript messages (`convert.go`), routes approvals through a per-turn `webPrompter` (`prompter.go`) that appends the question to the transcript and blocks for `Respond` |
 | steer | `SendMessage` (next turn, `Resume: true`), `Respond` (answer a pending approval/ask), `Interrupt` (cancel the turn's context; the session is left `Completed`+resumable, not `Failed`), `SetPermissionMode` (next turn's `--permission-mode`) |
 | end | `Archive` closes the session for good — **nothing on disk is touched**: no clone, no directory the tool created, so there is nothing to delete. Archiving only stops tingly-box from resuming that session id |
-| show the artifact | `Diff` (`gitdiff.go`) runs read-only `git diff`/`status` in the folder — no clone, no commit, no branch, no push. Publishing changes stays with the person who owns the folder |
+
+There is deliberately no server-side directory browser (no `fs/dirs`-style
+endpoint) and no git diff/status endpoint in this first landing — see §6.
 
 Concurrency: several sessions may run in the same folder at once, the same
 way several local `claude --session-id <id>` processes can — `Service.runs`
@@ -129,7 +131,9 @@ one-core-per-entry-point pattern `imbot.NewBotManager` already uses.
 `frontend/src/components/managed-agent/*`): one work surface, no
 folder-then-session wizard (ux-principles.md §2) — a folder/prompt composer
 and the session list share the left column; the right column is the
-selected session's transcript, composer, and a collapsible git diff. A
+selected session's transcript and composer. `FolderPicker` is a plain
+Autocomplete over typed input + recently-used paths (`RecentFolder[]`) —
+no directory-browsing UI, matching the backend having no such endpoint. A
 session's one still-open approval/ask request is the only one that renders
 action buttons (`findPendingRequest` in `managedAgentUtils.ts`), so the page
 always shows exactly what the user can act on next (ux-principles.md §11).
@@ -144,6 +148,23 @@ new purpose on the same product pillar, not a new top-level domain.
   place, same as local `claude`. (Parked: `claude/managed-agent-git-source-parked`.)
 - No separate Folder/Workspace entity with its own lifecycle — folders are
   derived from session history only.
+- **No server-side directory browser.** An early draft of this landing had
+  a `GET /managed-agent/fs/dirs` endpoint (list the subdirectories of any
+  absolute path, no allowlist — the same trust model @cc's own IM directory
+  picker already uses) plus a `FolderPicker` browse popover on top of it.
+  Cut on review: it is a new "list arbitrary filesystem paths on request"
+  surface, and this first landing does not need it — typing a path, or
+  reusing one already used (`RecentFolder`), is enough to get started. If
+  directory browsing comes back, it should have an explicit, reviewed
+  security stance (e.g. scoped to configured roots) rather than reusing
+  @cc's allowlist-free precedent by default.
+- **No git diff/status endpoint.** Same review: a `GET .../diff` (read-only
+  `git diff`/`status` in the folder) plus a "Changes" panel existed in the
+  same draft. Seeing what changed isn't on the create→chat→approve
+  critical path, so it's cut for now; the person can just look at their
+  own working tree. Both this and the directory browser's code briefly
+  existed on this branch (`gitdiff.go`, `fsbrowse.go`) and are easy to
+  reintroduce from history if wanted later.
 - No live streaming transport (SSE/WS) — the frontend polls
   (`ManagedAgentPage.tsx`'s `SESSIONS_POLL_MS`/`MESSAGES_POLL_MS`), fast
   only while a turn is actually running.

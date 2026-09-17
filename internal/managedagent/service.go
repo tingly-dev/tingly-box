@@ -55,7 +55,6 @@ type Service struct {
 	sessions *session.Manager
 	agent    *agentboot.AgentService
 	routing  Routing
-	git      *Git // nil disables the diff endpoint
 
 	mu   sync.Mutex
 	runs map[string]*run // sessionID -> live turn, while one is in flight
@@ -74,12 +73,11 @@ type Config struct {
 	Sessions *session.Manager
 	Agent    *agentboot.AgentService
 	Routing  Routing // optional
-	Git      *Git    // optional
 }
 
 // NewService builds a Service. It does not touch the store.
 func NewService(cfg Config) *Service {
-	return &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, git: cfg.Git, runs: map[string]*run{}}
+	return &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, runs: map[string]*run{}}
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -88,16 +86,19 @@ func NewService(cfg Config) *Service {
 // live from the session list, not a stored entity. There is nothing to add
 // or remove: starting a task in a folder is what makes it "recent", the
 // same way @cc's directory browser has no separate allowlist to manage.
+//
+// This never scans the filesystem: every path here is one the caller
+// already typed and successfully started a session in, so there is no new
+// read surface to reason about.
 type RecentFolder struct {
 	Path       string    `json:"path"`
 	Name       string    `json:"name"`
-	IsRepo     bool      `json:"is_repo"`
 	LastUsedAt time.Time `json:"last_used_at"`
 }
 
 // RecentFolders lists the distinct folders web sessions have run in, most
 // recently used first.
-func (s *Service) RecentFolders(ctx context.Context, limit int) []RecentFolder {
+func (s *Service) RecentFolders(limit int) []RecentFolder {
 	all := s.sessions.SnapshotsByChat(webChatID)
 	byPath := map[string]*RecentFolder{}
 	for _, sess := range all {
@@ -106,7 +107,7 @@ func (s *Service) RecentFolders(ctx context.Context, limit int) []RecentFolder {
 		}
 		f, ok := byPath[sess.Project]
 		if !ok {
-			f = &RecentFolder{Path: sess.Project, Name: filepath.Base(sess.Project), IsRepo: s.isRepo(ctx, sess.Project)}
+			f = &RecentFolder{Path: sess.Project, Name: filepath.Base(sess.Project)}
 			byPath[sess.Project] = f
 		}
 		if sess.LastActivity.After(f.LastUsedAt) {
@@ -122,13 +123,6 @@ func (s *Service) RecentFolders(ctx context.Context, limit int) []RecentFolder {
 		out = out[:limit]
 	}
 	return out
-}
-
-func (s *Service) isRepo(ctx context.Context, dir string) bool {
-	if s.git == nil {
-		return false
-	}
-	return s.git.IsRepo(ctx, dir)
 }
 
 // cleanFolderPath validates a folder path the way every entry point needs
@@ -316,20 +310,6 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		snap.Status = session.StatusClosed
 	}
 	return &snap, nil
-}
-
-// Diff summarises what the agent changed in the folder. A folder that is
-// not a git work tree, or with no Git configured, has no baseline, so the
-// answer is an empty diff rather than an error.
-func (s *Service) Diff(ctx context.Context, id string) (*Diff, error) {
-	snap, ok := s.sessions.Snapshot(id)
-	if !ok {
-		return nil, notFound("session", id)
-	}
-	if s.git == nil || !s.git.IsRepo(ctx, snap.Project) {
-		return &Diff{}, nil
-	}
-	return s.git.Diff(ctx, snap.Project, "")
 }
 
 func isActive(st session.Status) bool {

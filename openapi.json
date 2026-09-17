@@ -3722,39 +3722,6 @@
         }
       }
     },
-    "/api/v1/managed-agent/fs/dirs": {
-      "get": {
-        "tags": [
-          "managed-agent"
-        ],
-        "summary": "List the subdirectories of a path, for picking a folder to work in",
-        "description": "List the subdirectories of a path, for picking a folder to work in",
-        "operationId": "apiV1Managed-agentFsDirsGet",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "query",
-            "description": "Absolute directory to list; empty defaults to the home directory",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListDirsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/managed-agent/permission-modes": {
       "get": {
         "tags": [
@@ -3900,39 +3867,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionInfo"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/managed-agent/sessions/{session_id}/diff": {
-      "get": {
-        "tags": [
-          "managed-agent"
-        ],
-        "summary": "Summarise what the agent changed in the folder",
-        "description": "Summarise what the agent changed in the folder",
-        "operationId": "apiV1Managed-agentSessionsSession_idDiffGet",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Diff"
                 }
               }
             }
@@ -10151,68 +10085,6 @@
           "message"
         ]
       },
-      "Diff": {
-        "type": "object",
-        "properties": {
-          "changed_files": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field changed_files"
-          },
-          "patch": {
-            "type": "string",
-            "description": "Field patch"
-          },
-          "stat": {
-            "type": "string",
-            "description": "Field stat"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
-          },
-          "untracked": {
-            "type": "array",
-            "description": "Field untracked",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "changed_files",
-          "stat",
-          "patch",
-          "truncated"
-        ]
-      },
-      "DirEntry": {
-        "type": "object",
-        "properties": {
-          "hidden": {
-            "type": "boolean",
-            "description": "Field hidden"
-          },
-          "is_repo": {
-            "type": "boolean",
-            "description": "Field is_repo"
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
-          }
-        },
-        "required": [
-          "name",
-          "path",
-          "is_repo",
-          "hidden"
-        ]
-      },
       "DirectChat": {
         "type": "object",
         "properties": {
@@ -11973,26 +11845,6 @@
         },
         "required": [
           "success"
-        ]
-      },
-      "ListDirsResponse": {
-        "type": "object",
-        "properties": {
-          "entries": {
-            "type": "array",
-            "description": "Field entries",
-            "items": {
-              "$ref": "#/components/schemas/DirEntry"
-            }
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
-          }
-        },
-        "required": [
-          "path",
-          "entries"
         ]
       },
       "ListQuotaResponse": {
@@ -14395,10 +14247,6 @@
       "RecentFolder": {
         "type": "object",
         "properties": {
-          "is_repo": {
-            "type": "boolean",
-            "description": "Field is_repo"
-          },
           "last_used_at": {
             "type": "string",
             "format": "date-time",
@@ -14416,7 +14264,6 @@
         "required": [
           "path",
           "name",
-          "is_repo",
           "last_used_at"
         ]
       },

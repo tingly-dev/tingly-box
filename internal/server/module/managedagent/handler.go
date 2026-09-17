@@ -46,23 +46,11 @@ func (h *Handler) RecentFolders(c *gin.Context) {
 			limit = n
 		}
 	}
-	folders := h.svc.RecentFolders(c.Request.Context(), limit)
+	folders := h.svc.RecentFolders(limit)
 	if folders == nil {
 		folders = []managedagent.RecentFolder{}
 	}
 	c.JSON(http.StatusOK, RecentFoldersResponse{Folders: folders})
-}
-
-func (h *Handler) ListDirs(c *gin.Context) {
-	path, entries, err := h.svc.ListDirs(c.Request.Context(), c.Query("path"))
-	if err != nil {
-		sendServiceError(c, err)
-		return
-	}
-	if entries == nil {
-		entries = []managedagent.DirEntry{}
-	}
-	c.JSON(http.StatusOK, ListDirsResponse{Path: path, Entries: entries})
 }
 
 func (h *Handler) PermissionModes(c *gin.Context) {
@@ -174,13 +162,4 @@ func (h *Handler) Archive(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, sessionToInfo(sess))
-}
-
-func (h *Handler) Diff(c *gin.Context) {
-	diff, err := h.svc.Diff(c.Request.Context(), c.Param("session_id"))
-	if err != nil {
-		sendServiceError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, diff)
 }

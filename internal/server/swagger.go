@@ -145,7 +145,6 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 				Sessions: maCore.Session,
 				Agent:    maCore.Agent,
 				Routing:  tbclient.NewTBClient(cfg),
-				Git:      &managedagentsvc.Git{},
 			})
 			managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc))
 		}

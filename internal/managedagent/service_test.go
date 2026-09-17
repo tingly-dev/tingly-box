@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -104,20 +103,6 @@ func (s *memStore) Messages(id string) ([]session.Message, error) {
 	out := make([]session.Message, len(s.messages[id]))
 	copy(out, s.messages[id])
 	return out, nil
-}
-
-func mustMkdir(t *testing.T, path string) {
-	t.Helper()
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", path, err)
-	}
-}
-
-func mustWriteFile(t *testing.T, path string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
 }
 
 // fakeAgent is a scripted agentboot.Agent: each Execute call builds one
@@ -270,11 +255,11 @@ func waitStatus(t *testing.T, svc *Service, id string, want session.Status, time
 	}
 }
 
-// ---------- folders / fs ----------
+// ---------- folders ----------
 
 func TestRecentFolders_EmptyInitially(t *testing.T) {
 	svc, _ := newTestService(t, completingScript)
-	if got := svc.RecentFolders(context.Background(), 0); len(got) != 0 {
+	if got := svc.RecentFolders(0); len(got) != 0 {
 		t.Fatalf("want no recent folders, got %v", got)
 	}
 }
@@ -289,38 +274,9 @@ func TestRecentFolders_ReflectsCompletedSession(t *testing.T) {
 	}
 	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
 
-	folders := svc.RecentFolders(context.Background(), 0)
+	folders := svc.RecentFolders(0)
 	if len(folders) != 1 || folders[0].Path != dir {
 		t.Fatalf("want one recent folder %q, got %v", dir, folders)
-	}
-}
-
-func TestListDirs_RejectsRelativeAndMissingPaths(t *testing.T) {
-	svc, _ := newTestService(t, completingScript)
-
-	if _, _, err := svc.ListDirs(context.Background(), "relative/path"); !errors.Is(err, ErrValidation) {
-		t.Fatalf("relative path: want ErrValidation, got %v", err)
-	}
-	if _, _, err := svc.ListDirs(context.Background(), "/definitely/does/not/exist/xyz"); !errors.Is(err, ErrValidation) {
-		t.Fatalf("missing path: want ErrValidation, got %v", err)
-	}
-}
-
-func TestListDirs_ListsSubdirectoriesOnly(t *testing.T) {
-	svc, _ := newTestService(t, completingScript)
-	base := t.TempDir()
-	mustMkdir(t, base+"/child")
-	mustWriteFile(t, base+"/afile.txt")
-
-	path, entries, err := svc.ListDirs(context.Background(), base)
-	if err != nil {
-		t.Fatalf("ListDirs: %v", err)
-	}
-	if path != base {
-		t.Fatalf("path = %q, want %q", path, base)
-	}
-	if len(entries) != 1 || entries[0].Name != "child" {
-		t.Fatalf("entries = %v, want just [child]", entries)
 	}
 }
 
@@ -579,22 +535,4 @@ func TestArchive_ConcurrentWithRunsMap(t *testing.T) {
 		}(sess.ID)
 	}
 	wg.Wait()
-}
-
-func TestDiff_NoGitConfigured(t *testing.T) {
-	svc, _ := newTestService(t, completingScript)
-	dir := t.TempDir()
-	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi"})
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
-	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
-
-	diff, err := svc.Diff(context.Background(), sess.ID)
-	if err != nil {
-		t.Fatalf("Diff: %v", err)
-	}
-	if diff.ChangedFiles != 0 || diff.Patch != "" {
-		t.Fatalf("diff = %+v, want empty (no git configured)", diff)
-	}
 }

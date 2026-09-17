@@ -254,7 +254,6 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 				Sessions: maCore.Session,
 				Agent:    maCore.Agent,
 				Routing:  tbclient.NewTBClient(s.config),
-				Git:      &managedagentsvc.Git{},
 			})
 			managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc))
 		}

@@ -14,8 +14,6 @@ import {
 export type SessionInfo = components['schemas']['SessionInfo'];
 export type MessageInfo = components['schemas']['MessageInfo'];
 export type RecentFolder = components['schemas']['RecentFolder'];
-export type DirEntry = components['schemas']['DirEntry'];
-export type Diff = components['schemas']['Diff'];
 
 type ClientCall<T> = (client: ApiClient, headers: Record<string, string>) => Promise<{
     data?: T;
@@ -38,12 +36,6 @@ export const listRecentFolders = (limit?: number): Promise<RecentFolder[]> =>
         headers,
         params: {query: limit ? {limit} : {}},
     })).then((r) => r.folders);
-
-export const listDirs = (path?: string): Promise<{path: string; entries: DirEntry[]}> =>
-    call((client, headers) => client.GET('/api/v1/managed-agent/fs/dirs', {
-        headers,
-        params: {query: path ? {path} : {}},
-    }));
 
 export const listPermissionModes = (): Promise<string[]> =>
     call((client, headers) => client.GET('/api/v1/managed-agent/permission-modes', {headers}))
@@ -102,12 +94,6 @@ export const interrupt = (sessionId: string): Promise<void> =>
 
 export const archive = (sessionId: string): Promise<SessionInfo> =>
     call((client, headers) => client.POST('/api/v1/managed-agent/sessions/{session_id}/archive', {
-        headers,
-        params: {path: {session_id: sessionId}},
-    }));
-
-export const getDiff = (sessionId: string): Promise<Diff> =>
-    call((client, headers) => client.GET('/api/v1/managed-agent/sessions/{session_id}/diff', {
         headers,
         params: {path: {session_id: sessionId}},
     }));

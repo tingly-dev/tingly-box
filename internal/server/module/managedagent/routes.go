@@ -1,9 +1,6 @@
 package managedagent
 
-import (
-	"github.com/tingly-dev/tingly-box/internal/managedagent"
-	"github.com/tingly-dev/tingly-box/swagger"
-)
+import "github.com/tingly-dev/tingly-box/swagger"
 
 // RegisterRoutes wires /managed-agent onto an authenticated route group.
 func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler) {
@@ -12,12 +9,6 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler) {
 		swagger.WithDescription("List folders web sessions have recently worked in"),
 		swagger.WithQuery("limit", "int", "Maximum folders to return (0 = no limit)"),
 		swagger.WithResponseModel(RecentFoldersResponse{}),
-	)
-	apiV1.GET("/managed-agent/fs/dirs", h.ListDirs,
-		swagger.WithTags("managed-agent"),
-		swagger.WithDescription("List the subdirectories of a path, for picking a folder to work in"),
-		swagger.WithQuery("path", "string", "Absolute directory to list; empty defaults to the home directory"),
-		swagger.WithResponseModel(ListDirsResponse{}),
 	)
 	apiV1.GET("/managed-agent/permission-modes", h.PermissionModes,
 		swagger.WithTags("managed-agent"),
@@ -71,10 +62,5 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler) {
 		swagger.WithTags("managed-agent"),
 		swagger.WithDescription("End a session for good; the folder and transcript are untouched"),
 		swagger.WithResponseModel(SessionInfo{}),
-	)
-	apiV1.GET("/managed-agent/sessions/:session_id/diff", h.Diff,
-		swagger.WithTags("managed-agent"),
-		swagger.WithDescription("Summarise what the agent changed in the folder"),
-		swagger.WithResponseModel(managedagent.Diff{}),
 	)
 }
