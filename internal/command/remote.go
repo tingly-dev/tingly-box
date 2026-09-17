@@ -410,9 +410,11 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	// same way as in server mode.
 	pairing := bot.NewPairingManager()
 
-	// Register unified message handler
-	// Pass nil as SettingsStore - standalone bots don't have dynamic config updates
-	handler := remoteagent.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, nil, tbClient, pairing, nil)
+	// Register unified message handler.
+	// Pass nil as sessionPool - standalone bots don't get persistent @cc
+	// sessions (see .design/claude-code.md); nil as SettingsStore -
+	// standalone bots don't have dynamic config updates.
+	handler := remoteagent.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, nil, directoryBrowser, manager, nil, tbClient, pairing, nil)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {

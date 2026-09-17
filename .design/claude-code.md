@@ -1,10 +1,8 @@
 # Claude Code: from one-shot processes to a persistent stream session
 
-> Status: P0 (feasibility), P1 (core primitive) and P2's pool
-> (`agentboot/pool`) done, 2026-09-17. P2's wiring into `@cc` and P3
-> (observability) not started — see §6. `@cc`'s actual execution path is
-> unchanged; `PersistentSession`/`Runner.Open`/`pool.Pool` exist in
-> `agentboot` but nothing in the product calls them yet.
+> Status: P0 (feasibility), P1 (core primitive), and P2 (pool + wiring into
+> `@cc`, behind the `persistent_session` bot setting, default off) done,
+> 2026-09-17. P3 (observability) not started — see §6.
 > Scope: `@cc` (Claude Code) execution via `agentboot`, as driven by
 > `remote/control/remoteagent`. Does not touch `@tb` (SmartGuide/AFK), which
 > is already a long-lived in-process ReAct loop — see `.design/afk.md`.
@@ -360,27 +358,59 @@ section).
   as backed by a live `PersistentSession` versus the default expiring
   one-shot bookkeeping — still unwired, see below.
 
-**Remaining P2 scope (not done): wiring.** `pool.Pool` has no consumer yet.
-`ClaudeCodeExecutor.Execute` (`executor_claude.go`) still calls
-`AgentService.Run` (one-shot) for every message. Wiring it to look up/open a
-`pool.Pool` entry keyed by `(chatID, agent, project)`, call `Touch` on every
-`TurnCompleteEvent`, and route `SessionStateEvent{Terminated}` to
-`pool.Remove` is a deliberately separate, larger change — it touches the
-actual `@cc` execution path and (per §5.4) needs an opt-in bot/profile
-setting, which drags in `swagger`/`openapi` regen and a frontend placeholder
-per `CLAUDE.md`'s codegen convention. Scoped out of this pass on purpose.
+**Wired (2026-09-17).** `pool.Pool` now has a real consumer:
+`ClaudeCodeExecutor.Execute` (`executor_claude.go`) branches into
+`runPersistentTurn` when the bot opted in (§5.4). `Touch` is called after a
+successful `RunTurnWithPrompter` return; a session observed
+`SessionStateTerminated` after a failed turn is `Remove`d (not `Close`d
+again — it already tore itself down) so the next message opens a fresh one.
+`session.Manager`'s `SetRunning`/`SetCompleted` are called directly from
+`runPersistentTurn` (the persistent path never sets `opts.Store`, since
+`Runner.Open`/`PersistentSession` don't consume it — see §5.1) rather than
+through the runner-internal wiring the one-shot path relies on.
 
-### 5.4 Wiring into `@cc`
+### 5.4 Wiring into `@cc` — done
 
-`remote/control/remoteagent/executor_claude.go`'s `ClaudeCodeExecutor.Execute`
-currently calls `AgentService.Run` (spawn, drive to completion, return) for
-every message. The persistent path adds an alternative branch: look up (or
-open) the registry entry for `(chatID, agent, project)`, `Send` the prompt,
-and drive the *existing* `RunWithPrompter`-style event loop against
-`PersistentSession.Events()` filtered up to the next `TurnCompleteEvent`
-instead of the whole handle closing. `sink`/`prompter` wiring (lines
-148–187 today) needs no change in shape — only the source of the event
-channel and where "this turn is over" is detected.
+`ClaudeCodeExecutor.Execute` (`executor_claude.go`) now branches on
+`e.deps.SessionPool != nil && bot.IsPersistentSession()`:
+
+- **No pool entry for this `(platform, botUUID, chatID, projectPath)` key**
+  (`persistentPoolKey`) → `AgentService.Open` starts a new
+  `PersistentSession` with this message as its first turn, then
+  `pool.Pool.Open` registers it.
+- **A live entry exists** → `PersistentSession.Send` submits this message as
+  the next turn on the already-running process.
+- Either way, the turn is then driven by `RunTurnWithPrompter` (§5.1) — the
+  exact same `sink`/`prompter` closures the one-shot path already built,
+  unchanged in shape.
+- **Any failure to use the persistent path** (no capacity, a stale entry
+  that raced closed, the agent not supporting `Open`, a `Send` failing
+  outright) is treated as *not handled*: the caller falls straight through
+  to the pre-existing one-shot `AgentService.Run` call for that one message,
+  transparently, per §5.3's fallback contract. A session that terminates
+  **mid-turn** (a crash) is the one case that does *not* silently retry as
+  one-shot — tool calls may have already run once, so re-running the prompt
+  risks doing them twice; that turn's error is reported like any other
+  execution failure, and the dead session is dropped from the pool so the
+  *next* message starts clean.
+
+**Bot setting**: `persistent_session` (`*bool`, default unset = off) landed
+end-to-end — `db.ImBotSettingsRecord`/`db.Settings` →
+`imbot.CreateRequest`/`UpdateRequest` → `bot.BotSetting.IsPersistentSession()`
+— following the exact same shape as the existing `require_pairing` tri-state
+field. Per ux-principles.md §6 ("smart defaults over toggles"), this is a
+deliberate, documented deviation: the blast radius (how many `claude`
+processes stay resident, crash/eviction behavior) has no production mileage
+yet, so it ships as an explicit opt-in rather than a default. UI: a `Switch`
+in `CCProfileDialog.tsx`, presented as a separate control below (not inside)
+the profile radio list — profile selection and persistent-session are
+orthogonal axes (ux-principles.md §4) and must not share one control.
+
+**Pool sizing**: one process-wide `pool.Pool` (`MaxSessions: 20`,
+`IdleTimeout: 10m`, `internal/server/module/imbot/manager.go`'s
+`sessionPoolConfig`), shared across every bot the server runs — not a
+per-bot pool, since the cap is meant to bound total resident `claude`
+processes for the whole instance. Not yet a tunable setting (§6 P3).
 
 This should be **opt-in** (a bot/profile setting, not a global default) for
 at least the first shipped iteration — see §6 phasing and
@@ -434,15 +464,20 @@ core efficiency win (skip process-spawn/startup cost per message).
    something the primitive enforces on itself.
    Not yet wired to anything — `Runner.Execute`/`ExecutionHandle` are
    untouched and remain the only path `@cc` actually uses.
-3. **P2 — registry + wiring — pool DONE, wiring not started
-   (2026-09-17).** `pool.Pool` (capacity/LRU eviction, idle-timeout sweep,
-   never evicts a `Running` session) landed in `agentboot/pool` with unit
-   tests against a fake `PersistentSession`. Wiring it into
-   `ClaudeCodeExecutor` behind an opt-in setting is deliberately deferred —
-   see §5.3's "Remaining P2 scope" note.
-4. **P3 — observability.** Surface resident-process count / per-session
-   idle time somewhere an operator can see it (metrics or a debug endpoint)
-   before defaulting anyone into it.
+3. **P2 — registry + wiring — DONE (2026-09-17).** `pool.Pool`
+   (capacity/LRU eviction, idle-timeout sweep, never evicts a `Running`
+   session) in `agentboot/pool`, wired into `ClaudeCodeExecutor` behind the
+   `persistent_session` bot setting (§5.3/§5.4). One process-wide pool
+   shared across every bot. Frontend toggle in `CCProfileDialog.tsx`; full
+   `task codegen` (backend `openapi.json` + `pnpm gen:api`) run and
+   committed as part of this phase. `go build`/`go vet`/`go test -race`
+   green across the whole repo; `pnpm typecheck`/`pnpm lint` clean on the
+   frontend.
+4. **P3 — observability — not started.** Surface resident-process count /
+   per-session idle time somewhere an operator can see it (metrics or a
+   debug endpoint), and make pool sizing (`MaxSessions`/`IdleTimeout`,
+   currently hardcoded in `sessionPoolConfig`) a real setting once there's
+   production mileage to tune against.
 
 ## 7. Open questions / risks
 

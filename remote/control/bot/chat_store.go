@@ -41,8 +41,19 @@ type BotSetting struct {
 	// elsewhere. Operators opt out by setting this to false explicitly.
 	RequirePairing *bool `json:"require_pairing,omitempty"`
 
+	// PersistentSession opts @cc into a long-lived Claude Code process kept
+	// warm across chat turns instead of one process per message. Nil/false
+	// is the default — see .design/claude-code.md.
+	PersistentSession *bool `json:"persistent_session,omitempty"`
+
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// IsPersistentSession reports whether @cc should keep a Claude Code process
+// warm across chat turns for this bot. Nil (unset) defaults to false.
+func (b BotSetting) IsPersistentSession() bool {
+	return b.PersistentSession != nil && *b.PersistentSession
 }
 
 // IsRequirePairing reports whether this bot requires per-chat pairing.

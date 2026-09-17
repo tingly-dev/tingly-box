@@ -166,25 +166,35 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		}
 	}
 
-	startTime := time.Now()
-	result, werr := e.deps.AgentService.Run(ctx, agentboot.RunRequest{
-		ProjectPath: projectPath,
-		Prompt:      req.Text,
-		Opts: agentboot.ExecutionOptions{
-			SessionID: sessionID,
-			Resume:    shouldResume,
-			ControlMetadata: map[string]string{
-				claude.ContextKeyChatID:   req.HCtx.ChatID,
-				claude.ContextKeyPlatform: string(req.HCtx.Platform),
-				claude.ContextKeyBotUUID:  req.HCtx.BotUUID,
-			},
-			PermissionPromptTool: "stdio",
-			PermissionMode:       permissionMode,
-			Env:                  execEnv,
-			SettingsPath:         settingsPath,
-			Store:                e.deps.SessionMgr,
+	execOpts := agentboot.ExecutionOptions{
+		SessionID: sessionID,
+		Resume:    shouldResume,
+		ControlMetadata: map[string]string{
+			claude.ContextKeyChatID:   req.HCtx.ChatID,
+			claude.ContextKeyPlatform: string(req.HCtx.Platform),
+			claude.ContextKeyBotUUID:  req.HCtx.BotUUID,
 		},
-	}, prompter, sink)
+		PermissionPromptTool: "stdio",
+		PermissionMode:       permissionMode,
+		Env:                  execEnv,
+		SettingsPath:         settingsPath,
+	}
+
+	startTime := time.Now()
+	var result *agentboot.Result
+	var werr error
+	persistentHandled := false
+	if e.deps.SessionPool != nil && e.deps.GetBotSettingOrCache().IsPersistentSession() {
+		result, werr, persistentHandled = e.runPersistentTurn(ctx, req, projectPath, sessionID, execOpts, prompter, sink)
+	}
+	if !persistentHandled {
+		execOpts.Store = e.deps.SessionMgr
+		result, werr = e.deps.AgentService.Run(ctx, agentboot.RunRequest{
+			ProjectPath: projectPath,
+			Prompt:      req.Text,
+			Opts:        execOpts,
+		}, prompter, sink)
+	}
 	duration := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{
 		"chatID":    req.HCtx.ChatID,
@@ -214,10 +224,85 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		return werr
 	}
 
-	// Success: runner called Store.SetCompleted inside Wait(); send the "Task done" card.
+	// Success: the one-shot path's runner calls Store.SetCompleted inside
+	// Wait(); the persistent path's runPersistentTurn calls it directly
+	// (Runner.Open/PersistentSession never see opts.Store). Either way,
+	// SetCompleted has already run — send the "Task done" card.
 	sendTaskDoneCard(req.HCtx, meta)
 
 	return nil
+}
+
+// runPersistentTurn attempts to run req through the bot's persistent-session
+// pool (e.deps.SessionPool) instead of a one-shot process. Callers must
+// already have confirmed the bot opted in and the pool is non-nil.
+//
+// handled=false means the persistent path could not be used for this
+// message — no capacity, a stale/crashed entry that was just evicted, or
+// the agent doesn't support Open — and the caller should fall back to a
+// fresh one-shot AgentService.Run, exactly as if persistent mode were off.
+// This is always safe: nothing has been sent to any process yet in the
+// handled=false case.
+//
+// handled=true means the persistent path actually drove this turn to
+// completion, successfully or not; result/err are the same shape
+// AgentService.Run would have produced. A turn that fails because the
+// session terminated mid-turn (a crash) is NOT retried as one-shot here —
+// unlike an eviction/idle-timeout, side effects (tool calls) may have
+// already run, so silently re-running the prompt could double them up. The
+// session is removed from the pool either way so the next message opens a
+// fresh one.
+func (e *ClaudeCodeExecutor) runPersistentTurn(
+	ctx context.Context,
+	req PreparedRequest,
+	projectPath string,
+	sessionID string,
+	opts agentboot.ExecutionOptions,
+	prompter agentboot.Prompter,
+	sink agentboot.MessageSink,
+) (result *agentboot.Result, err error, handled bool) {
+	poolKey := persistentPoolKey(req.HCtx, projectPath)
+
+	persistentSession, found := e.deps.SessionPool.Acquire(poolKey)
+	if !found {
+		opened, operr := e.deps.AgentService.Open(ctx, agentClaudeCode, projectPath, req.Text, opts)
+		if operr != nil {
+			logrus.WithError(operr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: could not open persistent session, falling back to one-shot")
+			return nil, nil, false
+		}
+		if perr := e.deps.SessionPool.Open(ctx, poolKey, opened); perr != nil {
+			logrus.WithError(perr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: could not register persistent session, falling back to one-shot")
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = opened.Close(closeCtx)
+			cancel()
+			return nil, nil, false
+		}
+		persistentSession = opened
+	} else if serr := persistentSession.Send(ctx, req.Text); serr != nil {
+		logrus.WithError(serr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: persistent session Send failed, evicting and falling back to one-shot")
+		e.deps.SessionPool.Remove(poolKey)
+		return nil, nil, false
+	}
+
+	e.deps.SessionMgr.SetRunning(sessionID)
+	result, err = agentboot.RunTurnWithPrompter(ctx, persistentSession, prompter, sink)
+	if err != nil && persistentSession.Status() == agentboot.SessionStateTerminated {
+		e.deps.SessionPool.Remove(poolKey)
+	} else {
+		e.deps.SessionPool.Touch(poolKey)
+	}
+	if err == nil {
+		e.deps.SessionMgr.SetCompleted(sessionID, "")
+	}
+	return result, err, true
+}
+
+// persistentPoolKey identifies a persistent session's slot in the shared,
+// process-wide pool. It must be unique across every bot/chat/project this
+// process serves — platform+bot avoids two different bots' chats
+// colliding on the same numeric chat ID.
+func persistentPoolKey(hCtx HandlerContext, projectPath string) string {
+	return strings.Join([]string{string(hCtx.Platform), hCtx.BotUUID, hCtx.ChatID, projectPath}, "|")
 }
 
 // ccProfileID extracts the Claude Code profile ID from a bot's DefaultAgent

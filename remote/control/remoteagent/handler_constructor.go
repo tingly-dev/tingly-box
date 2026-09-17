@@ -10,6 +10,7 @@ import (
 	smart_guide2 "github.com/tingly-dev/tingly-box/remote/control/smart_guide"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -22,6 +23,7 @@ func NewBotHandler(
 	chatStore bot2.ChatStoreInterface,
 	sessionMgr *session.Manager,
 	agentService *agentboot.AgentService,
+	sessionPool *pool.Pool,
 	directoryBrowser *feature.DirectoryBrowser,
 	manager *imbot.Manager,
 	prompter *imchannel.IMPrompter,
@@ -113,6 +115,7 @@ func NewBotHandler(
 		ChatStore:         chatStore,
 		SessionMgr:        sessionMgr,
 		AgentService:      agentService,
+		SessionPool:       sessionPool,
 		IMPrompter:        imPrompter,
 		FileStore:         fileStore,
 		TBClient:          tbClient,

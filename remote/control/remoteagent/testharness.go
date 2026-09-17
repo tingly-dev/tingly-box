@@ -130,6 +130,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting bot.BotSetting, o
 		chatStore,
 		sessionMgr,
 		agentService,
+		nil, // sessionPool — persistent @cc sessions not exercised by this harness
 		dirBrowser,
 		manager,
 		nil, // prompter — standalone: the handler creates (and routes) its own

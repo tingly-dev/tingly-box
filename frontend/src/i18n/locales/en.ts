@@ -2301,6 +2301,8 @@ export default {
       "dialogTitle": "Claude Code Profile for @cc",
       "empty": "No Claude Code profiles yet. Create one on the Claude Code scenario page first.",
       "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
+      "persistentSession": "Keep the process warm between messages",
+      "persistentSessionCaption": "Experimental: skips process startup cost on every @cc message by reusing one Claude Code process across a chat's turns.",
       "profileTooltip": "Claude Code profile",
       "scenario": "Scenario",
       "separate": "separate",
@@ -2310,7 +2312,8 @@ export default {
     "emptyTitle": "No {{platform}} Bots Yet",
     "notify": {
       "ccProfileUpdateFailed": "Failed to update Claude Code profile",
-      "ccProfileUpdated": "Claude Code profile updated"
+      "ccProfileUpdated": "Claude Code profile updated",
+      "persistentSessionUpdateFailed": "Failed to update persistent-session setting"
     },
     "pageSubtitle": "Choose who can control each bot and where chat commands route.",
     "pageTitle": "Remote Control",

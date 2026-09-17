@@ -178,6 +178,7 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
 		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
 		RequirePairing:     req.RequirePairing,
+		PersistentSession:  req.PersistentSession,
 	}
 
 	created, err := h.store.CreateSettings(settings)
@@ -352,6 +353,11 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	// Handle require_pairing (partial update); nil → leave unchanged in DB.
 	if req.RequirePairing != nil {
 		settings.RequirePairing = req.RequirePairing
+	}
+
+	// Handle persistent_session (partial update); nil → leave unchanged in DB.
+	if req.PersistentSession != nil {
+		settings.PersistentSession = req.PersistentSession
 	}
 
 	// Start from the current mount list so unrelated edits don't wipe it (the

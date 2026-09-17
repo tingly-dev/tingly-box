@@ -54,7 +54,7 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot2.Manager,
 	registry := channel.NewRegistry()
 	m := bot2.NewManager(store,
 		bot2.NewNotifyConsumer(),
-		remoteagent.NewConsumer(sessionMgr, svc, nil, store))
+		remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store))
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
 		t.Fatalf("open store manager: %v", err)

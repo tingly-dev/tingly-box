@@ -2,6 +2,8 @@ package agentboot
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 )
@@ -100,4 +102,77 @@ func RunWithPrompter(ctx context.Context, h ExecutionHandle, prompter Prompter, 
 	}
 
 	return h.Wait()
+}
+
+// ErrSessionEventsClosedMidTurn means a [PersistentSession]'s Events()
+// channel closed without ever producing a TurnCompleteEvent or a
+// SessionStateEvent{State: SessionStateTerminated} — both of which
+// [persistentSession.terminate] always emits before closing the channel, so
+// this indicates a bug in the session implementation rather than a normal
+// runtime outcome.
+var ErrSessionEventsClosedMidTurn = errors.New("agentboot: persistent session events closed without a turn boundary")
+
+// RunTurnWithPrompter is [RunWithPrompter]'s counterpart for a
+// [PersistentSession]: it drains Events() through exactly one turn
+// boundary — a TurnCompleteEvent, whose Result it returns — instead of
+// waiting for the channel to close, since a persistent session's channel
+// stays open across further turns.
+//
+// If the session terminates (a crash, or a fatal protocol error) before the
+// turn completes, RunTurnWithPrompter returns the SessionStateEvent's
+// reason as an error instead of a Result. Callers should treat this the
+// same as any other execution failure and remove the session from
+// whatever registry (e.g. an [github.com/tingly-dev/tingly-box/agentboot/pool.Pool])
+// tracks it — see .design/claude-code.md §5.3/§5.4.
+//
+// Dispatch for MessageEvent/ApprovalRequestEvent/AskRequestEvent/ErrorEvent
+// mirrors RunWithPrompter exactly.
+func RunTurnWithPrompter(ctx context.Context, session PersistentSession, prompter Prompter, sink MessageSink) (*Result, error) {
+	for ev := range session.Events() {
+		switch e := ev.(type) {
+		case MessageEvent:
+			if sink != nil {
+				sink(e.Raw)
+			}
+
+		case ApprovalRequestEvent:
+			res, perr := prompter.OnApproval(ctx, e)
+			if perr != nil {
+				logrus.WithError(perr).Warn("agentboot.RunTurnWithPrompter: prompter.OnApproval error; denying")
+				res = ApprovalResponse{Approved: false, Reason: perr.Error()}
+			}
+			if rerr := session.Respond(e.ID, res); rerr != nil {
+				logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
+			}
+
+		case AskRequestEvent:
+			res, aerr := prompter.OnAsk(ctx, e)
+			if aerr != nil {
+				logrus.WithError(aerr).Warn("agentboot.RunTurnWithPrompter: prompter.OnAsk error; denying")
+				res = AskResponse{Approved: false, Reason: aerr.Error()}
+			}
+			if rerr := session.Respond(e.ID, res); rerr != nil {
+				logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
+			}
+
+		case ErrorEvent:
+			logrus.WithError(e.Err).Warn("agentboot.RunTurnWithPrompter: agent ErrorEvent")
+			if sink != nil {
+				sink(e)
+			}
+
+		case TurnCompleteEvent:
+			if e.Result != nil && e.Result.Error != "" {
+				return e.Result, errors.New(e.Result.Error)
+			}
+			return e.Result, nil
+
+		case SessionStateEvent:
+			if e.State == SessionStateTerminated {
+				return nil, fmt.Errorf("agentboot: persistent session terminated before this turn completed: %s", e.Reason)
+			}
+		}
+	}
+
+	return nil, ErrSessionEventsClosedMidTurn
 }

@@ -95,7 +95,7 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -185,7 +185,7 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -253,7 +253,7 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {

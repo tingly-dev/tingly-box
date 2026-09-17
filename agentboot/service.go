@@ -202,6 +202,25 @@ func (s *AgentService) ExecuteSessionWithAgent(ctx context.Context, agentType Ag
 	return agent.Execute(ctx, prompt, opts)
 }
 
+// Open starts a long-lived, multi-turn [PersistentSession] against the
+// specified agent type and project path, submitting prompt as the first
+// turn. Pass an empty agentType to use the default agent.
+//
+// Returns an error if the resolved agent does not implement
+// [PersistentAgent] (i.e. does not support Open) — see .design/claude-code.md.
+func (s *AgentService) Open(ctx context.Context, agentType AgentType, projectPath string, prompt string, opts ExecutionOptions) (PersistentSession, error) {
+	agent, err := s.resolveAgent(agentType)
+	if err != nil {
+		return nil, fmt.Errorf("agentservice: %w", err)
+	}
+	persistent, ok := agent.(PersistentAgent)
+	if !ok {
+		return nil, fmt.Errorf("agentservice: agent %q does not support persistent sessions", agent.Type())
+	}
+	opts.ProjectPath = projectPath
+	return persistent.Open(ctx, prompt, opts)
+}
+
 // RunRequest bundles the inputs for a high-level [AgentService.Run].
 type RunRequest struct {
 	// AgentType selects the agent; empty uses the default agent.

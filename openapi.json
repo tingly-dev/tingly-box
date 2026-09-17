@@ -10798,6 +10798,10 @@
             "type": "string",
             "description": "Field name"
           },
+          "persistent_session": {
+            "type": "boolean",
+            "description": "Field persistent_session"
+          },
           "platform": {
             "type": "string",
             "description": "Field platform"
@@ -10894,6 +10898,10 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "persistent_session": {
+            "type": "boolean",
+            "description": "Field persistent_session"
           },
           "platform": {
             "type": "string",
@@ -14751,6 +14759,10 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "persistent_session": {
+            "type": "boolean",
+            "description": "Field persistent_session"
           },
           "platform": {
             "type": "string",

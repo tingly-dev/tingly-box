@@ -16,10 +16,20 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/session"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
+
+// sessionPoolConfig bounds resident persistent @cc processes for the whole
+// server, across every bot. Not yet exposed as a setting — see
+// .design/claude-code.md §5.3/P3 (observability should land before this
+// becomes tunable).
+var sessionPoolConfig = pool.Config{
+	MaxSessions: 20,
+	IdleTimeout: 10 * time.Minute,
+}
 
 // BotManager manages the lifecycle of ImBot instances.
 // It encapsulates the internal bot.Manager and provides a clean interface
@@ -30,6 +40,7 @@ type BotManager struct {
 	store        *db.ImBotSettingsStore
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
+	sessionPool  *pool.Pool
 	config       *config.Config
 }
 
@@ -102,7 +113,8 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	// remote/control/adapter). The raw *db.ImBotSettingsStore is kept for
 	// host-side reads that still want db.Settings.
 	settingsStore := adapter.NewSettingsStore(store)
-	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, tbClient, settingsStore)
+	sessionPool := pool.New(sessionPoolConfig)
+	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, sessionPool, tbClient, settingsStore)
 
 	// Create internal bot manager
 	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)
@@ -117,6 +129,7 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		store:        store,
 		sessionMgr:   sessionMgr,
 		agentService: agentService,
+		sessionPool:  sessionPool,
 		config:       cfg,
 	}
 
@@ -367,6 +380,14 @@ func (bm *BotManager) Shutdown() {
 	// closed on the server path.
 	if bm.sessionMgr != nil {
 		bm.sessionMgr.Stop()
+	}
+
+	// Close every resident persistent @cc process before the server exits,
+	// rather than leaving them to be killed by process teardown.
+	if bm.sessionPool != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		bm.sessionPool.Shutdown(shutdownCtx)
+		cancel()
 	}
 
 	logrus.Info("BotManager shutdown complete")

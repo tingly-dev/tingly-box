@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/smart_guide"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -54,9 +55,15 @@ type ExecutorDependencies struct {
 	// immediately without requiring a bot restart.
 	GetBotSetting func() (bot.BotSetting, error)
 
-	ChatStore                  bot.ChatStoreInterface
-	SessionMgr                 *session.Manager
-	AgentService               *agentboot.AgentService
+	ChatStore    bot.ChatStoreInterface
+	SessionMgr   *session.Manager
+	AgentService *agentboot.AgentService
+	// SessionPool holds long-lived Claude Code processes for bots that opt
+	// into persistent sessions (BotSetting.PersistentSession). Nil disables
+	// the feature entirely regardless of the bot setting — the standalone
+	// CLI path (internal/command/remote.go) does not construct one.
+	// See .design/claude-code.md.
+	SessionPool                *pool.Pool
 	IMPrompter                 *imchannel.IMPrompter
 	FileStore                  *FileStore
 	TBClient                   tbclient.TBClient
