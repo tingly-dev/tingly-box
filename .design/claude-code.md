@@ -385,8 +385,13 @@ core efficiency win (skip process-spawn/startup cost per message).
 ## 7. Open questions / risks
 
 - **The root/`--dangerously-skip-permissions` gap found during P0** applies
-  to *today's* one-shot path too, not just the persistent design — worth its
-  own small fix independent of this proposal (see P0 note in §6).
+  to *today's* one-shot path too, not just the persistent design. Low actual
+  risk today — `SetSkipPermissions` has zero callers in product code or
+  tests (`@cc`'s real bypass path is `--permission-mode bypassPermissions` +
+  the app-level `autoApprovePrompter`, neither of which touches `isRoot()`)
+  — so this is flagged with a code comment at the call site
+  (`agentboot/claude/driver.go`) rather than fixed speculatively; revisit if
+  a future caller actually wires `skipPerms` up under a root deployment.
 - **Crash blast radius.** A persistent process holds credentials/env for its
   full idle lifetime instead of a few seconds — worth an explicit look at
   whether `execEnv`/`settingsPath` (per-message today, `executor_claude.go`
