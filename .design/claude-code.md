@@ -406,11 +406,14 @@ in `CCProfileDialog.tsx`, presented as a separate control below (not inside)
 the profile radio list — profile selection and persistent-session are
 orthogonal axes (ux-principles.md §4) and must not share one control.
 
-**Pool sizing**: one process-wide `pool.Pool` (`MaxSessions: 20`,
+**Pool sizing**: one process-wide `pool.Pool` (`MaxSessions: 10`,
 `IdleTimeout: 10m`, `internal/server/module/imbot/manager.go`'s
 `sessionPoolConfig`), shared across every bot the server runs — not a
 per-bot pool, since the cap is meant to bound total resident `claude`
-processes for the whole instance. Not yet a tunable setting (§6 P3).
+processes for the whole instance. `MaxSessions` counts top-level entry
+agents only — each may spawn subagents of its own, so 10 is a conservative
+retention budget on top-level sessions, not a hard ceiling on total
+processes. Not yet a tunable setting (§6 P3).
 
 This should be **opt-in** (a bot/profile setting, not a global default) for
 at least the first shipped iteration — see §6 phasing and
