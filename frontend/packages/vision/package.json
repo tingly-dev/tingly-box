@@ -8,5 +8,8 @@
     ".": "./src/index.ts"
   },
   "types": "./src/index.ts",
-  "sideEffects": false
+  "sideEffects": false,
+  "dependencies": {
+    "mediabunny": "^1.56.1"
+  }
 }

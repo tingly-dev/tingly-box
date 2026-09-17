@@ -41,9 +41,6 @@ importers:
       i18next-browser-languagedetector:
         specifier: ^8.2.1
         version: 8.2.1
-      mediabunny:
-        specifier: ^1.56.1
-        version: 1.56.1
       openai:
         specifier: ^6.48.0
         version: 6.48.0(ws@8.21.1)(zod@4.4.3)
@@ -159,7 +156,11 @@ importers:
         specifier: 0.170.0
         version: 0.170.0
 
-  packages/vision: {}
+  packages/vision:
+    dependencies:
+      mediabunny:
+        specifier: ^1.56.1
+        version: 1.56.1
 
 packages:
 
