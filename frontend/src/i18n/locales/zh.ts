@@ -471,6 +471,8 @@ export default {
     "copied": "已复制!",
     "requestConfig": "请求配置",
     "advanced": "高级",
+    "groupParameters": "参数",
+    "groupContent": "内容",
     "copy": "复制",
     "emptyTitle": "尚未运行",
     "emptyBody": "在左侧选好请求配置后点运行测试——结果、请求旅程和 cURL 都会在这里展示。",
