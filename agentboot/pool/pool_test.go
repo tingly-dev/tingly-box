@@ -2,6 +2,7 @@ package pool_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -207,4 +208,26 @@ func TestPool_ShutdownClosesEverything(t *testing.T) {
 	assert.Equal(t, 1, a.closedCount())
 	assert.Equal(t, 1, b.closedCount())
 	assert.Equal(t, 0, p.Len())
+}
+
+func TestPool_CloseAllWhere(t *testing.T) {
+	p := pool.New(pool.Config{})
+	botASession1 := newFakeSession(agentboot.SessionStateIdle)
+	botASession2 := newFakeSession(agentboot.SessionStateRunning)
+	botBSession := newFakeSession(agentboot.SessionStateIdle)
+	require.NoError(t, p.Open(context.Background(), "bot-a|chat-1|/proj", botASession1))
+	require.NoError(t, p.Open(context.Background(), "bot-a|chat-2|/proj", botASession2))
+	require.NoError(t, p.Open(context.Background(), "bot-b|chat-1|/proj", botBSession))
+
+	n := p.CloseAllWhere(context.Background(), func(key string) bool {
+		return strings.HasPrefix(key, "bot-a|")
+	})
+
+	assert.Equal(t, 2, n)
+	assert.Equal(t, 1, botASession1.closedCount())
+	assert.Equal(t, 1, botASession2.closedCount())
+	assert.Equal(t, 0, botBSession.closedCount())
+	assert.Equal(t, 1, p.Len())
+	_, ok := p.Acquire("bot-b|chat-1|/proj")
+	assert.True(t, ok)
 }

@@ -270,6 +270,39 @@ func (p *Pool) sweepIdle() {
 	}
 }
 
+// CloseAllWhere closes and removes every session whose key satisfies match,
+// concurrently, waiting for them all to finish or ctx to be canceled.
+// Returns the number of sessions matched (closing itself is best-effort,
+// like CloseAndRemove/Shutdown — an error from one session's Close does not
+// stop the others or get reported here).
+//
+// This is the caller's tool for invalidating every session tied to some
+// piece of the key it constructed — e.g. every session for one bot, when
+// that bot's persistent-session setting is turned off or the bot stops.
+// Pool has no notion of what a key means, so it cannot do this on its own.
+func (p *Pool) CloseAllWhere(ctx context.Context, match func(key string) bool) int {
+	p.mu.Lock()
+	var matched []*entry
+	for k, e := range p.entries {
+		if match(k) {
+			matched = append(matched, e)
+			delete(p.entries, k)
+		}
+	}
+	p.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, e := range matched {
+		wg.Add(1)
+		go func(e *entry) {
+			defer wg.Done()
+			_ = p.closeEntry(ctx, e)
+		}(e)
+	}
+	wg.Wait()
+	return len(matched)
+}
+
 // Shutdown stops the idle sweep and closes every resident session,
 // concurrently, waiting for all of them to finish or ctx to be canceled.
 func (p *Pool) Shutdown(ctx context.Context) {
