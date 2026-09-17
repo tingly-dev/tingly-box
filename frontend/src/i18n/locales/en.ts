@@ -1628,7 +1628,44 @@ export default {
     "deleteSuccess": "Team deleted",
     "deleteFailed": "Team cannot be deleted while it owns sharing keys",
     "enabled": "Team enabled",
-    "disabled": "Team disabled"
+    "disabled": "Team disabled",
+    "guide": {
+      "trigger": "How Team works",
+      "title": "How Team works",
+      "subtitle": "Step {{current}} of {{total}}",
+      "previous": "Previous",
+      "next": "Next",
+      "gotIt": "Got it!",
+      "steps": {
+        "usage": {
+          "title": "What a Team is for",
+          "content": "A Team is a self-contained slice of this Tingly-Box instance: its own rules, its own Sharing Keys, and its own usage — separate from your personal scenarios (Claude Code, OpenAI, …) and from every other Team.",
+          "bullet1": "Use it to hand a group — a customer, a sub-team, an external app — model access without sharing your main setup.",
+          "bullet2": "Each Team gets its own rule list below; add and edit rules here the same way you would on any other scenario page."
+        },
+        "isolation": {
+          "title": "How it's separated",
+          "content": "A Sharing Key is bound to exactly one Team and can only reach /tingly/team[/v1] — never another Team, another scenario, or the management API.",
+          "bullet1": "Moving a key to another Team updates its access immediately; the old Team loses it right away.",
+          "bullet2": "Disabling a Team disables every Sharing Key under it until the Team is re-enabled.",
+          "bullet3": "Your Global model token still has full cross-scenario access — it isn't Team-scoped."
+        },
+        "keys": {
+          "title": "Configure a Sharing Key",
+          "content": "Click \"Sharing Keys\" above to create one for this Team.",
+          "bullet1": "Create Token → give it a name for who or what it's for → copy the tb-share-… value, shown only once at creation.",
+          "bullet2": "Hand that key to whoever should use this Team — a teammate, a client app, a CI job.",
+          "bullet3": "You can move a key to a different Team later without rotating it."
+        },
+        "principles": {
+          "title": "How it's used",
+          "content": "Point the client at this Team's endpoint and authenticate with its Sharing Key.",
+          "bullet1": "Base URL: /tingly/team (or /tingly/team/v1) — copy it from the Team Access panel above.",
+          "bullet2": "API key: the tb-share-… Sharing Key created for this Team.",
+          "bullet3": "Requests are then routed by the rules below, exactly like any other scenario — only models added to this Team's rules are reachable."
+        }
+      }
+    }
   },
   "context1M": {
     "enabledTitle": "1M Context Window Enabled",

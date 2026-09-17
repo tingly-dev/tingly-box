@@ -83,3 +83,26 @@ Files: `ProviderFormDialog.tsx`, `providerFormDialog/ProtocolSelector.tsx`.
 
 i18n keys added under `providerDialog.apiStyle`: `recommendedBadge`,
 `customOpenAIHint`, `customAnthropicHint` (en + zh).
+
+## 4. Team page — "what is this and how do I use it?"
+
+The Team page (`UseTeamPage.tsx`) embeds the same `TemplatePage` rule list as
+every other scenario, so its rule list already gets the routing/tier guide via
+the "?" in that card's title (`EntryGuideDialog`, mode `direct`). But nothing
+explained the Team-specific concepts sitting above that rule list: what a Team
+is for, how it's isolated from other Teams/scenarios, how to mint a Sharing
+Key, and how a client actually points at one.
+
+**Fix (embed education, principle #8):** a second, Team-scoped `?` next to the
+existing key-scope info icon in the page title row opens `TeamGuideDialog`
+(`pages/scenario/components/TeamGuideDialog.tsx`) — a 4-step, diagram-free
+walkthrough (What a Team is for → How it's separated → Configure a Sharing Key
+→ How it's used), grounded in `.design/team.md`'s access model. It deliberately
+skips the routing diagram: that's already one click away via the rule list's
+own guide, and repeating it here would just be two guides explaining the same
+thing (the routing/tier guides already coexist as near-duplicate dialog shells
+for exactly this reason — a third near-copy wasn't worth it once the content
+diverged this much, so this one drops the `StaticGraphViewer` diagram box
+entirely in favor of short bulleted text).
+
+Files: `UseTeamPage.tsx`, `TeamGuideDialog.tsx`, i18n `teams.guide.*` (en + zh).

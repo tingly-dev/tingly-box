@@ -1624,7 +1624,44 @@ export default {
     "deleteSuccess": "Team 已删除",
     "deleteFailed": "Team 仍有共享密钥，无法删除",
     "enabled": "Team 已启用",
-    "disabled": "Team 已停用"
+    "disabled": "Team 已停用",
+    "guide": {
+      "trigger": "Team 使用说明",
+      "title": "Team 使用说明",
+      "subtitle": "第 {{current}} 步，共 {{total}} 步",
+      "previous": "上一步",
+      "next": "下一步",
+      "gotIt": "知道了！",
+      "steps": {
+        "usage": {
+          "title": "Team 是做什么用的",
+          "content": "Team 是这个 Tingly-Box 实例中一块独立的空间：有自己的规则、自己的共享密钥、自己的用量统计——与你的个人场景（Claude Code、OpenAI……）以及其他 Team 都是分开的。",
+          "bullet1": "用它把模型访问权交给某个群体——客户、子团队、外部应用——而不必分享你的主配置。",
+          "bullet2": "每个 Team 在下方都有自己独立的规则列表；在这里添加、编辑规则的方式和其他场景页一样。"
+        },
+        "isolation": {
+          "title": "它是怎么被隔离的",
+          "content": "一个共享密钥只能绑定一个 Team，且只能访问 /tingly/team[/v1]——不能访问其他 Team、其他场景，也不能访问管理 API。",
+          "bullet1": "把密钥移动到另一个 Team 后，权限会立即生效；旧 Team 会立刻失去这个密钥的访问权。",
+          "bullet2": "停用某个 Team 后，它名下所有共享密钥都会立即失效，直到该 Team 重新启用。",
+          "bullet3": "你的全局 model token 仍然拥有跨场景的完整访问权限——它不受 Team 范围限制。"
+        },
+        "keys": {
+          "title": "配置共享密钥",
+          "content": "点击上方的\"共享密钥\"按钮，为这个 Team 创建一个。",
+          "bullet1": "创建令牌 → 起一个能看出用途的名称 → 复制 tb-share-… 开头的密钥（仅在创建时显示一次）。",
+          "bullet2": "把这个密钥交给应该使用这个 Team 的一方——队友、客户端应用、CI 任务。",
+          "bullet3": "之后可以把密钥移动到另一个 Team，无需重新生成。"
+        },
+        "principles": {
+          "title": "怎么用",
+          "content": "让客户端指向这个 Team 的接口地址，并用它的共享密钥完成鉴权。",
+          "bullet1": "Base URL：/tingly/team（或 /tingly/team/v1）——从上方的 Team Access 面板复制。",
+          "bullet2": "API Key：为这个 Team 创建的 tb-share-… 共享密钥。",
+          "bullet3": "之后请求会按下方的规则路由，和其他场景完全一样——只有添加到这个 Team 规则里的模型才能被访问。"
+        }
+      }
+    }
   },
   "context1M": {
     "enabledTitle": "已启用 1M 上下文窗口",
