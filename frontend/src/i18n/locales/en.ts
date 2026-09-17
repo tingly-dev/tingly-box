@@ -926,6 +926,11 @@ export default {
       "direct": "Direct Routing Guide",
       "smart": "Smart Routing Guide",
       "tier": "Tier Guide"
+    },
+    "team": {
+      "title": "Team Guide",
+      "description": "What a Team is for, how it's isolated, and how to configure a Sharing Key — the same guide available on any Team page.",
+      "action": "How Team works"
     }
   },
   "serverInfo": {
@@ -1628,7 +1633,41 @@ export default {
     "deleteSuccess": "Team deleted",
     "deleteFailed": "Team cannot be deleted while it owns sharing keys",
     "enabled": "Team enabled",
-    "disabled": "Team disabled"
+    "disabled": "Team disabled",
+    "guide": {
+      "trigger": "How Team works",
+      "title": "How Team works",
+      "subtitle": "Step {{current}} of {{total}}",
+      "previous": "Previous",
+      "next": "Next",
+      "gotIt": "Got it!",
+      "steps": {
+        "usage": {
+          "title": "What a Team is for",
+          "content": "A Team is an isolated slice of this instance — its own rules, Sharing Keys, and usage, separate from your other scenarios and Teams.",
+          "bullet1": "Give a group — a customer, a sub-team, an external app — model access without sharing your main setup.",
+          "bullet2": "Add rules to this Team below, just like on any other scenario page."
+        },
+        "isolation": {
+          "title": "How it's separated",
+          "content": "A Sharing Key belongs to exactly one Team and can only reach /tingly/team[/v1].",
+          "bullet1": "Moving or disabling a key or Team takes effect immediately.",
+          "bullet2": "Your Global model token isn't Team-scoped — it still has full access."
+        },
+        "keys": {
+          "title": "Configure a Sharing Key",
+          "content": "Click \"Sharing Keys\" above to create one for this Team.",
+          "bullet1": "Name it, then copy the tb-share-… value — shown only once.",
+          "bullet2": "Move it to another Team anytime, without rotating it."
+        },
+        "principles": {
+          "title": "How it's used",
+          "content": "Point the client at this Team's Base URL, using its Sharing Key as the API key.",
+          "bullet1": "Base URL and API key are shown in the Team Access panel above.",
+          "bullet2": "Requests route through the rules below — only models added there are reachable."
+        }
+      }
+    }
   },
   "context1M": {
     "enabledTitle": "1M Context Window Enabled",

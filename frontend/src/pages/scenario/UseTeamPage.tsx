@@ -7,7 +7,7 @@ import {
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip, Typography,
 } from '@mui/material';
-import {Delete, Edit, Info as IconInfo, Key as IconKey} from '@/components/icons';
+import {Delete, Edit, HelpOutline, Info as IconInfo, Key as IconKey} from '@/components/icons';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -15,6 +15,7 @@ import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import SharingKeysDialog from './components/SharingKeysDialog.tsx';
+import TeamGuideDialog from './components/TeamGuideDialog.tsx';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
 import {api} from '@/services/api';
@@ -34,6 +35,7 @@ const UseTeamPageContent: React.FC = () => {
     const {isLoading, notification, copyToClipboard, baseUrl} = useScenarioPageInternal(scenario);
 
     const [sharingKeysOpen, setSharingKeysOpen] = useState(false);
+    const [teamGuideOpen, setTeamGuideOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [teamName, setTeamName] = useState('');
@@ -138,6 +140,16 @@ const UseTeamPageContent: React.FC = () => {
                                             <IconInfo fontSize="small" />
                                         </IconButton>
                                     </Tooltip>
+                                    <Tooltip title={t('teams.guide.trigger')}>
+                                        <IconButton
+                                            size="small"
+                                            aria-label={t('teams.guide.trigger')}
+                                            onClick={() => setTeamGuideOpen(true)}
+                                            sx={{color: 'text.secondary', '&:hover': {color: 'primary.main'}}}
+                                        >
+                                            <HelpOutline fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                     <Tooltip title={t('teams.editTeam')}>
                                         <IconButton size="small" onClick={openEditor}><Edit fontSize="small" /></IconButton>
                                     </Tooltip>
@@ -213,6 +225,8 @@ const UseTeamPageContent: React.FC = () => {
                 <SharingKeysDialog open={sharingKeysOpen} onClose={() => setSharingKeysOpen(false)}
                                    team={currentTeam} teams={teams} />
             )}
+
+            <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
 
             <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('teams.editTeam')}</DialogTitle>
