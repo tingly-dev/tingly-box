@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import type {ExperimentalFeature} from '@/components/ExperimentalFeatureGate';
-import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
+import { Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import {alpha} from '@mui/material/styles';
 import React, {useEffect, useState} from 'react';
@@ -33,6 +33,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
+    const [benchEnabled, setBenchEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const [updatingFeature, setUpdatingFeature] = useState<ExperimentalFeature>();
     const [actionError, setActionError] = useState(false);
@@ -58,6 +59,10 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             // Load MCP flag
             const mcpResult = await api.getScenarioFlag('_global', 'mcp');
             setMCPEnabled(mcpResult?.data?.value || false);
+
+            // Load Bench flag
+            const benchResult = await api.getScenarioFlag('_global', 'bench');
+            setBenchEnabled(benchResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -108,6 +113,11 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const toggleMCP = () => {
         const newValue = !mcpEnabled;
         return finishUpdate('mcp', newValue, () => setMCPEnabled(newValue));
+    };
+
+    const toggleBench = () => {
+        const newValue = !benchEnabled;
+        return finishUpdate('bench', newValue, () => setBenchEnabled(newValue));
     };
 
     useEffect(() => {
@@ -180,6 +190,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             skill_ide: t('system.experimentalFeatures.skills'),
             guardrails: t('system.experimentalFeatures.guardrails'),
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
+            bench: t('system.experimentalFeatures.bench'),
         }[requestedFeature]
         : undefined;
 
@@ -253,6 +264,16 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                         {t('system.experimentalFeatures.mcpEnabledInfo')}
                     </Typography>
                 </Alert>
+            )}
+
+            {/* Bench Section */}
+            {featureRow(
+                'bench',
+                <IconTestPipe sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.bench'),
+                t('system.experimentalFeatures.enableBench'),
+                benchEnabled,
+                toggleBench,
             )}
 
         </Box>
