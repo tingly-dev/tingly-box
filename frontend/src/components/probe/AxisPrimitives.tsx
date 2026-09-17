@@ -43,6 +43,32 @@ export const railGroupStyle = {
     },
 };
 
+// AxisGroup: a small overline + divider header, splitting a stack of Axis
+// rows into the two kinds an axis actually is — never by how often it's
+// touched (that's what the dialog's Advanced fold already does). Same visual
+// language as PluginsPanel's flag categories, so the two panels read as one
+// system (.design/bench.md §1 "四种归类").
+//
+//   Parameters — a real, independently-valued field of the request (Stream,
+//   Thinking, Protocol). Turning it doesn't inject or remove any content.
+//   Content — a fixed, unparametrized blob toggled on/off (Tool, Vision,
+//   Message). There is no "which tool" or "which image" dial; the axis only
+//   decides whether the one canned blob is present. Structurally the same
+//   thing as a Bench Template, just body-fragment-sized instead of
+//   whole-body — which is why Bench's "start from" menu can list them
+//   alongside Templates without inventing a new category.
+export const AxisGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+    <Box>
+        <Typography
+            variant="overline"
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.6rem', color: 'text.secondary', mb: 0.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}
+        >
+            {label}
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{children}</Box>
+    </Box>
+);
+
 export const Axis = memo(({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => {
     const head = (
         <Typography

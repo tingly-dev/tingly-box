@@ -3,15 +3,16 @@ import { Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
 import type { ProbeProtocol, ProbeRouting } from '@/types/probe';
-import { Axis, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from '@/components/probe/AxisPrimitives';
+import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from '@/components/probe/AxisPrimitives';
 import { protocolAvailability, scopeAvailable, visionAvailable, type ProbeAxes } from '@/components/probe/probeConfig';
 import { ruleProtocolForScenario } from '@/components/probe/ResultSections';
 import type { BenchTarget } from './benchLink';
 
 // BenchAxes: every probe axis resident, no Advanced fold — the page
 // exists so that all knobs are visible and composable (.design/bench.md
-// §2). Same axis logic as the probe dialog (probeConfig reducers), different
-// layout.
+// §2). Same axis logic as the probe dialog (probeConfig reducers), grouped
+// the same way (Parameters vs Content, .design/bench.md §1), different
+// layout (no fold, since nothing here is meant to be hidden away).
 
 export interface AxisAvailability {
     protocol: { value: ProbeProtocol | ''; options: ProbeProtocol[]; locked: boolean; disabled: boolean; lockHint?: string };
@@ -109,57 +110,67 @@ export const BenchAxes: React.FC<{
                     disabled={targetKind === null}
                 />
             </Axis>
-            {/* Tool / Vision / Thinking / Protocol only apply to the probe's own
-                fixture. A raw request owns all four itself (tools, image
+            {/* Parameters and Content only apply to the probe's own preset
+                request. A custom request owns all four itself (tools, image
                 blocks, a thinking field, the wire shape are yours to write) —
                 so once you've written one, these rows aren't disabled, they
                 don't render at all. Nothing here is "yours but greyed out";
                 it's simply not this view's concern (.design/bench.md §6). */}
             {!rawMode && (
                 <>
-                    <Axis label={t('probe.tool')} hint={t('probe.toolHint')}>
-                        <ExclusiveToggle
-                            value={axes.tool ? 'on' : 'off'}
-                            onChange={(v) => set({ tool: v === 'on' })}
-                            options={[
-                                { value: 'off', label: t('probe.toolOff') },
-                                { value: 'on', label: t('probe.toolOn') },
-                            ]}
-                        />
-                    </Axis>
-                    <Axis label={t('probe.vision')} hint={availability.visionHint}>
-                        <ExclusiveToggle
-                            value={axes.vision}
-                            onChange={(v) => set({ vision: v })}
-                            options={[
-                                { value: 'none', label: t('probe.visionNone') },
-                                { value: 'user', label: t('probe.visionUser') },
-                                { value: 'tool', label: t('probe.visionTool') },
-                            ]}
-                            disabled={availability.visionDisabled}
-                        />
-                    </Axis>
-                    <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
-                        <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
-                    </Axis>
-                    <Axis
-                        label={t('probe.protocol')}
-                        hint={
-                            protocol.locked || protocol.disabled
-                                ? protocol.lockHint
-                                : `${PROTOCOL_META[protocol.value]?.full || ''} · ${t('probe.protocolHint')}`
-                        }
-                    >
-                        <ExclusiveToggle
-                            value={protocol.value}
-                            onChange={(v) => set({ protocol: v as ProbeProtocol })}
-                            options={protocolOptions.map((p) => ({
-                                value: p,
-                                label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
-                            }))}
-                            disabled={protocol.locked || protocol.disabled || protocolOptions.length === 0}
-                        />
-                    </Axis>
+                    {/* Parameters: real, independently-valued request fields — turning
+                        one doesn't inject or remove content (.design/bench.md §1). */}
+                    <AxisGroup label={t('probe.groupParameters', { defaultValue: 'Parameters' })}>
+                        <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
+                            <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
+                        </Axis>
+                        <Axis
+                            label={t('probe.protocol')}
+                            hint={
+                                protocol.locked || protocol.disabled
+                                    ? protocol.lockHint
+                                    : `${PROTOCOL_META[protocol.value]?.full || ''} · ${t('probe.protocolHint')}`
+                            }
+                        >
+                            <ExclusiveToggle
+                                value={protocol.value}
+                                onChange={(v) => set({ protocol: v as ProbeProtocol })}
+                                options={protocolOptions.map((p) => ({
+                                    value: p,
+                                    label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
+                                }))}
+                                disabled={protocol.locked || protocol.disabled || protocolOptions.length === 0}
+                            />
+                        </Axis>
+                    </AxisGroup>
+
+                    {/* Content: a fixed, unparametrized blob toggled on/off — the same
+                        canned content Templates offer in the custom request editor,
+                        just body-fragment-sized (.design/bench.md §1). */}
+                    <AxisGroup label={t('probe.groupContent', { defaultValue: 'Content' })}>
+                        <Axis label={t('probe.tool')} hint={t('probe.toolHint')}>
+                            <ExclusiveToggle
+                                value={axes.tool ? 'on' : 'off'}
+                                onChange={(v) => set({ tool: v === 'on' })}
+                                options={[
+                                    { value: 'off', label: t('probe.toolOff') },
+                                    { value: 'on', label: t('probe.toolOn') },
+                                ]}
+                            />
+                        </Axis>
+                        <Axis label={t('probe.vision')} hint={availability.visionHint}>
+                            <ExclusiveToggle
+                                value={axes.vision}
+                                onChange={(v) => set({ vision: v })}
+                                options={[
+                                    { value: 'none', label: t('probe.visionNone') },
+                                    { value: 'user', label: t('probe.visionUser') },
+                                    { value: 'tool', label: t('probe.visionTool') },
+                                ]}
+                                disabled={availability.visionDisabled}
+                            />
+                        </Axis>
+                    </AxisGroup>
                 </>
             )}
         </Stack>

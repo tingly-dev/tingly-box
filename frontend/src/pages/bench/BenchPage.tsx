@@ -119,6 +119,13 @@ const BenchPage: React.FC = () => {
     const [scenarioFlags, setScenarioFlags] = useState<Record<string, unknown> | undefined>();
     const [curl, setCurl] = useState<ProbeCurlResult | null>(null);
     const [curlLoading, setCurlLoading] = useState(false);
+    // A second, independent curl fetch: the preset request's body, computed
+    // even while a custom request is active. `curl` above always reflects
+    // whatever is CURRENTLY going out (raw once raw is active), so it can't
+    // seed "Copy the preset request" once you're already past the door —
+    // only fetched while raw is active, since otherwise `curl` already is
+    // the preset request.
+    const [presetPreviewCurl, setPresetPreviewCurl] = useState<ProbeCurlResult | null>(null);
     const [running, setRunning] = useState(false);
     const [shown, setShown] = useState<{ result: ProbeResult; snapshot: BenchState } | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -220,6 +227,27 @@ const BenchPage: React.FC = () => {
         return () => { cancelled = true; clearTimeout(timer); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [requestKey]);
+
+    // Preset preview: the same construction, but with raw forced off, so
+    // "Copy the preset request" stays accurate once a custom request is
+    // active. Only runs while raw is active — otherwise `request` above
+    // already is the preset request and this would just duplicate the fetch.
+    const presetPreviewRequest = useMemo(() => (state.raw ? buildProbeRequest({ ...state, raw: null }).request : null), [state]);
+    const presetPreviewKey = useMemo(() => JSON.stringify(presetPreviewRequest), [presetPreviewRequest]);
+    useEffect(() => {
+        if (!presetPreviewRequest) { setPresetPreviewCurl(null); return; }
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            const res = await buildProbeCurl(presetPreviewRequest);
+            if (!cancelled) setPresetPreviewCurl(res);
+        }, 500);
+        return () => { cancelled = true; clearTimeout(timer); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [presetPreviewKey]);
+
+    const seedBody = state.raw
+        ? (presetPreviewCurl?.success && presetPreviewCurl.data?.body ? prettyBody(presetPreviewCurl.data.body) : undefined)
+        : (curl?.success && curl.data?.body ? prettyBody(curl.data.body) : undefined);
 
     const run = useCallback(async () => {
         if (!request || running) return;
@@ -340,7 +368,7 @@ const BenchPage: React.FC = () => {
                             raw={state.raw}
                             onRawChange={(raw) => patch({ raw })}
                             protocolOptions={rawProtocolOptions}
-                            seedBody={curl?.success && curl.data?.body && !state.raw ? prettyBody(curl.data.body) : undefined}
+                            seedBody={seedBody}
                             error={state.raw ? built.error : undefined}
                             messagePlaceholder={defaultMessage(state.axes.tool)}
                         />

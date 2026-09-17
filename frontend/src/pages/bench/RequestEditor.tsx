@@ -5,17 +5,28 @@ import type { ProbeProtocol } from '@/types/probe';
 import { PROTOCOL_META } from '@/components/probe/AxisPrimitives';
 import type { RawRequest } from './benchState';
 
-// RequestEditor: what the client sends. Fixture mode keeps the probe's
-// built-in request and exposes only its message override; raw mode is the
-// request itself, written by hand in one of the three client protocols —
+// RequestEditor: what the client sends. The preset request keeps the probe's
+// own request and exposes only its message override; the custom request is
+// the request itself, written by hand in one of the three client protocols —
 // exactly what a client speaking that protocol would send, with the model
 // filled in by the probe (.design/bench.md §6).
 
 const PROTOCOL_LABEL = (p: ProbeProtocol) => PROTOCOL_META[p]?.full || p;
 
+// BLANK: the empty starting point per protocol — just the top-level key a
+// body in that protocol needs, so the shape is right even before anything
+// is typed.
+const BLANK: Record<ProbeProtocol, object> = {
+    anthropic_v1: { messages: [] },
+    openai_chat: { messages: [] },
+    openai_responses: { input: [] },
+};
+
 // Templates carry the shapes that fixed fixtures cannot express — the
 // harness's test subjects, surfaced. One set per protocol; no model field
-// (the probe fills it).
+// (the probe fills it). Each one is a content preset — the same kind of
+// thing the probe's own Tool / Vision axes are (.design/bench.md §1), just
+// whole-body instead of a single fragment.
 const TEMPLATES: Record<ProbeProtocol, { id: string; body: object }[]> = {
     anthropic_v1: [
         { id: 'multi', body: { messages: [
@@ -71,6 +82,63 @@ const TEMPLATES: Record<ProbeProtocol, { id: string; body: object }[]> = {
     ],
 };
 
+// StartingPointMenu: the one place "what should the custom request's body
+// start as" gets decided, used both to cross the door out of the preset
+// request and to change the starting point once already inside the custom
+// editor — same list either time, so there's exactly one mechanism instead
+// of three (a door button with a state-dependent label, a second in-editor
+// "edit the builder's request" button, and a separate Templates menu). Every
+// item here is a content preset in the .design/bench.md §1 sense: a fixed
+// blob you either take or don't, blank included.
+const StartingPointMenu: React.FC<{
+    label: string;
+    protocol: ProbeProtocol;
+    /** The preset request's current body, if there's a target to build one from. */
+    seedBody?: string;
+    onPick: (body: string) => void;
+}> = ({ label, protocol, seedBody, onPick }) => {
+    const { t } = useTranslation();
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const pick = (body: string) => {
+        setAnchor(null);
+        onPick(body);
+    };
+    const item = (id: string, body: string, primary: string, secondary: string) => (
+        <MenuItem key={id} onClick={() => pick(body)} sx={{ maxWidth: 380, whiteSpace: 'normal' }}>
+            <ListItemText
+                primary={primary}
+                secondary={secondary}
+                slotProps={{ primary: { sx: { fontSize: '0.85rem', fontWeight: 600 } }, secondary: { sx: { fontSize: '0.72rem' } } }}
+            />
+        </MenuItem>
+    );
+    return (
+        <>
+            <Button size="small" variant="outlined" onClick={(e) => setAnchor(e.currentTarget)} sx={{ fontSize: '0.72rem' }}>
+                {label} ▾
+            </Button>
+            <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+                {seedBody &&
+                    item(
+                        'preset',
+                        seedBody,
+                        t('bench.startFromPreset', { defaultValue: 'Copy the preset request' }),
+                        t('bench.startFromPresetHint', { defaultValue: "What the probe's own request would send right now." }),
+                    )}
+                {item(
+                    'blank',
+                    JSON.stringify(BLANK[protocol], null, 2),
+                    t('bench.template.blank', { defaultValue: 'Blank' }),
+                    t('bench.template.blankDesc', { defaultValue: "An empty request in this protocol's shape." }),
+                )}
+                {(TEMPLATES[protocol] ?? []).map((tpl) =>
+                    item(tpl.id, JSON.stringify(tpl.body, null, 2), t(`bench.template.${tpl.id}`), t(`bench.template.${tpl.id}Desc`)),
+                )}
+            </Menu>
+        </>
+    );
+};
+
 export const RequestEditor: React.FC<{
     message: string;
     onMessageChange: (message: string) => void;
@@ -85,11 +153,7 @@ export const RequestEditor: React.FC<{
     messagePlaceholder: string;
 }> = ({ message, onMessageChange, raw, onRawChange, protocolOptions, seedBody, error, messagePlaceholder }) => {
     const { t } = useTranslation();
-    const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
     const defaultProtocol = protocolOptions[0] ?? 'openai_chat';
-
-    const startRaw = (body: string, protocol?: ProbeProtocol) => onRawChange({ protocol: protocol ?? defaultProtocol, body });
-    const templates = raw ? TEMPLATES[raw.protocol] ?? [] : [];
 
     if (!raw) {
         return (
@@ -109,11 +173,12 @@ export const RequestEditor: React.FC<{
                     {t('bench.presetHint', { defaultValue: "The preset request: one message, shaped by the Tool / Vision / Thinking knobs — it's the probe itself, materialized. To send anything else — multi-turn, images, tool results, provider-specific fields — write the request yourself." })}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Button size="small" variant="outlined" onClick={() => startRaw(seedBody ?? JSON.stringify(TEMPLATES[defaultProtocol][0].body, null, 2))}>
-                        {seedBody
-                            ? t('bench.startFromBuilder', { defaultValue: "Edit the builder's request" })
-                            : t('bench.writeYourself', { defaultValue: 'Write the request yourself' })}
-                    </Button>
+                    <StartingPointMenu
+                        label={t('bench.writeYourself', { defaultValue: 'Write the request yourself' })}
+                        protocol={defaultProtocol}
+                        seedBody={seedBody}
+                        onPick={(body) => onRawChange({ protocol: defaultProtocol, body })}
+                    />
                 </Box>
             </Stack>
         );
@@ -149,31 +214,12 @@ export const RequestEditor: React.FC<{
                     </Select>
                 </Tooltip>
                 <Box sx={{ flex: 1 }} />
-                {seedBody && (
-                    <Tooltip title={t('bench.startFromBuilderHint', { defaultValue: "Replace the text with the request the probe's builder would send right now." })}>
-                        <Button size="small" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: '0.72rem' }}>
-                            {t('bench.startFromBuilder', { defaultValue: "Edit the builder's request" })}
-                        </Button>
-                    </Tooltip>
-                )}
-                <Button size="small" variant="outlined" onClick={(e) => setMenuAnchor(e.currentTarget)} sx={{ fontSize: '0.72rem' }}>
-                    {t('bench.templates', { defaultValue: 'Templates' })} ▾
-                </Button>
-                <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
-                    {templates.map((tpl) => (
-                        <MenuItem
-                            key={tpl.id}
-                            onClick={() => { setMenuAnchor(null); onRawChange({ ...raw, body: JSON.stringify(tpl.body, null, 2) }); }}
-                            sx={{ maxWidth: 380, whiteSpace: 'normal' }}
-                        >
-                            <ListItemText
-                                primary={t(`bench.template.${tpl.id}`)}
-                                secondary={t(`bench.template.${tpl.id}Desc`)}
-                                slotProps={{ primary: { sx: { fontSize: '0.85rem', fontWeight: 600 } }, secondary: { sx: { fontSize: '0.72rem' } } }}
-                            />
-                        </MenuItem>
-                    ))}
-                </Menu>
+                <StartingPointMenu
+                    label={t('bench.changeStartingPoint', { defaultValue: 'Change starting point' })}
+                    protocol={raw.protocol}
+                    seedBody={seedBody}
+                    onPick={(body) => onRawChange({ ...raw, body })}
+                />
             </Box>
             <TextField
                 multiline
