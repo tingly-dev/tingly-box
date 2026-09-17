@@ -6,7 +6,7 @@
 // auto-detected per image already (see analyzeSheetBackground), so there is
 // nothing to "continue" there.
 
-import type { CropRect } from './imageSlice';
+import type { CropRect } from '@tingly/vision';
 
 export interface SliceParams {
     rows: number;

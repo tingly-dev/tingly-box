@@ -30,7 +30,7 @@ import { CopyIconButton } from '@/components/CopyIconButton';
 import { AutoAwesome, Close, ContentCopy, ContentPaste, Create, Description, Download, Edit, ErrorOutline, FileUpload, GridView, OpenInFull, Photo, Refresh, RestartAlt, ViewGallery, ZoomIn } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono } from '@/theme/fonts';
-import { parseImageSize } from '@/utils/sketchCanvas';
+import { parseImageSize } from '@tingly/vision';
 import { api } from '@/services/api';
 import { getOpenAIClient } from '@/services/modelApi';
 import { downloadImage, fetchBlob, slugify } from '@/utils/download';

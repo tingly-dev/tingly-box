@@ -29,6 +29,7 @@
     "@mui/x-date-pickers": "^9.10.0",
     "@tabler/icons-react": "^3.45.0",
     "@tingly/mannequin": "workspace:*",
+    "@tingly/vision": "workspace:*",
     "date-fns": "^4.4.0",
     "devicons-react": "^1.5.0",
     "i18next": "^26.3.6",

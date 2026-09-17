@@ -7,7 +7,6 @@
 // user drags the frame the grid divides and nudges one gutter, with a live
 // overlay showing where every cut lands.
 
-import { fetchBlob } from './download';
 import {
     analyzeBackground,
     removeBackground,
@@ -16,6 +15,16 @@ import {
     type RGBAImage,
 } from './imageMatte';
 import type { GifFrame } from './gif';
+
+// Local rather than shared with the host app's `utils/download.ts`: that
+// module also serves app-wide, non-image downloads (guardrails exports, rule
+// fragments), so it stays in the app rather than becoming this package's
+// dependency. This is the one line of overlap.
+const fetchBlob = async (src: string): Promise<Blob> => {
+    const response = await fetch(src);
+    if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
+    return response.blob();
+};
 
 /**
  * The part of the image the grid is cut out of, in fractions of the image's

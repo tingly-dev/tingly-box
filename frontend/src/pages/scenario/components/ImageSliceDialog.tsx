@@ -23,10 +23,11 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove, ZoomIn } from '@/components/icons';
-import { createZipBlob } from '@/utils/zip';
 import { downloadBlob, slugify } from '@/utils/download';
-import { encodeGif } from '@/utils/gif';
+import { loadSliceParams, saveSliceParams } from '@/utils/sliceParamsStore';
 import {
+    createZipBlob,
+    encodeGif,
     encodeVideo,
     evenSize,
     MAX_VIDEO_LOOPS,
@@ -34,10 +35,8 @@ import {
     probeVideoTarget,
     videoFileName,
     type VideoTarget,
-} from '@/utils/video';
-import { DEFAULT_TOLERANCE, type BackgroundKind } from '@/utils/imageMatte';
-import { loadSliceParams, saveSliceParams } from '@/utils/sliceParamsStore';
-import {
+    DEFAULT_TOLERANCE,
+    type BackgroundKind,
     analyzeSheetBackground,
     clampFrameDelay,
     computeTileRects,
@@ -58,7 +57,7 @@ import {
     type CropRect,
     type MatteSpec,
     type TileRect,
-} from '@/utils/imageSlice';
+} from '@tingly/vision';
 
 // Rows, columns, frame duration and loop count are all numbers you nudge
 // while watching the result, so each is a stepper with a typable field rather
