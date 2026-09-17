@@ -149,22 +149,27 @@ export const TeamGuideDialog: React.FC<TeamGuideDialogProps> = ({ open, onClose 
                     ))}
                 </Stepper>
 
-                <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
-                    {t(`teams.guide.steps.${stepId}.content`)}
-                </Typography>
+                {/* Fixed height so the dialog doesn't resize as steps with a
+                    different bullet count are navigated — content that
+                    overflows scrolls within this box instead. */}
+                <Box sx={{ height: 260, overflowY: 'auto', pr: 0.5 }}>
+                    <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+                        {t(`teams.guide.steps.${stepId}.content`)}
+                    </Typography>
 
-                {bulletKeys.length > 0 && (
-                    <List dense sx={{ mt: 1, listStyleType: 'disc', pl: 3 }}>
-                        {bulletKeys.map((key) => (
-                            <ListItem key={key} sx={{ display: 'list-item', p: 0, mb: 0.75 }}>
-                                <ListItemText
-                                    primary={t(key)}
-                                    slotProps={{ primary: { variant: 'body2', sx: { lineHeight: 1.7 } } }}
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
+                    {bulletKeys.length > 0 && (
+                        <List dense sx={{ mt: 1, listStyleType: 'disc', pl: 3 }}>
+                            {bulletKeys.map((key) => (
+                                <ListItem key={key} sx={{ display: 'list-item', p: 0, mb: 0.75 }}>
+                                    <ListItemText
+                                        primary={t(key)}
+                                        slotProps={{ primary: { variant: 'body2', sx: { lineHeight: 1.7 } } }}
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                    )}
+                </Box>
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'flex-end', gap: 1.5, px: { xs: 2, sm: 3 }, py: 2 }}>
                 <Button disabled={activeStep === 0} onClick={handleBack} variant="outlined" size="small" sx={{ minWidth: 100 }}>

@@ -1635,30 +1635,27 @@ export default {
       "steps": {
         "usage": {
           "title": "Team 是做什么用的",
-          "content": "Team 是这个 Tingly-Box 实例中一块独立的空间：有自己的规则、自己的共享密钥、自己的用量统计——与你的个人场景（Claude Code、OpenAI……）以及其他 Team 都是分开的。",
-          "bullet1": "用它把模型访问权交给某个群体——客户、子团队、外部应用——而不必分享你的主配置。",
-          "bullet2": "每个 Team 在下方都有自己独立的规则列表；在这里添加、编辑规则的方式和其他场景页一样。"
+          "content": "Team 是这个实例里一块独立的空间——有自己的规则、共享密钥和用量，与其他场景、其他 Team 都是分开的。",
+          "bullet1": "把模型访问权交给某个群体（客户、子团队、外部应用），而不必分享你的主配置。",
+          "bullet2": "在下方为这个 Team 添加规则，方式和其他场景页一样。"
         },
         "isolation": {
           "title": "它是怎么被隔离的",
-          "content": "一个共享密钥只能绑定一个 Team，且只能访问 /tingly/team[/v1]——不能访问其他 Team、其他场景，也不能访问管理 API。",
-          "bullet1": "把密钥移动到另一个 Team 后，权限会立即生效；旧 Team 会立刻失去这个密钥的访问权。",
-          "bullet2": "停用某个 Team 后，它名下所有共享密钥都会立即失效，直到该 Team 重新启用。",
-          "bullet3": "你的全局 model token 仍然拥有跨场景的完整访问权限——它不受 Team 范围限制。"
+          "content": "一个共享密钥只能绑定一个 Team，且只能访问 /tingly/team[/v1]。",
+          "bullet1": "移动密钥或停用 Team，都会立即生效。",
+          "bullet2": "全局 model token 不受 Team 范围限制，仍拥有完整访问权限。"
         },
         "keys": {
           "title": "配置共享密钥",
           "content": "点击上方的\"共享密钥\"按钮，为这个 Team 创建一个。",
-          "bullet1": "创建令牌 → 起一个能看出用途的名称 → 复制 tb-share-… 开头的密钥（仅在创建时显示一次）。",
-          "bullet2": "把这个密钥交给应该使用这个 Team 的一方——队友、客户端应用、CI 任务。",
-          "bullet3": "之后可以把密钥移动到另一个 Team，无需重新生成。"
+          "bullet1": "起个名称，复制 tb-share-… 开头的密钥（仅显示一次）。",
+          "bullet2": "之后可以随时移动到另一个 Team，无需重新生成。"
         },
         "principles": {
           "title": "怎么用",
-          "content": "让客户端指向这个 Team 的接口地址，并用它的共享密钥完成鉴权。",
-          "bullet1": "Base URL：/tingly/team（或 /tingly/team/v1）——从上方的 Team Access 面板复制。",
-          "bullet2": "API Key：为这个 Team 创建的 tb-share-… 共享密钥。",
-          "bullet3": "之后请求会按下方的规则路由，和其他场景完全一样——只有添加到这个 Team 规则里的模型才能被访问。"
+          "content": "让客户端指向这个 Team 的 Base URL，用它的共享密钥作为 API Key。",
+          "bullet1": "Base URL 和 API Key 都在上方的 Team Access 面板里。",
+          "bullet2": "请求会按下方的规则路由——只有添加到规则里的模型才能被访问。"
         }
       }
     }
