@@ -181,7 +181,7 @@ export function useActivityItems(): ActivityItem[] {
             {
                 key: 'dashboard',
                 icon: <IconChartBar sx={{ fontSize: 22 }} />,
-                label: t('layout.usage', { defaultValue: 'Usage' }),
+                label: t('layout.dashboard', { defaultValue: 'Dashboard' }),
                 path: '/dashboard/today',
                 defaultPath: '/dashboard/today',
                 children: [

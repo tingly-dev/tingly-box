@@ -102,7 +102,6 @@ export default {
     },
     "easterEgg": "Привет, я Tingly-Box, ваш умный ИИ-оркестратор",
     "dashboard": "Панель",
-    "usage": "Расход",
     "userUsage": "Использование командой",
     "heatmap": "Тепловая карта",
     "today": "Сегодня",

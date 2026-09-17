@@ -102,7 +102,6 @@ export default {
     },
     "easterEgg": "Hi, I'm Tingly-Box, Your Smart AI Orchestrator",
     "dashboard": "Dashboard",
-    "usage": "Usage",
     "userUsage": "Team usage",
     "heatmap": "Heatmap",
     "today": "Today",
