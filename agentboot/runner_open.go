@@ -61,11 +61,21 @@ func (r *Runner) Open(ctx context.Context, prompt string, opts ExecutionOptions)
 		Metadata:  opts.ControlMetadata,
 	})
 
-	// Persistent sessions manage their own lifetime across many turns;
-	// unlike Execute, opts.Timeout is not applied to the whole process here
-	// — that would kill a session that is legitimately idle between turns.
-	// A caller that wants an idle timeout drives it externally via Close.
-	runCtx, cancel := context.WithCancel(ctx)
+	// Persistent sessions manage their own lifetime across many turns and
+	// outlive the ctx that opened them: only Close ends one. Deriving
+	// runCtx from ctx would be a serious bug, not just a Timeout question
+	// — Execute's one-shot process is correctly scoped to its single
+	// request's ctx, but a caller here is typically a per-message request
+	// handler whose ctx is canceled the moment that one message finishes
+	// processing. Tying the process (and, for the real OS factory,
+	// exec.CommandContext's auto-kill) to that ctx would kill the process
+	// before the *next* Send ever arrives — silently defeating persistence
+	// on every second message. runCtx is therefore detached from ctx;
+	// opts.Timeout is likewise not applied to the whole process here, since
+	// that would kill a session that is legitimately idle between turns. A
+	// caller that wants an idle timeout drives it externally via Close
+	// (see agentboot/pool for the idle-timeout sweep that does this).
+	runCtx, cancel := context.WithCancel(context.Background())
 
 	logrus.Infof("runner.Open: starting %s (persistent)", r.driver.Type())
 	proc, err := r.procFactory.Start(runCtx, *spec)
