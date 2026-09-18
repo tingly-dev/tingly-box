@@ -121,3 +121,16 @@ Invariants the code keeps:
   adds `type` and flattens `output_text`; the chat and Anthropic
   converters drop item ids entirely and keep `call_id`; the native
   Responses passthrough forwards input untouched.
+
+### Not a correlation key
+
+Only `call_id` carries cross-request meaning; a later turn's
+`function_call_output` must reference it, and it is passed through
+unchanged. The minted ids above do not: OpenAI's own Responses API only
+makes `response.id`/item ids resolvable via `previous_response_id` or
+`GET /v1/responses/{id}`, and tingly-box implements neither (`store` is
+not honoured; `GET` returns 404). So a minted id needs no relationship to
+the call that produced it — randomizing it is safe, and it closes a minor
+leak rather than opening one: the previous scheme (`response.id =
+resp.ID`, `"msg_" + resp.ID`) exposed the upstream's own id, and by
+extension which provider served the request, to the client.
