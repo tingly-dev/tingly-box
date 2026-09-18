@@ -7,6 +7,11 @@ interface VersionContextType {
     hasUpdate: boolean;
     shouldNotify: boolean;
     releaseURL: string | null;
+    // How this running instance was launched ("npx", "npm", "npx-bundle",
+    // "npm-bundle", "binary"; null while not yet loaded / unknown). Lets UI
+    // that offers several equivalent methods (e.g. the update panel) default
+    // to whichever one matches how the user is already running Tingly Box.
+    launchSource: string | null;
     checking: boolean;
     error: string | null;
     checkForUpdates: (manual?: boolean) => Promise<void>;
@@ -35,6 +40,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     const [hasUpdate, setHasUpdate] = useState(false);
     const [shouldNotify, setShouldNotify] = useState(false);
     const [releaseURL, setReleaseURL] = useState<string | null>(null);
+    const [launchSource, setLaunchSource] = useState<string | null>(null);
     const [checking, setChecking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
@@ -51,6 +57,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 setHasUpdate(result.data.has_update);
                 setShouldNotify(result.data.should_notify);
                 setReleaseURL(result.data.release_url);
+                setLaunchSource(result.data.launch_source || null);
             }
         } catch (err) {
             console.error('Failed to check for updates:', err);
@@ -105,6 +112,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 hasUpdate,
                 shouldNotify,
                 releaseURL,
+                launchSource,
                 checking,
                 error,
                 checkForUpdates,

@@ -1878,7 +1878,22 @@ export const handlers = [
 
     http.get('/api/v1/info/version', () => HttpResponse.json({
         success: true,
-        data: { version: 'mock-dev' },
+        data: { version: 'mock-dev', launch_source: 'npm' },
+    })),
+
+    // Exercises the update panel / quick-start command panel default-method
+    // logic in mock mode — launch_source: 'npm' should default both to their
+    // 'npm'/'global' method instead of the hardcoded 'npx' fallback.
+    http.get('/api/v1/info/version/check', () => HttpResponse.json({
+        success: true,
+        data: {
+            current_version: 'mock-dev',
+            latest_version: 'mock-dev',
+            has_update: false,
+            release_url: 'https://github.com/tingly-dev/tingly-box/releases',
+            should_notify: false,
+            launch_source: 'npm',
+        },
     })),
 
     // Probe V2 (E2E) — used by the quick test button and the Probe dialog.

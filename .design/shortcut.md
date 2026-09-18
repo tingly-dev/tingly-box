@@ -390,6 +390,29 @@ written and, on Linux, the headless launcher script path with a copy button —
 matching `UpdatePanelDialog`'s "hand over the concrete artifact" pattern (§11)
 rather than a bare "Created!" toast.
 
+### A second consumer: defaulting multi-method pickers
+
+`h.launchSource` also flows into `internal/server/module/info` — `GET
+/info/version` and `GET /info/version/check` now carry it as `launch_source`
+alongside the version fields. Unlike the shortcut card, these endpoints don't
+act on it themselves; they just hand it to the frontend, which already polls
+both routes (`VersionContext`) for unrelated reasons. Two panels that ask the
+user to pick among several equivalent install/run methods read it from
+`useVersion().launchSource` to default their toggle to whichever method
+already matches this install, instead of a hardcoded guess:
+
+- `UpdatePanelDialog` (npx / npm / docker) — `npx`/`npx-bundle` → `npx`,
+  `npm`/`npm-bundle` → `npm`, anything else (`binary`, not loaded yet) leaves
+  the existing selection alone.
+- `ClaudeCodeProfilePage`'s quick-start command panel (npx / global CLI) —
+  `npx`/`npx-bundle` → `npx`, `npm`/`npm-bundle`/`binary` → `global` (a
+  binary launch means `tingly-box` is already on `PATH`, same as a global npm
+  install).
+
+Both default once and then stop: a `touched` flag flips on the first manual
+toggle click, so a later `launch_source` value (or a periodic version-check
+poll) never overrides a choice the user already made.
+
 It first shipped on the System settings page, but that buried it too deep for
 a first-run user (the exact person who most needs it — see §1). It now lives
 on a dedicated `HelpPage` (`frontend/src/pages/HelpPage.tsx`, route `/help`),

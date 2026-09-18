@@ -24,6 +24,12 @@ type ConfigInfoResponse struct {
 // VersionInfo holds the running version string.
 type VersionInfo struct {
 	Version string `json:"version" example:"1.0.0"`
+	// LaunchSource is how this process was itself invoked ("binary", "npx",
+	// "npm", "npx-bundle", "npm-bundle"; "" if unknown). The frontend uses it
+	// to default multi-method pickers (update instructions, quick-start
+	// commands) to whichever method matches how the user is already running
+	// Tingly Box. See .design/shortcut.md.
+	LaunchSource string `json:"launch_source" example:"npx"`
 }
 
 // VersionInfoResponse is the JSON envelope for GET /info/version.
@@ -40,6 +46,10 @@ type LatestVersionInfo struct {
 	HasUpdate      bool   `json:"has_update" example:"true"`
 	ReleaseURL     string `json:"release_url" example:"https://github.com/tingly-dev/tingly-box/releases"`
 	ShouldNotify   bool   `json:"should_notify" example:"true"`
+	// LaunchSource is how this process was itself invoked; see VersionInfo.
+	// The update panel uses it to default its method picker (npx/npm/docker)
+	// to whichever channel matches this install.
+	LaunchSource string `json:"launch_source" example:"npx"`
 }
 
 // LatestVersionResponse is the JSON envelope for GET /info/version/check.
