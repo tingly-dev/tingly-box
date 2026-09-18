@@ -317,6 +317,44 @@ jobs:
           done < built.txt
           [ "$FAILED" -eq 0 ]
 
+      # A successful `npm publish` does not mean the package is queryable
+      # yet — npm's read replicas can lag behind the write by seconds to
+      # minutes. If the shim ships with optionalDependencies pointing at a
+      # platform package that isn't visible yet, a user installing right
+      # after this run resolves no binary for their platform and silently
+      # falls back to the slower GitHub download path (or fails outright on
+      # a registry mirror that never proxies through). Check every platform
+      # package in parallel and only move on to building/publishing the
+      # shim once all of them are actually readable.
+      - name: Wait for platform packages to be ready on the registry
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          mkdir -p ready-logs
+          wait_ready() {
+            local name="$1" log="ready-logs/$(echo "$1" | tr '/@' '__').status"
+            for i in $(seq 1 30); do
+              if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
+                echo "ok" > "$log"; return 0
+              fi
+              sleep 10
+            done
+            echo "timeout" > "$log"
+          }
+          while read -r name; do
+            echo "⏳ Waiting for ${name}@${VERSION} to be queryable on the registry..."
+            wait_ready "$name" &
+          done < built.txt
+          wait
+          FAILED=0
+          while read -r name; do
+            log="ready-logs/$(echo "$name" | tr '/@' '__').status"
+            case "$(cat "$log" 2>/dev/null)" in
+              ok) echo "✅ ${name}@${VERSION} ready" ;;
+              *)  echo "❌ ${name}@${VERSION} not visible on the registry after 5 minutes"; FAILED=1 ;;
+            esac
+          done < built.txt
+          [ "$FAILED" -eq 0 ]
+
       # ---- cli shim ----------------------------------------------------
       - name: Update NPX package.json with new version
         working-directory: ${{ env.PKG_DIR }}
@@ -385,12 +423,8 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          # Give the registry a moment to serve the platform package just published.
-          for i in $(seq 1 30); do
-            if npm view "@tingly-dev/tingly-box-linux-x64@${VERSION}" version >/dev/null 2>&1; then break; fi
-            echo "waiting for @tingly-dev/tingly-box-linux-x64@${VERSION} on the registry ($i)..."
-            sleep 10
-          done
+          # Already confirmed queryable by "Wait for platform packages to be
+          # ready on the registry" above.
           npm view "@tingly-dev/tingly-box-linux-x64@${VERSION}" version
           # Exactly what `npm install -g tingly-box` does, from the tarball
           # we are about to publish, into a scratch prefix.

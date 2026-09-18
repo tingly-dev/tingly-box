@@ -305,11 +305,21 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   then wire and publish the shim. A version already on the registry is a
   skip, not a failure, and the registry's own "previously published"
   rejection counts as "already there" because `npm view` on the read
-  replicas can lag a publish by minutes. Before publishing the shim the job
-  does what a user does:
-  `npm pack` it and `npm install -g --prefix <scratch>` the tarball against
-  the real registry, asserting the binary came from `@tingly-dev/tingly-box-linux-x64`
-  and nothing was downloaded. The download fallback keeps its own smoke test.
+  replicas can lag a publish by minutes.
+- **Readiness gate before the shim.** A successful `npm publish` only means
+  the write landed, not that every read replica serves it yet. Between
+  publishing the five platform packages and touching the shim, a dedicated
+  step polls `npm view <name>@<version>` for all five concurrently (same
+  background-process-then-`wait` shape as the publish step) and fails the
+  job if any is still invisible after 5 minutes. This runs before the shim's
+  `optionalDependencies` are wired and before the shim itself is published,
+  so the shim is never published pinning a platform version a fresh
+  `npm install` could race ahead of and fall back to the (slower, and on
+  some networks unreachable) GitHub download for. Before publishing the shim
+  the job also does what a user does: `npm pack` it and
+  `npm install -g --prefix <scratch>` the tarball against the real registry,
+  asserting the binary came from `@tingly-dev/tingly-box-linux-x64` and
+  nothing was downloaded. The download fallback keeps its own smoke test.
 - **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
   `publish_bundle` input, the bundle entry in the web UI's update dialog,
   and every doc mention. The Go side keeps recognising the `npx-bundle` /
