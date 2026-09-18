@@ -1,3 +1,4 @@
+import { copyText } from '@/utils/clipboard';
 import {
     Box,
     Typography,
@@ -151,7 +152,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     };
 
     const handleCopy = () => {
-        void navigator.clipboard.writeText(modelName);
+        void copyText(modelName);
         notify.success(`Model name "${modelName}" copied to clipboard`);
     };
 

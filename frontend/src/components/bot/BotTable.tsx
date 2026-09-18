@@ -1,4 +1,5 @@
 import {ContentCopy as CopyIcon, Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Security} from '@/components/icons';
+import { copyText } from '@/utils/clipboard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {capabilityEnabled} from '@/types/bot';
 import type {BotSettings} from '@/types/bot';
@@ -88,7 +89,7 @@ const BotTable: React.FC<BotTableProps> = ({
     const handleCopyUuid = useCallback(async (uuid: string) => {
         if (!uuid) return;
         try {
-            await navigator.clipboard.writeText(uuid);
+            await copyText(uuid);
             notify.success(t('bots.table.uuidCopied', {defaultValue: 'Bot UUID copied'}));
         } catch {
             notify.error(t('bots.table.uuidCopyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));

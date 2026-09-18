@@ -1,3 +1,4 @@
+import { copyText } from '@/utils/clipboard';
 import {
     ContentCopy as CopyIcon,
     Info as InfoIcon,
@@ -83,7 +84,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
     const handleCopy = useCallback(async () => {
         if (!code) return;
         try {
-            await navigator.clipboard.writeText(`/bind ${code}`);
+            await copyText(`/bind ${code}`);
             notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied' }));
         } catch {
             notify.error(t('remoteControl.pairing.copyFailed', { defaultValue: 'Copy failed — check clipboard permissions' }));

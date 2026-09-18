@@ -1,4 +1,5 @@
 import { Key as IconKey, Add as IconPlus, Delete as IconTrash } from '@/components/icons';
+import { copyText } from '@/utils/clipboard';
 import {
     Button,
     CircularProgress,
@@ -156,7 +157,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
                             visibleTokens={visibleTokens}
                             onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
                             onCopy={(tokenId) => {
-                                navigator.clipboard.writeText(tokenId);
+                                copyText(tokenId);
                                 notify.success(t('sharingKeys.copiedToClipboard'));
                             }}
                             onToggleEnabled={handleToggleEnabled}

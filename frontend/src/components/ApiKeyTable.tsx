@@ -1,4 +1,5 @@
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
+import { copyText } from '@/utils/clipboard';
 import ModelListDialog from "@/components/ModelListDialog";
 import type {ExportFormat} from "@/components/rule-card/utils";
 import {
@@ -610,7 +611,7 @@ const ApiKeyTable = ({
                             onClick={async () => {
                                 if (tokenModal.token) {
                                     try {
-                                        await navigator.clipboard.writeText(tokenModal.token);
+                                        await copyText(tokenModal.token);
                                     } catch (err) {
                                         console.error("Failed to copy token:", err);
                                     }
