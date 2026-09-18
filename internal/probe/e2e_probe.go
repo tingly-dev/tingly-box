@@ -177,8 +177,7 @@ func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) 
 	}
 
 	// Route through TB's own loopback endpoint so request-level flags
-	// (openai_endpoint_override, thinking_effort, etc.) can be applied when
-	// a rule is also specified via X-Tingly-Probe-Rule.
+	// (openai_endpoint_override, thinking_effort, etc.) can be applied.
 	port := e.config.GetServerPort()
 	if port == 0 {
 		// Server port unknown — fall back to direct SDK probe.
@@ -314,16 +313,12 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 
 	logrus.Debugf("[probe-e2e] rule %s -> TB loopback %s (model=%s)", rule.UUID, apiBase, rule.RequestModel)
 
+	// The request carries only the rule's request model and TB matches the
+	// rule exactly as it would for a real client; the matched rule comes back
+	// in the routing trace, so a mismatch with the rule the caller picked is
+	// visible rather than silently corrected.
 	probeHeaders := map[string]string{
 		"X-Tingly-Debug-Routing": "1",
-	}
-	// Default (natural): no pin. The request carries only the rule's request
-	// model and TB matches the rule exactly as it would for a real client;
-	// the matched rule comes back in the routing trace, so a mismatch with
-	// the rule the caller picked is visible rather than silently corrected.
-	// Pinned: force this rule, skipping only the matching step.
-	if req.Routing.Pinned() {
-		probeHeaders["X-Tingly-Probe-Rule"] = rule.UUID
 	}
 
 	provider, model, err := e.loopbackConfigTarget(ctx, string(scenario), apiBase, apiStyle, rule.RequestModel)

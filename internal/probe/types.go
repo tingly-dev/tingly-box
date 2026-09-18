@@ -320,31 +320,7 @@ type E2ERequest struct {
 	// tripper after the SDK built the request, so it wins over the SDK's
 	// own headers and the probe pins; the rendered cURL applies the same.
 	Headers map[string]string `json:"headers,omitempty"`
-
-	// Routing picks how a rule target enters TB. "" / "natural" (default)
-	// sends only the rule's request model to the scenario endpoint and lets
-	// TB match the rule exactly as it would for a real client — the full
-	// production chain; the Journey reports which rule actually matched,
-	// which may differ from the one picked. "pinned" forces the chosen rule
-	// via X-Tingly-Probe-Rule (skipping rule matching, everything else is
-	// production) — for testing a rule whose request model collides with
-	// another rule's, or one that is not active. Rule targets only; provider
-	// targets are pinned by definition (X-Tingly-Probe-Service).
-	Routing ProbeRouting `json:"routing,omitempty" example:"pinned"`
 }
-
-// ProbeRouting selects how a rule target enters TB (see E2ERequest.Routing).
-type ProbeRouting string
-
-const (
-	// RoutingNatural lets TB match the rule from the request model, as for real traffic (default).
-	RoutingNatural ProbeRouting = "natural"
-	// RoutingPinned forces the chosen rule via X-Tingly-Probe-Rule.
-	RoutingPinned ProbeRouting = "pinned"
-)
-
-// Pinned reports whether the rule target should be forced rather than matched.
-func (r ProbeRouting) Pinned() bool { return r == RoutingPinned }
 
 // Customized reports whether the request departs from the plain fixture
 // shape (raw request, flag overlay, header overrides). Such probes are never
@@ -511,16 +487,6 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, ": \t\r\n") {
 			return &ValidationError{Field: "headers", Message: fmt.Sprintf("%q is not a valid header name", name)}
 		}
-	}
-
-	switch req.Routing {
-	case "", RoutingNatural:
-	case RoutingPinned:
-		if req.TargetType != E2ETargetRule {
-			return &ValidationError{Field: "routing", Message: "pinned routing only applies to rule targets (a provider target is pinned by definition)"}
-		}
-	default:
-		return &ValidationError{Field: "routing", Message: "routing must be 'natural' or 'pinned'"}
 	}
 
 	// A raw client request replaces the fixture; the fixture knobs and the
