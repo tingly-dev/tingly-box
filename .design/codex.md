@@ -95,7 +95,7 @@ provider ran with no affinity at all.
 
 The gateway now derives one identifier and uses it for both:
 
-- `request.responsesPromptCacheKey` reads the session id out of Claude Code's
+- `request.openAIPromptCacheKey` reads the session id out of Claude Code's
   `metadata.user_id` (see `metaid.ParseMetadataUserID`) and sets it as
   `prompt_cache_key` on the converted Responses request. Only the session id is
   forwarded — never the device id or account uuid. A `user_id` in some other

@@ -127,7 +127,7 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 // the session-id header.
 //
 // The key is already the conversation-stable identifier the converters derived
-// from the client's own session (see request.responsesPromptCacheKey), so no
+// from the client's own session (see request.openAIPromptCacheKey), so no
 // extra plumbing is needed to reach it here. A client that sent its own
 // session-id keeps it, and a key that is not a uuid is left in the body only —
 // the backend expects the canonical form in this header and rejecting the
