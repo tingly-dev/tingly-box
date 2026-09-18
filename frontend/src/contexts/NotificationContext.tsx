@@ -6,7 +6,7 @@
  * never need to wire notification state into their own components.
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Alert, AlertTitle, Box, Collapse, IconButton, Slide } from '@mui/material';
+import { Alert, AlertTitle, Box, Collapse, IconButton, Link, Slide } from '@mui/material';
 import { Close } from '@/components/icons';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import {
@@ -18,12 +18,22 @@ import {
 
 const EXIT_TRANSITION_MS = 200;
 
+// Above this, a toast collapses behind a "Show more" toggle instead of
+// dumping its full text in the user's face.
+const LONG_MESSAGE_CHARS = 200;
+const COLLAPSED_LINES = 3;
+
+function isLongMessage(message: string): boolean {
+  return message.length > LONG_MESSAGE_CHARS || message.split('\n').length > COLLAPSED_LINES;
+}
+
 function useNotifyItems(): NotifyItem[] {
   return useSyncExternalStore(subscribeNotify, getNotifyItems, getNotifyItems);
 }
 
 function NotificationToast({ item }: { item: NotifyItem }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trigger the enter transition once mounted.
@@ -54,6 +64,7 @@ function NotificationToast({ item }: { item: NotifyItem }) {
   const isError = item.severity === 'error';
   // What lands on the clipboard when the user copies an error for a report.
   const reportText = item.title ? `${item.title}\n${item.message}` : item.message;
+  const long = isLongMessage(item.message);
 
   return (
     <Collapse in={open} appear>
@@ -61,7 +72,7 @@ function NotificationToast({ item }: { item: NotifyItem }) {
         <Slide direction="left" in={open} appear>
           <Alert
             severity={item.severity}
-            variant="filled"
+            variant="standard"
             onClose={isError ? undefined : handleClose}
             action={
               isError ? (
@@ -87,13 +98,41 @@ function NotificationToast({ item }: { item: NotifyItem }) {
             }
             sx={{
               width: '100%',
-              boxShadow: 6,
               alignItems: 'flex-start',
+              bgcolor: 'background.paper',
+              boxShadow: 3,
+              borderLeft: 3,
+              borderColor: `${item.severity}.main`,
               '& .MuiAlert-message': { overflowWrap: 'anywhere', minWidth: 0 },
             }}
           >
             {item.title && <AlertTitle sx={{ fontWeight: 600 }}>{item.title}</AlertTitle>}
-            {item.message}
+            <Box
+              sx={
+                long && !expanded
+                  ? {
+                      display: '-webkit-box',
+                      WebkitLineClamp: COLLAPSED_LINES,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }
+                  : { whiteSpace: 'pre-wrap' }
+              }
+            >
+              {item.message}
+            </Box>
+            {long && (
+              <Link
+                component="button"
+                type="button"
+                color="inherit"
+                underline="always"
+                onClick={() => setExpanded((v) => !v)}
+                sx={{ fontSize: '0.75rem', mt: 0.5, display: 'block', opacity: 0.85 }}
+              >
+                {expanded ? 'Show less' : 'Show more'}
+              </Link>
+            )}
           </Alert>
         </Slide>
       </Box>
