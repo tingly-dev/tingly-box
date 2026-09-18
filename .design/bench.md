@@ -162,9 +162,9 @@ Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次
 │        │ │  Request Think.│ ├─ Result ─────────────┤ │ (debounced live)  │ │
 │        │ │ PRESETS        │ │ ✅ 850ms · 43 tok    │ └───────────────────┘ │
 │        │ │  Tool Vision   │ │ Journey (默认展开)   │                       │
-│        │ │ Plugins overlay│ │ Response / Raw JSON  │                       │
-│        │ │  (registry-    │ └──────────────────────┘                       │
-│        │ │   driven 三态) │                                                │
+│        │ │ Plugins       │ │ Response / Raw JSON  │                       │
+│        │ │  (路由图同款  │ └──────────────────────┘                       │
+│        │ │   卡片 + 弹窗)│                                                │
 │        │ └───────────────┘                                                │
 └────────┴────────────────────────────────────────────────────────────────────┘
 ```
@@ -179,11 +179,18 @@ Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专
 
 布局要点：
 
-- **左栏不再有 Advanced 折叠**，这点沿用——Bench 的存在理由是"所有旋钮可见、可叠加"，
-  折叠违背页面使命。但内部不是一个扁平列表：Protocol/Request mode/Scope 常驻在顶部
-  （各自一行，前两者是这次新加的正式控件，不再是隐藏在 Request 面板里的按钮），下面
-  是 Parameters 和 Presets 两个 `AxisGroup`。切到 Custom 模式时，Parameters 组只剩
-  Request（Stream）——Thinking 只塑形预设 builder，不适用；Presets 组整块不渲染。
+- **宽屏三栏共用一个固定工作区高度**：`lg` 起三栏使用同一个高度 token，避免请求、结果或
+  payload 内容变化时整页上下跳动。每栏是一张项目现有风格的 outlined surface；Compose
+  的全部轴始终完整展开，不在栏内滚动，且 Plugins 直接以路由图同款摘要卡片作为 Compose
+  内最后一个、与 Presets 平级的独立类目；Request/Result 与 Payload 的超长内容在各自 surface 内滚动。`xs` / `md` 回到内容驱动的自然高度，Payload 继续下沉跨两栏，不把
+  桌面固定高度和内部滚动带进窄屏。
+- **页头保持精简**：常驻区只保留标题与 Run；用途说明收进标题旁的问号 tooltip，空的 run
+  history 不占版面，第一次运行后才显示可恢复的记录。
+- **左栏不再有 Advanced 折叠**，这点沿用——Bench 的请求轴全部常驻；Plugins 则直接沿用
+  路由图的摘要卡片 + catalog 弹窗，不在左栏重复展开一整套 registry 控件。Protocol/Request
+  mode/Scope 常驻顶部（各自一行，前两者是这次新加的正式控件，不再隐藏在 Request 面板
+  里），下面是 Parameters 和 Presets 两个 `AxisGroup`。切到 Custom 模式时，Parameters
+  组只剩 Request（Stream）——Thinking 只塑形预设 builder，不适用；Presets 组整块不渲染。
 - **Payload 常驻右侧**，不是折叠在底部（probe dialog 的 cURL 位置）。它是本页第二主角：
   用户每拨一个旋钮，右侧 payload 实时（debounce 500ms）重建，"这个轴改了 body 的哪个
   字段"当场可见。构造走现有 `POST /api/v2/probe/curl`（construct-only，与执行共用同一
@@ -322,28 +329,25 @@ header 的安全边界与 `X-Tingly-Probe-Rule` 相同：任何持网关 key 的
 请求上带它来改变本次请求的 flags（不落库、只影响自己），属于 probe.md 已记录的 admin-only
 probe surface；未来若要收紧，三个 probe header 一起做。
 
-### 5.4 UI：registry-driven 三态
+### 5.4 UI：直接沿用路由图 Plugins 组件
 
-完全复用 rule-flags 的前端资产：`GET /rule/flags/registry` + `flagHelpers.ts`
-（`getFlagValue`/`setFlagValue`/`isFlagActive`/`flagDefault`），按 `FlagSpec.Category`
-分组渲染，控件按 `spec.Type` 选择（bool→Switch、enum→Select、string→TextField、
-int→number、service_ref→picker）——与 `FlagCatalogDialog` 同构，**新增 flag 零 Bench
-改动**。
+Bench 不另写 registry renderer。它直接使用路由图已经在用的两件组件：
 
-每个 flag 行是**三态**，而非简单开关：
+- `RulePluginsCard`：紧凑展示当前启用项，作为唯一入口；
+- `FlagCatalogDialog`：按 `FlagSpec.Category` 分组并按 `spec.Type` 提供完整编辑能力，包含
+  `headers` 与 `service_ref`。
 
-| 态 | 呈现 | 语义 |
-|----|------|------|
-| inherited | muted，显示目标解析出的**具体值**（rule target 预载 rule.Flags + scenario 继承；provider target 为全默认） | 本次请求不干预 |
-| overridden | 高亮边框 + 当前值 + 单项 ↺ reset | 出现在 overlay 里 |
-| 分区级 | 顶部 "N overridden · Reset all" | 一眼看清实验偏离了基线多少 |
+Bench 只保留一层页面接线：`BenchState.flags` 是 probe wire 所需的 snake_case overlay，进入
+共享组件前走 `apiToFlags`，保存时走 `flagsToApi` 再写回 Bench 本地状态。保存只影响这次请求
+及 `tb.bench.state`，绝不调用 rule 更新 API。provider target 没有 rule/scenario 基线，因此不再
+维持独立的 inherited / overridden 三态 UI；显式零值与未出现 key 在当前空基线下行为等价，
+不为这个差异引入第二套 editor 或新的通用抽象。
 
-inherited 态展示的是**解析后的具体值**而不是 "默认" 字样（ux-principles #5）——
-比如 CC rule 的 `clean_header` inherited 显示 "on (rule default)"。
+Direct 时保留原有说明并阻止打开 catalog；已配置 overlay 留在状态中，切回 Through TB 后继续
+可用。`buildProbeRequest` 仍是请求层的最终保护：Direct 不发送 flags。这个 scope 约束留在
+Bench 外层，不给共享的路由组件增加 probe-specific `disabled` 语义。
 
-> 前端预载基线仅为**展示**（读 rule.Flags + scenario flags 做浅合并即可）；生效值的
-> 权威永远是响应回显的 `AppliedFlags`。两者不一致时（如 OAuth 抑制），以回显为准，
-> UI 在 Journey 的 Flags 行并列展示，不试图在前端复刻全部后端逻辑。
+registry 仍是唯一可信源，响应中的 `AppliedFlags` 仍是实际生效值的权威。
 
 ---
 
@@ -569,8 +573,8 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | 1 | `pages/bench/BenchPage.tsx` | 页面（lazy），三栏布局编排、run history、⌘/Ctrl+Enter、localStorage 持久化 |
 | 2 | ~~`pages/bench/benchLink.ts`~~ | **V1.1 整个文件删除**——深链协议（`?target=rule:{uuid}&scenario=` 等）随 Rule target 一起下线，Bench 不再接受任何跳转 |
 | 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签。**V1.1**：`BenchTarget` 收窄为 `{providerUuid, model}`，`routing` 字段随之删除 |
-| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组，与 PluginsPanel 同一套 overline+分割线样式、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
-| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴，**V1.1 去掉 Routing 轴**，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、`PluginsPanel`（registry-driven，**V1.1 起 baseline 恒为空**——provider 目标没有 rule/scenario 可继承）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
+| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
+| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴，**V1.1 去掉 Routing 轴**，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、Plugins 直接使用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`（Bench 只做 wire key 转换与 Direct gate）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
 | 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
 | 7 | `services/api.ts` | ~~`getAllRules`（不带 scenario 即全部规则）~~（**V1.1**：`useTargetCatalog` 不再拉 rules，只拉 providers） |
 | 8 | i18n | `bench.*` en/zh；~~`probe.openInBench`~~（**V1.1 删除**，随入口一起）；`layout.bench` |
@@ -582,9 +586,8 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 原计划三个阶段一次落地（V1 已含全部三段）。当时的划分保留作参考：
 
 1. **骨架页**（纯前端 + 现有 API）：三栏布局、target picker、全展开轴、单 message、
-   payload 实时面板、result、run history。Plugins 区已渲染（inherited 只读展示），
-   overlay 控件禁用 + hint "coming"。
-2. **Flags overlay**（后端 #1–#4 + 前端 FlagOverlayPanel 激活 + codegen）——核心价值落地。
+   payload 实时面板、result、run history，以及路由图同款 Plugins 卡片/catalog 入口。
+2. **Flags overlay**（后端 #1–#4 + Bench 对共享 Plugins 组件的状态接线 + codegen）——核心价值落地。
 3. **Raw request**（前置 PR 的 `request`/`request_protocol` + 前端 RequestEditor + templates）。
 
 每阶段用 `ui-preview` skill 截图验收布局。
@@ -607,6 +610,7 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | 配置持久化 | localStorage 持久化 | 跟随 probe 的不持久化 | 诊断要默认可预测，工作台要延续上下文——两个页面的正确答案相反，显式写下避免"统一"冲动 |
 | provider_config target | 不纳入 | 三种 target 全支持 | 它属于 Connect AI 的"保存前验证"流程；Bench 面向已保存对象，多一种 target 只添心智噪音 |
 | Run history | session 内存 | 落库持久化 | 先验证"回看/对照"是不是真实高频动作，再决定值不值得一张表 |
+| Plugins UI（V1.1） | 直接复用路由图的 `RulePluginsCard` + `FlagCatalogDialog` | 保留 Bench 常驻三态面板 / 再抽一层通用框架 | 路由图已经有完整 registry 控件与 provider picker；Bench 只需 wire key 转换和 Direct gate，第二套实现已经产生能力漂移 |
 | Target picker（V1.1） | 路由图同款卡片选择器（`ModelSelectDialog`），只选 Provider+Model | 继续用 Autocomplete 下拉，只是把 Rule 分组去掉 | Autocomplete 下拉在窄栏里把长名字硬截断、选项难分辨；卡片选择器是用户已经练熟的心智，且是同一份代码，不是仿制视觉 |
 | Rule target（V1.1） | 移除，Bench 只连 Provider+Model | 保留 Rule，但换个更宽的地方放 target picker | Rule 目标撑不起统一的卡片选择器，硬塞等于发明第二种选择模式；连带的 routing 轴/深链协议/flag 基线耦合面大，不如一次性和 picker 改造一起砍掉，未来要接回来再设计 |
 
@@ -640,11 +644,11 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | 2 | 消解模式选择 | 统一 target picker；进页即工作面，无向导 |
 | 3 | 命名唯一 | Bench / Plugins / Probe 各指一物；轴词汇与 probe 完全共用 |
 | 4 | 正交维度分轴 | 轴 × flags overlay × request 三个正交面板；轴内按"四种归类"分组（Parameters/Presets）；自定义模式下归请求的轴整块不渲染而非静默忽略 |
-| 5 | 展示具体值 | inherited flag 显示解析后实际值；payload 展示真实 body；AppliedFlags 回显权威生效值 |
-| 6 | 聪明默认 | 轴默认沿用 probe（Stream/Through-TB/primary protocol）；flags 默认全 inherited；request 默认 fixture |
+| 5 | 展示具体值 | Plugins 卡片/catalog 展示当前配置值；payload 展示真实 body；AppliedFlags 回显权威生效值 |
+| 6 | 聪明默认 | 轴默认沿用 probe（Stream/Through-TB/primary protocol）；plugins 沿用既有 catalog 行为；request 默认 fixture |
 | 7 | 诊断走真实链路 | 一切默认 loopback 生产路径；Direct 仅作对照且与 flags 互斥 |
 | 8 | 教育内嵌 | 按协议的 request templates 即教材；overlay 与 AppliedFlags 的差异展示约束本身 |
-| 9 | 降视觉噪声 | 主角是 payload 与 result；flags 未覆盖时 muted；journey 字段仍是等宽极简行 |
+| 9 | 降视觉噪声 | 主角是 payload 与 result；Plugins 使用紧凑摘要卡片，需要时再进入 catalog；journey 字段仍是等宽极简行 |
 | 10 | 完成 ≠ 锁死 | run history 回看并恢复配置；页面状态持久化，随时回来续做 |
 | 11 | 交付下一步物件 | cURL/payload 逐块可复制；probe→bench 深链带配置；（V2）导出 harness case |
 | 12 | 副作用限定当前表面 | overlay 不落库、不触碰任何 rule/scenario 配置；run 不进 usage 统计之外的任何状态 |

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, LinearProgress, Paper, Stack, Typography } from '@mui/material';
-import { PlayArrow as RunIcon, TestPipe as BenchIcon } from '@/components/icons';
+import { Box, Button, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { HelpOutline, PlayArrow as RunIcon, TestPipe as BenchIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';
-import type { FlagSpec } from '@/components/RoutingGraphTypes';
+import type { FlagSpec, RuleFlagsApi } from '@/components/RoutingGraphTypes';
+import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
+import { apiToFlags, flagsToApi } from '@/components/rule-card/flagHelpers';
 import type { Provider } from '@/types/provider';
 import type { ProbeRequest, ProbeResult } from '@/types/probe';
 import { runProbe, buildProbeCurl, type ProbeCurlResult } from '@/components/probe/runProbe';
@@ -27,7 +29,6 @@ import {
 import { useTargetCatalog } from './useTargetCatalog';
 import { TargetPicker } from './TargetPicker';
 import { BenchAxes, useAxisAvailability, type RequestMode } from './BenchAxes';
-import { PluginsPanel, type FlagBaseline } from './PluginsPanel';
 import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
@@ -35,7 +36,8 @@ import { RunHistory } from './RunHistory';
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
 // Compose (what do I send?) · Conversation + Result (what happened?) ·
-// Payload (what actually goes out?). Every knob is resident. Bench targets a
+// Payload (what actually goes out?). Request axes stay resident; Plugins uses
+// the same compact card and catalog as the routing graph. Bench targets a
 // real provider model directly — no Rule/deep-link jump-in from elsewhere;
 // it is reached only through its own nav entry.
 
@@ -73,21 +75,50 @@ const prettyBody = (raw: string): string => {
     }
 };
 
-const Panel: React.FC<{ title: string; question: string; action?: React.ReactNode; children: React.ReactNode }> = ({ title, question, action, children }) => (
-    <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.75, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+const BENCH_WORKSPACE_HEIGHT = 840;
+
+const Panel: React.FC<{
+    title: string;
+    question: string;
+    action?: React.ReactNode;
+    scroll?: boolean;
+    children: React.ReactNode;
+}> = ({ title, question, action, scroll = false, children }) => (
+    <Paper
+        variant="outlined"
+        sx={{
+            overflow: 'hidden',
+            bgcolor: 'background.paper',
+            height: { lg: '100%' },
+            ...(scroll && {
+                display: { lg: 'flex' },
+                flexDirection: { lg: 'column' },
+                minHeight: 0,
+            }),
+        }}
+    >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.75, py: 1, borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
             <Typography variant="overline" sx={{ fontSize: '0.62rem', color: 'text.secondary', lineHeight: 1 }}>{title}</Typography>
             <Typography variant="caption" sx={{ color: 'text.disabled' }}>{question}</Typography>
             <Box sx={{ flex: 1 }} />
             {action}
         </Box>
-        <Box sx={{ p: 1.75 }}>{children}</Box>
+        <Box
+            sx={{
+                p: 1.75,
+                ...(scroll && {
+                    flex: { lg: 1 },
+                    minHeight: 0,
+                    overflowY: { lg: 'auto' },
+                    overscrollBehavior: { lg: 'contain' },
+                    scrollbarGutter: { lg: 'stable' },
+                }),
+            }}
+        >
+            {children}
+        </Box>
     </Paper>
 );
-
-// A provider target has no rule/scenario to inherit flags from — every row
-// starts uninherited, and the overlay is the whole story for this request.
-const EMPTY_BASELINE: FlagBaseline = { values: {}, sources: {} };
 
 const BenchPage: React.FC = () => {
     const { t } = useTranslation();
@@ -96,6 +127,7 @@ const BenchPage: React.FC = () => {
     const [state, setState] = useState<BenchState>(() => loadState() ?? cloneState(DEFAULT_STATE));
     const [registry, setRegistry] = useState<FlagSpec[]>([]);
     const [registryLoading, setRegistryLoading] = useState(true);
+    const [pluginCatalogOpen, setPluginCatalogOpen] = useState(false);
     const [running, setRunning] = useState(false);
     const [shown, setShown] = useState<{ result: ProbeResult; snapshot: BenchState } | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -143,6 +175,11 @@ const BenchPage: React.FC = () => {
     const built = useMemo(() => buildProbeRequest(state), [state]);
     const request = built.request;
     const direct = isDirect(state);
+    const pluginFlags = useMemo(() => apiToFlags(state.flags as RuleFlagsApi), [state.flags]);
+
+    useEffect(() => {
+        if (direct) setPluginCatalogOpen(false);
+    }, [direct]);
 
     // Protocols a hand-written request may be in for this target: whatever
     // the provider speaks.
@@ -240,8 +277,24 @@ const BenchPage: React.FC = () => {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <PageHeader
-                title={t('bench.title', { defaultValue: 'Bench' })}
-                subtitle={t('bench.subtitle', { defaultValue: 'One probe request with every knob resident: pick a provider model, shape the request, overlay flags, edit the payload.' })}
+                title={
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                        <Box component="span">{t('bench.title', { defaultValue: 'Bench' })}</Box>
+                        <Tooltip
+                            arrow
+                            placement="right"
+                            title={t('bench.subtitle', {
+                                defaultValue: 'One probe request with every knob resident: pick a provider model, shape the request, overlay flags, edit the payload.',
+                            })}
+                        >
+                            <HelpOutline
+                                aria-label={t('bench.about', { defaultValue: 'About Bench' })}
+                                tabIndex={0}
+                                sx={{ fontSize: 17, color: 'text.disabled', cursor: 'help' }}
+                            />
+                        </Tooltip>
+                    </Stack>
+                }
                 icon={<BenchIcon sx={{ fontSize: 26 }} />}
                 actions={
                     <Button variant="contained" startIcon={<RunIcon />} onClick={run} disabled={!request || running} sx={{ minWidth: 120 }} title={t('bench.runHint', { defaultValue: '⌘ / Ctrl + Enter' })}>
@@ -257,12 +310,13 @@ const BenchPage: React.FC = () => {
                 sx={{
                     display: 'grid',
                     gap: 2,
-                    alignItems: 'start',
+                    alignItems: 'stretch',
+                    height: { lg: BENCH_WORKSPACE_HEIGHT },
                     gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', lg: '300px minmax(0, 1fr) minmax(360px, 420px)' },
                 }}
             >
                 {/* ① what do I send? */}
-                <Stack spacing={2}>
+                <Box sx={{ minWidth: 0, height: { lg: '100%' } }}>
                     <Panel title={t('bench.compose', { defaultValue: 'Compose' })} question={t('bench.composeQ', { defaultValue: 'what do I send?' })}>
                         <Stack spacing={1.5}>
                             <Box>
@@ -280,79 +334,97 @@ const BenchPage: React.FC = () => {
                                 customProtocolOptions={rawProtocolOptions}
                                 protocolValue={protocolValue}
                                 onProtocolChange={onProtocolChange}
+                                pluginFlags={pluginFlags}
+                                pluginRegistry={registry}
+                                pluginsActive={!direct}
+                                onOpenPlugins={() => {
+                                    if (!direct) setPluginCatalogOpen(true);
+                                }}
                             />
                         </Stack>
                     </Panel>
-                    <Panel title={t('bench.plugins', { defaultValue: 'Plugins' })} question={t('bench.pluginsQ', { defaultValue: 'flag overlay · this request only' })}>
-                        <PluginsPanel
-                            registry={registry}
-                            loading={registryLoading}
-                            baseline={EMPTY_BASELINE}
-                            overlay={state.flags}
-                            onChange={(flags) => patch({ flags })}
-                            disabled={direct}
-                        />
-                    </Panel>
-                </Stack>
+                    <FlagCatalogDialog
+                        open={pluginCatalogOpen}
+                        flags={pluginFlags}
+                        registry={registry}
+                        loading={registryLoading}
+                        providers={catalog.providers}
+                        onClose={() => setPluginCatalogOpen(false)}
+                        onSave={(next) => {
+                            patch({ flags: { ...flagsToApi(next) } });
+                            setPluginCatalogOpen(false);
+                        }}
+                    />
+                </Box>
 
                 {/* ② the request itself · ③ what happened? */}
-                <Stack spacing={2}>
-                    <Panel title={t('bench.requestPanel', { defaultValue: 'Request' })} question={t('bench.requestQ', { defaultValue: 'what the client sends' })}>
-                        <RequestEditor
-                            message={state.message}
-                            onMessageChange={(message) => patch({ message })}
-                            raw={state.raw}
-                            onRawChange={(raw) => patch({ raw })}
-                            seedBody={seedBody}
-                            error={state.raw ? built.error : undefined}
-                            messagePlaceholder={defaultMessage(state.axes.tool)}
-                        />
-                    </Panel>
-                    <Panel title={t('bench.result', { defaultValue: 'Result' })} question={t('bench.resultQ', { defaultValue: 'what happened?' })}>
-                        {running && <LinearProgress sx={{ height: 6, borderRadius: 3 }} />}
-                        {!running && !shown && (
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {t('bench.resultEmpty', { defaultValue: 'Not run yet — press Run to send exactly this request.' })}
-                            </Typography>
-                        )}
-                        {!running && shown && (
-                            <Box sx={{ mt: -2 }}>
-                                <StatusBar result={shown.result} />
-                                <CollapsibleSection title={t('probe.journey')} defaultExpanded>
-                                    <Journey
-                                        result={shown.result}
-                                        targetType="provider"
-                                        targetName={targetName}
-                                        model={shown.snapshot.target?.model}
-                                        bypassed={isDirect(shown.snapshot)}
-                                        showFlags
-                                        flagsExtra={
-                                            shownOverlay.length > 0 ? (
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'primary.main', fontFamily: 'inherit', mt: 0.25 }}>
-                                                    {t('bench.overlaySent', { flags: shownOverlay.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '), defaultValue: 'overlay sent: {{flags}}' })}
-                                                </Typography>
-                                            ) : undefined
-                                        }
-                                    />
-                                </CollapsibleSection>
-                                {shown.result.success && (
-                                    <CollapsibleSection title={t('probe.response')} defaultExpanded={false}>
-                                        <CopyBlock text={extracted || t('probe.noText')} maxHeight="40vh" />
-                                    </CollapsibleSection>
+                <Box sx={{ minWidth: 0, height: { lg: '100%' } }}>
+                    <Panel scroll title={t('bench.requestPanel', { defaultValue: 'Request' })} question={t('bench.requestQ', { defaultValue: 'what the client sends' })}>
+                        <Stack spacing={2}>
+                            <RequestEditor
+                                message={state.message}
+                                onMessageChange={(message) => patch({ message })}
+                                raw={state.raw}
+                                onRawChange={(raw) => patch({ raw })}
+                                seedBody={seedBody}
+                                error={state.raw ? built.error : undefined}
+                                messagePlaceholder={defaultMessage(state.axes.tool)}
+                            />
+                            <Box sx={{ pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+                                    <Typography variant="overline" sx={{ fontSize: '0.62rem', color: 'text.secondary', lineHeight: 1 }}>
+                                        {t('bench.result', { defaultValue: 'Result' })}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                                        {t('bench.resultQ', { defaultValue: 'what happened?' })}
+                                    </Typography>
+                                </Box>
+                                {running && <LinearProgress sx={{ height: 6, borderRadius: 3 }} />}
+                                {!running && !shown && (
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {t('bench.resultEmpty', { defaultValue: 'Not run yet — press Run to send exactly this request.' })}
+                                    </Typography>
                                 )}
-                                {shown.result.success && shown.result.data?.content && (
-                                    <CollapsibleSection title={t('probe.rawJson')} defaultExpanded={false}>
-                                        <CopyBlock text={shown.result.data.content} maxHeight="45vh" fontSize="0.72rem" />
-                                    </CollapsibleSection>
+                                {!running && shown && (
+                                    <Box sx={{ mt: -2 }}>
+                                        <StatusBar result={shown.result} />
+                                        <CollapsibleSection title={t('probe.journey')} defaultExpanded>
+                                            <Journey
+                                                result={shown.result}
+                                                targetType="provider"
+                                                targetName={targetName}
+                                                model={shown.snapshot.target?.model}
+                                                bypassed={isDirect(shown.snapshot)}
+                                                showFlags
+                                                flagsExtra={
+                                                    shownOverlay.length > 0 ? (
+                                                        <Typography variant="caption" sx={{ display: 'block', color: 'primary.main', fontFamily: 'inherit', mt: 0.25 }}>
+                                                            {t('bench.overlaySent', { flags: shownOverlay.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '), defaultValue: 'overlay sent: {{flags}}' })}
+                                                        </Typography>
+                                                    ) : undefined
+                                                }
+                                            />
+                                        </CollapsibleSection>
+                                        {shown.result.success && (
+                                            <CollapsibleSection title={t('probe.response')} defaultExpanded={false}>
+                                                <CopyBlock text={extracted || t('probe.noText')} maxHeight="40vh" />
+                                            </CollapsibleSection>
+                                        )}
+                                        {shown.result.success && shown.result.data?.content && (
+                                            <CollapsibleSection title={t('probe.rawJson')} defaultExpanded={false}>
+                                                <CopyBlock text={shown.result.data.content} maxHeight="45vh" fontSize="0.72rem" />
+                                            </CollapsibleSection>
+                                        )}
+                                    </Box>
                                 )}
                             </Box>
-                        )}
+                        </Stack>
                     </Panel>
-                </Stack>
+                </Box>
 
                 {/* ④ what actually goes out? Spans the row below on narrow screens. */}
-                <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' } }}>
-                    <Panel title={t('bench.payload', { defaultValue: 'Payload' })} question={t('bench.payloadQ', { defaultValue: 'what actually goes out' })}>
+                <Box sx={{ minWidth: 0, gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' }, height: { lg: '100%' } }}>
+                    <Panel scroll title={t('bench.payload', { defaultValue: 'Payload' })} question={t('bench.payloadQ', { defaultValue: 'what actually goes out' })}>
                         <PayloadPanel
                             request={request}
                             curl={curl}

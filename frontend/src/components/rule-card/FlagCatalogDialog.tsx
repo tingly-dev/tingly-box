@@ -173,11 +173,11 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ pb: 1 }}>
-                Rule Plugins
+                Plugins
                 <Typography variant="caption" component="div" sx={{
                     color: "text.secondary"
                 }}>
-                    Plugin flags applied at the rule level.
+                    Configure plugin flags.
                 </Typography>
             </DialogTitle>
             {/* Active flags strip — empty state stays hidden to save vertical space. */}
