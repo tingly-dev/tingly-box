@@ -8,8 +8,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 )
 
-// responsesPromptCacheKey derives a stable prompt_cache_key from an Anthropic
-// request's metadata.user_id.
+// openAIPromptCacheKey derives a stable prompt_cache_key from an Anthropic
+// request's metadata.user_id. Both OpenAI shapes carry the field, so this
+// serves the Chat converter as well as the two Responses converters.
 //
 // Anthropic has no equivalent field: its prompt cache is addressed purely by
 // the request prefix. OpenAI's is not — prompt_cache_key is the affinity hint
@@ -24,7 +25,7 @@ import (
 // is forwarded, never the device or account fields. A user_id in some other
 // shape is hashed, so an unrecognized format still yields a stable key without
 // leaking whatever it contains upstream.
-func responsesPromptCacheKey(rawUserID string) param.Opt[string] {
+func openAIPromptCacheKey(rawUserID string) param.Opt[string] {
 	if rawUserID == "" {
 		return param.Opt[string]{}
 	}

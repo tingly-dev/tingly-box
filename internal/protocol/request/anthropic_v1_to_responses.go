@@ -36,15 +36,7 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	// Always set Input field, even if empty, as Responses API requires it
 	var inputItems responses.ResponseInputParam
 	if hasSystemCacheControl {
-		content := make(responses.ResponseInputMessageContentListParam, 0, len(anthropicReq.System))
-		for _, block := range anthropicReq.System {
-			part := &responses.ResponseInputTextParam{Text: block.Text}
-			if !param.IsOmitted(block.CacheControl) {
-				part.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-			}
-			content = append(content, responses.ResponseInputContentUnionParam{OfInputText: part})
-		}
-		inputItems = append(inputItems, responseMessageWithContent("system", content))
+		inputItems = append(inputItems, responseMessageWithContent("system", responsesTextParts(anthropicReq.System)))
 	}
 	inputItems = append(inputItems, convertV1MessagesToResponsesInput(anthropicReq.Messages)...)
 	params.Input = responses.ResponseNewParamsInputUnion{
@@ -77,7 +69,7 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 
 	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
 	// field, so it is derived from metadata.user_id.
-	params.PromptCacheKey = responsesPromptCacheKey(anthropicReq.Metadata.UserID.Or(""))
+	params.PromptCacheKey = openAIPromptCacheKey(anthropicReq.Metadata.UserID.Or(""))
 
 	hasRepresentableCacheControl := hasSystemCacheControl || anthropicV1MessagesHaveRepresentableCacheControl(anthropicReq.Messages)
 	hasFallbackCacheControl := anthropicV1ToolsHaveCacheControl(anthropicReq.Tools) ||
@@ -273,7 +265,7 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 	}
 
 	// Add text content as a separate message if present
-	if parts := responsesAssistantTextParts(textBlocks); len(parts) > 0 {
+	if parts := responsesTextParts(textBlocks); len(parts) > 0 {
 		items = append(items, responseMessageWithContent("assistant", parts))
 	}
 

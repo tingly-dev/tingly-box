@@ -3,8 +3,10 @@ package protocoltest
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 )
 
 // cache_prefix is the cross-request prompt-cache regression section shared by
@@ -219,12 +221,16 @@ func responsesCachePrefixBody(model string, streaming bool, turns, _ int, sessio
 
 const cachePrefixSystemText = "STABLE SYSTEM PROMPT — the whole point is that this never moves."
 
-func cachePrefixCallID(i int) string { return fmt.Sprintf("call_cacheprefix%02d", i) }
+func cachePrefixCallID(i int) string {
+	return fmt.Sprintf("%s_cacheprefix%02d", ids.PrefixCall, i)
+}
 
 // cachePrefixReasoningID is shaped like the ids internal/protocol/ids mints
-// (<prefix>_<32 hex>), because that is what Codex replays back to us.
+// (<prefix>_<32 hex>), because that is what Codex replays back to us. The
+// prefix comes from that package so a change to it fails the compile here
+// rather than silently making the fixture unrepresentative.
 func cachePrefixReasoningID(i int) string {
-	return fmt.Sprintf("rs_%032x", 0xcace0000+i)
+	return fmt.Sprintf("%s_%032x", ids.PrefixReasoning, 0xcace0000+i)
 }
 
 // cachePrefixCacheableBlocks is how many history blocks can carry a breakpoint
@@ -252,9 +258,7 @@ func stripCacheDirectives(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(node))
 		for k, child := range node {
-			switch k {
-			case "cache_control", "prompt_cache_breakpoint", "prompt_cache_options",
-				"prompt_cache_retention", "prompt_cache_key":
+			if slices.Contains(protocol.PromptCacheHintFields, k) {
 				continue
 			}
 			out[k] = stripCacheDirectives(child)
@@ -283,15 +287,7 @@ func canonicalJSON(v any) string {
 
 func capturedCachePrefixView(t flagTB, env *TestEnv, target protocol.APIType, label string) cachePrefixView {
 	t.Helper()
-	endpoint := cacheControlEndpoint(target)
-	if endpoint == "" {
-		t.Fatalf("%s: unsupported target protocol %s", label, target)
-	}
-	captured := env.virtual.LastRequest(endpoint)
-	if captured == nil {
-		t.Fatalf("%s: final provider received no %s request", label, endpoint)
-	}
-	return cachePrefixViewOf(captured.JSON(), endpoint)
+	return cachePrefixViewOf(requireLastRequest(t, env, target, label).JSON(), cacheControlEndpoint(target))
 }
 
 func cachePrefixViewOf(body map[string]any, endpoint EndpointKind) cachePrefixView {
@@ -321,9 +317,11 @@ func cachePrefixViewOf(body map[string]any, endpoint EndpointKind) cachePrefixVi
 	return view
 }
 
-// requireIdenticalPrefix asserts two turns produced the same request modulo
-// cache directives — the rotation property.
-func requireIdenticalPrefix(t flagTB, want, got cachePrefixView, label string) {
+// requireSharedPrefix asserts the second turn still shares the first's cached
+// prefix: same instruction/system text, same tool definitions, and the items
+// they have in common byte-identical. The label already says which property is
+// under test, so both callers use the same wording.
+func requireSharedPrefix(t flagTB, want, got cachePrefixView, label string) {
 	t.Helper()
 	if want.Prefix != got.Prefix {
 		t.Errorf("%s: instruction/system prefix changed\n  before: %s\n  after:  %s",
@@ -334,29 +332,28 @@ func requireIdenticalPrefix(t flagTB, want, got cachePrefixView, label string) {
 			label, truncate(want.Tools, 600), truncate(got.Tools, 600))
 	}
 	requireItemPrefix(t, want.Items, got.Items, label)
+}
+
+// requireIdenticalPrefix is the rotation property: moving a breakpoint must
+// leave the request whole.
+func requireIdenticalPrefix(t flagTB, want, got cachePrefixView, label string) {
+	t.Helper()
+	requireSharedPrefix(t, want, got, label)
 	if len(want.Items) != len(got.Items) {
 		t.Errorf("%s: item count changed: %d -> %d", label, len(want.Items), len(got.Items))
 	}
 }
 
-// requireGrowthPreservesPrefix asserts a longer turn still replays the shorter
-// turn's history byte-identically — the growth property.
+// requireGrowthPreservesPrefix is the growth property: a longer turn still
+// replays the shorter turn's history byte-identically.
 func requireGrowthPreservesPrefix(t flagTB, short, long cachePrefixView, label string) {
 	t.Helper()
-	if short.Prefix != long.Prefix {
-		t.Errorf("%s: instruction/system prefix changed as the conversation grew\n  turn N:   %s\n  turn N+1: %s",
-			label, truncate(short.Prefix, 600), truncate(long.Prefix, 600))
-	}
-	if short.Tools != long.Tools {
-		t.Errorf("%s: tool definitions changed as the conversation grew\n  turn N:   %s\n  turn N+1: %s",
-			label, truncate(short.Tools, 600), truncate(long.Tools, 600))
-	}
 	if len(long.Items) < len(short.Items) {
 		t.Errorf("%s: turn N+1 sent %d items, fewer than turn N's %d — history was dropped, not appended to",
 			label, len(long.Items), len(short.Items))
 		return
 	}
-	requireItemPrefix(t, short.Items, long.Items, label)
+	requireSharedPrefix(t, short, long, label)
 }
 
 // requireItemPrefix reports the first item position at which two histories
@@ -382,11 +379,7 @@ func requireItemPrefix(t flagTB, want, got []string, label string) {
 // prefix — so an Anthropic target legitimately returns "".
 func capturedCacheKey(t flagTB, env *TestEnv, target protocol.APIType, label string) (bodyKey, headerKey string) {
 	t.Helper()
-	endpoint := cacheControlEndpoint(target)
-	captured := env.virtual.LastRequest(endpoint)
-	if captured == nil {
-		t.Fatalf("%s: final provider received no %s request", label, endpoint)
-	}
+	captured := requireLastRequest(t, env, target, label)
 	bodyKey, _ = captured.JSON()["prompt_cache_key"].(string)
 	return bodyKey, captured.Headers.Get("session-id")
 }
@@ -401,15 +394,35 @@ func cachePrefixScenario() Scenario {
 	return s
 }
 
-func sendCachePrefixTurn(t flagTB, env *TestEnv, c cachePrefixClient, target protocol.APIType,
-	scenarioName, model string, streaming bool, turns, breakpointAt int, sessionID string) {
+// cachePrefixRun is one configured case: everything that is fixed for the
+// duration of it, so the per-turn calls carry only what actually varies.
+type cachePrefixRun struct {
+	env       *TestEnv
+	client    cachePrefixClient
+	target    protocol.APIType
+	scenario  string
+	model     string
+	streaming bool
+	// codex is set for the Codex-boundary case, where the request passes
+	// through the real Codex RoundTripper and the ChatGPT backend's own wire
+	// rules and session-id affinity header apply on top.
+	codex bool
+	base  string
+}
+
+func (r cachePrefixRun) send(t flagTB, turns, breakpointAt int, sessionID string) {
 	t.Helper()
-	path, _ := buildRequest(c.source, model, streaming)
-	body := c.build(model, streaming, turns, breakpointAt, sessionID)
-	if _, err := env.dispatch(c.source, target, scenarioName, path, mustMarshal(body), nil, streaming); err != nil {
+	path, _ := buildRequest(r.client.source, r.model, r.streaming)
+	body := r.client.build(r.model, r.streaming, turns, breakpointAt, sessionID)
+	if _, err := r.env.dispatch(r.client.source, r.target, r.scenario, path, mustMarshal(body), nil, r.streaming); err != nil {
 		t.Fatalf("dispatch %s %s -> %s (turns=%d, breakpoint=%d, streaming=%v): %v",
-			c.name, c.source, target, turns, breakpointAt, streaming, err)
+			r.client.name, r.client.source, r.target, turns, breakpointAt, r.streaming, err)
 	}
+}
+
+func (r cachePrefixRun) capture(t flagTB, suffix string) cachePrefixView {
+	t.Helper()
+	return capturedCachePrefixView(t, r.env, r.target, r.base+suffix)
 }
 
 // runCachePrefixCase drives one client shape against one target and checks all
@@ -422,73 +435,76 @@ func runCachePrefixCase(t flagTB, env *TestEnv, c cachePrefixClient, target prot
 	if model == "" {
 		t.Fatalf("%s: %s -> %s route model not configured", c.name, c.source, target)
 	}
-	runCachePrefixChecks(t, env, c, target, s.Name, model, streaming, false)
+	runCachePrefixChecks(t, newCachePrefixRun(env, c, target, s.Name, model, streaming, false))
+}
+
+func newCachePrefixRun(env *TestEnv, c cachePrefixClient, target protocol.APIType,
+	scenario, model string, streaming, codex bool) cachePrefixRun {
+	return cachePrefixRun{
+		env: env, client: c, target: target, scenario: scenario,
+		model: model, streaming: streaming, codex: codex,
+		base: fmt.Sprintf("%s/%s→%s/%s", c.name, c.source, target, streamMode(streaming)),
+	}
 }
 
 // runCachePrefixChecks is the assertion body, shared by the generic-provider
 // case and the Codex-boundary case (which only differs in how the route was
 // provisioned). codexBoundary additionally asserts the Codex wire rules.
-func runCachePrefixChecks(t flagTB, env *TestEnv, c cachePrefixClient, target protocol.APIType,
-	scenarioName, model string, streaming, codexBoundary bool) {
+func runCachePrefixChecks(t flagTB, r cachePrefixRun) {
 	t.Helper()
-	base := fmt.Sprintf("%s/%s→%s/%s", c.name, c.source, target, streamMode(streaming))
 	blocks := cachePrefixCacheableBlocks(cachePrefixTurns)
 
 	// Rotation: the same history, with the client's breakpoint parked on the
 	// last cacheable block and then on the one before it — what happens
 	// naturally as a client's fixed pool of breakpoints rolls forward.
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns, blocks-1, cachePrefixSessionID)
-	rotationBaseline := capturedCachePrefixView(t, env, target, base+"/rotation")
-	if c.rotates {
+	r.send(t, cachePrefixTurns, blocks-1, cachePrefixSessionID)
+	rotationBaseline := r.capture(t, "/rotation")
+	if r.client.rotates {
 		for _, at := range []int{blocks - 2, 0, -1} {
-			sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns, at, cachePrefixSessionID)
-			got := capturedCachePrefixView(t, env, target, base+"/rotation")
-			requireIdenticalPrefix(t, rotationBaseline, got,
-				fmt.Sprintf("%s/rotation/breakpoint=%d", base, at))
+			r.send(t, cachePrefixTurns, at, cachePrefixSessionID)
+			requireIdenticalPrefix(t, rotationBaseline, r.capture(t, "/rotation"),
+				fmt.Sprintf("%s/rotation/breakpoint=%d", r.base, at))
 		}
 	}
 
 	// Growth: turn N+1 appends one exchange and rolls the breakpoint onto it.
 	// Everything turn N sent must still arrive byte-identical.
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns, blocks-1, cachePrefixSessionID)
-	shortView := capturedCachePrefixView(t, env, target, base+"/growth")
-	grownBlocks := cachePrefixCacheableBlocks(cachePrefixTurns + 1)
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns+1, grownBlocks-1, cachePrefixSessionID)
-	longView := capturedCachePrefixView(t, env, target, base+"/growth")
-	requireGrowthPreservesPrefix(t, shortView, longView, base+"/growth")
+	r.send(t, cachePrefixTurns, blocks-1, cachePrefixSessionID)
+	shortView := r.capture(t, "/growth")
+	r.send(t, cachePrefixTurns+1, cachePrefixCacheableBlocks(cachePrefixTurns+1)-1, cachePrefixSessionID)
+	requireGrowthPreservesPrefix(t, shortView, r.capture(t, "/growth"), r.base+"/growth")
 
 	// Affinity: the conversation identity must reach the upstream, stably, and
 	// must distinguish one conversation from another.
-	assertCachePrefixAffinity(t, env, c, target, scenarioName, model, streaming, base, codexBoundary)
+	assertCachePrefixAffinity(t, r)
 
-	if codexBoundary {
-		assertCodexCacheWireRules(t, env, base)
+	if r.codex {
+		assertCodexCacheWireRules(t, r.env, r.base)
 	}
 }
 
 // assertCachePrefixAffinity checks the upstream affinity hint: stable within a
 // conversation, different across conversations, and absent when there is
 // nothing to derive it from.
-func assertCachePrefixAffinity(t flagTB, env *TestEnv, c cachePrefixClient, target protocol.APIType,
-	scenarioName, model string, streaming bool, base string, codexBoundary bool) {
+func assertCachePrefixAffinity(t flagTB, r cachePrefixRun) {
 	t.Helper()
-	label := base + "/affinity"
+	label := r.base + "/affinity"
 
 	// Anthropic has no cache-key field; its cache is addressed purely by
 	// prefix, which the rotation and growth checks above already cover. Both
 	// OpenAI shapes carry prompt_cache_key.
-	wantKey := c.carriesAffinity && cacheControlEndpoint(target) != EndpointAnthropic
+	wantKey := r.client.carriesAffinity && cacheControlEndpoint(r.target) != EndpointAnthropic
 
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns, 0, cachePrefixSessionID)
-	firstBody, firstHeader := capturedCacheKey(t, env, target, label)
+	r.send(t, cachePrefixTurns, 0, cachePrefixSessionID)
+	firstBody, firstHeader := capturedCacheKey(t, r.env, r.target, label)
 
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns+1, 1, cachePrefixSessionID)
-	secondBody, secondHeader := capturedCacheKey(t, env, target, label)
+	r.send(t, cachePrefixTurns+1, 1, cachePrefixSessionID)
+	secondBody, secondHeader := capturedCacheKey(t, r.env, r.target, label)
 
 	if !wantKey {
 		if firstBody != "" {
 			t.Errorf("%s: %s target carries prompt_cache_key %q, but this protocol has no such field",
-				label, target, firstBody)
+				label, r.target, firstBody)
 		}
 		return
 	}
@@ -503,14 +519,14 @@ func assertCachePrefixAffinity(t flagTB, env *TestEnv, c cachePrefixClient, targ
 			label, firstBody, secondBody)
 	}
 
-	sendCachePrefixTurn(t, env, c, target, scenarioName, model, streaming, cachePrefixTurns, 0, cachePrefixOtherSessionID)
-	otherBody, _ := capturedCacheKey(t, env, target, label)
+	r.send(t, cachePrefixTurns, 0, cachePrefixOtherSessionID)
+	otherBody, _ := capturedCacheKey(t, r.env, r.target, label)
 	if otherBody == firstBody {
 		t.Errorf("%s: two different conversations share prompt_cache_key %q — they would contend for one cache slot",
 			label, firstBody)
 	}
 
-	if !codexBoundary {
+	if !r.codex {
 		return
 	}
 	// At the Codex boundary the header is what ChatGPT keys affinity on.
@@ -535,10 +551,7 @@ func assertCachePrefixAffinity(t flagTB, env *TestEnv, c cachePrefixClient, targ
 // the converter chose to represent it upstream of this boundary.
 func assertCodexCacheWireRules(t flagTB, env *TestEnv, base string) {
 	t.Helper()
-	captured := env.virtual.LastRequest(EndpointResponses)
-	if captured == nil {
-		t.Fatalf("%s: Codex provider received no request", base)
-	}
+	captured := requireLastRequest(t, env, protocol.TypeOpenAIResponses, base+"/codex")
 	body := captured.JSON()
 	raw := truncate(string(captured.Body), 1200)
 
@@ -578,7 +591,7 @@ func runCodexBoundaryCachePrefixCase(t flagTB, env *TestEnv, c cachePrefixClient
 	if model == "" {
 		t.Fatalf("%s: Codex route model not configured", c.name)
 	}
-	runCachePrefixChecks(t, env, c, target, s.Name, model, streaming, true)
+	runCachePrefixChecks(t, newCachePrefixRun(env, c, target, s.Name, model, streaming, true))
 }
 
 // ExecuteAllCachePrefix runs the cross-request prompt-cache section. Name

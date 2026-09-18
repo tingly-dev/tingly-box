@@ -35,3 +35,22 @@ var (
 	NewTokenUsageFull      = publicprotocol.NewTokenUsageFull
 	ZeroTokenUsage         = publicprotocol.ZeroTokenUsage
 )
+
+// PromptCacheHintFields names every field that is a prompt-cache *hint* rather
+// than part of the prompt itself, in both protocol families' spellings:
+// Anthropic's cache_control and OpenAI's prompt_cache_* family.
+//
+// A prompt cache is keyed on the request prefix, and these fields describe that
+// prefix rather than belong to it, so removing them is what "compare what the
+// upstream actually caches" means. The list is declared once here because three
+// places need the same answer: the vendor-boundary strip in
+// internal/protocol/ops, and the two prefix-stability suites that diff request
+// bodies across turns. A field added to the SDK and missed by one of them would
+// make that suite quietly test something weaker.
+var PromptCacheHintFields = []string{
+	"cache_control",
+	"prompt_cache_breakpoint",
+	"prompt_cache_options",
+	"prompt_cache_retention",
+	"prompt_cache_key",
+}

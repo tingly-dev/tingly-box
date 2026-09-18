@@ -9,7 +9,8 @@ import (
 )
 
 // =============================================
-// ParseMetadataUserID Tests
+// Anthropic metadata-transform tests (the metadata.user_id model itself is
+// tested in internal/protocol/metaid).
 // =============================================
 
 func TestApplyAnthropicV1MetadataTransform(t *testing.T) {
@@ -32,7 +33,7 @@ func TestApplyAnthropicV1MetadataTransform(t *testing.T) {
 			name:           "nil extra - no metadata generated",
 			req:            &anthropic.MessageNewParams{},
 			extra:          nil,
-			wantNoMetadata: true, // BuildMetadataUserID(nil) returns nil due to missing required fields
+			wantNoMetadata: true, // metaid.BuildMetadataUserID(nil) returns nil due to missing required fields
 		},
 		{
 			name: "with user_id in extra - also needs device",

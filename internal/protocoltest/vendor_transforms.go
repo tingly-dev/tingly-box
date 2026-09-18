@@ -50,10 +50,19 @@ type vendorFixture struct {
 	// Only api.openai.com is allowlisted today — see supportsExplicitPromptCache
 	// in internal/protocol/ops/request_openai_extensions.go.
 	wantsExplicitPromptCache bool
+
+	// wantsArrayTextContent is whether text-only message content should reach
+	// this vendor as a content-part array rather than a plain string
+	// (acceptsChatArrayTextContent). Declared independently of
+	// wantsExplicitPromptCache even though the two allowlists happen to agree
+	// today: deriving one expectation from the other would re-encode the
+	// coupling the production split exists to avoid, and the suite would no
+	// longer notice if they were rejoined.
+	wantsArrayTextContent bool
 }
 
 var vendorFixtures = []vendorFixture{
-	{name: "openai_official", apiBase: "http://api.openai.com", wantsExplicitPromptCache: true},
+	{name: "openai_official", apiBase: "http://api.openai.com", wantsExplicitPromptCache: true, wantsArrayTextContent: true},
 	{name: "generic_openai_compatible", apiBase: "http://example-llm-provider.test", wantsExplicitPromptCache: false},
 	{name: "deepseek", apiBase: "http://api.deepseek.com", wantsExplicitPromptCache: false},
 	// NVIDIA NIM rejects the whole request over top-level prompt-cache
@@ -137,11 +146,7 @@ func runVendorTransformCase(t flagTB, env *TestEnv, fx vendorFixture, streaming 
 		sendCacheControlBody(t, env, source, target, s.Name, model, streaming, cached)
 		wantCached := cached && fx.wantsExplicitPromptCache
 		assertCapturedCacheState(t, env, target, wantCached, label)
-		// The wire shape of text content follows the same allowlist: a vendor
-		// that cannot take the breakpoints has no use for the content-part
-		// array either, and some reject it outright. See
-		// compactOpenAIChatTextContent.
-		assertCapturedChatTextShape(t, env, !fx.wantsExplicitPromptCache, label)
+		assertCapturedChatTextShape(t, env, !fx.wantsArrayTextContent, label)
 	}
 }
 

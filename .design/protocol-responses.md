@@ -180,13 +180,19 @@ worth stating:
 - The array form is what travels *through* the gateway, not necessarily what
   leaves it. It is the richer of the two Chat wire forms, and an
   OpenAI-compatible vendor that only accepts a string for system, assistant or
-  tool content would reject it. So the same allowlist that strips the
-  breakpoints (`supportsExplicitPromptCache`) also collapses all-text content
-  back to a plain string on the way out — `compactOpenAIChatTextContent`.
-  Nothing is lost, because the breakpoints are already gone by then, and both
-  branches stay shape-stable: a breakpoint-free vendor always sees strings,
-  `api.openai.com` always sees parts. The `vendor` harness section
-  (`harness-matrix.md` §10.3) asserts both.
+  tool content would reject it. So a second, deliberately independent vendor
+  allowlist — `acceptsChatArrayTextContent`, sitting next to
+  `supportsExplicitPromptCache` — decides the wire form, and
+  `compactOpenAIChatTextContent` collapses all-text content back to a plain
+  string for everyone off it. Nothing is lost, because the breakpoints are
+  already stripped by then, and both branches stay shape-stable: an
+  off-allowlist vendor always sees strings, an allowlisted one always sees
+  parts. The two allowlists hold the same single entry today and are still kept
+  apart on purpose: "accepts the prompt-cache fields" and "accepts array text
+  content" are different questions, and folding them together would silently
+  flip a vendor's entire text wire format the day it is added for the cache
+  fields alone. The `vendor` harness section (`harness-matrix.md` §10.3) carries
+  the two expectations as independent fixture fields for the same reason.
 - For native Responses and allowlisted Chat providers the breakpoints still
   ship, unchanged; they are now purely additive.
   `TestResponsesShapeIsStableAcrossBreakpointRotation` asserts that stripping

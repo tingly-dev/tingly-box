@@ -2,10 +2,12 @@ package request
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // claudeCodeStyleRequest builds an Anthropic beta request shaped like a Claude
@@ -66,8 +68,7 @@ func stripPromptCacheFields(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(node))
 		for k, child := range node {
-			switch k {
-			case "prompt_cache_breakpoint", "prompt_cache_options", "prompt_cache_retention", "prompt_cache_key":
+			if slices.Contains(protocol.PromptCacheHintFields, k) {
 				continue
 			}
 			out[k] = stripPromptCacheFields(child)

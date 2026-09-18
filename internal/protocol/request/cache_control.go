@@ -34,24 +34,17 @@ func responsesInputTextPart(text string, breakpoint bool) *responses.ResponseInp
 	return part
 }
 
-// responsesAssistantTextParts converts assistant text blocks to input_text
-// content parts, one per block, skipping empty ones.
-func responsesAssistantTextParts[T anthropic.TextBlockParam | anthropic.BetaTextBlockParam](blocks []T) responses.ResponseInputMessageContentListParam {
+// responsesTextParts converts text blocks to input_text content parts, one per
+// block, skipping empty ones. Shared by the assistant-message and system-prefix
+// paths, which differ only in where the blocks come from.
+func responsesTextParts(blocks []anthropic.TextBlockParam) responses.ResponseInputMessageContentListParam {
 	parts := make(responses.ResponseInputMessageContentListParam, 0, len(blocks))
 	for _, block := range blocks {
-		var text string
-		var hasBreakpoint bool
-		switch b := any(block).(type) {
-		case anthropic.TextBlockParam:
-			text, hasBreakpoint = b.Text, !param.IsOmitted(b.CacheControl)
-		case anthropic.BetaTextBlockParam:
-			text, hasBreakpoint = b.Text, !param.IsOmitted(b.CacheControl)
-		}
-		if text == "" {
+		if block.Text == "" {
 			continue
 		}
 		parts = append(parts, responses.ResponseInputContentUnionParam{
-			OfInputText: responsesInputTextPart(text, hasBreakpoint),
+			OfInputText: responsesInputTextPart(block.Text, !param.IsOmitted(block.CacheControl)),
 		})
 	}
 	return parts

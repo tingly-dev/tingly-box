@@ -682,13 +682,19 @@ go run ./cli/harness matrix --mode=vendor
 ```
 
 Alongside the allowlist itself, the section asserts the **wire shape of text
-content** per vendor: the compact string for everyone off the allowlist, the
-content-part array for those on it (`assertCapturedChatTextShape`). The
-converters emit the array unconditionally so a moving cache breakpoint cannot
-change an item's shape (§10.4), which makes the array the gateway's internal
-form — `compactOpenAIChatTextContent` picks the compatible wire form per vendor
-on the way out. Both branches are fixed per vendor; neither depends on where a
-breakpoint sat.
+content** per vendor: the compact string for everyone off
+`acceptsChatArrayTextContent`, the content-part array for those on it
+(`assertCapturedChatTextShape`). The converters emit the array unconditionally
+so a moving cache breakpoint cannot change an item's shape (§10.4), which makes
+the array the gateway's internal form — `compactOpenAIChatTextContent` picks the
+compatible wire form per vendor on the way out. Both branches are fixed per
+vendor; neither depends on where a breakpoint sat.
+
+`vendorFixture` declares `wantsArrayTextContent` separately from
+`wantsExplicitPromptCache` even though the two production allowlists agree
+today. Deriving one expectation from the other would re-encode the coupling the
+production split exists to avoid, leaving the suite unable to notice if the two
+were ever rejoined.
 
 ### 10.4 Cross-request prompt-cache suite (`cache_prefix.go`)
 

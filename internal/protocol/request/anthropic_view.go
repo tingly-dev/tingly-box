@@ -37,7 +37,7 @@ type anthropicRequestView struct {
 	Thinking     anthropic.ThinkingConfigParamUnion
 	OutputConfig anthropic.OutputConfigParam
 	// MetadataUserID is metadata.user_id verbatim; the converters read the
-	// conversation's session identity out of it (see responsesPromptCacheKey).
+	// conversation's session identity out of it (see openAIPromptCacheKey).
 	MetadataUserID string
 }
 
@@ -144,6 +144,22 @@ func viewAnthropicBetaImage(img *anthropic.BetaImageBlockParam) *anthropic.Image
 	return image
 }
 
+// viewAnthropicBetaSystem bridges beta system blocks into the canonical v1
+// type, carrying each block's cache control across.
+func viewAnthropicBetaSystem(blocks []anthropic.BetaTextBlockParam) []anthropic.TextBlockParam {
+	if len(blocks) == 0 {
+		return nil
+	}
+	out := make([]anthropic.TextBlockParam, 0, len(blocks))
+	for _, block := range blocks {
+		out = append(out, anthropic.TextBlockParam{
+			Text:         block.Text,
+			CacheControl: viewAnthropicBetaCacheControl(&block.CacheControl),
+		})
+	}
+	return out
+}
+
 func viewAnthropicBetaMessage(msg anthropic.BetaMessageParam) anthropic.MessageParam {
 	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
 	for _, block := range msg.Content {
@@ -247,12 +263,7 @@ func viewAnthropicBetaRequest(req *anthropic.BetaMessageNewParams) anthropicRequ
 		},
 		MetadataUserID: req.Metadata.UserID.Or(""),
 	}
-	for _, sys := range req.System {
-		view.System = append(view.System, anthropic.TextBlockParam{
-			Text:         sys.Text,
-			CacheControl: viewAnthropicBetaCacheControl(&sys.CacheControl),
-		})
-	}
+	view.System = viewAnthropicBetaSystem(req.System)
 	for _, msg := range req.Messages {
 		view.Messages = append(view.Messages, viewAnthropicBetaMessage(msg))
 	}
@@ -310,7 +321,7 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 
 	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
 	// field, so it is derived from metadata.user_id.
-	openaiReq.PromptCacheKey = responsesPromptCacheKey(view.MetadataUserID)
+	openaiReq.PromptCacheKey = openAIPromptCacheKey(view.MetadataUserID)
 
 	hasRepresentableCacheControl := viewHasRepresentableCacheControl(view)
 	hasFallbackCacheControl := viewHasToolDefinitionCacheControl(view) || viewHasToolUseCacheControl(view)
@@ -358,6 +369,8 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 // blocks to a single OpenAI assistant message. Thinking content is preserved
 // in the "x_thinking" extra field for provider-specific transforms.
 func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamUnion) openai.ChatCompletionMessageParamUnion {
+	// Left nil rather than pre-sized: an assistant message that is only tool
+	// calls must omit content, and a non-nil empty slice marshals as "[]".
 	var textParts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion
 	var toolCalls []openai.ChatCompletionMessageToolCallUnionParam
 	var thinking string
@@ -421,8 +434,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 		}
 	}
 
-	switch {
-	case hasToolResult:
+	if hasToolResult {
 		// When there are tool_result blocks, we need to create separate
 		// messages. Text and image blocks alongside the tool results are
 		// re-emitted as a follow-up user message (issue #1606: images must
@@ -440,7 +452,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 		if len(leftoverBlocks) > 0 {
 			result = append(result, convertAnthropicViewUserToOpenAI(leftoverBlocks)...)
 		}
-	default:
+	} else {
 		// Always an array of text + image_url content parts — see the
 		// cache-shape invariant in cache_control.go.
 		parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(blocks))
@@ -470,11 +482,11 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 }
 
 // openAIToolMessageFromAnthropicToolResult converts a normalized tool_result
-// block into an OpenAI role="tool" message. Text-only results without cache
-// control keep the compact plain-string content; results carrying image
-// blocks (tool screenshots — issue #1606) or cache breakpoints use the
-// content-part array so nothing is dropped. tool_call_id is truncated to
-// OpenAI's 40-character limit.
+// block into an OpenAI role="tool" message. The content is always the
+// content-part array, so an image entry (tool screenshots — issue #1606) and a
+// cache breakpoint both have somewhere to live and the shape never depends on
+// whether a breakpoint is present (see the cache-shape invariant in
+// cache_control.go). tool_call_id is truncated to OpenAI's 40-character limit.
 func openAIToolMessageFromAnthropicToolResult(block *anthropic.ToolResultBlockParam) openai.ChatCompletionMessageParamUnion {
 	toolCallID := truncateToolCallID(block.ToolUseID)
 	hasCache := hasAnthropicCacheControl(block.CacheControl)
