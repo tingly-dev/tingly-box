@@ -1,9 +1,10 @@
 # Claude Code: from one-shot processes to a persistent stream session
 
-> Status: P0 (feasibility) and P1 (core primitive) done, 2026-09-17. P2
-> (registry + wiring into `@cc`) and P3 (observability) not started — see §6.
-> `@cc`'s actual execution path is unchanged; `PersistentSession`/
-> `Runner.Open` exist in `agentboot` but nothing calls them yet.
+> Status: P0 (feasibility), P1 (core primitive) and P2's pool
+> (`agentboot/pool`) done, 2026-09-17. P2's wiring into `@cc` and P3
+> (observability) not started — see §6. `@cc`'s actual execution path is
+> unchanged; `PersistentSession`/`Runner.Open`/`pool.Pool` exist in
+> `agentboot` but nothing in the product calls them yet.
 > Scope: `@cc` (Claude Code) execution via `agentboot`, as driven by
 > `remote/control/remoteagent`. Does not touch `@tb` (SmartGuide/AFK), which
 > is already a long-lived in-process ReAct loop — see `.design/afk.md`.
@@ -326,26 +327,48 @@ alone, never to the `ctx` of whichever call happened to touch it.
 
 ### 5.3 Isolation moves from "process per call" to "session registry"
 
-A small registry (`agentboot.SessionPool` or similar), keyed by the same
-`(chatID, agent, project)` tuple `session.Manager.FindBy` already uses:
+**Implemented (2026-09-17) as `agentboot/pool` (`pool.Pool`), a separate
+package from `agentboot` root** — pooling is a distinct concern from the
+process/protocol lifecycle `Runner`/`PersistentSession` own; `pool.Pool`
+only ever calls the public `PersistentSession` interface (`Status`/`Close`),
+never anything about how the underlying process runs. It is agent-neutral
+and key-format-agnostic: the caller decides what a key means. For `@cc`
+that's the same `(chatID, agent, project)` tuple `session.Manager.FindBy`
+already uses (not yet wired — see P2 remaining scope at the end of this
+section).
 
-- One `PersistentSession` per key, at most.
-- `Send` on a key with an in-flight turn blocks/queues at the registry
-  layer (single-flight per key) rather than relying on the CLI's own
-  "session file already in use" error — that error class should become
-  unreachable in persistent mode, since only the registry ever touches this
-  process's stdin.
-- Idle timeout (config, default TBD — start conservative, e.g. 5–10 min of
-  no `Send`) auto-`Close()`s and evicts.
-- Hard cap on resident persistent processes (config). Over the cap, evict
-  the least-recently-active session (`Close()` it) before opening a new one.
+- One `PersistentSession` per key, at most (`Open` returns
+  `ErrKeyAlreadyOpen` on a live duplicate; callers `Acquire` first).
+- `Open`/`Acquire`/`Touch`/`CloseAndRemove`/`Remove`/`Len`/`Shutdown`.
+  `Send` serialization is *not* the pool's job — `PersistentSession.Send`
+  already returns `ErrTurnInFlight` on its own (§5.1); the pool only ever
+  decides which session a key maps to.
+- Idle timeout (`Config.IdleTimeout`, a background sweep) auto-`Close()`s
+  and evicts — but **only entries observed `Idle`**, never `Running`: idle
+  time is measured from the caller's `Touch()` call after a
+  `TurnCompleteEvent`, not from time-since-last-`Send`, so a
+  longer-than-`IdleTimeout` turn is never mistaken for an idle session.
+- Hard cap (`Config.MaxSessions`). Over the cap, `Open` evicts the
+  least-recently-touched **Idle** entry to make room; if every resident
+  entry is `Running`, `Open` returns `ErrFull` instead of force-closing an
+  active turn — the caller falls back to a one-shot `Execute` for that turn.
   Evicted/idle-timed-out sessions fall back to the existing one-shot
   `--resume` path transparently on the next message — the user sees no
   difference beyond slightly higher latency on that one message.
 - `session.Manager`'s existing `ExpiresAt.IsZero()` ("persistent: caller
   drives the lifecycle") seam is the natural place to mark a logical session
   as backed by a live `PersistentSession` versus the default expiring
-  one-shot bookkeeping.
+  one-shot bookkeeping — still unwired, see below.
+
+**Remaining P2 scope (not done): wiring.** `pool.Pool` has no consumer yet.
+`ClaudeCodeExecutor.Execute` (`executor_claude.go`) still calls
+`AgentService.Run` (one-shot) for every message. Wiring it to look up/open a
+`pool.Pool` entry keyed by `(chatID, agent, project)`, call `Touch` on every
+`TurnCompleteEvent`, and route `SessionStateEvent{Terminated}` to
+`pool.Remove` is a deliberately separate, larger change — it touches the
+actual `@cc` execution path and (per §5.4) needs an opt-in bot/profile
+setting, which drags in `swagger`/`openapi` regen and a frontend placeholder
+per `CLAUDE.md`'s codegen convention. Scoped out of this pass on purpose.
 
 ### 5.4 Wiring into `@cc`
 
@@ -411,8 +434,12 @@ core efficiency win (skip process-spawn/startup cost per message).
    something the primitive enforces on itself.
    Not yet wired to anything — `Runner.Execute`/`ExecutionHandle` are
    untouched and remain the only path `@cc` actually uses.
-3. **P2 — registry + wiring.** `SessionPool`, eviction policy, wire into
-   `ClaudeCodeExecutor` behind an opt-in setting.
+3. **P2 — registry + wiring — pool DONE, wiring not started
+   (2026-09-17).** `pool.Pool` (capacity/LRU eviction, idle-timeout sweep,
+   never evicts a `Running` session) landed in `agentboot/pool` with unit
+   tests against a fake `PersistentSession`. Wiring it into
+   `ClaudeCodeExecutor` behind an opt-in setting is deliberately deferred —
+   see §5.3's "Remaining P2 scope" note.
 4. **P3 — observability.** Surface resident-process count / per-session
    idle time somewhere an operator can see it (metrics or a debug endpoint)
    before defaulting anyone into it.
