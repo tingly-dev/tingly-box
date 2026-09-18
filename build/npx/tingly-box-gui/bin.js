@@ -109,9 +109,6 @@ async function getPlatformArchAndBinary() {
 		}
 
 		console.log(`✅ Downloaded and extracted to ${appPath}`);
-		// Shown once per fresh install/update (not on every plain run) —
-		// introduces the "TB" short name used throughout the CLI and UI.
-		console.log(`👋 Welcome to Tingly Box (TB) — an intelligence orchestrator for LLM gateway, remote control and guard rails.`);
 	}
 
 	// The app for this tag is in place — old tag dirs are now safe to GC.
