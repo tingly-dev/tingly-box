@@ -343,7 +343,7 @@ const BenchPage: React.FC = () => {
                     display: 'grid',
                     gap: 2,
                     alignItems: 'start',
-                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', xl: '320px minmax(0, 1fr) 440px' },
+                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', lg: '260px minmax(0, 1fr) minmax(360px, 420px)' },
                 }}
             >
                 {/* ① what do I send? */}
@@ -447,7 +447,7 @@ const BenchPage: React.FC = () => {
                 </Stack>
 
                 {/* ④ what actually goes out? Spans the row below on narrow screens. */}
-                <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1', xl: 'auto' } }}>
+                <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' } }}>
                     <Panel title={t('bench.payload', { defaultValue: 'Payload' })} question={t('bench.payloadQ', { defaultValue: 'what actually goes out' })}>
                         <PayloadPanel
                             request={request}
