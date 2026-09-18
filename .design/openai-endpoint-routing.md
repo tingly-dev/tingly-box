@@ -223,7 +223,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 ## 8. 关键文件
 
 - `ai/provider.go` —— `OpenAIEndpointMode` 类型 + 常量 + `Provider.OpenAIEndpointMode` 字段
-- `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoint` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
+- `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoints` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
 - `internal/data/providers.json` —— 出厂 template 的 mode 声明，以及 §10 的按模型 override 表
 - `internal/protocolserver/protocol_endpoint.go` —— `ResolveOpenAIEndpoint` 纯函数、`EndpointOverride` 枚举与 `ParseEndpointOverride`
 - `internal/protocolserver/openai_chat.go`、`openai_responses.go`、`anthropic_message.go` —— 三处入站路径的路由调用点，各自查表后传入 `ResolveOpenAIEndpoint`
@@ -255,20 +255,29 @@ provider 级单值，说不出这句话——Codex 客户端点 luna 被降级�
 
 ### 10.2 方案
 
-`providers.json` 每个 model 条目加一个可选字段：
+`providers.json` 每个 model 条目加一个可选字段，值是一个**列表**而不是单值——
+同一个模型可能两个 endpoint 都支持，列表能同时表达"只支持一个"和"两个都支持"：
 
 ```json
-{"id": "gpt-5.6-luna", "openai_endpoint": "responses"}
+{"id": "gpt-5.6-luna", "openai_endpoints": ["responses"]}
+{"id": "some-dual-model", "openai_endpoints": ["chat", "responses"]}
 ```
 
 `data.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, model)` 用
-`findTemplateByProvider` 同一套匹配规则找到 template，查这个字段。三种返回值：
-`""`(无覆盖)、`chat`、`responses`；未识别的字符串按 `""` 处理，数据笔误只会
-退化成"不生效"，不会路由错。
+`findTemplateByProvider` 同一套匹配规则找到 template，把这个列表折叠成一个
+`ai.OpenAIEndpointMode`（与 provider 级用的是同一个类型）：只有 `"chat"` →
+`EndpointModeChat`；只有 `"responses"` → `EndpointModeResponses`；两个都在 →
+`EndpointModeBoth`；空列表或只有未识别值 → `EndpointModeUnknown`（无声明）。
+未识别的字符串被忽略而不是报错，数据笔误只会退化成"这条声明不生效"，不会
+路由错。**未声明时默认视为只支持 Chat**——一个模型条目完全不写这个字段，
+效果等同于旧版里 `""`(无覆盖)：继续按 provider mode 解析，最终落到 Chat。
 
 `ResolveOpenAIEndpoint` 的优先级插在 rule override 之后、provider mode 之前：
-override > 按模型表 > provider mode。三个入站路径各自查一次表、把结果当参数
-传入，`ResolveOpenAIEndpoint` 本身保持纯函数。
+override > 按模型表 > provider mode。三个入站路径各自查一次表、把结果（一个
+`ai.OpenAIEndpointMode`）当参数传入，`ResolveOpenAIEndpoint` 本身保持纯函数。
+`EndpointModeBoth` 在模型级和 provider 级共用同一条"mirror 入站协议"规则
+（`resolveEndpointMode`），不是把两个 endpoint 都试一遍——路由结果仍然是单一、
+确定的目标。
 
 ### 10.3 代价：静态表要人工维护
 
