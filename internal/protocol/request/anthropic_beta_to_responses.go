@@ -80,6 +80,10 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
+	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
+	// field, so it is derived from metadata.user_id.
+	params.PromptCacheKey = responsesPromptCacheKey(anthropicReq.Metadata.UserID.Or(""))
+
 	hasRepresentableCacheControl := hasSystemCacheControl || anthropicBetaMessagesHaveRepresentableCacheControl(anthropicReq.Messages)
 	hasFallbackCacheControl := anthropicBetaToolsHaveCacheControl(anthropicReq.Tools) ||
 		anthropicBetaMessagesHaveToolUseCacheControl(anthropicReq.Messages)
@@ -109,16 +113,11 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []responses.ResponseInputItemUnionParam {
 	var items []responses.ResponseInputItemUnionParam
 
-	var hasToolResult, hasImage, hasCacheControl bool
+	var hasToolResult bool
 	for _, block := range msg.Content {
 		if block.OfToolResult != nil {
 			hasToolResult = true
-		}
-		if block.OfImage != nil {
-			hasImage = true
-		}
-		if cacheControl := block.GetCacheControl(); cacheControl != nil {
-			hasCacheControl = hasCacheControl || !param.IsOmitted(*cacheControl)
+			break
 		}
 	}
 
@@ -141,40 +140,22 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 				}
 			} else if block.OfText != nil && block.OfText.Text != "" {
 				// Text content alongside tool results
-				content := responses.EasyInputMessageContentUnionParam{OfString: ParamOpt(block.OfText.Text)}
-				if !param.IsOmitted(block.OfText.CacheControl) {
-					text := &responses.ResponseInputTextParam{
-						Text:                  block.OfText.Text,
-						PromptCacheBreakpoint: responses.NewResponseInputTextPromptCacheBreakpointParam(),
-					}
-					content = responses.EasyInputMessageContentUnionParam{
-						OfInputItemContentList: responses.ResponseInputMessageContentListParam{
-							{OfInputText: text},
-						},
-					}
-				}
-				messageItem := responses.EasyInputMessageParam{
-					Type:    responses.EasyInputMessageTypeMessage,
-					Role:    responses.EasyInputMessageRole("user"),
-					Content: content,
-				}
-				items = append(items, responses.ResponseInputItemUnionParam{
-					OfMessage: &messageItem,
-				})
+				items = append(items, responseMessageWithContent("user",
+					responses.ResponseInputMessageContentListParam{
+						{OfInputText: responsesInputTextPart(block.OfText.Text, !param.IsOmitted(block.OfText.CacheControl))},
+					}))
 			}
 		}
-	} else if hasImage || hasCacheControl {
-		// Multimodal user message: emit input_text + input_image content parts
+	} else {
 		contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msg.Content))
 		for _, block := range msg.Content {
 			switch {
 			case block.OfText != nil:
-				text := &responses.ResponseInputTextParam{Text: block.OfText.Text}
-				if !param.IsOmitted(block.OfText.CacheControl) {
-					text.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
+				if block.OfText.Text == "" {
+					continue
 				}
 				contentList = append(contentList, responses.ResponseInputContentUnionParam{
-					OfInputText: text,
+					OfInputText: responsesInputTextPart(block.OfText.Text, !param.IsOmitted(block.OfText.CacheControl)),
 				})
 			case block.OfImage != nil:
 				url := betaImageBlockToOpenAIURL(block.OfImage)
@@ -189,31 +170,7 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 			}
 		}
 		if len(contentList) > 0 {
-			messageItem := responses.EasyInputMessageParam{
-				Type: responses.EasyInputMessageTypeMessage,
-				Role: responses.EasyInputMessageRole("user"),
-				Content: responses.EasyInputMessageContentUnionParam{
-					OfInputItemContentList: contentList,
-				},
-			}
-			items = append(items, responses.ResponseInputItemUnionParam{
-				OfMessage: &messageItem,
-			})
-		}
-	} else {
-		// Simple text-only user message
-		contentStr := ConvertBetaContentBlocksToString(msg.Content)
-		if contentStr != "" {
-			messageItem := responses.EasyInputMessageParam{
-				Type: responses.EasyInputMessageTypeMessage,
-				Role: responses.EasyInputMessageRole("user"),
-				Content: responses.EasyInputMessageContentUnionParam{
-					OfString: ParamOpt(contentStr),
-				},
-			}
-			items = append(items, responses.ResponseInputItemUnionParam{
-				OfMessage: &messageItem,
-			})
+			items = append(items, responseMessageWithContent("user", contentList))
 		}
 	}
 
@@ -224,13 +181,11 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 // Handles text content, tool_use blocks, and thinking blocks
 func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam) []responses.ResponseInputItemUnionParam {
 	var items []responses.ResponseInputItemUnionParam
-	var textContent string
 	var textBlocks []anthropic.BetaTextBlockParam
 
 	// Process content blocks
 	for _, block := range msg.Content {
 		if block.OfText != nil {
-			textContent += block.OfText.Text
 			textBlocks = append(textBlocks, *block.OfText)
 		}
 	}
@@ -253,30 +208,8 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 	}
 
 	// Add text content as a separate message if present
-	if textContent != "" {
-		content := responses.EasyInputMessageContentUnionParam{OfString: ParamOpt(textContent)}
-		for _, block := range textBlocks {
-			if !param.IsOmitted(block.CacheControl) {
-				parts := make(responses.ResponseInputMessageContentListParam, 0, len(textBlocks))
-				for _, textBlock := range textBlocks {
-					part := &responses.ResponseInputTextParam{Text: textBlock.Text}
-					if !param.IsOmitted(textBlock.CacheControl) {
-						part.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-					}
-					parts = append(parts, responses.ResponseInputContentUnionParam{OfInputText: part})
-				}
-				content = responses.EasyInputMessageContentUnionParam{OfInputItemContentList: parts}
-				break
-			}
-		}
-		messageItem := responses.EasyInputMessageParam{
-			Type:    responses.EasyInputMessageTypeMessage,
-			Role:    responses.EasyInputMessageRole("assistant"),
-			Content: content,
-		}
-		items = append(items, responses.ResponseInputItemUnionParam{
-			OfMessage: &messageItem,
-		})
+	if parts := responsesAssistantTextParts(textBlocks); len(parts) > 0 {
+		items = append(items, responseMessageWithContent("assistant", parts))
 	}
 
 	// An assistant message with no text and no tool_use blocks is empty — skip it.

@@ -134,3 +134,60 @@ the call that produced it — randomizing it is safe, and it closes a minor
 leak rather than opening one: the previous scheme (`response.id =
 resp.ID`, `"msg_" + resp.ID`) exposed the upstream's own id, and by
 extension which provider served the request, to the client.
+
+## 3. Cache-shape invariant on converted requests
+
+**A converted input item's serialized shape must depend only on its content —
+never on whether a prompt-cache breakpoint happens to sit on it this turn.**
+
+Anthropic expresses cache boundaries as `cache_control` on a content block;
+Responses expresses them as `prompt_cache_breakpoint` on a content *part*. A
+part list is therefore the only shape that can carry a breakpoint, and the
+Anthropic→Responses converters used to switch between the two representations
+per item:
+
+| Item | No breakpoint | With breakpoint |
+| --- | --- | --- |
+| user / assistant message | `"content": "text"` | `"content": [{"type":"input_text","text":"text"}]` |
+| tool result | `"output": "text"` | `"output": [{"type":"input_text","text":"text"}]` |
+
+That looked like a harmless compaction and was not. A client carries a small,
+fixed number of ephemeral breakpoints and **rolls them forward** as the
+conversation grows — Claude Code has four — so a block that owned one on turn N
+usually does not own it on turn N+1. Under the switch, every turn silently
+rewrote conversation history the upstream cache had already been keyed on: the
+prefix matched up to the oldest moved breakpoint and missed from there on. The
+symptom is a hit rate that oscillates and, when it lands short, reports a small
+`cached_tokens` against a large input — the prefix matched the system prompt and
+the tools and then diverged. Nothing in the logs attributes it to caching.
+
+So the part-list shape is emitted unconditionally, and a breakpoint only ever
+*adds a field* to a part that would have been there anyway. Two consequences
+worth stating:
+
+- For the ChatGPT Codex backend, which does not accept breakpoints at all and
+  has them stripped at the provider boundary, breakpoint placement now has
+  **exactly zero** effect on the dispatched body. `TestCodexBodyIsStable-
+  AcrossBreakpointRotation` asserts byte equality across every placement.
+- For native Responses providers the breakpoints still ship, unchanged; they
+  are now purely additive.
+  `TestResponsesShapeIsStableAcrossBreakpointRotation` asserts that stripping
+  the cache directives leaves every placement identical.
+
+### The system prompt
+
+A system breakpoint flips a coarser switch — `instructions` (a plain string) vs.
+a leading `role: "system"` input message whose parts can carry the breakpoint —
+and that one is kept: it is what lets a system-level boundary survive a
+Responses→Anthropic round trip, and `applyFirstResponsesCacheBreakpoint`
+deliberately relocates `instructions` the same way so a tool-definition boundary
+lands on the system prefix rather than after the first user message.
+
+Codex would otherwise see that flip too, since it rejects `role: "system"` input
+and `normalizeCodexSystemMessagesJSON` lifts the text back. The lift is
+therefore the **exact inverse** of the converters' own join — parts concatenated
+verbatim, no trimming, no separator, matching `ConvertBetaTextBlocksToString` —
+so both representations reduce to a byte-identical `instructions`. It used to
+trim each part and join with `\n\n`, which meant the two paths produced
+different instruction strings and a flip invalidated the entire prefix, not just
+its tail.

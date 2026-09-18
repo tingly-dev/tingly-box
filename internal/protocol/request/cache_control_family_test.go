@@ -111,7 +111,12 @@ func TestCacheControlProtocolFamilyDoesNotSynthesizeBreakpoints(t *testing.T) {
 	require.Empty(t, responsesReq.PromptCacheOptions.Mode)
 	require.True(t, responsesReq.Instructions.Valid())
 	require.Len(t, responsesReq.Input.OfInputItemList, 1)
-	require.True(t, responsesReq.Input.OfInputItemList[0].OfMessage.Content.OfString.Valid())
+	// The content-part list is the one shape a converted message ever takes —
+	// see the cache-shape invariant in cache_control.go. No breakpoint is
+	// synthesized onto it.
+	userParts := responsesReq.Input.OfInputItemList[0].OfMessage.Content.OfInputItemContentList
+	require.Len(t, userParts, 1)
+	require.True(t, openaiparam.IsOmitted(userParts[0].OfInputText.PromptCacheBreakpoint))
 
 	chatAgain := ConvertOpenAIResponsesToChat(responsesReq, 4096)
 	require.Empty(t, chatAgain.PromptCacheOptions.Mode)
@@ -151,7 +156,9 @@ func TestCacheControlProtocolFamilyToolFallbackPrefersSystemPrefix(t *testing.T)
 	require.False(t, responsesReq.Instructions.Valid())
 	require.Len(t, responsesReq.Input.OfInputItemList, 2)
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[0], "system")
-	require.True(t, responsesReq.Input.OfInputItemList[1].OfMessage.Content.OfString.Valid())
+	userParts := responsesReq.Input.OfInputItemList[1].OfMessage.Content.OfInputItemContentList
+	require.Len(t, userParts, 1)
+	require.True(t, openaiparam.IsOmitted(userParts[0].OfInputText.PromptCacheBreakpoint))
 }
 
 func TestCacheControlProtocolFamilyToolUseFallbackPrefersSystemPrefix(t *testing.T) {

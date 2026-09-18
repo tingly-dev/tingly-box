@@ -1,9 +1,61 @@
 package request
 
 import (
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 )
+
+// The cache-shape invariant
+//
+// A converted input item's serialized shape must depend only on its content —
+// never on whether a prompt-cache breakpoint happens to sit on it this turn.
+//
+// Anthropic clients carry a small, fixed number of ephemeral breakpoints and
+// roll them forward as the conversation grows, so a block that owned one on
+// turn N usually does not own it on turn N+1. When the compact string form was
+// used for "no breakpoint" and the content-part list form for "has breakpoint",
+// that rotation silently rewrote history the upstream prompt cache had already
+// been keyed on: the prefix matched up to the oldest moved breakpoint and
+// missed from there on, burning the whole tail of a long conversation. The
+// list form is therefore emitted unconditionally, and a breakpoint only ever
+// adds a field to a part that would have been there anyway.
+//
+// See .design/protocol-responses.md §3.
+
+// responsesInputTextPart builds an input_text content part, marking a
+// prompt-cache breakpoint on it when the source block carried one. The part is
+// byte-identical with and without the breakpoint apart from that one field.
+func responsesInputTextPart(text string, breakpoint bool) *responses.ResponseInputTextParam {
+	part := &responses.ResponseInputTextParam{Text: text}
+	if breakpoint {
+		part.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
+	}
+	return part
+}
+
+// responsesAssistantTextParts converts assistant text blocks to input_text
+// content parts, one per block, skipping empty ones.
+func responsesAssistantTextParts[T anthropic.TextBlockParam | anthropic.BetaTextBlockParam](blocks []T) responses.ResponseInputMessageContentListParam {
+	parts := make(responses.ResponseInputMessageContentListParam, 0, len(blocks))
+	for _, block := range blocks {
+		var text string
+		var hasBreakpoint bool
+		switch b := any(block).(type) {
+		case anthropic.TextBlockParam:
+			text, hasBreakpoint = b.Text, !param.IsOmitted(b.CacheControl)
+		case anthropic.BetaTextBlockParam:
+			text, hasBreakpoint = b.Text, !param.IsOmitted(b.CacheControl)
+		}
+		if text == "" {
+			continue
+		}
+		parts = append(parts, responses.ResponseInputContentUnionParam{
+			OfInputText: responsesInputTextPart(text, hasBreakpoint),
+		})
+	}
+	return parts
+}
 
 // applyFirstResponsesCacheBreakpoint carries an Anthropic cache boundary that
 // Responses cannot attach directly (for example, on a tool definition or tool

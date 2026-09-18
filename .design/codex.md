@@ -1,7 +1,8 @@
 # Codex as a Client
 
 What tingly-box has to guarantee when OpenAI Codex (CLI or desktop) is the
-client. Codex setup and auth are covered by `codex-config.md` and
+client, plus — in §5 — what the ChatGPT Codex backend expects when it is the
+*upstream*. Codex setup and auth are covered by `codex-config.md` and
 `codex-auth.md`; this note is about the wire behaviour once requests flow.
 The Responses-side contract itself lives in `protocol-responses.md`.
 
@@ -64,3 +65,48 @@ replayed input items are never rewritten.
 DeepSeek's chat endpoint validates the tool-call shape strictly and is the
 provider that surfaced the repair; its Responses endpoint is lenient on ids
 and only insists on `call_id`. Probe tables are in `deepseek.md`.
+
+## 5. Prompt-cache affinity on the Codex upstream
+
+The ChatGPT Codex backend caches on the request prefix like any Responses
+endpoint, but it does not decide *where* a request lands from the prefix alone.
+Two affinity hints exist, and a request that carries neither can miss a cache it
+would otherwise have hit — the same conversation, byte-identical prefix,
+oscillating between a ~99% hit and a full re-bill depending on which shard it
+reached.
+
+What the Codex CLI does, read from `codex-rs/core/src/client.rs` (openai/codex,
+Sep 2026):
+
+| Hint | Value the CLI sends | Notes |
+| --- | --- | --- |
+| `prompt_cache_key` (body) | `prompt_cache_key_override`, else `"{session_source}:{parent_thread_id}"` for internal sessions, else the **session id** | Conversation-scoped and stable across turns, never per-turn |
+| `session-id` (header) | the Responses session id, canonical uuid | The CLI's own comment: *"ChatGPT derives cache affinity from the Responses session-id header."* Hyphenated; the legacy underscore `session_id` / `conversation_id` headers were dropped outside the compact path (openai/codex #11732) |
+| `thread-id`, `x-client-request-id`, `originator`, `x-codex-window-id` | thread id / attribution | Attribution, not cache affinity |
+
+So: **the body field is the platform-API hint; the `session-id` header is the
+one ChatGPT itself keys affinity on.** The CLI sends both, which is why a
+native Codex session holds a high hit rate across a long thread.
+
+Traffic converted from another client used to send neither. Anthropic has no
+equivalent of `prompt_cache_key` — its cache is addressed purely by prefix — so
+nothing survived the conversion, and a Claude Code session against a Codex
+provider ran with no affinity at all.
+
+The gateway now derives one identifier and uses it for both:
+
+- `request.responsesPromptCacheKey` reads the session id out of Claude Code's
+  `metadata.user_id` (see `metaid.ParseMetadataUserID`) and sets it as
+  `prompt_cache_key` on the converted Responses request. Only the session id is
+  forwarded — never the device id or account uuid. A `user_id` in some other
+  shape is hashed, so an unrecognized format still yields a stable key without
+  leaking its contents upstream.
+- `applyCodexSessionAffinityHeader` mirrors that key into the `session-id`
+  header at the Codex boundary, so no extra plumbing is needed to carry the
+  session identity down to the round tripper. A client that sent its own
+  `session-id` keeps it. A key that is not a canonical uuid (the hashed
+  fallback) stays in the body only: the header expects the uuid form and a
+  rejected request would cost more than a missed hint.
+
+`thread-id` and the attribution headers are deliberately not synthesized — they
+identify a Codex client we are not, and they do not affect caching.

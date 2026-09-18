@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -73,6 +74,8 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 			return nil, fmt.Errorf("failed to filter field: %w", err)
 		}
 
+		applyCodexSessionAffinityHeader(req, filtered)
+
 		// Trim capacity to length to avoid excessive memory usage
 		filtered = append([]byte(nil), filtered...)
 		// Set GetBody to allow retries and redirects
@@ -106,6 +109,38 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	logrus.WithContext(req.Context()).Debugf("[Codex] Must use stream: %s", resp.Status)
 
 	return resp, nil
+}
+
+// codexSessionIDHeader is the header ChatGPT's Codex backend derives Responses
+// prompt-cache affinity from — the upstream analogue of the platform API's
+// prompt_cache_key body field (codex-rs/core/src/client.rs: "ChatGPT derives
+// cache affinity from the Responses session-id header"). The Codex CLI always
+// sends it; converted traffic from other clients has to supply it too, or a
+// byte-identical prefix can still land on a cold shard and re-bill the whole
+// conversation.
+const codexSessionIDHeader = "session-id"
+
+// uuidPattern matches the canonical uuid form the Codex CLI puts in session-id.
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// applyCodexSessionAffinityHeader mirrors the request's prompt_cache_key into
+// the session-id header.
+//
+// The key is already the conversation-stable identifier the converters derived
+// from the client's own session (see request.responsesPromptCacheKey), so no
+// extra plumbing is needed to reach it here. A client that sent its own
+// session-id keeps it, and a key that is not a uuid is left in the body only —
+// the backend expects the canonical form in this header and rejecting the
+// request would be a worse trade than missing the affinity hint.
+func applyCodexSessionAffinityHeader(req *http.Request, body []byte) {
+	if req.Header.Get(codexSessionIDHeader) != "" {
+		return
+	}
+	key := gjson.GetBytes(body, "prompt_cache_key").String()
+	if key == "" || !uuidPattern.MatchString(key) {
+		return
+	}
+	req.Header.Set(codexSessionIDHeader, key)
 }
 
 func validateCodexStreamResponse(resp *http.Response) error {
@@ -284,7 +319,7 @@ func normalizeCodexSystemMessagesJSON(bodyStr string) string {
 		return bodyStr
 	}
 
-	var systemTexts []string
+	var systemText strings.Builder
 	var systemIndexes []int
 	for i, item := range input.Array() {
 		if item.Get("type").String() != "message" || item.Get("role").String() != "system" {
@@ -293,18 +328,14 @@ func normalizeCodexSystemMessagesJSON(bodyStr string) string {
 		systemIndexes = append(systemIndexes, i)
 		content := item.Get("content")
 		if content.Type == gjson.String {
-			if text := strings.TrimSpace(content.String()); text != "" {
-				systemTexts = append(systemTexts, text)
-			}
+			systemText.WriteString(content.String())
 			continue
 		}
 		if !content.IsArray() {
 			continue
 		}
 		for _, part := range content.Array() {
-			if text := strings.TrimSpace(part.Get("text").String()); text != "" {
-				systemTexts = append(systemTexts, text)
-			}
+			systemText.WriteString(part.Get("text").String())
 		}
 	}
 
@@ -312,11 +343,23 @@ func normalizeCodexSystemMessagesJSON(bodyStr string) string {
 		return bodyStr
 	}
 
-	if existing := strings.TrimSpace(gjson.Get(bodyStr, "instructions").String()); existing != "" {
-		systemTexts = append([]string{existing}, systemTexts...)
+	// The parts are concatenated verbatim — no trimming, no separator — so this
+	// is the exact inverse of the converters' own system→instructions join
+	// (ConvertBetaTextBlocksToString). Whether a system block happened to carry
+	// a cache breakpoint decides which of the two representations reaches this
+	// point, and the resulting `instructions` must be byte-identical either way
+	// or the whole cached prefix is invalidated the turn a breakpoint moves.
+	instructions := systemText.String()
+	if existing := gjson.Get(bodyStr, "instructions").String(); existing != "" {
+		if instructions == "" {
+			instructions = existing
+		} else {
+			// Two independently-authored strings: keep them apart.
+			instructions = existing + "\n\n" + instructions
+		}
 	}
-	if len(systemTexts) > 0 {
-		bodyStr, _ = sjson.Set(bodyStr, "instructions", strings.Join(systemTexts, "\n\n"))
+	if instructions != "" {
+		bodyStr, _ = sjson.Set(bodyStr, "instructions", instructions)
 	}
 
 	// Delete in reverse so earlier indexes remain stable.
