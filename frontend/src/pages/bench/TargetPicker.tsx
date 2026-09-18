@@ -1,53 +1,15 @@
-import React, { useMemo } from 'react';
-import { Autocomplete, Box, Chip, TextField, Typography } from '@mui/material';
+import React, { useMemo, useState } from 'react';
+import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Rule } from '@/components/RoutingGraphTypes';
-import type { Provider } from '@/types/provider';
-import type { BenchTarget } from './benchLink';
-import { targetKey } from './benchState';
+import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
+import type { BenchTarget } from './benchState';
 import type { TargetCatalog } from './useTargetCatalog';
 
-// TargetPicker: one searchable list, grouped Rules / <provider name>, where
-// picking an entry IS the target. No mode picker in front of it
-// (ux-principles #2).
-
-export interface TargetOption {
-    key: string;
-    target: BenchTarget;
-    group: string;
-    primary: string;
-    secondary: string;
-    search: string;
-}
-
-export const ruleLabel = (rule: Rule): string => rule.description || rule.request_model || rule.uuid;
-
-export function buildTargetOptions(catalog: TargetCatalog, t: (k: string, o?: any) => string): TargetOption[] {
-    const rules: TargetOption[] = catalog.rules.map((r) => ({
-        key: `rule:${r.uuid}`,
-        target: { kind: 'rule', ruleUuid: r.uuid, scenario: r.scenario },
-        group: t('bench.rules', { defaultValue: 'Rules' }),
-        primary: ruleLabel(r),
-        secondary: `${r.scenario}${r.request_model && r.request_model !== ruleLabel(r) ? ` · ${r.request_model}` : ''}`,
-        search: `${ruleLabel(r)} ${r.scenario} ${r.request_model} ${r.uuid}`.toLowerCase(),
-    }));
-    const providers: TargetOption[] = [];
-    [...catalog.providers]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach((p: Provider) => {
-            (catalog.modelsByProvider[p.uuid] ?? []).forEach((model) => {
-                providers.push({
-                    key: `provider:${p.uuid}:${model}`,
-                    target: { kind: 'provider', providerUuid: p.uuid, model },
-                    group: p.name,
-                    primary: model,
-                    secondary: `${p.name} · ${p.api_style}`,
-                    search: `${p.name} ${model} ${p.api_style} ${p.uuid}`.toLowerCase(),
-                });
-            });
-        });
-    return [...rules, ...providers];
-}
+// TargetPicker: the same card-based provider→model picker the routing graph
+// already trained users on (ModelSelectDialog — left rail of providers,
+// right grid of model cards), instead of a searchable-but-cramped Autocomplete
+// dropdown. Bench only ever targets a real provider model directly; there is
+// no Rule concept here to fold into the picker (benchState.ts, BenchTarget).
 
 export const TargetPicker: React.FC<{
     catalog: TargetCatalog;
@@ -55,72 +17,48 @@ export const TargetPicker: React.FC<{
     onChange: (target: BenchTarget | null) => void;
 }> = ({ catalog, value, onChange }) => {
     const { t } = useTranslation();
-    const options = useMemo(() => buildTargetOptions(catalog, t), [catalog, t]);
-    const selected = useMemo(() => options.find((o) => o.key === targetKey(value)) ?? null, [options, value]);
-    const missing = !!value && !catalog.loading && !selected;
-    const getOptionLabel = (o: TargetOption) => (o.target.kind === 'rule' ? `${o.primary} · ${o.secondary}` : `${o.group} ▸ ${o.primary}`);
+    const [open, setOpen] = useState(false);
+    const provider = useMemo(() => (value ? catalog.providers.find((p) => p.uuid === value.providerUuid) ?? null : null), [catalog.providers, value]);
+    const missing = !!value && !catalog.loading && !provider;
+
+    const handleSelected = (option: ProviderSelectTabOption) => {
+        onChange({ providerUuid: option.provider.uuid, model: option.model });
+        setOpen(false);
+    };
 
     return (
-        <Autocomplete
-            size="small"
-            options={options}
-            value={selected}
-            loading={catalog.loading}
-            loadingText={t('bench.targetLoading', { defaultValue: 'Loading rules and providers…' })}
-            groupBy={(o) => o.group}
-            getOptionLabel={getOptionLabel}
-            isOptionEqualToValue={(a, b) => a.key === b.key}
-            filterOptions={(opts, state) => {
-                const q = state.inputValue.trim().toLowerCase();
-                return q ? opts.filter((o) => o.search.includes(q)) : opts;
-            }}
-            onChange={(_, o) => onChange(o?.target ?? null)}
-            // The picker sits in a narrow column, so both the trigger and the
-            // popper are too tight to show long rule/provider names in full.
-            // Let the dropdown size to its own content instead of the input's
-            // width, and give the collapsed field a native tooltip so the
-            // full label is still one hover away (ux-principles #5 — the
-            // user needs the concrete value, not a clipped alias).
-            slotProps={{ popper: { style: { width: 'fit-content', maxWidth: 480 }, placement: 'bottom-start' } }}
-            renderInput={(params) => (
-                <TextField
-                    {...params}
-                    placeholder={t('bench.targetPlaceholder', { defaultValue: 'Search rules & providers…' })}
-                    error={missing || !!catalog.error}
-                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, title: selected ? getOptionLabel(selected) : undefined } }}
-                    helperText={
-                        catalog.error
-                            ? catalog.error
-                            : missing
-                              ? t('bench.targetMissing', { defaultValue: 'The saved target no longer exists — pick another.' })
-                              : !value
-                                ? t('bench.targetEmpty', { defaultValue: 'Pick a rule or a provider model to start.' })
-                                : undefined
-                    }
-                />
-            )}
-            renderOption={(props, o) => {
-                const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
-                return (
-                    <li key={key} {...rest} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <Chip
-                            size="small"
-                            label={o.target.kind}
-                            sx={{ height: 18, fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}
-                            color={o.target.kind === 'rule' ? 'primary' : 'default'}
-                            variant="outlined"
-                        />
-                        <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500 }} noWrap>
-                                {o.primary}
-                            </Typography>
-                            <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block' }} noWrap>
-                                {o.secondary}
-                            </Typography>
-                        </Box>
-                    </li>
-                );
-            }}
-        />
+        <Box>
+            <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                color={missing ? 'error' : 'inherit'}
+                onClick={() => setOpen(true)}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none', fontWeight: 400, py: 0.75 }}
+            >
+                <Typography variant="body2" noWrap sx={{ color: value && provider ? 'text.primary' : 'text.secondary' }}>
+                    {value && provider
+                        ? `${provider.name} · ${value.model}`
+                        : catalog.loading
+                          ? t('bench.targetLoading', { defaultValue: 'Loading providers…' })
+                          : t('bench.targetPlaceholder', { defaultValue: 'Pick a provider & model…' })}
+                </Typography>
+            </Button>
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: missing || catalog.error ? 'error.main' : 'text.secondary' }}>
+                {catalog.error
+                    ? catalog.error
+                    : missing
+                      ? t('bench.targetMissing', { defaultValue: 'The saved target no longer exists — pick another.' })
+                      : !value
+                        ? t('bench.targetEmpty', { defaultValue: 'Pick a provider model to start.' })
+                        : ' '}
+            </Typography>
+            <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg" fullWidth slotProps={{ paper: { sx: { height: '80vh' } } }}>
+                <DialogTitle sx={{ textAlign: 'center' }}>{t('bench.targetDialogTitle', { defaultValue: 'Choose a provider & model' })}</DialogTitle>
+                <DialogContent>
+                    <ModelSelectDialog providers={catalog.providers} selectedProvider={value?.providerUuid} selectedModel={value?.model} onSelected={handleSelected} />
+                </DialogContent>
+            </Dialog>
+        </Box>
     );
 };

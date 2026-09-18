@@ -2,11 +2,10 @@ import React, { useMemo } from 'react';
 import { Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
-import type { ProbeProtocol, ProbeRouting } from '@/types/probe';
+import type { ProbeProtocol } from '@/types/probe';
 import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from '@/components/probe/AxisPrimitives';
-import { protocolAvailability, scopeAvailable, visionAvailable, type ProbeAxes } from '@/components/probe/probeConfig';
-import { ruleProtocolForScenario } from '@/components/probe/ResultSections';
-import type { BenchTarget } from './benchLink';
+import { protocolAvailability, visionAvailable, type ProbeAxes } from '@/components/probe/probeConfig';
+import type { BenchTarget } from './benchState';
 
 // BenchAxes: every probe axis resident, no Advanced fold — the page exists
 // so that all knobs are visible and composable (.design/bench.md §2). Not a
@@ -29,51 +28,34 @@ export interface AxisAvailability {
 export function useAxisAvailability(target: BenchTarget | null, provider: Provider | null, axes: ProbeAxes): AxisAvailability {
     const { t } = useTranslation();
     return useMemo(() => {
-        const isRule = target?.kind === 'rule';
         const avail = protocolAvailability(provider);
-        const protocol = isRule
-            ? (() => {
-                  const value = ruleProtocolForScenario(target.scenario);
-                  return { value, options: [value], locked: true, disabled: false, lockHint: t('probe.protocolLockedRule') };
-              })()
-            : provider?.api_style === 'google'
-              ? { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') }
-              : { value: axes.protocol, options: avail.options, locked: avail.locked, disabled: false, lockHint: t('probe.protocolLockedProvider') };
-        const scopeDisabled = !target || !scopeAvailable(target.kind);
+        const protocol =
+            provider?.api_style === 'google'
+                ? { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') }
+                : { value: axes.protocol, options: avail.options, locked: avail.locked, disabled: false, lockHint: t('probe.protocolLockedProvider') };
         const visionDisabled = !visionAvailable(provider);
         return {
             protocol,
-            scopeDisabled,
-            scopeHint: scopeDisabled ? t('probe.scopeRuleLocked') : t('probe.scopeHint'),
+            scopeDisabled: !target,
+            scopeHint: t('probe.scopeHint'),
             visionDisabled,
             visionHint: visionDisabled ? t('probe.visionGoogle') : t('probe.visionHint'),
         };
     }, [target, provider, axes.protocol, t]);
 }
 
-// Scope is one axis with three values, reduced per target (like Protocol):
-// a rule target chooses between the full production chain (TB matches the
-// rule from the request model) and pinning the rule; a provider target
-// chooses between going through TB (service pinned, middleware intact) and
-// calling the upstream directly. Same question — "how much of TB is in the
-// path?" — so it stays one control (.design/bench.md §3).
-type ScopeValue = 'natural' | 'pinned' | 'tb' | 'direct';
-
 export const BenchAxes: React.FC<{
     axes: ProbeAxes;
     onChange: (axes: ProbeAxes) => void;
     availability: AxisAvailability;
-    targetKind: 'rule' | 'provider' | null;
-    routing: ProbeRouting;
-    onRoutingChange: (routing: ProbeRouting) => void;
     mode: RequestMode;
     onModeChange: (mode: RequestMode) => void;
-    /** Protocols a hand-written request may be in — only consulted in custom mode (a rule's scenario family, or whatever the provider speaks). */
+    /** Protocols a hand-written request may be in — only consulted in custom mode (whatever the provider speaks). */
     customProtocolOptions: ProbeProtocol[];
     /** The unified Protocol control's current value, already resolved for whichever mode is active. */
     protocolValue: ProbeProtocol;
     onProtocolChange: (protocol: ProbeProtocol) => void;
-}> = ({ axes, onChange, availability, targetKind, routing, onRoutingChange, mode, onModeChange, customProtocolOptions, protocolValue, onProtocolChange }) => {
+}> = ({ axes, onChange, availability, mode, onModeChange, customProtocolOptions, protocolValue, onProtocolChange }) => {
     const { t } = useTranslation();
     const isCustom = mode === 'custom';
     const set = (patch: Partial<ProbeAxes>) => onChange({ ...axes, ...patch });
@@ -86,23 +68,6 @@ export const BenchAxes: React.FC<{
         : presetProtocol.locked || presetProtocol.disabled
           ? presetProtocol.lockHint
           : `${PROTOCOL_META[protocolValue]?.full || ''} · ${t('probe.protocolHint')}`;
-
-    const isRule = targetKind === 'rule';
-    const scopeValue: ScopeValue = isRule ? routing : axes.direct ? 'direct' : 'tb';
-    const scopeOptions: { value: ScopeValue; label: string }[] = isRule
-        ? [
-              { value: 'natural', label: t('bench.scopeFull', { defaultValue: 'Full chain' }) },
-              { value: 'pinned', label: t('bench.scopePinned', { defaultValue: 'Pinned rule' }) },
-          ]
-        : [
-              { value: 'tb', label: t('probe.throughTB') },
-              { value: 'direct', label: t('probe.direct') },
-          ];
-    const scopeHint = isRule
-        ? routing === 'pinned'
-            ? t('bench.scopePinnedHint', { defaultValue: 'X-Tingly-Probe-Rule forces this rule; only rule matching is skipped. Use it when the request model collides with another rule or the rule is inactive.' })
-            : t('bench.scopeFullHint', { defaultValue: 'Exactly the production path: TB matches the rule from the request model. The Journey shows which rule actually matched.' })
-        : availability.scopeHint;
 
     return (
         <Stack spacing={1.5}>
@@ -134,15 +99,15 @@ export const BenchAxes: React.FC<{
                 />
             </Axis>
 
-            <Axis label={t('probe.scope')} hint={scopeHint}>
-                <ExclusiveToggle<ScopeValue>
-                    value={scopeValue}
-                    onChange={(v) => {
-                        if (v === 'natural' || v === 'pinned') onRoutingChange(v);
-                        else set({ direct: v === 'direct' });
-                    }}
-                    options={scopeOptions}
-                    disabled={targetKind === null}
+            <Axis label={t('probe.scope')} hint={availability.scopeHint}>
+                <ExclusiveToggle
+                    value={axes.direct ? 'direct' : 'tb'}
+                    onChange={(v) => set({ direct: v === 'direct' })}
+                    options={[
+                        { value: 'tb', label: t('probe.throughTB') },
+                        { value: 'direct', label: t('probe.direct') },
+                    ]}
+                    disabled={availability.scopeDisabled}
                 />
             </Axis>
 

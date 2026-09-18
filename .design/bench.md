@@ -3,6 +3,16 @@
 > 适用对象：tingly-box 前端 / 后端贡献者。
 > 状态：**已实现（V1）**——页面 `frontend/src/pages/bench/`，后端字段见 §11。线框图见 [`bench.pencil.md`](./bench.pencil.md)。
 > 前置阅读：[`probe.md`](./probe.md)、[`rule-flags.md`](./rule-flags.md)、[`ux-principles.md`](./ux-principles.md)。
+>
+> **V1.1 修正（本次）**：三栏布局的响应式断点与左栏宽度修了一版（原先 `xl`
+> 断点+固定 320px 导致常规桌面宽度下退化成两栏、且左栏内容撑不满）；随后发现
+> target picker（Autocomplete 下拉）在窄栏里把 rule/provider 名字硬截断，选起来
+> 很难分辨——于是把 **Target 模型收窄为只选 Provider+Model**，选择器换成路由图
+> 已经用的那套卡片式 `ModelSelectDialog`（Provider 侧栏 + Model 卡片网格），
+> **Rule target、深链入口（Probe dialog "Open in Bench"）与 pinned routing 全部
+> 一并砍掉**——Bench 不再是任何页面的跳转目标，只通过自己的一级导航进入。§3/§9
+> 已按此更新；未来若要连接到 Rule，设想是把 scenario 端点也列进 picker 的模型
+> 列表里，而不是重新引入一个独立的 target kind（见 §15）。
 
 ---
 
@@ -189,33 +199,41 @@ Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专
 
 ## 3. Target 模型
 
-沿用 probe 的 target 语义，不发明新概念：
+**V1.1**：target 只有一种——`provider`(+model)（`E2ETargetProvider`）。默认
+loopback（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即
+"近似直连"），可切 Direct 完全绕开 TB 对照。
 
-| target | 复用自 probe | Bench 行为 |
-|--------|--------------|-----------------|
-| `rule` | `E2ETargetRule` | 走 TB loopback `/tingly/{scenario}`，完整 middleware + 路由管线。默认**全链路**：只发 `request_model`，TB 像对真实客户端一样匹配规则（Journey 显示实际命中的规则，与所选不同时给出提示）；可切**钉住规则**（`routing: "pinned"` → `X-Tingly-Probe-Rule`），只跳过匹配这一步 |
-| `provider`(+model) | `E2ETargetProvider` | 默认 loopback（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即"近似直连"），可切 Direct 完全绕开 TB 对照 |
-| `provider_config` | `E2ETargetProviderConfig` | **不纳入**。它服务于"未保存配置的连通性"（Connect AI 场景），Bench 玩的是已保存的对象；纳入只会引入第三种 target 心智 |
+不纳入的两种：
 
-**统一 target picker**（ux-principles #2：消解模式选择）：不做 "先选 rule 还是 provider"
-的两段式，而是一个可搜索的单选下拉，分组平铺：
+| target | 状态 | 理由 |
+|--------|------|------|
+| `rule` | **已移除**（V1 曾支持） | 见下方"为什么砍掉 Rule" |
+| `provider_config` | 不纳入 | 它服务于"未保存配置的连通性"（Connect AI 场景），Bench 玩的是已保存的对象；纳入只会引入第三种 target 心智 |
 
-```
-  Rules        ├ Claude Code · cc-rule (claude_code)
-               ├ Codex · codex-rule (codex)         ← 按 scenario 分组，含 profile
-  Providers    ├ Kimi  ▸ kimi-k2-0905-preview       ← provider 行内二级选 model
-               ├ OpenRouter ▸ …
-```
+**target picker**：不再是可搜索的 Autocomplete 下拉——那个形态在窄栏里把
+provider/model 名字硬截断，选项之间很难分辨。改用用户已经在路由图上练熟的卡片式
+选择器：`ModelSelectDialog`（`frontend/src/components/ModelSelectDialog.tsx`，
+左栏 Provider 列表 + 右栏 Model 卡片网格，点卡片即选中即关闭），Compose 面板里的
+Target 行是一个显示"Provider · model"的按钮，点开即弹出同一个组件——和路由图上
+点服务节点弹出的是完全同一套代码，不是照着视觉仿了一遍。
 
-选中即为 target；target 类型只是所选对象的属性，不是先要回答的问题。
+**为什么砍掉 Rule**（连带 pinned routing 轴、Journey 的 rule-mismatch 提示、
+Plugins 面板的 rule/scenario flag 基线，以及下面的深链入口）：
 
-**深链入口**（ux-principles #11：把物件交到下一步动作手上）：
-
-- Probe dialog 标题栏加 "Open in Bench"：携带当前 target + axes + message 跳转——
-  在弹窗里发现问题、去工作台深挖，是最自然的升级路径。
-- Rule 卡片齿轮菜单、provider 卡片菜单同样加入口。
-- URL 携带 target：`/bench?target=rule:{uuid}` / `?target=provider:{uuid}:{model}`，
-  便于分享和回跳。URL 参数优先于 localStorage 恢复（§10）。
+1. Rule 目标撑不起一个统一的卡片选择器——`ModelSelectDialog` 天然只表达
+   Provider→Model 两级，硬塞 Rule 意味着要么在同一个对话框里发明第二种选择模式
+   （违反 ux-principles #2：消解模式选择），要么继续留着旧的 Autocomplete 给
+   Rule 专用、两套选择器并存，两个选项都比"先只做 Provider+Model"更差。
+2. Rule 目标在 Bench 状态机里的耦合面很大（`routing`/`ProbeRouting`、rule
+   baseline 来源、深链协议、Journey 的 ruleExtra 提示），一次性和 target picker
+   改造一起砍掉，比留着半条腿的 Rule 支持更干净。
+3. 深链入口（Probe dialog "Open in Bench"、rule 卡片齿轮菜单）本身就是围绕
+   Rule target 设计的（`/bench?target=rule:{uuid}&scenario=...`），Rule 一走，
+   这两个入口连带没有意义，一并移除——Bench 不再是任何页面的跳转目标，只通过
+   自己的一级导航（§9）进入，`benchLink.ts` 整个文件删除。
+4. 未来如果要重新连接到 Rule，设想是把 scenario 端点也作为一种"模型"列进
+   `ModelSelectDialog` 的右栏列表里，而不是重新引入一个独立的 target kind——
+   这样选择器还是同一个，不用再面对"先选类型再选对象"的两段式（见 §15）。
 
 ---
 
@@ -501,6 +519,10 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
   都放独立模块。
 - i18n：`en.ts` / `zh.ts` 增 `bench.*` 命名空间；复用 `probe.*` 已有的轴文案
   （同一概念同一词）。
+- **无深链入口（V1.1）**：`/bench` 不接受任何查询参数，也没有别的页面能跳转过来
+  预填 target——Bench 完全独立，只能通过自己的一级导航进入，然后在页面内用
+  target picker 选（§3）。曾经的 `/bench?target=rule:{uuid}` 深链协议
+  （`benchLink.ts`）随 Rule target 一起移除。
 
 ---
 
@@ -576,6 +598,8 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 | 配置持久化 | localStorage 持久化 | 跟随 probe 的不持久化 | 诊断要默认可预测，工作台要延续上下文——两个页面的正确答案相反，显式写下避免"统一"冲动 |
 | provider_config target | 不纳入 | 三种 target 全支持 | 它属于 Connect AI 的"保存前验证"流程；Bench 面向已保存对象，多一种 target 只添心智噪音 |
 | Run history | session 内存 | 落库持久化 | 先验证"回看/对照"是不是真实高频动作，再决定值不值得一张表 |
+| Target picker（V1.1） | 路由图同款卡片选择器（`ModelSelectDialog`），只选 Provider+Model | 继续用 Autocomplete 下拉，只是把 Rule 分组去掉 | Autocomplete 下拉在窄栏里把长名字硬截断、选项难分辨；卡片选择器是用户已经练熟的心智，且是同一份代码，不是仿制视觉 |
+| Rule target（V1.1） | 移除，Bench 只连 Provider+Model | 保留 Rule，但换个更宽的地方放 target picker | Rule 目标撑不起统一的卡片选择器，硬塞等于发明第二种选择模式；连带的 routing 轴/深链协议/flag 基线耦合面大，不如一次性和 picker 改造一起砍掉，未来要接回来再设计 |
 
 ---
 
