@@ -55,3 +55,7 @@ One bullet = one line (~15 words after the colon); 3+ lines means rewrite or
 split. Over budget → cut the weakest bullets, don't compress wording. One
 fact, one place — nothing repeats across title/Summary/bullets/Notes.
 -->
+
+<!--
+No footer details from agent except session link
+-->
