@@ -20,8 +20,8 @@ const EXIT_TRANSITION_MS = 200;
 
 // Above this, a toast collapses behind a "Show more" toggle instead of
 // dumping its full text in the user's face.
-const LONG_MESSAGE_CHARS = 240;
-const COLLAPSED_LINES = 4;
+const LONG_MESSAGE_CHARS = 200;
+const COLLAPSED_LINES = 3;
 
 function isLongMessage(message: string): boolean {
   return message.length > LONG_MESSAGE_CHARS || message.split('\n').length > COLLAPSED_LINES;
@@ -72,7 +72,7 @@ function NotificationToast({ item }: { item: NotifyItem }) {
         <Slide direction="left" in={open} appear>
           <Alert
             severity={item.severity}
-            variant="filled"
+            variant="standard"
             onClose={isError ? undefined : handleClose}
             action={
               isError ? (
@@ -98,8 +98,11 @@ function NotificationToast({ item }: { item: NotifyItem }) {
             }
             sx={{
               width: '100%',
-              boxShadow: 6,
               alignItems: 'flex-start',
+              bgcolor: 'background.paper',
+              boxShadow: 3,
+              borderLeft: 3,
+              borderColor: `${item.severity}.main`,
               '& .MuiAlert-message': { overflowWrap: 'anywhere', minWidth: 0 },
             }}
           >
