@@ -510,7 +510,7 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-09-03",
-          "note": "最新旗舰模型，代码/应用/研究综合能力最强，目前限量灰度发布，需在 config.toml 手动开启，数周内成为 Astra 默认模型",
+          "note": "最新旗舰模型，代码/应用/研究综合能力最强；截至 2026-09-18 Codex CLI 的 /model 选择器仍不默认展示该模型（企业版需管理员在后台开启，Plus/Pro 按节奏灰度），需在 config.toml 显式设置 model = \"gpt-6-astra\" 才能使用，但配置后可直接生效",
           "openai_endpoints": ["responses"]
         },
         {
@@ -565,12 +565,14 @@
           "id": "gpt-5.5",
           "context": 272000,
           "note": "上一代旗舰模型，ChatGPT 登录会话默认模型",
+          "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans; switch to gpt-5.6-sol",
           "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.3-codex-spark",
           "context": 128000,
           "note": "纯文本研究预览模型，优化近实时编码迭代",
+          "deprecated": "shutdown 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
           "openai_endpoints": ["responses"]
         }
       ],
@@ -578,10 +580,12 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-09-04",
+      "last_updated": "2026-09-18",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
+        "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
         "https://openai.com/index/gpt-6-astra/",
+        "https://github.com/openai/codex/issues/43342",
         "https://9to5mac.com/2026/09/03/openai-releasing-major-upgrade-to-chatgpt-and-codex-with-gpt-6-astra-details-here/"
       ]
     },
