@@ -52,14 +52,7 @@ func handleResponsesToAnthropicStream(hc *protocol.HandleContext, stream Respons
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("[ResponsesAPI] Stream error: %v", err)
 		hc.DispatchStreamError(err)
-		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}, nil)
+		sendAnthropicStreamEvent(c, "error", BuildErrorEvent(err, "stream_failed"), nil)
 		return conv.Usage(), err
 	}
 
@@ -167,14 +160,7 @@ func handleOpenAIToAnthropicStreamResponse(
 			SendStreamingError(c, err)
 			return conv.Usage(), err
 		}
-		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}, nil)
+		sendAnthropicStreamEvent(c, "error", BuildErrorEvent(err, "stream_failed"), nil)
 		return conv.Usage(), err
 	}
 	if streamErr := stream.Err(); streamErr != nil {
