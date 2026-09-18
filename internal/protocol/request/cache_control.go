@@ -35,8 +35,7 @@ func responsesInputTextPart(text string, breakpoint bool) *responses.ResponseInp
 }
 
 // responsesTextParts converts text blocks to input_text content parts, one per
-// block, skipping empty ones. Shared by the assistant-message and system-prefix
-// paths, which differ only in where the blocks come from.
+// block, skipping empty ones. Used by the system-prefix path.
 func responsesTextParts(blocks []anthropic.TextBlockParam) responses.ResponseInputMessageContentListParam {
 	parts := make(responses.ResponseInputMessageContentListParam, 0, len(blocks))
 	for _, block := range blocks {
@@ -45,6 +44,26 @@ func responsesTextParts(blocks []anthropic.TextBlockParam) responses.ResponseInp
 		}
 		parts = append(parts, responses.ResponseInputContentUnionParam{
 			OfInputText: responsesInputTextPart(block.Text, !param.IsOmitted(block.CacheControl)),
+		})
+	}
+	return parts
+}
+
+// responsesOutputTextParts converts text blocks to output_text content parts,
+// one per block, skipping empty ones. The Responses API requires
+// assistant-authored content items to use output_text (or refusal); input_text
+// is only valid on user/system input, so this is the assistant-message
+// counterpart to responsesTextParts. Prompt-cache breakpoints have no
+// output_text equivalent (ResponseOutputTextParam carries no such field), so
+// block.CacheControl is ignored here.
+func responsesOutputTextParts(blocks []anthropic.TextBlockParam) []responses.ResponseOutputMessageContentUnionParam {
+	parts := make([]responses.ResponseOutputMessageContentUnionParam, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Text == "" {
+			continue
+		}
+		parts = append(parts, responses.ResponseOutputMessageContentUnionParam{
+			OfOutputText: &responses.ResponseOutputTextParam{Text: block.Text},
 		})
 	}
 	return parts

@@ -81,14 +81,19 @@ func TestCacheControlProtocolFamilyPreservesMultiblockBoundaries(t *testing.T) {
 		require.False(t, openaiparam.IsOmitted(
 			user.Content.OfInputItemContentList[1].OfInputImage.PromptCacheBreakpoint))
 
-		assistant := responsesReq.Input.OfInputItemList[2].OfMessage
+		assistant := responsesReq.Input.OfInputItemList[2].OfOutputMessage
 		require.NotNil(t, assistant)
-		require.Len(t, assistant.Content.OfInputItemContentList, 1)
-		require.False(t, openaiparam.IsOmitted(
-			assistant.Content.OfInputItemContentList[0].OfInputText.PromptCacheBreakpoint))
+		require.Len(t, assistant.Content, 1)
+		require.NotNil(t, assistant.Content[0].OfOutputText)
+		require.Equal(t, "assistant text", assistant.Content[0].OfOutputText.Text)
 
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
-		requireAnthropicFamilyBoundaries(t, out)
+		// A prompt-cache breakpoint has no output_text equivalent (the
+		// Responses API only accepts breakpoints on input_text/input_image,
+		// which are only valid on user/system content) — the assistant
+		// boundary is necessarily dropped on this round trip, unlike the
+		// chat/messages family above where it survives.
+		requireAnthropicFamilyBoundariesAssistantBreakpointDropped(t, out)
 	})
 }
 
@@ -235,6 +240,30 @@ func requireAnthropicFamilyBoundaries(t *testing.T, out *anthropic.BetaMessageNe
 	require.Len(t, assistant.Content, 1)
 	require.NotNil(t, assistant.Content[0].OfText)
 	require.False(t, anthropicparam.IsOmitted(assistant.Content[0].OfText.CacheControl))
+}
+
+// requireAnthropicFamilyBoundariesAssistantBreakpointDropped is
+// requireAnthropicFamilyBoundaries, except it does not expect the assistant
+// text's cache_control to survive — see its caller for why.
+func requireAnthropicFamilyBoundariesAssistantBreakpointDropped(t *testing.T, out *anthropic.BetaMessageNewParams) {
+	t.Helper()
+	require.Len(t, out.System, 2)
+	require.True(t, anthropicparam.IsOmitted(out.System[0].CacheControl))
+	require.False(t, anthropicparam.IsOmitted(out.System[1].CacheControl))
+	require.Len(t, out.Messages, 2)
+
+	user := out.Messages[0]
+	require.Len(t, user.Content, 2)
+	require.NotNil(t, user.Content[0].OfText)
+	require.True(t, anthropicparam.IsOmitted(user.Content[0].OfText.CacheControl))
+	require.NotNil(t, user.Content[1].OfImage)
+	require.False(t, anthropicparam.IsOmitted(user.Content[1].OfImage.CacheControl))
+
+	assistant := out.Messages[1]
+	require.Len(t, assistant.Content, 1)
+	require.NotNil(t, assistant.Content[0].OfText)
+	require.Equal(t, "assistant text", assistant.Content[0].OfText.Text)
+	require.True(t, anthropicparam.IsOmitted(assistant.Content[0].OfText.CacheControl))
 }
 
 func TestCacheControlProtocolFamilyChatResponsesKeepsMultipleBreakpoints(t *testing.T) {

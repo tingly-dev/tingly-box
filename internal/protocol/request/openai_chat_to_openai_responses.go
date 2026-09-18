@@ -235,6 +235,13 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 
 // convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
 // Returns nil if the message has no usable text content.
+//
+// Always emits the plain-string content form. The typed content-part form
+// (responseContentFromChatTextParts) tags parts input_text, which the
+// Responses API rejects on assistant-authored content — it requires
+// output_text/refusal there — and a prompt-cache breakpoint has no
+// output_text equivalent to preserve anyway, so there is nothing the part
+// form buys an assistant message that the string form doesn't.
 func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) []responses.ResponseInputItemUnionParam {
 	if content := assistantMsg.Content.OfString.Value; content != "" {
 		return []responses.ResponseInputItemUnionParam{responseMessageWithString("assistant", content)}
@@ -245,18 +252,11 @@ func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionA
 			parts = append(parts, *part.OfText)
 		}
 	}
-	if !chatTextPartsHaveCacheBreakpoint(parts) {
-		content := joinTextContentParts(parts)
-		if content == "" {
-			return nil
-		}
-		return []responses.ResponseInputItemUnionParam{responseMessageWithString("assistant", content)}
-	}
-	content := responseContentFromChatTextParts(parts)
-	if len(content) == 0 {
+	content := joinTextContentParts(parts)
+	if content == "" {
 		return nil
 	}
-	return []responses.ResponseInputItemUnionParam{responseMessageWithContent("assistant", content)}
+	return []responses.ResponseInputItemUnionParam{responseMessageWithString("assistant", content)}
 }
 
 // convertChatToolMessageToResponses converts a Chat tool message to Responses function_call_output format.

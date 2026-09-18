@@ -153,7 +153,12 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		assert.Equal(t, `{"location":"NYC"}`, fnCall.Arguments)
 	})
 
-	t.Run("assistant text and cache breakpoint survive beside tool call", func(t *testing.T) {
+	t.Run("assistant text survives beside tool call, cache breakpoint dropped", func(t *testing.T) {
+		// A cache breakpoint on assistant text has no output_text equivalent
+		// (the Responses API only accepts input_text with a breakpoint on
+		// user/system input, and rejects input_text entirely on
+		// assistant-authored content) — it is dropped rather than emitted
+		// as a mismatched type. See convertChatAssistantMessageToResponses.
 		text := openai.ChatCompletionContentPartTextParam{
 			Text:                  "Calling the weather tool.",
 			PromptCacheBreakpoint: openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam(),
@@ -174,10 +179,7 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		message := result.Input.OfInputItemList[0].OfMessage
 		require.NotNil(t, message)
 		require.Equal(t, "assistant", string(message.Role))
-		require.Len(t, message.Content.OfInputItemContentList, 1)
-		require.Equal(t, "Calling the weather tool.", message.Content.OfInputItemContentList[0].OfInputText.Text)
-		require.False(t, param.IsOmitted(
-			message.Content.OfInputItemContentList[0].OfInputText.PromptCacheBreakpoint))
+		require.Equal(t, "Calling the weather tool.", message.Content.OfString.Value)
 		require.NotNil(t, result.Input.OfInputItemList[1].OfFunctionCall)
 	})
 

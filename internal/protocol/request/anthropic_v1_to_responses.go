@@ -264,9 +264,11 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 		}
 	}
 
-	// Add text content as a separate message if present
-	if parts := responsesTextParts(textBlocks); len(parts) > 0 {
-		items = append(items, responseMessageWithContent("assistant", parts))
+	// Add text content as a separate output message if present. Assistant
+	// content must use output_text (or refusal), not input_text — see
+	// responsesOutputTextParts.
+	if parts := responsesOutputTextParts(textBlocks); len(parts) > 0 {
+		items = append(items, responses.ResponseInputItemParamOfOutputMessage(parts, "", responses.ResponseOutputMessageStatusCompleted))
 	}
 
 	// An assistant message with no text and no tool_use blocks is empty — skip it.
