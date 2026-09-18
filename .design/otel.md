@@ -70,7 +70,7 @@ cumulative 指标的每个不同属性组合都是一条**进程生命周期内�
 守护测试（指针级断言，比对 `unsafe.StringData` 确认属性值不与源缓冲区共享存储）：
 - `tracker/token_tracker_test.go`：`TestRecordUsage_NoHighCardinalityAttributes`（latency 不上属性 + error.type 截断）、`TestRecordUsage_DetachesRequestBufferStrings`（clone 解绑）
 - `internal/otel/oom_regression_test.go`：`TestStartRequestSpan_DetachesModelString`（span 侧解绑）
-- `internal/obs/memorylog_test.go`：`TestFireDetachesValues`（内存日志 detach，另一条 OOM 战线，见 logging-redesign）
+- `internal/obs/memorylog_test.go`：`TestFireDetachesValues`（内存日志 detach，另一条 OOM 战线，见 `.design/logging.md`）
 
 ## 5. Trace 管道的具体接线
 

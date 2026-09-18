@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -77,10 +79,19 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	entry := logrus.WithContext(req.Context()).WithFields(fields)
 	if err != nil {
+		// fail_reason categorizes the raw net/url error as its own field so
+		// entries are filterable without parsing the message text.
+		if reason, ok := protocol.ClassifyTransportError(err); ok {
+			entry = entry.WithField("fail_reason", string(reason))
+		}
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
 	}
-	entry.WithField("status", resp.StatusCode).Infof("upstream %d via %s", resp.StatusCode, proxy)
+	// A 4xx/5xx response is still a failure even though RoundTrip returned
+	// no error; level it the same way the HTTP access log does
+	// (obs.LevelForStatus) instead of always logging at Info.
+	entry.WithField("status", resp.StatusCode).
+		Logf(obs.LevelForStatus(resp.StatusCode), "upstream %d via %s", resp.StatusCode, proxy)
 	return resp, nil
 }
 
