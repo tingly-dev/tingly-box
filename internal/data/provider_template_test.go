@@ -769,6 +769,11 @@ func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
 	}
 
 	goProvider := &typ.Provider{APIBase: "https://opencode.ai/zen/go/v1"}
+	deepseekProvider := &typ.Provider{APIBase: "https://api.deepseek.com/v1"}
+	codexProvider := &typ.Provider{
+		AuthType:    ai.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerCodex},
+	}
 
 	tests := []struct {
 		name     string
@@ -784,6 +789,10 @@ func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
 		{"unrelated provider, same model id would be a false positive if host-gating broke", &typ.Provider{APIBase: "https://api.openai.com/v1"}, "gpt-5.6-luna", ai.EndpointModeUnknown},
 		{"nil provider", nil, "gpt-5.6-luna", ai.EndpointModeUnknown},
 		{"empty model", goProvider, "", ai.EndpointModeUnknown},
+		{"deepseek-com official model, both endpoints", deepseekProvider, "deepseek-v4-pro", ai.EndpointModeBoth},
+		{"deepseek-com official model, both endpoints (flash)", deepseekProvider, "deepseek-v4-flash", ai.EndpointModeBoth},
+		{"deepseek-com deprecated alias has no override", deepseekProvider, "deepseek-chat", ai.EndpointModeUnknown},
+		{"codex OAuth model, responses-only annotated in place", codexProvider, "gpt-6-astra", ai.EndpointModeResponses},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

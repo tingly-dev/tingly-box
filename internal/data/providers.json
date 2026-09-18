@@ -510,59 +510,68 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-09-03",
-          "note": "最新旗舰模型，代码/应用/研究综合能力最强，目前限量灰度发布，需在 config.toml 手动开启，数周内成为 Astra 默认模型"
+          "note": "最新旗舰模型，代码/应用/研究综合能力最强，目前限量灰度发布，需在 config.toml 手动开启，数周内成为 Astra 默认模型",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-sol",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理"
+          "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-sol:fast",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
+          "note": "旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-terra",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "平衡能力与成本，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4"
+          "note": "平衡能力与成本，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-terra:fast",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "平衡模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
+          "note": "平衡模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-luna",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "延迟和成本最低，适合高频、相对简单的任务；已取代于 2026-08-31 退役的 gpt-5.4-mini"
+          "note": "延迟和成本最低，适合高频、相对简单的任务；已取代于 2026-08-31 退役的 gpt-5.4-mini",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-luna:fast",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
+          "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.5",
           "context": 272000,
-          "note": "上一代旗舰模型，ChatGPT 登录会话默认模型"
+          "note": "上一代旗舰模型，ChatGPT 登录会话默认模型",
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.3-codex-spark",
           "context": 128000,
-          "note": "纯文本研究预览模型，优化近实时编码迭代"
+          "note": "纯文本研究预览模型，优化近实时编码迭代",
+          "openai_endpoints": ["responses"]
         }
       ],
       "supports_models_endpoint": false,
@@ -854,12 +863,14 @@
         {
           "id": "deepseek-v4-flash",
           "context": 1000000,
-          "max_output": 384000
+          "max_output": 384000,
+          "openai_endpoints": ["chat", "responses"]
         },
         {
           "id": "deepseek-v4-pro",
           "context": 1000000,
-          "max_output": 384000
+          "max_output": 384000,
+          "openai_endpoints": ["chat", "responses"]
         }
       ],
       "supports_models_endpoint": true,
