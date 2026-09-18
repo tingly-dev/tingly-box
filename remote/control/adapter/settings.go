@@ -68,5 +68,6 @@ func BotSettingFromRecord(record db.Settings) bot.BotSetting {
 		SmartGuideProvider: record.SmartGuideProvider,
 		SmartGuideModel:    record.SmartGuideModel,
 		RequirePairing:     record.RequirePairing,
+		PersistentSession:  record.PersistentSession,
 	}
 }

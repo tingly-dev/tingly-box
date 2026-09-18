@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -76,11 +77,15 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		Timestamp: time.Now(),
 	})
 
+	// Read dynamically (not cached across the call) so a profile switch or a
+	// persistent_session toggle in the web UI applies from the next message
+	// without a bot restart.
+	botSetting := e.deps.GetBotSettingOrCache()
+
 	// The bot's default_agent setting decides which Claude Code configuration
 	// serves @cc: the main claude_code scenario or a profile
-	// ("claude_code:<id>"). Read dynamically so a profile switch in the web UI
-	// applies from the next message without a bot restart.
-	profileID := ccProfileID(e.deps.GetBotSettingOrCache())
+	// ("claude_code:<id>").
+	profileID := ccProfileID(botSetting)
 
 	statusMsg := "⏳ CC: Processing new session..."
 	if !req.IsNewSession {
@@ -166,25 +171,35 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		}
 	}
 
-	startTime := time.Now()
-	result, werr := e.deps.AgentService.Run(ctx, agentboot.RunRequest{
-		ProjectPath: projectPath,
-		Prompt:      req.Text,
-		Opts: agentboot.ExecutionOptions{
-			SessionID: sessionID,
-			Resume:    shouldResume,
-			ControlMetadata: map[string]string{
-				claude.ContextKeyChatID:   req.HCtx.ChatID,
-				claude.ContextKeyPlatform: string(req.HCtx.Platform),
-				claude.ContextKeyBotUUID:  req.HCtx.BotUUID,
-			},
-			PermissionPromptTool: "stdio",
-			PermissionMode:       permissionMode,
-			Env:                  execEnv,
-			SettingsPath:         settingsPath,
-			Store:                e.deps.SessionMgr,
+	execOpts := agentboot.ExecutionOptions{
+		SessionID: sessionID,
+		Resume:    shouldResume,
+		ControlMetadata: map[string]string{
+			claude.ContextKeyChatID:   req.HCtx.ChatID,
+			claude.ContextKeyPlatform: string(req.HCtx.Platform),
+			claude.ContextKeyBotUUID:  req.HCtx.BotUUID,
 		},
-	}, prompter, sink)
+		PermissionPromptTool: "stdio",
+		PermissionMode:       permissionMode,
+		Env:                  execEnv,
+		SettingsPath:         settingsPath,
+	}
+
+	startTime := time.Now()
+	var result *agentboot.Result
+	var werr error
+	persistentHandled := false
+	if e.deps.SessionPool != nil && botSetting.IsPersistentSession() {
+		result, werr, persistentHandled = e.runPersistentTurn(ctx, req, projectPath, sessionID, execOpts, prompter, sink)
+	}
+	if !persistentHandled {
+		execOpts.Store = e.deps.SessionMgr
+		result, werr = e.deps.AgentService.Run(ctx, agentboot.RunRequest{
+			ProjectPath: projectPath,
+			Prompt:      req.Text,
+			Opts:        execOpts,
+		}, prompter, sink)
+	}
 	duration := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{
 		"chatID":    req.HCtx.ChatID,
@@ -214,10 +229,124 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		return werr
 	}
 
-	// Success: runner called Store.SetCompleted inside Wait(); send the "Task done" card.
+	// Success: the one-shot path's runner calls Store.SetCompleted inside
+	// Wait(); the persistent path's runPersistentTurn calls it directly
+	// (Runner.Open/PersistentSession never see opts.Store). Either way,
+	// SetCompleted has already run — send the "Task done" card.
 	sendTaskDoneCard(req.HCtx, meta)
 
 	return nil
+}
+
+// runPersistentTurn attempts to run req through the bot's persistent-session
+// pool (e.deps.SessionPool) instead of a one-shot process. Callers must
+// already have confirmed the bot opted in and the pool is non-nil.
+//
+// handled=false means the persistent path could not be used for this
+// message — no capacity, a stale/crashed entry that was just evicted, or
+// the agent doesn't support Open — and the caller should fall back to a
+// fresh one-shot AgentService.Run, exactly as if persistent mode were off.
+// This is always safe: nothing has been sent to any process yet in the
+// handled=false case.
+//
+// handled=true means the persistent path actually drove this turn to
+// completion, successfully or not; result/err are the same shape
+// AgentService.Run would have produced. A turn that fails because the
+// session terminated mid-turn (a crash) is NOT retried as one-shot here —
+// unlike an eviction/idle-timeout, side effects (tool calls) may have
+// already run, so silently re-running the prompt could double them up. The
+// session is removed from the pool either way so the next message opens a
+// fresh one.
+func (e *ClaudeCodeExecutor) runPersistentTurn(
+	ctx context.Context,
+	req PreparedRequest,
+	projectPath string,
+	sessionID string,
+	opts agentboot.ExecutionOptions,
+	prompter agentboot.Prompter,
+	sink agentboot.MessageSink,
+) (result *agentboot.Result, err error, handled bool) {
+	poolKey := persistentPoolKey(req.HCtx, projectPath)
+
+	persistentSession, found := e.deps.SessionPool.Acquire(poolKey)
+	if !found {
+		opened, operr := e.deps.AgentService.Open(ctx, agentClaudeCode, projectPath, req.Text, opts)
+		if operr != nil {
+			logrus.WithError(operr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: could not open persistent session, falling back to one-shot")
+			return nil, nil, false
+		}
+		if perr := e.deps.SessionPool.Open(ctx, poolKey, opened); perr != nil {
+			logrus.WithError(perr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: could not register persistent session, falling back to one-shot")
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = opened.Close(closeCtx)
+			cancel()
+			return nil, nil, false
+		}
+		persistentSession = opened
+	} else if serr := persistentSession.Send(ctx, req.Text); serr != nil {
+		logrus.WithError(serr).WithField("poolKey", poolKey).Info("ClaudeCodeExecutor: persistent session Send failed, evicting and falling back to one-shot")
+		e.deps.SessionPool.Remove(poolKey)
+		return nil, nil, false
+	}
+
+	// A one-shot run is always bounded by opts.Timeout or the runner's
+	// configured default (30 min in production) — Runner.Execute applies it
+	// to the whole process. Runner.Open deliberately does not (§5.1: it
+	// would kill a session that's legitimately idle between turns), so
+	// nothing else bounds a single persistent turn. Apply
+	// ExecutionOptions.Timeout's usual semantics to just this turn via
+	// RunTurnWithPrompter's own ctx.Done() handling (which ends the whole
+	// session on timeout, same as a one-shot's process getting killed).
+	turnCtx := ctx
+	timeout := agentboot.ResolveTimeout(opts.Timeout, e.deps.AgentService.Config().DefaultExecutionTimeout)
+	if timeout > 0 {
+		var turnCancel context.CancelFunc
+		turnCtx, turnCancel = context.WithTimeout(ctx, timeout)
+		defer turnCancel()
+	}
+
+	e.deps.SessionMgr.SetRunning(sessionID)
+	result, err = agentboot.RunTurnWithPrompter(turnCtx, persistentSession, prompter, sink)
+	if err != nil && persistentSession.Status() == agentboot.SessionStateTerminated {
+		e.deps.SessionPool.Remove(poolKey)
+	} else {
+		e.deps.SessionPool.Touch(poolKey)
+	}
+	if err == nil {
+		e.deps.SessionMgr.SetCompleted(sessionID, "")
+	}
+	return result, err, true
+}
+
+// persistentPoolKey identifies a persistent session's slot in the shared,
+// process-wide pool. BotUUID alone already uniquely identifies one bot on
+// one platform (it's the imbot_settings primary key), so it — not
+// platform — is what has to lead the key: EvictPersistentSessionsForBot
+// matches on a "<botUUID>|" prefix to drop every session belonging to one
+// bot, e.g. when that bot's persistent-session setting is turned off or the
+// bot stops (see internal/server/module/imbot's BotManager).
+func persistentPoolKey(hCtx HandlerContext, projectPath string) string {
+	return strings.Join([]string{hCtx.BotUUID, hCtx.ChatID, projectPath}, "|")
+}
+
+// EvictPersistentSessionsForBot closes and removes every persistent session
+// belonging to botUUID from sessionPool. Callers: the bot's
+// persistent-session setting was turned off (the abandoned process would
+// otherwise keep the Claude on-disk session file open while the next
+// message resumes it in a separate one-shot process — a
+// session-file-conflict race), or the bot is stopping/restarting/being
+// deleted. sessionPool may be nil (persistent sessions disabled
+// process-wide); a nil pool has nothing to evict.
+func EvictPersistentSessionsForBot(sessionPool *pool.Pool, botUUID string) int {
+	if sessionPool == nil {
+		return 0
+	}
+	prefix := botUUID + "|"
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	return sessionPool.CloseAllWhere(ctx, func(key string) bool {
+		return strings.HasPrefix(key, prefix)
+	})
 }
 
 // ccProfileID extracts the Claude Code profile ID from a bot's DefaultAgent

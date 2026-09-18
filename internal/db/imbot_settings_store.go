@@ -28,6 +28,10 @@ type Settings struct {
 	SmartGuideModel    string `json:"smartguide_model,omitempty"`    // Model identifier
 	// RequirePairing enforces TOFU pairing for DMs. Nil = legacy/opt-in.
 	RequirePairing *bool `json:"require_pairing,omitempty"`
+	// PersistentSession opts @cc into a long-lived Claude Code process kept
+	// warm across chat turns instead of one process per message. Nil/false
+	// is the default.
+	PersistentSession *bool `json:"persistent_session,omitempty"`
 	// Scenarios is the raw JSON-encoded list of hook scenarios this bot
 	// serves. The notify module parses it into typed bindings; the
 	// settings store keeps it opaque to avoid a cross-package dependency.
@@ -141,6 +145,7 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 		SmartGuideProvider: settings.SmartGuideProvider,
 		SmartGuideModel:    settings.SmartGuideModel,
 		RequirePairing:     settings.RequirePairing,
+		PersistentSession:  settings.PersistentSession,
 		Scenarios:          settings.Scenarios,
 		CreatedAt:          settings.CreatedAt,
 		UpdatedAt:          settings.UpdatedAt,
@@ -212,6 +217,9 @@ func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) erro
 	}
 	if settings.RequirePairing != nil {
 		record.RequirePairing = settings.RequirePairing
+	}
+	if settings.PersistentSession != nil {
+		record.PersistentSession = settings.PersistentSession
 	}
 	// Scenarios is intentionally allowed to be cleared (empty string) so
 	// callers can unbind a bot from all scenarios.
@@ -305,6 +313,7 @@ func recordToSettings(record ImBotSettingsRecord) Settings {
 		SmartGuideProvider: record.SmartGuideProvider,
 		SmartGuideModel:    record.SmartGuideModel,
 		RequirePairing:     record.RequirePairing,
+		PersistentSession:  record.PersistentSession,
 		Scenarios:          record.Scenarios,
 		CreatedAt:          record.CreatedAt,
 		UpdatedAt:          record.UpdatedAt,

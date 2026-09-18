@@ -40,6 +40,7 @@ type CreateRequest struct {
 	SmartGuideProvider string                                            `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    string                                            `json:"smartguide_model,omitempty"`    // Model identifier
 	RequirePairing     *bool                                             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → platform default
+	PersistentSession  *bool                                             `json:"persistent_session,omitempty"`  // Keep a Claude Code process warm across @cc turns; nil → false default
 	Capabilities       map[access.CapabilityName]CapabilityUpdateRequest `json:"capabilities,omitempty"`
 }
 
@@ -59,6 +60,7 @@ type UpdateRequest struct {
 	SmartGuideProvider *string           `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    *string           `json:"smartguide_model,omitempty"`    // Model identifier
 	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → unchanged
+	PersistentSession  *bool             `json:"persistent_session,omitempty"`  // Keep a Claude Code process warm across @cc turns; nil → unchanged
 }
 
 // PairingCodeResponse represents the response for pairing-code reveal/rotate.

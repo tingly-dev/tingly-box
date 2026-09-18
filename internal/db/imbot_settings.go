@@ -31,6 +31,12 @@ type ImBotSettingsRecord struct {
 	// create wizard sets this to true for newly created bots.
 	RequirePairing *bool `gorm:"column:require_pairing"`
 
+	// PersistentSession opts @cc into a long-lived Claude Code process kept
+	// warm across chat turns (agentboot.PersistentSession / agentboot/pool)
+	// instead of spawning a fresh process per message. Nil/false is the
+	// default — see .design/claude-code.md for the rollout rationale.
+	PersistentSession *bool `gorm:"column:persistent_session"`
+
 	// Scenarios is a JSON-encoded list of scenario bindings declaring
 	// which Claude Code hook scenarios this bot serves and the IM target.
 	// Schema: see internal/server/module/notify/binding.go ScenarioBinding.
@@ -51,4 +57,9 @@ func (r *ImBotSettingsRecord) GetVerbose() bool {
 		return true // default
 	}
 	return *r.Verbose
+}
+
+// GetPersistentSession returns the persistent-session setting with default false.
+func (r *ImBotSettingsRecord) GetPersistentSession() bool {
+	return r.PersistentSession != nil && *r.PersistentSession
 }

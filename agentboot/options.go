@@ -5,6 +5,25 @@ import (
 	"time"
 )
 
+// SessionCloseTimeout bounds how long callers wait for a process or
+// [PersistentSession] to close gracefully before giving up (the underlying
+// Close is still best-effort past this point, not aborted). Shared so every
+// close-with-a-deadline call site uses the same budget instead of an
+// independent copy of the same literal.
+const SessionCloseTimeout = 15 * time.Second
+
+// ResolveTimeout applies [ExecutionOptions.Timeout]'s documented semantics —
+// zero uses defaultTimeout, a negative value disables the timeout, a positive
+// value is used as-is — and returns the resolved duration. A returned value
+// of zero or less means "no timeout"; callers only wrap ctx in
+// context.WithTimeout when it is positive.
+func ResolveTimeout(timeout, defaultTimeout time.Duration) time.Duration {
+	if timeout == 0 {
+		return defaultTimeout
+	}
+	return timeout
+}
+
 // OutputFormat defines agent output format.
 type OutputFormat string
 

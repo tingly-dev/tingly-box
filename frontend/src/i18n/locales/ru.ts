@@ -2107,7 +2107,8 @@ export default {
     "notify": {
       "agentSettingsSaved": "Настройки агента сохранены",
       "ccProfileUpdated": "Профиль Claude Code обновлён",
-      "ccProfileUpdateFailed": "Не удалось обновить профиль Claude Code"
+      "ccProfileUpdateFailed": "Не удалось обновить профиль Claude Code",
+      "persistentSessionUpdateFailed": "Не удалось обновить настройку постоянной сессии"
     },
     "pageTitle": "Удалённое управление",
     "pageSubtitle": "Задайте, кто может управлять каждым ботом и куда идут команды из чата.",
@@ -2122,6 +2123,8 @@ export default {
       "dialogSubtitle": "Удалённые сессии @cc идут через выбранный профиль — его правила, сопоставление моделей и переопределения настроек.",
       "empty": "Профилей Claude Code пока нет. Сначала создайте профиль на странице сценария Claude Code.",
       "missingTooltip": "Профиль «{{id}}» больше не существует — @cc возвращается к сценарию claude_code по умолчанию. Нажмите, чтобы выбрать другой.",
+      "persistentSession": "Держать процесс прогретым между сообщениями",
+      "persistentSessionCaption": "Экспериментально: переиспользует один процесс Claude Code для всех ходов чата, избегая затрат на запуск процесса при каждом сообщении @cc.",
       "profileTooltip": "Профиль Claude Code",
       "scenario": "Сценарий",
       "separate": "раздельный",

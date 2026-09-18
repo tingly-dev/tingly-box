@@ -16,10 +16,22 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/session"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
+
+// sessionPoolConfig bounds resident persistent @cc processes for the whole
+// server, across every bot. MaxSessions counts top-level entry agents only
+// — each one may spawn subagents of its own, so 10 resident entry sessions
+// is already a conservative retention budget, not a hard resource count.
+// Not yet exposed as a setting — see .design/claude-code.md §5.3/P3
+// (observability should land before this becomes tunable).
+var sessionPoolConfig = pool.Config{
+	MaxSessions: 10,
+	IdleTimeout: 10 * time.Minute,
+}
 
 // BotManager manages the lifecycle of ImBot instances.
 // It encapsulates the internal bot.Manager and provides a clean interface
@@ -30,6 +42,7 @@ type BotManager struct {
 	store        *db.ImBotSettingsStore
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
+	sessionPool  *pool.Pool
 	config       *config.Config
 }
 
@@ -102,7 +115,8 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	// remote/control/adapter). The raw *db.ImBotSettingsStore is kept for
 	// host-side reads that still want db.Settings.
 	settingsStore := adapter.NewSettingsStore(store)
-	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, tbClient, settingsStore)
+	sessionPool := pool.New(sessionPoolConfig)
+	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, sessionPool, tbClient, settingsStore)
 
 	// Create internal bot manager
 	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)
@@ -117,6 +131,7 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		store:        store,
 		sessionMgr:   sessionMgr,
 		agentService: agentService,
+		sessionPool:  sessionPool,
 		config:       cfg,
 	}
 
@@ -199,10 +214,18 @@ func (bm *BotManager) StopBot(uuid string) error {
 	// Stop the bot
 	bm.manager.Stop(uuid)
 
-	// Wait for bot to fully stop (with 5 second timeout)
-	// Do this outside the lock to avoid deadlock
+	// Wait for bot to fully stop (with 5 second timeout), then evict any
+	// resident persistent @cc session for it — an abandoned process would
+	// otherwise keep the Claude on-disk session file open while a later
+	// restart resumes it in a separate process, racing on that same file.
+	// Both happen outside the lock: WaitForStop to avoid deadlock, eviction
+	// because sessionPool is set once at construction and never mutated, so
+	// it needs no lock protection, and it may block for
+	// agentboot.SessionCloseTimeout waiting on the session's process — an
+	// unrelated bot's Start/Stop must not queue behind that.
 	bm.mu.Unlock()
 	bm.manager.WaitForStop(uuid, 5*time.Second)
+	bm.EvictPersistentSessions(uuid)
 	bm.mu.Lock()
 
 	logrus.WithFields(logrus.Fields{
@@ -212,6 +235,22 @@ func (bm *BotManager) StopBot(uuid string) error {
 	}).Info("Bot stopped successfully")
 
 	return nil
+}
+
+// EvictPersistentSessions closes and removes every resident persistent @cc
+// session belonging to uuid from the shared pool, without touching whether
+// the bot itself is running. Callers: StopBot (the bot is going away
+// entirely) and the settings handler (the bot keeps running but its
+// persistent_session setting was just turned off) — see
+// remoteagent.EvictPersistentSessionsForBot's doc comment for why an
+// abandoned session must not be left resident. Returns the number of
+// sessions evicted; a nil sessionPool (persistent sessions disabled
+// process-wide) evicts nothing.
+func (bm *BotManager) EvictPersistentSessions(uuid string) int {
+	if bm == nil {
+		return 0
+	}
+	return remoteagent.EvictPersistentSessionsForBot(bm.sessionPool, uuid)
 }
 
 // RestartBot stops a single bot and starts it again, preserving its UUID.
@@ -367,6 +406,14 @@ func (bm *BotManager) Shutdown() {
 	// closed on the server path.
 	if bm.sessionMgr != nil {
 		bm.sessionMgr.Stop()
+	}
+
+	// Close every resident persistent @cc process before the server exits,
+	// rather than leaving them to be killed by process teardown.
+	if bm.sessionPool != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+		bm.sessionPool.Shutdown(shutdownCtx)
+		cancel()
 	}
 
 	logrus.Info("BotManager shutdown complete")

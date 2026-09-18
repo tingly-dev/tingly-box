@@ -2149,7 +2149,8 @@ export default {
     "notify": {
       "agentSettingsSaved": "Agent 设置已保存",
       "ccProfileUpdated": "Claude Code Profile 已更新",
-      "ccProfileUpdateFailed": "更新 Claude Code Profile 失败"
+      "ccProfileUpdateFailed": "更新 Claude Code Profile 失败",
+      "persistentSessionUpdateFailed": "更新常驻会话设置失败"
     },
     "pageTitle": "远程控制",
     "pageSubtitle": "设置谁可以控制每个 Bot，以及聊天指令的路由去向。",
@@ -2164,6 +2165,8 @@ export default {
       "dialogSubtitle": "远程 @cc 会话会走所选 Profile —— 包括它的规则、模型映射与设置覆盖。",
       "empty": "还没有 Claude Code Profile。请先在 Claude Code 场景页创建一个。",
       "missingTooltip": "Profile「{{id}}」已不存在 —— @cc 回退到默认 claude_code 场景。点击可另选一个。",
+      "persistentSession": "在消息之间保持进程常驻",
+      "persistentSessionCaption": "实验性功能：复用同一个 Claude Code 进程处理同一会话的多轮消息，省去每条消息的进程启动开销。",
       "profileTooltip": "Claude Code Profile",
       "scenario": "场景",
       "separate": "分离",

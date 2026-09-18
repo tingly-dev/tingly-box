@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/binding"
@@ -24,22 +25,30 @@ import (
 type consumer struct {
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
-	tbClient     tbclient.TBClient
-	store        bot2.SettingsStore
+	// sessionPool is shared across every bot this process runs — it caps
+	// resident Claude Code processes process-wide, not per bot. May be nil
+	// (standalone/test use), which disables persistent sessions regardless
+	// of any bot's setting. See .design/claude-code.md.
+	sessionPool *pool.Pool
+	tbClient    tbclient.TBClient
+	store       bot2.SettingsStore
 }
 
 // NewConsumer builds the consumer that binds a bot to the remote-agent
 // purpose. tbClient and store may be nil (standalone / test use): SmartGuide
 // falls back to Claude Code and dynamic settings refresh is skipped.
+// sessionPool may also be nil to disable persistent @cc sessions entirely.
 func NewConsumer(
 	sessionMgr *session.Manager,
 	agentService *agentboot.AgentService,
+	sessionPool *pool.Pool,
 	tbClient tbclient.TBClient,
 	store bot2.SettingsStore,
 ) bot2.Consumer {
 	return &consumer{
 		sessionMgr:   sessionMgr,
 		agentService: agentService,
+		sessionPool:  sessionPool,
 		tbClient:     tbClient,
 		store:        store,
 	}
@@ -72,6 +81,7 @@ func (c *consumer) Attach(
 		chatStore,
 		c.sessionMgr,
 		c.agentService,
+		c.sessionPool,
 		directoryBrowser,
 		mgr,
 		prompter,

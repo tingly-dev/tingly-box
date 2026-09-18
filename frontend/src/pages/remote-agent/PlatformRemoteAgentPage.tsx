@@ -216,6 +216,19 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
         }
     }, [loadBots, showNotification, t]);
 
+    const handleTogglePersistentSession = useCallback(async (uuid: string, enabled: boolean) => {
+        const response = await api.updateImBotSetting(uuid, {
+            persistent_session: enabled,
+        });
+        if (response?.success) {
+            await loadBots();
+        } else {
+            const message = response?.error || t('remoteAgent.notify.persistentSessionUpdateFailed', { defaultValue: 'Failed to update persistent-session setting' });
+            showNotification(message, 'error');
+            throw new Error(message);
+        }
+    }, [loadBots, showNotification, t]);
+
     return (
         <PageLayout
             loading={false}
@@ -305,6 +318,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
                 bot={profileDialogBot}
                 profiles={ccProfiles}
                 onSelect={handleCCProfileSelect}
+                onTogglePersistentSession={handleTogglePersistentSession}
                 onClose={() => setProfileDialogBot(null)}
             />
             <Snackbar
