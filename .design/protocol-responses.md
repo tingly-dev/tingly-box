@@ -141,15 +141,23 @@ extension which provider served the request, to the client.
 never on whether a prompt-cache breakpoint happens to sit on it this turn.**
 
 Anthropic expresses cache boundaries as `cache_control` on a content block;
-Responses expresses them as `prompt_cache_breakpoint` on a content *part*. A
-part list is therefore the only shape that can carry a breakpoint, and the
-Anthropic→Responses converters used to switch between the two representations
-per item:
+both OpenAI shapes express them as `prompt_cache_breakpoint` on a content
+*part*. A part list is therefore the only shape that can carry a breakpoint,
+and the converters used to switch between the two representations per item —
+the same bug, independently, on both the Responses and the Chat Completions
+side:
 
-| Item | No breakpoint | With breakpoint |
-| --- | --- | --- |
-| user / assistant message | `"content": "text"` | `"content": [{"type":"input_text","text":"text"}]` |
-| tool result | `"output": "text"` | `"output": [{"type":"input_text","text":"text"}]` |
+| Converter | Item | No breakpoint | With breakpoint |
+| --- | --- | --- | --- |
+| Anthropic→Responses | user / assistant message | `"content": "text"` | `"content": [{"type":"input_text",…}]` |
+| Anthropic→Responses | tool result | `"output": "text"` | `"output": [{"type":"input_text",…}]` |
+| Anthropic→Chat | system / user / assistant message | `"content": "text"` | `"content": [{"type":"text",…}]` |
+| Anthropic→Chat | tool result | `"content": "text"` | `"content": [{"type":"text",…}]` |
+
+(The Chat side was found by the `cache_prefix` harness section — see
+`harness-matrix.md` §10.4 — after the Responses side had been fixed by hand.
+Responses→Chat collapses text to the compact string form unconditionally, so
+it was never affected.)
 
 That looked like a harmless compaction and was not. A client carries a small,
 fixed number of ephemeral breakpoints and **rolls them forward** as the
@@ -169,10 +177,12 @@ worth stating:
   has them stripped at the provider boundary, breakpoint placement now has
   **exactly zero** effect on the dispatched body. `TestCodexBodyIsStable-
   AcrossBreakpointRotation` asserts byte equality across every placement.
-- For native Responses providers the breakpoints still ship, unchanged; they
-  are now purely additive.
+- For native Responses and Chat providers the breakpoints still ship,
+  unchanged; they are now purely additive.
   `TestResponsesShapeIsStableAcrossBreakpointRotation` asserts that stripping
-  the cache directives leaves every placement identical.
+  the cache directives leaves every placement identical, and the `cache_prefix`
+  harness section asserts the same end-to-end through the real gateway for
+  every client shape × target protocol.
 
 ### The system prompt
 

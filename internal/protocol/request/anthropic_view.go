@@ -2,7 +2,6 @@ package request
 
 import (
 	"encoding/json"
-	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -37,6 +36,9 @@ type anthropicRequestView struct {
 	ToolChoice   anthropic.ToolChoiceUnionParam
 	Thinking     anthropic.ThinkingConfigParamUnion
 	OutputConfig anthropic.OutputConfigParam
+	// MetadataUserID is metadata.user_id verbatim; the converters read the
+	// conversation's session identity out of it (see responsesPromptCacheKey).
+	MetadataUserID string
 }
 
 func viewAnthropicBetaCacheControl(control *anthropic.BetaCacheControlEphemeralParam) anthropic.CacheControlEphemeralParam {
@@ -55,15 +57,16 @@ func hasAnthropicCacheControl(control anthropic.CacheControlEphemeralParam) bool
 
 func viewAnthropicV1Request(req *anthropic.MessageNewParams) anthropicRequestView {
 	return anthropicRequestView{
-		Model:        req.Model,
-		MaxTokens:    req.MaxTokens,
-		CacheControl: req.CacheControl,
-		System:       req.System,
-		Messages:     req.Messages,
-		Tools:        req.Tools,
-		ToolChoice:   req.ToolChoice,
-		Thinking:     req.Thinking,
-		OutputConfig: req.OutputConfig,
+		Model:          req.Model,
+		MaxTokens:      req.MaxTokens,
+		CacheControl:   req.CacheControl,
+		System:         req.System,
+		Messages:       req.Messages,
+		Tools:          req.Tools,
+		ToolChoice:     req.ToolChoice,
+		Thinking:       req.Thinking,
+		OutputConfig:   req.OutputConfig,
+		MetadataUserID: req.Metadata.UserID.Or(""),
 	}
 }
 
@@ -242,6 +245,7 @@ func viewAnthropicBetaRequest(req *anthropic.BetaMessageNewParams) anthropicRequ
 		OutputConfig: anthropic.OutputConfigParam{
 			Effort: anthropic.OutputConfigEffort(req.OutputConfig.Effort),
 		},
+		MetadataUserID: req.Metadata.UserID.Or(""),
 	}
 	for _, sys := range req.System {
 		view.System = append(view.System, anthropic.TextBlockParam{
@@ -279,27 +283,20 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 		}
 	}
 
-	// Convert system messages. Keep block boundaries when cache controls are
-	// present so their exact prompt prefix survives A→O→A gateway chaining.
+	// Convert system messages. Block boundaries are always kept: the exact
+	// prompt prefix has to survive A→O→A gateway chaining, and the
+	// representation must not depend on whether a breakpoint happens to sit on
+	// a block this turn (the cache-shape invariant in cache_control.go).
 	if len(view.System) > 0 {
-		var systemMsg openai.ChatCompletionMessageParamUnion
-		if systemBlocksHaveCacheControl(view.System) {
-			parts := make([]openai.ChatCompletionContentPartTextParam, 0, len(view.System))
-			for _, system := range view.System {
-				part := openai.ChatCompletionContentPartTextParam{Text: system.Text}
-				if hasAnthropicCacheControl(system.CacheControl) {
-					part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
-				}
-				parts = append(parts, part)
+		parts := make([]openai.ChatCompletionContentPartTextParam, 0, len(view.System))
+		for _, system := range view.System {
+			part := openai.ChatCompletionContentPartTextParam{Text: system.Text}
+			if hasAnthropicCacheControl(system.CacheControl) {
+				part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
 			}
-			systemMsg = openai.SystemMessage(parts)
-		} else {
-			var systemText strings.Builder
-			for _, system := range view.System {
-				systemText.WriteString(system.Text)
-			}
-			systemMsg = openai.SystemMessage(systemText.String())
+			parts = append(parts, part)
 		}
+		systemMsg := openai.SystemMessage(parts)
 		// Add system message at the beginning
 		openaiReq.Messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, openaiReq.Messages...)
 	}
@@ -310,6 +307,10 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 		// Convert tool choice
 		openaiReq.ToolChoice = convertAnthropicToolChoiceViewToOpenAI(view.ToolChoice)
 	}
+
+	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
+	// field, so it is derived from metadata.user_id.
+	openaiReq.PromptCacheKey = responsesPromptCacheKey(view.MetadataUserID)
 
 	hasRepresentableCacheControl := viewHasRepresentableCacheControl(view)
 	hasFallbackCacheControl := viewHasToolDefinitionCacheControl(view) || viewHasToolUseCacheControl(view)
@@ -357,8 +358,6 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 // blocks to a single OpenAI assistant message. Thinking content is preserved
 // in the "x_thinking" extra field for provider-specific transforms.
 func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamUnion) openai.ChatCompletionMessageParamUnion {
-	preserveTextParts := blocksHaveCacheControl(blocks)
-	var textContent strings.Builder
 	var textParts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion
 	var toolCalls []openai.ChatCompletionMessageToolCallUnionParam
 	var thinking string
@@ -366,14 +365,13 @@ func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamU
 	for _, block := range blocks {
 		switch {
 		case block.OfText != nil:
-			if preserveTextParts {
-				part := openAITextPart(block.OfText.Text, hasAnthropicCacheControl(block.OfText.CacheControl))
-				textParts = append(textParts, openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
-					OfText: &part,
-				})
-			} else {
-				textContent.WriteString(block.OfText.Text)
+			if block.OfText.Text == "" {
+				continue
 			}
+			part := openAITextPart(block.OfText.Text, hasAnthropicCacheControl(block.OfText.CacheControl))
+			textParts = append(textParts, openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
+				OfText: &part,
+			})
 		case block.OfToolUse != nil:
 			// Convert tool_use block to OpenAI tool_call format;
 			// marshal input to a JSON string for OpenAI
@@ -399,11 +397,7 @@ func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamU
 	assistant := &openai.ChatCompletionAssistantMessageParam{
 		ToolCalls: toolCalls,
 	}
-	if preserveTextParts {
-		assistant.Content.OfArrayOfContentParts = textParts
-	} else {
-		assistant.Content.OfString = openai.Opt(textContent.String())
-	}
+	assistant.Content.OfArrayOfContentParts = textParts
 
 	// Preserve x_thinking in ExtraFields for provider transforms (e.g., DeepSeek/Moonshot)
 	// Must set on OfAssistant (variant level), not on union level, because
@@ -418,16 +412,13 @@ func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamU
 // blocks turn the message into a multimodal content-part array.
 func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion) []openai.ChatCompletionMessageParamUnion {
 	var result []openai.ChatCompletionMessageParamUnion
-	var hasToolResult, hasImage, hasCache bool
+	var hasToolResult bool
 
 	for _, block := range blocks {
-		switch {
-		case block.OfToolResult != nil:
+		if block.OfToolResult != nil {
 			hasToolResult = true
-		case block.OfImage != nil:
-			hasImage = true
+			break
 		}
-		hasCache = hasCache || blockHasCacheControl(block)
 	}
 
 	switch {
@@ -449,12 +440,16 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 		if len(leftoverBlocks) > 0 {
 			result = append(result, convertAnthropicViewUserToOpenAI(leftoverBlocks)...)
 		}
-	case hasImage || hasCache:
-		// Multimodal user message: emit an array of text + image_url content parts
+	default:
+		// Always an array of text + image_url content parts — see the
+		// cache-shape invariant in cache_control.go.
 		parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(blocks))
 		for _, block := range blocks {
 			switch {
 			case block.OfText != nil:
+				if block.OfText.Text == "" {
+					continue
+				}
 				part := openAITextPart(block.OfText.Text, hasAnthropicCacheControl(block.OfText.CacheControl))
 				parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfText: &part})
 			case block.OfImage != nil:
@@ -468,17 +463,6 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 		}
 		if len(parts) > 0 {
 			result = append(result, openai.UserMessage(parts))
-		}
-	default:
-		// Simple text-only user message
-		var textContent strings.Builder
-		for _, block := range blocks {
-			if block.OfText != nil {
-				textContent.WriteString(block.OfText.Text)
-			}
-		}
-		if textContent.Len() > 0 {
-			result = append(result, openai.UserMessage(textContent.String()))
 		}
 	}
 
@@ -494,18 +478,14 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropic.ContentBlockParamUnion)
 func openAIToolMessageFromAnthropicToolResult(block *anthropic.ToolResultBlockParam) openai.ChatCompletionMessageParamUnion {
 	toolCallID := truncateToolCallID(block.ToolUseID)
 	hasCache := hasAnthropicCacheControl(block.CacheControl)
-	hasImage := slices.ContainsFunc(block.Content, func(c anthropic.ToolResultBlockParamContentUnion) bool {
-		return c.OfImage != nil
-	})
-
-	if !hasImage && !hasCache {
-		return openai.ToolMessage(convertToolResultContent(block.Content), toolCallID)
-	}
 
 	parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(block.Content))
 	for _, c := range block.Content {
 		switch {
 		case c.OfText != nil:
+			if c.OfText.Text == "" {
+				continue
+			}
 			part := openAITextPart(c.OfText.Text, false)
 			parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfText: &part})
 		case c.OfImage != nil:

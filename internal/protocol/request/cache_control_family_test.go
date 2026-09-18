@@ -102,10 +102,17 @@ func TestCacheControlProtocolFamilyDoesNotSynthesizeBreakpoints(t *testing.T) {
 		},
 	}
 
+	// The content-part list is the one shape a converted message ever takes —
+	// see the cache-shape invariant in cache_control.go. No breakpoint is
+	// synthesized onto it.
 	chat, _ := ConvertAnthropicToOpenAIRequest(anthropicReq, true, false, false)
 	require.Empty(t, chat.PromptCacheOptions.Mode)
-	require.True(t, chat.Messages[0].OfSystem.Content.OfString.Valid())
-	require.True(t, chat.Messages[1].OfUser.Content.OfString.Valid())
+	chatSystem := chat.Messages[0].OfSystem.Content.OfArrayOfContentParts
+	require.Len(t, chatSystem, 1)
+	require.True(t, openaiparam.IsOmitted(chatSystem[0].PromptCacheBreakpoint))
+	chatUser := chat.Messages[1].OfUser.Content.OfArrayOfContentParts
+	require.Len(t, chatUser, 1)
+	require.True(t, openaiparam.IsOmitted(chatUser[0].OfText.PromptCacheBreakpoint))
 
 	responsesReq := ConvertAnthropicV1ToResponsesRequest(anthropicReq)
 	require.Empty(t, responsesReq.PromptCacheOptions.Mode)
@@ -118,6 +125,8 @@ func TestCacheControlProtocolFamilyDoesNotSynthesizeBreakpoints(t *testing.T) {
 	require.Len(t, userParts, 1)
 	require.True(t, openaiparam.IsOmitted(userParts[0].OfInputText.PromptCacheBreakpoint))
 
+	// Responses→Chat collapses text content to the compact string form
+	// unconditionally, so its shape does not depend on breakpoints either.
 	chatAgain := ConvertOpenAIResponsesToChat(responsesReq, 4096)
 	require.Empty(t, chatAgain.PromptCacheOptions.Mode)
 	require.True(t, chatAgain.Messages[0].OfSystem.Content.OfString.Valid())
@@ -149,7 +158,7 @@ func TestCacheControlProtocolFamilyToolFallbackPrefersSystemPrefix(t *testing.T)
 	require.Len(t, chat.Messages[0].OfSystem.Content.OfArrayOfContentParts, 1)
 	require.False(t, openaiparam.IsOmitted(
 		chat.Messages[0].OfSystem.Content.OfArrayOfContentParts[0].PromptCacheBreakpoint))
-	require.True(t, chat.Messages[1].OfUser.Content.OfString.Valid())
+	require.Len(t, chat.Messages[1].OfUser.Content.OfArrayOfContentParts, 1)
 
 	responsesReq := ConvertAnthropicV1ToResponsesRequest(in)
 	require.Equal(t, "explicit", responsesReq.PromptCacheOptions.Mode)

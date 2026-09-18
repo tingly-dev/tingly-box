@@ -299,10 +299,18 @@ func TestConvertAnthropicBetaToOpenAI_ImageURL(t *testing.T) {
 	assert.Equal(t, "https://example.com/cat.png", imgURL["url"])
 }
 
-// TestConvertAnthropicBetaToOpenAI_TextOnlyUnchanged is a regression test
-// confirming the text-only path still emits a plain string content (not a
-// parts array), so we don't accidentally degrade simple requests.
-func TestConvertAnthropicBetaToOpenAI_TextOnlyUnchanged(t *testing.T) {
+// TestConvertAnthropicBetaToOpenAI_TextContentShapeIsStable pins the
+// content-part list as the one shape a converted message takes.
+//
+// This test previously asserted the opposite — that a text-only message keeps
+// a plain string content, "so we don't accidentally degrade simple requests".
+// The compaction was not free: the converter fell back to the parts array as
+// soon as a block carried a cache breakpoint, so an Anthropic client rolling
+// its breakpoints forward re-serialized history it had already sent and
+// invalidated the upstream prompt cache from that point on. A stable shape is
+// worth more than a shorter one; see the cache-shape invariant in
+// cache_control.go.
+func TestConvertAnthropicBetaToOpenAI_TextContentShapeIsStable(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Model:     "test-model",
 		MaxTokens: 100,
@@ -316,15 +324,33 @@ func TestConvertAnthropicBetaToOpenAI_TextOnlyUnchanged(t *testing.T) {
 		},
 	}
 
-	out, _ := ConvertAnthropicBetaToOpenAIRequest(req, false, false, false)
-	require.Len(t, out.Messages, 1)
+	content := func(req *anthropic.BetaMessageNewParams) any {
+		out, _ := ConvertAnthropicBetaToOpenAIRequest(req, false, false, false)
+		require.Len(t, out.Messages, 1)
+		raw, err := json.Marshal(out.Messages[0])
+		require.NoError(t, err)
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(raw, &m))
+		assert.Equal(t, "user", m["role"])
+		return m["content"]
+	}
 
-	raw, err := json.Marshal(out.Messages[0])
-	require.NoError(t, err)
-	var m map[string]interface{}
-	require.NoError(t, json.Unmarshal(raw, &m))
-	assert.Equal(t, "user", m["role"])
-	assert.Equal(t, "hello", m["content"], "text-only content should remain a string")
+	plain := content(req)
+	assert.Equal(t,
+		[]any{map[string]any{"type": "text", "text": "hello"}},
+		plain, "text content is always a content-part list")
+
+	// The same message with a breakpoint on it differs by that field alone.
+	req.Messages[0].Content[0].OfText.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+	cached, ok := content(req).([]any)
+	require.True(t, ok)
+	require.Len(t, cached, 1)
+	part, ok := cached[0].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, part, "prompt_cache_breakpoint")
+	delete(part, "prompt_cache_breakpoint")
+	assert.Equal(t, plain, []any{part},
+		"a breakpoint must only add a field, never change the shape")
 }
 
 // TestConvertAnthropicToOpenAI_ImageBase64 mirrors the beta image test for

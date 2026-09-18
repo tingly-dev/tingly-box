@@ -110,3 +110,9 @@ The gateway now derives one identifier and uses it for both:
 
 `thread-id` and the attribution headers are deliberately not synthesized — they
 identify a Codex client we are not, and they do not affect caching.
+
+The `cache_prefix` harness section (`harness-matrix.md` §10.4) drives each
+client shape through a provider wired with a Codex OAuth identity, so these
+rules — breakpoints stripped, system lifted into `instructions`, `session-id`
+present and agreeing with `prompt_cache_key` — are asserted against the request
+that actually leaves the Codex RoundTripper, not against a hand-built body.
