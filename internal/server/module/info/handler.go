@@ -11,17 +11,21 @@ import (
 
 // Handler carries the minimal server state needed to serve /info/* endpoints.
 type Handler struct {
-	version    string
-	configFile string
-	configDir  string
+	version      string
+	configFile   string
+	configDir    string
+	launchSource string
 }
 
-// NewHandler creates a Handler.
-func NewHandler(version, configFile, configDir string) *Handler {
+// NewHandler creates a Handler. launchSource is how this process was itself
+// invoked (see server.WithLaunchSource) — known once at boot, never detected
+// or persisted.
+func NewHandler(version, configFile, configDir, launchSource string) *Handler {
 	return &Handler{
-		version:    version,
-		configFile: configFile,
-		configDir:  configDir,
+		version:      version,
+		configFile:   configFile,
+		configDir:    configDir,
+		launchSource: launchSource,
 	}
 }
 
@@ -51,7 +55,7 @@ func (h *Handler) GetInfoConfig(c *gin.Context) {
 func (h *Handler) GetInfoVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, VersionInfoResponse{
 		Success: true,
-		Data:    VersionInfo{Version: h.version},
+		Data:    VersionInfo{Version: h.version, LaunchSource: h.launchSource},
 	})
 }
 
@@ -79,6 +83,7 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 			HasUpdate:      hasUpdate,
 			ReleaseURL:     releaseURL,
 			ShouldNotify:   hasUpdate,
+			LaunchSource:   h.launchSource,
 		},
 	})
 }

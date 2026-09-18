@@ -70,7 +70,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV1.Router.Use(s.getUserAuthMiddleware())
 
 	// Info endpoints: health (unauthenticated) + config/version (authenticated)
-	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir)
+	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir, s.launchSource)
 	info.RegisterRoutes(apiAuth, apiV1, infoHandler)
 
 	// Desktop / start-menu shortcut creation (authenticated) — see

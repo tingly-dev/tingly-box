@@ -2,7 +2,7 @@ import { GitHub, AppRegistration as NPM, Refresh } from '@/components/icons';
 import { Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { fontMono } from '@/theme/fonts';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVersion } from '@/contexts/VersionContext';
 import { CopyIconButton } from '@/components/CopyIconButton';
@@ -12,6 +12,23 @@ interface UpdatePanelDialogProps {
     open: boolean;
     onClose: () => void;
 }
+
+// Maps a backend launch_source to the matching update method, so the panel
+// opens on the channel the user is already using instead of always 'npx'.
+// null means "no match" (e.g. a downloaded binary, or not loaded yet) —
+// callers keep whatever method is already selected.
+const updateMethodForSource = (source: string | null): 'npx' | 'npm' | null => {
+    switch (source) {
+        case 'npx':
+        case 'npx-bundle':
+            return 'npx';
+        case 'npm':
+        case 'npm-bundle':
+            return 'npm';
+        default:
+            return null;
+    }
+};
 
 /**
  * UpdatePanelDialog Component
@@ -23,9 +40,23 @@ interface UpdatePanelDialogProps {
 export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onClose }) => {
     const { t } = useTranslation();
     const theme = useTheme();
-    const { currentVersion, latestVersion, checking, releaseURL, checkForUpdates, hasUpdate } = useVersion();
+    const { currentVersion, latestVersion, checking, releaseURL, checkForUpdates, hasUpdate, launchSource } = useVersion();
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('npx');
+    // Once the launch source arrives, adopt its matching method — but only
+    // until the user picks one themselves, so a later poll never yanks the
+    // toggle out from under them.
+    const [methodTouched, setMethodTouched] = useState(false);
+    useEffect(() => {
+        if (methodTouched) return;
+        const preferred = updateMethodForSource(launchSource);
+        if (preferred) setSelectedMethodId(preferred);
+    }, [launchSource, methodTouched]);
+
+    const handleMethodChange = useCallback((value: string) => {
+        setMethodTouched(true);
+        setSelectedMethodId(value);
+    }, []);
 
     const displayCurrentVersion = (currentVersion || 'Unknown').split('+')[0];
     const displayLatestVersion = (latestVersion || currentVersion || 'Unknown').split('+')[0];
@@ -205,7 +236,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                         <ToggleButtonGroup
                             value={selectedMethod.id}
                             exclusive
-                            onChange={(_, value) => value && setSelectedMethodId(value)}
+                            onChange={(_, value) => value && handleMethodChange(value)}
                             size="small"
                             fullWidth
                             sx={{ mb: 1.5 }}

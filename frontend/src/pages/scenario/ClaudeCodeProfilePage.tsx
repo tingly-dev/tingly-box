@@ -6,6 +6,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ConfigRow from "@/components/ConfigRow.tsx";
 import { ActiveBadge } from "@/components/ActiveBadge";
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useVersion } from '@/contexts/VersionContext';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
 import { copyableTextStyle } from '@/styles/textStyles';
@@ -39,6 +40,24 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 const BASE_SCENARIO = 'claude_code';
 
+// Maps a backend launch_source to the matching quick-start command mode, so
+// the panel opens on the form that already works for this install instead of
+// always assuming npx. null means "no match" (not loaded yet) — callers keep
+// whatever mode is already selected.
+const commandModeForSource = (source: string | null): 'npx' | 'global' | null => {
+    switch (source) {
+        case 'npx':
+        case 'npx-bundle':
+            return 'npx';
+        case 'npm':
+        case 'npm-bundle':
+        case 'binary':
+            return 'global';
+        default:
+            return null;
+    }
+};
+
 const ClaudeCodeProfilePageContent: React.FC = () => {
     const { profileId } = useParams<{ profileId: string }>();
     const navigate = useNavigate();
@@ -56,6 +75,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         baseUrl,
         isLoading,
     } = useScenarioPageInternal(scenario);
+    const { launchSource } = useVersion();
 
     // Profile state
     const { getProfiles, refresh: refreshProfiles } = useProfileContext();
@@ -70,6 +90,19 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     // package has also installed a permanent executable on PATH. Keep the
     // global command available as an explicit alternative for those who have.
     const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
+    // Once the launch source arrives, adopt its matching mode — but only
+    // until the user picks one themselves, so a later poll never yanks the
+    // toggle out from under them.
+    const [commandModeTouched, setCommandModeTouched] = useState(false);
+    useEffect(() => {
+        if (commandModeTouched) return;
+        const preferred = commandModeForSource(launchSource);
+        if (preferred) setCommandMode(preferred);
+    }, [launchSource, commandModeTouched]);
+    const handleCommandModeChange = (mode: 'npx' | 'global') => {
+        setCommandModeTouched(true);
+        setCommandMode(mode);
+    };
     const [settingsArtifact, setSettingsArtifact] = useState<ClaudeCodeProfileSettingsArtifact | null>(null);
     // Quick Start / Settings File share one ConfigRow (like Base URL | API Key
     // elsewhere) instead of two separate always-expanded rows — same info,
@@ -223,7 +256,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                             <Tooltip title="Use npx command">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => setCommandMode('npx')}
+                                                    onClick={() => handleCommandModeChange('npx')}
                                                     sx={{
                                                         position: 'relative',
                                                         opacity: commandMode === 'npx' ? 1 : 0.5,
@@ -255,7 +288,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                             <Tooltip title="Use global CLI command">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => setCommandMode('global')}
+                                                    onClick={() => handleCommandModeChange('global')}
                                                     sx={{
                                                         opacity: commandMode === 'global' ? 1 : 0.5,
                                                         transition: 'opacity 0.2s',

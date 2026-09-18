@@ -11227,6 +11227,11 @@
             "description": "Field latest_version",
             "example": "0.260130.1200"
           },
+          "launch_source": {
+            "type": "string",
+            "description": "Field launch_source",
+            "example": "npx"
+          },
           "release_url": {
             "type": "string",
             "description": "Field release_url",
@@ -11243,7 +11248,8 @@
           "latest_version",
           "has_update",
           "release_url",
-          "should_notify"
+          "should_notify",
+          "launch_source"
         ]
       },
       "LatestVersionResponse": {
@@ -11916,9 +11922,12 @@
             "format": "int64",
             "description": "Field max_output"
           },
-          "openai_endpoint": {
-            "type": "string",
-            "description": "Field openai_endpoint"
+          "openai_endpoints": {
+            "type": "array",
+            "description": "Field openai_endpoints",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -16672,6 +16681,11 @@
       "VersionInfo": {
         "type": "object",
         "properties": {
+          "launch_source": {
+            "type": "string",
+            "description": "Field launch_source",
+            "example": "npx"
+          },
           "version": {
             "type": "string",
             "description": "Field version",
@@ -16679,7 +16693,8 @@
           }
         },
         "required": [
-          "version"
+          "version",
+          "launch_source"
         ]
       },
       "VersionInfoResponse": {

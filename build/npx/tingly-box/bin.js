@@ -140,6 +140,9 @@ async function getPlatformArchAndBinary() {
 			await downloadAndExtractZip(downloadUrl, tinglyBinDir, { hints: source.hints });
 			console.log(`✅ Downloaded and extracted to ${binaryPath}`);
 		}
+		// Shown once per fresh install/update (not on every plain run) —
+		// introduces the "TB" short name used throughout the CLI and UI.
+		console.log(`👋 Welcome to Tingly Box (TB) — an intelligence orchestrator for LLM gateway, remote control and guard rails.`);
 	}
 
 	// The binary for this tag is in place — old tag dirs are now safe to GC.
