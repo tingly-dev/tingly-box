@@ -44,11 +44,9 @@ const missingToolOutputPlaceholder = "[tool call aborted: no output was recorded
 //   - an output with no call (missing call_id, call trimmed from history, or
 //     a duplicate answer) is rewritten as a user message that quotes the
 //     output, so its content survives without a dangling tool message;
-//   - a function_call whose call_id repeats an earlier call_id (corrupted or
-//     replayed history — call_id must be unique) is dropped: every
-//     downstream protocol rejects or mispairs two tool_calls/tool_use
-//     entries sharing one id, so re-emitting the repeat would only relocate
-//     the collision instead of repairing it.
+//   - a function_call whose call_id repeats an earlier one is dropped
+//     (not observed in practice; guarded because re-emitting it would reach
+//     the provider as two tool_calls/tool_use entries sharing one id).
 //
 // Every other item passes through unchanged, in its original relative order.
 // See .design/protocol-responses.md for the live provider probes.
@@ -110,14 +108,12 @@ func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.Resp
 	for _, item := range items {
 		if !param.IsOmitted(item.OfFunctionCall) {
 			id := item.OfFunctionCall.CallID
-			// A call_id must be unique: every downstream protocol rejects (or
-			// silently mispairs) two tool_calls/tool_use entries sharing one
-			// id in the same turn. A repeat is corrupted/replayed history
-			// (the class of input this function targets), not a legitimate
-			// second call, so it is dropped rather than re-emitted — keeping
-			// it would just relocate the collision instead of repairing it.
+			// Not observed in practice; guarded because a repeated call_id
+			// would otherwise reach the provider as two tool_calls/tool_use
+			// entries sharing one id. Warn (not Debug) so it surfaces if it
+			// ever does happen.
 			if id != "" && callIDSeen[id] {
-				logrus.Debugf("RepairResponsesToolCalls: duplicate function_call call_id %q; dropping repeat", id)
+				logrus.Warnf("RepairResponsesToolCalls: duplicate function_call call_id %q; dropping repeat", id)
 				continue
 			}
 			callIDSeen[id] = true
