@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -37,14 +38,20 @@ type ModelInfo struct {
 	Context     int    `json:"context,omitempty"`
 	MaxOutput   int    `json:"max_output,omitempty"`
 
-	// OpenAIEndpoint overrides which OpenAI endpoint THIS model uses, for a
-	// template whose catalog mixes vendors (OpenCode Zen: most models are
-	// Chat-only, a few are Responses-only) — a fact
-	// ProviderTemplate.OpenAIEndpointMode can't express since it's one value
-	// per provider. "" means no override. Static and hand-maintained: an
-	// unlisted model just falls through to the provider default (see
-	// .design/openai-endpoint-routing.md §10). Values: "chat" or "responses".
-	OpenAIEndpoint string `json:"openai_endpoint,omitempty"`
+	// OpenAIEndpoints declares which OpenAI endpoint(s) THIS model supports,
+	// for a template whose catalog mixes vendors (OpenCode Zen: most models
+	// are Chat-only, a few are Responses-only, and some may support both) —
+	// a fact ProviderTemplate.OpenAIEndpointMode can't express since it's one
+	// value per provider. A list rather than a single value so a model that
+	// answers on both endpoints can say so, instead of only ever declaring
+	// one. Empty means no declaration for this model: falls through exactly
+	// as if this field didn't exist (defers to the provider default, which
+	// resolves to Chat unless the provider itself declares otherwise). Static
+	// and hand-maintained: an unlisted model just falls through to the
+	// provider default (see .design/openai-endpoint-routing.md §10). Values:
+	// any subset of "chat", "responses"; unrecognized entries are ignored so
+	// a typo degrades to "no declaration" rather than a wrong route.
+	OpenAIEndpoints []string `json:"openai_endpoints,omitempty"`
 }
 
 // NamingRules defines the naming conventions for provider IDs
@@ -868,35 +875,53 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 	return constant.DefaultMaxTokens
 }
 
-// GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoint for this
-// model on this provider's template. "" means no override — resolve exactly
-// as if this function didn't exist. Matched by template like
+// GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoints for
+// this model on this provider's template and returns the mode it declares.
+// ai.EndpointModeUnknown means no declaration — resolve exactly as if this
+// function didn't exist. Matched by template like
 // GetMaxTokensForModelByProvider, so it works regardless of the provider's
 // display name.
-func (tm *TemplateManager) GetOpenAIEndpointOverrideForModel(provider *typ.Provider, model string) protocol.APIType {
+func (tm *TemplateManager) GetOpenAIEndpointOverrideForModel(provider *typ.Provider, model string) ai.OpenAIEndpointMode {
 	if tm == nil || provider == nil || model == "" {
-		return ""
+		return ai.EndpointModeUnknown
 	}
 	tmpl := tm.findTemplateByProvider(provider)
 	if tmpl == nil {
-		return ""
+		return ai.EndpointModeUnknown
 	}
 	for _, m := range tmpl.Models {
 		if m.ID != model {
 			continue
 		}
-		switch m.OpenAIEndpoint {
+		return openAIEndpointModeFromList(m.OpenAIEndpoints)
+	}
+	return ai.EndpointModeUnknown
+}
+
+// openAIEndpointModeFromList folds a ModelInfo.OpenAIEndpoints list into the
+// single ai.OpenAIEndpointMode the resolver already understands. Unrecognized
+// entries are ignored, so a typo in the data file degrades to "no
+// declaration" for that entry rather than a wrong route.
+func openAIEndpointModeFromList(endpoints []string) ai.OpenAIEndpointMode {
+	var hasChat, hasResponses bool
+	for _, e := range endpoints {
+		switch e {
 		case "chat":
-			return protocol.TypeOpenAIChat
+			hasChat = true
 		case "responses":
-			return protocol.TypeOpenAIResponses
-		default:
-			// Empty or an unrecognized value: no override. A typo in the data
-			// file degrades to "resolve as usual", never to a wrong endpoint.
-			return ""
+			hasResponses = true
 		}
 	}
-	return ""
+	switch {
+	case hasChat && hasResponses:
+		return ai.EndpointModeBoth
+	case hasResponses:
+		return ai.EndpointModeResponses
+	case hasChat:
+		return ai.EndpointModeChat
+	default:
+		return ai.EndpointModeUnknown
+	}
 }
 
 // GetWebSearchSchemaForProvider returns the web search capability schema for a provider

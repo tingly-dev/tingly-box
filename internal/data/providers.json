@@ -2755,15 +2755,15 @@
         },
         {
           "id": "grok-4.5",
-          "openai_endpoint": "responses"
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "grok-4.6",
-          "openai_endpoint": "responses"
+          "openai_endpoints": ["responses"]
         },
         {
           "id": "gpt-5.6-luna",
-          "openai_endpoint": "responses"
+          "openai_endpoints": ["responses"]
         }
       ],
       "supports_models_endpoint": true,

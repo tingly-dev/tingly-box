@@ -27,16 +27,19 @@ const (
 // Precedence:
 //
 //  1. Rule flag (flags.OpenAIEndpointOverride). Overrides everything below.
-//  2. modelOverride: a per-model table entry (data.ModelInfo.OpenAIEndpoint)
+//  2. modelOverride: a per-model table entry (data.ModelInfo.OpenAIEndpoints)
 //     for relays whose catalog mixes vendors, which provider.OpenAIEndpointMode
-//     can't express (one value per provider). "" means no entry for this
-//     model. The caller looks it up (data.TemplateManager) and passes it in,
-//     keeping this function pure.
-//  3. provider.OpenAIEndpointMode:
-//     EndpointModeUnknown / zero value → Chat
-//     EndpointModeChat                 → Chat
-//     EndpointModeResponses            → Responses
-//     EndpointModeBoth                 → mirror incoming
+//     can't express (one value per provider). ai.EndpointModeUnknown means no
+//     entry for this model. The caller looks it up (data.TemplateManager) and
+//     passes it in, keeping this function pure.
+//  3. provider.OpenAIEndpointMode.
+//
+// Both #2 and #3 resolve through the same rule (see resolveEndpointMode):
+//
+//	EndpointModeUnknown / zero value → Chat
+//	EndpointModeChat                 → Chat
+//	EndpointModeResponses            → Responses
+//	EndpointModeBoth                 → mirror incoming
 //
 // Rule override is honored unconditionally (per design intent). When an override
 // conflicts with the provider's declared mode, a warning is logged but the override
@@ -52,7 +55,7 @@ const (
 // Anthropic→Chat downgrades. The user accepts this by declaring the mode.
 //
 // Pure function: no Server state, no probe lookups, no I/O.
-func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, modelOverride protocol.APIType) (protocol.APIType, error) {
+func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, modelOverride ai.OpenAIEndpointMode) (protocol.APIType, error) {
 	if provider == nil {
 		return "", fmt.Errorf("provider is required for endpoint selection")
 	}
@@ -76,21 +79,29 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 	}
 
 	// Per-model table entry (see precedence #2 above).
-	if modelOverride != "" {
-		return modelOverride, nil
+	if modelOverride != ai.EndpointModeUnknown {
+		return resolveEndpointMode(modelOverride, incoming), nil
 	}
 
 	// Fall back to provider mode when no override specified
+	return resolveEndpointMode(mode, incoming), nil
+}
+
+// resolveEndpointMode maps a declared OpenAIEndpointMode — either the
+// provider's own or a per-model table entry — plus the incoming protocol to a
+// concrete upstream endpoint. Shared by both layers so "both means mirror
+// incoming" is defined exactly once.
+func resolveEndpointMode(mode ai.OpenAIEndpointMode, incoming IncomingAPIType) protocol.APIType {
 	switch mode {
 	case ai.EndpointModeResponses:
-		return protocol.TypeOpenAIResponses, nil
+		return protocol.TypeOpenAIResponses
 	case ai.EndpointModeBoth:
 		if incoming == IncomingAPIResponses {
-			return protocol.TypeOpenAIResponses, nil
+			return protocol.TypeOpenAIResponses
 		}
-		return protocol.TypeOpenAIChat, nil
-	default: // EndpointModeChat / zero value
-		return protocol.TypeOpenAIChat, nil
+		return protocol.TypeOpenAIChat
+	default: // EndpointModeChat / EndpointModeUnknown
+		return protocol.TypeOpenAIChat
 	}
 }
 

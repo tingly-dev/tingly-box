@@ -15,7 +15,7 @@ import (
 )
 
 // TestE2E_OpenCodeModelTable_MatchesLiveUpstream proves the static table
-// (data.ModelInfo.OpenAIEndpoint in providers.json) still agrees with the real
+// (data.ModelInfo.OpenAIEndpoints in providers.json) still agrees with the real
 // OpenCode Zen upstream: a "responses" entry (gpt-5.6-luna) rejects Chat and
 // answers on Responses, and a model with no entry (kimi-k3) is plain Chat.
 // The table is hand-maintained and only as good as the day it was measured
@@ -57,10 +57,10 @@ func TestE2E_OpenCodeModelTable_MatchesLiveUpstream(t *testing.T) {
 
 	tests := []struct {
 		model        string
-		wantOverride protocol.APIType
+		wantOverride ai.OpenAIEndpointMode
 	}{
-		{"gpt-5.6-luna", protocol.TypeOpenAIResponses},
-		{"kimi-k3", ""},
+		{"gpt-5.6-luna", ai.EndpointModeResponses},
+		{"kimi-k3", ai.EndpointModeUnknown},
 	}
 
 	for _, tt := range tests {
@@ -75,7 +75,7 @@ func TestE2E_OpenCodeModelTable_MatchesLiveUpstream(t *testing.T) {
 				t.Fatal("no client for provider")
 			}
 
-			if override == protocol.TypeOpenAIResponses {
+			if override == ai.EndpointModeResponses {
 				resp, err := oc.ResponsesNew(ctx, responses.ResponseNewParams{
 					Model:           responses.ResponsesModel(tt.model),
 					MaxOutputTokens: openai.Int(8),

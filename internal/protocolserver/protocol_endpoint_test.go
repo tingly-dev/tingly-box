@@ -18,7 +18,7 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 		provider      *typ.Provider
 		flags         typ.RuleFlags
 		incoming      IncomingAPIType
-		modelOverride protocol.APIType
+		modelOverride ai.OpenAIEndpointMode
 		want          protocol.APIType
 	}{
 		// Default mode (chat) — provider ignores client's incoming API
@@ -109,20 +109,20 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			want:     protocol.TypeOpenAIResponses,
 		},
 
-		// Per-model table entry (data.ModelInfo.OpenAIEndpoint, looked up by
+		// Per-model table entry (data.ModelInfo.OpenAIEndpoints, looked up by
 		// the caller and passed in as modelOverride).
 		{
 			name:          "model override wins over the chat-only provider default",
 			provider:      chatOnly,
 			incoming:      IncomingAPIChat,
-			modelOverride: protocol.TypeOpenAIResponses,
+			modelOverride: ai.EndpointModeResponses,
 			want:          protocol.TypeOpenAIResponses,
 		},
 		{
 			name:          "model override wins over the both-mode provider's mirroring",
 			provider:      both,
 			incoming:      IncomingAPIChat,
-			modelOverride: protocol.TypeOpenAIResponses,
+			modelOverride: ai.EndpointModeResponses,
 			want:          protocol.TypeOpenAIResponses,
 		},
 		{
@@ -130,15 +130,32 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			provider:      chatOnly,
 			flags:         typ.RuleFlags{OpenAIEndpointOverride: "chat"},
 			incoming:      IncomingAPIChat,
-			modelOverride: protocol.TypeOpenAIResponses,
+			modelOverride: ai.EndpointModeResponses,
 			want:          protocol.TypeOpenAIChat,
 		},
 		{
 			name:          "empty model override changes nothing",
 			provider:      chatOnly,
 			incoming:      IncomingAPIResponses,
-			modelOverride: "",
+			modelOverride: ai.EndpointModeUnknown,
 			want:          protocol.TypeOpenAIChat,
+		},
+		// Model declares both endpoints — same "mirror incoming" behavior as
+		// a both-mode provider, not whichever endpoint happens to be listed
+		// first in providers.json.
+		{
+			name:          "model override both mirrors chat incoming",
+			provider:      chatOnly,
+			incoming:      IncomingAPIChat,
+			modelOverride: ai.EndpointModeBoth,
+			want:          protocol.TypeOpenAIChat,
+		},
+		{
+			name:          "model override both mirrors responses incoming",
+			provider:      chatOnly,
+			incoming:      IncomingAPIResponses,
+			modelOverride: ai.EndpointModeBoth,
+			want:          protocol.TypeOpenAIResponses,
 		},
 	}
 

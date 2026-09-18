@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -757,7 +758,7 @@ func TestOpenCodeTemplateDisambiguation(t *testing.T) {
 }
 
 // TestGetOpenAIEndpointOverrideForModel exercises the per-model routing table
-// (data.ModelInfo.OpenAIEndpoint) end to end against the real embedded
+// (data.ModelInfo.OpenAIEndpoints) end to end against the real embedded
 // providers.json, so a future edit to that file that breaks the shape (or a
 // typo in the endpoint string) fails a test instead of surfacing as a live
 // 500 for whichever model it broke.
@@ -773,16 +774,16 @@ func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
 		name     string
 		provider *typ.Provider
 		model    string
-		want     protocol.APIType
+		want     ai.OpenAIEndpointMode
 	}{
-		{"responses-only model, confirmed live 2026-09-08", goProvider, "gpt-5.6-luna", protocol.TypeOpenAIResponses},
-		{"another responses-only model", goProvider, "grok-4.6", protocol.TypeOpenAIResponses},
-		{"grok-4.5 annotated in place", goProvider, "grok-4.5", protocol.TypeOpenAIResponses},
-		{"chat-only model has no override", goProvider, "kimi-k3", ""},
-		{"model absent from the table", goProvider, "some-future-model", ""},
-		{"unrelated provider, same model id would be a false positive if host-gating broke", &typ.Provider{APIBase: "https://api.openai.com/v1"}, "gpt-5.6-luna", ""},
-		{"nil provider", nil, "gpt-5.6-luna", ""},
-		{"empty model", goProvider, "", ""},
+		{"responses-only model, confirmed live 2026-09-08", goProvider, "gpt-5.6-luna", ai.EndpointModeResponses},
+		{"another responses-only model", goProvider, "grok-4.6", ai.EndpointModeResponses},
+		{"grok-4.5 annotated in place", goProvider, "grok-4.5", ai.EndpointModeResponses},
+		{"chat-only model has no override", goProvider, "kimi-k3", ai.EndpointModeUnknown},
+		{"model absent from the table", goProvider, "some-future-model", ai.EndpointModeUnknown},
+		{"unrelated provider, same model id would be a false positive if host-gating broke", &typ.Provider{APIBase: "https://api.openai.com/v1"}, "gpt-5.6-luna", ai.EndpointModeUnknown},
+		{"nil provider", nil, "gpt-5.6-luna", ai.EndpointModeUnknown},
+		{"empty model", goProvider, "", ai.EndpointModeUnknown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -793,9 +794,30 @@ func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
 	}
 }
 
+// TestGetOpenAIEndpointOverrideForModel_BothEndpoints proves a model that
+// declares both endpoints resolves to EndpointModeBoth, the same "mirror
+// incoming" mode a provider-level declaration uses — not to whichever of
+// "chat"/"responses" happened to be listed first.
+func TestGetOpenAIEndpointOverrideForModel_BothEndpoints(t *testing.T) {
+	tm := &TemplateManager{
+		templates: map[string]*ProviderTemplate{
+			"t": {
+				ID:              "t",
+				CanonicalDomain: "example.invalid",
+				BaseURLOpenAI:   "https://example.invalid/v1",
+				Models:          []ModelInfo{{ID: "m", OpenAIEndpoints: []string{"chat", "responses"}}},
+			},
+		},
+	}
+	provider := &typ.Provider{APIBase: "https://example.invalid/v1"}
+	if got := tm.GetOpenAIEndpointOverrideForModel(provider, "m"); got != ai.EndpointModeBoth {
+		t.Errorf("got %q, want %q", got, ai.EndpointModeBoth)
+	}
+}
+
 // TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue proves a typo in
 // providers.json degrades to "no override" instead of crashing or silently
-// routing to whichever protocol.APIType a bad string coerces to.
+// routing to whichever mode a bad string coerces to.
 func TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue(t *testing.T) {
 	tm := &TemplateManager{
 		templates: map[string]*ProviderTemplate{
@@ -803,12 +825,12 @@ func TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue(t *testing.T) {
 				ID:              "t",
 				CanonicalDomain: "example.invalid",
 				BaseURLOpenAI:   "https://example.invalid/v1",
-				Models:          []ModelInfo{{ID: "m", OpenAIEndpoint: "carrier-pigeon"}},
+				Models:          []ModelInfo{{ID: "m", OpenAIEndpoints: []string{"carrier-pigeon"}}},
 			},
 		},
 	}
 	provider := &typ.Provider{APIBase: "https://example.invalid/v1"}
-	if got := tm.GetOpenAIEndpointOverrideForModel(provider, "m"); got != "" {
-		t.Errorf("got %q for an unrecognized openai_endpoint value, want no override", got)
+	if got := tm.GetOpenAIEndpointOverrideForModel(provider, "m"); got != ai.EndpointModeUnknown {
+		t.Errorf("got %q for an unrecognized openai_endpoints value, want no override", got)
 	}
 }
