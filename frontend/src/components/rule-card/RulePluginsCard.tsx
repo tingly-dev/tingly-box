@@ -98,7 +98,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
-                <Tooltip title="Configure rule plugins">
+                <Tooltip title="Configure plugins">
                     <AddIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 </Tooltip>
             </Stack>

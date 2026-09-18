@@ -4,7 +4,10 @@ import { PlayArrow as RunIcon, TestPipe as BenchIcon } from '@/components/icons'
 import { useTranslation } from 'react-i18next';
 import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';
-import type { FlagSpec } from '@/components/RoutingGraphTypes';
+import type { FlagSpec, RuleFlagsApi } from '@/components/RoutingGraphTypes';
+import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
+import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
+import { apiToFlags, flagsToApi } from '@/components/rule-card/flagHelpers';
 import type { Provider } from '@/types/provider';
 import type { ProbeRequest, ProbeResult } from '@/types/probe';
 import { runProbe, buildProbeCurl, type ProbeCurlResult } from '@/components/probe/runProbe';
@@ -27,7 +30,6 @@ import {
 import { useTargetCatalog } from './useTargetCatalog';
 import { TargetPicker } from './TargetPicker';
 import { BenchAxes, useAxisAvailability, type RequestMode } from './BenchAxes';
-import { PluginsPanel, type FlagBaseline } from './PluginsPanel';
 import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
@@ -35,7 +37,8 @@ import { RunHistory } from './RunHistory';
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
 // Compose (what do I send?) · Conversation + Result (what happened?) ·
-// Payload (what actually goes out?). Every knob is resident. Bench targets a
+// Payload (what actually goes out?). Request axes stay resident; Plugins uses
+// the same compact card and catalog as the routing graph. Bench targets a
 // real provider model directly — no Rule/deep-link jump-in from elsewhere;
 // it is reached only through its own nav entry.
 
@@ -85,10 +88,6 @@ const Panel: React.FC<{ title: string; question: string; action?: React.ReactNod
     </Paper>
 );
 
-// A provider target has no rule/scenario to inherit flags from — every row
-// starts uninherited, and the overlay is the whole story for this request.
-const EMPTY_BASELINE: FlagBaseline = { values: {}, sources: {} };
-
 const BenchPage: React.FC = () => {
     const { t } = useTranslation();
     const catalog = useTargetCatalog();
@@ -96,6 +95,7 @@ const BenchPage: React.FC = () => {
     const [state, setState] = useState<BenchState>(() => loadState() ?? cloneState(DEFAULT_STATE));
     const [registry, setRegistry] = useState<FlagSpec[]>([]);
     const [registryLoading, setRegistryLoading] = useState(true);
+    const [pluginCatalogOpen, setPluginCatalogOpen] = useState(false);
     const [running, setRunning] = useState(false);
     const [shown, setShown] = useState<{ result: ProbeResult; snapshot: BenchState } | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -143,6 +143,11 @@ const BenchPage: React.FC = () => {
     const built = useMemo(() => buildProbeRequest(state), [state]);
     const request = built.request;
     const direct = isDirect(state);
+    const pluginFlags = useMemo(() => apiToFlags(state.flags as RuleFlagsApi), [state.flags]);
+
+    useEffect(() => {
+        if (direct) setPluginCatalogOpen(false);
+    }, [direct]);
 
     // Protocols a hand-written request may be in for this target: whatever
     // the provider speaks.
@@ -284,15 +289,36 @@ const BenchPage: React.FC = () => {
                         </Stack>
                     </Panel>
                     <Panel title={t('bench.plugins', { defaultValue: 'Plugins' })} question={t('bench.pluginsQ', { defaultValue: 'flag overlay · this request only' })}>
-                        <PluginsPanel
-                            registry={registry}
-                            loading={registryLoading}
-                            baseline={EMPTY_BASELINE}
-                            overlay={state.flags}
-                            onChange={(flags) => patch({ flags })}
-                            disabled={direct}
-                        />
+                        <Stack spacing={1}>
+                            {direct && (
+                                <Typography variant="caption" sx={{ color: 'warning.main', display: 'block', lineHeight: 1.4 }}>
+                                    {t('bench.pluginsDirect', { defaultValue: 'Direct bypasses TB. Flags are TB middleware, so they cannot apply here — switch Scope to “Through TB” to test flags.' })}
+                                </Typography>
+                            )}
+                            <Box sx={{ display: 'flex', justifyContent: 'center', pointerEvents: direct ? 'none' : 'auto' }}>
+                                <RulePluginsCard
+                                    flags={pluginFlags}
+                                    registry={registry}
+                                    active={!direct}
+                                    onOpenCatalog={() => {
+                                        if (!direct) setPluginCatalogOpen(true);
+                                    }}
+                                />
+                            </Box>
+                        </Stack>
                     </Panel>
+                    <FlagCatalogDialog
+                        open={pluginCatalogOpen}
+                        flags={pluginFlags}
+                        registry={registry}
+                        loading={registryLoading}
+                        providers={catalog.providers}
+                        onClose={() => setPluginCatalogOpen(false)}
+                        onSave={(next) => {
+                            patch({ flags: { ...flagsToApi(next) } });
+                            setPluginCatalogOpen(false);
+                        }}
+                    />
                 </Stack>
 
                 {/* ② the request itself · ③ what happened? */}

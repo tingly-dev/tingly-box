@@ -45,9 +45,8 @@ export const railGroupStyle = {
 
 // AxisGroup: a small overline + divider header, splitting a stack of Axis
 // rows into the two kinds an axis actually is — never by how often it's
-// touched (that's what the dialog's Advanced fold already does). Same visual
-// language as PluginsPanel's flag categories, so the two panels read as one
-// system (.design/bench.md §1 "四种归类").
+// touched (that's what the dialog's Advanced fold already does). The divider
+// keeps the two axis kinds readable as one Compose sequence (.design/bench.md §1 "四种归类").
 //
 //   Parameters — a real, independently-valued field of the request (Stream,
 //   Thinking, Protocol). Turning it doesn't inject or remove any content.
