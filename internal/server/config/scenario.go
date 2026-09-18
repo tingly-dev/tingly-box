@@ -187,28 +187,19 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.SmartCompact = value
 	case constant.FlagSkipUsage:
 		config.Flags.SkipUsage = value
-	case constant.ExtensionSkillUser:
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions[constant.ExtensionSkillUser] = value
-	case constant.ExtensionSkillIDE:
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions[constant.ExtensionSkillIDE] = value
-	case constant.ExtensionGuardrails:
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions[constant.ExtensionGuardrails] = value
-	case constant.ExtensionMCP:
-		if config.Extensions == nil {
-			config.Extensions = make(map[string]interface{})
-		}
-		config.Extensions[constant.ExtensionMCP] = value
 	default:
-		return fmt.Errorf("unknown flag name: %s", flagName)
+		// Any other flag name is a generic boolean toggle stored in the
+		// Extensions map (mirrors GetScenarioFlag's default fallback), gated
+		// by the KnownExtensionBoolFlags registry so a typo'd flag name still
+		// fails loudly instead of silently creating an orphan key. Adding a
+		// new toggle only means adding it to that registry — no case here.
+		if !constant.KnownExtensionBoolFlags[flagName] {
+			return fmt.Errorf("unknown flag name: %s", flagName)
+		}
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions[flagName] = value
 	}
 
 	return c.Save()

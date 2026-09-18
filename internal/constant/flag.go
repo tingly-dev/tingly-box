@@ -36,4 +36,35 @@ const (
 	ExtensionMCP                = "mcp"
 	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
+	ExtensionBench              = "bench"
 )
+
+// KnownExtensionBoolFlags is the single source of truth for which
+// Extensions-map keys are a settable/readable bool toggle through
+// Config.GetScenarioFlag / Config.SetScenarioFlag's generic fallback (the
+// default case for anything that isn't one of the typed ScenarioFlags
+// fields above). Adding a new global on/off feature toggle (e.g. a new row
+// in frontend/src/components/GlobalExperimentalFeatures.tsx) means adding
+// one key here — the getter and setter both pick it up automatically, with
+// no switch/case to remember to touch on the backend.
+//
+// This existed as an asymmetry before: GetScenarioFlag already fell back to
+// reading any key out of Extensions (defaulting to false when absent), but
+// SetScenarioFlag required an explicit `case constant.ExtensionXxx:` for
+// every key or it rejected the write with "unknown flag name" — so a flag
+// could be read (silently false) but never turned on until someone
+// remembered to add its case. That's what broke the bench flag on launch
+// and had bitten skill_user/skill_ide/guardrails/mcp before it (see
+// TestProfileScenarioFlagWriteInheritsBaseConfig's history). This map
+// closes that gap by making both directions read the same registry.
+//
+// vision_proxy_service is deliberately excluded: it stores a structured
+// object (provider/model selection), not a bool, and is read directly off
+// ScenarioConfig.Extensions rather than through Get/SetScenarioFlag.
+var KnownExtensionBoolFlags = map[string]bool{
+	ExtensionGuardrails: true,
+	ExtensionMCP:        true,
+	ExtensionSkillUser:  true,
+	ExtensionSkillIDE:   true,
+	ExtensionBench:      true,
+}

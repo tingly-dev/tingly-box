@@ -152,6 +152,58 @@ func TestProfileScenarioFlagWriteInheritsBaseConfig(t *testing.T) {
 	}
 }
 
+// TestSetScenarioFlag_KnownExtensionBoolFlags round-trips every key in
+// constant.KnownExtensionBoolFlags through Set/GetScenarioFlag. This is the
+// registry SetScenarioFlag's default case validates against instead of a
+// per-flag switch/case (see internal/constant/flag.go) — a flag missing from
+// this map is exactly the bug that shipped the bench toggle broken (Set
+// rejected it with "unknown flag name" while Get silently read back false),
+// so this test fails immediately if a future flag is added to the registry
+// but the round trip doesn't actually persist.
+func TestSetScenarioFlag_KnownExtensionBoolFlags(t *testing.T) {
+	for flagName := range constant.KnownExtensionBoolFlags {
+		t.Run(flagName, func(t *testing.T) {
+			cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+			if err != nil {
+				t.Fatalf("NewConfig error: %v", err)
+			}
+
+			if v := cfg.GetScenarioFlag(typ.ScenarioGlobal, flagName); v {
+				t.Fatalf("expected default value false before any write, got true")
+			}
+
+			if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, flagName, true); err != nil {
+				t.Fatalf("SetScenarioFlag(%q, true) error: %v", flagName, err)
+			}
+			if v := cfg.GetScenarioFlag(typ.ScenarioGlobal, flagName); !v {
+				t.Errorf("GetScenarioFlag(%q) = false after SetScenarioFlag(true)", flagName)
+			}
+
+			if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, flagName, false); err != nil {
+				t.Fatalf("SetScenarioFlag(%q, false) error: %v", flagName, err)
+			}
+			if v := cfg.GetScenarioFlag(typ.ScenarioGlobal, flagName); v {
+				t.Errorf("GetScenarioFlag(%q) = true after SetScenarioFlag(false)", flagName)
+			}
+		})
+	}
+}
+
+// TestSetScenarioFlag_UnknownFlagRejected verifies an unregistered flag name
+// (a typo, or a flag key that's meant to be handled some other way, like
+// vision_proxy_service's structured value) is rejected loudly by the setter
+// rather than silently swallowed into Extensions.
+func TestSetScenarioFlag_UnknownFlagRejected(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, "totally_made_up_flag", true); err == nil {
+		t.Fatalf("expected an error for an unregistered flag name, got nil")
+	}
+}
+
 // TestBuiltInRulesSessionAffinity verifies the built-in Claude Code / Desktop /
 // Codex rules seed session_affinity to the 30-min default, while other built-in
 // rules leave it disabled.
