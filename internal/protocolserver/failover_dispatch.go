@@ -64,7 +64,7 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Message: err.Error(),
+			Message: protocol.UpstreamMessage(err),
 			Type:    "api_error",
 		},
 	})

@@ -2,6 +2,7 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,6 +11,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestBuildErrorEvent verifies the event shape and that the "type" field is
+// always "stream_error" (no longer a parameter — every call site across the
+// codebase passed that same literal) while message/code come from err/code.
+// The SDK-error/transport-error classification cases are
+// protocol.UpstreamMessage's own responsibility, covered in that package.
+func TestBuildErrorEvent(t *testing.T) {
+	err := errors.New("boom")
+	got := BuildErrorEvent(err, "stream_failed")
+	want := map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"message": "boom",
+			"type":    "stream_error",
+			"code":    "stream_failed",
+		},
+	}
+	assert.Equal(t, want, got)
+}
 
 type recorderFlusher struct {
 	*httptest.ResponseRecorder

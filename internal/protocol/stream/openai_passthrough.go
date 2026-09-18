@@ -257,7 +257,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
-				"message": err.Error(),
+				"message": protocol.UpstreamMessage(err),
 				"type":    "stream_error",
 				"code":    "stream_failed",
 			},
@@ -456,7 +456,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		}
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
-				"message": err.Error(),
+				"message": protocol.UpstreamMessage(err),
 				"type":    "stream_error",
 				"code":    "stream_failed",
 			},

@@ -17,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -148,12 +149,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward image generation request: %v", err)
-		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to forward request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
+		stream.SendForwardingError(c, err)
 		return
 	}
 
