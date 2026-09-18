@@ -217,3 +217,56 @@ so both representations reduce to a byte-identical `instructions`. It used to
 trim each part and join with `\n\n`, which meant the two paths produced
 different instruction strings and a flip invalidated the entire prefix, not just
 its tail.
+
+### Assistant content needs `output_text`, not `input_text`
+
+Making the part-list form unconditional (above) turned a latent bug into a
+guaranteed one. `responsesTextParts`/`responsesInputTextPart` were written for
+*input*-side content — user and system messages — and hardcode
+`type: "input_text"`. Before the unconditional form, an assistant message only
+took the part-list path when a cache breakpoint happened to sit on it, which
+was rare (Claude Code's rolling breakpoints seldom land on assistant turns),
+so the mismatch stayed latent. Once every assistant message with text went
+through the same builder regardless of breakpoints, so did the mismatch — and
+Codex's Responses API rejects `input_text` on assistant-authored content
+outright:
+
+```
+Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'.
+param: input[N].content[0]
+```
+
+Fixed by giving assistant text its own path in both directions:
+
+- `responsesOutputTextParts` (`cache_control.go`) is the assistant-side
+  counterpart to `responsesTextParts`: it emits `output_text` parts inside an
+  `output_message` item (`ResponseInputItemParamOfOutputMessage`), not a
+  `message` item. `ResponseOutputTextParam` has no `prompt_cache_breakpoint`
+  field at all, so a breakpoint on an assistant text block is dropped here
+  rather than mismatched — this is an inherent Responses API limitation
+  (breakpoints only exist on input-side `input_text`/`input_image`), not a
+  gateway gap, and the round trip back does not recover it.
+- The reverse converters (`openai_responses_to_anthropic.go`,
+  `openai_responses_to_chat.go`) had no case for `OfOutputMessage` at all —
+  it fell through their item-type switch silently, **dropping the whole
+  assistant turn**. Added `convertResponsesOutputMessageToAnthropicBeta` /
+  `outputMessageText`.
+- The Chat→Responses path (`convertChatAssistantMessageToResponses`) had the
+  same latent bug, behind its own cache-breakpoint condition, and emitted a
+  *different* valid shape besides (`EasyInputMessage` plain-string
+  shorthand) even once fixed. It now also emits `output_message` for
+  assistant text, matching the Anthropic→Responses shape — two different but
+  both-valid wire forms for "assistant history item" is exactly the kind of
+  inconsistency that let this bug class happen twice, independently, and
+  would bite a future shared helper that assumed one of them.
+
+**Coverage gap this exposed:** the `cache_prefix` harness section (§10.4)
+validates that two consecutive requests serialize to the same *shape* — it
+does not validate that the shape is *legal* per the role it's attached to. A
+regression that mis-tags assistant content as `input_text` again would
+serialize identically turn over turn (stable, just wrong) and `cache_prefix`
+would report success while the real Responses API 400s on it. Today only the
+unit tests in `internal/protocol/request` (`cache_control_family_test.go`,
+`openai_chat_to_openai_responses_test.go`) catch this class of bug; extending
+the harness to assert role-appropriate content types is unstarted.
+

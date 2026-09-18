@@ -769,3 +769,18 @@ Run it with:
 go test ./internal/protocoltest -run TestCachePrefix -count=1
 go run ./cli/harness matrix --mode=cache_prefix
 ```
+
+#### Known gap: shape stability, not wire-schema legality
+
+This suite proves a converted body's *shape* does not drift between
+consecutive requests — it does not prove that shape is *legal* for the role
+it's attached to. The mock Responses endpoint behind the matrix binds only
+`{Model, Stream, Input}` and never checks a content part's `type` against its
+item's `role`, so a regression that tags assistant-authored content
+`input_text` instead of `output_text` (see `protocol-responses.md`'s
+"Assistant content needs `output_text`, not `input_text`") would serialize
+identically turn over turn — stable, just wrong — and this suite would report
+success while the real Responses API 400s. Only the unit tests in
+`internal/protocol/request` catch that class of bug today.
+
+
