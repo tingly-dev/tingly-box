@@ -153,7 +153,7 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		assert.Equal(t, `{"location":"NYC"}`, fnCall.Arguments)
 	})
 
-	t.Run("assistant text survives beside tool call, cache breakpoint dropped", func(t *testing.T) {
+	t.Run("assistant text survives beside tool call", func(t *testing.T) {
 		// A cache breakpoint on assistant text has no output_text equivalent
 		// (the Responses API only accepts input_text with a breakpoint on
 		// user/system input, and rejects input_text entirely on
