@@ -72,6 +72,11 @@ func responsesOutputTextParts(blocks []anthropic.TextBlockParam) []responses.Res
 // applyFirstResponsesCacheBreakpoint carries an Anthropic cache boundary that
 // Responses cannot attach directly (for example, on a tool definition or tool
 // call). The boundary advances to the first cacheable content block.
+//
+// Every user/system message.OfMessage item this package builds is already the
+// content-part array form (the cache-shape invariant, above), never the
+// plain-string form, so the loop below only ever has to add a breakpoint to
+// an existing part.
 func applyFirstResponsesCacheBreakpoint(req *responses.ResponseNewParams) {
 	if req.Instructions.Valid() && req.Instructions.Value != "" {
 		text := &responses.ResponseInputTextParam{
@@ -88,29 +93,18 @@ func applyFirstResponsesCacheBreakpoint(req *responses.ResponseNewParams) {
 
 	for i := range req.Input.OfInputItemList {
 		item := &req.Input.OfInputItemList[i]
-		if item.OfMessage != nil {
-			content := &item.OfMessage.Content
-			if content.OfString.Valid() && content.OfString.Value != "" {
-				text := &responses.ResponseInputTextParam{
-					Text:                  content.OfString.Value,
-					PromptCacheBreakpoint: responses.NewResponseInputTextPromptCacheBreakpointParam(),
-				}
-				content.OfString = param.Opt[string]{}
-				content.OfInputItemContentList = responses.ResponseInputMessageContentListParam{
-					{OfInputText: text},
-				}
+		if item.OfMessage == nil {
+			continue
+		}
+		for j := range item.OfMessage.Content.OfInputItemContentList {
+			part := &item.OfMessage.Content.OfInputItemContentList[j]
+			if part.OfInputText != nil {
+				part.OfInputText.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
 				return
 			}
-			for j := range content.OfInputItemContentList {
-				part := &content.OfInputItemContentList[j]
-				if part.OfInputText != nil {
-					part.OfInputText.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-					return
-				}
-				if part.OfInputImage != nil {
-					part.OfInputImage.PromptCacheBreakpoint = responses.NewResponseInputImagePromptCacheBreakpointParam()
-					return
-				}
+			if part.OfInputImage != nil {
+				part.OfInputImage.PromptCacheBreakpoint = responses.NewResponseInputImagePromptCacheBreakpointParam()
+				return
 			}
 		}
 	}

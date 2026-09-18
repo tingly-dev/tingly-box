@@ -621,30 +621,23 @@ func viewHasToolUseCacheControl(view anthropicRequestView) bool {
 	return false
 }
 
+// applyFirstOpenAICacheBreakpoint carries an Anthropic cache boundary that
+// Chat cannot attach directly (for example, on a tool definition or tool
+// call) onto the first cacheable content part. Every system/user message this
+// converter builds is already the content-part array form (the cache-shape
+// invariant — see cache_control.go), never the plain-string form, so this
+// only ever has to add a breakpoint to an existing part.
 func applyFirstOpenAICacheBreakpoint(req *openai.ChatCompletionNewParams) {
 	for i := range req.Messages {
 		msg := &req.Messages[i]
 		switch {
 		case msg.OfSystem != nil:
-			if text := msg.OfSystem.Content.OfString.Value; text != "" {
-				msg.OfSystem.Content.OfString = param.Opt[string]{}
-				msg.OfSystem.Content.OfArrayOfContentParts = []openai.ChatCompletionContentPartTextParam{
-					openAITextPart(text, true),
-				}
-				return
-			}
 			if len(msg.OfSystem.Content.OfArrayOfContentParts) > 0 {
 				msg.OfSystem.Content.OfArrayOfContentParts[0].PromptCacheBreakpoint =
 					openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
 				return
 			}
 		case msg.OfUser != nil:
-			if text := msg.OfUser.Content.OfString.Value; text != "" {
-				msg.OfUser.Content.OfString = param.Opt[string]{}
-				part := openAITextPart(text, true)
-				msg.OfUser.Content.OfArrayOfContentParts = []openai.ChatCompletionContentPartUnionParam{{OfText: &part}}
-				return
-			}
 			for j := range msg.OfUser.Content.OfArrayOfContentParts {
 				part := &msg.OfUser.Content.OfArrayOfContentParts[j]
 				if part.OfText != nil {
