@@ -681,6 +681,15 @@ go test ./internal/protocoltest -run TestVendorTransforms -count=1
 go run ./cli/harness matrix --mode=vendor
 ```
 
+Alongside the allowlist itself, the section asserts the **wire shape of text
+content** per vendor: the compact string for everyone off the allowlist, the
+content-part array for those on it (`assertCapturedChatTextShape`). The
+converters emit the array unconditionally so a moving cache breakpoint cannot
+change an item's shape (§10.4), which makes the array the gateway's internal
+form — `compactOpenAIChatTextContent` picks the compatible wire form per vendor
+on the way out. Both branches are fixed per vendor; neither depends on where a
+breakpoint sat.
+
 ### 10.4 Cross-request prompt-cache suite (`cache_prefix.go`)
 
 §10.2 asks "does a cache marker survive one conversion?" — a property of a

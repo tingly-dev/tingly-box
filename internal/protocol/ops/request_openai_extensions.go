@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -25,6 +26,7 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 	nativeOpenAI := supportsExplicitPromptCache(host)
 	if !nativeOpenAI {
 		stripOpenAIPromptCacheFields(req)
+		compactOpenAIChatTextContent(req)
 	}
 
 	switch {
@@ -135,6 +137,91 @@ func stripTextPartBreakpoints(parts []openai.ChatCompletionContentPartTextParam)
 	for i := range parts {
 		parts[i].PromptCacheBreakpoint = openai.ChatCompletionContentPartTextPromptCacheBreakpointParam{}
 	}
+}
+
+// compactOpenAIChatTextContent collapses all-text content-part arrays back to
+// the plain string form. It runs immediately after stripOpenAIPromptCacheFields
+// and for the same set of providers — every vendor not confirmed to speak
+// OpenAI's gpt-5.6+ prompt-cache schema.
+//
+// The converters emit the content-part list unconditionally, because letting a
+// cache breakpoint decide an item's shape invalidates the upstream prompt cache
+// the turn a client rolls that breakpoint forward (see the cache-shape
+// invariant in internal/protocol/request/cache_control.go). That is the right
+// shape to carry *through* the gateway, but it is the richer of the two wire
+// forms, and an OpenAI-compatible vendor that only accepts a string for system,
+// assistant or tool content would reject every request.
+//
+// Once the breakpoints are stripped there is nothing left in the array form to
+// preserve, so the compact form is chosen — deterministically, from the content
+// alone. Both branches stay shape-stable: a breakpoint-free vendor always sees
+// strings, api.openai.com always sees parts. Parts are joined without a
+// separator, matching the concatenation the converters did before the arrays
+// became unconditional. Content holding anything but text (images, audio,
+// files) keeps the array, since the string form cannot express it.
+func compactOpenAIChatTextContent(req *openai.ChatCompletionNewParams) {
+	for i := range req.Messages {
+		msg := &req.Messages[i]
+		switch {
+		case msg.OfDeveloper != nil:
+			compactTextParts(&msg.OfDeveloper.Content.OfString, &msg.OfDeveloper.Content.OfArrayOfContentParts)
+		case msg.OfSystem != nil:
+			compactTextParts(&msg.OfSystem.Content.OfString, &msg.OfSystem.Content.OfArrayOfContentParts)
+		case msg.OfUser != nil:
+			compactUnionParts(&msg.OfUser.Content.OfString, &msg.OfUser.Content.OfArrayOfContentParts)
+		case msg.OfTool != nil:
+			compactUnionParts(&msg.OfTool.Content.OfString, &msg.OfTool.Content.OfArrayOfContentParts)
+		case msg.OfAssistant != nil:
+			compactAssistantParts(&msg.OfAssistant.Content.OfString, &msg.OfAssistant.Content.OfArrayOfContentParts)
+		}
+	}
+}
+
+// compactTextParts collapses a text-only part list (system, developer) into str.
+func compactTextParts(str *param.Opt[string], parts *[]openai.ChatCompletionContentPartTextParam) {
+	if len(*parts) == 0 {
+		return // already a string (or genuinely absent) — nothing to collapse
+	}
+	var text strings.Builder
+	for _, part := range *parts {
+		text.WriteString(part.Text)
+	}
+	*parts = nil
+	*str = openai.String(text.String())
+}
+
+// compactUnionParts collapses a part list (user, tool) into str, but only when
+// every part is text — an image or audio part has no string form.
+func compactUnionParts(str *param.Opt[string], parts *[]openai.ChatCompletionContentPartUnionParam) {
+	if len(*parts) == 0 {
+		return // already a string (or genuinely absent) — nothing to collapse
+	}
+	var text strings.Builder
+	for _, part := range *parts {
+		if part.OfText == nil {
+			return
+		}
+		text.WriteString(part.OfText.Text)
+	}
+	*parts = nil
+	*str = openai.String(text.String())
+}
+
+// compactAssistantParts is compactUnionParts for the assistant variant, whose
+// part union is a different type (text or refusal).
+func compactAssistantParts(str *param.Opt[string], parts *[]openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion) {
+	if len(*parts) == 0 {
+		return // already a string (or genuinely absent) — nothing to collapse
+	}
+	var text strings.Builder
+	for _, part := range *parts {
+		if part.OfText == nil {
+			return // a refusal part has no string form
+		}
+		text.WriteString(part.OfText.Text)
+	}
+	*parts = nil
+	*str = openai.String(text.String())
 }
 
 // ApplyCursorCompatContentNormalization flattens rich content in messages for

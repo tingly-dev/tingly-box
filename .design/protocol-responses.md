@@ -177,8 +177,18 @@ worth stating:
   has them stripped at the provider boundary, breakpoint placement now has
   **exactly zero** effect on the dispatched body. `TestCodexBodyIsStable-
   AcrossBreakpointRotation` asserts byte equality across every placement.
-- For native Responses and Chat providers the breakpoints still ship,
-  unchanged; they are now purely additive.
+- The array form is what travels *through* the gateway, not necessarily what
+  leaves it. It is the richer of the two Chat wire forms, and an
+  OpenAI-compatible vendor that only accepts a string for system, assistant or
+  tool content would reject it. So the same allowlist that strips the
+  breakpoints (`supportsExplicitPromptCache`) also collapses all-text content
+  back to a plain string on the way out — `compactOpenAIChatTextContent`.
+  Nothing is lost, because the breakpoints are already gone by then, and both
+  branches stay shape-stable: a breakpoint-free vendor always sees strings,
+  `api.openai.com` always sees parts. The `vendor` harness section
+  (`harness-matrix.md` §10.3) asserts both.
+- For native Responses and allowlisted Chat providers the breakpoints still
+  ship, unchanged; they are now purely additive.
   `TestResponsesShapeIsStableAcrossBreakpointRotation` asserts that stripping
   the cache directives leaves every placement identical, and the `cache_prefix`
   harness section asserts the same end-to-end through the real gateway for

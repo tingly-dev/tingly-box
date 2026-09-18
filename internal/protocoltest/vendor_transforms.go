@@ -137,6 +137,44 @@ func runVendorTransformCase(t flagTB, env *TestEnv, fx vendorFixture, streaming 
 		sendCacheControlBody(t, env, source, target, s.Name, model, streaming, cached)
 		wantCached := cached && fx.wantsExplicitPromptCache
 		assertCapturedCacheState(t, env, target, wantCached, label)
+		// The wire shape of text content follows the same allowlist: a vendor
+		// that cannot take the breakpoints has no use for the content-part
+		// array either, and some reject it outright. See
+		// compactOpenAIChatTextContent.
+		assertCapturedChatTextShape(t, env, !fx.wantsExplicitPromptCache, label)
+	}
+}
+
+// assertCapturedChatTextShape checks how text-only message content reached the
+// vendor: the compact string for everyone off the explicit-prompt-cache
+// allowlist, the content-part array for those on it. Either way the shape is
+// fixed per vendor and never depends on where a cache breakpoint sat — the
+// property the cache_prefix section checks end-to-end.
+func assertCapturedChatTextShape(t flagTB, env *TestEnv, wantCompact bool, label string) {
+	t.Helper()
+	captured := env.virtual.LastRequest(EndpointChat)
+	if captured == nil {
+		t.Fatalf("%s: final provider received no chat request", label)
+	}
+	messages, _ := captured.JSON()["messages"].([]any)
+	if len(messages) == 0 {
+		t.Fatalf("%s: captured chat request has no messages; body=%s", label, truncate(string(captured.Body), 1200))
+	}
+	for i, raw := range messages {
+		msg, _ := raw.(map[string]any)
+		switch content := msg["content"].(type) {
+		case string:
+			if !wantCompact {
+				t.Errorf("%s: messages[%d].content is a plain string, want content parts; body=%s",
+					label, i, truncate(string(captured.Body), 1200))
+			}
+		case []any:
+			if wantCompact {
+				t.Errorf("%s: messages[%d].content is a %d-part array, want a plain string — "+
+					"vendors off the prompt-cache allowlist may reject the array form; body=%s",
+					label, i, len(content), truncate(string(captured.Body), 1200))
+			}
+		}
 	}
 }
 
