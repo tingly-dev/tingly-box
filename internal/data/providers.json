@@ -13,7 +13,8 @@
       "plan": "standard | coding | oauth"
     },
     "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空",
-    "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。"
+    "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。",
+    "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。"
   },
   "version": "2.1.0",
   "last_updated": "2026-07-20T00:00:00Z",
@@ -511,7 +512,12 @@
           "max_output": 128000,
           "created": "2026-09-03",
           "note": "最新旗舰模型，代码/应用/研究综合能力最强；截至 2026-09-18 Codex CLI 的 /model 选择器仍不默认展示该模型（企业版需管理员在后台开启，Plus/Pro 按节奏灰度），需在 config.toml 显式设置 model = \"gpt-6-astra\" 才能使用，但配置后可直接生效",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://openai.com/index/gpt-6-astra/",
+            "https://github.com/openai/codex/issues/43342"
+          ]
         },
         {
           "id": "gpt-5.6-sol",
@@ -519,7 +525,8 @@
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": ["https://learn.chatgpt.com/docs/models"]
         },
         {
           "id": "gpt-5.6-sol:fast",
@@ -535,7 +542,8 @@
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "平衡能力与成本，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": ["https://learn.chatgpt.com/docs/models"]
         },
         {
           "id": "gpt-5.6-terra:fast",
@@ -551,7 +559,8 @@
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "延迟和成本最低，适合高频、相对简单的任务；已取代于 2026-08-31 退役的 gpt-5.4-mini",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": ["https://learn.chatgpt.com/docs/models"]
         },
         {
           "id": "gpt-5.6-luna:fast",
@@ -566,14 +575,16 @@
           "context": 272000,
           "note": "上一代旗舰模型，ChatGPT 登录会话默认模型",
           "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans; switch to gpt-5.6-sol",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
         },
         {
           "id": "gpt-5.3-codex-spark",
           "context": 128000,
           "note": "纯文本研究预览模型，优化近实时编码迭代",
           "deprecated": "shutdown 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
-          "openai_endpoints": ["responses"]
+          "openai_endpoints": ["responses"],
+          "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
         }
       ],
       "supports_models_endpoint": false,
