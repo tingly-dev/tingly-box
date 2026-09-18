@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertOpenAIResponsesToAnthropicBetaRequest_SimpleInput(t *testing.T) {
@@ -107,9 +109,17 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_FunctionCall(t *testing.T)
 
 	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
 
-	// Verify messages
-	if len(result.Messages) != 1 {
-		t.Fatalf("Expected 1 message, got %d", len(result.Messages))
+	// A lone function_call is answered by a placeholder tool_result so the
+	// tool_use does not dangle (Anthropic rejects unanswered tool_use).
+	if len(result.Messages) != 2 {
+		t.Fatalf("Expected 2 messages, got %d", len(result.Messages))
+	}
+	placeholder := result.Messages[1]
+	if string(placeholder.Role) != "user" || len(placeholder.Content) != 1 || placeholder.Content[0].OfToolResult == nil {
+		t.Fatalf("Expected a user tool_result placeholder, got %+v", placeholder)
+	}
+	if placeholder.Content[0].OfToolResult.ToolUseID != "call_123" {
+		t.Errorf("Expected placeholder for call_123, got %s", placeholder.Content[0].OfToolResult.ToolUseID)
 	}
 
 	msg := result.Messages[0]
@@ -287,4 +297,54 @@ func TestConvertResponsesToolChoiceToAnthropicBeta(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair covers the
+// Anthropic invariants ("tool_use ids were found without tool_result blocks
+// immediately after", "unexpected tool_use_id") on Codex-shaped history.
+func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.T) {
+	t.Run("parallel calls interrupted after the first output", func(t *testing.T) {
+		items := parseCodexInput(t, `{"input":[
+		 {"type":"message","role":"user","content":"run both"},
+		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
+		 {"type":"function_call","call_id":"call_b","name":"shell","arguments":"{}"},
+		 {"type":"function_call_output","call_id":"call_a","output":"a-out"},
+		 {"type":"message","role":"user","content":"stop"}]}`)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(responses.ResponseNewParams{
+			Input: responses.ResponseNewParamsInputUnion{OfInputItemList: items},
+		}, 4096)
+
+		require.Len(t, out.Messages, 4)
+		assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, out.Messages[1].Role)
+		require.Len(t, out.Messages[1].Content, 2)
+		assert.Equal(t, "call_a", out.Messages[1].Content[0].OfToolUse.ID)
+		assert.Equal(t, "call_b", out.Messages[1].Content[1].OfToolUse.ID)
+
+		// Every tool_use is answered in the very next user message.
+		results := out.Messages[2]
+		assert.Equal(t, anthropic.BetaMessageParamRoleUser, results.Role)
+		require.Len(t, results.Content, 2)
+		assert.Equal(t, "call_a", results.Content[0].OfToolResult.ToolUseID)
+		assert.Equal(t, "call_b", results.Content[1].OfToolResult.ToolUseID)
+		assert.Equal(t, missingToolOutputPlaceholder, results.Content[1].OfToolResult.Content[0].OfText.Text)
+	})
+
+	t.Run("orphan outputs become user text instead of dangling tool_result", func(t *testing.T) {
+		items := parseCodexInput(t, `{"input":[
+		 {"type":"function_call_output","id":"fco_01","name":"automation_update","output":"automation: nightly"},
+		 {"type":"function_call_output","call_id":"call_old","output":"stale"},
+		 {"type":"message","role":"user","content":"do the task"}]}`)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(responses.ResponseNewParams{
+			Input: responses.ResponseNewParamsInputUnion{OfInputItemList: items},
+		}, 4096)
+
+		for _, msg := range out.Messages {
+			assert.Equal(t, anthropic.BetaMessageParamRoleUser, msg.Role)
+			for _, block := range msg.Content {
+				assert.Nil(t, block.OfToolResult, "no tool_result may survive without a tool_use")
+			}
+		}
+		assert.Equal(t, "[tool output: automation_update]\nautomation: nightly", out.Messages[0].Content[0].OfText.Text)
+		assert.Equal(t, "[tool output: call_old]\nstale", out.Messages[1].Content[0].OfText.Text)
+	})
 }

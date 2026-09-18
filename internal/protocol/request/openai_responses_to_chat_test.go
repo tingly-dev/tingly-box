@@ -438,6 +438,133 @@ func TestConvertResponsesInputToMessages(t *testing.T) {
 	})
 }
 
+// TestConvertResponsesInputToMessages_ToolCallSequencing covers the
+// DeepSeek/OpenAI chat invariant: every assistant tool_calls message is
+// immediately followed by one tool message per call. Codex replays history that violates this
+// (interrupted tool calls, outputs separated from their calls), which used to
+// surface as "An assistant message with 'tool_calls' must be followed by tool
+// messages responding to each 'tool_call_id'".
+func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
+	userMsg := func(text string) responses.ResponseInputItemUnionParam {
+		return responses.ResponseInputItemUnionParam{
+			OfMessage: &responses.EasyInputMessageParam{
+				Type:    responses.EasyInputMessageTypeMessage,
+				Role:    responses.EasyInputMessageRole("user"),
+				Content: responses.EasyInputMessageContentUnionParam{OfString: param.NewOpt(text)},
+			},
+		}
+	}
+	fnCall := func(id, name string) responses.ResponseInputItemUnionParam {
+		return responses.ResponseInputItemUnionParam{
+			OfFunctionCall: &responses.ResponseFunctionToolCallParam{CallID: id, Name: name, Arguments: "{}"},
+		}
+	}
+	fnOutput := func(id, out string) responses.ResponseInputItemUnionParam {
+		return responses.ResponseInputItemUnionParam{
+			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+				CallID: param.NewOpt(id),
+				Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: param.NewOpt(out)},
+			},
+		}
+	}
+	roles := func(msgs []openai.ChatCompletionMessageParamUnion) []string {
+		out := make([]string, 0, len(msgs))
+		for _, m := range msgs {
+			out = append(out, getMessageRole(t, m))
+		}
+		return out
+	}
+
+	t.Run("interrupted call gets a placeholder tool message before the next user turn", func(t *testing.T) {
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run it"),
+			fnCall("call_1", "shell"),
+			userMsg("stop, do something else"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool", "user"}, roles(messages))
+		require.Len(t, getToolCalls(t, messages[1]), 1)
+		assert.Equal(t, "call_1", getToolCallID(t, messages[2]))
+		assert.Equal(t, missingToolOutputPlaceholder, getMessageContent(t, messages[2]))
+	})
+
+	t.Run("trailing call without output is still answered", func(t *testing.T) {
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run it"),
+			fnCall("call_1", "shell"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool"}, roles(messages))
+		assert.Equal(t, "call_1", getToolCallID(t, messages[2]))
+	})
+
+	t.Run("output separated from its call is re-attached", func(t *testing.T) {
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run it"),
+			fnCall("call_1", "shell"),
+			userMsg("interjection"),
+			fnOutput("call_1", "done"),
+			userMsg("next"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool", "user", "user"}, roles(messages))
+		assert.Equal(t, "call_1", getToolCallID(t, messages[2]))
+		assert.Equal(t, "done", getMessageContent(t, messages[2]))
+	})
+
+	t.Run("parallel calls flush as one assistant message with all outputs in order", func(t *testing.T) {
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run both"),
+			fnCall("call_a", "shell"),
+			fnCall("call_b", "shell"),
+			fnOutput("call_b", "b-out"),
+			fnOutput("call_a", "a-out"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool", "tool"}, roles(messages))
+		require.Len(t, getToolCalls(t, messages[1]), 2)
+		assert.Equal(t, "call_a", getToolCallID(t, messages[2]))
+		assert.Equal(t, "a-out", getMessageContent(t, messages[2]))
+		assert.Equal(t, "call_b", getToolCallID(t, messages[3]))
+		assert.Equal(t, "b-out", getMessageContent(t, messages[3]))
+	})
+
+	t.Run("parallel calls interrupted after the first output are all answered", func(t *testing.T) {
+		// Codex ran two parallel tool calls, only the first finished before the
+		// user interrupted and sent a new prompt. Previously this produced
+		// assistant(a,b) followed by a single tool message, which DeepSeek
+		// rejects as "insufficient tool messages following tool_calls message".
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("run both"),
+			fnCall("call_a", "shell"),
+			fnCall("call_b", "shell"),
+			fnOutput("call_a", "a-out"),
+			userMsg("stop"),
+		})
+
+		require.Equal(t, []string{"user", "assistant", "tool", "tool", "user"}, roles(messages))
+		require.Len(t, getToolCalls(t, messages[1]), 2)
+		assert.Equal(t, "call_a", getToolCallID(t, messages[2]))
+		assert.Equal(t, "a-out", getMessageContent(t, messages[2]))
+		assert.Equal(t, "call_b", getToolCallID(t, messages[3]))
+		assert.Equal(t, missingToolOutputPlaceholder, getMessageContent(t, messages[3]))
+	})
+
+	t.Run("output without a preceding call becomes a user message", func(t *testing.T) {
+		// A bare tool message is rejected by DeepSeek/OpenAI ("Messages with
+		// role 'tool' must be a response to a preceding message with
+		// 'tool_calls'"); plain user text carries no such constraint.
+		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+			userMsg("hi"),
+			fnOutput("call_ghost", "stale"),
+			userMsg("again"),
+		})
+
+		require.Equal(t, []string{"user", "user", "user"}, roles(messages))
+		assert.Equal(t, "[tool output: call_ghost]\nstale", getMessageContent(t, messages[1]))
+	})
+}
+
 func TestConvertResponsesToolsToChatTools(t *testing.T) {
 	t.Run("empty tools", func(t *testing.T) {
 		tools := ConvertResponsesToolsToChatTools([]responses.ToolUnionParam{})

@@ -71,9 +71,7 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 
 // pendingToolCall holds a single tool call during input-to-message conversion.
 // Consecutive function_call input items are accumulated and flushed together
-// as a single assistant message with all tool_calls, so the resulting message
-// sequence satisfies providers (DeepSeek) that require tool messages to
-// immediately follow the assistant message that requested them.
+// as a single assistant message with all tool_calls.
 type pendingToolCall struct {
 	CallID    string
 	Name      string
@@ -81,15 +79,27 @@ type pendingToolCall struct {
 }
 
 // ConvertResponsesInputToMessages converts Responses API input items to Chat Completion messages.
+//
+// The input is first passed through RepairResponsesToolCalls, which
+// guarantees that every function_call group is immediately followed by one
+// function_call_output per call and that no output stands without a call.
+// Chat Completions providers (DeepSeek, OpenAI) require exactly that shape:
+// an assistant message carrying tool_calls must be followed by one tool
+// message per call, and a tool message must answer a preceding tool_calls
+// message. The conversion below therefore only has to preserve order.
 func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []openai.ChatCompletionMessageParamUnion {
-	var messages []openai.ChatCompletionMessageParamUnion
+	items = RepairResponsesToolCalls(items)
 
-	flushCalls := func(calls []pendingToolCall) {
-		if len(calls) == 0 {
+	var messages []openai.ChatCompletionMessageParamUnion
+	var pendingCalls []pendingToolCall
+
+	// flushCalls emits the accumulated function_calls as one assistant message.
+	flushCalls := func() {
+		if len(pendingCalls) == 0 {
 			return
 		}
-		toolCalls := make([]map[string]interface{}, 0, len(calls))
-		for _, tc := range calls {
+		toolCalls := make([]map[string]interface{}, 0, len(pendingCalls))
+		for _, tc := range pendingCalls {
 			toolCalls = append(toolCalls, map[string]interface{}{
 				"id":   tc.CallID,
 				"type": "function",
@@ -105,38 +115,13 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			"tool_calls": toolCalls,
 		}
 		msgBytes, _ := json.Marshal(msgMap)
-		var result openai.ChatCompletionMessageParamUnion
-		_ = json.Unmarshal(msgBytes, &result)
-		messages = append(messages, result)
+		var assistant openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &assistant)
+		messages = append(messages, assistant)
+		pendingCalls = nil
 	}
 
-	var pendingCalls []pendingToolCall
-
 	for _, item := range items {
-		// Handle message items — do NOT flush pending function_calls.
-		// function_call_output flushes them so that assistant(tool_calls)
-		// appears immediately before the corresponding tool messages.
-		// Flushing here would cause messages to be inserted between
-		// assistant(tool_calls) and its tool responses.
-		if !param.IsOmitted(item.OfMessage) {
-			msg := item.OfMessage
-			role := string(msg.Role)
-
-			// Extract content based on type
-			if !param.IsOmitted(msg.Content.OfString) {
-				// Simple string content
-				content := msg.Content.OfString.Value
-				messages = append(messages, createMessage(role, content))
-			} else if !param.IsOmitted(msg.Content.OfInputItemContentList) {
-				if converted, ok := createMessageFromResponsesContent(role, msg.Content.OfInputItemContentList); ok {
-					messages = append(messages, converted)
-				}
-			}
-			continue
-		}
-
-		// Accumulate consecutive function_call items into a single assistant message.
-		// Flushed on the next message boundary or first function_call_output.
 		if !param.IsOmitted(item.OfFunctionCall) {
 			fnCall := item.OfFunctionCall
 			pendingCalls = append(pendingCalls, pendingToolCall{
@@ -147,58 +132,68 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			continue
 		}
 
-		// Handle function call output items (tool results)
-		// Flush pending function calls as a single assistant message first
-		if !param.IsOmitted(item.OfFunctionCallOutput) {
-			flushCalls(pendingCalls)
-			pendingCalls = nil
+		// Any other item ends the assistant tool-call turn.
+		flushCalls()
 
-			output := item.OfFunctionCallOutput
-
-			// Extract output content
-			if !param.IsOmitted(output.Output.OfString) {
-				messages = append(messages, openai.ToolMessage(output.Output.OfString.Value, output.CallID.Value))
-				continue
-			}
-			parts := make([]openai.ChatCompletionContentPartUnionParam, 0,
-				len(output.Output.OfResponseFunctionCallOutputItemArray))
-			for _, item := range output.Output.OfResponseFunctionCallOutputItemArray {
-				switch {
-				case item.OfInputText != nil && item.OfInputText.Text != "":
-					part := openai.ChatCompletionContentPartTextParam{Text: item.OfInputText.Text}
-					if !param.IsOmitted(item.OfInputText.PromptCacheBreakpoint) {
-						part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
-					}
-					parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfText: &part})
-				case item.OfInputImage != nil && item.OfInputImage.ImageURL.Valid():
-					part := openai.ChatCompletionContentPartImageParam{
-						ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: item.OfInputImage.ImageURL.Value},
-					}
-					if !param.IsOmitted(item.OfInputImage.PromptCacheBreakpoint) {
-						part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartImagePromptCacheBreakpointParam()
-					}
-					parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfImageURL: &part})
+		switch {
+		case !param.IsOmitted(item.OfMessage):
+			msg := item.OfMessage
+			role := string(msg.Role)
+			if !param.IsOmitted(msg.Content.OfString) {
+				messages = append(messages, createMessage(role, msg.Content.OfString.Value))
+			} else if !param.IsOmitted(msg.Content.OfInputItemContentList) {
+				if converted, ok := createMessageFromResponsesContent(role, msg.Content.OfInputItemContentList); ok {
+					messages = append(messages, converted)
 				}
 			}
-			if len(parts) > 0 {
-				messages = append(messages, openai.ChatCompletionMessageParamUnion{
-					OfTool: &openai.ChatCompletionToolMessageParam{
-						ToolCallID: output.CallID.Value,
-						Content: openai.ChatCompletionToolMessageParamContentUnion{
-							OfArrayOfContentParts: parts,
-						},
-					},
-				})
-			} else {
-				messages = append(messages, openai.ToolMessage("", output.CallID.Value))
-			}
+
+		case !param.IsOmitted(item.OfFunctionCallOutput):
+			messages = append(messages, convertResponsesFunctionCallOutput(item.OfFunctionCallOutput))
 		}
 	}
-
-	// Flush remaining pending calls at end of input
-	flushCalls(pendingCalls)
+	flushCalls()
 
 	return messages
+}
+
+// convertResponsesFunctionCallOutput converts a function_call_output item to
+// a Chat Completions tool message.
+func convertResponsesFunctionCallOutput(output *responses.ResponseInputItemFunctionCallOutputParam) openai.ChatCompletionMessageParamUnion {
+	callID := output.CallID.Value
+	if !param.IsOmitted(output.Output.OfString) {
+		return openai.ToolMessage(output.Output.OfString.Value, callID)
+	}
+	parts := make([]openai.ChatCompletionContentPartUnionParam, 0,
+		len(output.Output.OfResponseFunctionCallOutputItemArray))
+	for _, item := range output.Output.OfResponseFunctionCallOutputItemArray {
+		switch {
+		case item.OfInputText != nil && item.OfInputText.Text != "":
+			part := openai.ChatCompletionContentPartTextParam{Text: item.OfInputText.Text}
+			if !param.IsOmitted(item.OfInputText.PromptCacheBreakpoint) {
+				part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
+			}
+			parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfText: &part})
+		case item.OfInputImage != nil && item.OfInputImage.ImageURL.Valid():
+			part := openai.ChatCompletionContentPartImageParam{
+				ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: item.OfInputImage.ImageURL.Value},
+			}
+			if !param.IsOmitted(item.OfInputImage.PromptCacheBreakpoint) {
+				part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartImagePromptCacheBreakpointParam()
+			}
+			parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfImageURL: &part})
+		}
+	}
+	if len(parts) == 0 {
+		return openai.ToolMessage("", callID)
+	}
+	return openai.ChatCompletionMessageParamUnion{
+		OfTool: &openai.ChatCompletionToolMessageParam{
+			ToolCallID: callID,
+			Content: openai.ChatCompletionToolMessageParamContentUnion{
+				OfArrayOfContentParts: parts,
+			},
+		},
+	}
 }
 
 func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {
