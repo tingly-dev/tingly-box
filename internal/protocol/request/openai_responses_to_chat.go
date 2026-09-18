@@ -147,6 +147,13 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 				}
 			}
 
+		case !param.IsOmitted(item.OfOutputMessage):
+			// The assistant-message counterpart to item.OfMessage — content
+			// parts are output_text/refusal, never input_text.
+			if text, ok := outputMessageText(item.OfOutputMessage); ok {
+				messages = append(messages, createMessage("assistant", text))
+			}
+
 		case !param.IsOmitted(item.OfFunctionCallOutput):
 			messages = append(messages, convertResponsesFunctionCallOutput(item.OfFunctionCallOutput))
 		}
@@ -196,8 +203,23 @@ func convertResponsesFunctionCallOutput(output *responses.ResponseInputItemFunct
 	}
 }
 
-func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {
+// outputMessageText concatenates the output_text/refusal parts of a Responses
+// output_message item into a single string, for feeding into Chat's plain
+// string content form.
+func outputMessageText(msg *responses.ResponseOutputMessageParam) (string, bool) {
 	var text string
+	for _, item := range msg.Content {
+		switch {
+		case item.OfOutputText != nil:
+			text += item.OfOutputText.Text
+		case item.OfRefusal != nil:
+			text += item.OfRefusal.Refusal
+		}
+	}
+	return text, text != ""
+}
+
+func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {	var text string
 	var hasImage, hasCacheBreakpoint bool
 	for _, item := range content {
 		switch {

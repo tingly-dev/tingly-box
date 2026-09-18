@@ -154,6 +154,14 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 					messages = append(messages, converted)
 				}
 			}
+		case !param.IsOmitted(item.OfOutputMessage):
+			// The assistant-message counterpart to item.OfMessage — see
+			// ResponseInputItemParamOfOutputMessage in anthropic_v1_to_responses.go.
+			converted := convertResponsesOutputMessageToAnthropicBeta(item.OfOutputMessage)
+			converted.Content = dropEmptyTextBlocks(converted.Content)
+			if len(converted.Content) > 0 {
+				messages = append(messages, converted)
+			}
 		case !param.IsOmitted(item.OfFunctionCall):
 			appendBetaMessage(&messages, convertResponsesFunctionCallToAnthropicBeta(item.OfFunctionCall))
 		case !param.IsOmitted(item.OfFunctionCallOutput):
@@ -266,6 +274,33 @@ func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMes
 	return anthropic.BetaMessageParam{
 		Role:    anthropic.BetaMessageParamRoleAssistant,
 		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("")},
+	}
+}
+
+// convertResponsesOutputMessageToAnthropicBeta converts a Responses API
+// output_message item — the wire form our own converters emit for assistant
+// history turns (see ResponseInputItemParamOfOutputMessage) and the form
+// other Responses-API clients replay conversation history in — to Anthropic
+// Beta format. Its content parts are output_text/refusal, never input_text,
+// so it needs its own reader distinct from convertResponsesAssistantMessageToAnthropicBeta.
+func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputMessageParam) anthropic.BetaMessageParam {
+	var blocks []anthropic.BetaContentBlockParamUnion
+	for _, contentItem := range msg.Content {
+		switch {
+		case contentItem.OfOutputText != nil:
+			blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfOutputText.Text))
+		case contentItem.OfRefusal != nil:
+			blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfRefusal.Refusal))
+		default:
+			logrus.Warnf("Unsupported content type in Responses API output_message, skipping. Content types available: %v", contentItem)
+		}
+	}
+	if len(blocks) == 0 {
+		blocks = []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("")}
+	}
+	return anthropic.BetaMessageParam{
+		Role:    anthropic.BetaMessageParamRoleAssistant,
+		Content: blocks,
 	}
 }
 
