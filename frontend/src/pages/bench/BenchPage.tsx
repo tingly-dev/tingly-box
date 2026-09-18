@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Button, LinearProgress, Paper, Stack, Typography } from '@mui/material';
 import { PlayArrow as RunIcon, TestPipe as BenchIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';
 import type { FlagSpec } from '@/components/RoutingGraphTypes';
@@ -11,8 +10,7 @@ import type { ProbeRequest, ProbeResult } from '@/types/probe';
 import { runProbe, buildProbeCurl, type ProbeCurlResult } from '@/components/probe/runProbe';
 import { protocolAvailability, visionAvailable } from '@/components/probe/probeConfig';
 import type { ProbeProtocol } from '@/types/probe';
-import { StatusBar, Journey, CollapsibleSection, CopyBlock, extractText, defaultMessage, ruleProtocolForScenario } from '@/components/probe/ResultSections';
-import { BENCH_PATH, parseBenchLink } from './benchLink';
+import { StatusBar, Journey, CollapsibleSection, CopyBlock, extractText, defaultMessage } from '@/components/probe/ResultSections';
 import {
     BLANK_REQUEST,
     DEFAULT_STATE,
@@ -27,9 +25,9 @@ import {
     type RunRecord,
 } from './benchState';
 import { useTargetCatalog } from './useTargetCatalog';
-import { TargetPicker, ruleLabel } from './TargetPicker';
+import { TargetPicker } from './TargetPicker';
 import { BenchAxes, useAxisAvailability, type RequestMode } from './BenchAxes';
-import { PluginsPanel, isFlagSet, type FlagBaseline } from './PluginsPanel';
+import { PluginsPanel, type FlagBaseline } from './PluginsPanel';
 import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
@@ -37,8 +35,9 @@ import { RunHistory } from './RunHistory';
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
 // Compose (what do I send?) · Conversation + Result (what happened?) ·
-// Payload (what actually goes out?). Every knob is resident; nothing here is
-// written to any rule or scenario.
+// Payload (what actually goes out?). Every knob is resident. Bench targets a
+// real provider model directly — no Rule/deep-link jump-in from elsewhere;
+// it is reached only through its own nav entry.
 
 const MAX_RUNS = 10;
 
@@ -74,28 +73,6 @@ const prettyBody = (raw: string): string => {
     }
 };
 
-// Initial state: an explicit URL intent (deep link) beats the persisted
-// workbench state, which beats the defaults (§10).
-function initialState(search: string): BenchState {
-    const base = loadState() ?? cloneState(DEFAULT_STATE);
-    const link = parseBenchLink(search);
-    if (!link.target && Object.keys(link.axes).length === 0 && !link.message) return base;
-    const next: BenchState = { ...base, axes: { ...base.axes, ...link.axes } };
-    if (link.target) {
-        next.target = link.target;
-        // A new target means a new baseline; overlays composed against the
-        // old one would silently mean something else.
-        next.flags = {};
-        next.headers = {};
-        next.raw = null;
-    }
-    if (link.message) {
-        next.message = link.message;
-        next.raw = null;
-    }
-    return next;
-}
-
 const Panel: React.FC<{ title: string; question: string; action?: React.ReactNode; children: React.ReactNode }> = ({ title, question, action, children }) => (
     <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.75, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -108,40 +85,17 @@ const Panel: React.FC<{ title: string; question: string; action?: React.ReactNod
     </Paper>
 );
 
-function computeBaseline(registry: FlagSpec[], ruleFlags: Record<string, unknown> | undefined, scenarioFlags: Record<string, unknown> | undefined): FlagBaseline {
-    const values: FlagBaseline['values'] = {};
-    const sources: FlagBaseline['sources'] = {};
-    registry.forEach((spec) => {
-        const rv = ruleFlags?.[spec.key];
-        const sv = spec.shared ? scenarioFlags?.[spec.key] : undefined;
-        const ruleSet = isFlagSet(spec, rv);
-        const scenSet = isFlagSet(spec, sv);
-        if (spec.type === 'bool' && spec.inheritanceMode === 'or') {
-            if (ruleSet || scenSet) {
-                values[spec.key] = true;
-                sources[spec.key] = ruleSet ? 'rule' : 'scenario';
-            }
-        } else if (ruleSet) {
-            values[spec.key] = rv;
-            sources[spec.key] = 'rule';
-        } else if (scenSet) {
-            values[spec.key] = sv;
-            sources[spec.key] = 'scenario';
-        }
-    });
-    return { values, sources };
-}
+// A provider target has no rule/scenario to inherit flags from — every row
+// starts uninherited, and the overlay is the whole story for this request.
+const EMPTY_BASELINE: FlagBaseline = { values: {}, sources: {} };
 
 const BenchPage: React.FC = () => {
     const { t } = useTranslation();
-    const location = useLocation();
-    const navigate = useNavigate();
     const catalog = useTargetCatalog();
 
-    const [state, setState] = useState<BenchState>(() => initialState(location.search));
+    const [state, setState] = useState<BenchState>(() => loadState() ?? cloneState(DEFAULT_STATE));
     const [registry, setRegistry] = useState<FlagSpec[]>([]);
     const [registryLoading, setRegistryLoading] = useState(true);
-    const [scenarioFlags, setScenarioFlags] = useState<Record<string, unknown> | undefined>();
     const [running, setRunning] = useState(false);
     const [shown, setShown] = useState<{ result: ProbeResult; snapshot: BenchState } | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -149,13 +103,7 @@ const BenchPage: React.FC = () => {
 
     const patch = useCallback((p: Partial<BenchState>) => setState((s) => ({ ...s, ...p })), []);
 
-    // Persist every change; the deep link has been consumed, so drop it from
-    // the URL — a reload must resume the workbench, not replay the link.
     useEffect(() => saveState(state), [state]);
-    useEffect(() => {
-        if (location.search) navigate(BENCH_PATH, { replace: true });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     // Flag registry — the single source of truth for the Plugins panel.
     useEffect(() => {
@@ -168,26 +116,9 @@ const BenchPage: React.FC = () => {
     }, []);
 
     const { target } = state;
-    const rule = useMemo(() => (target?.kind === 'rule' ? catalog.rules.find((r) => r.uuid === target.ruleUuid) ?? null : null), [catalog.rules, target]);
     const provider: Provider | null = useMemo(
-        () => (target?.kind === 'provider' ? catalog.providers.find((p) => p.uuid === target.providerUuid) ?? null : null),
+        () => (target ? catalog.providers.find((p) => p.uuid === target.providerUuid) ?? null : null),
         [catalog.providers, target],
-    );
-
-    // Scenario-level flags feed the inherited baseline of a rule target.
-    useEffect(() => {
-        const scenario = rule?.scenario;
-        if (!scenario) { setScenarioFlags(undefined); return; }
-        let cancelled = false;
-        api.getScenarioConfig(scenario)
-            .then((r: any) => { if (!cancelled) setScenarioFlags(r?.success ? r.data?.flags ?? undefined : undefined); })
-            .catch(() => { if (!cancelled) setScenarioFlags(undefined); });
-        return () => { cancelled = true; };
-    }, [rule?.scenario]);
-
-    const baseline = useMemo(
-        () => computeBaseline(registry, (rule?.flags as Record<string, unknown> | undefined) ?? undefined, scenarioFlags),
-        [registry, rule?.flags, scenarioFlags],
     );
 
     // Axis availability per target, and the clamp that keeps the axes legal
@@ -198,11 +129,8 @@ const BenchPage: React.FC = () => {
         setState((s) => {
             const a = { ...s.axes };
             let changed = false;
-            const avail = protocolAvailability(provider);
-            if (target?.kind === 'rule') {
-                if (a.direct) { a.direct = false; changed = true; }
-                if (a.protocol !== '') { a.protocol = ''; changed = true; }
-            } else if (target?.kind === 'provider' && provider) {
+            if (provider) {
+                const avail = protocolAvailability(provider);
                 if (avail.locked && a.protocol !== avail.default) { a.protocol = avail.default; changed = true; }
                 else if (!avail.locked && a.protocol && !avail.options.includes(a.protocol)) { a.protocol = avail.default; changed = true; }
                 else if (!avail.locked && a.protocol === '' && avail.default) { a.protocol = avail.default; changed = true; }
@@ -216,15 +144,12 @@ const BenchPage: React.FC = () => {
     const request = built.request;
     const direct = isDirect(state);
 
-    // Protocols a hand-written request may be in for this target: a rule's
-    // scenario family, or whatever the provider speaks.
+    // Protocols a hand-written request may be in for this target: whatever
+    // the provider speaks.
     const rawProtocolOptions = useMemo<ProbeProtocol[]>(() => {
-        if (target?.kind === 'rule') {
-            return ruleProtocolForScenario(target.scenario) === 'anthropic_v1' ? ['anthropic_v1'] : ['openai_chat', 'openai_responses'];
-        }
         const avail = protocolAvailability(provider);
         return avail.options.length ? avail.options : ['openai_chat', 'openai_responses', 'anthropic_v1'];
-    }, [target, provider]);
+    }, [provider]);
 
     // Live payload: pure construction, so debouncing just avoids redundant work.
     const { data: curl, loading: curlLoading } = useDebouncedCurl(request);
@@ -245,8 +170,7 @@ const BenchPage: React.FC = () => {
     // value/options/onChange are resolved per mode here, since preset reads
     // axes.protocol (via availability) and custom reads raw.protocol.
     const mode: RequestMode = state.raw ? 'custom' : 'preset';
-    const protocolValue: ProbeProtocol = state.raw?.protocol
-        ?? (target?.kind === 'rule' ? ruleProtocolForScenario(target.scenario) : (state.axes.protocol || protocolAvailability(provider).default || 'openai_chat'));
+    const protocolValue: ProbeProtocol = state.raw?.protocol ?? (state.axes.protocol || protocolAvailability(provider).default || 'openai_chat');
     const onModeChange = (next: RequestMode) => {
         if (next === mode) return;
         if (next === 'custom') {
@@ -309,16 +233,7 @@ const BenchPage: React.FC = () => {
         setActiveRun(null);
     };
 
-    // Natural routing can land on a rule other than the one picked — that is
-    // a finding, not an error, and the Journey says so.
-    const shownRuleMismatch = (() => {
-        const snap = shown?.snapshot;
-        const matched = shown?.result.data?.matched_rule;
-        if (!snap || snap.target?.kind !== 'rule' || snap.routing === 'pinned' || !matched) return false;
-        return matched !== snap.target.ruleUuid;
-    })();
-
-    const targetName = rule ? ruleLabel(rule) : provider?.name ?? '';
+    const targetName = provider?.name ?? '';
     const shownOverlay = shown ? Object.entries(shown.snapshot.flags) : [];
     const extracted = useMemo(() => extractText(shown?.result.data?.content), [shown?.result.data?.content]);
 
@@ -326,7 +241,7 @@ const BenchPage: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <PageHeader
                 title={t('bench.title', { defaultValue: 'Bench' })}
-                subtitle={t('bench.subtitle', { defaultValue: 'One probe request with every knob resident: pick a target, shape the request, overlay flags, edit the payload. Nothing here is saved to a rule.' })}
+                subtitle={t('bench.subtitle', { defaultValue: 'One probe request with every knob resident: pick a provider model, shape the request, overlay flags, edit the payload.' })}
                 icon={<BenchIcon sx={{ fontSize: 26 }} />}
                 actions={
                     <Button variant="contained" startIcon={<RunIcon />} onClick={run} disabled={!request || running} sx={{ minWidth: 120 }} title={t('bench.runHint', { defaultValue: '⌘ / Ctrl + Enter' })}>
@@ -343,7 +258,7 @@ const BenchPage: React.FC = () => {
                     display: 'grid',
                     gap: 2,
                     alignItems: 'start',
-                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', xl: '320px minmax(0, 1fr) 440px' },
+                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', lg: '300px minmax(0, 1fr) minmax(360px, 420px)' },
                 }}
             >
                 {/* ① what do I send? */}
@@ -360,9 +275,6 @@ const BenchPage: React.FC = () => {
                                 axes={state.axes}
                                 onChange={(axes) => patch({ axes })}
                                 availability={availability}
-                                targetKind={target?.kind ?? null}
-                                routing={state.routing}
-                                onRoutingChange={(routing) => patch({ routing })}
                                 mode={mode}
                                 onModeChange={onModeChange}
                                 customProtocolOptions={rawProtocolOptions}
@@ -375,7 +287,7 @@ const BenchPage: React.FC = () => {
                         <PluginsPanel
                             registry={registry}
                             loading={registryLoading}
-                            baseline={baseline}
+                            baseline={EMPTY_BASELINE}
                             overlay={state.flags}
                             onChange={(flags) => patch({ flags })}
                             disabled={direct}
@@ -409,19 +321,11 @@ const BenchPage: React.FC = () => {
                                 <CollapsibleSection title={t('probe.journey')} defaultExpanded>
                                     <Journey
                                         result={shown.result}
-                                        targetType={shown.snapshot.target?.kind ?? 'provider'}
+                                        targetType="provider"
                                         targetName={targetName}
-                                        scenario={shown.snapshot.target?.kind === 'rule' ? shown.snapshot.target.scenario : undefined}
-                                        model={shown.snapshot.target?.kind === 'provider' ? shown.snapshot.target.model : undefined}
+                                        model={shown.snapshot.target?.model}
                                         bypassed={isDirect(shown.snapshot)}
                                         showFlags
-                                        ruleExtra={
-                                            shownRuleMismatch ? (
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'warning.main', fontFamily: 'inherit', mt: 0.25 }}>
-                                                    {t('bench.ruleMismatch', { defaultValue: 'TB matched a different rule than the one you picked — this is what a real client would hit. Switch Scope to “Pinned rule” to force yours.' })}
-                                                </Typography>
-                                            ) : undefined
-                                        }
                                         flagsExtra={
                                             shownOverlay.length > 0 ? (
                                                 <Typography variant="caption" sx={{ display: 'block', color: 'primary.main', fontFamily: 'inherit', mt: 0.25 }}>
@@ -447,7 +351,7 @@ const BenchPage: React.FC = () => {
                 </Stack>
 
                 {/* ④ what actually goes out? Spans the row below on narrow screens. */}
-                <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1', xl: 'auto' } }}>
+                <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' } }}>
                     <Panel title={t('bench.payload', { defaultValue: 'Payload' })} question={t('bench.payloadQ', { defaultValue: 'what actually goes out' })}>
                         <PayloadPanel
                             request={request}

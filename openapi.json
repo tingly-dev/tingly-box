@@ -9960,11 +9960,6 @@
             "description": "Field request_protocol",
             "example": "anthropic_v1"
           },
-          "routing": {
-            "type": "string",
-            "description": "Field routing",
-            "example": "pinned"
-          },
           "rule_uuid": {
             "type": "string",
             "description": "Field rule_uuid"
@@ -11912,6 +11907,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Field max_output"
+          },
+          "openai_endpoint": {
+            "type": "string",
+            "description": "Field openai_endpoint"
           }
         },
         "required": [

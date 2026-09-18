@@ -80,7 +80,7 @@ const FlagControl: React.FC<{ spec: FlagSpec; value: unknown; overridden: boolea
                     size="small"
                     value={(value as string) || spec.options?.[0]?.value || ''}
                     onChange={(e) => onSet(e.target.value)}
-                    sx={{ fontSize: '0.75rem', minWidth: 110, '& .MuiSelect-select': { py: 0.4 }, ...muted }}
+                    sx={{ fontSize: '0.75rem', minWidth: 92, '& .MuiSelect-select': { py: 0.4 }, ...muted }}
                     inputProps={{ 'aria-label': spec.key }}
                 >
                     {(spec.options ?? []).map((o) => (
@@ -98,7 +98,7 @@ const FlagControl: React.FC<{ spec: FlagSpec; value: unknown; overridden: boolea
                     onChange={(e) => onSet((Array.isArray(e.target.value) ? e.target.value : splitMulti(e.target.value)).join(','))}
                     renderValue={(selected) => (selected.length ? `${selected.length} selected` : '—')}
                     displayEmpty
-                    sx={{ fontSize: '0.75rem', minWidth: 110, '& .MuiSelect-select': { py: 0.4 }, ...muted }}
+                    sx={{ fontSize: '0.75rem', minWidth: 92, '& .MuiSelect-select': { py: 0.4 }, ...muted }}
                     inputProps={{ 'aria-label': spec.key }}
                 >
                     {(spec.options ?? []).map((o) => (
@@ -118,7 +118,7 @@ const FlagControl: React.FC<{ spec: FlagSpec; value: unknown; overridden: boolea
                     type="number"
                     defaultValue={typeof value === 'number' ? value : 0}
                     onBlur={(e) => onSet(Math.max(0, Number(e.target.value) || 0))}
-                    sx={{ width: 90 }}
+                    sx={{ width: 76 }}
                     slotProps={{ htmlInput: { min: 0, 'aria-label': spec.key, sx: { fontSize: '0.75rem', py: 0.5 } } }}
                 />
             );
@@ -130,7 +130,7 @@ const FlagControl: React.FC<{ spec: FlagSpec; value: unknown; overridden: boolea
                     defaultValue={(value as string) ?? ''}
                     placeholder={spec.placeholder || '—'}
                     onBlur={(e) => { if (e.target.value !== ((value as string) ?? '')) onSet(e.target.value); }}
-                    sx={{ width: 130 }}
+                    sx={{ width: 108 }}
                     slotProps={{ htmlInput: { 'aria-label': spec.key, sx: { fontSize: '0.75rem', py: 0.5, fontFamily: 'monospace' } } }}
                 />
             );
@@ -214,9 +214,9 @@ export const PluginsPanel: React.FC<{
                                     <Box
                                         sx={{
                                             display: 'grid',
-                                            gridTemplateColumns: '10px minmax(0, 1fr) auto 26px',
+                                            gridTemplateColumns: '8px minmax(0, 1fr) auto 24px',
                                             alignItems: 'center',
-                                            gap: 1,
+                                            gap: 0.75,
                                             px: 0.75,
                                             py: 0.4,
                                             borderRadius: 1,

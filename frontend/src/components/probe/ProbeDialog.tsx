@@ -15,9 +15,7 @@ import {
     Refresh as RefreshIcon,
     PlayArrow as RunIcon,
     Terminal as TerminalIcon,
-    OpenInNew as OpenInBenchIcon,
 } from '@/components/icons';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeThinking, ProbeTargetType } from '@/types/probe.ts';
 import type { Provider } from '@/types/provider';
@@ -42,7 +40,6 @@ import {
     defaultMessage,
     ruleProtocolForScenario,
 } from './ResultSections';
-import { benchDeepLink } from '@/pages/bench/benchLink';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -80,7 +77,6 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     onResult,
 }) => {
     const { t } = useTranslation();
-    const navigate = useNavigate();
     const [axes, setAxes] = useState<ProbeAxes>(() =>
         resolveInitialAxes({ targetType, thinkingLevel, initialResult, provider: provider ?? null }),
     );
@@ -278,23 +274,6 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                             setIsLoading(false);
                         }}
                     />
-                    {/* Escalation path: found something in the quick diagnostic, go
-                        deeper in the workbench with the same target and knobs. Saved
-                        (unsaved-config) targets have no bench identity. */}
-                    {targetType !== 'provider_config' && (
-                        <Tooltip title={t('probe.openInBench')}>
-                            <IconButton
-                                size="small"
-                                sx={{ color: 'text.secondary' }}
-                                onClick={() => {
-                                    onClose();
-                                    navigate(benchDeepLink({ targetType, targetId, scenario, model, axes, message }));
-                                }}
-                            >
-                                <OpenInBenchIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
                     <Tooltip
                         title={copyTooltipOpen ? t('probe.copied') : t('probe.curlCopy')}
                         open={copyTooltipOpen || undefined}

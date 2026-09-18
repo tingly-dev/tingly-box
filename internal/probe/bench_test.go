@@ -36,15 +36,6 @@ func TestValidateE2ERequest_Bench(t *testing.T) {
 		req.Headers = map[string]string{"bad name": "1"}
 		assert.Equal(t, "headers", validationField(t, ValidateE2ERequest(req)))
 	})
-	t.Run("routing", func(t *testing.T) {
-		req := benchBase()
-		req.Routing = RoutingPinned
-		assert.NoError(t, ValidateE2ERequest(req))
-		req.Routing = ProbeRouting("sideways")
-		assert.Equal(t, "routing", validationField(t, ValidateE2ERequest(req)))
-		prov := &E2ERequest{TargetType: E2ETargetProvider, ProviderUUID: "p", Model: "m", Routing: RoutingPinned}
-		assert.Equal(t, "routing", validationField(t, ValidateE2ERequest(prov)))
-	})
 }
 
 func TestCustomized(t *testing.T) {

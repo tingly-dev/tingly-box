@@ -1,35 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseBenchLink, benchDeepLink } from './benchLink';
 import { DEFAULT_STATE, buildProbeRequest, runLabel, type BenchState } from './benchState';
 
 const base = (over: Partial<BenchState> = {}): BenchState => ({
     ...DEFAULT_STATE,
     axes: { ...DEFAULT_STATE.axes },
-    target: { kind: 'rule', ruleUuid: 'r1', scenario: 'claude_code' },
+    target: { providerUuid: 'p1', model: 'm' },
     ...over,
-});
-
-describe('benchLink', () => {
-    it('round-trips a rule target with knobs', () => {
-        const url = benchDeepLink({ targetType: 'rule', targetId: 'r1', scenario: 'claude_code:p1', axes: { stream: false, tool: true, thinking: 'high' }, message: 'hi there' });
-        const parsed = parseBenchLink(url.slice(url.indexOf('?')));
-        expect(parsed.target).toEqual({ kind: 'rule', ruleUuid: 'r1', scenario: 'claude_code:p1' });
-        expect(parsed.axes).toEqual({ stream: false, tool: true, thinking: 'high' });
-        expect(parsed.message).toBe('hi there');
-    });
-
-    it('round-trips a provider target whose model contains slashes', () => {
-        const url = benchDeepLink({ targetType: 'provider', targetId: 'p1', model: 'openai/gpt-5:free', axes: { direct: true, protocol: 'openai_responses' } });
-        const parsed = parseBenchLink(url.slice(url.indexOf('?')));
-        expect(parsed.target).toEqual({ kind: 'provider', providerUuid: 'p1', model: 'openai/gpt-5:free' });
-        expect(parsed.axes).toEqual({ direct: true, protocol: 'openai_responses' });
-    });
-
-    it('ignores garbage', () => {
-        const parsed = parseBenchLink('?target=nope&thinking=turbo&vision=x');
-        expect(parsed.target).toBeNull();
-        expect(parsed.axes).toEqual({});
-    });
 });
 
 describe('buildProbeRequest', () => {
@@ -39,13 +15,12 @@ describe('buildProbeRequest', () => {
 
     it('fixture mode sends the knobs and the message', () => {
         const { request } = buildProbeRequest(base({ message: 'hello', axes: { ...DEFAULT_STATE.axes, tool: true } }));
-        expect(request).toEqual({ target_type: 'rule', scenario: 'claude_code', rule_uuid: 'r1', stream: true, tool: true, thinking: 'none', message: 'hello' });
+        expect(request).toEqual({ target_type: 'provider', provider_uuid: 'p1', model: 'm', direct: false, stream: true, tool: true, thinking: 'none', message: 'hello' });
     });
 
     it('raw mode sends the request on its own protocol and drops the fixture knobs', () => {
         const { request } = buildProbeRequest(
             base({
-                target: { kind: 'provider', providerUuid: 'p1', model: 'm' },
                 axes: { ...DEFAULT_STATE.axes, tool: true, thinking: 'high', protocol: 'openai_chat' },
                 message: 'ignored',
                 raw: { protocol: 'openai_responses', body: '{"input":[{"role":"user","content":"hi"}]}' },
@@ -69,15 +44,10 @@ describe('buildProbeRequest', () => {
 
     it('drops the flag overlay on a direct provider probe', () => {
         const { request } = buildProbeRequest(
-            base({ target: { kind: 'provider', providerUuid: 'p1', model: 'm' }, axes: { ...DEFAULT_STATE.axes, direct: true, protocol: 'openai_chat' }, flags: { skip_usage: true } }),
+            base({ axes: { ...DEFAULT_STATE.axes, direct: true, protocol: 'openai_chat' }, flags: { skip_usage: true } }),
         );
         expect(request!.direct).toBe(true);
         expect(request!.flags).toBeUndefined();
-    });
-
-    it('sends routing only when a rule is pinned', () => {
-        expect(buildProbeRequest(base()).request!.routing).toBeUndefined();
-        expect(buildProbeRequest(base({ routing: 'pinned' })).request!.routing).toBe('pinned');
     });
 });
 

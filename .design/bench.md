@@ -3,6 +3,16 @@
 > 适用对象：tingly-box 前端 / 后端贡献者。
 > 状态：**已实现（V1）**——页面 `frontend/src/pages/bench/`，后端字段见 §11。线框图见 [`bench.pencil.md`](./bench.pencil.md)。
 > 前置阅读：[`probe.md`](./probe.md)、[`rule-flags.md`](./rule-flags.md)、[`ux-principles.md`](./ux-principles.md)。
+>
+> **V1.1 修正（本次）**：三栏布局的响应式断点与左栏宽度修了一版（原先 `xl`
+> 断点+固定 320px 导致常规桌面宽度下退化成两栏、且左栏内容撑不满）；随后发现
+> target picker（Autocomplete 下拉）在窄栏里把 rule/provider 名字硬截断，选起来
+> 很难分辨——于是把 **Target 模型收窄为只选 Provider+Model**，选择器换成路由图
+> 已经用的那套卡片式 `ModelSelectDialog`（Provider 侧栏 + Model 卡片网格），
+> **Rule target、深链入口（Probe dialog "Open in Bench"）与 pinned routing 全部
+> 一并砍掉**——Bench 不再是任何页面的跳转目标，只通过自己的一级导航进入。§3/§9
+> 已按此更新；未来若要连接到 Rule，设想是把 scenario 端点也列进 picker 的模型
+> 列表里，而不是重新引入一个独立的 target kind（见 §15）。
 
 ---
 
@@ -189,33 +199,41 @@ Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专
 
 ## 3. Target 模型
 
-沿用 probe 的 target 语义，不发明新概念：
+**V1.1**：target 只有一种——`provider`(+model)（`E2ETargetProvider`）。默认
+loopback（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即
+"近似直连"），可切 Direct 完全绕开 TB 对照。
 
-| target | 复用自 probe | Bench 行为 |
-|--------|--------------|-----------------|
-| `rule` | `E2ETargetRule` | 走 TB loopback `/tingly/{scenario}`，完整 middleware + 路由管线。默认**全链路**：只发 `request_model`，TB 像对真实客户端一样匹配规则（Journey 显示实际命中的规则，与所选不同时给出提示）；可切**钉住规则**（`routing: "pinned"` → `X-Tingly-Probe-Rule`），只跳过匹配这一步 |
-| `provider`(+model) | `E2ETargetProvider` | 默认 loopback（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即"近似直连"），可切 Direct 完全绕开 TB 对照 |
-| `provider_config` | `E2ETargetProviderConfig` | **不纳入**。它服务于"未保存配置的连通性"（Connect AI 场景），Bench 玩的是已保存的对象；纳入只会引入第三种 target 心智 |
+不纳入的两种：
 
-**统一 target picker**（ux-principles #2：消解模式选择）：不做 "先选 rule 还是 provider"
-的两段式，而是一个可搜索的单选下拉，分组平铺：
+| target | 状态 | 理由 |
+|--------|------|------|
+| `rule` | **已移除**（V1 曾支持） | 见下方"为什么砍掉 Rule" |
+| `provider_config` | 不纳入 | 它服务于"未保存配置的连通性"（Connect AI 场景），Bench 玩的是已保存的对象；纳入只会引入第三种 target 心智 |
 
-```
-  Rules        ├ Claude Code · cc-rule (claude_code)
-               ├ Codex · codex-rule (codex)         ← 按 scenario 分组，含 profile
-  Providers    ├ Kimi  ▸ kimi-k2-0905-preview       ← provider 行内二级选 model
-               ├ OpenRouter ▸ …
-```
+**target picker**：不再是可搜索的 Autocomplete 下拉——那个形态在窄栏里把
+provider/model 名字硬截断，选项之间很难分辨。改用用户已经在路由图上练熟的卡片式
+选择器：`ModelSelectDialog`（`frontend/src/components/ModelSelectDialog.tsx`，
+左栏 Provider 列表 + 右栏 Model 卡片网格，点卡片即选中即关闭），Compose 面板里的
+Target 行是一个显示"Provider · model"的按钮，点开即弹出同一个组件——和路由图上
+点服务节点弹出的是完全同一套代码，不是照着视觉仿了一遍。
 
-选中即为 target；target 类型只是所选对象的属性，不是先要回答的问题。
+**为什么砍掉 Rule**（连带 pinned routing 轴、Journey 的 rule-mismatch 提示、
+Plugins 面板的 rule/scenario flag 基线，以及下面的深链入口）：
 
-**深链入口**（ux-principles #11：把物件交到下一步动作手上）：
-
-- Probe dialog 标题栏加 "Open in Bench"：携带当前 target + axes + message 跳转——
-  在弹窗里发现问题、去工作台深挖，是最自然的升级路径。
-- Rule 卡片齿轮菜单、provider 卡片菜单同样加入口。
-- URL 携带 target：`/bench?target=rule:{uuid}` / `?target=provider:{uuid}:{model}`，
-  便于分享和回跳。URL 参数优先于 localStorage 恢复（§10）。
+1. Rule 目标撑不起一个统一的卡片选择器——`ModelSelectDialog` 天然只表达
+   Provider→Model 两级，硬塞 Rule 意味着要么在同一个对话框里发明第二种选择模式
+   （违反 ux-principles #2：消解模式选择），要么继续留着旧的 Autocomplete 给
+   Rule 专用、两套选择器并存，两个选项都比"先只做 Provider+Model"更差。
+2. Rule 目标在 Bench 状态机里的耦合面很大（`routing`/`ProbeRouting`、rule
+   baseline 来源、深链协议、Journey 的 ruleExtra 提示），一次性和 target picker
+   改造一起砍掉，比留着半条腿的 Rule 支持更干净。
+3. 深链入口（Probe dialog "Open in Bench"、rule 卡片齿轮菜单）本身就是围绕
+   Rule target 设计的（`/bench?target=rule:{uuid}&scenario=...`），Rule 一走，
+   这两个入口连带没有意义，一并移除——Bench 不再是任何页面的跳转目标，只通过
+   自己的一级导航（§9）进入，`benchLink.ts` 整个文件删除。
+4. 未来如果要重新连接到 Rule，设想是把 scenario 端点也作为一种"模型"列进
+   `ModelSelectDialog` 的右栏列表里，而不是重新引入一个独立的 target kind——
+   这样选择器还是同一个，不用再面对"先选类型再选对象"的两段式（见 §15）。
 
 ---
 
@@ -501,6 +519,10 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
   都放独立模块。
 - i18n：`en.ts` / `zh.ts` 增 `bench.*` 命名空间；复用 `probe.*` 已有的轴文案
   （同一概念同一词）。
+- **无深链入口（V1.1）**：`/bench` 不接受任何查询参数，也没有别的页面能跳转过来
+  预填 target——Bench 完全独立，只能通过自己的一级导航进入，然后在页面内用
+  target picker 选（§3）。曾经的 `/bench?target=rule:{uuid}` 深链协议
+  （`benchLink.ts`）随 Rule target 一起移除。
 
 ---
 
@@ -522,29 +544,38 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 
 | # | 位置 | 改动 |
 |---|------|------|
-| 1 | `internal/probe/types.go` | `E2ERequest` 增 `Flags typ.FlagOverlay`、`Headers map[string]string`、`Routing`（natural 默认 / pinned → `X-Tingly-Probe-Rule`）；`ValidateE2ERequest` 扩展（flags 按 registry 校验、direct×flags 互斥、header 名合法、routing 取值）；`Customized()` = raw request ∨ flags ∨ headers，让定制请求绕过能力缓存 |
+| 1 | `internal/probe/types.go` | `E2ERequest` 增 `Flags typ.FlagOverlay`、`Headers map[string]string`；~~`Routing`（natural 默认 / pinned → `X-Tingly-Probe-Rule`）~~（**V1.1 移除**，见下）；`ValidateE2ERequest` 扩展（flags 按 registry 校验、direct×flags 互斥、header 名合法）；`Customized()` = raw request ∨ flags ∨ headers，让定制请求绕过能力缓存 |
 | 2 | `internal/typ/flag_overlay.go` | `FlagOverlay`、`ValidateFlagOverlay`（含 `multi_enum`）、`ApplyFlagOverlay`（经 JSON 形态合并，显式零值可以清掉已开的 flag）、`ProbeFlagsHeader` 及 base64url 编解码。registry 仍是唯一可信源 |
-| 3 | `internal/probe/e2e_probe.go` | 回环路径把 `Flags` 编进 `X-Tingly-Probe-Flags`；pinned 时 rule target 发 `X-Tingly-Probe-Rule`；`Headers` 经 ctx 交给 header round tripper（最内层）；capture 客户端同样套用 |
+| 3 | `internal/probe/e2e_probe.go` | 回环路径把 `Flags` 编进 `X-Tingly-Probe-Flags`；~~pinned 时 rule target 发 `X-Tingly-Probe-Rule`~~（**V1.1 移除**）；`Headers` 经 ctx 交给 header round tripper（最内层）；capture 客户端同样套用 |
 | 4 | `internal/client/probe_rewrite.go` | `WithProbeHeaderOverrides` / `probeHeaderOverridesRoundTripper` / `ApplyHeaderOverrides`：请求离开进程前设/删 header；只做 header，不碰 body |
 | 5 | `internal/protocolserver/rule_flags.go` | `ResolveRuleFlagsWithScenario` 在 scenario 继承后、自动项/OAuth 抑制前应用 header overlay（`applyProbeFlagOverlay`；解码失败记 warn 并忽略） |
 | 6 | `internal/probe/curl.go` | 应用 header 覆盖；Through-TB 的 curl 带探测头 |
 | 7 | swagger / codegen | `openapi.json` 与前端 `schema.d.ts` 已重新生成 |
-| 8 | 测试 | `typ/flag_overlay_test.go`、`client/probe_rewrite_test.go`、`probe/bench_test.go`（校验 + routing + Customized + curl header 覆盖）、`protocolserver/rule_flags_overlay_test.go` |
+| 8 | 测试 | `typ/flag_overlay_test.go`、`client/probe_rewrite_test.go`、`probe/bench_test.go`（校验 + Customized + curl header 覆盖；~~routing~~ 子测试 V1.1 随字段一起删）、`protocolserver/rule_flags_overlay_test.go` |
+
+**V1.1 后端清理**（随前端 Rule target 一起，§3）：`ProbeRouting`/`RoutingNatural`/`RoutingPinned`/`Pinned()`、
+`E2ERequest.Routing` 字段、`ValidateE2ERequest` 里对 `routing` 的校验分支、`resolveRuleTarget`
+里"pinned 时发 `X-Tingly-Probe-Rule`"的分支，全部删除——这条路径从诞生起就只有 Bench 会走（Probe
+弹窗从未暴露 pinned 选项，`scopeAvailable()` 的注释明确写着 rule 探测必须走完整 middleware），
+Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/protocolserver/protocol_handler.go`
+读取 `X-Tingly-Probe-Rule` header 的逻辑本身——它和仍在用的 `X-Tingly-Probe-Service` 是同一族通用
+探测头基础设施（`.design/probe.md`），不是 Bench 专属，现在没有生产者了但保留它的读取分支成本
+为零、风险却是动核心路由代码，不值得为了"零调用方也删干净"去碰。
 
 ## 12. 前端改动清单（已实现）
 
 | # | 位置 | 改动 |
 |---|------|------|
-| 1 | `pages/bench/BenchPage.tsx` | 页面（lazy），三栏布局编排、run history、⌘/Ctrl+Enter、localStorage 持久化、深链消费 |
-| 2 | `pages/bench/benchLink.ts` | URL 契约（`?target=rule:{uuid}&scenario=` / `?target=provider:{uuid}&model=` + 轴参数）；独立小模块，供 ProbeDialog 的 "Open in Bench" 使用而不拖入页面 chunk |
-| 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签 |
+| 1 | `pages/bench/BenchPage.tsx` | 页面（lazy），三栏布局编排、run history、⌘/Ctrl+Enter、localStorage 持久化 |
+| 2 | ~~`pages/bench/benchLink.ts`~~ | **V1.1 整个文件删除**——深链协议（`?target=rule:{uuid}&scenario=` 等）随 Rule target 一起下线，Bench 不再接受任何跳转 |
+| 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签。**V1.1**：`BenchTarget` 收窄为 `{providerUuid, model}`，`routing` 字段随之删除 |
 | 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组，与 PluginsPanel 同一套 overline+分割线样式、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
-| 5 | `pages/bench/` 内部组件 | `TargetPicker`（统一目标选择）、`BenchAxes`（全展开轴、Parameters/Content 分组，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、`PluginsPanel`（registry-driven 三态）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
+| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴，**V1.1 去掉 Routing 轴**，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、`PluginsPanel`（registry-driven，**V1.1 起 baseline 恒为空**——provider 目标没有 rule/scenario 可继承）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
 | 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
-| 7 | `services/api.ts` | `getAllRules`（不带 scenario 即全部规则） |
-| 8 | i18n | `bench.*` en/zh；`probe.openInBench`；`layout.bench` |
-| 9 | 入口 | ProbeDialog 标题栏 "Open in Bench"（带 target + 轴 + message） |
-| 10 | 测试 | `pages/bench/bench.test.ts`（深链往返、请求构造、raw 请求解析与互斥） |
+| 7 | `services/api.ts` | ~~`getAllRules`（不带 scenario 即全部规则）~~（**V1.1**：`useTargetCatalog` 不再拉 rules，只拉 providers） |
+| 8 | i18n | `bench.*` en/zh；~~`probe.openInBench`~~（**V1.1 删除**，随入口一起）；`layout.bench` |
+| 9 | ~~入口：ProbeDialog 标题栏 "Open in Bench"~~ | **V1.1 移除**——Bench 不再是任何页面的跳转目标 |
+| 10 | 测试 | `pages/bench/bench.test.ts`（**V1.1**：深链往返测试随 `benchLink.ts` 删除，只剩请求构造 + raw 请求解析与互斥） |
 
 ## 13. 分期交付
 
@@ -576,6 +607,8 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 | 配置持久化 | localStorage 持久化 | 跟随 probe 的不持久化 | 诊断要默认可预测，工作台要延续上下文——两个页面的正确答案相反，显式写下避免"统一"冲动 |
 | provider_config target | 不纳入 | 三种 target 全支持 | 它属于 Connect AI 的"保存前验证"流程；Bench 面向已保存对象，多一种 target 只添心智噪音 |
 | Run history | session 内存 | 落库持久化 | 先验证"回看/对照"是不是真实高频动作，再决定值不值得一张表 |
+| Target picker（V1.1） | 路由图同款卡片选择器（`ModelSelectDialog`），只选 Provider+Model | 继续用 Autocomplete 下拉，只是把 Rule 分组去掉 | Autocomplete 下拉在窄栏里把长名字硬截断、选项难分辨；卡片选择器是用户已经练熟的心智，且是同一份代码，不是仿制视觉 |
+| Rule target（V1.1） | 移除，Bench 只连 Provider+Model | 保留 Rule，但换个更宽的地方放 target picker | Rule 目标撑不起统一的卡片选择器，硬塞等于发明第二种选择模式；连带的 routing 轴/深链协议/flag 基线耦合面大，不如一次性和 picker 改造一起砍掉，未来要接回来再设计 |
 
 ---
 
