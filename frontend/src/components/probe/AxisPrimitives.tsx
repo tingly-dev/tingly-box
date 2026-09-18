@@ -56,7 +56,7 @@ export const railGroupStyle = {
 //   thing as a Bench Template, just body-fragment-sized instead of
 //   whole-body — which is why Bench's "start from" menu can list them
 //   alongside Templates without inventing a new category.
-export const AxisGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+export const AxisGroup: React.FC<{ label: React.ReactNode; children: React.ReactNode }> = ({ label, children }) => (
     <Box>
         <Typography
             variant="overline"

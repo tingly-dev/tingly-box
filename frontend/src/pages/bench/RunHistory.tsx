@@ -15,13 +15,7 @@ export const RunHistory: React.FC<{
     onSelect: (run: RunRecord) => void;
 }> = ({ runs, activeId, onSelect }) => {
     const { t } = useTranslation();
-    if (runs.length === 0) {
-        return (
-            <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                {t('bench.runsEmpty', { defaultValue: 'Runs from this session appear here — click one to restore its result and the config that produced it.' })}
-            </Typography>
-        );
-    }
+    if (runs.length === 0) return null;
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflowX: 'auto', py: 0.25 }}>
             <Typography variant="overline" sx={{ fontSize: '0.6rem', color: 'text.disabled', mr: 0.5, whiteSpace: 'nowrap' }}>
