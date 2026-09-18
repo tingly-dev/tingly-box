@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	managedagentsvc "github.com/tingly-dev/tingly-box/internal/managedagent"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -248,6 +249,14 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	UseWebStaticEndpoints(s.engine)
 }
 
+// managedAgentSessionPoolConfig mirrors imbot's sessionPoolConfig
+// (internal/server/module/imbot/manager.go) — same capacity/idle-timeout
+// reasoning applies to a browser-driven Claude Code session as to a bot one.
+var managedAgentSessionPoolConfig = pool.Config{
+	MaxSessions: 10,
+	IdleTimeout: 10 * time.Minute,
+}
+
 // registerManagedAgentRoutes wires the Managed Agent HTTP surface — a web
 // front door onto the same remote/session + agentboot machinery @cc already
 // drives, not a separate domain model (.design/managed-agent.md). It builds
@@ -271,6 +280,7 @@ func registerManagedAgentRoutes(apiV1 *swagger.RouteGroup, sm *db.StoreManager, 
 		Sessions: maCore.Session,
 		Agent:    maCore.Agent,
 		Routing:  tbclient.NewTBClient(cfg),
+		Pool:     pool.New(managedAgentSessionPoolConfig),
 	})
 	managedagentmodule.RegisterRoutes(apiV1, managedagentmodule.NewHandler(maSvc), enabled)
 }

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -108,12 +110,26 @@ func (s *memStore) Messages(id string) ([]session.Message, error) {
 // fakeAgent is a scripted agentboot.Agent: each Execute call builds one
 // fakeHandle via the test-supplied script function, so a test controls
 // exactly what a "turn" does without spawning a real Claude Code process.
+// It also implements agentboot.PersistentAgent's Open — openFn is nil in
+// tests that only exercise the one-shot path, which makes every persistent
+// attempt fail (simulating an agent that can't Open), same as a real launch
+// failure would: runPersistentTurn falls back to one-shot either way.
 type fakeAgent struct {
-	script func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle)
+	script    func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle)
+	openFn    func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error)
+	openCalls atomic.Int32
 }
 
 func (a *fakeAgent) Type() agentboot.AgentType { return agentboot.AgentTypeClaude }
 func (a *fakeAgent) IsAvailable() bool         { return true }
+
+func (a *fakeAgent) Open(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+	a.openCalls.Add(1)
+	if a.openFn == nil {
+		return nil, errors.New("fakeAgent: Open not configured")
+	}
+	return a.openFn(ctx, prompt, opts)
+}
 
 func (a *fakeAgent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
 	h := &fakeHandle{
@@ -207,6 +223,115 @@ func newTestService(t *testing.T, script func(ctx context.Context, prompt string
 	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, &fakeAgent{script: script})
 
 	return NewService(Config{Sessions: mgr, Agent: agentSvc}), mgr
+}
+
+// newPersistentTestService is newTestService plus a *pool.Pool, so Service
+// drives turns through openFn's PersistentSession first, falling back to
+// oneShotScript only if openFn returns an error (or is nil).
+func newPersistentTestService(t *testing.T, oneShotScript func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle), openFn func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error)) (*Service, *fakeAgent) {
+	t.Helper()
+	mgr := session.NewManager(session.Config{Timeout: time.Hour, MessageRetention: time.Hour}, newMemStore())
+	t.Cleanup(mgr.Stop)
+
+	agentSvc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewAgentService: %v", err)
+	}
+	fa := &fakeAgent{script: oneShotScript, openFn: openFn}
+	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
+
+	p := pool.New(pool.Config{MaxSessions: 10, IdleTimeout: time.Hour})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Pool: p}), fa
+}
+
+// fakePersistentSession is a controllable agentboot.PersistentSession: a
+// script decides what each Send (including the implicit one from Open)
+// does, via the emit/completeTurn/crash helpers below.
+type fakePersistentSession struct {
+	mu     sync.Mutex
+	status agentboot.SessionState
+	events chan agentboot.StreamEvent
+
+	script func(ctx context.Context, prompt string, s *fakePersistentSession)
+}
+
+// newFakePersistentSession builds a session already Running its first turn
+// (prompt), matching real Open's contract — the caller (an openFn) has
+// exactly the ctx/prompt Open itself received, so it kicks the script off
+// here rather than leaving turn 1 unrun until some later Send.
+func newFakePersistentSession(ctx context.Context, prompt string, script func(ctx context.Context, prompt string, s *fakePersistentSession)) *fakePersistentSession {
+	s := &fakePersistentSession{status: agentboot.SessionStateRunning, events: make(chan agentboot.StreamEvent, 16), script: script}
+	go script(ctx, prompt, s)
+	return s
+}
+
+func (s *fakePersistentSession) Send(ctx context.Context, prompt string) error {
+	s.mu.Lock()
+	if s.status != agentboot.SessionStateIdle {
+		s.mu.Unlock()
+		return errors.New("fakePersistentSession: turn already in flight")
+	}
+	s.status = agentboot.SessionStateRunning
+	s.mu.Unlock()
+	go s.script(ctx, prompt, s)
+	return nil
+}
+
+func (s *fakePersistentSession) Events() <-chan agentboot.StreamEvent { return s.events }
+
+func (s *fakePersistentSession) Respond(reqID string, resp agentboot.ControlResponse) error {
+	return agentboot.ErrUnknownRequestID
+}
+
+func (s *fakePersistentSession) Status() agentboot.SessionState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.status
+}
+
+func (s *fakePersistentSession) Close(ctx context.Context) error {
+	s.mu.Lock()
+	if s.status == agentboot.SessionStateTerminated {
+		s.mu.Unlock()
+		return nil
+	}
+	s.status = agentboot.SessionStateTerminated
+	s.mu.Unlock()
+	select {
+	case s.events <- agentboot.SessionStateEvent{State: agentboot.SessionStateTerminated, Reason: "closed"}:
+	default:
+	}
+	return nil
+}
+
+func (s *fakePersistentSession) emit(ev agentboot.StreamEvent) { s.events <- ev }
+
+func (s *fakePersistentSession) completeTurn(result *agentboot.Result) {
+	s.mu.Lock()
+	s.status = agentboot.SessionStateIdle
+	s.mu.Unlock()
+	s.events <- agentboot.TurnCompleteEvent{Result: result}
+}
+
+func (s *fakePersistentSession) crash(reason string) {
+	s.mu.Lock()
+	s.status = agentboot.SessionStateTerminated
+	s.mu.Unlock()
+	s.events <- agentboot.SessionStateEvent{State: agentboot.SessionStateTerminated, Reason: reason}
+}
+
+// completingPersistentScript finishes a turn immediately, the persistent
+// counterpart of completingScript.
+func completingPersistentScript(ctx context.Context, prompt string, s *fakePersistentSession) {
+	s.emit(agentboot.MessageEvent{Raw: "ok: " + prompt})
+	s.completeTurn(&agentboot.Result{Format: agentboot.OutputFormatText, Output: "done"})
+}
+
+// crashingPersistentScript simulates the process dying mid-turn.
+func crashingPersistentScript(ctx context.Context, prompt string, s *fakePersistentSession) {
+	s.crash("boom")
 }
 
 // completingScript finishes a turn immediately with one assistant-ish
@@ -535,4 +660,102 @@ func TestArchive_ConcurrentWithRunsMap(t *testing.T) {
 		}(sess.ID)
 	}
 	wg.Wait()
+}
+
+// ---------- persistent sessions (agentboot/pool) ----------
+
+func TestPersistentTurn_ReusesSessionAcrossMessages(t *testing.T) {
+	svc, fa := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		return newFakePersistentSession(ctx, prompt, completingPersistentScript), nil
+	})
+	dir := t.TempDir()
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if err := svc.SendMessage(context.Background(), sess.ID, "again"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if got := fa.openCalls.Load(); got != 1 {
+		t.Fatalf("Open called %d times, want 1 (the second message should Acquire+Send the pooled session, not Open a new one)", got)
+	}
+}
+
+func TestPersistentTurn_FallsBackToOneShotOnOpenFailure(t *testing.T) {
+	svc, fa := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		return nil, errors.New("boom: launch failed")
+	})
+	dir := t.TempDir()
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	// completingScript (one-shot) still completes the session normally.
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if got := fa.openCalls.Load(); got != 1 {
+		t.Fatalf("Open called %d times, want 1", got)
+	}
+}
+
+func TestPersistentTurn_CrashMidTurnDropsFromPoolAndFails(t *testing.T) {
+	svc, fa := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		return newFakePersistentSession(ctx, prompt, crashingPersistentScript), nil
+	})
+	dir := t.TempDir()
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	// A mid-turn crash is a real failure, not something to silently retry
+	// one-shot (runPersistentTurn returns handled=true even on error).
+	waitStatus(t, svc, sess.ID, session.StatusFailed, time.Second)
+
+	// The crashed session must have been dropped from the pool, so a
+	// follow-up message Opens a fresh one rather than reusing the dead one.
+	if err := svc.SendMessage(context.Background(), sess.ID, "again"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	// The session's status is already Failed from turn 1, so waitStatus on
+	// StatusFailed alone could return before turn 2 even starts. Wait for the
+	// second Open call directly, then confirm the status it lands on.
+	deadline := time.Now().Add(time.Second)
+	for fa.openCalls.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("Open called %d times, want 2 (the crashed session must not be reused)", fa.openCalls.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusFailed, time.Second)
+}
+
+func TestArchive_EvictsResidentPersistentSession(t *testing.T) {
+	svc, _ := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		return newFakePersistentSession(ctx, prompt, completingPersistentScript), nil
+	})
+	dir := t.TempDir()
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if _, ok := svc.pool.Acquire(sess.ID); !ok {
+		t.Fatalf("session %s not resident in the pool after its first turn completed", sess.ID)
+	}
+
+	if _, err := svc.Archive(sess.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if _, ok := svc.pool.Acquire(sess.ID); ok {
+		t.Fatalf("pool still holds a session for %s after Archive — the on-disk session file would stay locked", sess.ID)
+	}
 }

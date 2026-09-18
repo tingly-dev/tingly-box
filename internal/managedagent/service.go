@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -55,6 +56,7 @@ type Service struct {
 	sessions *session.Manager
 	agent    *agentboot.AgentService
 	routing  Routing
+	pool     *pool.Pool // optional: nil keeps every turn one-shot
 
 	mu   sync.Mutex
 	runs map[string]*run // sessionID -> live turn, while one is in flight
@@ -73,11 +75,19 @@ type Config struct {
 	Sessions *session.Manager
 	Agent    *agentboot.AgentService
 	Routing  Routing // optional
+	// Pool, if set, drives turns through a long-lived Claude Code process
+	// per session instead of spawning one per message — the same
+	// agentboot/pool mechanism @cc's ClaudeCodeExecutor uses for its
+	// persistent_session setting (.design/claude-code.md §5.3). A setup
+	// failure always falls back to a one-shot turn, so this is safe to
+	// enable unconditionally; nil keeps every turn one-shot, unchanged
+	// from before this existed.
+	Pool *pool.Pool
 }
 
 // NewService builds a Service. It does not touch the store.
 func NewService(cfg Config) *Service {
-	return &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, runs: map[string]*run{}}
+	return &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}}
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -314,6 +324,11 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 	}
 	if snap.Status != session.StatusClosed {
 		s.cancelRun(id)
+		// A resident persistent process must not survive archiving: it
+		// would keep the on-disk Claude session file open, corrupting any
+		// later resume attempt (the exact bug .design/claude-code.md §5.4
+		// documents fixing for @cc's own bot-stop/setting-off paths).
+		s.evictPersistent(id)
 		// Close removes the session from the manager's live index (it stays
 		// only in the store), so re-reading it via Snapshot afterward would
 		// spuriously find nothing; the transition is known here, so just
@@ -322,6 +337,18 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		snap.Status = session.StatusClosed
 	}
 	return &snap, nil
+}
+
+// evictPersistent closes and forgets id's resident persistent session, if
+// any. A no-op when persistence isn't configured or the session was never
+// promoted to persistent (e.g. it only ever ran one-shot turns).
+func (s *Service) evictPersistent(id string) {
+	if s.pool == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	_ = s.pool.CloseAndRemove(ctx, id)
 }
 
 func isActive(st session.Status) bool {
