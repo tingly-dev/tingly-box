@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
@@ -231,7 +233,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 	}
 
 	// Generate message ID for Anthropic format
-	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+	messageID := ids.Message()
 
 	// Track streaming state
 	var (
@@ -402,7 +404,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 	}
 
 	// Generate message ID for Anthropic beta format
-	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+	messageID := ids.Message()
 
 	// Track streaming state
 	var (

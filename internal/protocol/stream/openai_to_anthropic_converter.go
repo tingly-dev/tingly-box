@@ -2,10 +2,10 @@ package stream
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 	"sort"
-	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -98,7 +98,7 @@ func newOpenAIToAnthropicConverter(
 		req:             req,
 		hooks:           hooks,
 		mapFinishReason: mapFinishReason,
-		messageID:       fmt.Sprintf("msg_%d", time.Now().Unix()),
+		messageID:       ids.Message(),
 		state:           newStreamState(),
 		usage:           protocol.ZeroTokenUsage(),
 	}

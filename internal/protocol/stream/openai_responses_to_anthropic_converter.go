@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"sort"
-	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
@@ -51,7 +52,7 @@ func newResponsesToAnthropicConverter(ctx context.Context, stream ResponsesStrea
 		ctx:           ctx,
 		stream:        stream,
 		responseModel: responseModel,
-		messageID:     fmt.Sprintf("msg_%d", time.Now().Unix()),
+		messageID:     ids.Message(),
 		state:         newStreamState(),
 		toolCalls:     make(map[string]*responsesToAnthropicToolCall),
 		usage:         protocol.ZeroTokenUsage(),

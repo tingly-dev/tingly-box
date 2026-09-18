@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"google.golang.org/genai"
 )
@@ -125,7 +127,7 @@ func HandleGoogleToAnthropic(googleResp *genai.GenerateContentResponse, response
 
 	// Build response JSON
 	responseJSON := map[string]interface{}{
-		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
+		"id":            ids.Message(),
 		"type":          "message",
 		"role":          "assistant",
 		"content":       []map[string]interface{}{},
@@ -219,7 +221,7 @@ func HandleGoogleToAnthropicBeta(googleResp *genai.GenerateContentResponse, resp
 
 	// Build response JSON
 	responseJSON := map[string]interface{}{
-		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
+		"id":            ids.Message(),
 		"type":          "message",
 		"role":          "assistant",
 		"content":       []map[string]interface{}{},

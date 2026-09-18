@@ -1,7 +1,10 @@
 package check
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -337,4 +340,162 @@ func AssertUsagePropagated() Assertion {
 			return nil
 		},
 	}
+}
+
+// responsesIDShape is the canonical form for one Responses item type: its
+// id prefix and a compiled "<prefix>_<32 hex>" matcher built from it, so the
+// prefix used in an error message is the one value both were built from
+// rather than something re-derived from the regexp source.
+type responsesIDShape struct {
+	prefix string
+	re     *regexp.Regexp
+}
+
+func newResponsesIDShape(prefix string) responsesIDShape {
+	return responsesIDShape{prefix: prefix, re: regexp.MustCompile(`^` + prefix + `_[0-9a-f]{32}$`)}
+}
+
+// responsesIDShapes are the canonical id forms the gateway mints for a
+// Responses response it synthesizes from a non-Responses upstream
+// (.design/protocol-responses.md §2): "<prefix>_<32 lowercase hex>".
+var responsesIDShapes = map[string]responsesIDShape{
+	"response":      newResponsesIDShape("resp"),
+	"message":       newResponsesIDShape("msg"),
+	"function_call": newResponsesIDShape("fc"),
+	"reasoning":     newResponsesIDShape("rs"),
+}
+
+// FinalResponsesBody returns the terminal Responses API response body of a
+// round trip: RawBody parsed directly when the trip was not streaming, or
+// the "response" payload of the terminal response.completed /
+// response.incomplete SSE event when it was. Shared by this package's own
+// assertions and by harness test cases that need the same body (e.g.
+// internal/protocoltest/content_shapes.go), so the terminal-event scan is
+// implemented once.
+func FinalResponsesBody(r *RoundTripResult) (map[string]any, error) {
+	if !r.IsStreaming {
+		var resp map[string]any
+		if err := json.Unmarshal(r.RawBody, &resp); err != nil {
+			return nil, fmt.Errorf("responses body: %w", err)
+		}
+		return resp, nil
+	}
+	for _, line := range r.StreamEvents {
+		payload := strings.TrimPrefix(line, "data: ")
+		var ev map[string]any
+		if json.Unmarshal([]byte(payload), &ev) != nil {
+			continue
+		}
+		if ev["type"] == "response.completed" || ev["type"] == "response.incomplete" {
+			if resp, ok := ev["response"].(map[string]any); ok {
+				return resp, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("stream has no response.completed/incomplete event")
+}
+
+// AssertResponsesItemIDsCanonical returns an Assertion that a Responses
+// response synthesized by the gateway (source Responses, target not
+// Responses) carries canonical ids: the response id and every output item
+// id have the type prefix and 32-hex shape OpenAI validates on replay, ids
+// are unique within the response, a function_call's call_id is set and
+// distinct from its item id, and in streaming the same item id appears in
+// output_item.added, output_item.done and the final response output.
+//
+// It is a no-op for other pairs: on a Responses passthrough the ids come
+// from the upstream, and a non-Responses source never sees these ids.
+func AssertResponsesItemIDsCanonical() Assertion {
+	return Assertion{
+		Name: "responses_item_ids_canonical",
+		Check: func(r *RoundTripResult) error {
+			if r.SourceProtocol != protocol.TypeOpenAIResponses || r.TargetProtocol == protocol.TypeOpenAIResponses {
+				return nil
+			}
+			final, err := FinalResponsesBody(r)
+			if err != nil {
+				return err
+			}
+			if err := checkResponsesIDs(final); err != nil {
+				return err
+			}
+			if !r.IsStreaming {
+				return nil
+			}
+
+			added := map[string]string{}
+			done := map[string]string{}
+			for _, line := range r.StreamEvents {
+				payload := strings.TrimPrefix(line, "data: ")
+				var ev map[string]any
+				if json.Unmarshal([]byte(payload), &ev) != nil {
+					continue
+				}
+				switch ev["type"] {
+				case "response.output_item.added":
+					item, _ := ev["item"].(map[string]any)
+					added[str(item["id"])] = str(item["type"])
+				case "response.output_item.done":
+					item, _ := ev["item"].(map[string]any)
+					done[str(item["id"])] = str(item["type"])
+				}
+			}
+			for id, typ := range added {
+				if _, ok := done[id]; !ok {
+					return fmt.Errorf("output_item.added %s %s has no matching output_item.done", typ, id)
+				}
+			}
+			for id := range done {
+				if _, ok := added[id]; !ok {
+					return fmt.Errorf("output_item.done %s was never added", id)
+				}
+			}
+			for _, o := range outputItems(final) {
+				if _, ok := added[str(o["id"])]; !ok {
+					return fmt.Errorf("final output item %s %s was not streamed under that id", str(o["type"]), str(o["id"]))
+				}
+			}
+			return nil
+		},
+	}
+}
+
+func checkResponsesIDs(resp map[string]any) error {
+	if id := str(resp["id"]); !responsesIDShapes["response"].re.MatchString(id) {
+		return fmt.Errorf("response id %q is not %s_<32 hex>", id, responsesIDShapes["response"].prefix)
+	}
+	seen := map[string]bool{}
+	for _, item := range outputItems(resp) {
+		typ, id := str(item["type"]), str(item["id"])
+		if shape, ok := responsesIDShapes[typ]; ok && !shape.re.MatchString(id) {
+			return fmt.Errorf("%s item id %q is not %s_<32 hex>", typ, id, shape.prefix)
+		}
+		if seen[id] {
+			return fmt.Errorf("duplicate output item id %q", id)
+		}
+		seen[id] = true
+		if typ == "function_call" {
+			callID := str(item["call_id"])
+			if callID == "" || callID == id {
+				return fmt.Errorf("function_call %s call_id %q must be set and distinct from the item id", id, callID)
+			}
+		}
+	}
+	return nil
+}
+
+func outputItems(resp map[string]any) []map[string]any {
+	raw, _ := resp["output"].([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, o := range raw {
+		if m, ok := o.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func str(v any) string {
+	s, _ := v.(string)
+	return s
 }

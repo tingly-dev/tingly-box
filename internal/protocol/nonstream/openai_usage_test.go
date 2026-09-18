@@ -104,7 +104,9 @@ func TestConvertChatToResponsesWirePreservesToolCalls(t *testing.T) {
 	require.Len(t, converted.Output, 1)
 	item := converted.Output[0]
 	assert.Equal(t, "function_call", item.Type)
-	assert.Equal(t, "call_chat_1", item.ID)
+	// The item id is minted in canonical fc_ form; the chat tool_call id is
+	// preserved only as the call_id correlation key.
+	assert.Regexp(t, `^fc_[0-9a-f]{32}$`, item.ID)
 	assert.Equal(t, "call_chat_1", item.CallID)
 	assert.Equal(t, "lookup", item.Name)
 	require.NotNil(t, item.Arguments)

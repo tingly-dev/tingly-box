@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
@@ -64,7 +66,7 @@ func marshalOpenAIChatToAnthropic(chat *openai.ChatCompletion, model string) ([]
 		return nil, fmt.Errorf("convert OpenAI Chat response to Anthropic: response is nil")
 	}
 	result := wire.AnthropicMsgWire{
-		ID:           "msg_" + uuid.NewString(),
+		ID:           ids.Message(),
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},
@@ -133,7 +135,7 @@ func ConvertOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string)
 		return nil, fmt.Errorf("convert OpenAI Chat response to Anthropic beta: response is nil")
 	}
 	result := wire.AnthropicMsgWire{
-		ID:           "msg_" + uuid.NewString(),
+		ID:           ids.Message(),
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},

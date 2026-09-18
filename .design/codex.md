@@ -41,7 +41,25 @@ caches are not disturbed.
 `apply_patch`) are currently dropped by both converters. Tracked
 separately.
 
-## 3. DeepSeek specifics
+## 3. Ids Codex replays
+
+Two facts about the ids on the objects the gateway synthesizes:
+
+1. Codex replays our ids verbatim, possibly into a **native** Responses
+   upstream after a mid-thread provider switch, where OpenAI validates
+   them (type prefix, charset, length, uniqueness). Codex's own replay
+   validation only checks that *some* prefix exists (openai/codex #38855),
+   so a wrong prefix reaches the upstream.
+2. Ids are never model-visible and never resolved by anyone under
+   `store: false`; they only have to be well-formed and unique. What the
+   model does see is the `call_id`, passed through from the upstream.
+
+The minting rules and rejected alternatives are in `protocol-responses.md`
+§2. Two invariants follow: an id is minted once per object and is identical
+in `output_item.added`, `output_item.done` and the final output; ids on
+replayed input items are never rewritten.
+
+## 4. DeepSeek specifics
 
 DeepSeek's chat endpoint validates the tool-call shape strictly and is the
 provider that surfaced the repair; its Responses endpoint is lenient on ids

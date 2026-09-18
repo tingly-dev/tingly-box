@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+
 	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -55,9 +57,9 @@ func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) 
 	return &chatToResponsesConverter{
 		stream:           stream,
 		responseModel:    responseModel,
-		responseID:       fmt.Sprintf("resp_%d", time.Now().Unix()),
+		responseID:       ids.Response(),
 		createdAt:        time.Now().Unix(),
-		textItemID:       fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		textItemID:       ids.Message(),
 		textOutputIndex:  -1,
 		usage:            protocol.ZeroTokenUsage(),
 		pendingToolCalls: make(map[int]*pendingToolCallResponse),
@@ -151,21 +153,20 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 			// Preserve it as call_id, but never reuse it as the Responses item ID:
 			// Codex persists output item IDs and a later native Responses request
 			// rejects an item whose id starts with call_ instead of fc_.
-			itemID := fmt.Sprintf("fc_%d_%d", time.Now().Unix(), openaiIndex)
+			itemID := ids.FunctionCall()
+			callID := toolCall.ID
+			if callID == "" {
+				callID = ids.Call()
+			}
 
 			toolOutputIndex := c.outputIndex
 			c.outputIndex++
 
 			c.pendingToolCalls[openaiIndex] = &pendingToolCallResponse{
 				itemID:    itemID,
-				callID:    toolCall.ID,
+				callID:    callID,
 				outputIdx: toolOutputIndex,
 				name:      toolCall.Function.Name,
-			}
-
-			callID := toolCall.ID
-			if callID == "" {
-				callID = itemID
 			}
 			c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
 				Type:           "response.output_item.added",
@@ -259,9 +260,6 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 	for _, idx := range sortedIndexes {
 		ptc := c.pendingToolCalls[idx]
 		callID := ptc.callID
-		if callID == "" {
-			callID = ptc.itemID
-		}
 		arguments := ptc.arguments.String()
 		c.pending = append(c.pending, wire.ResponsesFunctionCallArgumentsDoneEvent{
 			Type:           "response.function_call_arguments.done",
@@ -292,9 +290,6 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 	for _, idx := range sortedIndexes {
 		ptc := c.pendingToolCalls[idx]
 		callID := ptc.callID
-		if callID == "" {
-			callID = ptc.itemID
-		}
 		output[ptc.outputIdx] = newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), itemStatus)
 	}
 

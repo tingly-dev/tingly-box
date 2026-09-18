@@ -658,10 +658,14 @@ func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResu
 	var r *sse.ParsedResult
 	switch style {
 	case protocol.APIStyleOpenAI:
-		// Try to assemble as Responses API first
+		// Try to assemble as Responses API first. Fall back to Chat
+		// Completions only when the Responses assembler saw nothing at all:
+		// a tool-call-only Responses stream has no text content but does
+		// carry tool calls and a terminal status, and falling back on
+		// "no content" alone used to discard those tool calls (the reason the
+		// openai_responses tool_use scenarios sat in the skip list).
 		r = sse.AssembleOpenAIResponsesStream(events)
-		// If that failed, try Chat Completions
-		if r == nil || len(r.Content) == 0 {
+		if r == nil || (len(r.Content) == 0 && len(r.ToolCalls) == 0 && r.FinishReason == "") {
 			r = sse.AssembleOpenAIStream(events)
 		}
 	case protocol.APIStyleAnthropic:

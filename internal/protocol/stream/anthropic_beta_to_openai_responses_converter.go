@@ -2,9 +2,10 @@ package stream
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -51,6 +52,7 @@ type pendingResponseTextBlock struct {
 // pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
 type pendingResponseToolCall struct {
 	itemID      string
+	callID      string
 	name        string
 	outputIndex int
 	arguments   strings.Builder
@@ -67,7 +69,7 @@ func newAnthropicBetaToResponsesConverter(
 		stream:            stream,
 		responseModel:     responseModel,
 		acc:               usagepkg.NewAnthropicAccumulator(),
-		responseID:        fmt.Sprintf("resp_%d", ts),
+		responseID:        ids.Response(),
 		pendingTextBlocks: make(map[int]*pendingResponseTextBlock),
 		pendingToolCalls:  make(map[int]*pendingResponseToolCall),
 		createdAt:         ts,
@@ -172,7 +174,7 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthrop
 	currentOutputIndex := c.outputIndex
 
 	if blockType == "text" {
-		itemID := fmt.Sprintf("msg_%d_%d", c.createdAt, index)
+		itemID := ids.Message()
 		c.pendingTextBlocks[index] = &pendingResponseTextBlock{
 			itemID:      itemID,
 			outputIndex: currentOutputIndex,
@@ -201,7 +203,7 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthrop
 	} else if blockType == "tool_use" {
 		toolID := event.ContentBlock.ID
 		toolName := event.ContentBlock.Name
-		c.pendingToolCalls[index] = &pendingResponseToolCall{itemID: toolID, name: toolName, outputIndex: currentOutputIndex}
+		c.pendingToolCalls[index] = &pendingResponseToolCall{itemID: ids.FunctionCall(), callID: toolID, name: toolName, outputIndex: currentOutputIndex}
 
 		arguments := ""
 		c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
@@ -210,7 +212,7 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthrop
 			OutputIndex:    currentOutputIndex,
 			Item: wire.ResponsesOutputItemWire{
 				Type:      "function_call",
-				ID:        toolID,
+				ID:        c.pendingToolCalls[index].itemID,
 				CallID:    toolID,
 				Name:      toolName,
 				Arguments: &arguments,
@@ -309,7 +311,7 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStop(event *anthropi
 				Item: wire.ResponsesOutputItemWire{
 					Type:      "function_call",
 					ID:        pending.itemID,
-					CallID:    pending.itemID,
+					CallID:    pending.callID,
 					Name:      pending.name,
 					Arguments: &argumentsStr,
 					Status:    "completed",
@@ -353,7 +355,7 @@ func (c *anthropicBetaToResponsesConverter) emitCompletionEvents() {
 		output[pending.outputIndex] = wire.ResponsesOutputItemWire{
 			Type:      "function_call",
 			ID:        pending.itemID,
-			CallID:    pending.itemID,
+			CallID:    pending.callID,
 			Name:      pending.name,
 			Arguments: &argumentsStr,
 			Status:    itemStatus,
