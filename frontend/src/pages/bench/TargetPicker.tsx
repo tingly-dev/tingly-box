@@ -58,6 +58,7 @@ export const TargetPicker: React.FC<{
     const options = useMemo(() => buildTargetOptions(catalog, t), [catalog, t]);
     const selected = useMemo(() => options.find((o) => o.key === targetKey(value)) ?? null, [options, value]);
     const missing = !!value && !catalog.loading && !selected;
+    const getOptionLabel = (o: TargetOption) => (o.target.kind === 'rule' ? `${o.primary} · ${o.secondary}` : `${o.group} ▸ ${o.primary}`);
 
     return (
         <Autocomplete
@@ -67,18 +68,26 @@ export const TargetPicker: React.FC<{
             loading={catalog.loading}
             loadingText={t('bench.targetLoading', { defaultValue: 'Loading rules and providers…' })}
             groupBy={(o) => o.group}
-            getOptionLabel={(o) => (o.target.kind === 'rule' ? `${o.primary} · ${o.secondary}` : `${o.group} ▸ ${o.primary}`)}
+            getOptionLabel={getOptionLabel}
             isOptionEqualToValue={(a, b) => a.key === b.key}
             filterOptions={(opts, state) => {
                 const q = state.inputValue.trim().toLowerCase();
                 return q ? opts.filter((o) => o.search.includes(q)) : opts;
             }}
             onChange={(_, o) => onChange(o?.target ?? null)}
+            // The picker sits in a narrow column, so both the trigger and the
+            // popper are too tight to show long rule/provider names in full.
+            // Let the dropdown size to its own content instead of the input's
+            // width, and give the collapsed field a native tooltip so the
+            // full label is still one hover away (ux-principles #5 — the
+            // user needs the concrete value, not a clipped alias).
+            slotProps={{ popper: { style: { width: 'fit-content', maxWidth: 480 }, placement: 'bottom-start' } }}
             renderInput={(params) => (
                 <TextField
                     {...params}
                     placeholder={t('bench.targetPlaceholder', { defaultValue: 'Search rules & providers…' })}
                     error={missing || !!catalog.error}
+                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, title: selected ? getOptionLabel(selected) : undefined } }}
                     helperText={
                         catalog.error
                             ? catalog.error

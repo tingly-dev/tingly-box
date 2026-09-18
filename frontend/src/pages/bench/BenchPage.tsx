@@ -343,7 +343,7 @@ const BenchPage: React.FC = () => {
                     display: 'grid',
                     gap: 2,
                     alignItems: 'start',
-                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', lg: '260px minmax(0, 1fr) minmax(360px, 420px)' },
+                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1fr)', lg: '300px minmax(0, 1fr) minmax(360px, 420px)' },
                 }}
             >
                 {/* ① what do I send? */}
