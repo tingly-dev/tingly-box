@@ -101,6 +101,19 @@ func (t *Transport) EncodeControlResponse(reqID string, resp agentboot.ControlRe
 	}
 }
 
+// EncodeUserMessage converts a plain-text user turn into the wire payload
+// Claude expects on stdin. Implements [agentboot.AgentTransport]. Mirrors
+// [StreamPromptBuilder.AddUserMessage]'s shape.
+func (t *Transport) EncodeUserMessage(prompt string) any {
+	return map[string]any{
+		"type": SDKUserMessage,
+		"message": map[string]any{
+			"role":    "user",
+			"content": prompt,
+		},
+	}
+}
+
 // --- internal: control-event parsing ----------------------------------------
 
 // parseControlRequest dispatches on the request subtype to produce either an

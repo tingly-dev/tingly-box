@@ -69,3 +69,44 @@ type ErrorEvent struct {
 }
 
 func (ErrorEvent) isStreamEvent() {}
+
+// SessionState is the lifecycle state of a [PersistentSession].
+type SessionState string
+
+const (
+	// SessionStateIdle: no turn is in flight; Send is ready to accept one.
+	SessionStateIdle SessionState = "idle"
+	// SessionStateRunning: a turn is in flight (Open's first prompt, or a
+	// call to Send).
+	SessionStateRunning SessionState = "running"
+	// SessionStateClosing: Close has been called; the underlying process is
+	// shutting down.
+	SessionStateClosing SessionState = "closing"
+	// SessionStateTerminated: the process has exited, whether from a
+	// graceful Close or an unexpected crash. Events() has closed.
+	SessionStateTerminated SessionState = "terminated"
+)
+
+// TurnCompleteEvent marks the end of one turn on a [PersistentSession].
+// Unlike [ExecutionHandle], whose Events channel closes when its single turn
+// ends, a PersistentSession's channel stays open across turns —
+// TurnCompleteEvent is the per-turn boundary signal that ExecutionHandle
+// gets for free from the channel closing. Result carries that turn's
+// events/duration/error, scoped to just that turn (not the whole session).
+type TurnCompleteEvent struct {
+	Result *Result
+}
+
+func (TurnCompleteEvent) isStreamEvent() {}
+
+// SessionStateEvent reports a [PersistentSession] lifecycle transition to
+// Terminated — a graceful Close or an unexpected process exit/protocol
+// error. Reason is human-readable context. It is not emitted for the
+// routine Running<->Idle transitions between turns; TurnCompleteEvent
+// already conveys those.
+type SessionStateEvent struct {
+	State  SessionState
+	Reason string
+}
+
+func (SessionStateEvent) isStreamEvent() {}

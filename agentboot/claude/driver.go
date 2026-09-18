@@ -283,6 +283,12 @@ func (d *Driver) buildArgs(
 		return nil, fmt.Errorf("invalid output format: %s", format)
 	}
 
+	// The CLI refuses --dangerously-skip-permissions outright when running as
+	// root/sudo, so isRoot() drops the flag here — with no substitute. As of
+	// this writing nothing calls SetSkipPermissions in product code, so this
+	// is a no-op today; if a future caller wires skipPerms up under a root
+	// deployment, add "--permission-prompts none" (or an equivalent) in this
+	// branch instead of silently doing nothing.
 	if skipPerms && !isRoot() {
 		args = append(args, "--dangerously-skip-permissions")
 	}
