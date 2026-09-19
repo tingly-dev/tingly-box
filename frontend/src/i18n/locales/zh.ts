@@ -433,7 +433,7 @@ export default {
     "startFromPresetHint": "探针本体此刻会发出的请求。",
     "rawInvalid": "不是合法 JSON：{{error}}",
     "rawHint": "这就是一个说该协议的客户端会发出的请求。探测器只补 model（Anthropic 还补 max_tokens）；流式开关仍然生效；tools、图片和 thinking 在这里自己写——上面的工具 / 视觉 / 思考旋钮只作用于 Content: Message。",
-    "template": {"message": "单条消息", "messageDesc": "一条消息，由下面的工具 / 视觉 / 思考旋钮塑形——就是探针本体。", "blank": "空白", "blankDesc": "该协议形态下的一份空请求。", "multi": "多轮", "multiDesc": "user → assistant → user。任意协议对的转换保真基线。", "tool": "工具往返", "toolDesc": "工具定义、assistant 的调用和工具结果——agent 框架发出的形态。", "image": "图片", "imageDesc": "文本 + 图片的 user 消息，按该协议的表达方式。", "midsys": "会话中段 system", "midsysDesc": "messages[] 里夹一条 system——claude_code_compat 就是为这个形态而存在的。"},
+    "template": {"message": "单条消息", "messageDesc": "一条消息，由下面的工具 / 视觉 / 思考旋钮塑形——就是探针本体。", "custom": "自定义", "blank": "空白", "blankDesc": "该协议形态下的一份空请求。", "multi": "多轮", "multiDesc": "user → assistant → user。任意协议对的转换保真基线。", "tool": "工具往返", "toolDesc": "工具定义、assistant 的调用和工具结果——agent 框架发出的形态。", "image": "图片", "imageDesc": "文本 + 图片的 user 消息，按该协议的表达方式。", "midsys": "会话中段 system", "midsysDesc": "messages[] 里夹一条 system——claude_code_compat 就是为这个形态而存在的。"},
     "editBody": "编辑",
     "editBodyHint": "把这份 body 拿进请求编辑器作为原始请求，随意修改。",
     "noteRaw": "你自己写的请求，按其协议直接发出；只补了 model。",

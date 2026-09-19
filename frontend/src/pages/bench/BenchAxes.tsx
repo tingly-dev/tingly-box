@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { HelpOutline } from '@/components/icons';
+import { ExpandMore, HelpOutline } from '@/components/icons';
 import { Box, Button, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
@@ -71,10 +71,17 @@ const ContentMenu: React.FC<{
     const { t } = useTranslation();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const templates = useMemo(() => templatesForProtocol(protocol), [protocol]);
-    const label = (id: string | null) =>
-        id === MESSAGE_ID || id === null
+    // contentId is only ever null while raw is active (BenchPage.tsx never
+    // produces MESSAGE_ID's null-alias case) — a hand-edited body that no
+    // longer matches any template. Labeling that "Message" would be a lie
+    // (you're still editing JSON, just not any of the named starting
+    // points), so it gets its own label instead of falling back to Message.
+    const label =
+        contentId === MESSAGE_ID
             ? t('bench.template.message', { defaultValue: 'Message' })
-            : t(`bench.template.${id}`);
+            : contentId === null
+              ? t('bench.template.custom', { defaultValue: 'Custom' })
+              : t(`bench.template.${contentId}`);
     const pick = (id: string) => {
         setAnchor(null);
         onSelect(id);
@@ -90,10 +97,19 @@ const ContentMenu: React.FC<{
     );
     return (
         <>
-            <Button size="small" variant="outlined" onClick={(e) => setAnchor(e.currentTarget)} sx={{ fontSize: '0.78rem', justifyContent: 'flex-start' }}>
-                {label(contentId)} ▾
+            <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                onClick={(e) => setAnchor(e.currentTarget)}
+                sx={{ justifyContent: 'space-between', textTransform: 'none', fontWeight: 400, py: 0.75 }}
+                endIcon={<ExpandMore sx={{ fontSize: 18 }} />}
+            >
+                <Typography variant="body2" noWrap sx={{ flex: 1, textAlign: 'left' }}>
+                    {label}
+                </Typography>
             </Button>
-            <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+            <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 260 } } }}>
                 {item(MESSAGE_ID, t('bench.template.message', { defaultValue: 'Message' }), t('bench.template.messageDesc', { defaultValue: 'One message, shaped by the Tool / Vision / Thinking knobs below — the probe itself, materialized.' }))}
                 {templates.map((tpl: ContentTemplate) => item(tpl.id, t(`bench.template.${tpl.id}`), t(`bench.template.${tpl.id}Desc`)))}
             </Menu>
