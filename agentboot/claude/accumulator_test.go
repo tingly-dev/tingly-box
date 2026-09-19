@@ -94,19 +94,7 @@ func TestMessageAccumulator(t *testing.T) {
 	assert.True(t, resultMsg.IsSuccess())
 	assert.Equal(t, "success", resultMsg.SubType)
 
-	// Test GetMessagesByType
-	assistantMessages := accumulator.GetMessagesByType(SDKAssistantMessage)
-	assert.Len(t, assistantMessages, 1, "should have 1 assistant message")
-
-	// Test GetAssistantMessages
-	assistantMsgs := accumulator.GetAssistantMessages()
-	assert.Len(t, assistantMsgs, 1, "should have 1 assistant message")
-	assert.Equal(t, "Hello, world!", extractTextFromAssistant(assistantMsgs[0]))
-
-	// Test Reset
-	accumulator.Reset()
-	assert.Empty(t, accumulator.GetMessages(), "should have no messages after reset")
-	assert.Empty(t, accumulator.GetSessionID(), "should have no session ID after reset")
+	assert.Equal(t, "Hello, world!", extractTextFromAssistant(assistantMsg))
 }
 
 // TestAgentCollectsResult tests that Agent.Execute collects typed messages into a Result

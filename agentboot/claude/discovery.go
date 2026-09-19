@@ -430,8 +430,3 @@ var defaultDiscovery = NewCLIDiscovery()
 func FindClaudeCLI(ctx context.Context) (*CLIVariant, error) {
 	return defaultDiscovery.FindClaudeCLI(ctx)
 }
-
-// InvalidateDiscoveryCache invalidates the global discovery cache
-func InvalidateDiscoveryCache() {
-	defaultDiscovery.InvalidateCache()
-}

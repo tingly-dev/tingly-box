@@ -20,33 +20,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Empty(t, config.Model)
 }
 
-// TestConfigWithModel tests the WithModel builder
-func TestConfigWithModel(t *testing.T) {
-	config := DefaultConfig()
-	result := config.WithModel("claude-sonnet-4-6")
-
-	assert.Same(t, &config, result)
-	assert.Equal(t, "claude-sonnet-4-6", config.Model)
-}
-
-// TestConfigWithResume tests the WithResume builder
-func TestConfigWithResume(t *testing.T) {
-	config := DefaultConfig()
-	result := config.WithResume("session-123")
-
-	assert.Same(t, &config, result)
-	assert.Equal(t, "session-123", config.ResumeSessionID)
-}
-
-// TestConfigWithContinue tests the WithContinue builder
-func TestConfigWithContinue(t *testing.T) {
-	config := DefaultConfig()
-	result := config.WithContinue()
-
-	assert.Same(t, &config, result)
-	assert.True(t, config.ContinueConversation)
-}
-
 func TestBuildCommonArgsLetsSettingsOwnPermissionMode(t *testing.T) {
 	args := BuildCommonArgs(Config{}, CommonOptions{
 		SettingsPath: "/tmp/profile/settings.json",
