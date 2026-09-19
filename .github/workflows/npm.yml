@@ -376,6 +376,15 @@ jobs:
           node --check bin.js
           echo "✅ Bundled bin.js ($(du -h bin.js | cut -f1)), dependencies stripped"
 
+      # Built before the smoke tests run, so it's there for `publish-cli-review`
+      # to publish from if a smoke test below fails the job.
+      - name: Upload CLI package (in case smoke test fails and review is needed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tingly-box-npm-package
+          path: ${{ env.PKG_DIR }}
+          retention-days: 7
+
       - name: Smoke-test bundled shim (download fallback + exec real release)
         working-directory: ${{ env.PKG_DIR }}
         run: |
@@ -449,9 +458,63 @@ jobs:
             exit 1
           fi
 
+  # Only runs when publish-cli above failed (most commonly one of its two
+  # smoke-test steps — see .design/npm.md). Sits behind the
+  # `production-smoke-review` environment, which must be configured in repo
+  # Settings -> Environments with required reviewers — that's what actually
+  # pauses the run for a human. Approve to publish the shim anyway (e.g. the
+  # smoke test's registry-visibility timeout was just replica lag); reject
+  # (or leave it unanswered) and this job fails, so the pipeline ends in
+  # error without publishing.
+  publish-cli-review:
+    needs: [setup, publish-cli]
+    name: Manual Review — Publish CLI (after smoke-test failure)
+    runs-on: ubuntu-latest
+    environment: production-smoke-review
+    permissions:
+      id-token: write
+    if: >-
+      needs.setup.outputs.publish_cli == 'true' &&
+      needs.publish-cli.result == 'failure'
+    env:
+      PKG_NAME: tingly-box
+      PKG_DIR: build/npx/tingly-box
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download CLI package built before the smoke-test failure
+        uses: actions/download-artifact@v4
+        with:
+          name: tingly-box-npm-package
+          path: ${{ env.PKG_DIR }}
+
+      - name: Publish to npm
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          VERSION="${{ needs.setup.outputs.npx_version }}"
+          NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
+
+          echo "⚠️ Publishing despite failed smoke test — approved via manual review."
+          echo "📦 Publishing $PKG_NAME@${VERSION} to npm (tag: ${NPM_TAG})..."
+
+          if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
+          elif npm publish --provenance --access public --tag "$NPM_TAG" 2>&1 | tee publish.log; test "${PIPESTATUS[0]}" -eq 0; then
+            echo "✅ $PKG_NAME@${VERSION} published"
+          elif grep -qiE "previously published|cannot publish over|EPUBLISHCONFLICT" publish.log; then
+            # `npm view` lags behind the registry; the registry itself says it is there.
+            echo "ℹ️ $PKG_NAME@${VERSION} already on npm (registry rejected the re-publish). Skipping."
+          else
+            exit 1
+          fi
+
   # Append NPX install info to the existing version release (no extra tag/release)
   create-release:
-    needs: [setup, publish-cli]
+    needs: [setup, publish-cli, publish-cli-review]
     name: Annotate Release with NPX Info
     runs-on: ubuntu-latest
     permissions:
@@ -459,7 +522,9 @@ jobs:
     if: >-
       always() &&
       needs.setup.result == 'success' &&
-      (needs.publish-cli.result == 'success' || needs.publish-cli.result == 'skipped')
+      (needs.publish-cli.result == 'success' ||
+       needs.publish-cli-review.result == 'success' ||
+       needs.setup.outputs.publish_cli != 'true')
     steps:
       - name: Append NPX info to release notes
         env:
@@ -520,15 +585,16 @@ jobs:
 
   # Build Docker NPX image after npm release is created
   build-docker-npx:
-    needs: [setup, publish-cli, create-release]
+    needs: [setup, publish-cli, publish-cli-review, create-release]
     name: Build Docker NPX Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     if: >-
+      always() &&
       needs.setup.result == 'success' &&
-      needs.publish-cli.result == 'success' &&
+      (needs.publish-cli.result == 'success' || needs.publish-cli-review.result == 'success') &&
       needs.create-release.result == 'success' &&
       needs.setup.outputs.publish_cli == 'true' &&
       needs.setup.outputs.build_docker == 'true'

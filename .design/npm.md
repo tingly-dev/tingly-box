@@ -320,6 +320,23 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   fresh `npm install` could race ahead of and fall back to the (slower, and
   on some networks unreachable) GitHub download for. The download fallback
   keeps its own separate smoke test.
+- **A failed smoke test pauses for manual review instead of failing the
+  release outright.** `publish-cli` uploads the already-built shim
+  (`bin.js` + `package.json`) as the `tingly-box-npm-package` artifact right
+  after bundling, before either smoke-test step runs — cheap, and means the
+  artifact exists even if a smoke test then fails the job. The smoke tests
+  themselves are unchanged (still a normal, job-failing step): the
+  registry-visibility timeout shown in `install.log` is usually npm
+  read-replica lag, not a bad build, so failing the whole run outright would
+  be too blunt. `publish-cli-review` runs only when `publish-cli` failed,
+  behind the `production-smoke-review` environment — required reviewers must
+  be configured there in repo Settings, that's what actually pauses the run.
+  Approving lets it download the artifact and run `npm publish` itself;
+  rejecting (or leaving it unanswered) fails that job too, so the release
+  ends in error without publishing — no separate "did review pass" branching
+  needed, `create-release` and `build-docker-npx` just also accept
+  `publish-cli-review` having succeeded wherever they previously only
+  accepted `publish-cli`.
 - **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
   `publish_bundle` input, the bundle entry in the web UI's update dialog,
   and every doc mention. The Go side keeps recognising the `npx-bundle` /
