@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/advisortest"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -102,7 +101,7 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 	t.Cleanup(rt.Close)
 
 	pipeline := servertool.NewPipeline()
-	pipeline.Register(advisortool.NewProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
+	pipeline.Register(servertool.NewProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
 	h := NewHandler(ProtocolHandlerDeps{MCPRuntime: rt, GetServertoolPipeline: func() *servertool.Pipeline { return pipeline }})
 	msgs := []map[string]any{{"role": "user", "content": "please advise"}}
 

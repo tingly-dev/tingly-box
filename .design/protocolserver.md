@@ -29,7 +29,8 @@ internal/protocolserver/
 ├── failover_dispatch / load_balance（选路引擎）
 ├── guardrails_runtime* / recording_transform / usage_tracking / tracking_context
 ├── routes.go             # RegisterRoutes(...) ← 原 UseAIEndpoints
-└── 子包整体迁入: forwarding/ recording/ transform/ servertool/ advisortool/
+└── 子包整体迁入: forwarding/ recording/ transform/ servertool/ toolengine/
+    （advisortool/ 已并入 servertool/，见 advisor_provider.go；2026-09）
 ```
 
 **后续进一步提升**（steps 1–5 之后，2026-08-04）：
