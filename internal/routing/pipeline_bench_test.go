@@ -16,7 +16,7 @@ import (
 
 	"github.com/openai/openai-go/v3"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -40,9 +40,9 @@ func benchRequest() *openai.ChatCompletionNewParams {
 // empty on purpose — Select() takes the *typ.Rule directly via
 // SelectionContext, so benchmarks build rules in-memory without paying for
 // AddRequestConfig's persisted-config write path.
-func benchSelector(b *testing.B) (*routing.ServiceSelector, *config.AppConfig) {
+func benchSelector(b *testing.B) (*routing.ServiceSelector, *appconfig.AppConfig) {
 	b.Helper()
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(b.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(b.TempDir()))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func benchSelector(b *testing.B) (*routing.ServiceSelector, *config.AppConfig) {
 	return sel, appConfig
 }
 
-func benchProvider(b *testing.B, appConfig *config.AppConfig, uuid string) {
+func benchProvider(b *testing.B, appConfig *appconfig.AppConfig, uuid string) {
 	b.Helper()
 	p := &typ.Provider{UUID: uuid, Name: uuid, APIBase: "http://bench.invalid", Enabled: true}
 	if err := appConfig.GetGlobalConfig().AddProvider(p); err != nil {

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -18,7 +18,7 @@ import (
 // mirrors the production *command.AppManager surface but lives here to keep
 // the test inside the tui package (avoids a command → tui → command cycle).
 type tuiHarnessManager struct {
-	ac *config.AppConfig
+	ac *appconfig.AppConfig
 }
 
 func (m *tuiHarnessManager) GetGlobalConfig() *serverconfig.Config { return m.ac.GetGlobalConfig() }
@@ -37,7 +37,7 @@ func newTUIHarness(t *testing.T) TUIManager {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	ac, err := config.NewAppConfig(config.WithConfigDir(tempDir))
+	ac, err := appconfig.NewAppConfig(appconfig.WithConfigDir(tempDir))
 	if err != nil {
 		t.Fatalf("NewAppConfig: %v", err)
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/browser"
 	"github.com/tingly-dev/tingly-box/ai"
 	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -50,7 +50,7 @@ func (o *OAuthCmdKong) Run(appManager *AppManager) error {
 // ============== Business Logic Functions ==============
 
 // runInteractiveMode shows simple provider selection
-func runInteractiveMode(appConfig *config.AppConfig, customName string, callbackPort int, proxyURL string) error {
+func runInteractiveMode(appConfig *appconfig.AppConfig, customName string, callbackPort int, proxyURL string) error {
 	providers := supportedProviders()
 
 	fmt.Println("🔐 OAuth Authentication")
@@ -105,7 +105,7 @@ func runInteractiveMode(appConfig *config.AppConfig, customName string, callback
 }
 
 // runOAuthFlow runs the OAuth authentication flow for a provider
-func runOAuthFlow(appConfig *config.AppConfig, issuer string, customName string, callbackPort int, proxyURL string) error {
+func runOAuthFlow(appConfig *appconfig.AppConfig, issuer string, customName string, callbackPort int, proxyURL string) error {
 	// Validate provider
 	if !isProviderSupported(issuer) {
 		supported := make([]string, 0, len(supportedProviders()))
@@ -139,7 +139,7 @@ func runOAuthFlow(appConfig *config.AppConfig, issuer string, customName string,
 }
 
 // runAddFlow handles the actual OAuth flow execution
-func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, customName string, callbackPort int, proxyURLStr string) error {
+func runAddFlow(appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, customName string, callbackPort int, proxyURLStr string) error {
 	ctx := context.Background()
 
 	// Create OAuth manager
@@ -177,7 +177,7 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 }
 
 // runDeviceCodeFlow handles device code flow (e.g., qwen_code)
-func runDeviceCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string) error {
+func runDeviceCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, providerName string) error {
 	issuer := ai.Issuer(config.Type)
 
 	// Initiate device code flow
@@ -217,7 +217,7 @@ func runDeviceCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *
 }
 
 // runAuthCodeFlow handles authorization code flow with PKCE
-func runAuthCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, callbackPort int) error {
+func runAuthCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, providerName string, callbackPort int) error {
 	issuer := ai.Issuer(config.Type)
 
 	// Create callback server
@@ -310,7 +310,7 @@ func runAuthCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *co
 }
 
 // createProviderFromToken creates and saves a provider from OAuth token
-func createProviderFromToken(appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, token *oauth2.Token) error {
+func createProviderFromToken(appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, providerName string, token *oauth2.Token) error {
 	// Determine API style
 	var apiStyle protocol.APIStyle = protocol.APIStyleOpenAI
 	if config.APIStyle == "anthropic" {
@@ -552,7 +552,7 @@ type ProviderOAuthConfig struct {
 }
 
 // findUniqueProviderName finds a unique provider name by appending a number if needed
-func findUniqueProviderName(appConfig *config.AppConfig, baseName string) string {
+func findUniqueProviderName(appConfig *appconfig.AppConfig, baseName string) string {
 	// Check if base name is available
 	if existing, err := appConfig.GetProviderByName(baseName); err != nil || existing == nil {
 		return baseName

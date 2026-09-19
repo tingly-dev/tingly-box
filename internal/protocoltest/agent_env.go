@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -99,7 +99,7 @@ type AgentTestEnv struct {
 	configDir string
 
 	// appConfig is the application configuration
-	appConfig *config.AppConfig
+	appConfig *appconfig.AppConfig
 
 	// gateway is the gateway instance behind gatewayServer
 	gateway *server.Server

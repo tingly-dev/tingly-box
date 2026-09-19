@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -68,7 +68,7 @@ func MaybeRunDuoServe() {
 }
 
 func runDuoServe(spec duoInstanceSpec) error {
-	appCfg, err := config.NewAppConfig(config.WithConfigDir(spec.ConfigDir))
+	appCfg, err := appconfig.NewAppConfig(appconfig.WithConfigDir(spec.ConfigDir))
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -124,7 +124,7 @@ func runDuoServe(spec duoInstanceSpec) error {
 // seedDuoGateway persists the tb2 wiring into the child's own config dir:
 // one provider per target protocol pointing at tb1's /virtual endpoints, and
 // one anthropic-scenario rule per duo route (fast and slow variants).
-func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
+func seedDuoGateway(appCfg *appconfig.AppConfig, tb1URL, tb1Token string) error {
 	providers := map[string]*typ.Provider{
 		"chat": {
 			UUID:               DuoProviderChat,

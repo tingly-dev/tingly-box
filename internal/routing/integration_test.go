@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -27,7 +27,7 @@ const delayModelResponseID = "delay-model"
 
 // routingTestServer wraps a real Server for E2E routing pipeline tests.
 type routingTestServer struct {
-	appConfig      *config.AppConfig
+	appConfig      *appconfig.AppConfig
 	httpServer     *httptest.Server
 	capacityConfig capacityConfigType
 }
@@ -39,7 +39,7 @@ func newRoutingTestServer(t *testing.T) *routingTestServer {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(configDir) })
 
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(configDir))
 	require.NoError(t, err)
 
 	httpServer := server.NewServer(appConfig.GetGlobalConfig())
@@ -96,7 +96,7 @@ func newRoutingTestServerWithCapacity(t *testing.T, capacities map[string]struct
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(configDir) })
 
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(configDir))
 	require.NoError(t, err)
 
 	httpServer := server.NewServer(appConfig.GetGlobalConfig())

@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -43,7 +43,7 @@ type StartCmdKong struct {
 // resolveOptions converts the parsed Kong flags into resolved server options.
 // portOverride, when non-zero, replaces the flag port (restart uses it to
 // continue on the live port).
-func (s *StartCmdKong) resolveOptions(appConfig *config.AppConfig, portOverride int) options.StartServerOptions {
+func (s *StartCmdKong) resolveOptions(appConfig *appconfig.AppConfig, portOverride int) options.StartServerOptions {
 	port := s.Port
 	if portOverride != 0 {
 		port = portOverride

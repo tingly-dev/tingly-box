@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
@@ -37,7 +37,7 @@ import (
 // to provider format, and forwards to the virtual server which speaks provider
 // native APIs (/v1/chat/completions, /v1/messages, etc.).
 type TestEnv struct {
-	appConfig     *config.AppConfig
+	appConfig     *appconfig.AppConfig
 	gateway       *server.Server   // the gateway instance behind gatewayServer
 	gatewayServer *httptest.Server // real HTTP server; every request traverses it
 	virtual       *VirtualServer
@@ -152,7 +152,7 @@ func preseedEnterpriseContextKeys(configDir string) error {
 // (replay/agent) both assemble from it, so the boot sequence exists once.
 type gatewayCore struct {
 	configDir  string
-	appConfig  *config.AppConfig
+	appConfig  *appconfig.AppConfig
 	server     *server.Server
 	gateway    *httptest.Server
 	srv        *server.Server // the gateway behind `gateway`, for test-only internals (record sink flush)
@@ -163,7 +163,7 @@ type gatewayCore struct {
 // newGatewayCore boots the skeleton. configure (optional) runs after the app
 // config exists but before the server is created, for settings the server
 // reads at construction time (e.g. the MCP extension flag).
-func newGatewayCore(dirPattern string, configure func(*config.AppConfig), serverOpts ...server.ServerOption) (*gatewayCore, error) {
+func newGatewayCore(dirPattern string, configure func(*appconfig.AppConfig), serverOpts ...server.ServerOption) (*gatewayCore, error) {
 	configDir, err := os.MkdirTemp("", dirPattern)
 	if err != nil {
 		return nil, fmt.Errorf("create temp config dir: %w", err)
@@ -178,7 +178,7 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 		return nil, fmt.Errorf("preseed enterprise keys: %w", err)
 	}
 
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(configDir))
 	if err != nil {
 		os.RemoveAll(configDir)
 		return nil, fmt.Errorf("create app config: %w", err)
@@ -261,7 +261,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}
 
-	core, err := newGatewayCore("pv-env-*", func(ac *config.AppConfig) {
+	core, err := newGatewayCore("pv-env-*", func(ac *appconfig.AppConfig) {
 		if cfg.mcpEnabled {
 			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionMCP, true)
 		}

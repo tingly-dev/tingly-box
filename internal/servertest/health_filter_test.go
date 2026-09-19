@@ -10,14 +10,14 @@ import (
 	server "github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestHealthFilter_BasicFiltering tests that unhealthy services are filtered out
 func TestHealthFilter_BasicFiltering(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create health monitor with default config
@@ -75,7 +75,7 @@ func TestHealthFilter_BasicFiltering(t *testing.T) {
 
 // TestHealthFilter_AllUnhealthy tests behavior when all services are unhealthy
 func TestHealthFilter_AllUnhealthy(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	healthConfig := loadbalance.DefaultHealthMonitorConfig()
@@ -126,7 +126,7 @@ func TestHealthFilter_AllUnhealthy(t *testing.T) {
 
 // TestHealthFilter_Recovery tests that services recover after time-based timeout
 func TestHealthFilter_Recovery(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Use short recovery timeout for testing
@@ -184,7 +184,7 @@ func TestHealthFilter_Recovery(t *testing.T) {
 // recovered (generic errors no longer feed the health monitor — the circuit
 // breaker owns them).
 func TestHealthFilter_SuccessRecovery(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	healthConfig := loadbalance.HealthMonitorConfig{
@@ -236,7 +236,7 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 // monitor only reacts to 429 rate limits and 401/403 auth errors, so no
 // sequence of generic errors may mark a service health-unhealthy.
 func TestHealthFilter_GenericErrorsDoNotAffectHealth(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	healthConfig := loadbalance.HealthMonitorConfig{
@@ -280,7 +280,7 @@ func TestHealthFilter_GenericErrorsDoNotAffectHealth(t *testing.T) {
 
 // TestHealthFilter_InactiveServices tests that inactive services are not selected
 func TestHealthFilter_InactiveServices(t *testing.T) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	healthMonitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())

@@ -14,7 +14,7 @@ import (
 	server "github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -25,7 +25,7 @@ import (
 
 func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
@@ -123,7 +123,7 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 
 func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
@@ -637,7 +637,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 
 func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
