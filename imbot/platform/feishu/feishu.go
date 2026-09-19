@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
-	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	larkevent "github.com/larksuite/oapi-sdk-go/v3/event"
@@ -16,6 +16,16 @@ import (
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
+)
+
+// feishuBaseURL / larkBaseURL mirror lark.FeishuBaseUrl / lark.LarkBaseUrl.
+// Defined locally (rather than importing the top-level "oapi-sdk-go/v3"
+// package just for these two strings) because that package's NewClient
+// eagerly constructs all ~65 Lark product services (corehr, hire, payroll,
+// okr, ...) this bot never uses — see buildIMService below.
+const (
+	feishuBaseURL = "https://open.feishu.cn"
+	larkBaseURL   = "https://open.larksuite.com"
 )
 
 // Domain represents the service domain (Feishu or Lark)
@@ -64,12 +74,57 @@ func getReceiveIdType(targetID string) string {
 // Supports both WebSocket (long connection) and webhook modes
 type Bot struct {
 	*core.BaseBot
-	client      *lark.Client   // HTTP client for sending messages
-	wsClient    *larkws.Client // WebSocket client for receiving events
+	client      *larkim.V1       // IM v1 service: the only Lark API surface this bot calls
+	larkConfig  *larkcore.Config // shared SDK config, needed for the raw token-check request
+	wsClient    *larkws.Client   // WebSocket client for receiving events
 	domain      Domain
 	adapter     *Adapter
 	eventCtx    context.Context
 	eventCancel context.CancelFunc
+}
+
+// buildIMService constructs the IM v1 service directly against a hand-built
+// *larkcore.Config, bypassing lark.NewClient. lark.NewClient's initService
+// unconditionally constructs all ~65 Lark product services (corehr, hire,
+// payroll, okr, mail, ...); this bot only ever calls Im.Message and
+// Im.MessageReaction, so building just those avoids compiling/linking the
+// other ~250MB of unrelated generated SDK code into tingly-box's binary.
+func buildIMService(clientID, clientSecret, baseURL string) (*larkim.V1, *larkcore.Config) {
+	config := &larkcore.Config{
+		BaseUrl:          baseURL,
+		AppId:            clientID,
+		AppSecret:        clientSecret,
+		EnableTokenCache: true,
+		AppType:          larkcore.AppTypeSelfBuilt,
+	}
+	// Same bootstrap sequence lark.NewClient runs before initService.
+	larkcore.NewLogger(config)
+	larkcore.NewCache(config)
+	larkcore.NewSerialization(config)
+	larkcore.NewHttpClient(config)
+
+	return larkim.New(config), config
+}
+
+// getTenantAccessTokenBySelfBuiltApp replicates
+// (*lark.Client).GetTenantAccessTokenBySelfBuiltApp against a bare config,
+// so the Connect() auth check doesn't need the full lark.Client either.
+func getTenantAccessTokenBySelfBuiltApp(ctx context.Context, config *larkcore.Config, req *larkcore.SelfBuiltTenantAccessTokenReq) (*larkcore.TenantAccessTokenResp, error) {
+	rawResp, err := larkcore.Request(ctx, &larkcore.ApiReq{
+		HttpMethod:                http.MethodPost,
+		ApiPath:                   larkcore.TenantAccessTokenInternalUrlPath,
+		Body:                      req,
+		SupportedAccessTokenTypes: []larkcore.AccessTokenType{larkcore.AccessTokenTypeNone},
+	}, config)
+	if err != nil {
+		return nil, err
+	}
+	resp := &larkcore.TenantAccessTokenResp{}
+	if err := json.Unmarshal(rawResp.RawBody, resp); err != nil {
+		return nil, err
+	}
+	resp.ApiResp = rawResp
+	return resp, nil
 }
 
 // NewBot creates a new Feishu/Lark bot using Lark SDK
@@ -87,23 +142,18 @@ func NewBot(config *core.Config, domain Domain) (*Bot, error) {
 	}
 
 	// Determine base URL by domain
-	baseURL := lark.FeishuBaseUrl
+	baseURL := feishuBaseURL
 	if domain == DomainLark {
-		baseURL = lark.LarkBaseUrl
+		baseURL = larkBaseURL
 	}
 
-	// Create Lark SDK HTTP client with domain-specific base URL
-	client := lark.NewClient(
-		config.Auth.ClientID,
-		config.Auth.ClientSecret,
-		lark.WithOpenBaseUrl(baseURL),
-		lark.WithEnableTokenCache(true),
-	)
+	client, larkConfig := buildIMService(config.Auth.ClientID, config.Auth.ClientSecret, baseURL)
 
 	return &Bot{
-		BaseBot: core.NewBaseBot(config),
-		client:  client,
-		domain:  domain,
+		BaseBot:    core.NewBaseBot(config),
+		client:     client,
+		larkConfig: larkConfig,
+		domain:     domain,
 	}, nil
 }
 
@@ -118,7 +168,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.adapter = NewAdapter(b.Config())
 
 	// Test authentication via SDK
-	_, err := b.client.GetTenantAccessTokenBySelfBuiltApp(ctx, &larkcore.SelfBuiltTenantAccessTokenReq{
+	_, err := getTenantAccessTokenBySelfBuiltApp(ctx, b.larkConfig, &larkcore.SelfBuiltTenantAccessTokenReq{
 		AppID:     b.Config().Auth.ClientID,
 		AppSecret: b.Config().Auth.ClientSecret,
 	})
@@ -161,9 +211,9 @@ func (b *Bot) StartReceiving(ctx context.Context) error {
 		OnP2CardActionTrigger(b.handleCardActionTrigger)
 
 	// Determine base URL for WebSocket
-	wsDomain := lark.FeishuBaseUrl
+	wsDomain := feishuBaseURL
 	if b.domain == DomainLark {
-		wsDomain = lark.LarkBaseUrl
+		wsDomain = larkBaseURL
 	}
 
 	// Create WebSocket client
@@ -431,11 +481,6 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 
 	b.Logger().Debug("Sending message: msgType=%s, target=%s", msgType, target)
 
-	// Check if Im service is available
-	if b.client.Im == nil {
-		return nil, fmt.Errorf("client.Im is nil - SDK not properly initialized")
-	}
-
 	// Use the direct client Post method for sending
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(getReceiveIdType(target)).
@@ -447,7 +492,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		Build()
 
 	b.Logger().Debug("Sending message request: target=%s, msgType=%s, receiveIdType=%s", target, msgType, getReceiveIdType(target))
-	resp, err := b.client.Im.Message.Create(context.Background(), req)
+	resp, err := b.client.Message.Create(context.Background(), req)
 
 	if err != nil {
 		b.Logger().Error("Failed to send message: %v", err)
@@ -574,7 +619,7 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 			Build()).
 		Build()
 
-	resp, err := b.client.Im.MessageReaction.Create(ctx, req)
+	resp, err := b.client.MessageReaction.Create(ctx, req)
 	if err != nil {
 		return fmt.Errorf("feishu react: %w", err)
 	}

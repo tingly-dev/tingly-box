@@ -20,9 +20,6 @@ func (b *Bot) sendActionCard(ctx context.Context, target string, opts *core.Send
 	if b.client == nil {
 		return nil, fmt.Errorf("bot client is nil")
 	}
-	if b.client.Im == nil {
-		return nil, fmt.Errorf("client.Im is nil")
-	}
 
 	card := buildActionCard(opts.Text, set)
 	cardJSON, err := card.String()
@@ -39,7 +36,7 @@ func (b *Bot) sendActionCard(ctx context.Context, target string, opts *core.Send
 			Build()).
 		Build()
 
-	resp, err := b.client.Im.Message.Create(ctx, req)
+	resp, err := b.client.Message.Create(ctx, req)
 	if err != nil {
 		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
@@ -235,7 +232,7 @@ func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.Restat
 			"feishu cannot change a card's controls without also rewriting its body; supply RestateOptions.Text",
 			false)
 	}
-	if b.client == nil || b.client.Im == nil {
+	if b.client == nil {
 		return fmt.Errorf("bot client is nil")
 	}
 
@@ -245,7 +242,7 @@ func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.Restat
 		return fmt.Errorf("failed to serialize card: %w", err)
 	}
 
-	resp, err := b.client.Im.Message.Patch(ctx, larkim.NewPatchMessageReqBuilder().
+	resp, err := b.client.Message.Patch(ctx, larkim.NewPatchMessageReqBuilder().
 		MessageId(ref.MessageID).
 		Body(larkim.NewPatchMessageReqBodyBuilder().
 			Content(cardJSON).
