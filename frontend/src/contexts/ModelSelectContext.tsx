@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { Provider } from '@/types/provider';
 import { notify } from '@/utils/notify';
 
@@ -52,10 +52,20 @@ const ModelSelectContext = createContext<ModelSelectContextValue | undefined>(un
 
 export interface ModelSelectProviderProps {
     children: ReactNode;
-    key?: string; // Key to force reset state when changed
 }
 
-export function ModelSelectProvider({ children, key: providerKey }: ModelSelectProviderProps) {
+// ModelSelectProvider is remounted by its caller's own React `key` whenever a
+// dialog session genuinely restarts (ModelSelectDialog.tsx keys it on
+// `selectedProvider`; useModelSelectDialog.tsx keys the whole dialog on
+// "closed" vs "providerUuid-modelName") — a fresh mount already gives every
+// piece of state below its initial value, so there is nothing left for this
+// component to reset on its own. An earlier version tried to *also* detect
+// "new session" internally by reading a `key` prop, but `key` is a reserved
+// React prop that is never actually passed down (React warns and the read
+// always returns undefined) — and even if it were readable, the remount
+// above already guarantees the "reset" case, making the comparison it drove
+// permanently unreachable. Removed rather than rewired.
+export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState<string | undefined>(undefined);
     const [isInitialized, setIsInitialized] = useState(false);
     const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
@@ -65,23 +75,6 @@ export function ModelSelectProvider({ children, key: providerKey }: ModelSelectP
         value: ''
     });
     const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-    // Track the previous key to detect if this is a new dialog session vs provider change
-    const previousKeyRef = useRef<string | undefined>(undefined);
-
-    useEffect(() => {
-        const prevKey = previousKeyRef.current;
-        previousKeyRef.current = providerKey;
-
-        // Check if this is a completely new session (dialog reopened)
-        // providerKey format is "closed" or "providerUuid-modelName"
-        if (prevKey === undefined || prevKey === 'closed' || providerKey === 'closed') {
-            // New session - reset initialization state
-            setInternalCurrentTab(undefined);
-            setIsInitialized(false);
-        }
-        // Otherwise it's just a provider change within the same session - preserve all state
-    }, [providerKey]);
 
     const triggerRefresh = useCallback(() => {
         setRefreshTrigger(prev => prev + 1);
