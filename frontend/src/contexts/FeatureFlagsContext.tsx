@@ -9,6 +9,7 @@ interface FeatureFlagsContextType {
     enableGuardrails: boolean;
     enableMCP: boolean;
     enableBench: boolean;
+    enableManagedAgent: boolean;
     loading: boolean;
     refresh: () => Promise<void>;
 }
@@ -34,22 +35,25 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
     const [enableBench, setEnableBench] = useState(false);
+    const [enableManagedAgent, setEnableManagedAgent] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const loadFlags = async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult] = await Promise.all([
+            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, managedAgentResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
                 api.getScenarioFlag('_global', 'bench'),
+                api.getScenarioFlag('_global', 'managed_agent'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
             setEnableBench(benchResult?.data?.value || false);
+            setEnableManagedAgent(managedAgentResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth
@@ -69,7 +73,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const refresh = loadFlags;
 
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, enableMCP, enableBench, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableManagedAgent, loading, refresh }}>
             {children}
         </FeatureFlagsContext.Provider>
     );

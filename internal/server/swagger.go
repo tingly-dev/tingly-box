@@ -132,4 +132,6 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// request time (there is no request time here).
 	quotaHandler := providerQuotaModule.NewHandler(nil, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
+
+	registerManagedAgentRoutes(apiV1, sm, cfg, s.managedAgentEnabled)
 }

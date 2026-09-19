@@ -43,7 +43,7 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableManagedAgent } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
@@ -231,6 +231,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
                     { type: 'divider' },
                     { path: '/remote-agent', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
+                    ...(enableManagedAgent ? [{ path: '/managed-agent', label: t('layout.managedAgent', { defaultValue: 'Managed Agent' }), icon: <IconCode sx={{ fontSize: 20 }} />, match: (p: string) => p.startsWith('/managed-agent') }] : []),
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
@@ -299,5 +300,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, profiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableManagedAgent, profiles, teams, botSummary, hiddenScenarios]);
 }

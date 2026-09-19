@@ -37,6 +37,7 @@ const (
 	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
 	ExtensionBench              = "bench"
+	ExtensionManagedAgent       = "managed_agent"
 )
 
 // KnownExtensionBoolFlags is the single source of truth for which
@@ -62,9 +63,10 @@ const (
 // object (provider/model selection), not a bool, and is read directly off
 // ScenarioConfig.Extensions rather than through Get/SetScenarioFlag.
 var KnownExtensionBoolFlags = map[string]bool{
-	ExtensionGuardrails: true,
-	ExtensionMCP:        true,
-	ExtensionSkillUser:  true,
-	ExtensionSkillIDE:   true,
-	ExtensionBench:      true,
+	ExtensionGuardrails:   true,
+	ExtensionMCP:          true,
+	ExtensionSkillUser:    true,
+	ExtensionSkillIDE:     true,
+	ExtensionBench:        true,
+	ExtensionManagedAgent: true,
 }

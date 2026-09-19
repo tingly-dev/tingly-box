@@ -27,6 +27,18 @@ func (s *Server) mcpEnabled() bool {
 	return protocolserver.MCPEnabled(s.config)
 }
 
+// managedAgentEnabled reports whether the experimental Managed Agent surface
+// (a web front door onto local Claude Code, see .design/managed-agent.md)
+// is turned on. Off by default: it runs an arbitrary local coding agent on
+// the host, so it opts in the same way guardrails/MCP do rather than being
+// always-on.
+func (s *Server) managedAgentEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionManagedAgent)
+}
+
 func (s *Server) initGuardrailsRuntime() {
 	runtime := s.currentGuardrailsRuntime()
 	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
