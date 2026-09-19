@@ -10,7 +10,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/slack-go/slack v0.27.0
 	github.com/stretchr/testify v1.11.1
-	github.com/tingly-dev/weixin v0.4.6
+	github.com/tingly-dev/weixin v0.4.10
 	github.com/yuin/goldmark v1.8.5
 	golang.org/x/net v0.57.0
 )
