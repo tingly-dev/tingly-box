@@ -202,14 +202,11 @@ Known gateway defects are registered **once**, in protocoltest's
 `skipSourceScenarios` (the matrix reads it directly; replay derives its skips
 via `KnownDefectReason` + the agent's source protocol). Each entry is a
 **real defect**, not a test artifact — fixing one is a one-line deletion in
-one place. Currently:
-
-- `openai_responses|tool_use` (+ streaming variant) — the Responses-API
-  source path's tool_call conversion is incomplete; skips Tier A's
-  openai_responses-source cells and every `codex/tool_use` replay run.
-
-Closing this list out — plus planned scenario expansion and fixture capture —
-is tracked in [PLANNING.md](./PLANNING.md).
+one place. **Currently empty** — every Tier A cell and every replay run is in
+the cross-product. (The one entry this list ever carried,
+`openai_responses|tool_use`, is closed — see
+[PLANNING.md §1](./PLANNING.md#1-close-the-known-defect-registry) for what it
+turned out to be and how to add a new entry if a future gap needs one.)
 
 **Use it for:** exercising the real gateway pipeline (rules, dispatch, vmodel
 short-circuit) across every agent × scenario × upstream — fast and hermetic.
@@ -259,6 +256,9 @@ continues past failures, exits non-zero if any failed.
   partial progress survives Ctrl-C / crashes).
 - Full prompt + output go to markdown files under `harness-output/`.
 - `--resume ""` skips every `(agent, entry)` already recorded in the summary.
+- `--only-failing` re-runs only `(agent, entry)` pairs whose latest recorded
+  row is `FAIL`/`TIMEOUT` — real-provider mode only, mutually exclusive with
+  `--resume` (summary is append-only either way; read the latest row per key).
 - `--timeout` caps each agent invocation (default `2m`; `0` disables). On
   timeout the child is killed and the row is recorded as `TIMEOUT`.
 
@@ -342,7 +342,7 @@ Built-in examples include an optional `expect` block that self-checks expected o
 - `breaker` / `health` — final snapshot subsets
 - `distinct_first_attempts` — set of first-attempt serviceIDs across ALL request steps (within-tier load sharing)
 
-All 13 built-in examples self-verify. The `expect` block is also available in `--file` scenarios, so users can self-check their own rules.
+All 14 built-in examples self-verify. The `expect` block is also available in `--file` scenarios, so users can self-check their own rules.
 
 ### Within-tier sub-tactic
 
@@ -385,8 +385,11 @@ program:
 
 The shapes map to the **"Rule config shapes" taxonomy** in
 `.design/tier-routing.md` (Single / Flat / Cascade / Grid). The
-**G1 horizontal-tactic breaker-blind gap** documented there is *not* yet modeled
-here (random/token tactics ignore the breaker at selection).
+**G1 horizontal-tactic breaker-blind gap** documented there is now resolved,
+and the fix is on the simulated path here for free: `lb` drives the real
+`routing.ServiceSelector.Select` (see the intro above), so horizontal tactics
+(random/token) get the same breaker-aware two-phase walk production does,
+with no separate harness-side change needed.
 
 **Use it for:** reproducing a customer's rule shape + outage pattern and watching
 exactly how routing, failover, the breaker, and affinity behave over a sequence.
@@ -534,9 +537,9 @@ pipeline (rule API → extraction → smart stage → affinity → LB → conver
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
 |------------|--------------------|-----------------------------------|---------------------|--------------------|
-| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`       | `tingly/cc`        |
-| `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `built-in-codex`    | `tingly-codex`     |
-| `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `built-in-opencode` | `tingly-opencode`  |
+| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`   | `tingly/cc`        |
+| `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `builtin:codex:default`    | `tingly-codex`     |
+| `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `builtin:opencode:default` | `tingly-opencode`  |
 
 ---
 
@@ -545,7 +548,7 @@ pipeline (rule API → extraction → smart stage → affinity → LB → conver
 ```
 cli/harness/
   main.go            Kong CLI root: version / matrix / agent / replay / lb /
-                     provider / init-config
+                     duo / routing / provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstream selection
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +

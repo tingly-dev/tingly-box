@@ -109,11 +109,17 @@ Open (policy, not wiring):
 
 ## 6. Full single-process e2e run exhausts file descriptors
 
-`go test -tags e2e ./internal/protocoltest/` (every e2e test in ONE process,
-~1500 envs) fails on low-ulimit machines with `too many open files`; each
-section run individually (the documented usage, and what CI runs) is green.
-Reproduced identically on the pre-refactor baseline — pre-existing, surfaced
-by running the whole suite at once.
+Originally reproduced via `go test -tags e2e ./internal/protocoltest/` when
+that command still ran the full pair × scenario × mode matrix as ~1500
+`TestEnv`s in one go-test process. That entry point no longer exists — broad
+matrix execution now lives only in the CLI (see `.design/harness-matrix.md`
+§4), where each invocation is its own OS process, so this exact repro no
+longer applies as originally described. The underlying leak this surfaced is
+still unverified as fixed (see below), so re-derive a repro against the
+current `go test ./internal/protocoltest/...` suite (smaller today, but
+still many `TestEnv`s across content_shapes/cache_controls/cache_prefix/
+vendor/duo/routing/failover) before closing this out, or drive `--batch`
+through `cli/harness matrix --mode=all` at a low `ulimit -n` instead.
 
 Evidence from an fd probe (one TestEnv, `/proc/self/fd`): an env holds ~8
 db fds; `Config.CloseStores()` (added, closes the store-manager and
@@ -130,7 +136,8 @@ the guardrails `ProtectedCredentialStore` pool (guardrails.db, opened by
 - `TODO` give `ProtectedCredentialStore` a Close and call it on server
   teardown.
 - **Done when:** the fd probe shows 0 remaining fds after `TestEnv.Close`,
-  and the full single-process `-tags e2e` run passes at `ulimit -n 4096`.
+  and `go test ./internal/protocoltest/...` (full package, one process)
+  passes at `ulimit -n 4096`.
 
 ---
 
