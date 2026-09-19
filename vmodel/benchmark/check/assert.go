@@ -392,6 +392,18 @@ func FinalResponsesBody(r *RoundTripResult) (map[string]any, error) {
 			}
 		}
 	}
+	// Some client drivers (the subprocess ones: python/node) report a stream
+	// event count rather than shipping every raw frame across the process
+	// boundary (client_subprocess.go sets StreamEvents to that many empty
+	// placeholder strings), so there is no literal response.completed/
+	// incomplete line to scan for above. Those drivers already extract the
+	// terminal response body themselves — via the real SDK's own
+	// response.completed event — and report it as RawBody in the same shape
+	// the non-streaming path parses; fall back to that before giving up.
+	var resp map[string]any
+	if err := json.Unmarshal(r.RawBody, &resp); err == nil {
+		return resp, nil
+	}
 	return nil, fmt.Errorf("stream has no response.completed/incomplete event")
 }
 
@@ -425,12 +437,14 @@ func AssertResponsesItemIDsCanonical() Assertion {
 
 			added := map[string]string{}
 			done := map[string]string{}
+			sawStreamContent := false
 			for _, line := range r.StreamEvents {
 				payload := strings.TrimPrefix(line, "data: ")
 				var ev map[string]any
 				if json.Unmarshal([]byte(payload), &ev) != nil {
 					continue
 				}
+				sawStreamContent = true
 				switch ev["type"] {
 				case "response.output_item.added":
 					item, _ := ev["item"].(map[string]any)
@@ -439,6 +453,16 @@ func AssertResponsesItemIDsCanonical() Assertion {
 					item, _ := ev["item"].(map[string]any)
 					done[str(item["id"])] = str(item["type"])
 				}
+			}
+			if !sawStreamContent {
+				// Some client drivers (the subprocess ones: python/node)
+				// report a stream event count rather than shipping every raw
+				// frame across the process boundary, so there is nothing
+				// here to pair added/done against — see the same note on
+				// FinalResponsesBody. The id-shape check above already ran
+				// against the terminal body, which is everything checkable
+				// without raw frames.
+				return nil
 			}
 			for id, typ := range added {
 				if _, ok := done[id]; !ok {

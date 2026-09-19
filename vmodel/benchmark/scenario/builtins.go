@@ -595,7 +595,7 @@ func googleIncompleteSSE() []string {
 func openAIResponsesIncompleteSSE() []string {
 	return []string{
 		`data: {"type":"response.created","response":{"id":"resp-validate-incomplete","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
-		`data: {"type":"response.output_item.added","response_id":"resp-validate-incomplete","item":{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-incomplete","output_index":0,"item":{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
 		`data: {"type":"response.output_text.delta","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"delta":"This response was truncated due to output limit."}`,
 		`data: {"type":"response.output_text.done","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"text":"This response was truncated due to output limit."}`,
 		`data: {"type":"response.incomplete","response":{"id":"resp-validate-incomplete","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"incomplete","content":[{"type":"output_text","text":"This response was truncated due to output limit.","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":50,"total_tokens":60}}}`,
@@ -770,7 +770,7 @@ func openAIResponsesToolUseResponse() MockResponseBuilder {
 func openAIResponsesTextSSE() []string {
 	return []string{
 		`data: {"type":"response.created","response":{"id":"resp-validate-text","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
-		`data: {"type":"response.output_item.added","response_id":"resp-validate-text","item":{"id":"item-validate-text","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-text","output_index":0,"item":{"id":"item-validate-text","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
 		`data: {"type":"response.output_text.delta","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"delta":"The capital of France is Paris."}`,
 		`data: {"type":"response.output_text.done","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"text":"The capital of France is Paris."}`,
 		`data: {"type":"response.completed","response":{"id":"resp-validate-text","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"completed","output":[{"id":"item-validate-text","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The capital of France is Paris.","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":8,"total_tokens":18}}}`,
@@ -781,9 +781,10 @@ func openAIResponsesTextSSE() []string {
 func openAIResponsesToolUseSSE() []string {
 	return []string{
 		`data: {"type":"response.created","response":{"id":"resp-validate-tool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
-		`data: {"type":"response.output_item.added","response_id":"resp-validate-tool","item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","status":"in_progress"}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-tool","output_index":0,"item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"","status":"in_progress"}}`,
 		`data: {"type":"response.function_call_arguments.delta","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"delta":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
 		`data: {"type":"response.function_call_arguments.done","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
+		`data: {"type":"response.output_item.done","response_id":"resp-validate-tool","output_index":0,"item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}","status":"completed"}}`,
 		`data: {"type":"response.completed","response":{"id":"resp-validate-tool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"completed","output":[{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}],"usage":{"input_tokens":15,"output_tokens":20,"total_tokens":35}}}`,
 		`data: [DONE]`,
 	}
