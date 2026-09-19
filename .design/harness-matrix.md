@@ -183,35 +183,41 @@ Together, §3.1 and §3.2 took (4-core machine):
 |---|---|---|
 | `matrix` (default) | ~15s | ~3s |
 | `matrix --mode=all` | ~41s | ~8s |
-| e2e go test (`TestHarness` + idempotent/flags/content_shapes) | ~60s | ~17s |
+| go test `./internal/protocoltest/...` (full package) | ~60s | ~17s |
 
-The e2e path was already parallel via `t.Parallel()`, so keygen CPU was its
-only bottleneck — it benefits from §3.2 alone.
+The go-test path was already parallel via `t.Parallel()`, so keygen CPU was
+its only bottleneck — it benefits from §3.2 alone.
 
 ---
 
 ## 4. How to run
 
-### go test (requires `-tags e2e`)
+### go test
+
+Broad (pair × scenario × streaming) single-hop/two-hop/idempotent coverage no
+longer runs under `go test` at all — it lives *only* in the CLI (below). There
+is no `TestHarness` entry point and no `e2e` build tag; `matrix_config_test.go`
+and `roundtrip_test.go` keep only two things: config-level guards on the
+matrix definition itself (pair/scenario/chain shape) and focused round-trip
+cases the CLI matrix doesn't cover (see those files' own doc comments). The
+suites that *do* still run as regular `go test` targets, with no build tag,
+are:
 
 ```bash
-# Everything — single-hop + two-hop, both modes
-go test -tags e2e ./internal/protocoltest/... -run TestHarness
-
-# Single-hop only
-go test -tags e2e ./internal/protocoltest/... -run TestHarness/single_hop
-
-# Two-hop only
-go test -tags e2e ./internal/protocoltest/... -run TestHarness/two_hop
-
-# Streaming only
-go test -tags e2e ./internal/protocoltest/... -run TestHarness_Streaming
-
-# Idempotent round-trips
-go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
-
 # Request content-shape regression suite (see §10.1)
-go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
+go test ./internal/protocoltest/... -run TestContentShapes
+
+# Prompt-cache request suite (see §10.2)
+go test ./internal/protocoltest/... -run TestCacheControls
+
+# Cross-request prompt-cache prefix suite (see §10.4)
+go test ./internal/protocoltest/... -run TestCachePrefix
+
+# Vendor-dispatch suite (see §10.3)
+go test ./internal/protocoltest/... -run TestVendorTransforms
+
+# Everything in the package (includes duo/routing/failover/content_shapes/...)
+go test ./internal/protocoltest/...
 ```
 
 ### CLI (`cli/harness`)
@@ -390,8 +396,9 @@ and Responses string-`input` dropped in responses→chat conversion).
 4. Set `SkipTransitive: true` if the scenario produces no output worth
    comparing across hops (e.g. error responses).
 
-5. Run `go test -tags e2e ./internal/protocoltest/... -run TestHarness`
-   to verify it passes across all pairs and modes.
+5. Run `go run ./cli/harness matrix --mode=all` to verify it passes across
+   all pairs and modes (this is the only entry point that exercises the
+   full pair × scenario × mode cross-product — see §4).
 
 ### Example
 
@@ -434,23 +441,21 @@ func IncompleteScenario() Scenario {
 
 ## 7. Test naming conventions
 
-Tests are structured as nested subtests for `-run` filtering:
+The pair × scenario × mode cross-product runs only through the CLI now (§4);
+`TestResult.Name` follows a `scenario/path/mode` pattern there:
 
 ```
-TestHarness/
-  single_hop/
-    {scenario}/
-      {source}/
-        {target}/
-          stream|nonstream
-
-  two_hop/
-    {scenario}/
-      {A}→{B}→{C}/
-        stream|nonstream
+{scenario}/{source}/{target}/stream|nonstream            # single-hop
+{scenario}/{A}→{B}→{C}/stream|nonstream                  # two-hop (transitive)
 ```
 
-CLI `TestResult.Name` follows the same `scenario/path/mode` pattern.
+`Matrix.Run(t)` — the single-hop `testing.T` entry point nested as
+`TestHarness/single_hop/{scenario}/{source}/{target}/stream|nonstream` — no
+longer exists; it and its two-hop/idempotent counterparts were retired when
+broad matrix execution moved to the CLI exclusively (§4). The focused
+`go test` suites that remain (content_shapes, cache_controls, cache_prefix,
+vendor, plus the individual `TestRoundTrip_*` cases) each use their own flat
+subtest names — see §10 and `roundtrip_test.go`.
 
 ---
 

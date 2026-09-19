@@ -76,8 +76,11 @@ func ParseOpenAIChatResult(m map[string]interface{}) *ParsedResult {
 }
 
 // ParseOpenAIResponsesResult extracts fields from an OpenAI Responses API response.
+// Role defaults to "assistant" like AssembleOpenAIResponsesStream does: every
+// Responses output item is assistant-authored, including a tool-call-only
+// output with no "message"/"output_text" item to read an explicit role from.
 func ParseOpenAIResponsesResult(m map[string]interface{}) *ParsedResult {
-	r := &ParsedResult{}
+	r := &ParsedResult{Role: "assistant"}
 	if model, ok := m["model"].(string); ok {
 		r.Model = model
 	}
