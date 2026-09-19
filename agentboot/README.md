@@ -302,7 +302,7 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
        newTransport := func() agentboot.AgentTransport {
            return NewTransport()
        }
-       return &Agent{runner: agentboot.NewRunner(d, newTransport), driver: d}
+       return &Agent{runner: agentboot.NewRunnerWithConfig(d, newTransport, agentboot.RunnerConfig{}), driver: d}
    }
 
    func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {

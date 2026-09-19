@@ -180,18 +180,12 @@ func (s *AgentService) Execute(ctx context.Context, agentType AgentType, project
 // It looks up the session's project path from the store, then executes with
 // Resume=true so the agent continues the conversation.
 func (s *AgentService) ExecuteSession(ctx context.Context, sessionID string, prompt string, opts ExecutionOptions) (ExecutionHandle, error) {
-	return s.ExecuteSessionWithAgent(ctx, "", sessionID, prompt, opts)
-}
-
-// ExecuteSessionWithAgent is like ExecuteSession but uses a specific agent type
-// (empty agentType uses the default agent).
-func (s *AgentService) ExecuteSessionWithAgent(ctx context.Context, agentType AgentType, sessionID string, prompt string, opts ExecutionOptions) (ExecutionHandle, error) {
 	meta, err := s.GetSession(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("agentservice: session %q not found: %w", sessionID, err)
 	}
 
-	agent, err := s.resolveAgent(agentType)
+	agent, err := s.resolveAgent("")
 	if err != nil {
 		return nil, fmt.Errorf("agentservice: %w", err)
 	}
