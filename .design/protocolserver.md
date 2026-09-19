@@ -1,6 +1,7 @@
 # ProtocolServer — 模型服务面从 internal/server 独立
 
-Status: steps 1–5 done + 后续进一步提升（middleware / routing 到 top-level，affinity 并入根）
+Status: steps 1–5 done + 后续进一步提升（middleware / routing / toolengine / forwarding
+到 top-level，affinity 并入根）
 Date: 2026-08-04
 
 ## 动机
@@ -29,7 +30,10 @@ internal/protocolserver/
 ├── failover_dispatch / load_balance（选路引擎）
 ├── guardrails_runtime* / recording_transform / usage_tracking / tracking_context
 ├── routes.go             # RegisterRoutes(...) ← 原 UseAIEndpoints
-└── 子包整体迁入: forwarding/ recording/ transform/ servertool/ advisortool/
+└── 子包整体迁入: recording/ transform/ servertool/
+    （advisortool/ 已并入 servertool/，见 advisor_provider.go；2026-09。
+    toolengine/ 与 forwarding/ 原是本目录子包，2026-09 提升为 top-level
+    `internal/toolengine` / `internal/forwarding`，见下方"遗留/后续"）
 ```
 
 **后续进一步提升**（steps 1–5 之后，2026-08-04）：
@@ -104,12 +108,23 @@ handler 类型 — **拆分对外部 API 零破坏**。
 
 - `load_balance_handler.go`（`LoadBalancerAPI`，管理面 HTTP 包装）与 `guardrails_handler.go`
   留在 server 侧（管理面），只消费 protocolserver 暴露的接口。
-- **`internal/mcpserver`**（Step 5，2026-08-04）：MCP 转换引擎（adapters/forwarder/
-  loop processor/stream interceptor/tool executor/continuation store，~3.6k 行）已从
-  `server/module/mcp` 独立；管理面（handler/routes，/api/v1/mcp CRUD）留在 module/mcp。
-  `protocolserver → server/module/*` 反向依赖清零。注意 mcpserver 引用
-  `protocolserver/forwarding`（context provider 接口）——方向可接受，若要彻底解耦可将
-  ForwardContext 下沉。
+- **`internal/toolengine`**（Step 5，2026-08-04；原 `internal/mcpserver`，2026-09 更名以
+  消除与 `internal/mcp`——客户端 MCP registry——的命名混淆；随后提升为 top-level peer，
+  同 middleware/routing 的先例，因为它和 `internal/protocolserver/servertool`——被调用
+  `CallMCPToolWithHooks` 的内置虚拟工具 provider/pipeline，两者零 import 耦合，
+  toolengine 经接口反转调用 servertool 背后的能力，不直接依赖——是两个不同职责，不应合并）：
+  MCP 转换引擎（adapters/forwarder/loop processor/stream interceptor/tool
+  executor/continuation store，~3.6k 行）已从 `server/module/mcp` 独立；管理面
+  （handler/routes，/api/v1/mcp CRUD）留在 module/mcp。`protocolserver →
+  server/module/*` 反向依赖清零。
+- **`internal/forwarding`**（原 `internal/protocolserver/forwarding`，2026-09 提升为
+  top-level）：转发请求给上游 provider 的纯函数原语（Anthropic/OpenAI/Google，流式与
+  非流式），对 `protocolserver`/`toolengine` 均零反依赖，只依赖 `client`/`typ`/
+  `constant`。之前窝在 `protocolserver/` 目录下造成误导——它其实是 `protocolserver`
+  根包（10 个调用点）和 `toolengine`（1 个调用点）共享的基础设施，两边都是它的消费者，
+  不是它的所有者，提出来后依赖方向才准确：
+  `internal/forwarding` ← 同时被 `internal/toolengine` 与 `internal/protocolserver` 依赖，
+  `internal/protocolserver` 依赖 `internal/toolengine`（反向不成立）。
 - LB 模拟器（`load_balance_simulator.go`）与 serving 侧测试中若干仍构造 `&Server{}`
   的用例留在 server 包（它们需要 unexported failover 入口经 aiHandler 走通）。
 - 拆完后可为依赖方向加 lint 规则（depguard / go vet 自定义）。middleware / routing 已提升为

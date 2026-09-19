@@ -31,7 +31,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/probe"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
@@ -582,7 +581,7 @@ func (s *Server) registerAdviserFromConfig() {
 		}
 
 		pipeline := servertool.NewPipeline()
-		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+		pipeline.Register(servertool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
 		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
 		s.servertoolPipeline = pipeline
 

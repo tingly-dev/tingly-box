@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	server2 "github.com/tingly-dev/tingly-box/internal/server"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -26,7 +26,7 @@ const defaultMockProviderTimeoutSeconds = int64(2)
 // the selection stack directly (no HTTP server).
 func newTestGlobalConfig(t *testing.T) *serverconfig.Config {
 	t.Helper()
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 	return appConfig.GetGlobalConfig()
 }
@@ -59,7 +59,7 @@ func newSelectorStack(cfg *serverconfig.Config) (*loadbalance.HealthMonitor, *pr
 
 // TestServer represents a test server wrapper
 type TestServer struct {
-	appConfig *config.AppConfig
+	appConfig *appconfig.AppConfig
 	server    *server2.Server
 	ginEngine *gin.Engine
 }
@@ -68,7 +68,7 @@ type TestServer struct {
 func NewTestServer(t *testing.T) *TestServer {
 	t.Helper()
 
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(t.TempDir()))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -77,7 +77,7 @@ func NewTestServer(t *testing.T) *TestServer {
 }
 
 // createTestServer creates a test server with the given appConfig
-func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
+func createTestServer(t *testing.T, appConfig *appconfig.AppConfig) *TestServer {
 	t.Helper()
 
 	// Create server instance but don't start it
@@ -176,7 +176,7 @@ func (ts *TestServer) EnsureLoadBalancingRule(t *testing.T, requestModel, model 
 }
 
 // NewTestServerFromConfig creates a new test server sharing an existing app config
-func NewTestServerFromConfig(appConfig *config.AppConfig) *TestServer {
+func NewTestServerFromConfig(appConfig *appconfig.AppConfig) *TestServer {
 	httpServer := server2.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{

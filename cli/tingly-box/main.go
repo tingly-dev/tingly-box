@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/command"
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
@@ -139,19 +139,19 @@ func main() {
 		logrus.SetLevel(logrus.TraceLevel)
 	}
 
-	var appConfig *config.AppConfig
+	var appConfig *appconfig.AppConfig
 
 	configDir := cli.ConfigDir
 	if configDir != "" {
 		expandedDir, expandErr := fs.ExpandConfigDir(configDir)
 		if expandErr == nil {
-			appConfig, err = config.NewAppConfig(config.WithConfigDir(expandedDir))
+			appConfig, err = appconfig.NewAppConfig(appconfig.WithConfigDir(expandedDir))
 		} else {
 			err = expandErr
 		}
 	}
 	if appConfig == nil && err == nil {
-		appConfig, err = config.NewAppConfig()
+		appConfig, err = appconfig.NewAppConfig()
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)

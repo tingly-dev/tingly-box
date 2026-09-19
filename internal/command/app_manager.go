@@ -3,7 +3,7 @@ package command
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
@@ -11,12 +11,12 @@ import (
 // AppManager is the command process host: it owns AppConfig and server
 // lifecycle. Domain behavior belongs in internal/usecase rather than here.
 type AppManager struct {
-	appConfig *config.AppConfig
+	appConfig *appconfig.AppConfig
 }
 
 // NewAppManager creates a new AppManager with the given config directory.
 func NewAppManager(configDir string) (*AppManager, error) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(configDir))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
@@ -27,14 +27,14 @@ func NewAppManager(configDir string) (*AppManager, error) {
 }
 
 // NewAppManagerWithConfig creates a new AppManager with an existing AppConfig.
-func NewAppManagerWithConfig(appConfig *config.AppConfig) *AppManager {
+func NewAppManagerWithConfig(appConfig *appconfig.AppConfig) *AppManager {
 	return &AppManager{
 		appConfig: appConfig,
 	}
 }
 
 // AppConfig returns the underlying AppConfig.
-func (am *AppManager) AppConfig() *config.AppConfig {
+func (am *AppManager) AppConfig() *appconfig.AppConfig {
 	return am.appConfig
 }
 

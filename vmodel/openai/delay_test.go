@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -21,7 +21,7 @@ import (
 
 // metricsTestServer is a minimal test harness that wraps the proxy server.
 type metricsTestServer struct {
-	appConfig *config.AppConfig
+	appConfig *appconfig.AppConfig
 	ginEngine interface {
 		ServeHTTP(http.ResponseWriter, *http.Request)
 	}
@@ -33,7 +33,7 @@ func newMetricsTestServer(t *testing.T) *metricsTestServer {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(configDir) })
 
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	appConfig, err := appconfig.NewAppConfig(appconfig.WithConfigDir(configDir))
 	require.NoError(t, err)
 
 	httpServer := server.NewServer(appConfig.GetGlobalConfig())

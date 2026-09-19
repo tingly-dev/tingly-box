@@ -3,7 +3,7 @@ package options
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 )
 
 // StartFlags holds flags for starting the server
@@ -48,7 +48,7 @@ func AddStartFlags(cmd *cobra.Command, flags *StartFlags) {
 
 // ResolveStartOptions resolves CLI flags with config file defaults
 // Priority: CLI flag > Config > Default
-func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *config.AppConfig) StartServerOptions {
+func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appconfig.AppConfig) StartServerOptions {
 	// Apply priority: CLI flag > Config > Default
 	resolvedDebug := flags.EnableDebug
 	if !cmd.Flags().Changed("debug") {

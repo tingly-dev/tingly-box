@@ -1,4 +1,4 @@
-package mcpserver
+package toolengine
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

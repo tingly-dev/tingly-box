@@ -1,4 +1,4 @@
-package mcpserver
+package toolengine
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"

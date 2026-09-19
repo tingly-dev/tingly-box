@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
@@ -17,7 +17,7 @@ const StopTimeout = time.Second
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig  *config.AppConfig
+	appConfig  *appconfig.AppConfig
 	server     *server.Server
 	serverOpts []server.ServerOption
 	status     string
@@ -26,7 +26,7 @@ type ServerManager struct {
 
 // NewServerManager creates a new server manager.
 // opts are server options passed directly to the underlying server.
-func NewServerManager(appConfig *config.AppConfig, opts ...server.ServerOption) *ServerManager {
+func NewServerManager(appConfig *appconfig.AppConfig, opts ...server.ServerOption) *ServerManager {
 	sm := &ServerManager{
 		appConfig:  appConfig,
 		serverOpts: opts,
