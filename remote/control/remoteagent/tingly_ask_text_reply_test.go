@@ -45,8 +45,12 @@ func Test_AgentE2E_AskQuestion_TextReply(t *testing.T) {
 	// Reply with "2" as text — 1-based index selecting "banana".
 	chat.SendText("2")
 
+	// The selection ack is an in-place edit of the prompt message (Restate),
+	// not a separate "Selected" Send.
+	editEvt := chat.WaitRestate(prompt.Event.MessageID, 3*time.Second)
+	editEvt.AssertContains(t, "Approved")
+
 	chat.ExpectInOrderLoose(3*time.Second,
-		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Selected", Name: "text-selection-ack"},
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "got it", Name: "post-ask-assistant"},
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Task done", Name: "completion"},
 	)
