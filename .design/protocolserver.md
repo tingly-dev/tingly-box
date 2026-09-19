@@ -29,8 +29,10 @@ internal/protocolserver/
 ├── failover_dispatch / load_balance（选路引擎）
 ├── guardrails_runtime* / recording_transform / usage_tracking / tracking_context
 ├── routes.go             # RegisterRoutes(...) ← 原 UseAIEndpoints
-└── 子包整体迁入: forwarding/ recording/ transform/ servertool/ toolengine/
-    （advisortool/ 已并入 servertool/，见 advisor_provider.go；2026-09）
+└── 子包整体迁入: forwarding/ recording/ transform/ servertool/
+    （advisortool/ 已并入 servertool/，见 advisor_provider.go；2026-09。
+    toolengine/ 原是本目录子包，2026-09 提升为 top-level `internal/toolengine`，
+    见下方"遗留/后续"）
 ```
 
 **后续进一步提升**（steps 1–5 之后，2026-08-04）：
@@ -105,14 +107,16 @@ handler 类型 — **拆分对外部 API 零破坏**。
 
 - `load_balance_handler.go`（`LoadBalancerAPI`，管理面 HTTP 包装）与 `guardrails_handler.go`
   留在 server 侧（管理面），只消费 protocolserver 暴露的接口。
-- **`internal/protocolserver/toolengine`**（Step 5，2026-08-04；原 `internal/mcpserver`，
-  2026-09 更名并下沉为 protocolserver 的子包，消除与 `internal/mcp`——客户端 MCP
-  registry——的命名混淆）：MCP 转换引擎（adapters/forwarder/loop processor/stream
-  interceptor/tool executor/continuation store，~3.6k 行）已从 `server/module/mcp`
-  独立；管理面（handler/routes，/api/v1/mcp CRUD）留在 module/mcp。
-  `protocolserver → server/module/*` 反向依赖清零。注意 toolengine 引用
-  `protocolserver/forwarding`（context provider 接口）——方向可接受，若要彻底解耦可将
-  ForwardContext 下沉。
+- **`internal/toolengine`**（Step 5，2026-08-04；原 `internal/mcpserver`，2026-09 更名以
+  消除与 `internal/mcp`——客户端 MCP registry——的命名混淆；随后提升为 top-level peer，
+  同 middleware/routing 的先例，因为它和 `internal/protocolserver/servertool`——被调用
+  `CallMCPToolWithHooks` 的内置虚拟工具 provider/pipeline，两者零 import 耦合，
+  toolengine 经接口反转调用 servertool 背后的能力，不直接依赖——是两个不同职责，不应合并）：
+  MCP 转换引擎（adapters/forwarder/loop processor/stream interceptor/tool
+  executor/continuation store，~3.6k 行）已从 `server/module/mcp` 独立；管理面
+  （handler/routes，/api/v1/mcp CRUD）留在 module/mcp。`protocolserver →
+  server/module/*` 反向依赖清零。注意 toolengine 引用 `protocolserver/forwarding`
+  （context provider 接口）——方向可接受，若要彻底解耦可将 ForwardContext 下沉。
 - LB 模拟器（`load_balance_simulator.go`）与 serving 侧测试中若干仍构造 `&Server{}`
   的用例留在 server 包（它们需要 unexported failover 入口经 aiHandler 走通）。
 - 拆完后可为依赖方向加 lint 规则（depguard / go vet 自定义）。middleware / routing 已提升为

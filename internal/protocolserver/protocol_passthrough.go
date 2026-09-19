@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	mcp "github.com/tingly-dev/tingly-box/internal/protocolserver/toolengine"
+	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
