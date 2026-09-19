@@ -105,6 +105,39 @@ func Test_AgentE2E_DenyDoesNotSendEmptyMessage(t *testing.T) {
 	require.True(t, sawDenialConfirm, "expected denial confirmation in chat events")
 }
 
+// Test_AgentE2E_PermissionAckSentOnce asserts that approving a permission
+// prompt produces exactly one user-visible confirmation — the in-place edit
+// of the prompt message — and not a second, independent
+// "<icon> <action> for tool: `X`" chat message.
+//
+// Background: HandlePromptCallback/HandlePromptTextReply used to send that
+// second message unconditionally, duplicating whatever
+// IMPrompter.Prompt's own editPromptToResult already showed (an in-place
+// edit on platforms that support it, a fallback Send on the ones that
+// don't).
+func Test_AgentE2E_PermissionAckSentOnce(t *testing.T) {
+	_, _, chat := agentBoot(t, fixture.Script{
+		fixture.PermissionRequest("req-ack-once", "Bash", map[string]any{"command": "pwd"}),
+		fixture.AssistantText("after approve"),
+		fixture.Result(true),
+	})
+
+	chat.SendText("run pwd")
+	drainProcessingPreface(t, chat)
+
+	prompt := chat.WaitApprovalPrompt(3 * time.Second)
+	prompt.Approve()
+
+	editEvt := chat.WaitRestate(prompt.Event.MessageID, 3*time.Second)
+	editEvt.AssertContains(t, "Approved")
+
+	waitTextContaining(t, chat, "Task done", 6, 3*time.Second)
+
+	// The old duplicate lived in a "... for tool: `X`" Send; assert no such
+	// event was ever produced for this decision.
+	chat.AssertTextOccurrences("for tool:", 0)
+}
+
 // brief copies testenv.brief for in-test debugging — testenv keeps it
 // unexported, so we build a tiny mirror here.
 func brief(e testenv.OutEvent) string {

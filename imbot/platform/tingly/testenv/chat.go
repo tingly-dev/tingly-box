@@ -125,6 +125,15 @@ func (c *Chat) WaitAnyEdit(d time.Duration) *OutEvent {
 	})
 }
 
+// WaitRestate waits for a restate (message-presentation replacement, see
+// core.MessageRestater) applied to the given message id.
+func (c *Chat) WaitRestate(messageID string, d time.Duration) *OutEvent {
+	c.env.t.Helper()
+	return c.waitOrFatal(d, "restate on "+messageID, func(e tingly.Event) bool {
+		return e.Kind == tingly.EventRestate && e.MessageID == messageID
+	})
+}
+
 // WaitReaction waits for a reaction applied to the given message id.
 func (c *Chat) WaitReaction(messageID string, d time.Duration) *OutEvent {
 	c.env.t.Helper()
@@ -155,6 +164,7 @@ func (c *Chat) ExpectNoEvent(d time.Duration, kinds ...tingly.EventKind) {
 	if len(kinds) == 0 {
 		kinds = []tingly.EventKind{
 			tingly.EventSend, tingly.EventEdit, tingly.EventReact, tingly.EventDelete, tingly.EventMedia,
+			tingly.EventRestate,
 		}
 	}
 	match := func(e tingly.Event) bool {
