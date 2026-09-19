@@ -22,4 +22,11 @@
 // here: it lives in internal/protocolserver/transform.ThinkingCompactTransform,
 // since it is a server-domain transform rather than a vmodel compression
 // strategy.
+//
+// This package sits alongside vmodel/anthropic and vmodel/openai as a
+// vmodel-level capability, but its implementation is currently
+// Anthropic-SDK-bound (every file imports anthropic-sdk-go) and
+// vmodel/anthropic remains its only consumer. If vmodel/openai needs
+// similar compression, extract the vendor-neutral parts (operating on
+// internal/protocol's Round types) before adding a second consumer here.
 package smartcompact

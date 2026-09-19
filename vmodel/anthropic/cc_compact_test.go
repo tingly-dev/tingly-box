@@ -7,7 +7,7 @@ import (
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/vmodel/anthropic/smartcompact"
+	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 )
 
 // TestClaudeCodeCompact_Compression tests that claude-code-compact actually compresses messages.

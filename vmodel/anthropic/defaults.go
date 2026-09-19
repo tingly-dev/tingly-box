@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/vmodel/anthropic/smartcompact"
+	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
 

@@ -6,7 +6,7 @@ import (
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/vmodel/anthropic/smartcompact"
+	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 )
 
 // ClaudeCodeCompactTransform conditionally applies XML compression for Claude Code.
