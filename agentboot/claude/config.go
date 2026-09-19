@@ -90,24 +90,6 @@ func DefaultConfig() Config {
 	}
 }
 
-// WithModel returns a new config with the specified model
-func (c *Config) WithModel(model string) *Config {
-	c.Model = model
-	return c
-}
-
-// WithResume returns a new config configured for resuming a session
-func (c *Config) WithResume(sessionID string) *Config {
-	c.ResumeSessionID = sessionID
-	return c
-}
-
-// WithContinue returns a new config configured for continuing a conversation
-func (c *Config) WithContinue() *Config {
-	c.ContinueConversation = true
-	return c
-}
-
 // IsValidPermissionMode checks if a permission mode is valid for Claude CLI
 func IsValidPermissionMode(mode string) bool {
 	switch PermissionMode(mode) {

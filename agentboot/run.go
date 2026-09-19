@@ -67,41 +67,57 @@ type MessageSink func(any)
 // handle.Events() directly.
 func RunWithPrompter(ctx context.Context, h ExecutionHandle, prompter Prompter, sink MessageSink) (*Result, error) {
 	for ev := range h.Events() {
-		switch e := ev.(type) {
-		case MessageEvent:
-			if sink != nil {
-				sink(e.Raw)
-			}
-
-		case ApprovalRequestEvent:
-			res, perr := prompter.OnApproval(ctx, e)
-			if perr != nil {
-				logrus.WithError(perr).Warn("agentboot.RunWithPrompter: prompter.OnApproval error; denying")
-				res = ApprovalResponse{Approved: false, Reason: perr.Error()}
-			}
-			if rerr := h.Respond(e.ID, res); rerr != nil {
-				logrus.WithError(rerr).Warn("agentboot.RunWithPrompter: Respond error")
-			}
-
-		case AskRequestEvent:
-			res, aerr := prompter.OnAsk(ctx, e)
-			if aerr != nil {
-				logrus.WithError(aerr).Warn("agentboot.RunWithPrompter: prompter.OnAsk error; denying")
-				res = AskResponse{Approved: false, Reason: aerr.Error()}
-			}
-			if rerr := h.Respond(e.ID, res); rerr != nil {
-				logrus.WithError(rerr).Warn("agentboot.RunWithPrompter: Respond error")
-			}
-
-		case ErrorEvent:
-			logrus.WithError(e.Err).Warn("agentboot.RunWithPrompter: agent ErrorEvent")
-			if sink != nil {
-				sink(e)
-			}
-		}
+		dispatchStreamEvent(ctx, ev, prompter, sink, h.Respond, "RunWithPrompter")
 	}
 
 	return h.Wait()
+}
+
+// dispatchStreamEvent handles the event kinds [RunWithPrompter] and
+// [RunTurnWithPrompter] both dispatch identically — MessageEvent,
+// ApprovalRequestEvent, AskRequestEvent, ErrorEvent — routing them to sink
+// and prompter/respond. It reports whether ev was one of those shared
+// kinds; RunTurnWithPrompter type-switches on the remainder itself for its
+// own turn-boundary events (TurnCompleteEvent, SessionStateEvent), which
+// have no RunWithPrompter counterpart since a one-shot handle's channel
+// simply closes at completion instead of emitting one.
+func dispatchStreamEvent(ctx context.Context, ev StreamEvent, prompter Prompter, sink MessageSink, respond func(reqID string, resp ControlResponse) error, logTag string) bool {
+	switch e := ev.(type) {
+	case MessageEvent:
+		if sink != nil {
+			sink(e.Raw)
+		}
+
+	case ApprovalRequestEvent:
+		res, perr := prompter.OnApproval(ctx, e)
+		if perr != nil {
+			logrus.WithError(perr).Warnf("agentboot.%s: prompter.OnApproval error; denying", logTag)
+			res = ApprovalResponse{Approved: false, Reason: perr.Error()}
+		}
+		if rerr := respond(e.ID, res); rerr != nil {
+			logrus.WithError(rerr).Warnf("agentboot.%s: Respond error", logTag)
+		}
+
+	case AskRequestEvent:
+		res, aerr := prompter.OnAsk(ctx, e)
+		if aerr != nil {
+			logrus.WithError(aerr).Warnf("agentboot.%s: prompter.OnAsk error; denying", logTag)
+			res = AskResponse{Approved: false, Reason: aerr.Error()}
+		}
+		if rerr := respond(e.ID, res); rerr != nil {
+			logrus.WithError(rerr).Warnf("agentboot.%s: Respond error", logTag)
+		}
+
+	case ErrorEvent:
+		logrus.WithError(e.Err).Warnf("agentboot.%s: agent ErrorEvent", logTag)
+		if sink != nil {
+			sink(e)
+		}
+
+	default:
+		return false
+	}
+	return true
 }
 
 // ErrSessionEventsClosedMidTurn means a [PersistentSession]'s Events()
@@ -155,38 +171,10 @@ func RunTurnWithPrompter(ctx context.Context, session PersistentSession, prompte
 			if !ok {
 				return nil, ErrSessionEventsClosedMidTurn
 			}
+			if dispatchStreamEvent(ctx, ev, prompter, sink, session.Respond, "RunTurnWithPrompter") {
+				continue
+			}
 			switch e := ev.(type) {
-			case MessageEvent:
-				if sink != nil {
-					sink(e.Raw)
-				}
-
-			case ApprovalRequestEvent:
-				res, perr := prompter.OnApproval(ctx, e)
-				if perr != nil {
-					logrus.WithError(perr).Warn("agentboot.RunTurnWithPrompter: prompter.OnApproval error; denying")
-					res = ApprovalResponse{Approved: false, Reason: perr.Error()}
-				}
-				if rerr := session.Respond(e.ID, res); rerr != nil {
-					logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
-				}
-
-			case AskRequestEvent:
-				res, aerr := prompter.OnAsk(ctx, e)
-				if aerr != nil {
-					logrus.WithError(aerr).Warn("agentboot.RunTurnWithPrompter: prompter.OnAsk error; denying")
-					res = AskResponse{Approved: false, Reason: aerr.Error()}
-				}
-				if rerr := session.Respond(e.ID, res); rerr != nil {
-					logrus.WithError(rerr).Warn("agentboot.RunTurnWithPrompter: Respond error")
-				}
-
-			case ErrorEvent:
-				logrus.WithError(e.Err).Warn("agentboot.RunTurnWithPrompter: agent ErrorEvent")
-				if sink != nil {
-					sink(e)
-				}
-
 			case TurnCompleteEvent:
 				if e.Result != nil && e.Result.Error != "" {
 					return e.Result, errors.New(e.Result.Error)

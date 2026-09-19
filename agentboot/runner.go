@@ -52,23 +52,9 @@ func normalizeRunnerConfig(config RunnerConfig) RunnerConfig {
 	return config
 }
 
-// NewRunner creates a Runner backed by [process.NewOSExecFactory].
-//
-// transportFactory is called once per Execute so mutable protocol state is
-// never shared by concurrent runs.
-func NewRunner(driver AgentDriver, transportFactory AgentTransportFactory) *Runner {
-	return NewRunnerWithConfig(driver, transportFactory, RunnerConfig{})
-}
-
 // NewRunnerWithConfig creates an OS-backed Runner with explicit defaults.
 func NewRunnerWithConfig(driver AgentDriver, transportFactory AgentTransportFactory, config RunnerConfig) *Runner {
 	return NewRunnerWithFactoryAndConfig(driver, transportFactory, process.NewOSExecFactory(), config)
-}
-
-// NewRunnerWithFactory creates a Runner with a custom process factory and
-// default RunnerConfig. Use [process.NewFakeFactory] in tests.
-func NewRunnerWithFactory(driver AgentDriver, transportFactory AgentTransportFactory, factory process.Factory) *Runner {
-	return NewRunnerWithFactoryAndConfig(driver, transportFactory, factory, RunnerConfig{})
 }
 
 // NewRunnerWithFactoryAndConfig creates a Runner with both a custom process
@@ -93,13 +79,4 @@ func (r *Runner) SetDefaultFormat(f OutputFormat) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.defaultFormat = f
-}
-
-func (r *Runner) GetDefaultFormat() OutputFormat {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if r.defaultFormat == "" {
-		return OutputFormatText
-	}
-	return r.defaultFormat
 }

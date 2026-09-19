@@ -2,7 +2,6 @@ package claude
 
 import (
 	"encoding/json"
-	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -130,71 +129,11 @@ func (a *MessageAccumulator) completePendingToolUse(result *ToolResultMessage) {
 	}
 }
 
-// GetMessages returns all accumulated messages
-func (a *MessageAccumulator) GetMessages() []Message {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	// Return a copy to prevent external modification
-	result := make([]Message, len(a.messages))
-	copy(result, a.messages)
-	return result
-}
-
-// GetMessagesByType returns messages of a specific type
-func (a *MessageAccumulator) GetMessagesByType(msgType string) []Message {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	var result []Message
-	for _, msg := range a.messages {
-		if msg.GetType() == msgType {
-			result = append(result, msg)
-		}
-	}
-	return result
-}
-
-// GetAssistantMessages returns all assistant messages
-func (a *MessageAccumulator) GetAssistantMessages() []*AssistantMessage {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	var result []*AssistantMessage
-	for _, msg := range a.messages {
-		if am, ok := msg.(*AssistantMessage); ok {
-			result = append(result, am)
-		}
-	}
-	return result
-}
-
-// GetToolUses returns all tool uses with their results
-func (a *MessageAccumulator) GetToolUses() map[string]*PendingToolUse {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	// Return a copy
-	result := make(map[string]*PendingToolUse)
-	maps.Copy(result, a.pendingToolUses)
-	return result
-}
-
 // GetSessionID returns the session ID if available
 func (a *MessageAccumulator) GetSessionID() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.sessionID
-}
-
-// Reset clears the accumulator state
-func (a *MessageAccumulator) Reset() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.messages = make([]Message, 0)
-	a.pendingToolUses = make(map[string]*PendingToolUse)
-	a.sessionID = ""
 }
 
 // unmarshalEvent unmarshals event raw JSON into a target struct
