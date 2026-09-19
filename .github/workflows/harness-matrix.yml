@@ -47,6 +47,9 @@ on:
           - idempotent
           - flags
           - content_shapes
+          - cache_controls
+          - cache_prefix
+          - vendor
           - gosdk
           - python
           - node

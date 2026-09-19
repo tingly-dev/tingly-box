@@ -57,6 +57,18 @@ jobs:
             tier: matrix
             focus: content_shapes
             cmd: matrix --mode=content_shapes --json
+          - name: matrix-cache-controls
+            tier: matrix
+            focus: cache_controls
+            cmd: matrix --mode=cache_controls --json
+          - name: matrix-cache-prefix
+            tier: matrix
+            focus: cache_prefix
+            cmd: matrix --mode=cache_prefix --json
+          - name: matrix-vendor
+            tier: matrix
+            focus: vendor
+            cmd: matrix --mode=vendor --json
           # One matrix leg per client driver: the same matrix driven through
           # real client stacks instead of raw HTTP. gosdk uses the official Go
           # SDKs in-process; python/node/aisdk run the real foreign SDKs via

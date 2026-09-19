@@ -69,10 +69,15 @@ fixture refresh a one-command operation when an agent CLI updates.
 ## 4. CI integration
 
 Wired: `.github/workflows/harness-matrix.yml` runs every hermetic mode in
-parallel legs — matrix (single / transitive / idempotent / flags), one matrix
-leg per client driver (gosdk / python / node / aisdk), `replay batch` on the
-virtual and vmodel upstreams, `lb --all`, `duo --skip-memory`, and `routing`
-— gated by a single required `Harness result` status. `DONE`.
+parallel legs — matrix (single / transitive / idempotent / flags /
+content_shapes / cache_controls / cache_prefix / vendor), one matrix leg per
+client driver (gosdk / python / node / aisdk), `replay batch` on the virtual
+and vmodel upstreams, `lb --all`, `duo --skip-memory`, and `routing` — gated
+by a single required `Harness result` status. `DONE`.
+
+New matrix sections must add a leg here too — nothing enforces the mapping,
+so it silently drifts (see cache_controls / cache_prefix / vendor, which
+shipped without a CI leg for weeks).
 
 Deliberate carve-outs:
 
