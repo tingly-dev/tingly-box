@@ -371,7 +371,17 @@ const BenchPage: React.FC = () => {
                 </Box>
 
                 {/* ② the request itself · ③ what happened? */}
-                <Box sx={{ minWidth: 0, height: { lg: '100%' } }}>
+                {/* minHeight: 0 overrides the grid item's default
+                    content-based auto minimum — without it, a tall Response
+                    (Journey + Response + Raw JSON, e.g. a long real answer)
+                    forces this grid row past its 840px height instead of
+                    being clipped and scrolled by Panel's own overflow:auto,
+                    which silently defeats the "scroll inside the panel, not
+                    the whole page" design (.design/bench.md §2). Compose's
+                    wrapper below intentionally keeps the default — it has no
+                    internal scroll of its own, so letting it grow the row is
+                    the correct fallback if it's ever taller than 840. */}
+                <Box sx={{ minWidth: 0, minHeight: { lg: 0 }, height: { lg: '100%' } }}>
                     <Panel scroll title={t('bench.requestPanel', { defaultValue: 'Request' })} question={t('bench.requestQ', { defaultValue: 'what the client sends' })}>
                         <Stack spacing={2}>
                             <RequestEditor
@@ -436,7 +446,8 @@ const BenchPage: React.FC = () => {
                 </Box>
 
                 {/* ④ what actually goes out? Spans the row below on narrow screens. */}
-                <Box sx={{ minWidth: 0, gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' }, height: { lg: '100%' } }}>
+                {/* minHeight: 0 — same fix as the Request column above. */}
+                <Box sx={{ minWidth: 0, minHeight: { lg: 0 }, gridColumn: { xs: 'auto', md: '1 / -1', lg: 'auto' }, height: { lg: '100%' } }}>
                     <Panel scroll title={t('bench.payload', { defaultValue: 'Payload' })} question={t('bench.payloadQ', { defaultValue: 'what actually goes out' })}>
                         <PayloadPanel
                             request={request}
