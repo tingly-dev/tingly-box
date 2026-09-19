@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"

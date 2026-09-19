@@ -10,7 +10,7 @@ import (
 	server "github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )

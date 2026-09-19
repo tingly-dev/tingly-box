@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"

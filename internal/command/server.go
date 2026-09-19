@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"

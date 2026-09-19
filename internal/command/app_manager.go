@@ -3,7 +3,7 @@ package command
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )

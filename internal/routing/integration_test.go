@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/server"

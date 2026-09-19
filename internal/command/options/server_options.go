@@ -3,7 +3,7 @@ package options
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 )
 
 // StartFlags holds flags for starting the server

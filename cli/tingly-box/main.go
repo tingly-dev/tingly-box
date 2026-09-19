@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/command"
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 

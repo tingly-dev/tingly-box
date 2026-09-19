@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	server2 "github.com/tingly-dev/tingly-box/internal/server"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"

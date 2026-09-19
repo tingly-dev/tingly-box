@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/browser"
 	"github.com/tingly-dev/tingly-box/ai"
 	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )

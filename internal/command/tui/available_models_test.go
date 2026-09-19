@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/command/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
