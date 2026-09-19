@@ -222,23 +222,50 @@ func KnownDefectReason(source protocol.APIType, scenarioName string) (string, bo
 	return reason, skip
 }
 
-// clientSkipScenarios lists client|source|scenario[|mode] combinations that are
-// known incompatibilities between a specific client driver and a scenario.
-// Keeping them here makes them visible skips instead of silent failures;
-// every entry should describe the real finding it papers over.
-var clientSkipScenarios = map[string]string{}
+// clientSkipScenarios lists known incompatibilities between a specific client
+// driver and a scenario, keyed either broadly (client|source|scenario, skips
+// every target/mode) or precisely (client|source|scenario|target|mode, e.g.
+// "aisdk|openai_responses|text|anthropic_beta|stream"). Keeping them here
+// makes them visible skips instead of silent failures; every entry should
+// describe the real finding it papers over.
+var clientSkipScenarios = map[string]string{
+	// AI SDK by Vercel unifies every provider into one fullStream event shape
+	// and, for @ai-sdk/openai's Responses provider in this SDK version,
+	// streamText().response never carries the raw provider response body
+	// (unlike generateText().response.body, which non-streaming already
+	// relies on) — so responses_item_ids_canonical's synthesized-response
+	// check has nothing to read for a streaming openai_responses source
+	// converted to a non-Responses target. Not a gateway defect: the http,
+	// gosdk, python and node drivers all pass the same cells; this is a
+	// driver capability gap. (Passthrough openai_responses→openai_responses
+	// is unaffected — that pair is a no-op for this assertion.)
+	"aisdk|openai_responses|text|anthropic_beta|stream":               "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|text|openai_chat|stream":                  "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|tool_use|anthropic_beta|stream":           "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|tool_use|openai_chat|stream":              "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_text|anthropic_beta|stream":     "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_text|openai_chat|stream":        "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_tool_use|anthropic_beta|stream": "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+	"aisdk|openai_responses|streaming_tool_use|openai_chat|stream":    "AI SDK streamText() has no raw response body for the Responses provider; see clientSkipScenarios doc comment",
+}
 
 // clientSkipReason returns a skip reason when the matrix's client driver
-// cannot run the given source/scenario combination.
-func (m *Matrix) clientSkipReason(source protocol.APIType, scenarioName string) (string, bool) {
+// cannot run the given source/scenario/target/mode combination. The precise
+// (target+mode) key is checked first, then the broad (client|source|scenario)
+// key that ignores target/mode.
+func (m *Matrix) clientSkipReason(source, target protocol.APIType, scenarioName string, streaming bool) (string, bool) {
 	if m.Client == nil {
 		return "", false
 	}
 	if !m.Client.Supports(source) {
 		return fmt.Sprintf("client %q does not support source protocol %s", m.Client.Name(), source), true
 	}
-	key := fmt.Sprintf("%s|%s|%s", m.Client.Name(), source, scenarioName)
-	if reason, ok := clientSkipScenarios[key]; ok {
+	precise := fmt.Sprintf("%s|%s|%s|%s|%s", m.Client.Name(), source, scenarioName, target, streamMode(streaming))
+	if reason, ok := clientSkipScenarios[precise]; ok {
+		return reason, true
+	}
+	broad := fmt.Sprintf("%s|%s|%s", m.Client.Name(), source, scenarioName)
+	if reason, ok := clientSkipScenarios[broad]; ok {
 		return reason, true
 	}
 	return "", false
@@ -402,11 +429,11 @@ func (m *Matrix) newBaseResult(scenarioName string, source, target protocol.APIT
 // skipReason chains every skip check that applies to a single-hop
 // combination: known gateway defects, client-driver incompatibilities, and
 // streaming-mode mismatches.
-func (m *Matrix) skipReason(scenario Scenario, source protocol.APIType, streaming bool) (string, bool) {
+func (m *Matrix) skipReason(scenario Scenario, source, target protocol.APIType, streaming bool) (string, bool) {
 	if reason, skip := KnownDefectReason(source, scenario.Name); skip {
 		return reason, true
 	}
-	if reason, skip := m.clientSkipReason(source, scenario.Name); skip {
+	if reason, skip := m.clientSkipReason(source, target, scenario.Name, streaming); skip {
 		return reason, true
 	}
 	return streamingSkipReason(scenario, streaming)
@@ -415,7 +442,7 @@ func (m *Matrix) skipReason(scenario Scenario, source protocol.APIType, streamin
 // executeTest executes a single test combination with the given environment,
 // resolving skips first and batching when requested.
 func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) TestResult {
-	if reason, skip := m.skipReason(scenario, source, streaming); skip {
+	if reason, skip := m.skipReason(scenario, source, target, streaming); skip {
 		r := m.newBaseResult(scenario.Name, source, target, streaming)
 		r.Skipped = true
 		r.SkipReason = reason

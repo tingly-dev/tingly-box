@@ -371,7 +371,12 @@ The contract itself is covered on every PR by a stub shell driver
 Python/Node are only needed where those SDKs actually run.
 
 **Known incompatibilities** go in `clientSkipScenarios`
-(`matrix.go`, key `client|source|scenario`) as *visible skips* with a reason —
+(`matrix.go`, key `client|source|scenario`, or the more precise
+`client|source|scenario|target|mode` when only one target/streaming
+combination is affected — e.g. `aisdk`'s Responses provider can't satisfy
+`responses_item_ids_canonical` in streaming mode because `streamText()`
+never exposes the raw provider body for that provider, but only when
+converting to a non-Responses target) as *visible skips* with a reason —
 never silent failures. Drivers must not be weakened to paper over a gateway
 bug; the strictness is the point. The gosdk/python bring-up alone surfaced
 four real gateway bugs (missing `event:` lines on the v1 stream path, empty
