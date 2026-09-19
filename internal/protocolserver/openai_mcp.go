@@ -10,7 +10,7 @@ import (
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

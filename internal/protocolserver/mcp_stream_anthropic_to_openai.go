@@ -12,7 +12,7 @@ import (
 	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
