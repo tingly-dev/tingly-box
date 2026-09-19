@@ -1958,9 +1958,24 @@ export const handlers = [
             protocol === 'anthropic_v1'
                 ? { 'Content-Type': 'application/json', 'x-api-key': '$TB_API_KEY', 'anthropic-version': '2023-06-01' }
                 : { 'Content-Type': 'application/json', Authorization: 'Bearer $TB_API_KEY' }
-        const headersOut = throughTB
+        const baseHeaders = throughTB
             ? headers
             : Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, v.replace('$TB_API_KEY', '$UPSTREAM_API_KEY')]))
+        // Bench's header overrides (name -> value, '' = remove) must show up
+        // here — the real backend applies them before the curl is built too
+        // (.design/bench.md §7), so the mock has to match or the payload
+        // panel lies about what a header override actually does.
+        const headersOut = { ...baseHeaders } as Record<string, string>
+        for (const [name, value] of Object.entries((body?.headers ?? {}) as Record<string, string>)) {
+            const existingKey = Object.keys(headersOut).find((k) => k.toLowerCase() === name.toLowerCase())
+            if (value === '') {
+                if (existingKey) delete headersOut[existingKey]
+            } else if (existingKey) {
+                headersOut[existingKey] = value
+            } else {
+                headersOut[name] = value
+            }
+        }
         const visionDataURL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQkAAAjAwPUvrX8reHAJBmsK3pIAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAJMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAyAASTAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADADHAllMDvLkz2XNAAAAAElFTkSuQmCC'
         const messages =
             body?.vision === 'user'
