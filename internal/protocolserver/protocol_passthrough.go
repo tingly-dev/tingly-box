@@ -377,3 +377,12 @@ func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transfo
 	// Track usage from stream handler
 	ph.trackUsageWithTokenUsage(c, usage, err)
 }
+
+// normalizeOpenAIChatReasoningExtras backfills message.reasoning_content on a
+// re-serialized chat completion response map from the SDK extras that plain
+// json.Marshal drops (the extras-carrying JSON metadata struct is tagged
+// json:"-"). The OpenAI spelling (message.reasoning / reasoning_details) is
+// normalized; an explicit reasoning_content passes through as-is (#1773).
+func normalizeOpenAIChatReasoningExtras(resp *openai.ChatCompletion, responseMap map[string]interface{}) {
+	// TODO(#1773): implement — test-first in protocol_passthrough_test.go
+}

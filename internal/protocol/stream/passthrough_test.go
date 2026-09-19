@@ -285,6 +285,46 @@ func TestHandleOpenAIChatStream_ZeroReasoningTokens(t *testing.T) {
 	assert.Equal(t, 0, usage.ReasoningTokens)
 }
 
+// TestHandleOpenAIChatStream_ReasoningPassthrough: upstream thinking text in
+// the OpenAI spelling (delta.reasoning / delta.reasoning_details, as emitted by
+// Command Code / OpenRouter-style providers) must reach the client normalized
+// to reasoning_content — the spelling tingly-box itself emits on converter
+// paths. The handler rebuilds each delta from a fixed field whitelist, and the
+// DeepSeek spelling (delta.reasoning_content) currently isn't in it either, so
+// the thinking text is silently dropped (#1773).
+func TestHandleOpenAIChatStream_ReasoningPassthrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	dec := &fakeChatDecoder{events: []string{
+		`{"id":"chatcmpl-test","object":"chat.completion.chunk","created":1000,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-test","object":"chat.completion.chunk","created":1000,"model":"gpt-4o","choices":[{"index":0,"delta":{"reasoning":"Let me think about this carefully."},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-test","object":"chat.completion.chunk","created":1000,"model":"gpt-4o","choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning","text":"Planning the arithmetic."}]},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-test","object":"chat.completion.chunk","created":1000,"model":"gpt-4o","choices":[{"index":0,"delta":{"reasoning_content":"DeepSeek spelling streams through."},"finish_reason":null}]}`,
+		`{"id":"chatcmpl-test","object":"chat.completion.chunk","created":1000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"390"},"finish_reason":null}]}`,
+		buildChatFinishChunkJSON(t),
+	}, current: -1}
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
+
+	hc := newTestHandleContext(c)
+	hc.DisableStreamUsage = true
+
+	_, err := HandleOpenAIChatStream(hc, stream)
+	require.NoError(t, err)
+
+	body := w.Body.String()
+	// delta.reasoning is normalized into reasoning_content
+	assert.Contains(t, body, `"reasoning_content":"Let me think about this carefully."`)
+	// so is the text inside delta.reasoning_details
+	assert.Contains(t, body, `"reasoning_content":"Planning the arithmetic."`)
+	// the DeepSeek spelling passes through unchanged
+	assert.Contains(t, body, `"reasoning_content":"DeepSeek spelling streams through."`)
+	// the answer text still streams through untouched
+	assert.Contains(t, body, `"content":"390"`)
+}
+
 // fakeChatDecoder replays chat completion chunks.
 type fakeChatDecoder struct {
 	events  []string
