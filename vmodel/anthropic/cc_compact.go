@@ -6,7 +6,7 @@ import (
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/smart_compact"
+	"github.com/tingly-dev/tingly-box/vmodel/anthropic/smartcompact"
 )
 
 // ClaudeCodeCompactTransform conditionally applies XML compression for Claude Code.
@@ -14,13 +14,13 @@ import (
 // 1. Last user message contains "compact" (case-insensitive)
 // 2. Request has tool definitions
 type ClaudeCodeCompactTransform struct {
-	inner *smart_compact.XMLCompactTransform
+	inner *smartcompact.XMLCompactTransform
 }
 
 // NewClaudeCodeCompactTransform creates a new ClaudeCodeCompactTransform.
 func NewClaudeCodeCompactTransform() transform.Transform {
 	return &ClaudeCodeCompactTransform{
-		inner: smart_compact.NewXMLCompactTransform().(*smart_compact.XMLCompactTransform),
+		inner: smartcompact.NewXMLCompactTransform().(*smartcompact.XMLCompactTransform),
 	}
 }
 

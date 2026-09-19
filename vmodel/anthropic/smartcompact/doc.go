@@ -1,4 +1,4 @@
-// Package smart_compact provides conversation compression strategies and
+// Package smartcompact provides conversation compression strategies and
 // transformers for Anthropic requests, consumed by the virtual compact models
 // (vmodel/anthropic: "compact-round-only", "compact-round-files",
 // "claude-code-compact", "claude-code-strategy").
@@ -19,7 +19,7 @@
 // of user requests and assistant responses.
 //
 // The flag-driven thinking trim (the SmartCompact scenario flag) is NOT
-// here: it lives in internal/server/transform.ThinkingCompactTransform,
+// here: it lives in internal/protocolserver/transform.ThinkingCompactTransform,
 // since it is a server-domain transform rather than a vmodel compression
 // strategy.
-package smart_compact
+package smartcompact

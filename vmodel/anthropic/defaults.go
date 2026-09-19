@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/smart_compact"
+	"github.com/tingly-dev/tingly-box/vmodel/anthropic/smartcompact"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
@@ -37,13 +37,13 @@ func RegisterDefaults(r *Registry) {
 			ID:          "compact-round-only",
 			Name:        "Compact Round Only",
 			Description: "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
-			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewRoundOnlyTransform()}),
+			Chain:       transform.NewTransformChain([]transform.Transform{smartcompact.NewRoundOnlyTransform()}),
 		},
 		{
 			ID:          "compact-round-files",
 			Name:        "Compact Round Files",
 			Description: "Keeps user/assistant + virtual file tools (75-88% compression)",
-			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewRoundFilesTransform()}),
+			Chain:       transform.NewTransformChain([]transform.Transform{smartcompact.NewRoundFilesTransform()}),
 		},
 		{
 			ID:          "claude-code-compact",
@@ -56,8 +56,8 @@ func RegisterDefaults(r *Registry) {
 			Name:        "Claude Code Strategy",
 			Description: "Applies DCP-inspired pruning strategies on every request: deduplicates repeated tool calls (keeps latest), and purges inputs of errored tool calls older than 4 turns.",
 			Chain: transform.NewTransformChain([]transform.Transform{
-				smart_compact.NewDeduplicationTransform(),
-				smart_compact.NewPurgeErrorsTransform(4),
+				smartcompact.NewDeduplicationTransform(),
+				smartcompact.NewPurgeErrorsTransform(4),
 			}),
 		},
 	}

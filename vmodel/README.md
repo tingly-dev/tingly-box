@@ -568,4 +568,4 @@ shared test-bench design.
   from `RegisterDefaults`; it owns its own registry of test fixtures.
 - `internal/protocol/transform` — Transform chain types used by
   `anthropic.TransformModel` (e.g. compact-round-only).
-- `internal/smart_compact` — Concrete transform implementations.
+- `vmodel/anthropic/smartcompact` — Concrete transform implementations.
