@@ -1,4 +1,5 @@
 import {Message as MessageIcon, ContentCopy as CopyIcon} from '@/components/icons';
+import { copyText } from '@/utils/clipboard';
 import type {BotChat} from '@/types/bot';
 import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
@@ -63,7 +64,7 @@ const BotChatsButton: React.FC<BotChatsButtonProps> = ({botUUID, platform, pairi
 
     const handleCopy = useCallback(async (chatID: string) => {
         try {
-            await navigator.clipboard.writeText(chatID);
+            await copyText(chatID);
             notify.success(t('bots.table.chatIdCopied', {defaultValue: 'Chat ID copied'}));
         } catch {
             notify.error(t('bots.table.chatIdCopyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));

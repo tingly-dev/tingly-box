@@ -1,4 +1,5 @@
 import {ContentCopy as CopyIcon, Edit as CustomIcon, Close as CloseIcon, Code as CodeIcon, Refresh as RefreshIcon, Block as BlockIcon, Delete as DeleteIcon} from '@/components/icons';
+import { copyText } from '@/utils/clipboard';
 import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
 import {capabilityEnabled, isPairingRequired} from '@/types/bot';
@@ -178,7 +179,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
 
     const handleCopy = useCallback(async (targetID: string) => {
         try {
-            await navigator.clipboard.writeText(targetID);
+            await copyText(targetID);
             notify.success(t('notify.chat.copied', {defaultValue: 'Target UUID copied'}));
         } catch {
             notify.error(t('notify.chat.copyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));

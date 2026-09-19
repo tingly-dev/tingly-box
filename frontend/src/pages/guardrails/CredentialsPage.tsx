@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { copyText } from '@/utils/clipboard';
 import {
     Alert,
     Box,
@@ -342,7 +343,7 @@ const GuardrailsCredentialsPage = () => {
             return;
         }
         try {
-            await navigator.clipboard.writeText(editorState.aliasToken);
+            await copyText(editorState.aliasToken);
             setEditorMessage({ type: 'success', text: 'Alias token copied.' });
         } catch {
             setEditorMessage({ type: 'error', text: 'Failed to copy alias token.' });

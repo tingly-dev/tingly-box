@@ -1,3 +1,4 @@
+import { copyText } from '@/utils/clipboard';
 import {
     Add,
     AutoFixHigh,
@@ -264,13 +265,13 @@ const SkillPage = () => {
     };
 
     const handleCopyContent = () => {
-        navigator.clipboard.writeText(skillContent);
+        copyText(skillContent);
         showNotification('Copied to clipboard!', 'success');
     };
 
     const handleCopyPath = () => {
         if (selectedSkill) {
-            navigator.clipboard.writeText(selectedSkill.path);
+            copyText(selectedSkill.path);
             showNotification('Path copied to clipboard!', 'success');
         }
     };
