@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -172,7 +172,7 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	reverseMap := remapRequestToolNames(req)
 
 	// Inject session ID from metadata
-	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
+	meta := metaid.ParseMetadataUserID(req.Metadata.UserID.String())
 	if meta == nil {
 		panic("invalid metadata")
 	}
@@ -232,7 +232,7 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	reverseMap := remapBetaRequestToolNames(req)
 
 	// Inject session ID from metadata
-	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
+	meta := metaid.ParseMetadataUserID(req.Metadata.UserID.String())
 	if meta == nil {
 		panic("invalid metadata")
 	}

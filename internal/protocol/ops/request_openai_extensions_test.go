@@ -93,3 +93,21 @@ func TestDefaultTransformKeepsExtendedEffortForVerifiedOpenAI(t *testing.T) {
 
 	assert.Equal(t, "xhigh", string(req.ReasoningEffort))
 }
+
+// TestChatArrayContentIsAPrerequisiteForPromptCacheFields pins the one
+// direction in which the two vendor allowlists are not independent: a
+// prompt-cache breakpoint rides on a content part, so a host allowlisted for
+// the cache fields but not for array content would have those breakpoints
+// compacted away silently.
+func TestChatArrayContentIsAPrerequisiteForPromptCacheFields(t *testing.T) {
+	for _, host := range []string{
+		"api.openai.com",
+		"api.deepseek.com",
+		"integrate.api.nvidia.com",
+		"example-llm-provider.test",
+	} {
+		if supportsExplicitPromptCache(host) && !acceptsChatArrayTextContent(host) {
+			t.Errorf("host %q accepts prompt-cache fields but not array content: its breakpoints would be compacted away", host)
+		}
+	}
+}

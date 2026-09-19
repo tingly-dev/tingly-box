@@ -1,14 +1,18 @@
 package client
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
 func TestSanitizeCodexInputIDsJSON_DropsRequiredEmptyID(t *testing.T) {
@@ -183,7 +187,12 @@ func TestNormalizeCodexSystemMessagesJSON(t *testing.T) {
 		}`
 
 		out := normalizeCodexSystemMessagesJSON(body)
-		assert.Equal(t, "existing\n\nfirst\n\nsecond", gjson.Get(out, "instructions").String())
+		// System parts concatenate verbatim — the exact inverse of the
+		// converters' system→instructions join — so the lifted text is
+		// byte-identical whether or not a cache breakpoint forced the system
+		// prompt through the input array this turn. Text the client authored as
+		// `instructions` is a separate string and stays separated.
+		assert.Equal(t, "existing\n\nfirstsecond", gjson.Get(out, "instructions").String())
 		assert.Len(t, gjson.Get(out, "input").Array(), 1)
 	})
 
@@ -276,4 +285,115 @@ func TestValidateCodexStreamResponse_AllowsAmbiguousNonSSEContentType(t *testing
 	}
 
 	require.NoError(t, validateCodexStreamResponse(resp))
+}
+
+// TestCodexBodyIsStableAcrossBreakpointRotation is the end-to-end guard for the
+// Codex prompt-cache collapse. The ChatGPT backend strips no ambiguity for us:
+// it caches on the request prefix, so any byte the gateway changes between two
+// turns over the same history is a cache miss the user pays for.
+//
+// Codex does not accept prompt-cache breakpoints at all, so once the converters
+// stopped letting a breakpoint decide an item's shape, moving the client's
+// rolling breakpoints must have exactly zero effect on the dispatched body.
+func TestCodexBodyIsStableAcrossBreakpointRotation(t *testing.T) {
+	rt := &codexRoundTripper{}
+	body := func(breakpointAt int) string {
+		converted := request.ConvertAnthropicBetaToResponsesRequest(claudeCodeBetaRequest(breakpointAt))
+		raw, err := json.Marshal(converted)
+		require.NoError(t, err)
+		filtered, err := rt.filterField(raw)
+		require.NoError(t, err)
+		return string(filtered)
+	}
+
+	baseline := body(-1)
+	for _, at := range []int{0, 1, 2} {
+		assert.Equal(t, baseline, body(at),
+			"moving the breakpoint to message block %d changed the Codex request body", at)
+	}
+
+	// And the body really is the one Codex expects: system text lifted into
+	// instructions, no breakpoint fields left anywhere.
+	assert.Equal(t, "You are Claude Code.BIG SYSTEM PROMPT", gjson.Get(baseline, "instructions").String())
+	assert.NotContains(t, baseline, "prompt_cache_breakpoint")
+	assert.NotContains(t, baseline, "prompt_cache_options")
+	for _, item := range gjson.Get(baseline, "input").Array() {
+		assert.NotEqual(t, "system", item.Get("role").String())
+	}
+}
+
+// claudeCodeBetaRequest mirrors a Claude Code turn: two-block system prompt, a
+// cached tool definition, and a short tool-use history, with the client's
+// rolling ephemeral breakpoint parked on message block breakpointAt (-1 =
+// none).
+func claudeCodeBetaRequest(breakpointAt int) *anthropic.BetaMessageNewParams {
+	cache := func(on bool) anthropic.BetaCacheControlEphemeralParam {
+		if on {
+			return anthropic.NewBetaCacheControlEphemeralParam()
+		}
+		return anthropic.BetaCacheControlEphemeralParam{}
+	}
+
+	return &anthropic.BetaMessageNewParams{
+		Model:     "gpt-5.6-sol",
+		MaxTokens: 4096,
+		System: []anthropic.BetaTextBlockParam{
+			{Text: "You are Claude Code."},
+			{Text: "BIG SYSTEM PROMPT", CacheControl: anthropic.NewBetaCacheControlEphemeralParam()},
+		},
+		Tools: []anthropic.BetaToolUnionParam{{
+			OfTool: &anthropic.BetaToolParam{
+				Name:         "Read",
+				InputSchema:  anthropic.BetaToolInputSchemaParam{Type: "object"},
+				CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
+			},
+		}},
+		Messages: []anthropic.BetaMessageParam{
+			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "read a file", CacheControl: cache(breakpointAt == 0)}},
+			}},
+			{Role: "assistant", Content: []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "on it", CacheControl: cache(breakpointAt == 1)}},
+				{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_1", Name: "Read", Input: map[string]any{"p": "x"}}},
+			}},
+			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{
+				{OfToolResult: &anthropic.BetaToolResultBlockParam{
+					ToolUseID:    "toolu_1",
+					CacheControl: cache(breakpointAt == 2),
+					Content: []anthropic.BetaToolResultBlockParamContentUnion{
+						{OfText: &anthropic.BetaTextBlockParam{Text: "file contents"}},
+					},
+				}},
+			}},
+		},
+	}
+}
+
+func TestApplyCodexSessionAffinityHeader(t *testing.T) {
+	sessionID := "16d97292-8713-438b-ad2e-76f495717258"
+
+	t.Run("mirrors prompt_cache_key into session-id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+		applyCodexSessionAffinityHeader(req, []byte(`{"prompt_cache_key":"`+sessionID+`"}`))
+		assert.Equal(t, sessionID, req.Header.Get("session-id"))
+	})
+
+	t.Run("keeps a session-id the client already sent", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+		req.Header.Set("session-id", "client-owned")
+		applyCodexSessionAffinityHeader(req, []byte(`{"prompt_cache_key":"`+sessionID+`"}`))
+		assert.Equal(t, "client-owned", req.Header.Get("session-id"))
+	})
+
+	t.Run("skips non-uuid keys rather than risk a rejected request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+		applyCodexSessionAffinityHeader(req, []byte(`{"prompt_cache_key":"deadbeefdeadbeefdeadbeefdeadbeef"}`))
+		assert.Empty(t, req.Header.Get("session-id"))
+	})
+
+	t.Run("no key, no header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+		applyCodexSessionAffinityHeader(req, []byte(`{"model":"gpt-5.6-sol"}`))
+		assert.Empty(t, req.Header.Get("session-id"))
+	})
 }

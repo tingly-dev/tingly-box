@@ -57,7 +57,7 @@ func TestCacheControlProtocolFamilyPreservesMultiblockBoundaries(t *testing.T) {
 		require.False(t, openaiparam.IsOmitted(assistantParts[0].OfText.PromptCacheBreakpoint))
 
 		out := ConvertOpenAIToAnthropicRequest(chat, 4096)
-		requireAnthropicFamilyBoundaries(t, out)
+		requireAnthropicFamilyBoundaries(t, out, true)
 	})
 
 	t.Run("messages responses messages", func(t *testing.T) {
@@ -81,14 +81,14 @@ func TestCacheControlProtocolFamilyPreservesMultiblockBoundaries(t *testing.T) {
 		require.False(t, openaiparam.IsOmitted(
 			user.Content.OfInputItemContentList[1].OfInputImage.PromptCacheBreakpoint))
 
-		assistant := responsesReq.Input.OfInputItemList[2].OfMessage
+		assistant := responsesReq.Input.OfInputItemList[2].OfOutputMessage
 		require.NotNil(t, assistant)
-		require.Len(t, assistant.Content.OfInputItemContentList, 1)
-		require.False(t, openaiparam.IsOmitted(
-			assistant.Content.OfInputItemContentList[0].OfInputText.PromptCacheBreakpoint))
+		require.Len(t, assistant.Content, 1)
+		require.NotNil(t, assistant.Content[0].OfOutputText)
+		require.Equal(t, "assistant text", assistant.Content[0].OfOutputText.Text)
 
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
-		requireAnthropicFamilyBoundaries(t, out)
+		requireAnthropicFamilyBoundaries(t, out, false)
 	})
 }
 
@@ -102,17 +102,31 @@ func TestCacheControlProtocolFamilyDoesNotSynthesizeBreakpoints(t *testing.T) {
 		},
 	}
 
+	// The content-part list is the one shape a converted message ever takes —
+	// see the cache-shape invariant in cache_control.go. No breakpoint is
+	// synthesized onto it.
 	chat, _ := ConvertAnthropicToOpenAIRequest(anthropicReq, true, false, false)
 	require.Empty(t, chat.PromptCacheOptions.Mode)
-	require.True(t, chat.Messages[0].OfSystem.Content.OfString.Valid())
-	require.True(t, chat.Messages[1].OfUser.Content.OfString.Valid())
+	chatSystem := chat.Messages[0].OfSystem.Content.OfArrayOfContentParts
+	require.Len(t, chatSystem, 1)
+	require.True(t, openaiparam.IsOmitted(chatSystem[0].PromptCacheBreakpoint))
+	chatUser := chat.Messages[1].OfUser.Content.OfArrayOfContentParts
+	require.Len(t, chatUser, 1)
+	require.True(t, openaiparam.IsOmitted(chatUser[0].OfText.PromptCacheBreakpoint))
 
 	responsesReq := ConvertAnthropicV1ToResponsesRequest(anthropicReq)
 	require.Empty(t, responsesReq.PromptCacheOptions.Mode)
 	require.True(t, responsesReq.Instructions.Valid())
 	require.Len(t, responsesReq.Input.OfInputItemList, 1)
-	require.True(t, responsesReq.Input.OfInputItemList[0].OfMessage.Content.OfString.Valid())
+	// The content-part list is the one shape a converted message ever takes —
+	// see the cache-shape invariant in cache_control.go. No breakpoint is
+	// synthesized onto it.
+	userParts := responsesReq.Input.OfInputItemList[0].OfMessage.Content.OfInputItemContentList
+	require.Len(t, userParts, 1)
+	require.True(t, openaiparam.IsOmitted(userParts[0].OfInputText.PromptCacheBreakpoint))
 
+	// Responses→Chat collapses text content to the compact string form
+	// unconditionally, so its shape does not depend on breakpoints either.
 	chatAgain := ConvertOpenAIResponsesToChat(responsesReq, 4096)
 	require.Empty(t, chatAgain.PromptCacheOptions.Mode)
 	require.True(t, chatAgain.Messages[0].OfSystem.Content.OfString.Valid())
@@ -144,14 +158,16 @@ func TestCacheControlProtocolFamilyToolFallbackPrefersSystemPrefix(t *testing.T)
 	require.Len(t, chat.Messages[0].OfSystem.Content.OfArrayOfContentParts, 1)
 	require.False(t, openaiparam.IsOmitted(
 		chat.Messages[0].OfSystem.Content.OfArrayOfContentParts[0].PromptCacheBreakpoint))
-	require.True(t, chat.Messages[1].OfUser.Content.OfString.Valid())
+	require.Len(t, chat.Messages[1].OfUser.Content.OfArrayOfContentParts, 1)
 
 	responsesReq := ConvertAnthropicV1ToResponsesRequest(in)
 	require.Equal(t, "explicit", responsesReq.PromptCacheOptions.Mode)
 	require.False(t, responsesReq.Instructions.Valid())
 	require.Len(t, responsesReq.Input.OfInputItemList, 2)
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[0], "system")
-	require.True(t, responsesReq.Input.OfInputItemList[1].OfMessage.Content.OfString.Valid())
+	userParts := responsesReq.Input.OfInputItemList[1].OfMessage.Content.OfInputItemContentList
+	require.Len(t, userParts, 1)
+	require.True(t, openaiparam.IsOmitted(userParts[0].OfInputText.PromptCacheBreakpoint))
 }
 
 func TestCacheControlProtocolFamilyToolUseFallbackPrefersSystemPrefix(t *testing.T) {
@@ -201,7 +217,12 @@ func TestCacheControlProtocolFamilyToolUseFallbackPrefersSystemPrefix(t *testing
 	require.NotNil(t, betaResponsesReq.Input.OfInputItemList[1].OfFunctionCall)
 }
 
-func requireAnthropicFamilyBoundaries(t *testing.T, out *anthropic.BetaMessageNewParams) {
+// requireAnthropicFamilyBoundaries checks the shared system/user boundaries
+// plus the assistant boundary. assistantCacheControl is false for the
+// Responses family, where a prompt-cache breakpoint has no output_text
+// equivalent (breakpoints only exist on input_text/input_image, valid only
+// on user/system content) and is necessarily dropped on the round trip.
+func requireAnthropicFamilyBoundaries(t *testing.T, out *anthropic.BetaMessageNewParams, assistantCacheControl bool) {
 	t.Helper()
 	require.Len(t, out.System, 2)
 	require.True(t, anthropicparam.IsOmitted(out.System[0].CacheControl))
@@ -218,7 +239,7 @@ func requireAnthropicFamilyBoundaries(t *testing.T, out *anthropic.BetaMessageNe
 	assistant := out.Messages[1]
 	require.Len(t, assistant.Content, 1)
 	require.NotNil(t, assistant.Content[0].OfText)
-	require.False(t, anthropicparam.IsOmitted(assistant.Content[0].OfText.CacheControl))
+	require.Equal(t, assistantCacheControl, !anthropicparam.IsOmitted(assistant.Content[0].OfText.CacheControl))
 }
 
 func TestCacheControlProtocolFamilyChatResponsesKeepsMultipleBreakpoints(t *testing.T) {

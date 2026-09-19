@@ -50,10 +50,19 @@ type vendorFixture struct {
 	// Only api.openai.com is allowlisted today — see supportsExplicitPromptCache
 	// in internal/protocol/ops/request_openai_extensions.go.
 	wantsExplicitPromptCache bool
+
+	// wantsArrayTextContent is whether text-only message content should reach
+	// this vendor as a content-part array rather than a plain string
+	// (acceptsChatArrayTextContent). Declared independently of
+	// wantsExplicitPromptCache even though the two allowlists happen to agree
+	// today: deriving one expectation from the other would re-encode the
+	// coupling the production split exists to avoid, and the suite would no
+	// longer notice if they were rejoined.
+	wantsArrayTextContent bool
 }
 
 var vendorFixtures = []vendorFixture{
-	{name: "openai_official", apiBase: "http://api.openai.com", wantsExplicitPromptCache: true},
+	{name: "openai_official", apiBase: "http://api.openai.com", wantsExplicitPromptCache: true, wantsArrayTextContent: true},
 	{name: "generic_openai_compatible", apiBase: "http://example-llm-provider.test", wantsExplicitPromptCache: false},
 	{name: "deepseek", apiBase: "http://api.deepseek.com", wantsExplicitPromptCache: false},
 	// NVIDIA NIM rejects the whole request over top-level prompt-cache
@@ -137,6 +146,40 @@ func runVendorTransformCase(t flagTB, env *TestEnv, fx vendorFixture, streaming 
 		sendCacheControlBody(t, env, source, target, s.Name, model, streaming, cached)
 		wantCached := cached && fx.wantsExplicitPromptCache
 		assertCapturedCacheState(t, env, target, wantCached, label)
+		assertCapturedChatTextShape(t, env, !fx.wantsArrayTextContent, label)
+	}
+}
+
+// assertCapturedChatTextShape checks how text-only message content reached the
+// vendor: the compact string for everyone off the explicit-prompt-cache
+// allowlist, the content-part array for those on it. Either way the shape is
+// fixed per vendor and never depends on where a cache breakpoint sat — the
+// property the cache_prefix section checks end-to-end.
+func assertCapturedChatTextShape(t flagTB, env *TestEnv, wantCompact bool, label string) {
+	t.Helper()
+	captured := env.virtual.LastRequest(EndpointChat)
+	if captured == nil {
+		t.Fatalf("%s: final provider received no chat request", label)
+	}
+	messages, _ := captured.JSON()["messages"].([]any)
+	if len(messages) == 0 {
+		t.Fatalf("%s: captured chat request has no messages; body=%s", label, truncate(string(captured.Body), 1200))
+	}
+	for i, raw := range messages {
+		msg, _ := raw.(map[string]any)
+		switch content := msg["content"].(type) {
+		case string:
+			if !wantCompact {
+				t.Errorf("%s: messages[%d].content is a plain string, want content parts; body=%s",
+					label, i, truncate(string(captured.Body), 1200))
+			}
+		case []any:
+			if wantCompact {
+				t.Errorf("%s: messages[%d].content is a %d-part array, want a plain string — "+
+					"vendors off the prompt-cache allowlist may reject the array form; body=%s",
+					label, i, len(content), truncate(string(captured.Body), 1200))
+			}
+		}
 	}
 }
 

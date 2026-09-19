@@ -214,17 +214,26 @@ func cacheSurvivesPath(hops ...protocol.APIType) bool {
 	return !slices.Contains(hops, protocol.TypeOpenAIChat)
 }
 
-func assertCapturedCacheState(t flagTB, env *TestEnv, target protocol.APIType, wantCached bool, label string) {
+// requireLastRequest returns the request the final provider received on the
+// endpoint target speaks, failing the case when the target has no endpoint or
+// nothing arrived. Every capture-and-assert helper in the suite starts here.
+func requireLastRequest(t flagTB, env *TestEnv, target protocol.APIType, label string) *CapturedRequest {
 	t.Helper()
 	endpoint := cacheControlEndpoint(target)
 	if endpoint == "" {
 		t.Fatalf("%s: unsupported target protocol %s", label, target)
 	}
-
 	captured := env.virtual.LastRequest(endpoint)
 	if captured == nil {
 		t.Fatalf("%s: final provider received no %s request", label, endpoint)
 	}
+	return captured
+}
+
+func assertCapturedCacheState(t flagTB, env *TestEnv, target protocol.APIType, wantCached bool, label string) {
+	t.Helper()
+	endpoint := cacheControlEndpoint(target)
+	captured := requireLastRequest(t, env, target, label)
 	body := captured.JSON()
 
 	markerKey := "prompt_cache_breakpoint"
@@ -282,13 +291,7 @@ func assertCapturedCacheState(t flagTB, env *TestEnv, target protocol.APIType, w
 func assertCapturedAutomaticCacheState(t flagTB, env *TestEnv, target protocol.APIType, wantImplicit bool, label string) {
 	t.Helper()
 	endpoint := cacheControlEndpoint(target)
-	if endpoint == "" {
-		t.Fatalf("%s: unsupported target protocol %s", label, target)
-	}
-	captured := env.virtual.LastRequest(endpoint)
-	if captured == nil {
-		t.Fatalf("%s: final provider received no %s request", label, endpoint)
-	}
+	captured := requireLastRequest(t, env, target, label)
 	body := captured.JSON()
 
 	if endpoint == EndpointAnthropic {

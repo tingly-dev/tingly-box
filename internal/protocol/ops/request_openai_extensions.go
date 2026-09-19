@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -25,6 +26,9 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 	nativeOpenAI := supportsExplicitPromptCache(host)
 	if !nativeOpenAI {
 		stripOpenAIPromptCacheFields(req)
+	}
+	if !acceptsChatArrayTextContent(host) {
+		compactOpenAIChatTextContent(req)
 	}
 
 	switch {
@@ -60,6 +64,27 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 // the default (stripped) is the safe outcome for an unverified vendor.
 func supportsExplicitPromptCache(host string) bool {
 	return host == "api.openai.com"
+}
+
+// acceptsChatArrayTextContent reports whether the provider host is confirmed to
+// accept the content-part array form for text-only system, user, assistant and
+// tool messages.
+//
+// Kept separate from supportsExplicitPromptCache, which holds the same single
+// entry today: "accepts the prompt-cache fields" and "accepts array text
+// content" are different questions, and one allowlist answering both would
+// silently flip a vendor's entire text wire format the day it is added for the
+// cache fields alone.
+//
+// They are not independent in both directions, though. A prompt-cache
+// breakpoint is a field on a content *part*, so it can only reach a vendor that
+// takes the array form — an allowlisted-for-cache host that was left off this
+// list would have its breakpoints compacted away without a word. The
+// implication is therefore encoded here rather than left to whoever edits the
+// lists next: array content is a prerequisite for the cache fields, never the
+// other way round.
+func acceptsChatArrayTextContent(host string) bool {
+	return host == "api.openai.com" || supportsExplicitPromptCache(host)
 }
 
 // stripOpenAIPromptCacheFields removes the OpenAI-only prompt-cache fields
@@ -135,6 +160,100 @@ func stripTextPartBreakpoints(parts []openai.ChatCompletionContentPartTextParam)
 	for i := range parts {
 		parts[i].PromptCacheBreakpoint = openai.ChatCompletionContentPartTextPromptCacheBreakpointParam{}
 	}
+}
+
+// compactOpenAIChatTextContent collapses all-text content-part arrays back to
+// the plain string form, for every vendor not on the acceptsChatArrayTextContent
+// allowlist.
+//
+// The converters emit the content-part list unconditionally, because letting a
+// cache breakpoint decide an item's shape invalidates the upstream prompt cache
+// the turn a client rolls that breakpoint forward (see the cache-shape
+// invariant in internal/protocol/request/cache_control.go). That is the right
+// shape to carry *through* the gateway, but it is the richer of the two wire
+// forms, and an OpenAI-compatible vendor that only accepts a string for system,
+// assistant or tool content would reject every request.
+//
+// Nothing in the array form is lost by collapsing it: its only extra
+// expressiveness over a string is the prompt-cache breakpoints, and a vendor
+// reaching this point is by construction one whose breakpoints were stripped
+// just above (see acceptsChatArrayTextContent). Both branches stay
+// shape-stable — an off-allowlist vendor always sees strings, an allowlisted one
+// always sees parts — and neither depends on where a breakpoint sat. Parts are
+// joined without a separator, matching the concatenation the converters did
+// before the arrays became unconditional. Content holding anything but text
+// (images, audio, files) keeps the array, since the string form cannot express
+// it.
+func compactOpenAIChatTextContent(req *openai.ChatCompletionNewParams) {
+	for i := range req.Messages {
+		msg := &req.Messages[i]
+		switch {
+		case msg.OfDeveloper != nil:
+			compactParts(&msg.OfDeveloper.Content.OfString, &msg.OfDeveloper.Content.OfArrayOfContentParts, textPartText)
+		case msg.OfSystem != nil:
+			compactParts(&msg.OfSystem.Content.OfString, &msg.OfSystem.Content.OfArrayOfContentParts, textPartText)
+		case msg.OfUser != nil:
+			compactParts(&msg.OfUser.Content.OfString, &msg.OfUser.Content.OfArrayOfContentParts, unionPartText)
+		case msg.OfTool != nil:
+			compactParts(&msg.OfTool.Content.OfString, &msg.OfTool.Content.OfArrayOfContentParts, unionPartText)
+		case msg.OfAssistant != nil:
+			compactParts(&msg.OfAssistant.Content.OfString, &msg.OfAssistant.Content.OfArrayOfContentParts, assistantPartText)
+		}
+	}
+}
+
+// compactParts replaces an all-text part list with the equivalent string.
+// text reports a part's text and whether the part is text at all; one part that
+// is not (an image, audio, a refusal) leaves the list untouched, and the scan
+// for that happens before any copying so a long text prefix ahead of an image
+// is never copied just to be discarded.
+func compactParts[T any](str *param.Opt[string], parts *[]T, text func(T) (string, bool)) {
+	if len(*parts) == 0 {
+		return // already a string (or genuinely absent) — nothing to collapse
+	}
+	total := 0
+	for _, part := range *parts {
+		s, ok := text(part)
+		if !ok {
+			return
+		}
+		total += len(s)
+	}
+	// The overwhelmingly common case: one text part, whose string is reused
+	// as-is rather than copied through a builder. A request carries one of
+	// these per message.
+	if len(*parts) == 1 {
+		s, _ := text((*parts)[0])
+		*parts = nil
+		*str = openai.String(s)
+		return
+	}
+	var joined strings.Builder
+	joined.Grow(total)
+	for _, part := range *parts {
+		s, _ := text(part)
+		joined.WriteString(s)
+	}
+	*parts = nil
+	*str = openai.String(joined.String())
+}
+
+func textPartText(part openai.ChatCompletionContentPartTextParam) (string, bool) {
+	return part.Text, true
+}
+
+func unionPartText(part openai.ChatCompletionContentPartUnionParam) (string, bool) {
+	if part.OfText == nil {
+		return "", false
+	}
+	return part.OfText.Text, true
+}
+
+func assistantPartText(part openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion) (string, bool) {
+	if part.OfText == nil {
+		return "", false // a refusal part has no string form
+	}
+	return part.OfText.Text, true
 }
 
 // ApplyCursorCompatContentNormalization flattens rich content in messages for

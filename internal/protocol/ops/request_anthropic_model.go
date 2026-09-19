@@ -10,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/tingly-dev/tingly-box/internal/protocol/catalog"
+	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -290,7 +291,7 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 		})
 	}
 	if req.Metadata.UserID.Valid() {
-		m := ParseMetadataUserID(req.Metadata.UserID.String())
+		m := metaid.ParseMetadataUserID(req.Metadata.UserID.String())
 		if m != nil {
 			// Recover from panic if Fix() fails due to missing required fields
 			func() {
@@ -305,9 +306,9 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 			}()
 		}
 	} else {
-		m := BuildMetadataUserID(extra)
+		m := metaid.BuildMetadataUserID(extra)
 		if m != nil {
-			s := FormatMetadataUserID(m)
+			s := metaid.FormatMetadataUserID(m)
 			req.Metadata.UserID = param.NewOpt(s)
 		}
 	}
@@ -343,16 +344,16 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 		})
 	}
 	if req.Metadata.UserID.Valid() {
-		m := ParseMetadataUserID(req.Metadata.UserID.String())
+		m := metaid.ParseMetadataUserID(req.Metadata.UserID.String())
 		if m != nil {
 			m.Fix(extra)
 			s := m.Format()
 			req.Metadata.UserID = param.NewOpt(s)
 		}
 	} else {
-		m := BuildMetadataUserID(extra)
+		m := metaid.BuildMetadataUserID(extra)
 		if m != nil {
-			s := FormatMetadataUserID(m)
+			s := metaid.FormatMetadataUserID(m)
 			req.Metadata.UserID = param.NewOpt(s)
 		}
 	}

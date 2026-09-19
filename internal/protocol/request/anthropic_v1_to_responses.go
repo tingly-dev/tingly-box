@@ -2,7 +2,6 @@ package request
 
 import (
 	"encoding/json"
-	"slices"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -37,15 +36,7 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	// Always set Input field, even if empty, as Responses API requires it
 	var inputItems responses.ResponseInputParam
 	if hasSystemCacheControl {
-		content := make(responses.ResponseInputMessageContentListParam, 0, len(anthropicReq.System))
-		for _, block := range anthropicReq.System {
-			part := &responses.ResponseInputTextParam{Text: block.Text}
-			if !param.IsOmitted(block.CacheControl) {
-				part.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-			}
-			content = append(content, responses.ResponseInputContentUnionParam{OfInputText: part})
-		}
-		inputItems = append(inputItems, responseMessageWithContent("system", content))
+		inputItems = append(inputItems, responseMessageWithContent("system", responsesTextParts(anthropicReq.System)))
 	}
 	inputItems = append(inputItems, convertV1MessagesToResponsesInput(anthropicReq.Messages)...)
 	params.Input = responses.ResponseNewParamsInputUnion{
@@ -75,6 +66,10 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
 		params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
+
+	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
+	// field, so it is derived from metadata.user_id.
+	params.PromptCacheKey = openAIPromptCacheKey(anthropicReq.Metadata.UserID.Or(""))
 
 	hasRepresentableCacheControl := hasSystemCacheControl || anthropicV1MessagesHaveRepresentableCacheControl(anthropicReq.Messages)
 	hasFallbackCacheControl := anthropicV1ToolsHaveCacheControl(anthropicReq.Tools) ||
@@ -123,44 +118,46 @@ func markFunctionCallOutputBreakpoint(item *responses.ResponseFunctionCallOutput
 }
 
 // responsesFunctionCallOutputFromToolResult converts a tool_result block into
-// a Responses function_call_output input item. Text-only results without
-// cache control collapse to the compact output string; results carrying
-// images (tool screenshots — issue #1606) or cache breakpoints keep the
-// structured output item list. Shared by the v1 and beta converters — the
-// beta path bridges through viewAnthropicBetaBlock first.
+// a Responses function_call_output input item, always as the structured output
+// item list. Shared by the v1 and beta converters — the beta path bridges
+// through viewAnthropicBetaBlock first.
+//
+// The list shape is unconditional on purpose — see the cache-shape invariant
+// documented in cache_control.go.
+// A text-only result used to collapse to the compact output string whenever it
+// carried no cache breakpoint, so the same tool result serialized one way while
+// a breakpoint sat on it and another way once Claude Code rolled that
+// breakpoint forward — re-writing conversation history the upstream cache had
+// already been keyed on.
 func responsesFunctionCallOutputFromToolResult(block *anthropic.ToolResultBlockParam) responses.ResponseInputItemUnionParam {
 	output := responses.ResponseInputItemFunctionCallOutputOutputUnionParam{}
 	hasCache := !param.IsOmitted(block.CacheControl)
-	hasImage := slices.ContainsFunc(block.Content, func(c anthropic.ToolResultBlockParamContentUnion) bool {
-		return c.OfImage != nil
-	})
 
-	if !hasImage && !hasCache {
-		output.OfString = param.NewOpt(convertV1ToolResultContentToString(block.Content))
-	} else {
-		items := make(responses.ResponseFunctionCallOutputItemListParam, 0, len(block.Content))
-		for _, c := range block.Content {
-			switch {
-			case c.OfText != nil:
+	items := make(responses.ResponseFunctionCallOutputItemListParam, 0, len(block.Content))
+	for _, c := range block.Content {
+		switch {
+		case c.OfText != nil:
+			if c.OfText.Text == "" {
+				continue
+			}
+			items = append(items, responses.ResponseFunctionCallOutputItemUnionParam{
+				OfInputText: &responses.ResponseInputTextContentParam{Text: c.OfText.Text},
+			})
+		case c.OfImage != nil:
+			if url := imageBlockToOpenAIURL(c.OfImage); url != "" {
 				items = append(items, responses.ResponseFunctionCallOutputItemUnionParam{
-					OfInputText: &responses.ResponseInputTextContentParam{Text: c.OfText.Text},
+					OfInputImage: &responses.ResponseInputImageContentParam{ImageURL: param.NewOpt(url)},
 				})
-			case c.OfImage != nil:
-				if url := imageBlockToOpenAIURL(c.OfImage); url != "" {
-					items = append(items, responses.ResponseFunctionCallOutputItemUnionParam{
-						OfInputImage: &responses.ResponseInputImageContentParam{ImageURL: param.NewOpt(url)},
-					})
-				}
 			}
 		}
-		if len(items) == 0 {
-			output.OfString = param.NewOpt("")
-		} else {
-			if hasCache {
-				markFunctionCallOutputBreakpoint(&items[len(items)-1])
-			}
-			output.OfResponseFunctionCallOutputItemArray = items
+	}
+	if len(items) == 0 {
+		output.OfString = param.NewOpt("")
+	} else {
+		if hasCache {
+			markFunctionCallOutputBreakpoint(&items[len(items)-1])
 		}
+		output.OfResponseFunctionCallOutputItemArray = items
 	}
 
 	return responses.ResponseInputItemUnionParam{
@@ -176,16 +173,11 @@ func responsesFunctionCallOutputFromToolResult(block *anthropic.ToolResultBlockP
 func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []responses.ResponseInputItemUnionParam {
 	var items []responses.ResponseInputItemUnionParam
 
-	var hasToolResult, hasImage, hasCacheControl bool
+	var hasToolResult bool
 	for _, block := range msg.Content {
 		if block.OfToolResult != nil {
 			hasToolResult = true
-		}
-		if block.OfImage != nil {
-			hasImage = true
-		}
-		if cacheControl := block.GetCacheControl(); cacheControl != nil {
-			hasCacheControl = hasCacheControl || !param.IsOmitted(*cacheControl)
+			break
 		}
 	}
 
@@ -203,88 +195,41 @@ func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []response
 						{OfInputImage: &responses.ResponseInputImageParam{ImageURL: param.NewOpt(url)}},
 					}))
 				}
-			} else if block.OfText != nil {
+			} else if block.OfText != nil && block.OfText.Text != "" {
 				// Text content alongside tool results
-				content := responses.EasyInputMessageContentUnionParam{
-					OfString: param.NewOpt(block.OfText.Text),
-				}
-				if !param.IsOmitted(block.OfText.CacheControl) {
-					text := &responses.ResponseInputTextParam{
-						Text:                  block.OfText.Text,
-						PromptCacheBreakpoint: responses.NewResponseInputTextPromptCacheBreakpointParam(),
-					}
-					content = responses.EasyInputMessageContentUnionParam{
-						OfInputItemContentList: responses.ResponseInputMessageContentListParam{
-							{OfInputText: text},
-						},
-					}
-				}
-				messageItem := responses.EasyInputMessageParam{
-					Type:    responses.EasyInputMessageTypeMessage,
-					Role:    responses.EasyInputMessageRole("user"),
-					Content: content,
-				}
-				items = append(items, responses.ResponseInputItemUnionParam{
-					OfMessage: &messageItem,
-				})
+				items = append(items, responseMessageWithContent("user",
+					responses.ResponseInputMessageContentListParam{
+						{OfInputText: responsesInputTextPart(block.OfText.Text, !param.IsOmitted(block.OfText.CacheControl))},
+					}))
 			}
 		}
 		return items
 	}
 
-	if hasImage || hasCacheControl {
-		// Multimodal user message: emit input_text + input_image content parts
-		contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msg.Content))
-		for _, block := range msg.Content {
-			switch {
-			case block.OfText != nil:
-				text := &responses.ResponseInputTextParam{Text: block.OfText.Text}
-				if !param.IsOmitted(block.OfText.CacheControl) {
-					text.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-				}
-				contentList = append(contentList, responses.ResponseInputContentUnionParam{
-					OfInputText: text,
-				})
-			case block.OfImage != nil:
-				url := imageBlockToOpenAIURL(block.OfImage)
-				if url == "" {
-					continue
-				}
-				image := &responses.ResponseInputImageParam{ImageURL: param.NewOpt(url)}
-				if !param.IsOmitted(block.OfImage.CacheControl) {
-					image.PromptCacheBreakpoint = responses.NewResponseInputImagePromptCacheBreakpointParam()
-				}
-				contentList = append(contentList, responses.ResponseInputContentUnionParam{OfInputImage: image})
+	contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msg.Content))
+	for _, block := range msg.Content {
+		switch {
+		case block.OfText != nil:
+			if block.OfText.Text == "" {
+				continue
 			}
-		}
-		if len(contentList) > 0 {
-			messageItem := responses.EasyInputMessageParam{
-				Type: responses.EasyInputMessageTypeMessage,
-				Role: responses.EasyInputMessageRole("user"),
-				Content: responses.EasyInputMessageContentUnionParam{
-					OfInputItemContentList: contentList,
-				},
-			}
-			items = append(items, responses.ResponseInputItemUnionParam{
-				OfMessage: &messageItem,
+			contentList = append(contentList, responses.ResponseInputContentUnionParam{
+				OfInputText: responsesInputTextPart(block.OfText.Text, !param.IsOmitted(block.OfText.CacheControl)),
 			})
+		case block.OfImage != nil:
+			url := imageBlockToOpenAIURL(block.OfImage)
+			if url == "" {
+				continue
+			}
+			image := &responses.ResponseInputImageParam{ImageURL: param.NewOpt(url)}
+			if !param.IsOmitted(block.OfImage.CacheControl) {
+				image.PromptCacheBreakpoint = responses.NewResponseInputImagePromptCacheBreakpointParam()
+			}
+			contentList = append(contentList, responses.ResponseInputContentUnionParam{OfInputImage: image})
 		}
-		return items
 	}
-
-	// Simple text-only user message
-	contentStr := convertV1ContentBlocksToString(msg.Content)
-	if contentStr != "" {
-		messageItem := responses.EasyInputMessageParam{
-			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRole("user"),
-			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(contentStr),
-			},
-		}
-		items = append(items, responses.ResponseInputItemUnionParam{
-			OfMessage: &messageItem,
-		})
+	if len(contentList) > 0 {
+		items = append(items, responseMessageWithContent("user", contentList))
 	}
 
 	return items
@@ -293,13 +238,11 @@ func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []response
 // convertV1AssistantMessageToResponsesInput converts Anthropic v1 assistant message to Responses API input items
 func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []responses.ResponseInputItemUnionParam {
 	var items []responses.ResponseInputItemUnionParam
-	var textContent string
 	var textBlocks []anthropic.TextBlockParam
 
 	// Process content blocks to collect text and find tool_use blocks
 	for _, block := range msg.Content {
 		if block.OfText != nil {
-			textContent += block.OfText.Text
 			textBlocks = append(textBlocks, *block.OfText)
 		}
 	}
@@ -321,31 +264,11 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 		}
 	}
 
-	// Add text content as a separate message if present
-	if textContent != "" {
-		content := responses.EasyInputMessageContentUnionParam{OfString: param.NewOpt(textContent)}
-		for _, block := range textBlocks {
-			if !param.IsOmitted(block.CacheControl) {
-				parts := make(responses.ResponseInputMessageContentListParam, 0, len(textBlocks))
-				for _, textBlock := range textBlocks {
-					part := &responses.ResponseInputTextParam{Text: textBlock.Text}
-					if !param.IsOmitted(textBlock.CacheControl) {
-						part.PromptCacheBreakpoint = responses.NewResponseInputTextPromptCacheBreakpointParam()
-					}
-					parts = append(parts, responses.ResponseInputContentUnionParam{OfInputText: part})
-				}
-				content = responses.EasyInputMessageContentUnionParam{OfInputItemContentList: parts}
-				break
-			}
-		}
-		messageItem := responses.EasyInputMessageParam{
-			Type:    responses.EasyInputMessageTypeMessage,
-			Role:    responses.EasyInputMessageRole("assistant"),
-			Content: content,
-		}
-		items = append(items, responses.ResponseInputItemUnionParam{
-			OfMessage: &messageItem,
-		})
+	// Add text content as a separate output message if present. Assistant
+	// content must use output_text (or refusal), not input_text — see
+	// responsesOutputTextParts.
+	if parts := responsesOutputTextParts(textBlocks); len(parts) > 0 {
+		items = append(items, responses.ResponseInputItemParamOfOutputMessage(parts, "", responses.ResponseOutputMessageStatusCompleted))
 	}
 
 	// An assistant message with no text and no tool_use blocks is empty — skip it.
@@ -386,28 +309,6 @@ func anthropicV1ToolsHaveCacheControl(tools []anthropic.ToolUnionParam) bool {
 		}
 	}
 	return false
-}
-
-// convertV1ContentBlocksToString converts v1 content blocks to string
-func convertV1ContentBlocksToString(blocks []anthropic.ContentBlockParamUnion) string {
-	var result string
-	for _, block := range blocks {
-		if block.OfText != nil {
-			result += block.OfText.Text
-		}
-	}
-	return result
-}
-
-// convertV1ToolResultContentToString converts tool result content to string
-func convertV1ToolResultContentToString(content []anthropic.ToolResultBlockParamContentUnion) string {
-	var result string
-	for _, c := range content {
-		if c.OfText != nil {
-			result += c.OfText.Text
-		}
-	}
-	return result
 }
 
 // ConvertAnthropicV1ToolsToResponses converts Anthropic v1 tools to Responses API format

@@ -1,4 +1,8 @@
-package ops
+// Package metaid parses and builds the identifier Anthropic clients put in
+// metadata.user_id. It is a leaf package so both the protocol converters and
+// the vendor ops layer can read a request's session identity without either
+// depending on the other.
+package metaid
 
 import (
 	"encoding/json"

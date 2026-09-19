@@ -17,6 +17,13 @@
 > Related: prompt-cache request metadata is covered by `cache_controls.go` —
 > see §10.2. It validates cache/no-cache over every single hop and every ABA
 > idempotent chain.
+>
+> Related: whether two *consecutive* requests of one conversation still share a
+> prefix by the time they reach the upstream is covered by `cache_prefix.go` —
+> see §10.4. Every section above validates one request at a time, which is
+> blind to the failure that actually costs money: a gateway that re-serializes
+> history differently from turn to turn, invalidating the upstream cache while
+> every individual request stays valid.
 
 ---
 
@@ -213,22 +220,24 @@ go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
 executor (`ExecuteAll*`) so the CLI can run it directly — including idempotence
 and the rule-flag suite, which would otherwise be go-test-only.
 
-| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§10.1) | cache_controls (§10.2) | vendor (§10.3) |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `default` *(no flag)* | ✅ | — | ✅ | — | — | — | — |
-| `all` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `single` | ✅ | — | — | — | — | — | — |
-| `transitive` | — | ✅ | — | — | — | — | — |
-| `idempotent` | — | — | ✅ | — | — | — | — |
-| `flags` | — | — | — | ✅ | — | — | — |
-| `content_shapes` | — | — | — | — | ✅ | — | — |
-| `cache_controls` | — | — | — | — | — | ✅ | — |
-| `vendor` | — | — | — | — | — | — | ✅ |
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§10.1) | cache_controls (§10.2) | vendor (§10.3) | cache_prefix (§10.4) |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `default` *(no flag)* | ✅ | — | ✅ | — | — | — | — | — |
+| `all` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `single` | ✅ | — | — | — | — | — | — | — |
+| `transitive` | — | ✅ | — | — | — | — | — | — |
+| `idempotent` | — | — | ✅ | — | — | — | — | — |
+| `flags` | — | — | — | ✅ | — | — | — | — |
+| `content_shapes` | — | — | — | — | ✅ | — | — | — |
+| `cache_controls` | — | — | — | — | — | ✅ | — | — |
+| `vendor` | — | — | — | — | — | — | ✅ | — |
+| `cache_prefix` | — | — | — | — | — | — | — | ✅ |
 
 This mode → section mapping is declared in one place: the `matrixSections`
 registry in `cli/harness/matrix.go`. Each entry names the section, lists the
 `--mode` values that include it, marks whether it is http-only (`flags`,
-`content_shapes`, `cache_controls`, and `vendor` drive raw requests directly),
+`content_shapes`, `cache_controls`, `cache_prefix`, and `vendor` drive raw
+requests directly),
 and points at its `ExecuteAll*` executor. Adding a section = one registry
 entry + extending the `--mode` enum (see §8 for why this replaced a
 hand-maintained if-chain).
@@ -249,6 +258,7 @@ go run ./cli/harness matrix --mode=idempotent
 go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
 go run ./cli/harness matrix --mode=content_shapes  # request content-shape regression
 go run ./cli/harness matrix --mode=cache_controls  # single-hop + ABA cache/no-cache
+go run ./cli/harness matrix --mode=cache_prefix    # cross-request prefix stability, per client shape
 go run ./cli/harness matrix --mode=vendor          # vendor-dispatch (ApplyProviderTransforms) against real vendor APIBase
 
 # Filter by scenario / source / target
@@ -670,3 +680,107 @@ Run it with:
 go test ./internal/protocoltest -run TestVendorTransforms -count=1
 go run ./cli/harness matrix --mode=vendor
 ```
+
+Alongside the allowlist itself, the section asserts the **wire shape of text
+content** per vendor: the compact string for everyone off
+`acceptsChatArrayTextContent`, the content-part array for those on it
+(`assertCapturedChatTextShape`). The converters emit the array unconditionally
+so a moving cache breakpoint cannot change an item's shape (§10.4), which makes
+the array the gateway's internal form — `compactOpenAIChatTextContent` picks the
+compatible wire form per vendor on the way out. Both branches are fixed per
+vendor; neither depends on where a breakpoint sat.
+
+`vendorFixture` declares `wantsArrayTextContent` separately from
+`wantsExplicitPromptCache` even though the two production allowlists agree
+today. Deriving one expectation from the other would re-encode the coupling the
+production split exists to avoid, leaving the suite unable to notice if the two
+were ever rejoined.
+
+### 10.4 Cross-request prompt-cache suite (`cache_prefix.go`)
+
+§10.2 asks "does a cache marker survive one conversion?" — a property of a
+single request. This section asks the question the token bill answers: **do two
+consecutive requests of the same conversation still share a prefix by the time
+they reach the upstream?**
+
+Every prompt cache — OpenAI's, ChatGPT's Codex backend, Anthropic's — keys on
+the request prefix. A gateway that re-serializes history even slightly
+differently from one turn to the next invalidates the cache from the first
+differing byte, and nothing in the response says so: the request succeeds, the
+answer is correct, and the user is silently re-billed for the whole
+conversation. That is exactly how the Codex collapse (#1718) slipped past every
+other section — each individual request it sent was valid.
+
+#### Client shapes
+
+A prefix bug can hide in one client's wire shape and not another's, so the
+section drives real ones rather than a single synthetic fixture:
+
+| Fixture | Source | Rotates breakpoints | Carries session identity |
+|---|---|:---:|---|
+| `claude_code` | Anthropic Beta | ✅ (4 rolling ephemeral breakpoints, cached tool definition, two-block system prompt) | `metadata.user_id` |
+| `anthropic_sdk` | Anthropic V1 | ✅ (content breakpoints only, no Claude-Code scaffolding) | — |
+| `codex_cli` | OpenAI Responses | — (its backend rejects breakpoints) | `prompt_cache_key` |
+
+`codex_cli` also replays `reasoning` items carrying ids in the shape
+`internal/protocol/ids` mints, because that is what Codex sends back to us.
+
+#### Properties
+
+Each fixture runs against every distinct target protocol, in both stream modes:
+
+1. **rotation** — the same history with the client's breakpoint parked on
+   different blocks. A client's fixed pool of breakpoints rolls forward every
+   turn, so this is what naturally happens between two consecutive requests.
+   The dispatched request must be identical modulo cache directives.
+2. **growth** — turn N+1 appends one exchange. Every item turn N sent must
+   arrive byte-identical, and the failure message names the first item position
+   that diverged — the position an upstream cache would stop matching at.
+3. **affinity** — `prompt_cache_key` must reach the upstream, stay stable
+   across turns of one conversation, and differ across conversations. Anthropic
+   targets have no such field (their cache is addressed purely by prefix), and
+   the suite asserts the gateway does not invent one there.
+
+Comparison strips every prompt-cache directive in either protocol family's
+spelling (`cache_control`, `prompt_cache_breakpoint`, `prompt_cache_options`,
+`prompt_cache_retention`, `prompt_cache_key`) before comparing: those are hints
+*about* the prefix, not part of the content being cached.
+
+#### The Codex boundary
+
+Each fixture additionally runs against a provider wired with a Codex OAuth
+identity via `SetupCodexAssemblyRoute`, so the request passes through the real
+Codex `RoundTripper` on its way out. There the suite also asserts what the
+ChatGPT backend requires — all of which the cache depends on:
+
+- no `prompt_cache_breakpoint` / `prompt_cache_options` / `prompt_cache_retention`
+  survives (Codex rejects them);
+- no `role: "system"` input message survives — the system prompt must arrive in
+  `instructions`, identically however the converter represented it upstream of
+  this boundary;
+- the `session-id` header is present, stable across turns, and agrees with
+  `prompt_cache_key`. ChatGPT derives Responses cache affinity from that header
+  (see `codex.md` §5), so a mismatch means one conversation with two affinity
+  scopes.
+
+Run it with:
+
+```bash
+go test ./internal/protocoltest -run TestCachePrefix -count=1
+go run ./cli/harness matrix --mode=cache_prefix
+```
+
+#### Known gap: shape stability, not wire-schema legality
+
+This suite proves a converted body's *shape* does not drift between
+consecutive requests — it does not prove that shape is *legal* for the role
+it's attached to. The mock Responses endpoint behind the matrix binds only
+`{Model, Stream, Input}` and never checks a content part's `type` against its
+item's `role`, so a regression that tags assistant-authored content
+`input_text` instead of `output_text` (see `protocol-responses.md`'s
+"Assistant content needs `output_text`, not `input_text`") would serialize
+identically turn over turn — stable, just wrong — and this suite would report
+success while the real Responses API 400s. Only the unit tests in
+`internal/protocol/request` catch that class of bug today.
+
+

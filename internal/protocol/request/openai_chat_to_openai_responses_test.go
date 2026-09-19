@@ -90,8 +90,9 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		result := ConvertChatToOpenAIResponses(params, 4096)
 
 		assert.Len(t, result.Input.OfInputItemList, 1)
-		assert.Equal(t, "assistant", string(result.Input.OfInputItemList[0].OfMessage.Role))
-		assert.Equal(t, "The capital of France is Paris.", result.Input.OfInputItemList[0].OfMessage.Content.OfString.Value)
+		assert.NotNil(t, result.Input.OfInputItemList[0].OfOutputMessage)
+		assert.Len(t, result.Input.OfInputItemList[0].OfOutputMessage.Content, 1)
+		assert.Equal(t, "The capital of France is Paris.", result.Input.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Text)
 	})
 
 	t.Run("with temperature and top_p", func(t *testing.T) {
@@ -130,7 +131,7 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		assert.Equal(t, "You are a helpful assistant.", result.Instructions.Value)
 		assert.Len(t, result.Input.OfInputItemList, 3)
 		assert.Equal(t, "user", string(result.Input.OfInputItemList[0].OfMessage.Role))
-		assert.Equal(t, "assistant", string(result.Input.OfInputItemList[1].OfMessage.Role))
+		assert.NotNil(t, result.Input.OfInputItemList[1].OfOutputMessage)
 		assert.Equal(t, "user", string(result.Input.OfInputItemList[2].OfMessage.Role))
 	})
 
@@ -153,7 +154,12 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		assert.Equal(t, `{"location":"NYC"}`, fnCall.Arguments)
 	})
 
-	t.Run("assistant text and cache breakpoint survive beside tool call", func(t *testing.T) {
+	t.Run("assistant text survives beside tool call", func(t *testing.T) {
+		// A cache breakpoint on assistant text has no output_text equivalent
+		// (the Responses API only accepts input_text with a breakpoint on
+		// user/system input, and rejects input_text entirely on
+		// assistant-authored content) — it is dropped rather than emitted
+		// as a mismatched type. See convertChatAssistantMessageToResponses.
 		text := openai.ChatCompletionContentPartTextParam{
 			Text:                  "Calling the weather tool.",
 			PromptCacheBreakpoint: openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam(),
@@ -171,13 +177,9 @@ func TestConvertChatToOpenAIResponses(t *testing.T) {
 		result := ConvertChatToOpenAIResponses(params, 4096)
 
 		require.Len(t, result.Input.OfInputItemList, 2)
-		message := result.Input.OfInputItemList[0].OfMessage
+		message := result.Input.OfInputItemList[0].OfOutputMessage
 		require.NotNil(t, message)
-		require.Equal(t, "assistant", string(message.Role))
-		require.Len(t, message.Content.OfInputItemContentList, 1)
-		require.Equal(t, "Calling the weather tool.", message.Content.OfInputItemContentList[0].OfInputText.Text)
-		require.False(t, param.IsOmitted(
-			message.Content.OfInputItemContentList[0].OfInputText.PromptCacheBreakpoint))
+		require.Equal(t, "Calling the weather tool.", message.Content[0].OfOutputText.Text)
 		require.NotNil(t, result.Input.OfInputItemList[1].OfFunctionCall)
 	})
 
@@ -496,8 +498,8 @@ func TestConvertChatToOpenAIResponsesArrayContent(t *testing.T) {
 		result := ConvertChatToOpenAIResponses(params, 4096)
 
 		require.Len(t, result.Input.OfInputItemList, 1)
-		assert.Equal(t, "assistant", string(result.Input.OfInputItemList[0].OfMessage.Role))
-		assert.Equal(t, "The capital of France is Paris.", result.Input.OfInputItemList[0].OfMessage.Content.OfString.Value)
+		require.NotNil(t, result.Input.OfInputItemList[0].OfOutputMessage)
+		assert.Equal(t, "The capital of France is Paris.", result.Input.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Text)
 	})
 
 	t.Run("reasoning_effort forwarded", func(t *testing.T) {

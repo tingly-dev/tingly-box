@@ -7,6 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -538,7 +539,7 @@ func TestApplyAnthropicMetadataTransform(t *testing.T) {
 		"user_id": accountID,
 	})
 
-	m := MetadataUserID{
+	m := metaid.MetadataUserID{
 		DeviceID:    deviceID,
 		AccountUUID: accountID,
 		SessionID:   "",

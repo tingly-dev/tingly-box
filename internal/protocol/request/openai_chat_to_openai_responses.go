@@ -235,9 +235,27 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 
 // convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
 // Returns nil if the message has no usable text content.
+//
+// Always emits the plain-string content form. The typed content-part form
+// (responseContentFromChatTextParts) tags parts input_text, which the
+// Responses API rejects on assistant-authored content — it requires
+// output_text/refusal there — and a prompt-cache breakpoint has no
+// output_text equivalent to preserve anyway, so there is nothing the part
+// form buys an assistant message that the string form doesn't.
+// convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
+// Returns nil if the message has no usable text content.
+//
+// Emits an output_message item (responseOutputMessageWithText), matching the
+// native shape the Anthropic->Responses path emits for assistant text (see
+// convertV1AssistantMessageToResponsesInput). The Responses API also accepts
+// assistant content as a plain-string message item, but a mismatched
+// content-part form on that path is what caused the input_text/output_text
+// bug this converter is the twin of (cache_control.go) — using the one
+// unambiguous shape here keeps the two conversion paths from producing two
+// different but both-valid wire forms for the same input.
 func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) []responses.ResponseInputItemUnionParam {
 	if content := assistantMsg.Content.OfString.Value; content != "" {
-		return []responses.ResponseInputItemUnionParam{responseMessageWithString("assistant", content)}
+		return []responses.ResponseInputItemUnionParam{responseOutputMessageWithText(content)}
 	}
 	var parts []openai.ChatCompletionContentPartTextParam
 	for _, part := range assistantMsg.Content.OfArrayOfContentParts {
@@ -245,18 +263,11 @@ func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionA
 			parts = append(parts, *part.OfText)
 		}
 	}
-	if !chatTextPartsHaveCacheBreakpoint(parts) {
-		content := joinTextContentParts(parts)
-		if content == "" {
-			return nil
-		}
-		return []responses.ResponseInputItemUnionParam{responseMessageWithString("assistant", content)}
-	}
-	content := responseContentFromChatTextParts(parts)
-	if len(content) == 0 {
+	content := joinTextContentParts(parts)
+	if content == "" {
 		return nil
 	}
-	return []responses.ResponseInputItemUnionParam{responseMessageWithContent("assistant", content)}
+	return []responses.ResponseInputItemUnionParam{responseOutputMessageWithText(content)}
 }
 
 // convertChatToolMessageToResponses converts a Chat tool message to Responses function_call_output format.
@@ -331,6 +342,18 @@ func responseMessageWithString(role, content string) responses.ResponseInputItem
 		Role:    responses.EasyInputMessageRole(role),
 		Content: responses.EasyInputMessageContentUnionParam{OfString: param.NewOpt(content)},
 	}}
+}
+
+// responseOutputMessageWithText builds an output_message item for assistant
+// text — the shape the Responses API actually expects for assistant-authored
+// content (output_text, not input_text; see responsesOutputTextParts in
+// cache_control.go, the Anthropic-path equivalent of this helper).
+func responseOutputMessageWithText(text string) responses.ResponseInputItemUnionParam {
+	return responses.ResponseInputItemParamOfOutputMessage(
+		[]responses.ResponseOutputMessageContentUnionParam{{OfOutputText: &responses.ResponseOutputTextParam{Text: text}}},
+		"",
+		responses.ResponseOutputMessageStatusCompleted,
+	)
 }
 
 func responseMessageWithContent(role string, content responses.ResponseInputMessageContentListParam) responses.ResponseInputItemUnionParam {
