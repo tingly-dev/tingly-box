@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import { HelpOutline } from '@/components/icons';
-import { Box, Stack, Tooltip, Typography } from '@mui/material';
+import React, { useMemo, useState } from 'react';
+import { ExpandMore, HelpOutline } from '@/components/icons';
+import { Box, Button, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
 import type { ProbeProtocol } from '@/types/probe';
@@ -8,19 +8,27 @@ import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from '@/components/probe/AxisPrimitives';
 import { protocolAvailability, visionAvailable, type ProbeAxes } from '@/components/probe/probeConfig';
+import { templatesForProtocol, MESSAGE_ID, type ContentTemplate } from './contentOptions';
 import type { BenchTarget } from './benchState';
 
 // BenchAxes: every probe axis resident, no Advanced fold — the page exists
 // so that all knobs are visible and composable (.design/bench.md §2). Not a
 // reuse of the probe dialog's layout: Compose reads top to bottom as one
-// sequence — Protocol (the coordinate system) → Request mode (a formal
-// preset/custom choice, not a door you stumble on) → Scope (transport) →
-// Parameters → Presets → Plugins — instead of Probe's frequency-ordered
-// Shape/Scope-then-Advanced (.design/bench.md §1 "四种归类" and the redesign
-// note). Plugins stays its own final group because it configures TB's handling,
-// not the request body.
-
-export type RequestMode = 'preset' | 'custom';
+// sequence — Protocol (the coordinate system) → Content (who authors the
+// body — Message's fragment-level knobs, or a whole-body preset for this
+// protocol) → Scope (transport) → Parameters → Presets → Plugins — instead
+// of Probe's frequency-ordered Shape/Scope-then-Advanced (.design/bench.md
+// §1 "四种归类" and the redesign note). Plugins stays its own final group
+// because it configures TB's handling, not the request body.
+//
+// Content replaces the old Preset/Custom mode toggle: both were always the
+// same kind of object — a content preset — just at fragment granularity
+// (Message + Tool/Vision) vs whole-body granularity (Templates). Splitting
+// them into a mode gate you had to flip before the rest of Compose meant
+// anything was the mode-picker antipattern (ux-principles #2); Content is
+// one menu, scoped to the current Protocol (a Tool round-trip body isn't
+// interchangeable across wire protocols), that always sets the whole body's
+// one author (.design/bench.md §6 — never a partial merge).
 
 export interface AxisAvailability {
     protocol: { value: ProbeProtocol | ''; options: ProbeProtocol[]; locked: boolean; disabled: boolean; lockHint?: string };
@@ -49,12 +57,75 @@ export function useAxisAvailability(target: BenchTarget | null, provider: Provid
     }, [target, provider, axes.protocol, t]);
 }
 
+// ContentMenu: the single button+menu that picks who authors the body —
+// Message (the fragment-level composer below) or one of this protocol's
+// whole-body templates. Replaces the old Preset/Custom ExclusiveToggle and
+// RequestEditor's separate "Change starting point" menu — one mechanism,
+// not two, because they always listed the same kind of thing (.design/bench.md §1).
+const ContentMenu: React.FC<{
+    protocol: ProbeProtocol;
+    /** MESSAGE_ID, a matched template id, or null when the body no longer matches anything (hand-edited). */
+    contentId: string | null;
+    onSelect: (id: string) => void;
+}> = ({ protocol, contentId, onSelect }) => {
+    const { t } = useTranslation();
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const templates = useMemo(() => templatesForProtocol(protocol), [protocol]);
+    // contentId is only ever null while raw is active (BenchPage.tsx never
+    // produces MESSAGE_ID's null-alias case) — a hand-edited body that no
+    // longer matches any template. Labeling that "Message" would be a lie
+    // (you're still editing JSON, just not any of the named starting
+    // points), so it gets its own label instead of falling back to Message.
+    const label =
+        contentId === MESSAGE_ID
+            ? t('bench.template.message', { defaultValue: 'Message' })
+            : contentId === null
+              ? t('bench.template.custom', { defaultValue: 'Custom' })
+              : t(`bench.template.${contentId}`);
+    const pick = (id: string) => {
+        setAnchor(null);
+        onSelect(id);
+    };
+    const item = (id: string, primary: string, secondary: string) => (
+        <MenuItem key={id} selected={id === contentId} onClick={() => pick(id)} sx={{ maxWidth: 380, whiteSpace: 'normal' }}>
+            <ListItemText
+                primary={primary}
+                secondary={secondary}
+                slotProps={{ primary: { sx: { fontSize: '0.85rem', fontWeight: 600 } }, secondary: { sx: { fontSize: '0.72rem' } } }}
+            />
+        </MenuItem>
+    );
+    return (
+        <>
+            <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                onClick={(e) => setAnchor(e.currentTarget)}
+                sx={{ justifyContent: 'space-between', textTransform: 'none', fontWeight: 400, py: 0.75 }}
+                endIcon={<ExpandMore sx={{ fontSize: 18 }} />}
+            >
+                <Typography variant="body2" noWrap sx={{ flex: 1, textAlign: 'left' }}>
+                    {label}
+                </Typography>
+            </Button>
+            <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 260 } } }}>
+                {item(MESSAGE_ID, t('bench.template.message', { defaultValue: 'Message' }), t('bench.template.messageDesc', { defaultValue: 'One message, shaped by the Tool / Vision / Thinking knobs below — the probe itself, materialized.' }))}
+                {templates.map((tpl: ContentTemplate) => item(tpl.id, t(`bench.template.${tpl.id}`), t(`bench.template.${tpl.id}Desc`)))}
+            </Menu>
+        </>
+    );
+};
+
 export const BenchAxes: React.FC<{
     axes: ProbeAxes;
     onChange: (axes: ProbeAxes) => void;
     availability: AxisAvailability;
-    mode: RequestMode;
-    onModeChange: (mode: RequestMode) => void;
+    /** Whether the body currently has an author other than the axes below (raw request active). */
+    isCustom: boolean;
+    /** MESSAGE_ID, a matched template id, or null (hand-edited body) — drives the Content button's label. */
+    contentId: string | null;
+    onSelectContent: (id: string) => void;
     /** Protocols a hand-written request may be in — only consulted in custom mode (whatever the provider speaks). */
     customProtocolOptions: ProbeProtocol[];
     /** The unified Protocol control's current value, already resolved for whichever mode is active. */
@@ -68,8 +139,9 @@ export const BenchAxes: React.FC<{
     axes,
     onChange,
     availability,
-    mode,
-    onModeChange,
+    isCustom,
+    contentId,
+    onSelectContent,
     customProtocolOptions,
     protocolValue,
     onProtocolChange,
@@ -79,8 +151,8 @@ export const BenchAxes: React.FC<{
     onOpenPlugins,
 }) => {
     const { t } = useTranslation();
-    const isCustom = mode === 'custom';
     const set = (patch: Partial<ProbeAxes>) => onChange({ ...axes, ...patch });
+    const inactiveHint = t('bench.axesInactive', { defaultValue: "Reference only — this request is your own JSON now (Content: not Message), so these values aren't sent. Set them directly in the body." });
     const { protocol: presetProtocol } = availability;
     const presetProtocolOptions = presetProtocol.options.length ? presetProtocol.options : presetProtocol.value ? [presetProtocol.value] : [];
     const protocolOptions = isCustom ? customProtocolOptions : presetProtocolOptions;
@@ -107,18 +179,12 @@ export const BenchAxes: React.FC<{
                 />
             </Axis>
 
-            {/* Request mode second: a formal choice, not a door discovered
-                halfway down a knob list — everything from here down changes
-                meaning depending on it (.design/bench.md §1, §6.3). */}
-            <Axis label={t('bench.requestMode', { defaultValue: 'Request mode' })} hint={t('bench.requestModeHint', { defaultValue: 'Preset: the probe builds it from the knobs below. Custom: you write it — Parameters and Presets stop applying.' })}>
-                <ExclusiveToggle<RequestMode>
-                    value={mode}
-                    onChange={onModeChange}
-                    options={[
-                        { value: 'preset', label: t('bench.modePreset', { defaultValue: 'Preset' }) },
-                        { value: 'custom', label: t('bench.modeCustom', { defaultValue: 'Custom' }) },
-                    ]}
-                />
+            {/* Content second: who authors the body — Message (the fragment-
+                level knobs below) or one of this protocol's whole-body
+                templates. One menu instead of a mode gate you had to flip
+                before Compose meant anything (.design/bench.md §1, §6.3). */}
+            <Axis label={t('bench.content', { defaultValue: 'Content' })} hint={t('bench.contentHint', { defaultValue: "What the body is made of, for this protocol. Message keeps the knobs below live; anything else hands you a whole body to edit — either way there's exactly one author." })}>
+                <ContentMenu protocol={protocolValue} contentId={contentId} onSelect={onSelectContent} />
             </Axis>
 
             <Axis label={t('probe.scope')} hint={availability.scopeHint}>
@@ -135,9 +201,13 @@ export const BenchAxes: React.FC<{
 
             {/* Parameters: real, independently-valued request fields — turning
                 one doesn't inject or remove content (.design/bench.md §1).
-                Stream applies in both modes (a real body field either way);
-                Thinking only shapes the preset builder, so it's not shown
-                once the body is yours to write. */}
+                Stream applies regardless of Content (a real body field
+                either way); Thinking only shapes the Message builder, so
+                once Content is anything else it goes inert — shown, not
+                hidden, so the field and its value ladder stay in view as a
+                reference while you write the equivalent by hand (the
+                original ask this redesign starts from: axes are easy to
+                forget how to fill once they're not on screen). */}
             <AxisGroup label={t('probe.groupParameters', { defaultValue: 'Parameters' })}>
                 <Axis label={t('probe.shape')} hint={t('probe.shapeHint')}>
                     <ExclusiveToggle
@@ -149,45 +219,42 @@ export const BenchAxes: React.FC<{
                         ]}
                     />
                 </Axis>
-                {!isCustom && (
-                    <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
-                        <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
-                    </Axis>
-                )}
+                <Axis label={t('probe.thinking')} hint={isCustom ? inactiveHint : t('probe.thinkingHint')}>
+                    <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} disabled={isCustom} />
+                </Axis>
             </AxisGroup>
 
             {/* Presets: fixed, unparametrized blobs toggled on/off — the
-                same canned content Templates offer in the custom request
-                editor, just body-fragment-sized (.design/bench.md §1). Only
-                meaningful in preset mode — a custom request owns its own
-                content, this isn't disabled for it, it's simply not
-                rendered (.design/bench.md §6.3). */}
-            {!isCustom && (
-                <AxisGroup label={t('bench.groupPresets', { defaultValue: 'Presets' })}>
-                    <Axis label={t('probe.tool')} hint={t('probe.toolHint')}>
-                        <ExclusiveToggle
-                            value={axes.tool ? 'on' : 'off'}
-                            onChange={(v) => set({ tool: v === 'on' })}
-                            options={[
-                                { value: 'off', label: t('probe.toolOff') },
-                                { value: 'on', label: t('probe.toolOn') },
-                            ]}
-                        />
-                    </Axis>
-                    <Axis label={t('probe.vision')} hint={availability.visionHint}>
-                        <ExclusiveToggle
-                            value={axes.vision}
-                            onChange={(v) => set({ vision: v })}
-                            options={[
-                                { value: 'none', label: t('probe.visionNone') },
-                                { value: 'user', label: t('probe.visionUser') },
-                                { value: 'tool', label: t('probe.visionTool') },
-                            ]}
-                            disabled={availability.visionDisabled}
-                        />
-                    </Axis>
-                </AxisGroup>
-            )}
+                same canned content Content's Templates offer, just
+                body-fragment-sized (.design/bench.md §1). Same as Thinking:
+                inert (not unmounted) once Content picks a whole body, so the
+                toggle and its two states stay visible as a reminder of what
+                "tool" / "vision" actually mean in the body you're writing. */}
+            <AxisGroup label={t('bench.groupPresets', { defaultValue: 'Presets' })}>
+                <Axis label={t('probe.tool')} hint={isCustom ? inactiveHint : t('probe.toolHint')}>
+                    <ExclusiveToggle
+                        value={axes.tool ? 'on' : 'off'}
+                        onChange={(v) => set({ tool: v === 'on' })}
+                        options={[
+                            { value: 'off', label: t('probe.toolOff') },
+                            { value: 'on', label: t('probe.toolOn') },
+                        ]}
+                        disabled={isCustom}
+                    />
+                </Axis>
+                <Axis label={t('probe.vision')} hint={isCustom ? inactiveHint : availability.visionHint}>
+                    <ExclusiveToggle
+                        value={axes.vision}
+                        onChange={(v) => set({ vision: v })}
+                        options={[
+                            { value: 'none', label: t('probe.visionNone') },
+                            { value: 'user', label: t('probe.visionUser') },
+                            { value: 'tool', label: t('probe.visionTool') },
+                        ]}
+                        disabled={isCustom || availability.visionDisabled}
+                    />
+                </Axis>
+            </AxisGroup>
 
             {/* Plugins is transport configuration rather than request content.
                 It remains the last, independent Compose group in both request

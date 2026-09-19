@@ -1,18 +1,9 @@
 # Bench — 高度可定制的端到端测试台
 
 > 适用对象：tingly-box 前端 / 后端贡献者。
-> 状态：**已实现（V1）**——页面 `frontend/src/pages/bench/`，后端字段见 §11。线框图见 [`bench.pencil.md`](./bench.pencil.md)。
+> 状态：**已实现**——页面 `frontend/src/pages/bench/`，后端字段见 §11。线框图见 [`bench.pencil.md`](./bench.pencil.md)。
 > 前置阅读：[`probe.md`](./probe.md)、[`rule-flags.md`](./rule-flags.md)、[`ux-principles.md`](./ux-principles.md)。
->
-> **V1.1 修正（本次）**：三栏布局的响应式断点与左栏宽度修了一版（原先 `xl`
-> 断点+固定 320px 导致常规桌面宽度下退化成两栏、且左栏内容撑不满）；随后发现
-> target picker（Autocomplete 下拉）在窄栏里把 rule/provider 名字硬截断，选起来
-> 很难分辨——于是把 **Target 模型收窄为只选 Provider+Model**，选择器换成路由图
-> 已经用的那套卡片式 `ModelSelectDialog`（Provider 侧栏 + Model 卡片网格），
-> **Rule target、深链入口（Probe dialog "Open in Bench"）与 pinned routing 全部
-> 一并砍掉**——Bench 不再是任何页面的跳转目标，只通过自己的一级导航进入。§3/§9
-> 已按此更新；未来若要连接到 Rule，设想是把 scenario 端点也列进 picker 的模型
-> 列表里，而不是重新引入一个独立的 target kind（见 §15）。
+> 本文档记录当前实现与设计结论，不逐版本记流水账——演进过程见 git log（`.design/bench.md`、`pages/bench/` 的提交历史）。
 
 ---
 
@@ -60,8 +51,8 @@ Probe / Bench / Server 三者不是并列的三个工具，是同一件事在三
 | 请求 | Bench | "发这个具体的东西，TB 会怎么处理" | 开放，一份具体的文档 |
 | 协议 | Server | "字段怎么从一种 wire 形态映射到另一种" | `internal/protocol/request/*` 那套转换器 |
 
-三者是一条投影链，不是三个孤立的抽屈：**探针的本质就是预设**——一组封闭的、协议无关
-的断言；把探针materialize 成一份具体的请求，得到的正是 Bench 默认视图里的那份
+三者是一条投影链，不是三个孤立的抽屉：**探针的本质就是预设**——一组封闭的、协议无关
+的断言；把探针 materialize 成一份具体的请求，得到的正是 Bench 默认视图里的那份
 **预设请求**（§6 用这个词，不再用"固定场景"/"fixture"）。所以 Bench 的默认视图长得
 和 Probe 弹窗一模一样，不是"复用了 Probe 的组件"这种实现细节——它是同一件事：预设
 请求就是探针在请求粒度上的投影。而 Bench 的**自定义请求**，是请求粒度上不背靠任何
@@ -70,11 +61,11 @@ Probe / Bench / Server 三者不是并列的三个工具，是同一件事在三
 这份东西翻译到另一个协议还讲不讲得通"；真要测跨协议的场景保真度，那问题已经回到了
 场景粒度，答案是探针（它的 Protocol 轴 + 其它场景轴组合起来，正是在跑真实转换代码、
 观察场景保真度），不是 Bench 该操心的事（这也是 §6 里"切换协议 = 换一份新协议的起始
-模板，而不是翻译现有 body"这个决定的根本原因，不只是图省事）。
+内容，而不是翻译现有 body"这个决定的根本原因，不只是图省事）。
 
 Scope / Routing / Flags overlay / Header 覆盖不在这条投影链上——它们不在请求 body
-里，是"Server 怎么处理这次运行"的配置，和请求内容长什么样无关，预设请求和自定义
-请求两种模式都用得到（§7）。Stream 不在此列，见下——它在 body 里，是一个真参数。
+里，是"Server 怎么处理这次运行"的配置，和请求内容长什么样无关，Message 与自定义内容
+两种情况都用得到（§7）。Stream 不在此列，见下——它在 body 里，是一个真参数。
 
 > 术语提醒：TB 代码里 `scenario` 另有一个具体含义（路由用的产品面家族，`rule.Scenario`、
 > `/tingly/{scenario}` 入口），和这里说的"场景粒度"不是同一件事——后者是更宽泛的
@@ -98,7 +89,7 @@ effort/budget 取值）、Protocol（决定一切怎么写的坐标系）完全�
 
 **内容预设的两个粒度是同一种东西**：Tool 轴给的固定工具交换，和 Bench Templates 里
 的 "Tool round-trip" 概念上是一回事，只是前者局部（一个片段）、后者整体（一份 body）。
-这就是为什么 Bench 的"从哪开始"菜单（§6.3）能把两者列进同一份清单，不用发明第三种
+这就是为什么 Compose 的 Content 菜单（§6.3）能把两者列进同一份清单，不用发明第三种
 机制——它们本来就是同一类，只是粒度不同。
 
 Probe 弹窗和 Bench 的轴面板按这个分类可视化分组（`AxisGroup`，共享组件）：**参数**
@@ -113,7 +104,7 @@ Probe 弹窗和 Bench 的轴面板按这个分类可视化分组（`AxisGroup`�
 2. **内容预设覆盖不到真实场景需要的空间**——例如"assistant 带 thinking 的历史轮"需要
    多轮对话 + thinking 内容同时出现在历史里，但 Thinking 轴只管这次请求要不要带
    thinking 配置，不管历史消息里有没有 thinking block。这正是要有 Templates、要有
-   自定义请求这条退路的理由，不是这次发现的新问题。
+   自定义请求这条退路的理由。
 
 ### 与线上运转的差异边界
 
@@ -127,7 +118,7 @@ Through-TB 模式下，从请求进入 `/tingly/{scenario}` 入口起走的就�
   `clean_header` 的 billing 块、UA 优先级——用 §7 的 header 覆盖补上对应特征。刻意不做
   "以某客户端身份发送"这类预设：那是过度设计，真实客户端的形态来自它真实发出的请求，
   而不是一份会漂移的模仿清单。
-- **provider target 跳过规则选择**（合成规则钉住 service）。rule target 默认不跳过。
+- **provider target 跳过规则选择**（合成规则钉住 service）。
 
 Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次只发一发、并解剖全过程。
 
@@ -152,13 +143,13 @@ Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次
 ┌─ rail ─┬────────────────────────────────────────────────────────────────────┐
 │        │  Bench                                              [▶ Run]   │
 │  nav   │ ┌─ Compose ────┐ ┌─ Request ──────────────┐ ┌─ Payload ─────────┐ │
-│        │ │ Target        │ │ preset: message [...]  │ │ ▤ Request │ cURL  │ │
-│  ▷ PG  │ │  [rule/provider│ │   or                   │ │ POST /tingly/...  │ │
-│        │ │   unified pick]│ │ custom: JSON body       │ │ headers…  [+ hdr] │ │
+│        │ │ Target        │ │ Message: [...]          │ │ ▤ Request │ cURL  │ │
+│  ▷ PG  │ │  [provider·   │ │   or                    │ │ POST /tingly/...  │ │
+│        │ │   model pick] │ │ JSON body                │ │ headers…  [+ hdr] │ │
 │        │ │ Protocol       │ │ {                      │ │ {                 │ │
-│        │ │ Request mode   │ │   "messages": […]      │ │   "model": …      │ │
+│        │ │ Content        │ │   "messages": […]      │ │   "model": …      │ │
 │        │ │ Scope          │ │ }                      │ │   "messages": […] │ │
-│        │ │ PARAMETERS     │ │ [Change starting point▾]│ │ }         [Edit]⧉ │ │
+│        │ │ PARAMETERS     │ │ [Copy the preset req.]  │ │ }         [Edit]⧉ │ │
 │        │ │  Request Think.│ ├─ Result ─────────────┤ │ (debounced live)  │ │
 │        │ │ PRESETS        │ │ ✅ 850ms · 43 tok    │ └───────────────────┘ │
 │        │ │  Tool Vision   │ │ Journey (默认展开)   │                       │
@@ -169,12 +160,12 @@ Bench 是"在真实管线里做受控实验"：请求可以是真的，但每次
 └────────┴────────────────────────────────────────────────────────────────────┘
 ```
 
-Compose 从上到下是一条序列，不是一堆并排的旋钮：**Protocol → Request mode → Scope →
-Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专门为 Bench 重新设计的，
-不是"复用 Probe 弹窗的布局再加两条"——Probe 弹窗保留它自己的频率优先结构（Shape/Scope
+Compose 从上到下是一条序列，不是一堆并排的旋钮：**Protocol → Content → Scope →
+Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专门为 Bench 设计的，不是
+"复用 Probe 弹窗的布局再加两条"——Probe 弹窗保留它自己的频率优先结构（Shape/Scope
 常驻、其余收进 Advanced），只把 Protocol 挪到最上面（它是坐标系，不该混进"其余"里，
 即使多数诊断从不碰它）。两边共享同一套 `AxisPrimitives`（`Axis`/`AxisGroup`/
-`ExclusiveToggle`/`ThinkingSlider`），但**布局这次不再假装是同一个东西**——Bench 有自己
+`ExclusiveToggle`/`ThinkingSlider`），但布局不假装是同一个东西——Bench 有自己
 的序列，Probe 弹窗有自己的频率分组，共享的是词汇表，不是版式。
 
 布局要点：
@@ -182,15 +173,16 @@ Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专
 - **宽屏三栏共用一个固定工作区高度**：`lg` 起三栏使用同一个高度 token，避免请求、结果或
   payload 内容变化时整页上下跳动。每栏是一张项目现有风格的 outlined surface；Compose
   的全部轴始终完整展开，不在栏内滚动，且 Plugins 直接以路由图同款摘要卡片作为 Compose
-  内最后一个、与 Presets 平级的独立类目；Request/Result 与 Payload 的超长内容在各自 surface 内滚动。`xs` / `md` 回到内容驱动的自然高度，Payload 继续下沉跨两栏，不把
+  内最后一个、与 Presets 平级的独立类目；Request/Result 与 Payload 的超长内容在各自
+  surface 内滚动。`xs` / `md` 回到内容驱动的自然高度，Payload 继续下沉跨两栏，不把
   桌面固定高度和内部滚动带进窄屏。
 - **页头保持精简**：常驻区只保留标题与 Run；用途说明收进标题旁的问号 tooltip，空的 run
   history 不占版面，第一次运行后才显示可恢复的记录。
-- **左栏不再有 Advanced 折叠**，这点沿用——Bench 的请求轴全部常驻；Plugins 则直接沿用
-  路由图的摘要卡片 + catalog 弹窗，不在左栏重复展开一整套 registry 控件。Protocol/Request
-  mode/Scope 常驻顶部（各自一行，前两者是这次新加的正式控件，不再隐藏在 Request 面板
-  里），下面是 Parameters 和 Presets 两个 `AxisGroup`。切到 Custom 模式时，Parameters
-  组只剩 Request（Stream）——Thinking 只塑形预设 builder，不适用；Presets 组整块不渲染。
+- **左栏不再有 Advanced 折叠**——Bench 的请求轴全部常驻；Plugins 则直接沿用
+  路由图的摘要卡片 + catalog 弹窗，不在左栏重复展开一整套 registry 控件。Protocol/
+  Content/Scope 常驻顶部（各自一行），下面是 Parameters 和 Presets 两个 `AxisGroup`，
+  两组也始终挂载：Content 不是 Message 时，Thinking/Tool/Vision 置灰但不隐藏，继续
+  显示字段名与取值范围，充当"这个字段该怎么填"的参考（§6.3）。
 - **Payload 常驻右侧**，不是折叠在底部（probe dialog 的 cURL 位置）。它是本页第二主角：
   用户每拨一个旋钮，右侧 payload 实时（debounce 500ms）重建，"这个轴改了 body 的哪个
   字段"当场可见。构造走现有 `POST /api/v2/probe/curl`（construct-only，与执行共用同一
@@ -206,41 +198,22 @@ Parameters → Presets**（§1"四种归类"落到交互顺序上）。这是专
 
 ## 3. Target 模型
 
-**V1.1**：target 只有一种——`provider`(+model)（`E2ETargetProvider`）。默认
-loopback（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即
-"近似直连"），可切 Direct 完全绕开 TB 对照。
+Target 只有一种：`provider`(+model)（`E2ETargetProvider`）。默认走 loopback
+（`X-Tingly-Probe-Service` 合成规则：跳过规则选择、保留全部中间件，即"近似直连"），
+可切 Direct 完全绕开 TB 对照。
 
-不纳入的两种：
+不支持的两种及理由：
 
-| target | 状态 | 理由 |
-|--------|------|------|
-| `rule` | **已移除**（V1 曾支持） | 见下方"为什么砍掉 Rule" |
-| `provider_config` | 不纳入 | 它服务于"未保存配置的连通性"（Connect AI 场景），Bench 玩的是已保存的对象；纳入只会引入第三种 target 心智 |
+| target | 理由 |
+|--------|------|
+| `rule` | `ModelSelectDialog`（下面的卡片选择器）天然只表达 Provider→Model 两级，硬塞 Rule 意味着要么在同一个对话框里发明第二种选择模式（违反 ux-principles #2：消解模式选择），要么让旧的 Autocomplete 专门留给 Rule、两套选择器并存。Rule 目标还会牵出 routing 轴、深链协议、Journey 的 rule-mismatch 提示、Plugins 面板的 rule/scenario flag 基线一整套耦合，价值不足以为此让选择器分裂。未来若要连接 Rule，设想是把 scenario 端点作为一种"模型"列进 `ModelSelectDialog` 的右栏列表，而不是引入第二种 target kind（见 §15） |
+| `provider_config` | 服务于"未保存配置的连通性"（Connect AI 场景），Bench 面向已保存对象；纳入只会引入第三种 target 心智 |
 
-**target picker**：不再是可搜索的 Autocomplete 下拉——那个形态在窄栏里把
-provider/model 名字硬截断，选项之间很难分辨。改用用户已经在路由图上练熟的卡片式
-选择器：`ModelSelectDialog`（`frontend/src/components/ModelSelectDialog.tsx`，
-左栏 Provider 列表 + 右栏 Model 卡片网格，点卡片即选中即关闭），Compose 面板里的
-Target 行是一个显示"Provider · model"的按钮，点开即弹出同一个组件——和路由图上
-点服务节点弹出的是完全同一套代码，不是照着视觉仿了一遍。
-
-**为什么砍掉 Rule**（连带 pinned routing 轴、Journey 的 rule-mismatch 提示、
-Plugins 面板的 rule/scenario flag 基线，以及下面的深链入口）：
-
-1. Rule 目标撑不起一个统一的卡片选择器——`ModelSelectDialog` 天然只表达
-   Provider→Model 两级，硬塞 Rule 意味着要么在同一个对话框里发明第二种选择模式
-   （违反 ux-principles #2：消解模式选择），要么继续留着旧的 Autocomplete 给
-   Rule 专用、两套选择器并存，两个选项都比"先只做 Provider+Model"更差。
-2. Rule 目标在 Bench 状态机里的耦合面很大（`routing`/`ProbeRouting`、rule
-   baseline 来源、深链协议、Journey 的 ruleExtra 提示），一次性和 target picker
-   改造一起砍掉，比留着半条腿的 Rule 支持更干净。
-3. 深链入口（Probe dialog "Open in Bench"、rule 卡片齿轮菜单）本身就是围绕
-   Rule target 设计的（`/bench?target=rule:{uuid}&scenario=...`），Rule 一走，
-   这两个入口连带没有意义，一并移除——Bench 不再是任何页面的跳转目标，只通过
-   自己的一级导航（§9）进入，`benchLink.ts` 整个文件删除。
-4. 未来如果要重新连接到 Rule，设想是把 scenario 端点也作为一种"模型"列进
-   `ModelSelectDialog` 的右栏列表里，而不是重新引入一个独立的 target kind——
-   这样选择器还是同一个，不用再面对"先选类型再选对象"的两段式（见 §15）。
+**target picker**：卡片式选择器 `ModelSelectDialog`（`frontend/src/components/ModelSelectDialog.tsx`，
+左栏 Provider 列表 + 右栏 Model 卡片网格，点卡片即选中即关闭）——和路由图上点服务节点
+弹出的是完全同一套代码，不是照着视觉仿了一遍。Compose 面板里的 Target 行是一个显示
+"Provider · model"的按钮，点开即弹出该组件。这个形态取代了可搜索的 Autocomplete 下拉：
+那个形态在窄栏里把 provider/model 名字硬截断，选项之间很难分辨。
 
 ---
 
@@ -351,29 +324,27 @@ registry 仍是唯一可信源，响应中的 `AppliedFlags` 仍是实际生效�
 
 ---
 
-## 6. Request：写你自己的客户端请求（三种协议）
+## 6. Request：谁来写这份 body（三种协议）
 
-Request 面板做两件不同的事，故意不把它们合并成一件：**预设请求**（默认视图，
+Request 面板做两件不同的事，故意不把它们合并成一件：**Message**（默认视图，
 和 Probe 弹窗共用同一套轴——Tool/Vision/Thinking/Protocol/Message，同一批
 builder——它就是探针在请求粒度上的投影，见 §1"三种粒度"）回答"TB 已知的兼容
-性矩阵，对这个目标现在还成立吗"；**自定义请求**（写你自己的完整请求，不背靠
+性矩阵，对这个目标现在还成立吗"；**自定义内容**（写你自己的完整请求，不背靠
 任何探针）回答"我发这个具体的东西，TB 会怎么处理"。前者故意固化——它的价值
 就是"小、快、可反复用同一套维度验证任意目标"，不该随手加轴；后者故意不受
 限——任何轴表达不了的形态，直接在协议原生的 JSON 里写。
 
-这条边界曾经含混过：早期实现里自定义请求只**禁用**部分轴而不是彻底不显示，
-Protocol 下拉在自定义请求模式下还能"切换"却只改标签不改 body，这类半耦合正
-是混乱的来源——两边都不是完整的自己。现在的规则很简单：**一份请求 body 只有
-一个作者**，要么是预设请求的 builder，要么是你写的 JSON，从不"部分借用"对方。
-进入自定义请求是一个单向动作（"Write the request yourself"），不是一个可以来
-回切的 tab——回去的唯一方式是重新开始，因为自定义 JSON 没法自动逆推回轴的状
-态，假装可以双向切换只会制造一种不存在的对称感。
+**规则：一份请求 body 只有一个作者**——要么是 Message 的 builder，要么是你写的
+JSON，从不"部分借用"对方，UI 上也不做反向推导（自定义 JSON 没法自动逆推回轴的
+状态，假装能双向同步只会制造一种不存在的对称感）。半途而废的耦合——比如让
+Protocol 在自定义内容下"能切换"却只改标签不改 body——正是这条规则要避免的具体
+情况。
 
-**这个自由度只属于 Bench，不属于 Probe 弹窗。** Probe 弹窗永远只产出预设请求
+**这个自由度只属于 Bench，不属于 Probe 弹窗。** Probe 弹窗永远只产出 Message
 （轴 + Message 覆盖，这就是它自己），没有自定义请求编辑器、没有 flags overlay、没有 header
 覆盖、没有 routing pin——弹窗的价值是"就地、两次点击拿结论"，塞入任何这些都会
 稀释它。弹窗唯一新增的出口是"在 Bench 中打开"：带着当前 target/axes/message 跳
-到 Bench 的默认视图（和弹窗长得一样），自定义请求这道门只在 Bench 页面里才有。
+到 Bench 的默认视图（和弹窗长得一样），自定义内容这道门只在 Bench 页面里才有。
 这是设计约束，不是待办——复杂操作不会因为"顺手"就加回弹窗。
 
 ### 6.1 为什么必须能自己写请求
@@ -393,10 +364,9 @@ Protocol 下拉在自定义请求模式下还能"切换"却只改标签不改 bo
 
 ### 6.2 不自定义消息结构：直接收三种协议的原始请求
 
-早期草案定义过一个 `ProbeMessage{role,text}` 的中间结构。它被否掉了：自造一个消息载体
-既表达不了 tools / 图片 / content block，又得在三个 builder 里各写一遍映射，还永远比真实
-客户端少一截。TB 是协议转换器，三种 wire 形态它本来就都会解——所以请求载体直接用协议
-本身：
+自造一个消息载体（例如 `ProbeMessage{role,text}` 的中间结构）既表达不了 tools / 图片 /
+content block，又得在三个 builder 里各写一遍映射，还永远比真实客户端少一截。TB 是协议
+转换器，三种 wire 形态它本来就都会解——所以请求载体直接用协议本身：
 
 ```go
 // Request is a raw client request body in RequestProtocol's shape
@@ -412,62 +382,60 @@ RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty"`
   `protocol.PreprocessInputData`，与生产 handler 同一路径），解析结果原样交给现有
   param builder 短路发出——探测只补 `model`（Anthropic 缺省 `max_tokens`、流式时
   chat 的 `stream_options.include_usage`）。请求体是什么形态，发出去就是什么形态。
-- **向后兼容**：`request` 为空时行为与今天完全一致（预设请求 + `message` override）；
-  probe dialog 不受影响。`request` 与 `message` / tool / vision / thinking 轴互斥
-  （校验拒绝，不猜）：这些轴都是"合成预设请求的旋钮"，请求既然是你写的，就整份归你。
+- **向后兼容**：`request` 为空时行为与 Probe 弹窗完全一致（Message + `message` override）。
+  `request` 与 `message` / tool / vision / thinking 轴互斥（校验拒绝，不猜）：这些轴都是
+  "合成 Message 的旋钮"，请求既然是你写的，就整份归你。
 - 协议一致性由校验守住：provider target 的 `protocol` 必须等于 `request_protocol`；
   rule target 的 scenario 家族（`ScenarioEndpoint`）必须与之相符。跨协议的"错投"
   不在 Bench 的范围（它测的是 TB 的转换，不是 TB 的 400）。
 - 这一层单独成 PR（"accept a raw client request in any of the three protocols"），
   Bench 叠在它之上。详见 probe.md "Raw client requests"。
 
-### 6.3 Request mode 是 Compose 里的正式控件，不是 Request 面板里的一扇门
+### 6.3 Content：一个菜单决定 body 的作者
 
-早期实现里，"预设 vs 自定义"是一个单向门——一个藏在 Request 面板底部的按钮，文案
-随 `seedBody` 是否存在在两种说法间切换，靠文案隐晦地告诉用户点了会拿到什么。这版
-重新设计（不是在旧结构上加东西）：**Request mode 提升为 Compose 顶部一个正式的
-二选一控件**（`ExclusiveToggle<'preset'|'custom'>`，紧跟在 Protocol 后面，§1"四种
-归类"），和 Protocol / Scope 同级，不再是 Request 面板里一个需要被发现的按钮。
+Compose 里 Protocol 之后是 **Content**（下拉菜单，`bench.content`）——决定这份请求
+body 由谁写：
 
-`Protocol`、`Request mode` 现在是 Bench 的两个"全局"控件——不管当前在哪个模式，
-两者的值都只有一份，显示在 Compose 顶部：
+- **Message**：片段级组合器。Body 由 Thinking / Tool / Vision 轴 + Message 覆盖字段
+  拼出，就是 §6 开头说的那份 Message（探针在请求粒度上的投影）。
+- **该协议的 Templates**：Blank / Multi-turn / Tool round-trip / Image，以及
+  Anthropic 独有的 Mid-conversation system（`claude_code_compat` 的测试形态）——选中
+  任意一个，body 整份替换成这份协议原生 JSON，进入手写状态。
 
-- **预设模式**：Protocol 读写 `axes.protocol`（沿用 Probe 的归约逻辑：rule target
-  锁定到 scenario 家族，provider target 按能力收窄）。
-- **自定义模式**：Protocol 读写 `raw.protocol`。切换协议时，body 重置为该协议的
-  空请求（`BLANK_REQUEST[protocol]`）——协议决定的是 body 的语法，换协议换的是
-  语法，不是内容，`Change starting point` 菜单负责选具体起点（下一条）。
-- **模式切换**（`BenchPage.tsx` 的 `onModeChange`）：预设→自定义时，`raw` 用
-  `seedBody ?? BLANK_REQUEST[protocol]` 初始化（有预设请求可抄就抄，没有就空白）；
-  自定义→预设时，把 `raw.protocol` 写回 `axes.protocol` 再清空 `raw`——这样切回去
-  再切过来，Protocol 显示的值不会因为模式切换本身跳变。
+选项按 **Protocol 收窄**（`pages/bench/contentOptions.ts` 的 `templatesForProtocol`）——
+Tool round-trip / Mid-conversation system 这些模板的字段形状是协议私有的，不能跨协议
+复用。这也是为什么 Protocol 下拉在两种作者下读写不同的字段：Message 时读写
+`axes.protocol`（沿用 Probe 的归约逻辑：rule target 锁定到 scenario 家族，provider
+target 按能力收窄）；非 Message 时读写 `raw.protocol`，切换协议会把 body 换成新协议
+的起始内容——协议决定的是 body 的语法，换协议换的是语法，不是内容。若当前内容在新
+协议下有对应模板（如 Multi-turn 三个协议都有）就原样带过去，没有就退回 Blank（如
+Mid-conversation system 只有 Anthropic 有）——保留"这是哪种内容"这个用户意图，而不
+是无脑退回空白。
 
-Request 面板内部只剩一个 **Change starting point** 菜单（`StartingPointMenu`，
-`pages/bench/RequestEditor.tsx`），在自定义模式下把 body 换成别的起点，选项都是
-内容预设（§1"四种归类"——粒度不同而已）：
+选中 Content 的任何一项都是**整体替换**，不做确认弹窗——这个页面的受众本来就习惯
+"重来"这个动作；符合 §6 的"一份 body 只有一个作者"规则，从不合并/diff（曾评估过
+"顶层 key 覆盖"方案，见 §14"body 细粒度修改"一行，结论是否掉）。
 
-| 选项 | 是什么 |
-|------|--------|
-| Copy the preset request | 预设请求（探针）现在会发出的样子；`seedBody` 存在才显示 |
-| Blank | 该协议形态下的一份空请求（`{messages:[]}`/`{input:[]}`） |
-| Multi-turn / Tool round-trip / Image / Mid-conversation system | 按协议各备的"教材式"整体内容预设（ux-principles #8），Anthropic 独有 Mid-conversation system（claude_code_compat 的测试形态） |
+Thinking / Tool / Vision 三个轴**始终挂载**：Content 不是 Message 时它们置灰，但不
+隐藏——继续显示字段名和取值范围，充当"这个字段该怎么填"的参考（ux-principles #8
+教育内嵌），hover 会有"仅供参考"的 hint（`bench.axesInactive`）说明当前不生效、要
+生效需要自己写进 body。Stream 例外：它在两种作者下都是真参数，永远生效，不随
+Content 变化。
 
-选中任何一项都是**整体替换**，不做确认弹窗——这个页面的受众本来就习惯"重来"这个
-动作。
+Request 面板内部只保留一个动作：**Copy the preset request**（有 `seedBody` 时才出
+现），把 Message 此刻会发出的样子原样搬进当前的 JSON——不是 Content 菜单的一项
+（Content 菜单的选项都是这个协议固定的静态模板，这个动作是动态的，取决于当前轴的
+值），是编辑器内一个独立的、随时可用的补充动作。
 
-`seedBody`（"Copy the preset request"用到的值）必须在**两个触发点都准确**——模式
-切换那一刻，以及已经在自定义模式里打开菜单时。已经进了自定义模式之后，Payload
-面板显示的是**当前的自定义请求**，不能再拿来当"预设请求现在的样子"——那样会变成
-把自己抄一遍的空操作。所以 `BenchPage.tsx` 维护了第二条独立的、`raw:null` 构造的
-curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态时才发起，预设模式下
-直接复用已有的 curl 结果，不重复请求。
+`seedBody` 必须在两个时机都准确——Content 从模板切回 Message 那一刻，以及已经处于
+非 Message 内容时点这个按钮。已经进入非 Message 内容后，Payload 面板显示的是当前的
+自定义 body，不能再当"Message 现在的样子"用（那样会变成把自己抄一遍）。所以
+`BenchPage.tsx` 维护了第二条独立的、`raw:null` 构造的 curl 请求（`presetPreviewCurl`），
+只在非 Message 内容活跃时才发起，Message 状态下直接复用已有的 curl 结果，不重复
+请求。
 
-- Parameters / Presets 这两个 `AxisGroup` 在自定义模式下的行为不同：Presets（Tool/
-  Vision）整块**不渲染**——它们不是这个模式的旋钮，压根不适用；Parameters 只隐藏
-  Thinking（只塑形预设 builder），Request（Stream）保留——它是 body 里的真参数，
-  两种模式都用得到。Scope / Routing 也保留，它们是传输配置，和 body 怎么拼出来
-  无关（§1"四种归类"）。
-- 切换 target 时清空自定义请求（它是针对旧 target 协议写的）。
+Scope / Routing 也始终挂载，它们是传输配置，和 body 怎么拼出来无关（§1"四种归类"）。
+切换 target 时清空当前 body（它是针对旧 target 协议写的）。
 
 ---
 
@@ -478,18 +446,18 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
   （`probe.CurlData`）渲染两种视图，无新端点。
 - 配置变更 → debounce 500ms → `POST /api/v2/probe/curl`。构造失败（如校验错）时面板
   显示错误原因——**payload 面板同时兼任"配置是否合法"的即时反馈**。
-- 每块可复制；cURL caption 保留 key 替换提示。Through-TB 的 cURL 现在携带探测头
+- 每块可复制；cURL caption 保留 key 替换提示。Through-TB 的 cURL 携带探测头
   （`X-Tingly-Probe-Rule` / `X-Tingly-Probe-Service` / `X-Tingly-Probe-Flags`），否则
   复制出来手动执行会按普通流量路由，复现不了这次探测。
 
-### 7.1 Header 覆盖；body 的"编辑"就是进入 raw 模式
+### 7.1 Header 覆盖；body 的"编辑"就是切到自定义内容
 
 只读的 payload 意味着"能改的都得先变成旋钮"，对一个叫"工作台"的页面这是真实缺口。
 两类可改的东西走两条路，不做第三种机制：
 
 - **Body**：点 Edit 不是打开一个 diff/覆盖层，而是把当前 body 原样搬进中栏 Request 面板
-  进入 raw 模式（§6.3）。早期草案里"顶层 key diff → `body_overrides` → sjson 重写"的
-  设计被撤掉：既然整份请求都能写，一个"改几个 key"的第二套机制只是重复，且它改的是
+  切到自定义内容（§6.3）。"顶层 key diff → `body_overrides` → sjson 重写"这类"改几个
+  key"的方案被评估过又否掉：既然整份请求都能写，第二套机制只是重复，且它改的是
   SDK 序列化之后的 body，与 Request 面板里"你写的就是发出的"这条原则打架。
 - **Header**：`headers: {name: value}`，空值 = 移除。后端由 ctx 携带的
   `probeHeaderOverridesRoundTripper`（探测客户端 transport 最内层）在请求离开进程前应用；
@@ -502,14 +470,14 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 ## 8. Result 与 Run history
 
 - 结果区复用 probe dialog 的四件套：StatusBar → Journey → Response → Raw JSON。
-  从 `ProbeDialog.tsx` 提炼为共享组件（如 `components/probe/ResultSections.tsx`），
+  从 `ProbeDialog.tsx` 提炼为共享组件（`components/probe/ResultSections.tsx`），
   dialog 与 bench 共用——避免两处维护 journey 字段映射。
 - Bench 差异：Journey **默认展开**；Flags 行在 overlay 生效时并列展示
   `AppliedFlags`（权威）与 overlay 请求值，不一致处即为教育点（§5.4）。
 - **Run history**（session 级）：结果区顶部一行 chips，最近 ~10 次 run：
   `✅ 850ms · stream · 2 flags` 。点击回看该次结果，且左栏/request 恢复为该次的
   请求配置（靠 Result 的 request-echo 字段 + 本地保存的请求快照）——"完成 ≠ 锁死"
-  （ux-principles #10），对照两次实验是工作台的日常动作。不落库、刷新即清（V1）。
+  （ux-principles #10），对照两次实验是工作台的日常动作。不落库、刷新即清。
 
 ---
 
@@ -521,12 +489,11 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 - 页面 `React.lazy(() => import('./pages/bench/BenchPage'))`（frontend/CLAUDE.md
   的 code-splitting 铁律）；**不从 page 文件导出任何共享状态**——picker 数据、共享轴原语
   都放独立模块。
-- i18n：`en.ts` / `zh.ts` 增 `bench.*` 命名空间；复用 `probe.*` 已有的轴文案
+- i18n：`en.ts` / `zh.ts` 的 `bench.*` 命名空间；复用 `probe.*` 已有的轴文案
   （同一概念同一词）。
-- **无深链入口（V1.1）**：`/bench` 不接受任何查询参数，也没有别的页面能跳转过来
+- **无深链入口**：`/bench` 不接受任何查询参数，也没有别的页面能跳转过来
   预填 target——Bench 完全独立，只能通过自己的一级导航进入，然后在页面内用
-  target picker 选（§3）。曾经的 `/bench?target=rule:{uuid}` 深链协议
-  （`benchLink.ts`）随 Rule target 一起移除。
+  target picker 选（§3）。
 
 ---
 
@@ -540,57 +507,47 @@ curl 请求（`presetPreviewCurl`），只在自定义请求处于活跃状态�
 
 ---
 
-## 11. 后端改动清单（已实现）
+## 11. 后端实现
 
-前置 PR（"accept a raw client request in any of the three protocols"）：`E2ERequest.Request` /
-`RequestProtocol`、`parseRawRequest`、三个 builder 的短路、校验（协议一致、与 fixture 轴互斥）、
-`request_shaping_test.go`。本页在其上叠加：
+前置 PR（"accept a raw client request in any of the three protocols"）打下的基础：
+`E2ERequest.Request` / `RequestProtocol`、`parseRawRequest`、三个 builder 的短路、
+校验（协议一致、与 fixture 轴互斥）、`request_shaping_test.go`。Bench 叠在其上：
 
-| # | 位置 | 改动 |
+| # | 位置 | 作用 |
 |---|------|------|
-| 1 | `internal/probe/types.go` | `E2ERequest` 增 `Flags typ.FlagOverlay`、`Headers map[string]string`；~~`Routing`（natural 默认 / pinned → `X-Tingly-Probe-Rule`）~~（**V1.1 移除**，见下）；`ValidateE2ERequest` 扩展（flags 按 registry 校验、direct×flags 互斥、header 名合法）；`Customized()` = raw request ∨ flags ∨ headers，让定制请求绕过能力缓存 |
+| 1 | `internal/probe/types.go` | `E2ERequest` 的 `Flags typ.FlagOverlay`、`Headers map[string]string`；`ValidateE2ERequest`（flags 按 registry 校验、direct×flags 互斥、header 名合法）；`Customized()` = raw request ∨ flags ∨ headers，让定制请求绕过能力缓存 |
 | 2 | `internal/typ/flag_overlay.go` | `FlagOverlay`、`ValidateFlagOverlay`（含 `multi_enum`）、`ApplyFlagOverlay`（经 JSON 形态合并，显式零值可以清掉已开的 flag）、`ProbeFlagsHeader` 及 base64url 编解码。registry 仍是唯一可信源 |
-| 3 | `internal/probe/e2e_probe.go` | 回环路径把 `Flags` 编进 `X-Tingly-Probe-Flags`；~~pinned 时 rule target 发 `X-Tingly-Probe-Rule`~~（**V1.1 移除**）；`Headers` 经 ctx 交给 header round tripper（最内层）；capture 客户端同样套用 |
+| 3 | `internal/probe/e2e_probe.go` | 回环路径把 `Flags` 编进 `X-Tingly-Probe-Flags`；`Headers` 经 ctx 交给 header round tripper（最内层）；capture 客户端同样套用 |
 | 4 | `internal/client/probe_rewrite.go` | `WithProbeHeaderOverrides` / `probeHeaderOverridesRoundTripper` / `ApplyHeaderOverrides`：请求离开进程前设/删 header；只做 header，不碰 body |
 | 5 | `internal/protocolserver/rule_flags.go` | `ResolveRuleFlagsWithScenario` 在 scenario 继承后、自动项/OAuth 抑制前应用 header overlay（`applyProbeFlagOverlay`；解码失败记 warn 并忽略） |
 | 6 | `internal/probe/curl.go` | 应用 header 覆盖；Through-TB 的 curl 带探测头 |
-| 7 | swagger / codegen | `openapi.json` 与前端 `schema.d.ts` 已重新生成 |
-| 8 | 测试 | `typ/flag_overlay_test.go`、`client/probe_rewrite_test.go`、`probe/bench_test.go`（校验 + Customized + curl header 覆盖；~~routing~~ 子测试 V1.1 随字段一起删）、`protocolserver/rule_flags_overlay_test.go` |
+| 7 | swagger / codegen | `openapi.json` 与前端 `schema.d.ts` |
+| 8 | 测试 | `typ/flag_overlay_test.go`、`client/probe_rewrite_test.go`、`probe/bench_test.go`、`protocolserver/rule_flags_overlay_test.go` |
 
-**V1.1 后端清理**（随前端 Rule target 一起，§3）：`ProbeRouting`/`RoutingNatural`/`RoutingPinned`/`Pinned()`、
-`E2ERequest.Routing` 字段、`ValidateE2ERequest` 里对 `routing` 的校验分支、`resolveRuleTarget`
-里"pinned 时发 `X-Tingly-Probe-Rule`"的分支，全部删除——这条路径从诞生起就只有 Bench 会走（Probe
-弹窗从未暴露 pinned 选项，`scopeAvailable()` 的注释明确写着 rule 探测必须走完整 middleware），
-Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/protocolserver/protocol_handler.go`
-读取 `X-Tingly-Probe-Rule` header 的逻辑本身——它和仍在用的 `X-Tingly-Probe-Service` 是同一族通用
-探测头基础设施（`.design/probe.md`），不是 Bench 专属，现在没有生产者了但保留它的读取分支成本
-为零、风险却是动核心路由代码，不值得为了"零调用方也删干净"去碰。
+`internal/protocolserver/protocol_handler.go` 读取 `X-Tingly-Probe-Rule` header 的逻辑
+与仍在用的 `X-Tingly-Probe-Service` 是同一族通用探测头基础设施（`.design/probe.md`），
+不是 Bench 专属；Bench 目前没有 rule target，不产生这个 header，但读取分支保留（成本
+为零，风险是动核心路由代码）。
 
-## 12. 前端改动清单（已实现）
+## 12. 前端实现
 
-| # | 位置 | 改动 |
+| # | 位置 | 作用 |
 |---|------|------|
 | 1 | `pages/bench/BenchPage.tsx` | 页面（lazy），三栏布局编排、run history、⌘/Ctrl+Enter、localStorage 持久化 |
-| 2 | ~~`pages/bench/benchLink.ts`~~ | **V1.1 整个文件删除**——深链协议（`?target=rule:{uuid}&scenario=` 等）随 Rule target 一起下线，Bench 不再接受任何跳转 |
-| 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签。**V1.1**：`BenchTarget` 收窄为 `{providerUuid, model}`，`routing` 字段随之删除 |
-| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
-| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴，**V1.1 去掉 Routing 轴**，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、Plugins 直接使用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`（Bench 只做 wire key 转换与 Direct gate）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
+| 2 | `pages/bench/benchState.ts` | 状态模型（`target`/`axes`/`raw: {protocol, body}`/`flags`/`headers`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造）、run 标签 |
+| 3 | `pages/bench/contentOptions.ts` | Content 菜单的协议作用域目录：`templatesForProtocol`（Blank + 该协议的 Templates）、`matchTemplateId`（body 反查属于哪个模板，驱动 Content 按钮文案与协议切换时的"同类内容延续"，见 §6.3） |
+| 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。`ProbeControls` 与 `BenchAxes` 都用 `AxisGroup` 按"四种归类"（§1）分组 |
+| 5 | `pages/bench/` 内部组件 | `TargetPicker`（`ModelSelectDialog` 卡片选择器）、`BenchAxes`（Content 菜单 + 全展开的 Parameters/Presets，见 §6.3）、Plugins 直接用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`、`RequestEditor`（Message 视图 + JSON 视图，JSON 视图头部只有一个"Copy the preset request"按钮）、`PayloadPanel`（只读 body + Edit→切到 JSON 视图、header 覆盖）、`RunHistory` |
 | 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
-| 7 | `services/api.ts` | ~~`getAllRules`（不带 scenario 即全部规则）~~（**V1.1**：`useTargetCatalog` 不再拉 rules，只拉 providers） |
-| 8 | i18n | `bench.*` en/zh；~~`probe.openInBench`~~（**V1.1 删除**，随入口一起）；`layout.bench` |
-| 9 | ~~入口：ProbeDialog 标题栏 "Open in Bench"~~ | **V1.1 移除**——Bench 不再是任何页面的跳转目标 |
-| 10 | 测试 | `pages/bench/bench.test.ts`（**V1.1**：深链往返测试随 `benchLink.ts` 删除，只剩请求构造 + raw 请求解析与互斥） |
+| 7 | `services/api.ts` | `useTargetCatalog` 只拉 providers |
+| 8 | i18n | `bench.*` en/zh；`layout.bench` |
+| 9 | 测试 | `pages/bench/bench.test.ts`（请求构造 + raw 请求解析与互斥） |
 
-## 13. 分期交付
+## 13. 交付历史
 
-原计划三个阶段一次落地（V1 已含全部三段）。当时的划分保留作参考：
-
-1. **骨架页**（纯前端 + 现有 API）：三栏布局、target picker、全展开轴、单 message、
-   payload 实时面板、result、run history，以及路由图同款 Plugins 卡片/catalog 入口。
-2. **Flags overlay**（后端 #1–#4 + Bench 对共享 Plugins 组件的状态接线 + codegen）——核心价值落地。
-3. **Raw request**（前置 PR 的 `request`/`request_protocol` + 前端 RequestEditor + templates）。
-
-每阶段用 `ui-preview` skill 截图验收布局。
+三个阶段（骨架页 → Flags overlay → Raw request）已全部落地；后续对 Compose 的 Content
+控件做过一轮整合（合并原先的 Preset/Custom 模式门与起点菜单，见 §6.3、§14）。逐笔提交
+记录见 git log，不在此重复。
 
 ---
 
@@ -605,14 +562,16 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | Direct × flags | 互斥（400 + UI 禁用） | 静默忽略 | flags 是 TB middleware 行为；静默忽略会让用户以为测了实际没测——最坏的一种假成功 |
 | flags key 集合 | `map[string]json.RawMessage` + registry 校验 | typed `RuleFlags` 指针字段 | typed struct 无法区分"未设"与"设为零值"，而这正是 overlay 的核心语义；registry 校验保住类型安全 |
 | 请求载体 | 三种协议的原始请求体（SDK decoder 解析） | 自定义 `ProbeMessage{role,text}` / 结构化多轮编辑器 | 自造载体表达不了 tools/图片/content block，还要在三个 builder 各写映射；协议本身就是最完整的载体，TB 本来就会解三种形态。编辑器换成 JSON 文本域 + 模板，复杂度反而更低 |
-| raw request 与 fixture 轴的关系 | 互斥：raw 时 Tool/Vision/Thinking/message 归请求 | 轴 fixture 叠加在 raw 请求上 | 叠加意味着后端要往用户写的请求里注入 tools/图片——"你写的就是发出的"被破坏，且注入规则本身又是一套要维护的映射 |
-| body 细粒度修改 | Edit → 进入 raw 模式 | 顶层 key diff → `body_overrides` sjson 重写 | 整份都能写时，"改几个 key"是重复机制；且它改的是序列化后的 body，与 Request 面板的单一来源打架。header 覆盖保留，因为 header 不属于请求体 |
+| raw request 与 fixture 轴的关系 | 互斥：自定义内容时 Tool/Vision/Thinking/message 归请求 | 轴 fixture 叠加在 raw 请求上 | 叠加意味着后端要往用户写的请求里注入 tools/图片——"你写的就是发出的"被破坏，且注入规则本身又是一套要维护的映射 |
+| body 细粒度修改 | Edit → 切到自定义内容，整份可写 | 顶层 key diff → `body_overrides` sjson 重写 | 整份都能写时，"改几个 key"是重复机制；且它改的是序列化后的 body，与 Request 面板的单一来源打架。header 覆盖保留，因为 header 不属于请求体 |
+| Request mode 与"从哪开始"菜单的关系 | 合并成一个 Content 菜单（Message + 该协议全部模板，见 §6.3） | 分开维护：一个 Preset/Custom 二选一开关 + 模式内再选起点 | 二者列的一直是同一类东西（内容预设，见 §1"四种归类"），分开维护是两层要翻的门；合并后 Protocol → Content → Scope 三个"全局"控件的心智更平——选完 Content 就知道下面该看什么 |
+| 非 Message 内容下 Thinking/Tool/Vision 的呈现 | 常驻显示 + 置灰 + "仅供参考"提示 | 整块不渲染 | 隐藏会让人忘记这些字段长什么样、该怎么填；置灰保留字段名与取值范围当参考卡片，同时清楚表达"当前不生效"，不是静默消失 |
 | 配置持久化 | localStorage 持久化 | 跟随 probe 的不持久化 | 诊断要默认可预测，工作台要延续上下文——两个页面的正确答案相反，显式写下避免"统一"冲动 |
 | provider_config target | 不纳入 | 三种 target 全支持 | 它属于 Connect AI 的"保存前验证"流程；Bench 面向已保存对象，多一种 target 只添心智噪音 |
 | Run history | session 内存 | 落库持久化 | 先验证"回看/对照"是不是真实高频动作，再决定值不值得一张表 |
-| Plugins UI（V1.1） | 直接复用路由图的 `RulePluginsCard` + `FlagCatalogDialog` | 保留 Bench 常驻三态面板 / 再抽一层通用框架 | 路由图已经有完整 registry 控件与 provider picker；Bench 只需 wire key 转换和 Direct gate，第二套实现已经产生能力漂移 |
-| Target picker（V1.1） | 路由图同款卡片选择器（`ModelSelectDialog`），只选 Provider+Model | 继续用 Autocomplete 下拉，只是把 Rule 分组去掉 | Autocomplete 下拉在窄栏里把长名字硬截断、选项难分辨；卡片选择器是用户已经练熟的心智，且是同一份代码，不是仿制视觉 |
-| Rule target（V1.1） | 移除，Bench 只连 Provider+Model | 保留 Rule，但换个更宽的地方放 target picker | Rule 目标撑不起统一的卡片选择器，硬塞等于发明第二种选择模式；连带的 routing 轴/深链协议/flag 基线耦合面大，不如一次性和 picker 改造一起砍掉，未来要接回来再设计 |
+| Plugins UI | 直接复用路由图的 `RulePluginsCard` + `FlagCatalogDialog` | 保留 Bench 常驻三态面板 / 再抽一层通用框架 | 路由图已经有完整 registry 控件与 provider picker；Bench 只需 wire key 转换和 Direct gate，第二套实现只会产生能力漂移 |
+| Target picker | 路由图同款卡片选择器（`ModelSelectDialog`），只选 Provider+Model | Autocomplete 下拉 | Autocomplete 下拉在窄栏里把长名字硬截断、选项难分辨；卡片选择器是用户已经练熟的心智，且是同一份代码，不是仿制视觉 |
+| Rule target | 不纳入，Bench 只连 Provider+Model | 保留 Rule，换个更宽的地方放 target picker | Rule 目标撑不起统一的卡片选择器，硬塞等于发明第二种选择模式；连带的 routing 轴/深链协议/flag 基线耦合面大，不如一次性砍掉，未来要接回来再设计 |
 
 ---
 
@@ -641,13 +600,13 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | # | 原则 | 本设计的落点 |
 |---|------|--------------|
 | 1 | 按用户问题组织 IA | 三栏 = 我要发什么 / 实际发出什么 / 发生了什么（§1） |
-| 2 | 消解模式选择 | 统一 target picker；进页即工作面，无向导 |
+| 2 | 消解模式选择 | 统一 target picker；进页即工作面，无向导；Content 一个菜单列出所有起点，不用先选模式（§6.3） |
 | 3 | 命名唯一 | Bench / Plugins / Probe 各指一物；轴词汇与 probe 完全共用 |
-| 4 | 正交维度分轴 | 轴 × flags overlay × request 三个正交面板；轴内按"四种归类"分组（Parameters/Presets）；自定义模式下归请求的轴整块不渲染而非静默忽略 |
+| 4 | 正交维度分轴 | 轴 × flags overlay × request 三个正交面板；轴内按"四种归类"分组（Parameters/Presets）；非 Message 内容下归 Message 的轴置灰仍显示，清楚表达"当前不生效"而非静默消失 |
 | 5 | 展示具体值 | Plugins 卡片/catalog 展示当前配置值；payload 展示真实 body；AppliedFlags 回显权威生效值 |
-| 6 | 聪明默认 | 轴默认沿用 probe（Stream/Through-TB/primary protocol）；plugins 沿用既有 catalog 行为；request 默认 fixture |
+| 6 | 聪明默认 | 轴默认沿用 probe（Stream/Through-TB/primary protocol）；plugins 沿用既有 catalog 行为；Content 默认 Message |
 | 7 | 诊断走真实链路 | 一切默认 loopback 生产路径；Direct 仅作对照且与 flags 互斥 |
-| 8 | 教育内嵌 | 按协议的 request templates 即教材；overlay 与 AppliedFlags 的差异展示约束本身 |
+| 8 | 教育内嵌 | 按协议的 Content 模板即教材；非 Message 内容下 Thinking/Tool/Vision 轴置灰常驻，充当字段/取值范围的参考卡片；overlay 与 AppliedFlags 的差异展示约束本身 |
 | 9 | 降视觉噪声 | 主角是 payload 与 result；Plugins 使用紧凑摘要卡片，需要时再进入 catalog；journey 字段仍是等宽极简行 |
 | 10 | 完成 ≠ 锁死 | run history 回看并恢复配置；页面状态持久化，随时回来续做 |
 | 11 | 交付下一步物件 | cURL/payload 逐块可复制；probe→bench 深链带配置；（V2）导出 harness case |

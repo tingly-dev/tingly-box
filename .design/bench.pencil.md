@@ -1,6 +1,10 @@
 # Bench Wireframes (pencil)
 
-Wireframes for [`bench.md`](./bench.md).
+Wireframes for [`bench.md`](./bench.md). Wireframes drift from the real
+layout faster than the design doc does — where the two disagree, `bench.md`
+(and the actual code) is authoritative; §2 and §1's rule-based target picker
+below are superseded by `bench.md` §3 (provider+model only, `ModelSelectDialog`
+card picker), kept here only as a record of a discarded alternative.
 
 Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed ·
 `▾` = expanded · `⧉` = copy · `●` = overridden flag · `○` = inherited flag ·
@@ -91,79 +95,74 @@ Legend: `▤` = toggle group · `( )` = disabled w/ tooltip · `▸` = collapsed
   suppressing clean_header shows up THERE, not as a UI prediction.
 ```
 
-## 4. Compose: Protocol → Request mode → Scope → Parameters → Presets
+## 4. Compose: Protocol → Content → Scope → Parameters → Presets
 
-This revises §4 as it stood earlier — Request mode was a one-way door
-(a button at the bottom of the Request panel, tabs explicitly rejected).
-The user redesigned Compose from scratch rather than inheriting that
-structure: Protocol and Request mode are now formal, always-visible
-controls at the *top* of Compose, in that order, not something you
-discover scrolling through axes. This isn't the rejected "tabs" shape
-either — there's still exactly one value for each control, not two
-independent panels each remembering their own state; picking Custom
-still means the body from here on is fully yours, same as before.
+Content is one menu, not a mode gate: it lists Message (the axis-driven
+builder) alongside this protocol's whole-body templates, so there's no
+"pick a mode, then discover the starting-point menu inside it" two-step
+(bench.md §6.3, §14).
 
 ```
-  Compose (preset mode)                    Compose (custom mode)
+  Compose (Content: Message)               Compose (Content: Multi-turn)
   ┌ COMPOSE ──────────────────┐            ┌ COMPOSE ──────────────────┐
-  │ Target    [rule/provider ▾]│            │ Target    [rule/provider ▾]│
+  │ Target    [provider·model]│            │ Target    [provider·model]│
   │                             │            │                             │
   │ Protocol  ▤ O.Chat│O.Resp│A│            │ Protocol  ▤ O.Chat│O.Resp│A│
-  │ Request mode ▤ Preset│Custom│           │ Request mode ▤ Preset│Custom│
-  │ Scope     ▤ Full│Pinned    │            │ Scope     ▤ Full│Pinned    │
+  │ Content   [ Message      ▾]│            │ Content   [ Multi-turn    ▾]│
+  │ Scope     ▤ Through TB│Dir │            │ Scope     ▤ Through TB│Dir │
   │ PARAMETERS ───────────────  │            │ PARAMETERS ───────────────  │
   │  Request  ▤ Nonstream│Stream│           │  Request  ▤ Nonstream│Stream│
-  │  Thinking ──●──────────    │            │  (Thinking not shown — only │
-  │ PRESETS ──────────────────  │            │   shapes the preset builder)│
-  │  Tool     ▤ Off│On         │            │                             │
-  │  Vision   ▤ Off│User│Tool  │            │ (Presets group not rendered │
-  │                             │            │  at all — not disabled)     │
+  │  Thinking ──●──────────    │            │  (Thinking ── ●, greyed —   │
+  │ PRESETS ──────────────────  │            │   reference only, hover for │
+  │  Tool     ▤ Off│On         │            │   "not applied" hint)       │
+  │  Vision   ▤ Off│User│Tool  │            │  (Tool/Vision same — greyed,│
+  │                             │            │   not unmounted)            │
   └─────────────────────────────┘            └─────────────────────────────┘
 
-  ┌ REQUEST (preset) ─────────┐             ┌ REQUEST (custom) ─────────────┐
-  │ Message                   │             │              [Change starting  │
-  │ [Hello, this is a test…]  │             │               point ▾]         │
-  └────────────────────────────┘             │ ┌ JSON ─────────────────────┐ │
-                                              │ │ { "messages": [ … ] }    │ │
+  ┌ REQUEST (Message) ────────┐             ┌ REQUEST (Multi-turn) ─────────┐
+  │ Message                   │             │       [Copy the preset req.]  │
+  │ [Hello, this is a test…]  │             │ ┌ JSON ─────────────────────┐ │
+  └────────────────────────────┘             │ │ { "messages": [ … ] }    │ │
                                               │ └────────────────────────────┘ │
                                               └────────────────────────────────┘
 ```
 
-Switching **Protocol** or **Request mode** never leaves a mismatched body
-behind — same rule as before, tightened:
+Switching **Protocol** or **Content** never leaves a mismatched body
+behind:
 
-- Request mode Preset→Custom: `raw` seeds from `seedBody` (what the preset
-  request would send right now) if there is one, else a blank body in the
-  current protocol.
-- Request mode Custom→Preset: the custom body's protocol is carried back
-  onto `axes.protocol` first, so the unified Protocol control doesn't
-  silently change value just because mode flipped.
-- Protocol changed while already Custom: body resets to a **blank** request
-  in the new protocol (not a template) — Protocol decides the body's
-  grammar, not its content; **Change starting point** picks the content.
+- Content → Message: `raw` clears; the unified Protocol control carries
+  the custom body's protocol back onto `axes.protocol` so it doesn't
+  silently change value just because Content flipped.
+- Content → a template: body is replaced wholesale with that template's
+  body in the current protocol.
+- Protocol changed while Content is already non-Message: the same *kind*
+  of content carries forward if the new protocol has it (e.g. Multi-turn
+  exists for all three); otherwise it falls back to Blank. Protocol
+  decides the body's grammar, Content decides its meaning.
 
-**Change starting point** (`StartingPointMenu`, one mechanism, one trigger
-now that the door is gone) — same list as before:
+The Content menu (`ContentMenu` in `BenchAxes.tsx`) lists:
 
 ```
-  [Change starting point ▾]
-    ○ Copy the preset request   (only when seeded)
+  [ Message                                    ▾]
+    ○ Message           (axis-driven; Thinking/Tool/Vision below apply)
     ○ Blank
-    ○ Multi-turn      ○ Tool round-trip
-    ○ Image           ○ Mid-convo system (Anthropic only)
+    ○ Multi-turn         ○ Tool round-trip
+    ○ Image              ○ Mid-conversation system (Anthropic only)
 ```
 
-"Copy the preset request" must stay correct even deep in a custom session —
-Payload's own curl reflects whatever's CURRENTLY active (the custom body,
-once one exists), so it can't source this. BenchPage runs a second,
-independent curl fetch with raw forced off, only while a custom request is
+"Copy the preset request" (in the Request panel, not the Content menu —
+it's a dynamic snapshot of the axes' current output, not a static
+template) must stay correct even deep in a non-Message session — Payload's
+own curl reflects whatever's CURRENTLY active (the custom body, once one
+exists), so it can't source this. BenchPage runs a second, independent
+curl fetch with raw forced off, only while a non-Message content is
 active (bench.md §6.3).
 
-The Probe dialog gets the lightest possible touch, not this redesign: it
-keeps its own frequency-ordered layout (Shape/Scope resident, everything
-else in Advanced) — only Protocol moves above the fold, because it's the
-coordinate system, not because it's frequently touched. No Request mode
-toggle, no custom request editor, no Presets/Parameters relabeling. Its
+The Probe dialog gets the lightest possible touch: it keeps its own
+frequency-ordered layout (Shape/Scope resident, everything else in
+Advanced) — only Protocol moves above the fold, because it's the
+coordinate system, not because it's frequently touched. No Content menu,
+no custom request editor, no Presets/Parameters relabeling. Its
 one door to Bench is unchanged:
 
 ```
@@ -178,11 +177,6 @@ one door to Bench is unchanged:
        Bench's preset request — never straight into the custom editor.
        Complex operations only exist on Bench.
 ```
-
-[templates ▾] carries the same content described above — one set per
-protocol, each entry's caption saying what it exercises (Multi-turn,
-Tool round-trip, Image, Mid-convo system). Insert = replace the body,
-same as a Protocol switch.
 
 ## 5. Flags overlay data flow (through-TB only)
 

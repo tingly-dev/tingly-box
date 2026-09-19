@@ -127,12 +127,13 @@ export function ExclusiveToggle<T extends string>({
 // ThinkingSlider: the effort ladder as one stepped control bar. End-mark
 // labels center on their ticks and would stick out of the rail, so the
 // slider is inset and the wrapper clips the rest.
-export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: ProbeThinking) => void }> = ({ value, onChange }) => {
+export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: ProbeThinking) => void; disabled?: boolean }> = ({ value, onChange, disabled }) => {
     const { t } = useTranslation();
     return (
         <Box sx={{ px: 1.25, overflowX: 'hidden' }}>
             <Slider
                 size="small"
+                disabled={disabled}
                 value={THINKING_LADDER.indexOf(value)}
                 min={0}
                 max={THINKING_LADDER.length - 1}
