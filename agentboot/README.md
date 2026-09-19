@@ -45,6 +45,11 @@ treat this as the change-review checklist, not an aspiration.
   `claude.Transport` (constructor types) + `claude/fixture` (scripted CLI
   output). This is how external tests substitute a fake Claude CLI process;
   it is a real, supported extension point, not incidental exposure.
+- **Persistent sessions** — `AgentService.Open` (returns a `PersistentSession`
+  via the optional `PersistentAgent` capability interface — see
+  `.design/claude-code.md`), `RunTurnWithPrompter`, `TurnCompleteEvent`,
+  `SessionStateEvent` + its `SessionState*` constants, and the `pool` package
+  (`pool.New`, `pool.Config`) for capacity/idle-managed multi-turn sessions.
 
 Changing or removing anything in this list is a breaking change for
 tingly-box and should be reviewed as one. Anything reachable only through

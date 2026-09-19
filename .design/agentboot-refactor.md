@@ -688,3 +688,73 @@ version, revisit this.
 Verified: `go build`, `go vet`, and `go test` green in both the `agentboot`
 module and the root module (`go build ./...`,
 `go test ./remote/control/...`).
+
+## 12. Driver/Transport verdict: kept, for a confirmed second implementation (2026-09-19)
+
+A review asked the question §8/§11 left open: is `AgentDriver`/`AgentTransport`
+— the two interfaces every doc section since §1.2 has called "genuinely
+agent-neutral" without a second implementation ever existing to prove it —
+still earning its keep, or is it the last piece of the original "ACP-like,
+adapts to many platforms" ambition that should also be collapsed into a
+Claude-native `Runner`?
+
+**Findings that almost tipped this the other way.** `AgentDriver`/
+`AgentTransport` have exactly one implementation ever (`claude/driver.go`,
+`claude/transport.go`). The one artifact that used to exercise the boundary
+as a boundary — an in-repo `mockagent` implementing both interfaces purely
+for engine testing — was deliberately deleted in favor of `claude/fixture`,
+which fakes only the OS process and runs every test through the real Claude
+driver/transport. No second agent is mentioned anywhere in `.design/`, code,
+or the README beyond the same unexercised "future providers" sentence this
+doc's own history keeps flagging. By the letter of §8's bar ("used by
+tingly-box or by tests"), the interface boundary itself — as opposed to its
+one real implementation — has never cleared it.
+
+**The verdict flips on one fact: Codex is a confirmed, near-term second
+implementation, not a hypothetical one.** `codex exec --json` emits a JSONL
+event stream over stdout — `thread.started` → `turn.started` → `item.*`
+(agent messages, reasoning, command execs, file changes, MCP tool calls,
+plan updates) → `turn.completed`/`turn.failed`/`error` — structurally the
+same shape of problem Claude Code's `stream-json` output poses (JSONL
+classified into message / terminal-success / terminal-error), which is
+exactly what `AgentTransport.Classify`/`AccumulateMessage` was built to
+abstract over. (Approval routing may need Codex's separate `app-server`
+JSON-RPC mode rather than the `--json` exec stream — unconfirmed, and a
+property of Codex's own design either way, not something this module's
+choice of abstraction changes.)
+
+**Decision: keep `AgentDriver`/`AgentTransport` and `Runner`'s dispatch loop
+as-is.** The cost of keeping them is close to zero — 107 lines of interface
+declarations plus the existing dispatch call sites in `runner_execute.go`/
+`runner_open.go`, all already written. The cost of collapsing them now and
+adding Codex shortly after is not: either the same abstraction gets
+reintroduced later (today's simplification reverted, pure churn), or Codex
+gets a hand-rolled parallel runner duplicating `runner_execute.go`/
+`runner_open.go`/`handle.go`'s ~700-900 lines of lifecycle/cancellation/
+timeout/grace-period-shutdown logic — a second copy to fix bugs in forever,
+not a one-time cost. Adding Codex under the current interfaces is expected
+to be a bounded, additive `codex/driver.go` + `codex/transport.go` (comparable
+in size to the Claude equivalents), reusing `Runner`/`ExecutionHandle`/
+`PersistentSession`/`pool` unchanged.
+
+**What this does NOT reopen**: the rest of this module's "internal-first,
+Claude-honest" positioning (§8) stands. The message layer
+(`MessageEvent.Raw` carrying concrete Claude types) is still honest, not
+neutral, and Codex will carry its own concrete message types the same way —
+`AgentDriver`/`AgentTransport` genuinely are the one layer meant to be
+provider-neutral, and are now validated by a real second consumer instead of
+carried on faith.
+
+Separately, a small cleanup pass landed alongside this decision (no
+architectural change): dead `Runner`/`AgentService`/`claude` accessors with
+zero callers removed (~155 lines: `Runner.GetDefaultFormat`, `NewRunner`,
+`NewRunnerWithFactory`, `AgentService.ExecuteSessionWithAgent`,
+`Config.WithModel`/`WithResume`/`WithContinue`, five `MessageAccumulator`
+getters, `InvalidateDiscoveryCache`), and `RunWithPrompter`/
+`RunTurnWithPrompter`'s duplicated event-dispatch arms were factored into a
+shared `dispatchStreamEvent` helper. README's "Public API" section gained
+the persistent-session surface (`AgentService.Open`, `RunTurnWithPrompter`,
+`pool`) it had been missing despite real production use.
+
+Verified: `go build`, `go vet`, `go test` green in both the `agentboot`
+module and the root module (`go test ./remote/... ./internal/server/module/imbot/...`).
