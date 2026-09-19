@@ -178,6 +178,8 @@ jobs:
       contents: write
       id-token: write
     if: needs.setup.outputs.publish_cli == 'true'
+    outputs:
+      smoke_passed: ${{ steps.smoke_status.outputs.smoke_passed }}
     env:
       PKG_NAME: tingly-box
       PKG_DIR: build/npx/tingly-box
@@ -377,6 +379,8 @@ jobs:
           echo "✅ Bundled bin.js ($(du -h bin.js | cut -f1)), dependencies stripped"
 
       - name: Smoke-test bundled shim (download fallback + exec real release)
+        id: smoke_bundled
+        continue-on-error: true
         working-directory: ${{ env.PKG_DIR }}
         run: |
           # The fallback a user without the platform package hits: bundled
@@ -385,7 +389,15 @@ jobs:
           rm -rf node_modules ../node_modules
           node bin.js --transport-version="${{ needs.setup.outputs.release_tag }}" version
 
+      # Smoke-test failures (this step and the next) don't fail the job
+      # outright — they're flaky-by-nature (registry replica lag, transient
+      # network) and a hard failure here would block a release over noise.
+      # Instead `smoke_status` below records the outcome, and if either
+      # failed, the `smoke-review` job pauses for a human to look at the
+      # logs and decide whether to let the publish continue anyway.
       - name: Smoke-test a real install (platform package via the registry)
+        id: smoke_real_install
+        continue-on-error: true
         working-directory: ${{ env.PKG_DIR }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
@@ -430,11 +442,96 @@ jobs:
           ! grep -q "Downloading" install.log
           echo "✅ Global install resolved the binary from the platform package"
 
+      - name: Record smoke-test result
+        id: smoke_status
+        if: always()
+        run: |
+          BUNDLED="${{ steps.smoke_bundled.outcome }}"
+          REAL_INSTALL="${{ steps.smoke_real_install.outcome }}"
+          echo "Smoke-test bundled shim: $BUNDLED"
+          echo "Smoke-test real install: $REAL_INSTALL"
+          if [ "$BUNDLED" = "success" ] && [ "$REAL_INSTALL" = "success" ]; then
+            echo "smoke_passed=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Smoke tests passed"
+          else
+            echo "smoke_passed=false" >> "$GITHUB_OUTPUT"
+            echo "❌ Smoke test(s) failed — publish will pause for manual review (see the 'smoke-review' job)"
+          fi
+
+      # The built shim (bin.js + package.json, version/optionalDependencies
+      # already wired) is handed to the publish-cli-npm job, which runs
+      # either immediately (smoke passed) or after a human approves the
+      # smoke-review gate.
+      - name: Upload CLI package for publish
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tingly-box-npm-package
+          path: ${{ env.PKG_DIR }}
+          retention-days: 7
+
+  # Only runs when a smoke test above failed. This job sits behind the
+  # `production-smoke-review` environment, which must be configured in repo
+  # Settings -> Environments with required reviewers — that's what actually
+  # pauses the run for a human. Approving lets publish-cli-npm proceed;
+  # rejecting (or letting the review time out) leaves the CLI unpublished.
+  smoke-review:
+    needs: [setup, publish-cli]
+    name: Manual Review — Smoke Test Failed
+    runs-on: ubuntu-latest
+    environment: production-smoke-review
+    if: >-
+      needs.setup.outputs.publish_cli == 'true' &&
+      needs.publish-cli.result == 'success' &&
+      needs.publish-cli.outputs.smoke_passed != 'true'
+    steps:
+      - name: Summarize for the reviewer
+        run: |
+          echo "Smoke test(s) failed for ${{ env.PKG_NAME }}@${{ needs.setup.outputs.npx_version }} (tag ${{ needs.setup.outputs.release_tag }})."
+          echo "Check the 'Publish CLI + Platform Packages' job logs above (steps 'Smoke-test bundled shim' / 'Smoke-test a real install') before approving."
+          echo "Approving this environment deployment resumes the release and publishes the CLI shim to npm; rejecting it leaves the shim unpublished."
+        env:
+          PKG_NAME: tingly-box
+
+  # Publishes the CLI shim built by publish-cli. Runs once smoke passed
+  # directly, or once a human approved the smoke-review gate above.
+  publish-cli-npm:
+    needs: [setup, publish-cli, smoke-review]
+    name: Publish CLI to npm
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+    if: >-
+      always() &&
+      needs.setup.outputs.publish_cli == 'true' &&
+      needs.publish-cli.result == 'success' &&
+      (needs.publish-cli.outputs.smoke_passed == 'true' || needs.smoke-review.result == 'success')
+    env:
+      PKG_NAME: tingly-box
+      PKG_DIR: build/npx/tingly-box
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download CLI package
+        uses: actions/download-artifact@v4
+        with:
+          name: tingly-box-npm-package
+          path: ${{ env.PKG_DIR }}
+
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
           NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
+
+          if [ "${{ needs.publish-cli.outputs.smoke_passed }}" != "true" ]; then
+            echo "⚠️ Publishing despite failed smoke test — approved via manual review (smoke-review job)."
+          fi
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm (tag: ${NPM_TAG})..."
 
@@ -451,7 +548,7 @@ jobs:
 
   # Append NPX install info to the existing version release (no extra tag/release)
   create-release:
-    needs: [setup, publish-cli]
+    needs: [setup, publish-cli-npm]
     name: Annotate Release with NPX Info
     runs-on: ubuntu-latest
     permissions:
@@ -459,7 +556,7 @@ jobs:
     if: >-
       always() &&
       needs.setup.result == 'success' &&
-      (needs.publish-cli.result == 'success' || needs.publish-cli.result == 'skipped')
+      (needs.publish-cli-npm.result == 'success' || needs.setup.outputs.publish_cli != 'true')
     steps:
       - name: Append NPX info to release notes
         env:
@@ -520,7 +617,7 @@ jobs:
 
   # Build Docker NPX image after npm release is created
   build-docker-npx:
-    needs: [setup, publish-cli, create-release]
+    needs: [setup, publish-cli-npm, create-release]
     name: Build Docker NPX Image
     runs-on: ubuntu-latest
     permissions:
@@ -528,7 +625,7 @@ jobs:
       packages: write
     if: >-
       needs.setup.result == 'success' &&
-      needs.publish-cli.result == 'success' &&
+      needs.publish-cli-npm.result == 'success' &&
       needs.create-release.result == 'success' &&
       needs.setup.outputs.publish_cli == 'true' &&
       needs.setup.outputs.build_docker == 'true'
