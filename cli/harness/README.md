@@ -4,8 +4,9 @@ A standalone CLI (`harness`) that validates the tingly-box gateway end-to-end:
 protocol transforms, routing rules, scenario dispatch, and real agent-CLI
 compatibility — without needing a deployed server.
 
-> Forward-looking work — new scenarios, fixture capture, CI integration,
-> closing the defect skip list — is tracked in [PLANNING.md](./PLANNING.md).
+> Forward-looking work — new scenarios, fixture capture, broader upstream
+> coverage, and a known fd-exhaustion issue — is tracked in
+> [Planned work & known issues](#planned-work--known-issues) below.
 
 The commands cover **three orthogonal axes**, each a small ladder of its own:
 
@@ -49,14 +50,41 @@ path — because that is the product's core. This boundary is deliberate:
   trace) because user configuration and explainability are part of the data
   plane's contract, but the harness does not aim to e2e the management plane.
 - **Known open axes** (product-decision-gated, not accidental gaps): the
-  Google target path, multimodal (image-block) scenarios, and automated
-  real-provider conformance (Tier D). Roadmapped work lives in
-  [PLANNING.md](./PLANNING.md).
+  Google target path, multimodal (image-block) scenarios, automated
+  real-provider conformance (Tier D — placeholder in `provider.go`, not part
+  of replay), and vmodel usage/quota tracking (the `IsVirtual()` short-circuit
+  intentionally skips outbound dispatch helpers; tracked in the vmodel
+  roadmap). See [Planned work & known issues](#planned-work--known-issues)
+  below for scenario/fixture/upstream-coverage work still open.
 
-Every hermetic mode runs in CI — see
+### CI
+
+Every hermetic mode runs in
 [`.github/workflows/harness-matrix.yml`](../../.github/workflows/harness-matrix.yml)
-and PLANNING §4 for the leg list and the deliberate carve-outs (duo memory
-phase, real upstreams).
+(shared leg definitions live in `harness-template.yml`, also called directly
+by `release.yml` to gate releases): matrix (single / transitive / idempotent
+/ flags / content_shapes / cache_controls / cache_prefix / vendor), one
+matrix leg per client driver (gosdk / python / node / aisdk), `replay batch`
+on the virtual and vmodel upstreams, `lb --all`, `duo --skip-memory`, and
+`routing` — gated by a single required `Harness result` status check.
+
+Deliberate carve-outs:
+
+- The duo **memory phase** stays out of shared-runner CI — noisy neighbors
+  make retention-slope thresholds flaky. `TestDuoMemoryRegression` guards the
+  slope in the Go suite instead (same `DuoDefaultMaxSlopeKB`).
+- `--upstream real` stays **manual / nightly** — it needs `providers.yaml`
+  with live credentials and is non-deterministic.
+
+New matrix sections must add a leg here too — nothing enforces the mapping,
+so it silently drifts (see `cache_controls` / `cache_prefix` / `vendor`,
+which shipped without a CI leg for weeks).
+
+Open policy question: the workflow triggers on `ci/**` pushes, PR-merge to
+the default branch, and manual dispatch — not on every PR. Whether the fast
+legs (matrix http + replay, ~seconds) should also gate PRs directly, leaving
+the toolchain-heavy client-driver legs on the current triggers, is still
+undecided.
 
 ---
 
@@ -202,14 +230,16 @@ Known gateway defects are registered **once**, in protocoltest's
 `skipSourceScenarios` (the matrix reads it directly; replay derives its skips
 via `KnownDefectReason` + the agent's source protocol). Each entry is a
 **real defect**, not a test artifact — fixing one is a one-line deletion in
-one place. Currently:
+one place. **Currently empty** — every Tier A cell and every replay run is in
+the cross-product.
 
-- `openai_responses|tool_use` (+ streaming variant) — the Responses-API
-  source path's tool_call conversion is incomplete; skips Tier A's
-  openai_responses-source cells and every `codex/tool_use` replay run.
-
-Closing this list out — plus planned scenario expansion and fixture capture —
-is tracked in [PLANNING.md](./PLANNING.md).
+The one entry this list ever carried, `openai_responses|tool_use` (+
+streaming variant), turned out not to be a gateway defect at all: the
+harness's own OpenAI stream assembly (`assembleFromEvents`, `testenv.go`)
+fell back from the Responses assembler to the Chat assembler whenever there
+was no text content, which discarded the tool calls of a tool-call-only
+Responses stream. Fixed there; both the matrix cells and every
+`codex/tool_use` replay run are back in the cross-product.
 
 **Use it for:** exercising the real gateway pipeline (rules, dispatch, vmodel
 short-circuit) across every agent × scenario × upstream — fast and hermetic.
@@ -259,6 +289,9 @@ continues past failures, exits non-zero if any failed.
   partial progress survives Ctrl-C / crashes).
 - Full prompt + output go to markdown files under `harness-output/`.
 - `--resume ""` skips every `(agent, entry)` already recorded in the summary.
+- `--only-failing` re-runs only `(agent, entry)` pairs whose latest recorded
+  row is `FAIL`/`TIMEOUT` — real-provider mode only, mutually exclusive with
+  `--resume` (summary is append-only either way; read the latest row per key).
 - `--timeout` caps each agent invocation (default `2m`; `0` disables). On
   timeout the child is killed and the row is recorded as `TIMEOUT`.
 
@@ -342,7 +375,7 @@ Built-in examples include an optional `expect` block that self-checks expected o
 - `breaker` / `health` — final snapshot subsets
 - `distinct_first_attempts` — set of first-attempt serviceIDs across ALL request steps (within-tier load sharing)
 
-All 13 built-in examples self-verify. The `expect` block is also available in `--file` scenarios, so users can self-check their own rules.
+All 14 built-in examples self-verify. The `expect` block is also available in `--file` scenarios, so users can self-check their own rules.
 
 ### Within-tier sub-tactic
 
@@ -385,8 +418,11 @@ program:
 
 The shapes map to the **"Rule config shapes" taxonomy** in
 `.design/tier-routing.md` (Single / Flat / Cascade / Grid). The
-**G1 horizontal-tactic breaker-blind gap** documented there is *not* yet modeled
-here (random/token tactics ignore the breaker at selection).
+**G1 horizontal-tactic breaker-blind gap** documented there is now resolved,
+and the fix is on the simulated path here for free: `lb` drives the real
+`routing.ServiceSelector.Select` (see the intro above), so horizontal tactics
+(random/token) get the same breaker-aware two-phase walk production does,
+with no separate harness-side change needed.
 
 **Use it for:** reproducing a customer's rule shape + outage pattern and watching
 exactly how routing, failover, the breaker, and affinity behave over a sequence.
@@ -534,9 +570,9 @@ pipeline (rule API → extraction → smart stage → affinity → LB → conver
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
 |------------|--------------------|-----------------------------------|---------------------|--------------------|
-| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`       | `tingly/cc`        |
-| `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `built-in-codex`    | `tingly-codex`     |
-| `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `built-in-opencode` | `tingly-opencode`  |
+| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`   | `tingly/cc`        |
+| `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `builtin:codex:default`    | `tingly-codex`     |
+| `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `builtin:opencode:default` | `tingly-opencode`  |
 
 ---
 
@@ -545,7 +581,7 @@ pipeline (rule API → extraction → smart stage → affinity → LB → conver
 ```
 cli/harness/
   main.go            Kong CLI root: version / matrix / agent / replay / lb /
-                     provider / init-config
+                     duo / routing / provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstream selection
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
@@ -617,3 +653,88 @@ Notably, **replay reuses the matrix's `Scenario.Assertions`** for the
 `virtual` upstream and `Scenario.Structural` elsewhere, and the duo
 functional phase runs the same assertion library over its two-process
 round trips — one vocabulary at every fidelity level.
+
+---
+
+## Planned work & known issues
+
+Forward-looking work and open problems, focused mostly on Tier B (`replay`).
+
+### Expand replay scenario coverage
+
+Replay currently runs `text`, `tool_use`, `streaming_text`. Tier A's matrix
+defines more scenarios that replay should also exercise through the real
+gateway pipeline:
+
+| scenario             | matrix `Scenario` ctor          | fixture work needed                  |
+|----------------------|----------------------------------|--------------------------------------|
+| `tool_result`        | `ToolResultScenario()`          | multi-block fixture w/ `tool_result` |
+| `thinking`           | `ThinkingScenario()`            | fixture w/ thinking enabled          |
+| `multi_turn`         | `MultiTurnScenario()`           | fixture w/ assistant+user history    |
+| `streaming_tool_use` | `StreamingToolUseScenario()`    | streaming fixture, tool-call assert  |
+| `error`              | `ErrorScenario()`               | fixture that should 4xx; assert it   |
+
+Each new scenario needs:
+1. an entry in `replayScenarios` (matrix scenario ctor + `defaultVModel` —
+   both assertion tiers already live on the Scenario itself: content
+   `Assertions` for the virtual upstream, upstream-independent `Structural`
+   for vmodel/real),
+2. a fixture per API style under `testdata/fixtures/<style>/<scenario>.json`,
+3. an entry in `replayScenarioOrder`.
+
+### Fixture capture mode
+
+Fixtures under `testdata/fixtures/` are currently **hand-authored**. They
+should be **captured from real agent CLI runs** so they stay faithful to
+what the CLIs actually send (headers, system blocks, metadata, tool schemas
+drift over time).
+
+Proposed: a `harness replay capture <agent> --scenario <name>` subcommand
+that runs the Tier C agent path with request recording enabled, extracts the
+raw gateway request body, and writes it to the right fixture path. This
+makes fixture refresh a one-command operation when an agent CLI updates.
+Open questions: design the capture flow (reuse Tier C's in-process gateway +
+recorder), and decide whether captured fixtures are committed or
+regenerated in CI.
+
+### Broader upstream coverage
+
+- `--upstream vmodel` currently uses `echo-model` (shared) and
+  `web-search-example` (tool) for every scenario. Add per-scenario vmodel
+  IDs that exercise more of the vmodel registry (thinking models,
+  multi-block responses).
+- `--upstream real`: allow running **all** runnable config entries, not just
+  `firstRunnableEntry`, so replay can sweep a provider matrix the way
+  `agent --config` does.
+
+### Known issue: full single-process test run can exhaust file descriptors
+
+Originally reproduced via `go test -tags e2e ./internal/protocoltest/` when
+that command still ran the full pair × scenario × mode matrix as ~1500
+`TestEnv`s in one go-test process — that entry point no longer exists (broad
+matrix execution now lives only in the CLI; see [CI](#ci) above and
+`.design/harness-matrix.md` §4), so this exact repro no longer applies as
+originally described. The underlying leak is still unverified as fixed, so
+re-derive a repro against the current `go test ./internal/protocoltest/...`
+suite (smaller today, but still many `TestEnv`s across
+content_shapes/cache_controls/cache_prefix/vendor/duo/routing/failover)
+before closing this out, or drive `--batch` through
+`cli/harness matrix --mode=all` at a low `ulimit -n` instead.
+
+Evidence from an fd probe (one `TestEnv`, `/proc/self/fd`): an env holds ~8
+db fds; `Config.CloseStores()` (closes the store-manager and provider-model
+gorm pools) returns no error but releases only the provider-model
+connection — the store-manager pool's `tingly.db` connections stay open
+after `sql.DB.Close`, i.e. they are held in-use somewhere in the init path
+(`Migrate` / `InsertDefaultRule` / `HydrateRules` are the suspects), and the
+guardrails `ProtectedCredentialStore` pool (`guardrails.db`, opened by
+`server.NewServer`) has no close path at all.
+
+Open items:
+- Audit the store-manager query paths for whatever keeps connections
+  checked out (leaked `Rows` / `Tx` / prepared stmt), so `CloseStores`
+  actually drains the pool.
+- Give `ProtectedCredentialStore` a `Close` and call it on server teardown.
+- **Done when:** the fd probe shows 0 remaining fds after `TestEnv.Close`,
+  and `go test ./internal/protocoltest/...` (full package, one process)
+  passes at `ulimit -n 4096`.

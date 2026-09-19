@@ -99,15 +99,32 @@ func responsesFunctionCallOutput(body map[string]any) (string, bool) {
 	return "", false
 }
 
-// responsesMessageContent returns the "content" string of the first input
-// item with the given role in a captured OpenAI Responses request body.
+// responsesMessageContent returns the text content of the first input item
+// with the given role in a captured OpenAI Responses request body. content is
+// a plain string on the input side (user/system) but an assistant message
+// wire-serializes as an output_message item — content is an array of
+// output_text parts (see .design/protocol-responses.md "Assistant content
+// needs output_text, not input_text") — so both shapes are handled here.
 func responsesMessageContent(body map[string]any, role string) (string, bool) {
 	input, _ := body["input"].([]any)
 	for _, raw := range input {
 		item, _ := raw.(map[string]any)
-		if item["type"] == "message" && item["role"] == role {
-			content, ok := item["content"].(string)
-			return content, ok
+		if item["type"] != "message" || item["role"] != role {
+			continue
+		}
+		switch content := item["content"].(type) {
+		case string:
+			return content, true
+		case []any:
+			for _, rawPart := range content {
+				part, _ := rawPart.(map[string]any)
+				if part["type"] == "output_text" || part["type"] == "input_text" {
+					if text, ok := part["text"].(string); ok {
+						return text, true
+					}
+				}
+			}
+			return "", false
 		}
 	}
 	return "", false

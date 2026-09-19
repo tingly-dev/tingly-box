@@ -213,7 +213,7 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 | 上游 401/403，terminal fail | key 错 / baseurl 错；检查 `providers.yaml` |
 | TIMEOUT | 默认每条 2m；`--timeout 5m` 放宽，或换更快模型 |
 | `codex` mock 报 404 `.../chat/completions` | **已修复**（`SetupAgent` 现对 OpenAI 风格加 `/v1`，与 matrix 路径对齐）。若复现看 `internal/protocoltest/agent_env.go` |
-| tool_use 相关跳过/失败 | 见 [`cli/harness/PLANNING.md`](../cli/harness/PLANNING.md) §1 已知缺陷登记表 |
+| tool_use 相关跳过/失败 | **已修复**（`openai_responses\|tool_use` 曾经是 `skipSourceScenarios` 里唯一的已知缺陷，现已清空——根因是 harness 自己的流式组装在无文本内容时从 Responses assembler 退化到 Chat assembler，丢弃了纯 tool-call 流的 tool_use；见 [`cli/harness/README.md`](../cli/harness/README.md) 的 `Skip list` 一节）。若复现说明 registry 里又有新条目，看 `internal/protocoltest/matrix.go` 的 `skipSourceScenarios` |
 
 ## 8. 退出码 & CI 边界
 
@@ -224,8 +224,9 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 | `2` | 环境错误（CLI 缺失 / build 失败 / config 不存在）|
 
 本基线**不进 CI**（依赖本地凭证 + CLI）。CI hermetic 覆盖见
-`.github/workflows/harness-matrix.yml`（matrix / replay virtual+vmodel / lb / duo / routing）；
-真实扫描按 [`PLANNING.md`](../cli/harness/PLANNING.md) §4 留作 manual / nightly。
+`.github/workflows/harness-matrix.yml`（matrix / replay virtual+vmodel / lb / duo / routing，
+详见 [`cli/harness/README.md`](../cli/harness/README.md) 的 `CI` 一节）；
+真实扫描留作 manual / nightly，因为需要真实凭证、结果不确定。
 
 ---
 
