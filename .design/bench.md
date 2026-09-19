@@ -4,7 +4,35 @@
 > 状态：**已实现（V1）**——页面 `frontend/src/pages/bench/`，后端字段见 §11。线框图见 [`bench.pencil.md`](./bench.pencil.md)。
 > 前置阅读：[`probe.md`](./probe.md)、[`rule-flags.md`](./rule-flags.md)、[`ux-principles.md`](./ux-principles.md)。
 >
-> **V1.1 修正（本次）**：三栏布局的响应式断点与左栏宽度修了一版（原先 `xl`
+> **V1.2 修正（本次，纯前端）**：Compose 的 **Request mode**（Preset/Custom 二选一
+> `ExclusiveToggle`）与 Request 面板的 **Change starting point** 菜单合并为一个控件：
+> **Content**（`bench.content`），Protocol 之后、Scope 之前。起因是用户反馈——用了一段
+> 时间后经常记不住 Thinking/Stream 这些轴该怎么填，而且必须先想起"要切到 Custom 模式"
+> 才能碰到 Multi-turn/Tool round-trip 这些模板，是两层要翻的门。§1"内容预设的两个粒度
+> 是同一种东西"这条分析当时已经点破了 Message/Tool/Vision（片段级）和 Templates（整体
+> 级）本来就是一类东西，只是这次才把 UI 落到这个认知上——Content 一个菜单列出
+> **Message**（片段级组合器，下面的 Thinking/Tool/Vision 旋钮仍然生效）+ 该协议的全部
+> Templates（选中即整体替换 body），不再需要先声明"模式"才能看到选项。
+>
+> **没有改变的不变量**（§6"一份请求 body 只有一个作者"）：选 Message 就是
+> `raw:null`，选别的就是整份替换 `raw.body`，从不合并/diff——当时评估过、否掉的
+> "顶层 key 覆盖"方案（§14）这次也没有重新引入，body 仍然只有一个作者，变的只是
+> "选作者"这道门从两级（先选模式、模式里再选起点）压平成一级（Content 菜单直接列出
+> 所有起点，包括 Message 本身）。
+>
+> Content 的选项按 **Protocol 收窄**（`contentOptions.ts` 的 `templatesForProtocol`）
+> ——Tool round-trip / Mid-conversation system 这些模板的字段形状是协议私有的，不能跨
+> 协议复用。切换 Protocol 时若当前处于非 Message 内容，会尝试用同一个模板 id 在新协议
+> 下取值（如 Multi-turn 三种协议都有，原样带过去），取不到则退回 Blank（如
+> Mid-conversation system 只有 Anthropic 有）——保留"这是哪种内容"这个用户意图，而不是
+> 无脑退回空白。
+>
+> Thinking / Tool / Vision 三个轴现在**始终挂载**，只在 Content ≠ Message 时置灰并换成
+> "仅供参考"提示（`bench.axesInactive`），不再是 `{!isCustom && …}` 整块不渲染——这直接
+> 针对最初的抱怨：轴一旦从屏幕上消失，用户就真的想不起来它长什么样、取值范围是什么；
+> 常驻但置灰，让它继续充当"这个字段该怎么填"的参考卡片，即使当前不生效。
+>
+> **V1.1 修正**：三栏布局的响应式断点与左栏宽度修了一版（原先 `xl`
 > 断点+固定 320px 导致常规桌面宽度下退化成两栏、且左栏内容撑不满）；随后发现
 > target picker（Autocomplete 下拉）在窄栏里把 rule/provider 名字硬截断，选起来
 > 很难分辨——于是把 **Target 模型收窄为只选 Provider+Model**，选择器换成路由图
@@ -574,7 +602,8 @@ Bench 一放弃它就没有任何调用方了。**保留不动**：`internal/pro
 | 2 | ~~`pages/bench/benchLink.ts`~~ | **V1.1 整个文件删除**——深链协议（`?target=rule:{uuid}&scenario=` 等）随 Rule target 一起下线，Bench 不再接受任何跳转 |
 | 3 | `pages/bench/benchState.ts` | 状态模型（含 `raw: {protocol, body}`）、`parseRawBody`、`buildProbeRequest`（Run 与 payload 面板共用的唯一请求构造；raw 模式下产出 `request`/`request_protocol` 并丢弃 fixture 轴）、run 标签。**V1.1**：`BenchTarget` 收窄为 `{providerUuid, model}`，`routing` 字段随之删除 |
 | 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`——Parameters/Content 分组、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。Journey 增 `showFlags` / `flagsExtra`。`ProbeControls` 与 `BenchAxes` 都改用 `AxisGroup` 按"四种归类"（§1）分组，不再是一个扁平列表 |
-| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴，**V1.1 去掉 Routing 轴**，自定义请求模式下归属该模式的 `AxisGroup` 整块不渲染而非禁用）、Plugins 直接使用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`（Bench 只做 wire key 转换与 Direct gate）、`RequestEditor`（预设/自定义两态，`StartingPointMenu` 统一"从哪开始"——门与"Change starting point"共用同一份菜单，见 §6.3）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
+| 5 | `pages/bench/` 内部组件 | `TargetPicker`（**V1.1 改用 `ModelSelectDialog` 卡片选择器**，不再是统一 Autocomplete）、`BenchAxes`（全展开轴；**V1.2**：Thinking/Presets 改为始终挂载+置灰而非整块不渲染，见文首 V1.2 说明）、Plugins 直接使用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`（Bench 只做 wire key 转换与 Direct gate）、`RequestEditor`（**V1.2**：不再自带 Preset/Custom 两态与起点菜单，只剩 Message 视图 + raw 视图，raw 视图头部只留"Copy the preset request"一个按钮）、`PayloadPanel`（只读 body + Edit→自定义、header 覆盖）、`RunHistory` |
+| 5b | `pages/bench/contentOptions.ts` | **V1.2 新增**——Content 菜单的协议作用域目录：`templatesForProtocol`（Blank + 该协议的 Templates）、`matchTemplateId`（body 反查属于哪个模板，驱动 Content 按钮文案与协议切换时的"同类内容延续"，见文首 V1.2 说明）。原先分散在 `RequestEditor.tsx`（`TEMPLATES`）与 `BenchAxes.tsx`（`RequestMode` 二选一）里的两份"从哪开始"逻辑合并到这一个模块 |
 | 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
 | 7 | `services/api.ts` | ~~`getAllRules`（不带 scenario 即全部规则）~~（**V1.1**：`useTargetCatalog` 不再拉 rules，只拉 providers） |
 | 8 | i18n | `bench.*` en/zh；~~`probe.openInBench`~~（**V1.1 删除**，随入口一起）；`layout.bench` |

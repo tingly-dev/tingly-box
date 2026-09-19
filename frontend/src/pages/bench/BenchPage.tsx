@@ -14,7 +14,6 @@ import { protocolAvailability, visionAvailable } from '@/components/probe/probeC
 import type { ProbeProtocol } from '@/types/probe';
 import { StatusBar, Journey, CollapsibleSection, CopyBlock, extractText, defaultMessage } from '@/components/probe/ResultSections';
 import {
-    BLANK_REQUEST,
     DEFAULT_STATE,
     buildProbeRequest,
     cloneState,
@@ -28,10 +27,11 @@ import {
 } from './benchState';
 import { useTargetCatalog } from './useTargetCatalog';
 import { TargetPicker } from './TargetPicker';
-import { BenchAxes, useAxisAvailability, type RequestMode } from './BenchAxes';
+import { BenchAxes, useAxisAvailability } from './BenchAxes';
 import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
+import { MESSAGE_ID, matchTemplateId, templatesForProtocol } from './contentOptions';
 
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
@@ -202,29 +202,41 @@ const BenchPage: React.FC = () => {
         ? (presetPreviewCurl?.success && presetPreviewCurl.data?.body ? prettyBody(presetPreviewCurl.data.body) : undefined)
         : (curl?.success && curl.data?.body ? prettyBody(curl.data.body) : undefined);
 
-    // Request mode and Protocol are unified, single controls in Compose now
-    // (.design/bench.md §1) — mode is just whether raw is set; Protocol's
-    // value/options/onChange are resolved per mode here, since preset reads
-    // axes.protocol (via availability) and custom reads raw.protocol.
-    const mode: RequestMode = state.raw ? 'custom' : 'preset';
+    // Content and Protocol are unified, single controls in Compose now
+    // (.design/bench.md §1) — isCustom is just whether raw is set; Protocol's
+    // value/options/onChange are resolved per Content here, since Message
+    // reads axes.protocol (via availability) and any other Content reads
+    // raw.protocol.
+    const isCustom = !!state.raw;
     const protocolValue: ProbeProtocol = state.raw?.protocol ?? (state.axes.protocol || protocolAvailability(provider).default || 'openai_chat');
-    const onModeChange = (next: RequestMode) => {
-        if (next === mode) return;
-        if (next === 'custom') {
-            patch({ raw: { protocol: protocolValue, body: seedBody ?? JSON.stringify(BLANK_REQUEST[protocolValue], null, 2) } });
-        } else {
+    // contentId drives the Content button's label: MESSAGE_ID for the
+    // structured builder, a matched template id, or null once the body no
+    // longer equals any of them (a hand edit — expected once you start
+    // typing, not an error state).
+    const contentId = state.raw ? matchTemplateId(protocolValue, state.raw.body) : MESSAGE_ID;
+    const onSelectContent = (id: string) => {
+        if (id === MESSAGE_ID) {
+            if (!state.raw) return;
             // Carry the protocol forward so the unified control doesn't
-            // silently change value just because mode flipped back.
-            patch({ raw: null, axes: { ...state.axes, protocol: state.raw!.protocol } });
+            // silently change value just because Content switched back.
+            patch({ raw: null, axes: { ...state.axes, protocol: state.raw.protocol } });
+            return;
         }
+        const tpl = templatesForProtocol(protocolValue).find((t) => t.id === id);
+        if (!tpl) return;
+        patch({ raw: { protocol: protocolValue, body: JSON.stringify(tpl.body, null, 2) } });
     };
     const onProtocolChange = (p: ProbeProtocol) => {
         if (p === protocolValue) return;
         if (state.raw) {
-            // Same move as picking a different template — a new protocol
-            // means a new starting body, never a relabeled old one
-            // (.design/bench.md §6.3).
-            patch({ raw: { protocol: p, body: JSON.stringify(BLANK_REQUEST[p], null, 2) } });
+            // A new protocol means a new starting body, never a relabeled
+            // old one (.design/bench.md §6.3) — but the *kind* of content
+            // carries forward when this protocol has the same one (e.g.
+            // Multi-turn exists for all three; Mid-conversation system is
+            // Anthropic-only and falls back to Blank).
+            const curId = matchTemplateId(protocolValue, state.raw.body) ?? 'blank';
+            const next = templatesForProtocol(p).find((t) => t.id === curId) ?? templatesForProtocol(p)[0];
+            patch({ raw: { protocol: p, body: JSON.stringify(next.body, null, 2) } });
         } else {
             patch({ axes: { ...state.axes, protocol: p } });
         }
@@ -329,8 +341,9 @@ const BenchPage: React.FC = () => {
                                 axes={state.axes}
                                 onChange={(axes) => patch({ axes })}
                                 availability={availability}
-                                mode={mode}
-                                onModeChange={onModeChange}
+                                isCustom={isCustom}
+                                contentId={contentId}
+                                onSelectContent={onSelectContent}
                                 customProtocolOptions={rawProtocolOptions}
                                 protocolValue={protocolValue}
                                 onProtocolChange={onProtocolChange}
