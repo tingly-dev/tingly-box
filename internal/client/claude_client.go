@@ -29,6 +29,10 @@ var _ AnthropicClientInterface = (*ClaudeClient)(nil)
 // - Requires tool prefix stripping (applied via middleware)
 type ClaudeClient struct {
 	*AnthropicClient
+	// native is the claude_code_version rule flag resolved at construction:
+	// true selects the native-client profile (claude_version.go), false keeps
+	// the historical 2.1.86 emulation untouched.
+	native bool
 }
 
 // NewClaudeClient creates a new Claude client wrapper.
@@ -55,6 +59,13 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	// Apply Claude Code specific headers
 	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID)
 
+	// claude_code_version rule flag: overlay the native-client profile on the
+	// legacy headers above (claude_version.go).
+	native := claudeCodeNative(ctx)
+	if native {
+		options = applyNativeClaudeCodeHeaders(options, model, isOAuthToken)
+	}
+
 	// Add beta query parameter
 	options = append(options, anthropicOption.WithQuery("beta", "true"))
 
@@ -74,7 +85,7 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		provider: provider,
 	}
 
-	return &ClaudeClient{AnthropicClient: base}, nil
+	return &ClaudeClient{AnthropicClient: base, native: native}, nil
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
@@ -177,6 +188,9 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 		panic("invalid metadata")
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	if c.native {
+		options = append(options, c.nativeRequestOptions(ctx, v1ClaudeBetaSignals(ctx, req, c.isOAuth()))...)
+	}
 	// Streaming responses bypass restoreToolNamesInMessage, so undo the rename
 	// on the wire instead. No-op for non-streaming responses.
 	if len(reverseMap) > 0 {
@@ -237,6 +251,12 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 		panic("invalid metadata")
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	if c.native {
+		options = append(options, c.nativeRequestOptions(ctx, betaClaudeBetaSignals(ctx, req, c.isOAuth()))...)
+		// The composed header is the whole anthropic-beta story: clear the
+		// SDK's per-param Betas so nothing is appended as a second value.
+		req.Betas = nil
+	}
 	// Streaming responses bypass restoreBetaToolNamesInMessage, so undo the
 	// rename on the wire instead. No-op for non-streaming responses.
 	if len(reverseMap) > 0 {
@@ -256,10 +276,21 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	return base, reverseMap
 }
 
+// In the native profile the Guard'ed client already carries the complete
+// anthropic-beta header (context_1m folded in), so the calls below bypass
+// AnthropicClient's wrappers, whose withContext1MBeta / context1MHeaderOpts
+// would append context-1m again as a second header value.
+
 // MessagesNew creates a new message request.
 func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
 	guard, reverseMap := c.Guard(ctx, req)
-	msg, err := guard.MessagesNew(ctx, req)
+	var msg *anthropic.Message
+	var err error
+	if c.native {
+		msg, err = guard.client.Messages.New(ctx, *req)
+	} else {
+		msg, err = guard.MessagesNew(ctx, req)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -270,13 +301,22 @@ func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNe
 // MessagesNewStreaming creates a new streaming message request.
 func (c *ClaudeClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
 	guard, _ := c.Guard(ctx, req)
+	if c.native {
+		return guard.client.Messages.NewStreaming(ctx, *req)
+	}
 	return guard.MessagesNewStreaming(ctx, req)
 }
 
 // BetaMessagesNew creates a new beta message request.
 func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
 	guard, reverseMap := c.GuardBeta(ctx, req)
-	msg, err := guard.BetaMessagesNew(ctx, req)
+	var msg *anthropic.BetaMessage
+	var err error
+	if c.native {
+		msg, err = guard.client.Beta.Messages.New(ctx, *req)
+	} else {
+		msg, err = guard.BetaMessagesNew(ctx, req)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -287,16 +327,28 @@ func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaM
 // BetaMessagesNewStreaming creates a new beta streaming message request.
 func (c *ClaudeClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
 	guard, _ := c.GuardBeta(ctx, req)
+	if c.native {
+		return guard.client.Beta.Messages.NewStreaming(ctx, *req)
+	}
 	return guard.BetaMessagesNewStreaming(ctx, req)
 }
 
 // MessagesCountTokens counts tokens for a message request.
 func (c *ClaudeClient) MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
+	if c.native {
+		client := c.nativeCountTokensClient(ctx, string(req.Model))
+		return client.Messages.CountTokens(ctx, *req)
+	}
 	return c.AnthropicClient.MessagesCountTokens(ctx, req)
 }
 
 // BetaMessagesCountTokens counts tokens for a beta message request.
 func (c *ClaudeClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
+	if c.native {
+		client := c.nativeCountTokensClient(ctx, string(req.Model))
+		req.Betas = nil
+		return client.Beta.Messages.CountTokens(ctx, *req)
+	}
 	return c.AnthropicClient.BetaMessagesCountTokens(ctx, req)
 }
 

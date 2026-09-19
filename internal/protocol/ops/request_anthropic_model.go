@@ -270,6 +270,10 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 	if req == nil {
 		return req
 	}
+	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
+		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
+		return applyNativeClaudeCodeIdentityV1(req, extra, v)
+	}
 
 	firstUserMsg := extractFirstUserMessageText(req.Messages)
 	ccVersion := computeCCVersion(firstUserMsg)
@@ -322,6 +326,10 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, extra map[string]any) *anthropic.BetaMessageNewParams {
 	if req == nil {
 		return req
+	}
+	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
+		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
+		return applyNativeClaudeCodeIdentityBeta(req, extra, v)
 	}
 
 	firstBetaUserMsg := extractFirstBetaUserMessageText(req.Messages)
