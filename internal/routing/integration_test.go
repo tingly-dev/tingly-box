@@ -76,11 +76,11 @@ func (ts *routingTestServer) addRule(t *testing.T, rule typ.Rule) {
 
 // updateProviderCapacity is a no-op for integration tests.
 // For capacity-based tests, set Service.ModelCapacity directly on services.
-// Provider-level capacity comes from ProviderTemplate (GitHub/file), not user's Provider.
+// Provider-level capacity comes from ProviderCatalog (GitHub/file), not user's Provider.
 func (ts *routingTestServer) updateProviderCapacity(t *testing.T, providerUUID string, totalCapacity int, modelCapacity int) {
 	t.Helper()
 	// No-op: capacity for integration tests is set via Service.ModelCapacity
-	// Provider-level capacity comes from ProviderTemplate
+	// Provider-level capacity comes from ProviderCatalog
 	t.Logf("provider capacity settings noted (total=%d, model=%d) - use Service.ModelCapacity for tests",
 		totalCapacity, modelCapacity)
 }

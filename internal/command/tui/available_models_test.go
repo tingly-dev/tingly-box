@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -42,7 +42,7 @@ func newTUIHarness(t *testing.T) TUIManager {
 		t.Fatalf("NewAppConfig: %v", err)
 	}
 
-	tm := data.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("template init: %v", err)
 	}

@@ -16,7 +16,7 @@ import {
     alpha,
 } from '@mui/material';
 import React, {useMemo, useState} from 'react';
-import {type UniqueProvider, useProviderTemplates, useCloudProviders, searchProviders} from '../services/serviceProviders';
+import {type UniqueProvider, useProviderCatalogs, useCloudProviders, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './OAuthDialog';
 
@@ -284,7 +284,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     showDetails = false,
     wide = false,
 }) => {
-    const keyProviders = useProviderTemplates();
+    const keyProviders = useProviderCatalogs();
     const cloudProviders = useCloudProviders();
 
     const oauthProviders = useMemo(

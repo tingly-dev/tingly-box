@@ -12,7 +12,7 @@ import (
 )
 
 func TestAnthropicModelThinkingCaps(t *testing.T) {
-	// Expectations mirror internal/protocol/catalog/claude.models.json — the
+	// Expectations mirror internal/catalog/claude.models.json — the
 	// caps are catalog-driven, not hardcoded per model name.
 	tests := []struct {
 		name     string

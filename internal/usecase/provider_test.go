@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -26,7 +26,7 @@ func newTestProviderConfig(t *testing.T) *serverconfig.Config {
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	tm := data.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("template manager Initialize: %v", err)
 	}

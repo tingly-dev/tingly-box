@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/recording"
@@ -124,7 +124,7 @@ func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
 
 // WithTemplateManager allows TBE to inject a custom TemplateManager.
 // This follows the same pattern as WithAuthMiddleware for consistency.
-func WithTemplateManager(tm *data.TemplateManager) ServerOption {
+func WithTemplateManager(tm *catalog.ProviderCatalogManager) ServerOption {
 	return func(s *Server) {
 		s.templateManager = tm
 		if s.config != nil {

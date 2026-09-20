@@ -1,15 +1,15 @@
-// Package catalog is the per-vendor model capability catalog: what each model
-// can do, declared once per model family, independent of which provider serves
-// it. It complements internal/data/providers.json, which is the offering
-// registry (who serves which model, at which endpoint, with what limits) —
-// capability facts live here, deployment facts live there.
+// claude_model_catalog.go is the per-vendor model capability catalog: what
+// each model can do, declared once per model family, independent of which
+// provider serves it. It complements providers.json (see provider_catalog.go),
+// the offering registry (who serves which model, at which endpoint, with what
+// limits) — capability facts live here, deployment facts live there.
 //
-// Layout: one <vendor>.models.json data file plus one <vendor>.go loader per
-// vendor (claude.models.json + claude.go today; openai/gemini can follow the
-// same pattern). Each file only carries the fields its loader actually
-// consumes — deliberately not a mirror of the vendor's full /v1/models
-// response, whose unused fields (display names, dates, unrelated capability
-// flags) are dead weight.
+// Layout: one <vendor>.models.json data file plus one <vendor>_model_catalog.go
+// loader per vendor (claude.models.json + claude_model_catalog.go today;
+// openai/gemini can follow the same pattern). Each file only carries the
+// fields its loader actually consumes — deliberately not a mirror of the
+// vendor's full /v1/models response, whose unused fields (display names,
+// dates, unrelated capability flags) are dead weight.
 //
 // The `reasoning` block's shape and field names (supported_efforts, ...)
 // follow OpenRouter's model-list schema rather than Anthropic's own nested

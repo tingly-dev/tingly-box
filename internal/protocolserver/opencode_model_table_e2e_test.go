@@ -8,8 +8,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -37,7 +37,7 @@ func TestE2E_OpenCodeModelTable_MatchesLiveUpstream(t *testing.T) {
 	// wrong-endpoint failure looks different ("not supported for format ...",
 	// or a bare 500). Full 200-OK confirmation is from 2026-09-08.
 
-	tm := data.NewTemplateManager("")
+	tm := catalog.NewProviderCatalogManager("")
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}

@@ -11,8 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
@@ -303,19 +303,19 @@ func isOpenRouterProvider(provider *typ.Provider) bool {
 	return false
 }
 
-func (c *Config) GetModelManager() *data.ModelListManager {
+func (c *Config) GetModelManager() *catalog.ModelListManager {
 	return c.modelManager
 }
 
 // SetTemplateManager sets the template manager for provider templates
-func (c *Config) SetTemplateManager(tm *data.TemplateManager) {
+func (c *Config) SetTemplateManager(tm *catalog.ProviderCatalogManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.templateManager = tm
 }
 
 // GetTemplateManager returns the template manager
-func (c *Config) GetTemplateManager() *data.TemplateManager {
+func (c *Config) GetTemplateManager() *catalog.ProviderCatalogManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.templateManager
