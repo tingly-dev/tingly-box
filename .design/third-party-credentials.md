@@ -159,7 +159,7 @@ Wiring / gotchas:
 - Vertex is two cards (Claude `api_style=anthropic`, Gemini `api_style=google`).
 - `AuthTypeBadge` renders Bedrock/Vertex/Azure labels.
 
-## 9. Templates (`internal/data/providers.json`)
+## 9. Templates (`internal/catalog/providers.json`)
 
 Four templates: `aws-bedrock`, `gcp-vertex-claude`, `gcp-vertex-gemini`,
 `azure-openai`. Each carries `auth_type`, explicit `api_style`,
@@ -189,7 +189,7 @@ verified against AWS/Google/Anthropic/Microsoft docs (Jul 2026): Bedrock
   stays **pure remote** (save moved into `fetchFromHTTP`, pre-merge) so a stale
   cache can never shadow a newer binary's embedded fixes; the refresh endpoint
   serves the merged `GetAllTemplates()` view.
-- Covered in `internal/data/provider_template_test.go` (cloud resolution,
+- Covered in `internal/catalog/provider_template_test.go` (cloud resolution,
   Vertex disambiguation, embedded-only merge).
 
 ## 10. Cross-cutting
@@ -229,7 +229,7 @@ leads with access-key/secret, bearer optional; encryption deferred.
 | `internal/client/{bedrock,vertex,azure}_client.go` | Per-cloud constructors + bundle→SDK translation |
 | `internal/client/{openai,anthropic,google}.go`, `pool.go` | Skip empty key / Vertex config branch / dispatch |
 | `internal/server/module/provider/{types,handler}.go` | `credential` field; validate/mask; auth_type whitelist |
-| `internal/data/providers.json`, `provider_template.go` | Cloud templates; `APIStyle` + api_style-aware matching |
+| `internal/catalog/providers.json`, `provider_template.go` | Cloud templates; `APIStyle` + api_style-aware matching |
 | `frontend/src/components/cloud/{CloudProviderDialog.tsx,cloudCredentialSchema.ts}` | Cloud add dialog + field schema |
 | `frontend/src/components/ConnectProviderDialog.tsx`, `services/serviceProviders.ts`, `hooks/useProviderDialog.tsx`, `components/AuthTypeBadge.tsx` | Picker section, cloud accessors, routing, badges |
 | `libs/anthropic-sdk-go/{bedrock,vertex}`, `libs/openai-go/azure`, `libs/go-genai` | Vendored cloud adapters |

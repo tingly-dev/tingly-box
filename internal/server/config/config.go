@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -106,7 +106,7 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager *data.ModelListManager
+	modelManager *catalog.ModelListManager
 	storeManager *db.StoreManager // Unified store manager for all database stores
 
 	// Store references for internal Config methods (RefreshStatsFromStore, etc.)
@@ -115,7 +115,7 @@ type Config struct {
 	usageStore         *db.UsageStore
 	providerStore      *db.ProviderStore
 	imbotSettingsStore *db.ImBotSettingsStore
-	templateManager    *data.TemplateManager
+	templateManager    *catalog.TemplateManager
 
 	// credentialStore backs the guardrails protected-credential database,
 	// which is a separate file from tingly.db. Built lazily by
@@ -399,7 +399,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	// Initialize provider model manager over the store manager's ModelStore,
 	// so the process keeps one connection to tingly.db instead of a second
 	// pool (with its own AutoMigrate) against the same file.
-	cfg.modelManager = data.NewModelListManager(storeManager.Model())
+	cfg.modelManager = catalog.NewModelListManager(storeManager.Model())
 
 	if err := cfg.RefreshStatsFromStore(); err != nil {
 		return nil, err

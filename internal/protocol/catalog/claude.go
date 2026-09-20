@@ -1,6 +1,6 @@
 // Package catalog is the per-vendor model capability catalog: what each model
 // can do, declared once per model family, independent of which provider serves
-// it. It complements internal/data/providers.json, which is the offering
+// it. It complements internal/catalog/providers.json, which is the offering
 // registry (who serves which model, at which endpoint, with what limits) —
 // capability facts live here, deployment facts live there.
 //

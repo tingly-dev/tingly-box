@@ -10,7 +10,7 @@
 // is intentionally a leaf (it does not import internal/client) so the client
 // layer can depend on it without an import cycle.
 //
-// Vendor landscape (derived from internal/data/providers.json):
+// Vendor landscape (derived from internal/catalog/providers.json):
 //
 //	OpenAI-compatible (POST {base}/images/generations, OpenAI request/response):
 //	  openai-com, x-ai, volces-com, z-ai/bigmodel-cn, siliconflow, stepfun,

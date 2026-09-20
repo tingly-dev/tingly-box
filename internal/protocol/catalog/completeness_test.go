@@ -15,7 +15,7 @@ import (
 // are removed. When this fails, add the new model to claude.models.json — do
 // not let a future family pass through runtime substring matching.
 func TestClaudeCatalogCoversProvidersJSON(t *testing.T) {
-	raw, err := os.ReadFile("../../data/providers.json")
+	raw, err := os.ReadFile("../../catalog/providers.json")
 	require.NoError(t, err)
 
 	var doc struct {

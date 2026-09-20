@@ -1,6 +1,6 @@
 # Model List 获取 / 缓存 / 兜底 设计
 
-> 适用对象：改 `internal/server/module/provider/handler.go`（`GetProviderModelsByUUID` / `UpdateProviderModelsByUUID`）、`internal/server/config/config.go`（`FetchAndSaveProviderModels`）、`internal/data/model_list.go`、`internal/data/db/provider_model.go`、`internal/data/provider_template.go` 的贡献者。
+> 适用对象：改 `internal/server/module/provider/handler.go`（`GetProviderModelsByUUID` / `UpdateProviderModelsByUUID`）、`internal/server/config/config.go`（`FetchAndSaveProviderModels`）、`internal/catalog/model_list.go`、`internal/data/db/provider_model.go`、`internal/catalog/provider_template.go` 的贡献者。
 > 本文档描述「前端请求某 provider 的模型列表 → gateway 返回」的取数、缓存与兜底最终设计。
 
 ---
@@ -30,9 +30,9 @@
 | 服务端点（读路径） | `GetProviderModelsByUUID` — `internal/server/module/provider/handler.go` |
 | 刷新端点（写路径） | `UpdateProviderModelsByUUID` — `handler.go` |
 | 排序（serving 边界唯一真源） | `SortProviderModels` — `config.go` |
-| 缓存 manager（TTL=1h） | `ModelListManager` / `ModelCacheTTL` — `internal/data/model_list.go:14` |
+| 缓存 manager（TTL=1h） | `ModelListManager` / `ModelCacheTTL` — `internal/catalog/model_list.go:14` |
 | 存储后端（SQLite/GORM） | `ModelStore` — `internal/data/db/provider_model.go`（PK 仅 `provider_uuid`） |
-| 内嵌模板兜底 | `TemplateManager.GetEmbeddedModelsForProvider` — `internal/data/provider_template.go` |
+| 内嵌模板兜底 | `TemplateManager.GetEmbeddedModelsForProvider` — `internal/catalog/provider_template.go` |
 | 响应里的来源标记 | `ModelCacheSource*` — `internal/server/module/provider/types.go` |
 
 ---
@@ -121,8 +121,8 @@ Step 4  内嵌模板兜底（live，不落库）                  非空 → 返
 
 | 缓存 | 常量 | TTL | 位置 | 说明 |
 |---|---|---|---|---|
-| provider 模型列表（DB） | `ModelCacheTTL` | 1h | `internal/data/model_list.go:14` | 只缓存 `api`/`vmodel` 来源，**不缓存模板** |
-| 模板注册表 GitHub 同步 | `DefaultTemplateCacheTTL` | 12h | `internal/data/provider_template.go:26` | 与内嵌兜底**是两条独立路径**；`GetEmbeddedModelsForProvider` 从不读它 |
+| provider 模型列表（DB） | `ModelCacheTTL` | 1h | `internal/catalog/model_list.go:14` | 只缓存 `api`/`vmodel` 来源，**不缓存模板** |
+| 模板注册表 GitHub 同步 | `DefaultTemplateCacheTTL` | 12h | `internal/catalog/provider_template.go:26` | 与内嵌兜底**是两条独立路径**；`GetEmbeddedModelsForProvider` 从不读它 |
 
 > 注意：内嵌兜底（`GetEmbeddedModelsForProvider`）走的是编译期 `//go:embed` 的 `tm.embedded`，纯内存查表、不落盘、不发网络请求，与 12h 的 GitHub 模板同步缓存无关。
 

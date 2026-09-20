@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -27,7 +27,7 @@ func newTestConfigWithTemplates(t *testing.T) *config.Config {
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	tm := data.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyTemplateManager()
 	require.NoError(t, tm.Initialize(context.Background()))
 	cfg.SetTemplateManager(tm)
 

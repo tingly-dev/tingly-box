@@ -223,8 +223,8 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 ## 8. 关键文件
 
 - `ai/provider.go` —— `OpenAIEndpointMode` 类型 + 常量 + `Provider.OpenAIEndpointMode` 字段
-- `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoints` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
-- `internal/data/providers.json` —— 出厂 template 的 mode 声明，以及 §10 的按模型 override 表
+- `internal/catalog/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoints` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
+- `internal/catalog/providers.json` —— 出厂 template 的 mode 声明，以及 §10 的按模型 override 表
 - `internal/protocolserver/protocol_endpoint.go` —— `ResolveOpenAIEndpoint` 纯函数、`EndpointOverride` 枚举与 `ParseEndpointOverride`
 - `internal/protocolserver/openai_chat.go`、`openai_responses.go`、`anthropic_message.go` —— 三处入站路径的路由调用点，各自查表后传入 `ResolveOpenAIEndpoint`
 - `internal/server/module/oauth/handler.go`、`internal/command/oauth.go` —— Codex OAuth 实例化打 mode

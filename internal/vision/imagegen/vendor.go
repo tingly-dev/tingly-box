@@ -32,7 +32,7 @@ const (
 
 // DetectVendor inspects a provider and returns the image generation vendor
 // family it belongs to. Detection is host-based so it works for both the
-// canonical providers in internal/data and user-defined clones that point at
+// canonical providers in internal/catalog and user-defined clones that point at
 // the same hosts.
 func DetectVendor(provider *typ.Provider) Vendor {
 	if provider == nil {

@@ -5,7 +5,7 @@
 | 层 | 位置 | 回答的问题 | 维护方式 |
 |----|------|-----------|---------|
 | **能力目录(catalog)** | `internal/protocol/catalog/<vendor>.models.json` + `<vendor>.go` | 这个模型本身能做什么。能力是**模型族属性**,与哪个 provider 提供无关,每个模型只声明一次。当前只覆盖 thinking/reasoning(其余能力用不上就不建模)。 | 人工策展,新模型发布时更新 JSON,不改代码。 |
-| **供给注册表(providers)** | `internal/data/providers.json` | 谁在哪个端点、以什么限额提供哪些模型(base_url、context、max_output、deprecated)。这些**可能**因 provider 而异,所以挂在 provider 条目下。 | 人工策展。 |
+| **供给注册表(providers)** | `internal/catalog/providers.json` | 谁在哪个端点、以什么限额提供哪些模型(base_url、context、max_output、deprecated)。这些**可能**因 provider 而异,所以挂在 provider 条目下。 | 人工策展。 |
 
 运行时从 provider API 拉取的模型列表(`ModelListManager` / DB)是第三层缓存,不在本文件讨论范围。
 

@@ -20,7 +20,7 @@ place that logic lives; each caller becomes a thin adapter that does I/O
 ## Contract
 
 **Allowed dependencies**: `internal/server/config`, `internal/typ`,
-`internal/loadbalance`, `internal/data`, `internal/agent`, `internal/protocol`.
+`internal/loadbalance`, `internal/catalog`, `internal/agent`, `internal/protocol`.
 
 **Forbidden dependencies**: `internal/command`, `internal/server` (the HTTP
 server itself), `gui/*`. A use-case must never import a caller.

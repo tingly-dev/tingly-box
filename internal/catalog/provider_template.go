@@ -1,4 +1,4 @@
-package data
+package catalog
 
 import (
 	"context"
@@ -29,7 +29,7 @@ const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
 
 const TemplateCacheFileName = "provider_template.json"
 
-const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/data/providers.json"
+const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/catalog/providers.json"
 
 // ModelInfo represents detailed information about a model
 type ModelInfo struct {

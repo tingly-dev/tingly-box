@@ -6,16 +6,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 )
 
 // Handler handles provider template HTTP requests
 type Handler struct {
-	templateManager *data.TemplateManager
+	templateManager *catalog.TemplateManager
 }
 
 // NewHandler creates a new provider template handler
-func NewHandler(templateManager *data.TemplateManager) *Handler {
+func NewHandler(templateManager *catalog.TemplateManager) *Handler {
 	return &Handler{
 		templateManager: templateManager,
 	}

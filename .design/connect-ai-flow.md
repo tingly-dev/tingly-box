@@ -195,4 +195,4 @@ enter their key without unchecking a separate toggle.
 | `frontend/src/components/provider-form-dialog/KeyNameField.tsx` | Advanced provider-name field |
 | `frontend/src/components/provider-form-dialog/VerificationResultPanel.tsx` | Test result panel; filters empty detail rows |
 | `frontend/src/components/provider-form-dialog/probe.ts` | Lightweight probe adapter for "Test Connection" |
-| `internal/data/providers.json` | Provider templates; self-hosted entries use `region: "self-hosted"` |
+| `internal/catalog/providers.json` | Provider templates; self-hosted entries use `region: "self-hosted"` |
