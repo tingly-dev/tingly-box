@@ -10,6 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
@@ -29,7 +30,7 @@ type CCmdKong struct {
 	Args    []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
-func (c *CCmdKong) Run(appManager *AppManager) error {
+func (c *CCmdKong) Run(appManager *app.AppManager) error {
 	// Check if user wants help in Claude args (e.g., "cc -- --help")
 	// This is handled by passing --help to Claude, not by showing tingly-box help
 	// Use --port if provided, otherwise 0 (will fallback to config)
@@ -44,7 +45,7 @@ func (c *CCmdKong) Run(appManager *AppManager) error {
 
 // runCC orchestrates: ensure server → resolve profile → write settings → exec claude.
 // If portOverride > 0, it takes precedence over the server's configured port.
-func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs []string) error {
+func runCC(appManager *app.AppManager, profile string, portOverride int, claudeArgs []string) error {
 	globalConfig := appManager.GetGlobalConfig()
 	scenario := typ.ScenarioClaudeCode
 

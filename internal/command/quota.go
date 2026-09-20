@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 
 	"github.com/tingly-dev/tingly-box/ai/quota"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
@@ -27,7 +28,7 @@ type QuotaCmdKong struct {
 	Provider     string `kong:"arg,optional,help='Provider name or UUID (interactive mode if omitted)'"`
 }
 
-func (q *QuotaCmdKong) Run(appManager *AppManager) error {
+func (q *QuotaCmdKong) Run(appManager *app.AppManager) error {
 	// If provider specified, show only that provider
 	if q.Provider != "" {
 		return runQuotaShowProvider(appManager, q.Provider, !q.NoRefresh)
@@ -43,7 +44,7 @@ func (q *QuotaCmdKong) Run(appManager *AppManager) error {
 // ============== Business Logic Functions ==============
 
 // runQuotaShowAll shows all providers with optional refresh
-func runQuotaShowAll(appManager *AppManager, refresh bool) error {
+func runQuotaShowAll(appManager *app.AppManager, refresh bool) error {
 	ctx := context.Background()
 
 	qm, err := createQuotaManager(appManager)
@@ -77,7 +78,7 @@ func runQuotaShowAll(appManager *AppManager, refresh bool) error {
 }
 
 // quotaRelevantProviders lists providers that can meaningfully have a quota.
-func quotaRelevantProviders(appManager *AppManager) []*typ.Provider {
+func quotaRelevantProviders(appManager *app.AppManager) []*typ.Provider {
 	all := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 	return filterQuotaRelevant(all)
 }
@@ -97,7 +98,7 @@ func filterQuotaRelevant(all []*typ.Provider) []*typ.Provider {
 }
 
 // runQuotaShowProvider shows a specific provider with optional refresh
-func runQuotaShowProvider(appManager *AppManager, providerName string, refresh bool) error {
+func runQuotaShowProvider(appManager *app.AppManager, providerName string, refresh bool) error {
 	ctx := context.Background()
 
 	// Find provider by name or UUID
@@ -140,7 +141,7 @@ func runQuotaShowProvider(appManager *AppManager, providerName string, refresh b
 }
 
 // runQuotaInteractive runs interactive mode for provider selection
-func runQuotaInteractive(appManager *AppManager, refresh bool) error {
+func runQuotaInteractive(appManager *app.AppManager, refresh bool) error {
 	providers := quotaRelevantProviders(appManager)
 
 	if len(providers) == 0 {
@@ -182,7 +183,7 @@ func runQuotaInteractive(appManager *AppManager, refresh bool) error {
 }
 
 // findProvider finds a provider by name or UUID (exact match).
-func findProvider(appManager *AppManager, nameOrUUID string) (*typ.Provider, error) {
+func findProvider(appManager *app.AppManager, nameOrUUID string) (*typ.Provider, error) {
 	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 	for _, p := range providers {
 		if p.Name == nameOrUUID || p.UUID == nameOrUUID {
@@ -193,7 +194,7 @@ func findProvider(appManager *AppManager, nameOrUUID string) (*typ.Provider, err
 }
 
 // createQuotaManager creates a quota manager for CLI use
-func createQuotaManager(appManager *AppManager) (*quota.Manager, error) {
+func createQuotaManager(appManager *app.AppManager) (*quota.Manager, error) {
 	// Create quota store
 	config := appManager.AppConfig()
 	store, err := quota.NewGormStore(constant.GetDBFile(config.ConfigDir()), logrus.StandardLogger())

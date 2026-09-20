@@ -9,12 +9,13 @@ import (
 	"time"
 
 	imbotweixin "github.com/tingly-dev/tingly-box/imbot/platform/weixin"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 )
 
 // runRemoteAddInteractive runs the interactive flow for adding a new bot
-func runRemoteAddInteractive(reader *bufio.Reader, appManager *AppManager) error {
+func runRemoteAddInteractive(reader *bufio.Reader, appManager *app.AppManager) error {
 	fmt.Println()
 	fmt.Println("╔═══════════════════════════════════════════════════════════════╗")
 	fmt.Println("║                    Add New Remote Bot                         ║")

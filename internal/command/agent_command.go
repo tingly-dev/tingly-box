@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
@@ -26,7 +27,7 @@ type AgentCmdKong struct {
 // AgentListFlagCmdKong lists configured agents (default behavior)
 type AgentListFlagCmdKong struct{}
 
-func (a *AgentListFlagCmdKong) Run(appManager *AppManager) error {
+func (a *AgentListFlagCmdKong) Run(appManager *app.AppManager) error {
 	return listAgentTypes()
 }
 
@@ -41,7 +42,7 @@ type AgentApplyFlagCmdKong struct {
 	Preview    bool   `kong:"flag,name='preview',help='Preview without applying'"`
 }
 
-func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
+func (a *AgentApplyFlagCmdKong) Run(appManager *app.AppManager) error {
 	var req agent.ApplyAgentRequest
 	req.Unified = a.Unified
 	req.InstallStatusLine = a.StatusLine
@@ -96,7 +97,7 @@ type AgentShowFlagCmdKong struct {
 	AgentType string `kong:"arg,optional,help='Agent type to show'"`
 }
 
-func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
+func (a *AgentShowFlagCmdKong) Run(appManager *app.AppManager) error {
 	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
 		if err := requireTTY("pass the agent type explicitly, e.g. 'tingly-box agent show claude-code' (cc, oc, codex)"); err != nil {
@@ -125,7 +126,7 @@ type AgentRestoreFlagCmdKong struct {
 	Yes       bool   `kong:"flag,name='yes',short='y',help='Skip the confirmation prompt'"`
 }
 
-func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
+func (a *AgentRestoreFlagCmdKong) Run(appManager *app.AppManager) error {
 	var req agent.RestoreAgentRequest
 	req.Yes = a.Yes
 
@@ -179,7 +180,7 @@ func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 // ============== Business Logic Functions ==============
 
 // executeAgentRestore performs the agent restore and prints the result.
-func executeAgentRestore(appManager *AppManager, req *agent.RestoreAgentRequest) error {
+func executeAgentRestore(appManager *app.AppManager, req *agent.RestoreAgentRequest) error {
 	result, err := usecase.NewAgentUseCase(appManager.GetGlobalConfig(), "localhost").Restore(req)
 	if err != nil {
 		return fmt.Errorf("failed to restore configuration: %w", err)
@@ -241,7 +242,7 @@ func promptForAgentTypeChoice(reader *bufio.Reader) (agent.AgentType, error) {
 // built around: whatever's already configured (via quickstart or the TUI),
 // applied as-is, no picker. Choosing a provider/model is TUI/Web UI work;
 // apply is a one-shot "apply the defaults" command, not a wizard.
-func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRequest) error {
+func resolveAgentConfigFromRules(appManager *app.AppManager, req *agent.ApplyAgentRequest) error {
 	globalConfig := appManager.GetGlobalConfig()
 	agentUC := usecase.NewAgentUseCase(globalConfig, "localhost")
 
@@ -306,7 +307,7 @@ func confirmApply(reader *bufio.Reader, req *agent.ApplyAgentRequest) error {
 }
 
 // showPreview shows a preview of what would be applied
-func showPreview(appManager *AppManager, req *agent.ApplyAgentRequest) error {
+func showPreview(appManager *app.AppManager, req *agent.ApplyAgentRequest) error {
 	info, ok := agent.GetAgentInfo(req.AgentType)
 	if !ok {
 		return fmt.Errorf("unknown agent type: %s", req.AgentType)
@@ -344,7 +345,7 @@ func showPreview(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 }
 
 // executeAgentApply executes the agent configuration apply
-func executeAgentApply(appManager *AppManager, req *agent.ApplyAgentRequest) error {
+func executeAgentApply(appManager *app.AppManager, req *agent.ApplyAgentRequest) error {
 	result, err := usecase.NewAgentUseCase(appManager.GetGlobalConfig(), "localhost").Apply(req)
 	if err != nil {
 		return fmt.Errorf("failed to apply configuration: %w", err)
@@ -375,7 +376,7 @@ func listAgentTypes() error {
 }
 
 // showAgentConfig shows current configuration for an agent type
-func showAgentConfig(appManager *AppManager, agentType agent.AgentType) error {
+func showAgentConfig(appManager *app.AppManager, agentType agent.AgentType) error {
 	result, err := usecase.NewAgentUseCase(appManager.GetGlobalConfig(), "localhost").Show(usecase.ShowRequest{
 		AgentType: agentType,
 	})

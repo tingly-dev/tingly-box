@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
@@ -38,7 +39,7 @@ type ProfileCmdKong struct {
 	Args      []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
-func (p *ProfileCmdKong) Run(appManager *AppManager) error {
+func (p *ProfileCmdKong) Run(appManager *app.AppManager) error {
 	// Validate: --list and --show are mutually exclusive
 	if p.List && p.Show {
 		return fmt.Errorf("--list and --show are mutually exclusive")
@@ -74,7 +75,7 @@ func (p *ProfileCmdKong) Run(appManager *AppManager) error {
 const profileScenario = typ.ScenarioClaudeCode
 
 // profileList prints all profiles for the claude_code scenario.
-func profileList(appManager *AppManager) error {
+func profileList(appManager *app.AppManager) error {
 	profiles := usecase.NewProfileUseCase(appManager.GetGlobalConfig()).List(usecase.ListProfilesRequest{
 		Scenario: profileScenario,
 	}).Profiles
@@ -97,7 +98,7 @@ func profileList(appManager *AppManager) error {
 }
 
 // profileShow prints detailed information about a specific profile.
-func profileShow(appManager *AppManager, nameOrID string) error {
+func profileShow(appManager *app.AppManager, nameOrID string) error {
 	profileUC := usecase.NewProfileUseCase(appManager.GetGlobalConfig())
 	result, err := profileUC.Get(usecase.GetProfileRequest{
 		Scenario:   profileScenario,
@@ -156,7 +157,7 @@ func profileShow(appManager *AppManager, nameOrID string) error {
 }
 
 // profileShowInteractive lists profiles and prompts the user to pick one to inspect.
-func profileShowInteractive(appManager *AppManager) error {
+func profileShowInteractive(appManager *app.AppManager) error {
 	profiles := usecase.NewProfileUseCase(appManager.GetGlobalConfig()).List(usecase.ListProfilesRequest{
 		Scenario: profileScenario,
 	}).Profiles
@@ -182,7 +183,7 @@ func profileShowInteractive(appManager *AppManager) error {
 // now the preferred, documented form (see CCmdKong's deprecation note).
 // If port > 0, it overrides the configured server port.
 // Additional args are passed to Claude Code.
-func profileUse(appManager *AppManager, nameOrID string, port int, extraArgs []string) error {
+func profileUse(appManager *app.AppManager, nameOrID string, port int, extraArgs []string) error {
 	profileUC := usecase.NewProfileUseCase(appManager.GetGlobalConfig())
 
 	// Resolve profile name → ID (handles both name and ID lookup).
@@ -219,7 +220,7 @@ func profileUse(appManager *AppManager, nameOrID string, port int, extraArgs []s
 
 // profileLaunchInteractive lists profiles and prompts the user to pick one to launch.
 // port > 0 overrides the configured server port.
-func profileLaunchInteractive(appManager *AppManager, port int) error {
+func profileLaunchInteractive(appManager *app.AppManager, port int) error {
 	profiles := usecase.NewProfileUseCase(appManager.GetGlobalConfig()).List(usecase.ListProfilesRequest{
 		Scenario: profileScenario,
 	}).Profiles

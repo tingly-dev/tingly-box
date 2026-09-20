@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
@@ -35,7 +36,7 @@ func withSilencedStdout(t *testing.T, fn func()) {
 }
 
 // newTestAppManager builds an AppManager with a throwaway config directory.
-func newTestAppManager(t *testing.T) *AppManager {
+func newTestAppManager(t *testing.T) *app.AppManager {
 	t.Helper()
 	tempDir, err := os.MkdirTemp("", "tingly-test-provider-cli-*")
 	if err != nil {
@@ -43,7 +44,7 @@ func newTestAppManager(t *testing.T) *AppManager {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
-	am, err := NewAppManager(tempDir)
+	am, err := app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("NewAppManager failed: %v", err)
 	}

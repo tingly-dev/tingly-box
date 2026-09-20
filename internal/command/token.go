@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
@@ -34,7 +35,7 @@ type TokenCmdKong struct {
 // TokenListCmdKong prints both tokens with masked previews.
 type TokenListCmdKong struct{}
 
-func (t *TokenListCmdKong) Run(appManager *AppManager) error {
+func (t *TokenListCmdKong) Run(appManager *app.AppManager) error {
 	return runBoxTokenList(appManager)
 }
 
@@ -46,7 +47,7 @@ type TokenViewCmdKong struct {
 	Reveal bool   `kong:"flag,name='reveal',short='r',help='Print the full token instead of a masked preview'"`
 }
 
-func (t *TokenViewCmdKong) Run(appManager *AppManager) error {
+func (t *TokenViewCmdKong) Run(appManager *app.AppManager) error {
 	if strings.TrimSpace(t.Kind) == "" {
 		return runBoxTokenViewAll(appManager, t.Reveal)
 	}
@@ -66,7 +67,7 @@ type TokenRefreshCmdKong struct {
 	Yes    bool   `kong:"flag,name='yes',short='y',help='Skip the rotation confirmation prompt'"`
 }
 
-func (t *TokenRefreshCmdKong) Run(appManager *AppManager) error {
+func (t *TokenRefreshCmdKong) Run(appManager *app.AppManager) error {
 	kind, err := resolveTokenKind(t.Kind)
 	if err != nil {
 		return err
@@ -115,7 +116,7 @@ func resolveTokenKind(arg string) (TokenKind, error) {
 
 // runBoxTokenList prints both tingly-box tokens (masked) along with the
 // endpoint each one is used for.
-func runBoxTokenList(appManager *AppManager) error {
+func runBoxTokenList(appManager *app.AppManager) error {
 	cfg, err := globalConfigOrErr(appManager)
 	if err != nil {
 		return err
@@ -138,7 +139,7 @@ func runBoxTokenList(appManager *AppManager) error {
 }
 
 // runBoxTokenView prints a single tingly-box token, masked unless --reveal.
-func runBoxTokenView(appManager *AppManager, kind TokenKind, reveal bool) error {
+func runBoxTokenView(appManager *app.AppManager, kind TokenKind, reveal bool) error {
 	cfg, err := globalConfigOrErr(appManager)
 	if err != nil {
 		return err
@@ -175,7 +176,7 @@ func runBoxTokenView(appManager *AppManager, kind TokenKind, reveal bool) error 
 // either token is harmless, so there's nothing worth prompting to choose.
 // Both are attempted even if one errors (e.g. not yet generated), so a
 // missing token doesn't hide the other's details.
-func runBoxTokenViewAll(appManager *AppManager, reveal bool) error {
+func runBoxTokenViewAll(appManager *app.AppManager, reveal bool) error {
 	authErr := runBoxTokenView(appManager, tokenKindAuth, reveal)
 	if authErr != nil {
 		fmt.Println(authErr)
@@ -194,7 +195,7 @@ func runBoxTokenViewAll(appManager *AppManager, reveal bool) error {
 // runBoxTokenRefresh rotates the chosen token, persists the change, and
 // prints the new value. Prompts for confirmation unless --yes is set
 // because rotation invalidates any clients still using the old token.
-func runBoxTokenRefresh(appManager *AppManager, kind TokenKind, reveal, yes bool) error {
+func runBoxTokenRefresh(appManager *app.AppManager, kind TokenKind, reveal, yes bool) error {
 	cfg, err := globalConfigOrErr(appManager)
 	if err != nil {
 		return err
@@ -233,7 +234,7 @@ func runBoxTokenRefresh(appManager *AppManager, kind TokenKind, reveal, yes bool
 
 // ============== Helpers ==============
 
-func globalConfigOrErr(appManager *AppManager) (*serverconfig.Config, error) {
+func globalConfigOrErr(appManager *app.AppManager) (*serverconfig.Config, error) {
 	if appManager == nil || appManager.AppConfig() == nil {
 		return nil, fmt.Errorf("application config not initialised")
 	}

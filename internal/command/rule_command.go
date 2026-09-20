@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -39,7 +40,7 @@ type RuleAddCmdKong struct {
 	Model        string `kong:"flag,name='model',help='Model name on the provider'"`
 }
 
-func (c *RuleAddCmdKong) Run(appManager *AppManager) error {
+func (c *RuleAddCmdKong) Run(appManager *app.AppManager) error {
 	if c.Scenario == "" || c.RequestModel == "" || c.Provider == "" || c.Model == "" {
 		return fmt.Errorf("all four flags are required: --scenario, --request-model, --provider, --model; for interactive setup use 'tingly-box tui' or the Web UI")
 	}
@@ -49,7 +50,7 @@ func (c *RuleAddCmdKong) Run(appManager *AppManager) error {
 // runRuleAddCI creates a rule from fully-specified flags. Provider may be
 // passed as UUID or name; name resolution is case-insensitive and ambiguous
 // names (multiple providers with the same name) are rejected.
-func runRuleAddCI(appManager *AppManager, scenario, requestModel, providerRef, model string) error {
+func runRuleAddCI(appManager *app.AppManager, scenario, requestModel, providerRef, model string) error {
 	scn := typ.RuleScenario(scenario)
 	providerUUID, err := resolveProviderRef(appManager, providerRef)
 	if err != nil {
@@ -81,7 +82,7 @@ func runRuleAddCI(appManager *AppManager, scenario, requestModel, providerRef, m
 
 // resolveProviderRef accepts a UUID or a name and returns the provider's UUID.
 // Name lookup is case-insensitive; ambiguous names (more than one match) error.
-func resolveProviderRef(appManager *AppManager, ref string) (string, error) {
+func resolveProviderRef(appManager *app.AppManager, ref string) (string, error) {
 	providerUC := usecase.NewProviderUseCase(appManager.GetGlobalConfig())
 	if result, err := providerUC.Get(usecase.GetProviderRequest{UUID: ref}); err == nil {
 		return result.Provider.UUID, nil
@@ -110,7 +111,7 @@ func resolveProviderRef(appManager *AppManager, ref string) (string, error) {
 // RuleListCmdKong lists all rules.
 type RuleListCmdKong struct{}
 
-func (c *RuleListCmdKong) Run(appManager *AppManager) error {
+func (c *RuleListCmdKong) Run(appManager *app.AppManager) error {
 	return runRuleList(appManager)
 }
 
@@ -124,7 +125,7 @@ type RuleUpdateCmdKong struct {
 	Model    string `kong:"flag,name='model',help='New model name on the provider'"`
 }
 
-func (c *RuleUpdateCmdKong) Run(appManager *AppManager) error {
+func (c *RuleUpdateCmdKong) Run(appManager *app.AppManager) error {
 	if c.Provider == "" || c.Model == "" {
 		return fmt.Errorf("both --provider and --model are required")
 	}
@@ -155,7 +156,7 @@ type RuleDeleteCmdKong struct {
 	Yes  bool   `kong:"flag,name='yes',short='y',help='Confirm deletion (required — this command never prompts)'"`
 }
 
-func (c *RuleDeleteCmdKong) Run(appManager *AppManager) error {
+func (c *RuleDeleteCmdKong) Run(appManager *app.AppManager) error {
 	if !c.Yes {
 		return fmt.Errorf("pass -y/--yes to confirm deletion of rule %s — this command never prompts", c.UUID)
 	}
@@ -180,7 +181,7 @@ type RuleExportCmdKong struct {
 	Output string `kong:"flag,name='output',help='Output file path (default: stdout)'"`
 }
 
-func (c *RuleExportCmdKong) Run(appManager *AppManager) error {
+func (c *RuleExportCmdKong) Run(appManager *app.AppManager) error {
 	result, err := usecase.NewRuleUseCase(appManager.GetGlobalConfig()).Get(usecase.GetRuleRequest{UUID: c.UUID})
 	if err != nil {
 		return err
@@ -194,7 +195,7 @@ type RuleImportCmdKong struct {
 	Format string `kong:"flag,name='format',default='auto',help='Import format: auto, jsonl, or base64'"`
 }
 
-func (c *RuleImportCmdKong) Run(appManager *AppManager) error {
+func (c *RuleImportCmdKong) Run(appManager *app.AppManager) error {
 	return runImport(appManager, c.Format, c.File)
 }
 
@@ -202,7 +203,7 @@ func (c *RuleImportCmdKong) Run(appManager *AppManager) error {
 
 // runRuleList prints the table of rules in the compact form
 // "index | request-model | scenario | service | uuid[:8]".
-func runRuleList(appManager *AppManager) error {
+func runRuleList(appManager *app.AppManager) error {
 	rules := usecase.NewRuleUseCase(appManager.GetGlobalConfig()).List().Rules
 	if len(rules) == 0 {
 		fmt.Println("No rules configured. Use 'rule add' to create one.")
@@ -225,7 +226,7 @@ func runRuleList(appManager *AppManager) error {
 // formatPrimaryService renders the rule's first service as
 // "<provider-name>:<model>" (or "<provider-uuid[:8]>:<model>" if the name
 // can't be resolved). Returns "(none)" if the rule has no services.
-func formatPrimaryService(appManager *AppManager, r *typ.Rule) string {
+func formatPrimaryService(appManager *app.AppManager, r *typ.Rule) string {
 	if len(r.Services) == 0 {
 		return "(none)"
 	}
@@ -249,7 +250,7 @@ func formatPrimaryService(appManager *AppManager, r *typ.Rule) string {
 // The rule is only used to select which providers to include — dataio
 // export/import is provider-only, so the rule itself does not travel in
 // the exported payload.
-func runExport(appManager *AppManager, rule *typ.Rule, formatStr, outputFile string) error {
+func runExport(appManager *app.AppManager, rule *typ.Rule, formatStr, outputFile string) error {
 	var format dataio.Format
 	switch strings.ToLower(formatStr) {
 	case "jsonl":
@@ -284,7 +285,7 @@ func runExport(appManager *AppManager, rule *typ.Rule, formatStr, outputFile str
 }
 
 // runImport imports providers from a file, or from stdin if file is empty.
-func runImport(appManager *AppManager, formatStr string, file string) error {
+func runImport(appManager *app.AppManager, formatStr string, file string) error {
 	var data string
 
 	if file != "" {

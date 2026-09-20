@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
@@ -37,7 +38,7 @@ type ProviderAddCmdKong struct {
 // four fields are required, or it fails with a clear error naming what to
 // pass instead — picking values interactively is `tingly-box tui` or Web UI
 // work.
-func (c *ProviderAddCmdKong) Run(appManager *AppManager) error {
+func (c *ProviderAddCmdKong) Run(appManager *app.AppManager) error {
 	if c.Name == "" || c.BaseURL == "" || c.Token == "" || c.APIStyle == "" {
 		return fmt.Errorf("all four positional args are required: name, base-url, token, api-style; for interactive setup use 'tingly-box tui' or the Web UI")
 	}
@@ -56,7 +57,7 @@ func (c *ProviderAddCmdKong) Run(appManager *AppManager) error {
 // ProviderListCmdKong lists all providers.
 type ProviderListCmdKong struct{}
 
-func (c *ProviderListCmdKong) Run(appManager *AppManager) error {
+func (c *ProviderListCmdKong) Run(appManager *app.AppManager) error {
 	return runProviderList(appManager)
 }
 
@@ -66,7 +67,7 @@ type ProviderGetCmdKong struct {
 	UUID string `kong:"arg,required,help='Provider UUID'"`
 }
 
-func (c *ProviderGetCmdKong) Run(appManager *AppManager) error {
+func (c *ProviderGetCmdKong) Run(appManager *app.AppManager) error {
 	return runProviderGet(appManager, c.UUID)
 }
 
@@ -83,7 +84,7 @@ type ProviderUpdateCmdKong struct {
 	ProxyURL string `kong:"flag,name='proxy-url',help='New proxy URL'"`
 }
 
-func (c *ProviderUpdateCmdKong) Run(appManager *AppManager) error {
+func (c *ProviderUpdateCmdKong) Run(appManager *app.AppManager) error {
 	if c.Name == "" && c.BaseURL == "" && c.Token == "" && c.APIStyle == "" && c.ProxyURL == "" {
 		return fmt.Errorf("nothing to update; pass at least one of --name, --base-url, --token, --api-style, --proxy-url")
 	}
@@ -141,7 +142,7 @@ type ProviderDeleteCmdKong struct {
 	Yes  bool   `kong:"flag,name='yes',short='y',help='Confirm deletion (required — this command never prompts)'"`
 }
 
-func (c *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
+func (c *ProviderDeleteCmdKong) Run(appManager *app.AppManager) error {
 	if !c.Yes {
 		return fmt.Errorf("pass -y/--yes to confirm deletion of provider %s — this command never prompts", c.UUID)
 	}
@@ -161,7 +162,7 @@ func (c *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
 
 // addProviderCI adds a provider without prompting. Used when every required
 // field is provided on the command line — typical for scripts and CI.
-func addProviderCI(appManager *AppManager, name, apiBase, token string, apiStyle APIStyle) error {
+func addProviderCI(appManager *app.AppManager, name, apiBase, token string, apiStyle APIStyle) error {
 	res, err := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).Add(usecase.CreateProviderRequest{
 		Name: name, APIBase: apiBase, Token: token, APIStyle: apiStyle,
 	})
@@ -173,7 +174,7 @@ func addProviderCI(appManager *AppManager, name, apiBase, token string, apiStyle
 }
 
 // runProviderList lists all providers
-func runProviderList(appManager *AppManager) error {
+func runProviderList(appManager *app.AppManager) error {
 	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 
 	if len(providers) == 0 {
@@ -202,7 +203,7 @@ func runProviderList(appManager *AppManager) error {
 
 // runProviderGet displays provider details for the given UUID. Providers are
 // keyed by UUID; names are not unique and must not be used as lookup keys.
-func runProviderGet(appManager *AppManager, uuid string) error {
+func runProviderGet(appManager *app.AppManager, uuid string) error {
 	result, err := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).Get(usecase.GetProviderRequest{UUID: uuid})
 	if err != nil {
 		return err

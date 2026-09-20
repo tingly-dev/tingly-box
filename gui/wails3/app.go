@@ -11,7 +11,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	assets "github.com/tingly-dev/tingly-box/internal"
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 )
 
 const (
@@ -23,7 +23,7 @@ var App *application.App
 var tinglyService *services.TinglyService
 
 // newAppWithServerManager creates a new full GUI app with a pre-configured ServerManager
-func newAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool) *application.App {
+func newAppWithServerManager(appManager *app.AppManager, serverManager *app.ServerManager, debug bool) *application.App {
 	// Create UI service with existing serverManager
 	tinglyService = services.NewTinglyServiceWithServerManager(appManager, serverManager)
 
@@ -79,7 +79,7 @@ func newAppWithServerManager(appManager *command.AppManager, serverManager *comm
 
 // newSlimAppWithServerManager creates a new slim GUI app with a pre-configured ServerManager
 // This is in the main package because the slim package has its own main() and cannot be imported
-func newSlimAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool) *application.App {
+func newSlimAppWithServerManager(appManager *app.AppManager, serverManager *app.ServerManager, debug bool) *application.App {
 	// Create UI service with existing serverManager
 	tinglyService := services.NewTinglyServiceWithServerManager(appManager, serverManager)
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
@@ -28,7 +29,7 @@ type reloadedBot struct {
 // .design/runtime-port-file.md). On acknowledgment it returns the per-bot
 // statuses reported by the server, so callers can tell whether a specific
 // bot actually came up — Sync swallows individual start failures by design.
-func notifyServerBotReload(appManager *AppManager) ([]reloadedBot, bool) {
+func notifyServerBotReload(appManager *app.AppManager) ([]reloadedBot, bool) {
 	if appManager == nil || appManager.AppConfig() == nil {
 		return nil, false
 	}

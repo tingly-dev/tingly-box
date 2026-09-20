@@ -3,11 +3,11 @@ package command
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 )
 
 // RootCommand creates the root command for the GUI binary
-func RootCommand(appManager *command.AppManager, launcher AppLauncher) *cobra.Command {
+func RootCommand(appManager *app.AppManager, launcher AppLauncher) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "tingly-box-gui",
 		Short: "Tingly Box - GUI Mode (Wails)",

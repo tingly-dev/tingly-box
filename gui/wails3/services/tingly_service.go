@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	exportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -29,13 +30,13 @@ var (
 
 // TinglyService manages the web UI and HTTP server functionality
 type TinglyService struct {
-	appManager    *command.AppManager
-	serverManager *command.ServerManager
+	appManager    *app.AppManager
+	serverManager *app.ServerManager
 	app           *application.App
 }
 
 // NewTinglyServiceWithServerManager creates a new UI service instance with a pre-configured ServerManager
-func NewTinglyServiceWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager) *TinglyService {
+func NewTinglyServiceWithServerManager(appManager *app.AppManager, serverManager *app.ServerManager) *TinglyService {
 	res := &TinglyService{
 		appManager:    appManager,
 		serverManager: serverManager,

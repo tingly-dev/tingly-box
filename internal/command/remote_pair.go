@@ -6,12 +6,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"
 )
 
 // RemotePairEnable enables or disables RequirePairing for a bot.
 // Takes effect at next bot start.
-func RemotePairEnable(appManager *AppManager, botUUID string, enable bool) error {
+func RemotePairEnable(appManager *app.AppManager, botUUID string, enable bool) error {
 	store, err := openSettingsStore(appManager)
 	if err != nil {
 		return err
@@ -43,7 +44,7 @@ func RemotePairEnable(appManager *AppManager, botUUID string, enable bool) error
 
 // RemotePairRevoke forgets the pairing for a specific chat.
 // The chat will need to re-bind to issue commands.
-func RemotePairRevoke(appManager *AppManager, botUUID, chatID string) error {
+func RemotePairRevoke(appManager *app.AppManager, botUUID, chatID string) error {
 	cfg := appManager.AppConfig().GetGlobalConfig()
 	if cfg == nil {
 		return fmt.Errorf("global config not available")
@@ -74,7 +75,7 @@ func RemotePairRevoke(appManager *AppManager, botUUID, chatID string) error {
 }
 
 // RemotePairStatus shows whether RequirePairing is on and where to find the code.
-func RemotePairStatus(appManager *AppManager, botUUID string) error {
+func RemotePairStatus(appManager *app.AppManager, botUUID string) error {
 	store, err := openSettingsStore(appManager)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func RemotePairStatus(appManager *AppManager, botUUID string) error {
 	return nil
 }
 
-func openSettingsStore(appManager *AppManager) (*db.ImBotSettingsStore, error) {
+func openSettingsStore(appManager *app.AppManager) (*db.ImBotSettingsStore, error) {
 	if appManager == nil || appManager.AppConfig() == nil {
 		return nil, fmt.Errorf("app configuration is not initialized")
 	}

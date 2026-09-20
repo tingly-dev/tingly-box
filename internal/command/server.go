@@ -14,8 +14,9 @@ import (
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/tingly-dev/tingly-box/internal/command/options"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -61,7 +62,7 @@ func (s *StartCmdKong) resolveOptions(appConfig *appconfig.AppConfig, portOverri
 	return options.ResolveStartOptions(newKongShimCmd(s.EnableDebug), flags, appConfig)
 }
 
-func (s *StartCmdKong) Run(appManager *AppManager, source LaunchSource) error {
+func (s *StartCmdKong) Run(appManager *app.AppManager, source LaunchSource) error {
 	if s.EnableShortcut {
 		refreshShortcut(source)
 	}
@@ -73,14 +74,14 @@ func (s *StartCmdKong) Run(appManager *AppManager, source LaunchSource) error {
 // StopCmdKong is the Kong version of stop command
 type StopCmdKong struct{}
 
-func (s *StopCmdKong) Run(appManager *AppManager) error {
+func (s *StopCmdKong) Run(appManager *app.AppManager) error {
 	return doStopServer(appManager)
 }
 
 // StatusCmdKong is the Kong version of status command
 type StatusCmdKong struct{}
 
-func (s *StatusCmdKong) Run(appManager *AppManager) error {
+func (s *StatusCmdKong) Run(appManager *app.AppManager) error {
 	return runStatusCmd(appManager)
 }
 
@@ -93,7 +94,7 @@ type RestartCmdKong struct {
 	Yes bool `kong:"flag,name='yes',short='y',hidden"`
 }
 
-func (r *RestartCmdKong) Run(appManager *AppManager, source LaunchSource) error {
+func (r *RestartCmdKong) Run(appManager *app.AppManager, source LaunchSource) error {
 	if r.EnableShortcut {
 		refreshShortcut(source)
 	}
@@ -151,7 +152,7 @@ type OpenCmdKong struct {
 	StartCmdKong
 }
 
-func (o *OpenCmdKong) Run(appManager *AppManager, source LaunchSource) error {
+func (o *OpenCmdKong) Run(appManager *app.AppManager, source LaunchSource) error {
 	opts := o.resolveOptions(appManager.AppConfig(), 0)
 	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
@@ -182,7 +183,7 @@ func (o *OpenCmdKong) Run(appManager *AppManager, source LaunchSource) error {
 // VersionCmdKong is the Kong version of version command
 type VersionCmdKong struct{}
 
-func (v *VersionCmdKong) Run(appManager *AppManager) error {
+func (v *VersionCmdKong) Run(appManager *app.AppManager) error {
 	fmt.Printf("Tingly Box CLI\n")
 	fmt.Printf("Version:    %s\n", BuildVersion)
 	fmt.Printf("Git Commit: %s\n", BuildGitCommit)
@@ -198,7 +199,7 @@ type SwaggerCmdKong struct {
 	Stdout bool   `kong:"flag,name='stdout',help='Write to stdout'"`
 }
 
-func (s *SwaggerCmdKong) Run(appManager *AppManager) error {
+func (s *SwaggerCmdKong) Run(appManager *app.AppManager) error {
 	return runSwagger(appManager, s.Output, s.Stdout)
 }
 
@@ -226,7 +227,7 @@ func newKongShimCmd(debugSet bool) *cobra.Command {
 }
 
 // runStatusCmd extracts status logic
-func runStatusCmd(appManager *AppManager) error {
+func runStatusCmd(appManager *app.AppManager) error {
 	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
@@ -288,7 +289,7 @@ func runStatusCmd(appManager *AppManager) error {
 }
 
 // runSwagger extracts swagger logic from SwaggerCommand
-func runSwagger(appManager *AppManager, output string, stdout bool) error {
+func runSwagger(appManager *app.AppManager, output string, stdout bool) error {
 	cfg := appManager.GetGlobalConfig()
 	if cfg == nil {
 		return fmt.Errorf("config not available")
@@ -423,7 +424,7 @@ func openBrowserURL(url string) error {
 // - server_windows.go for Windows (uses process.Kill())
 // - server_unix.go for Unix-like systems (uses SIGTERM/SIGKILL)
 
-func doStopServer(appManager *AppManager) error {
+func doStopServer(appManager *app.AppManager) error {
 	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
@@ -442,12 +443,12 @@ func doStopServer(appManager *AppManager) error {
 }
 
 // startServer handles the server starting logic
-func startServer(appManager *AppManager, opts options.StartServerOptions, source LaunchSource) error {
+func startServer(appManager *app.AppManager, opts options.StartServerOptions, source LaunchSource) error {
 	return startServerWithHook(appManager, opts, source)
 }
 
 // startServerWithHook handles the server starting logic with optional setup hooks.
-func startServerWithHook(appManager *AppManager, opts options.StartServerOptions, source LaunchSource, hooks ...func(*ServerManager) error) error {
+func startServerWithHook(appManager *app.AppManager, opts options.StartServerOptions, source LaunchSource, hooks ...func(*app.ServerManager) error) error {
 	appConfig := appManager.AppConfig()
 
 	// Set logrus level based on debug flag
@@ -564,7 +565,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		logrus.Warnf("Failed to record server version: %v", err)
 	}
 
-	serverManager := NewServerManager(
+	serverManager := app.NewServerManager(
 		appConfig,
 		server.WithDebug(opts.EnableDebug),
 		server.WithUI(opts.EnableUI),

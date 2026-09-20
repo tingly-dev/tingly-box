@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command/tui"
 )
 
@@ -10,7 +11,7 @@ import (
 // straight into the guided wizard via QuickstartCmdKong.
 type TUICmdKong struct{}
 
-func (t *TUICmdKong) Run(appManager *AppManager) error {
+func (t *TUICmdKong) Run(appManager *app.AppManager) error {
 	return tui.RunTUI(appManager)
 }
 
@@ -19,6 +20,6 @@ func (t *TUICmdKong) Run(appManager *AppManager) error {
 // than the mode menu.
 type QuickstartCmdKong struct{}
 
-func (q *QuickstartCmdKong) Run(appManager *AppManager) error {
+func (q *QuickstartCmdKong) Run(appManager *app.AppManager) error {
 	return tui.RunQuickstart(appManager)
 }

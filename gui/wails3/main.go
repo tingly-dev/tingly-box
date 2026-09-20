@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	appcommand "github.com/tingly-dev/tingly-box/gui/wails3/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
@@ -34,7 +35,7 @@ func main() {
 		log.Fatalf("Failed to get user home directory: %v", err)
 	}
 	configDir := home + "/.tingly-box"
-	appManager, err := command.NewAppManager(configDir)
+	appManager, err := app.NewAppManager(configDir)
 	if err != nil {
 		log.Fatalf("Failed to create app manager: %v", err)
 	}

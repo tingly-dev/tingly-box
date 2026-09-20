@@ -12,8 +12,9 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
@@ -162,7 +163,7 @@ func main() {
 		appConfig.SetVersion(version)
 	}
 
-	appManager := command.NewAppManagerWithConfig(appConfig)
+	appManager := app.NewAppManagerWithConfig(appConfig)
 
 	// Run the selected command. command.LaunchSource carries how this process
 	// was invoked (binary/npx/npx-bundle, from --source) so `shortcut`, `start`,

@@ -4,13 +4,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
-func addProviderForTest(appManager *AppManager, name, apiBase, token string, apiStyle protocol.APIStyle) (string, error) {
+func addProviderForTest(appManager *app.AppManager, name, apiBase, token string, apiStyle protocol.APIStyle) (string, error) {
 	result, err := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).Add(usecase.CreateProviderRequest{
 		Name: name, APIBase: apiBase, Token: token, APIStyle: apiStyle,
 	})
@@ -31,7 +32,7 @@ func TestQuickstartProviderLookup(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create app manager with temp config
-	appManager, err := NewAppManager(tempDir)
+	appManager, err := app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create app manager: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestQuickstartConfigureRules(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	appManager, err := NewAppManager(tempDir)
+	appManager, err := app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create app manager: %v", err)
 	}
@@ -238,7 +239,7 @@ func TestQuickstartProviderTemplate(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	appManager, err := NewAppManager(tempDir)
+	appManager, err := app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create app manager: %v", err)
 	}
@@ -289,7 +290,7 @@ func TestQuickstartConfigPersistence(t *testing.T) {
 
 	// First session: add provider and configure
 	t.Run("First session: add provider", func(t *testing.T) {
-		appManager1, err := NewAppManager(tempDir)
+		appManager1, err := app.NewAppManager(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create app manager: %v", err)
 		}
@@ -307,7 +308,7 @@ func TestQuickstartConfigPersistence(t *testing.T) {
 
 	// Second session: verify provider persists
 	t.Run("Second session: verify provider persists", func(t *testing.T) {
-		appManager2, err := NewAppManager(tempDir)
+		appManager2, err := app.NewAppManager(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create app manager: %v", err)
 		}
