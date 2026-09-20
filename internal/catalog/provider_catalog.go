@@ -203,9 +203,8 @@ type ProviderCatalogManager struct {
 // construction time.
 type ProviderCatalogManagerOption func(*ProviderCatalogManager)
 
-// WithGitHubURL sets where the manager syncs templates from, overriding the
-// default of CatalogGitHubURL. An empty URL means no GitHub sync — embedded
-// templates only.
+// WithGitHubURL sets where the manager syncs templates from. Unset (the
+// default), it means no GitHub sync — embedded templates only.
 func WithGitHubURL(url string) ProviderCatalogManagerOption {
 	return func(m *ProviderCatalogManager) {
 		m.githubURL = url
@@ -221,7 +220,10 @@ func WithSourcePreference(preference CatalogSourcePreference) ProviderCatalogMan
 }
 
 // EmbeddedOnly restricts the manager to embedded templates only, with no
-// GitHub sync — useful for development, testing, or offline scenarios.
+// GitHub sync. Behaviorally the same as the zero-value default (no
+// WithGitHubURL), but states that intent explicitly for callers — tests and
+// offline/development scenarios that must never touch the network or the
+// on-disk cache, and want that guaranteed even if the default ever changes.
 func EmbeddedOnly() ProviderCatalogManagerOption {
 	return func(m *ProviderCatalogManager) {
 		m.githubURL = ""
@@ -230,12 +232,13 @@ func EmbeddedOnly() ProviderCatalogManagerOption {
 }
 
 // NewProviderCatalogManager creates a new provider catalog manager. With no
-// options it syncs from CatalogGitHubURL using the default source
-// preference; pass WithGitHubURL/WithSourcePreference/EmbeddedOnly to
-// override.
+// options it uses only the embedded catalog — no network or cache I/O —
+// since an unset githubURL makes Initialize skip straight to embedded
+// templates regardless of source preference. Pass WithGitHubURL to opt into
+// syncing from GitHub (CatalogGitHubURL for the real catalog, or a test
+// double).
 func NewProviderCatalogManager(opts ...ProviderCatalogManagerOption) *ProviderCatalogManager {
 	m := &ProviderCatalogManager{
-		githubURL:         CatalogGitHubURL,
 		sourcePreference:  PreferenceDefault,
 		templates:         make(map[string]*ProviderCatalog),
 		capabilitySchemas: make(map[string]*CapabilitySchema),
