@@ -4,7 +4,7 @@
 
 | 层 | 位置 | 回答的问题 | 维护方式 |
 |----|------|-----------|---------|
-| **能力目录(catalog)** | `internal/catalog/<vendor>.models.json` + `<vendor>.go` | 这个模型本身能做什么。能力是**模型族属性**,与哪个 provider 提供无关,每个模型只声明一次。当前只覆盖 thinking/reasoning(其余能力用不上就不建模)。 | 人工策展,新模型发布时更新 JSON,不改代码。 |
+| **能力目录(catalog)** | `internal/catalog/<vendor>.models.json` + `<vendor>_model_catalog.go` | 这个模型本身能做什么。能力是**模型族属性**,与哪个 provider 提供无关,每个模型只声明一次。当前只覆盖 thinking/reasoning(其余能力用不上就不建模)。 | 人工策展,新模型发布时更新 JSON,不改代码。 |
 | **供给注册表(providers)** | `internal/catalog/providers.json` | 谁在哪个端点、以什么限额提供哪些模型(base_url、context、max_output、deprecated)。这些**可能**因 provider 而异,所以挂在 provider 条目下。 | 人工策展。 |
 
 运行时从 provider API 拉取的模型列表(`ModelListManager` / DB)是第三层缓存,不在本文件讨论范围。
@@ -40,7 +40,7 @@
   10 个),按需人工从线上 API 刷新,不必每次改动都同步。
 - 查询按"完整 id + 去日期 family 名"双索引、最长 key 优先做子串匹配,所以裸名
   (`claude-opus-4-5`)、带日期 id、云厂商修饰名(`us.anthropic.…-v1:0`、`…@20251001`)都能解析。
-- **完备性不变式**:`catalog/claude_model_catalog_completeness_test.go` 断言 providers.json 中出现的每个 Claude
+- **完备性不变式**:`catalog/claude_model_catalog_test.go` 断言 providers.json 中出现的每个 Claude
   模型 id 去除已知云厂商修饰后必须与 catalog 的完整 id 或去日期 family **精确相等**。
   完备性检查不复用运行时的宽松子串查询,避免新模型误借旧 family 的能力。加新模型先加
   catalog,再加 providers.json,否则测试失败。
