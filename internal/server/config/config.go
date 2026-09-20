@@ -15,8 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -115,7 +115,7 @@ type Config struct {
 	usageStore         *db.UsageStore
 	providerStore      *db.ProviderStore
 	imbotSettingsStore *db.ImBotSettingsStore
-	templateManager    *catalog.TemplateManager
+	templateManager    *catalog.ProviderCatalogManager
 
 	// credentialStore backs the guardrails protected-credential database,
 	// which is a separate file from tingly.db. Built lazily by

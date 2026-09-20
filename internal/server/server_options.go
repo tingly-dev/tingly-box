@@ -124,7 +124,7 @@ func WithMultiLogger(logger *obs.MultiLogger) ServerOption {
 
 // WithTemplateManager allows TBE to inject a custom TemplateManager.
 // This follows the same pattern as WithAuthMiddleware for consistency.
-func WithTemplateManager(tm *catalog.TemplateManager) ServerOption {
+func WithTemplateManager(tm *catalog.ProviderCatalogManager) ServerOption {
 	return func(s *Server) {
 		s.templateManager = tm
 		if s.config != nil {

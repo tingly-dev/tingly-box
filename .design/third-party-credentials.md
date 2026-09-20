@@ -169,7 +169,7 @@ verified against AWS/Google/Anthropic/Microsoft docs (Jul 2026): Bedrock
 `claude-haiku-4-5@20251001`; Gemini `gemini-3-flash` / `gemini-2.5-pro`; Azure
 `gpt-5` / `o4-mini`.
 
-- `ProviderTemplate.APIStyle` added. Multi-field cloud providers match templates
+- `ProviderCatalog.APIStyle` added. Multi-field cloud providers match templates
   by **auth_type + api_style** (`cloudTemplateMatcher`), not URL: the
   credential-derived host varies by region and Vertex multi-regional hosts
   (`aiplatform.us.rep.googleapis.com`) don't contain the canonical domain.
@@ -229,7 +229,7 @@ leads with access-key/secret, bearer optional; encryption deferred.
 | `internal/client/{bedrock,vertex,azure}_client.go` | Per-cloud constructors + bundle→SDK translation |
 | `internal/client/{openai,anthropic,google}.go`, `pool.go` | Skip empty key / Vertex config branch / dispatch |
 | `internal/server/module/provider/{types,handler}.go` | `credential` field; validate/mask; auth_type whitelist |
-| `internal/catalog/providers.json`, `provider_template.go` | Cloud templates; `APIStyle` + api_style-aware matching |
+| `internal/catalog/providers.json`, `provider_catalog.go` | Cloud templates; `APIStyle` + api_style-aware matching |
 | `frontend/src/components/cloud/{CloudProviderDialog.tsx,cloudCredentialSchema.ts}` | Cloud add dialog + field schema |
 | `frontend/src/components/ConnectProviderDialog.tsx`, `services/serviceProviders.ts`, `hooks/useProviderDialog.tsx`, `components/AuthTypeBadge.tsx` | Picker section, cloud accessors, routing, badges |
 | `libs/anthropic-sdk-go/{bedrock,vertex}`, `libs/openai-go/azure`, `libs/go-genai` | Vendored cloud adapters |

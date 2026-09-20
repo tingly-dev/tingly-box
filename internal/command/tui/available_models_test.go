@@ -42,7 +42,7 @@ func newTUIHarness(t *testing.T) TUIManager {
 		t.Fatalf("NewAppConfig: %v", err)
 	}
 
-	tm := catalog.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("template init: %v", err)
 	}

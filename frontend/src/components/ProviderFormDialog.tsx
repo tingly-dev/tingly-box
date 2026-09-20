@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
+import {type UniqueProvider, useProviderCatalogs} from '../services/serviceProviders';
 import {api} from '../services/api';
 import ApiKeyField from '@/components/provider-form-dialog/ApiKeyField';
 import KeyNameField from '@/components/provider-form-dialog/KeyNameField';
@@ -112,7 +112,7 @@ const ProviderFormDialog = ({
     const [slotOpenAI, setSlotOpenAI] = useState<ProtocolSlotData>({url: '', enabled: true});
     const [slotAnthropic, setSlotAnthropic] = useState<ProtocolSlotData>({url: '', enabled: false});
 
-    const allProviders = useProviderTemplates();
+    const allProviders = useProviderCatalogs();
 
     // Stable onChange ref so effects/handlers don't depend on it.
     const onChangeRef = useRef(onChange);

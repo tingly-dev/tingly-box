@@ -34,7 +34,7 @@ func TestNewTemplateManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewTemplateManager(tt.githubURL)
+			tm := NewProviderCatalogManager(tt.githubURL)
 			if tm == nil {
 				t.Fatal("NewTemplateManager returned nil")
 			}
@@ -53,7 +53,7 @@ func TestNewTemplateManager(t *testing.T) {
 
 // TestTemplateManagerInitialize tests initialization with embedded templates
 func TestTemplateManagerInitialize(t *testing.T) {
-	tm := NewTemplateManager("")
+	tm := NewProviderCatalogManager("")
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestTemplateManagerInitialize(t *testing.T) {
 
 // TestTemplateManagerGetTemplate tests retrieving individual templates
 func TestTemplateManagerGetTemplate(t *testing.T) {
-	tm := NewTemplateManager("")
+	tm := NewProviderCatalogManager("")
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -82,13 +82,13 @@ func TestTemplateManagerGetTemplate(t *testing.T) {
 		name        string
 		templateID  string
 		expectError bool
-		verifyFunc  func(*testing.T, *ProviderTemplate)
+		verifyFunc  func(*testing.T, *ProviderCatalog)
 	}{
 		{
 			name:        "Get existing template - openai-com",
 			templateID:  "openai-com",
 			expectError: false,
-			verifyFunc: func(t *testing.T, tmpl *ProviderTemplate) {
+			verifyFunc: func(t *testing.T, tmpl *ProviderCatalog) {
 				if tmpl.ID != "openai-com" {
 					t.Errorf("expected ID 'openai-com', got %q", tmpl.ID)
 				}
@@ -127,7 +127,7 @@ func TestTemplateManagerGetTemplate(t *testing.T) {
 			name:        "Get existing template - minimaxi-com",
 			templateID:  "minimaxi-com",
 			expectError: false,
-			verifyFunc: func(t *testing.T, tmpl *ProviderTemplate) {
+			verifyFunc: func(t *testing.T, tmpl *ProviderCatalog) {
 				if tmpl.ID != "minimaxi-com" {
 					t.Errorf("expected ID 'minimaxi-com', got %q", tmpl.ID)
 				}
@@ -205,7 +205,7 @@ func TestTemplateManagerFetchTemplates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewTemplateManager(tt.githubURL)
+			tm := NewProviderCatalogManager(tt.githubURL)
 			// Initialize first to load embedded templates
 			_ = tm.Initialize(context.Background())
 
@@ -237,7 +237,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 		provider       *typ.Provider
 		expectError    bool
 		expectModels   bool
-		expectedSource TemplateSource
+		expectedSource CatalogSource
 	}{
 		{
 			name:      "Provider with predefined models from embedded - minimaxi-com",
@@ -249,7 +249,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			},
 			expectError:    false,
 			expectModels:   true,
-			expectedSource: TemplateSourceLocal,
+			expectedSource: CatalogSourceLocal,
 		},
 		{
 			name:      "Provider with predefined models from embedded - openai-com",
@@ -261,7 +261,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			},
 			expectError:    false,
 			expectModels:   true,
-			expectedSource: TemplateSourceLocal,
+			expectedSource: CatalogSourceLocal,
 		},
 		{
 			name:      "Non-existent provider",
@@ -272,13 +272,13 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			},
 			expectError:    true,
 			expectModels:   false,
-			expectedSource: TemplateSourceLocal,
+			expectedSource: CatalogSourceLocal,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewTemplateManager(tt.githubURL)
+			tm := NewProviderCatalogManager(tt.githubURL)
 			if err := tm.Initialize(context.Background()); err != nil {
 				t.Fatalf("Initialize failed: %v", err)
 			}
@@ -310,12 +310,12 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 func TestValidateTemplate(t *testing.T) {
 	tests := []struct {
 		name        string
-		template    *ProviderTemplate
+		template    *ProviderCatalog
 		expectError bool
 	}{
 		{
 			name: "Valid template",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test",
 				Name:          "Test Provider",
 				BaseURLOpenAI: "https://api.test.com/v1",
@@ -324,7 +324,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Missing ID",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				Name:          "Test Provider",
 				BaseURLOpenAI: "https://api.test.com/v1",
 			},
@@ -332,7 +332,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Missing Name",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test",
 				BaseURLOpenAI: "https://api.test.com/v1",
 			},
@@ -340,7 +340,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Missing base_url for non-OAuth template",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:   "test",
 				Name: "Test Provider",
 			},
@@ -348,7 +348,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Valid with only Anthropic URL",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:               "test",
 				Name:             "Test Provider",
 				BaseURLAnthropic: "https://api.test.com",
@@ -357,7 +357,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Valid OAuth template with auth_type and oauth_provider",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test_oauth",
 				Name:          "Test OAuth Provider",
 				AuthType:      "oauth",
@@ -367,7 +367,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "OAuth template without oauth_provider field",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:       "test_oauth",
 				Name:     "Test OAuth Provider",
 				AuthType: "oauth",
@@ -376,7 +376,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "OAuth template without base_url is valid",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test_oauth",
 				Name:          "Test OAuth Provider",
 				AuthType:      "oauth",
@@ -386,7 +386,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "OAuth template with both oauth_provider and base_url is also valid",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test_oauth",
 				Name:          "Test OAuth Provider",
 				AuthType:      "oauth",
@@ -397,7 +397,7 @@ func TestValidateTemplate(t *testing.T) {
 		},
 		{
 			name: "Template with auth_type=key and oauth_provider is unusual but not invalid",
-			template: &ProviderTemplate{
+			template: &ProviderCatalog{
 				ID:            "test",
 				Name:          "Test Provider",
 				AuthType:      "key",
@@ -410,7 +410,7 @@ func TestValidateTemplate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTemplate(tt.template)
+			err := ValidateProviderCatalog(tt.template)
 			if tt.expectError {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -426,7 +426,7 @@ func TestValidateTemplate(t *testing.T) {
 
 // TestTemplateManagerConcurrentAccess tests concurrent access to templates
 func TestTemplateManagerConcurrentAccess(t *testing.T) {
-	tm := NewTemplateManager("")
+	tm := NewProviderCatalogManager("")
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 // (missing required fields, malformed model entries) introduced by hand-edits to
 // providers.json before they reach production.
 func TestEmbeddedTemplatesAreValid(t *testing.T) {
-	tm := NewEmbeddedOnlyTemplateManager()
+	tm := NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestEmbeddedTemplatesAreValid(t *testing.T) {
 			if tmpl.ID != id {
 				t.Errorf("map key %q does not match template.ID %q", id, tmpl.ID)
 			}
-			if err := ValidateTemplate(tmpl); err != nil {
+			if err := ValidateProviderCatalog(tmpl); err != nil {
 				t.Errorf("template %q failed ValidateTemplate: %v", id, err)
 			}
 			if tmpl.VendorFamily == "" {
@@ -562,7 +562,7 @@ func TestTemplateManagerHTTPTimeout(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	tm := NewTemplateManager(svr.URL)
+	tm := NewProviderCatalogManager(svr.URL)
 	if tm.httpClient == nil {
 		t.Fatal("httpClient should be initialized")
 	}
@@ -579,7 +579,7 @@ func TestTemplateManagerHTTPTimeout(t *testing.T) {
 // declared api_style — and return their seeded model lists. It also proves the
 // two Vertex templates (same canonical_domain) are disambiguated by api_style.
 func TestCloudTemplatesResolveModels(t *testing.T) {
-	tm := NewEmbeddedOnlyTemplateManager()
+	tm := NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestCloudTemplatesResolveModels(t *testing.T) {
 // Vertex templates share canonical_domain "aiplatform.googleapis.com", so
 // without api_style matching the wrong model family could be returned.
 func TestVertexDisambiguationByStyle(t *testing.T) {
-	tm := NewEmbeddedOnlyTemplateManager()
+	tm := NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestVertexDisambiguationByStyle(t *testing.T) {
 // TestExternalRegistryKeepsEmbeddedOnlyTemplates guards the failure mode that
 // hid the Cloud picker section: a remote registry (or its disk cache) that
 // predates the cloud templates used to replace tm.templates wholesale, so the
-// /provider-templates endpoint served no cloud entries and the frontend had
+// /provider-catalogs endpoint served no cloud entries and the frontend had
 // nothing to render. External entries must still win on id collision, but
 // embedded-only ids must survive the swap.
 func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
@@ -697,7 +697,7 @@ func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
 		t.Fatalf("write registry: %v", err)
 	}
 
-	tm := NewTemplateManager("file://" + registryPath)
+	tm := NewProviderCatalogManager("file://" + registryPath)
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		t.Fatalf("loadEmbeddedTemplates: %v", err)
 	}
@@ -739,7 +739,7 @@ func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
 // the base-URL-specificity tiebreak. This must resolve to the template whose
 // own base URL is the more specific prefix of the provider's, deterministically.
 func TestOpenCodeTemplateDisambiguation(t *testing.T) {
-	tm := NewEmbeddedOnlyTemplateManager()
+	tm := NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestOpenCodeTemplateDisambiguation(t *testing.T) {
 // typo in the endpoint string) fails a test instead of surfacing as a live
 // 500 for whichever model it broke.
 func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
-	tm := NewEmbeddedOnlyTemplateManager()
+	tm := NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -808,8 +808,8 @@ func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
 // incoming" mode a provider-level declaration uses — not to whichever of
 // "chat"/"responses" happened to be listed first.
 func TestGetOpenAIEndpointOverrideForModel_BothEndpoints(t *testing.T) {
-	tm := &TemplateManager{
-		templates: map[string]*ProviderTemplate{
+	tm := &ProviderCatalogManager{
+		templates: map[string]*ProviderCatalog{
 			"t": {
 				ID:              "t",
 				CanonicalDomain: "example.invalid",
@@ -828,8 +828,8 @@ func TestGetOpenAIEndpointOverrideForModel_BothEndpoints(t *testing.T) {
 // providers.json degrades to "no override" instead of crashing or silently
 // routing to whichever mode a bad string coerces to.
 func TestGetOpenAIEndpointOverrideForModel_RejectsUnknownValue(t *testing.T) {
-	tm := &TemplateManager{
-		templates: map[string]*ProviderTemplate{
+	tm := &ProviderCatalogManager{
+		templates: map[string]*ProviderCatalog{
 			"t": {
 				ID:              "t",
 				CanonicalDomain: "example.invalid",

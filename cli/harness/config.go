@@ -43,7 +43,7 @@ func runInitConfig(output string) error {
 	}
 
 	// Load embedded provider templates (no network).
-	tm := catalog.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
 	if err := tm.Initialize(context.Background()); err != nil {
 		return fmt.Errorf("load provider templates: %w", err)
 	}
@@ -71,7 +71,7 @@ type providerEntry struct {
 }
 
 // buildProvidersConfig converts provider templates into the new YAML format.
-func buildProvidersConfig(templates map[string]*catalog.ProviderTemplate) string {
+func buildProvidersConfig(templates map[string]*catalog.ProviderCatalog) string {
 	var entries []providerEntry
 	for _, tmpl := range templates {
 		// Skip OAuth-only providers — they can't be tested with an API key.

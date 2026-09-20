@@ -9,7 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/tingly-dev/tingly-box/internal/protocol/catalog"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -21,7 +21,7 @@ const ClaudeCodeVersion = "2.1.86"
 const FingerprintSalt = "59cf53e54c78"
 
 // anthropicModelThinkingCaps resolves a model's thinking dialect support from
-// the embedded catalog (internal/protocol/catalog/claude.models.json) — updating that
+// the embedded catalog (internal/catalog/claude.models.json) — updating that
 // catalog is how new models get correct treatment. Models absent from the
 // catalog (aliases, proxy models, releases newer than the snapshot) keep the
 // conservative legacy profile: budget-based thinking only, no effort field.

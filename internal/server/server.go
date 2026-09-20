@@ -21,8 +21,8 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
@@ -100,7 +100,7 @@ type Server struct {
 	callbackServersMu sync.RWMutex
 
 	// template manager for provider templates
-	templateManager *catalog.TemplateManager
+	templateManager *catalog.ProviderCatalogManager
 
 	// probeE2e runs SDK-level end-to-end probes for the /api/v2/probe endpoint.
 	probeE2e *probe.E2EProber
@@ -316,9 +316,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	if cfg.ProviderTemplateSource != "" {
 		templateURL = cfg.ProviderTemplateSource
 	} else {
-		templateURL = catalog.TemplateGitHubURL
+		templateURL = catalog.CatalogGitHubURL
 	}
-	templateManager := catalog.NewTemplateManager(templateURL)
+	templateManager := catalog.NewProviderCatalogManager(templateURL)
 	if err := templateManager.Initialize(context.Background()); err != nil {
 		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {

@@ -55,8 +55,8 @@ function notifyListeners() {
     listeners.forEach(listener => listener());
 }
 
-// Load provider templates from API
-async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>> {
+// Load provider catalog entries from API
+async function loadProviderCatalogs(): Promise<Record<string, ServiceProvider>> {
     if (cachedProviders) {
         return cachedProviders;
     }
@@ -68,7 +68,7 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
 
     loadPromise = (async (): Promise<Record<string, ServiceProvider>> => {
         try {
-            const res = await api.getProviderTemplates();
+            const res = await api.getProviderCatalogs();
             if (res && res.success && res.data) {
                 cachedProviders = res.data;
                 notifyListeners(); // Notify all subscribers
@@ -88,7 +88,7 @@ async function loadProviderTemplates(): Promise<Record<string, ServiceProvider>>
 
 // Export a function to get service providers (lazy loading)
 export async function getServiceProviders(): Promise<Record<string, ServiceProvider>> {
-    return loadProviderTemplates();
+    return loadProviderCatalogs();
 }
 
 // Synchronous getter for cached providers (returns empty object if not loaded)
@@ -294,12 +294,12 @@ function useProviderSelector<T>(select: () => T): T {
     return select();
 }
 
-// React hook for provider templates (API-key picker list).
-export function useProviderTemplates(): UniqueProvider[] {
+// React hook for provider catalog entries (API-key picker list).
+export function useProviderCatalogs(): UniqueProvider[] {
     return useProviderSelector(getAllUniqueProviders);
 }
 
-// Reactive accessor for cloud-credential provider templates (Cloud picker section).
+// Reactive accessor for cloud-credential provider catalog entries (Cloud picker section).
 export function useCloudProviders(): UniqueProvider[] {
     return useProviderSelector(getCloudProviders);
 }

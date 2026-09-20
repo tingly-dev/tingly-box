@@ -23,13 +23,13 @@ import (
 //go:embed providers.json
 var embeddedTemplatesJSON []byte
 
-const DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
+const DefaultCatalogHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
 
-const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
+const DefaultCatalogCacheTTL = 12 * time.Hour // Default TTL for template cache
 
-const TemplateCacheFileName = "provider_template.json"
+const CatalogCacheFileName = "provider_catalog.json"
 
-const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/catalog/providers.json"
+const CatalogGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/catalog/providers.json"
 
 // ModelInfo represents detailed information about a model
 type ModelInfo struct {
@@ -41,7 +41,7 @@ type ModelInfo struct {
 	// OpenAIEndpoints declares which OpenAI endpoint(s) THIS model supports,
 	// for a template whose catalog mixes vendors (OpenCode Zen: most models
 	// are Chat-only, a few are Responses-only, and some may support both) —
-	// a fact ProviderTemplate.OpenAIEndpointMode can't express since it's one
+	// a fact ProviderCatalog.OpenAIEndpointMode can't express since it's one
 	// value per provider. A list rather than a single value so a model that
 	// answers on both endpoints can say so, instead of only ever declaring
 	// one. Empty means no declaration for this model: falls through exactly
@@ -84,8 +84,8 @@ type ResultFormat struct {
 	Structure   map[string]interface{} `json:"structure,omitempty"`
 }
 
-// ProviderTemplate represents a predefined provider configuration template
-type ProviderTemplate struct {
+// ProviderCatalog represents a predefined provider configuration template
+type ProviderCatalog struct {
 	// Core identification
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -147,93 +147,93 @@ type ProviderTemplate struct {
 	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
 }
 
-// ProviderTemplateRegistry represents the provider template registry structure from GitHub
-type ProviderTemplateRegistry struct {
+// ProviderCatalogRegistry represents the provider template registry structure from GitHub
+type ProviderCatalogRegistry struct {
 	SchemaVersion     int                          `json:"_schema_version"`
 	NamingRules       *NamingRules                 `json:"_naming_rules,omitempty"`
-	Providers         map[string]*ProviderTemplate `json:"providers"`
+	Providers         map[string]*ProviderCatalog  `json:"providers"`
 	CapabilitySchemas map[string]*CapabilitySchema `json:"capability_schemas,omitempty"`
 	Version           string                       `json:"version"`
 	LastUpdated       string                       `json:"last_updated"`
 }
 
-// TemplateSource tracks where templates were loaded from
-type TemplateSource int
+// CatalogSource tracks where templates were loaded from
+type CatalogSource int
 
 const (
-	// TemplateSourceGitHub - From GitHub templates
-	TemplateSourceGitHub TemplateSource = iota
-	// TemplateSourceLocal - From local embedded templates
-	TemplateSourceLocal
+	// CatalogSourceGitHub - From GitHub templates
+	CatalogSourceGitHub CatalogSource = iota
+	// CatalogSourceLocal - From local embedded templates
+	CatalogSourceLocal
 )
 
-// TemplateSourcePreference defines the priority order for loading templates
-type TemplateSourcePreference int
+// CatalogSourcePreference defines the priority order for loading templates
+type CatalogSourcePreference int
 
 const (
 	// PreferenceDefault: Cache -> GitHub -> Embedded
-	PreferenceDefault TemplateSourcePreference = iota
+	PreferenceDefault CatalogSourcePreference = iota
 	// PreferenceEmbedded: Embedded only (no network requests)
 	PreferenceEmbedded
 	// PreferenceEmbeddedFirst: Embedded -> Cache -> GitHub
 	PreferenceEmbeddedFirst
 )
 
-// TemplateManager manages provider templates with -tier fallback
-type TemplateManager struct {
-	templates         map[string]*ProviderTemplate // Current templates from GitHub or embedded
-	embedded          map[string]*ProviderTemplate // Embedded templates (immutable fallback)
+// ProviderCatalogManager manages provider templates with -tier fallback
+type ProviderCatalogManager struct {
+	templates         map[string]*ProviderCatalog  // Current templates from GitHub or embedded
+	embedded          map[string]*ProviderCatalog  // Embedded templates (immutable fallback)
 	capabilitySchemas map[string]*CapabilitySchema // Current capability schemas
 	embeddedSchemas   map[string]*CapabilitySchema // Embedded capability schemas
 	mu                sync.RWMutex
-	lastUpdated       time.Time      // Last update timestamp
-	version           string         // Template version
-	source            TemplateSource // Current source: GitHub or Local
+	lastUpdated       time.Time     // Last update timestamp
+	version           string        // Template version
+	source            CatalogSource // Current source: GitHub or Local
 	sourceMu          sync.RWMutex
 	etag              string // For conditional GitHub requests
 	etagMu            sync.RWMutex
-	githubURL         string                   // Empty means no GitHub sync, only embedded templates
-	sourcePreference  TemplateSourcePreference // Priority order for loading templates
+	githubURL         string                  // Empty means no GitHub sync, only embedded templates
+	sourcePreference  CatalogSourcePreference // Priority order for loading templates
 	httpClient        *http.Client
 	cachePath         string        // Path to cache file
 	cacheTTL          time.Duration // Cache TTL (default 24h)
 }
 
-func NewDefaultTemplateManager() *TemplateManager {
-	return NewTemplateManagerWithPreference(TemplateGitHubURL, PreferenceDefault)
+func NewDefaultProviderCatalogManager() *ProviderCatalogManager {
+	return NewProviderCatalogManagerWithPreference(CatalogGitHubURL, PreferenceDefault)
 }
 
-// NewEmbeddedOnlyTemplateManager creates a template manager that only uses embedded templates
+// NewEmbeddedOnlyProviderCatalogManager creates a template manager that only uses embedded templates
 // This is useful for development, testing, or offline scenarios
-func NewEmbeddedOnlyTemplateManager() *TemplateManager {
-	return NewTemplateManagerWithPreference("", PreferenceEmbedded)
+func NewEmbeddedOnlyProviderCatalogManager() *ProviderCatalogManager {
+	return NewProviderCatalogManagerWithPreference("", PreferenceEmbedded)
 }
 
-// NewTemplateManager creates a new template manager with default preference.
+// NewProviderCatalogManager creates a new template manager with default preference.
 // If githubURL is empty, only embedded templates will be used (no GitHub sync).
-func NewTemplateManager(githubURL string) *TemplateManager {
-	return NewTemplateManagerWithPreference(githubURL, PreferenceDefault)
+func NewProviderCatalogManager(githubURL string) *ProviderCatalogManager {
+	return NewProviderCatalogManagerWithPreference(githubURL, PreferenceDefault)
 }
 
-// NewTemplateManagerWithPreference creates a new template manager with specified source preference.
+// NewProviderCatalogManagerWithPreference creates a new template manager with specified source preference.
 // If githubURL is empty, only embedded templates will be used (no GitHub sync).
-func NewTemplateManagerWithPreference(githubURL string, preference TemplateSourcePreference) *TemplateManager {
+func NewProviderCatalogManagerWithPreference(githubURL string, preference CatalogSourcePreference) *ProviderCatalogManager {
 	configDir := constant.GetTinglyConfDir()
-	return &TemplateManager{
+	return &ProviderCatalogManager{
 		githubURL:         githubURL,
 		sourcePreference:  preference,
-		templates:         make(map[string]*ProviderTemplate),
+		templates:         make(map[string]*ProviderCatalog),
 		capabilitySchemas: make(map[string]*CapabilitySchema),
 		httpClient: &http.Client{
-			Timeout: DefaultTemplateHTTPTimeout,
+			Timeout: DefaultCatalogHTTPTimeout,
 		},
 		cachePath: configDir, // Will store in .tingly-box directory
-		cacheTTL:  DefaultTemplateCacheTTL,
+		cacheTTL:  DefaultCatalogCacheTTL,
 	}
 }
 
 // GetTemplate returns a provider template by ID
-func (tm *TemplateManager) GetTemplate(id string) (*ProviderTemplate, error) {
+func (tm *ProviderCatalogManager) GetTemplate(id string) (*ProviderCatalog, error) {
 	tm.mu.RLock()
 	tmpl := tm.templates[id]
 	tm.mu.RUnlock()
@@ -245,25 +245,25 @@ func (tm *TemplateManager) GetTemplate(id string) (*ProviderTemplate, error) {
 }
 
 // GetAllTemplates returns all templates
-func (tm *TemplateManager) GetAllTemplates() map[string]*ProviderTemplate {
+func (tm *ProviderCatalogManager) GetAllTemplates() map[string]*ProviderCatalog {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
 	// Return a copy to avoid concurrent modification
-	result := make(map[string]*ProviderTemplate, len(tm.templates))
+	result := make(map[string]*ProviderCatalog, len(tm.templates))
 	maps.Copy(result, tm.templates)
 	return result
 }
 
 // GetVersion returns the current template version
-func (tm *TemplateManager) GetVersion() string {
+func (tm *ProviderCatalogManager) GetVersion() string {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return tm.version
 }
 
 // FetchTemplates fetches templates from URL (http://, https://, or file://)
-func (tm *TemplateManager) FetchTemplates(ctx context.Context) (*ProviderTemplateRegistry, error) {
+func (tm *ProviderCatalogManager) FetchTemplates(ctx context.Context) (*ProviderCatalogRegistry, error) {
 	if tm.githubURL == "" {
 		return nil, fmt.Errorf("no template source configured")
 	}
@@ -280,7 +280,7 @@ func (tm *TemplateManager) FetchTemplates(ctx context.Context) (*ProviderTemplat
 // templates in (see mergeEmbeddedOnly) so every ingestion path preserves the
 // "templates ⊇ embedded ids" invariant, and only adopts capability schemas
 // when the external source actually carries some.
-func (tm *TemplateManager) setExternalTemplates(registry *ProviderTemplateRegistry) {
+func (tm *ProviderCatalogManager) setExternalTemplates(registry *ProviderCatalogRegistry) {
 	tm.mu.Lock()
 	tm.templates = tm.mergeEmbeddedOnly(registry.Providers)
 	if registry.CapabilitySchemas != nil {
@@ -292,27 +292,27 @@ func (tm *TemplateManager) setExternalTemplates(registry *ProviderTemplateRegist
 }
 
 // fetchFromFile loads templates from a local file
-func (tm *TemplateManager) fetchFromFile(filePath string) (*ProviderTemplateRegistry, error) {
+func (tm *ProviderCatalogManager) fetchFromFile(filePath string) (*ProviderCatalogRegistry, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read template file: %w", err)
 	}
 
-	var registry ProviderTemplateRegistry
+	var registry ProviderCatalogRegistry
 	if err := json.Unmarshal(data, &registry); err != nil {
 		return nil, fmt.Errorf("failed to parse template JSON: %w", err)
 	}
 
 	tm.setExternalTemplates(&registry)
 	tm.sourceMu.Lock()
-	tm.source = TemplateSourceLocal
+	tm.source = CatalogSourceLocal
 	tm.sourceMu.Unlock()
 
 	return &registry, nil
 }
 
 // fetchFromHTTP fetches templates from HTTP/HTTPS URL
-func (tm *TemplateManager) fetchFromHTTP(ctx context.Context) (*ProviderTemplateRegistry, error) {
+func (tm *ProviderCatalogManager) fetchFromHTTP(ctx context.Context) (*ProviderCatalogRegistry, error) {
 	// If no URL is configured, return error immediately
 	if tm.githubURL == "" {
 		return nil, fmt.Errorf("no template URL configured")
@@ -340,13 +340,13 @@ func (tm *TemplateManager) fetchFromHTTP(ctx context.Context) (*ProviderTemplate
 	if resp.StatusCode == http.StatusNotModified {
 		// Return current state without modification
 		tm.mu.RLock()
-		providers := make(map[string]*ProviderTemplate, len(tm.templates))
+		providers := make(map[string]*ProviderCatalog, len(tm.templates))
 		maps.Copy(providers, tm.templates)
 		version := tm.version
 		lastUpdated := tm.lastUpdated
 		tm.mu.RUnlock()
 
-		return &ProviderTemplateRegistry{
+		return &ProviderCatalogRegistry{
 			Providers:   providers,
 			Version:     version,
 			LastUpdated: lastUpdated.Format(time.RFC3339),
@@ -366,7 +366,7 @@ func (tm *TemplateManager) fetchFromHTTP(ctx context.Context) (*ProviderTemplate
 	}
 
 	// Parse response
-	var registry ProviderTemplateRegistry
+	var registry ProviderCatalogRegistry
 	if err := json.NewDecoder(resp.Body).Decode(&registry); err != nil {
 		return nil, fmt.Errorf("failed to parse registry JSON: %w", err)
 	}
@@ -381,17 +381,17 @@ func (tm *TemplateManager) fetchFromHTTP(ctx context.Context) (*ProviderTemplate
 	return &registry, nil
 }
 
-// TemplateCacheData represents the cache file structure
-type TemplateCacheData struct {
-	Registry ProviderTemplateRegistry `json:"registry"`
-	CachedAt time.Time                `json:"cached_at"`
-	Version  string                   `json:"version"`
-	ETag     string                   `json:"etag,omitempty"`
+// CatalogCacheData represents the cache file structure
+type CatalogCacheData struct {
+	Registry ProviderCatalogRegistry `json:"registry"`
+	CachedAt time.Time               `json:"cached_at"`
+	Version  string                  `json:"version"`
+	ETag     string                  `json:"etag,omitempty"`
 }
 
 // loadCache loads templates from cache file if valid
-func (tm *TemplateManager) loadCache() (*ProviderTemplateRegistry, error) {
-	cacheFile := filepath.Join(tm.cachePath, TemplateCacheFileName)
+func (tm *ProviderCatalogManager) loadCache() (*ProviderCatalogRegistry, error) {
+	cacheFile := filepath.Join(tm.cachePath, CatalogCacheFileName)
 
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
@@ -401,7 +401,7 @@ func (tm *TemplateManager) loadCache() (*ProviderTemplateRegistry, error) {
 		return nil, fmt.Errorf("failed to read cache file: %w", err)
 	}
 
-	var cacheData TemplateCacheData
+	var cacheData CatalogCacheData
 	if err := json.Unmarshal(data, &cacheData); err != nil {
 		return nil, fmt.Errorf("failed to parse cache file: %w", err)
 	}
@@ -422,14 +422,14 @@ func (tm *TemplateManager) loadCache() (*ProviderTemplateRegistry, error) {
 }
 
 // saveCache saves the current templates to cache file
-func (tm *TemplateManager) saveCache(registry *ProviderTemplateRegistry) error {
-	cacheFile := filepath.Join(tm.cachePath, TemplateCacheFileName)
+func (tm *ProviderCatalogManager) saveCache(registry *ProviderCatalogRegistry) error {
+	cacheFile := filepath.Join(tm.cachePath, CatalogCacheFileName)
 
 	tm.etagMu.RLock()
 	etag := tm.etag
 	tm.etagMu.RUnlock()
 
-	cacheData := TemplateCacheData{
+	cacheData := CatalogCacheData{
 		Registry: *registry,
 		CachedAt: time.Now(),
 		Version:  registry.Version,
@@ -459,7 +459,7 @@ func (tm *TemplateManager) saveCache(registry *ProviderTemplateRegistry) error {
 // - PreferenceDefault: Cache -> GitHub -> Embedded
 // - PreferenceEmbedded: Embedded only (no network requests)
 // - PreferenceEmbeddedFirst: Embedded -> Cache -> GitHub
-func (tm *TemplateManager) Initialize(ctx context.Context) error {
+func (tm *ProviderCatalogManager) Initialize(ctx context.Context) error {
 	// First, always load embedded templates as immutable fallback
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		return err
@@ -469,7 +469,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 	case PreferenceEmbedded:
 		// Use embedded templates only, skip all network requests
 		tm.sourceMu.Lock()
-		tm.source = TemplateSourceLocal
+		tm.source = CatalogSourceLocal
 		tm.sourceMu.Unlock()
 		return nil
 
@@ -477,7 +477,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 		// Embedded is already loaded, return immediately
 		// User can manually refresh from GitHub if needed
 		tm.sourceMu.Lock()
-		tm.source = TemplateSourceLocal
+		tm.source = CatalogSourceLocal
 		tm.sourceMu.Unlock()
 		return nil
 
@@ -492,7 +492,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 				tm.setExternalTemplates(cachedRegistry)
 
 				tm.sourceMu.Lock()
-				tm.source = TemplateSourceGitHub // Loaded from cache, but originally from GitHub
+				tm.source = CatalogSourceGitHub // Loaded from cache, but originally from GitHub
 				tm.sourceMu.Unlock()
 				return nil
 			}
@@ -501,7 +501,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 			_, err = tm.FetchTemplates(ctx)
 			if err == nil {
 				tm.sourceMu.Lock()
-				tm.source = TemplateSourceGitHub
+				tm.source = CatalogSourceGitHub
 				tm.sourceMu.Unlock()
 				return nil
 			}
@@ -510,7 +510,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 
 		// Using embedded templates
 		tm.sourceMu.Lock()
-		tm.source = TemplateSourceLocal
+		tm.source = CatalogSourceLocal
 		tm.sourceMu.Unlock()
 		return nil
 	}
@@ -524,8 +524,8 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 // external set (and hence the disk cache built from it) stays pure remote
 // content, so a newer binary's embedded fixes are never shadowed by embedded
 // values a previous binary laundered into the cache. Callers must hold tm.mu.
-func (tm *TemplateManager) mergeEmbeddedOnly(external map[string]*ProviderTemplate) map[string]*ProviderTemplate {
-	merged := make(map[string]*ProviderTemplate, len(external)+len(tm.embedded))
+func (tm *ProviderCatalogManager) mergeEmbeddedOnly(external map[string]*ProviderCatalog) map[string]*ProviderCatalog {
+	merged := make(map[string]*ProviderCatalog, len(external)+len(tm.embedded))
 	for id, tmpl := range tm.embedded {
 		merged[id] = deepCopyTemplate(tmpl)
 	}
@@ -534,14 +534,14 @@ func (tm *TemplateManager) mergeEmbeddedOnly(external map[string]*ProviderTempla
 }
 
 // loadEmbeddedTemplates loads templates from embedded JSON file into both templates and embedded
-func (tm *TemplateManager) loadEmbeddedTemplates() error {
-	var registry ProviderTemplateRegistry
+func (tm *ProviderCatalogManager) loadEmbeddedTemplates() error {
+	var registry ProviderCatalogRegistry
 	if err := json.Unmarshal(embeddedTemplatesJSON, &registry); err != nil {
 		return fmt.Errorf("failed to parse embedded templates: %w", err)
 	}
 
 	// Make a deep copy for embedded (immutable fallback)
-	embeddedCopy := make(map[string]*ProviderTemplate, len(registry.Providers))
+	embeddedCopy := make(map[string]*ProviderCatalog, len(registry.Providers))
 	for k, v := range registry.Providers {
 		embeddedCopy[k] = deepCopyTemplate(v)
 	}
@@ -564,8 +564,8 @@ func (tm *TemplateManager) loadEmbeddedTemplates() error {
 	return nil
 }
 
-// ValidateTemplate validates a provider template
-func ValidateTemplate(tmpl *ProviderTemplate) error {
+// ValidateProviderCatalog validates a provider template
+func ValidateProviderCatalog(tmpl *ProviderCatalog) error {
 	if tmpl.ID == "" {
 		return fmt.Errorf("template ID is required")
 	}
@@ -592,7 +592,7 @@ func ValidateTemplate(tmpl *ProviderTemplate) error {
 // OAuth providers match by OAuthDetail.Issuer; multi-field cloud providers by
 // auth_type + api_style; API-key providers by APIBase against canonical_domain
 // or base URLs.
-func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *ProviderTemplate {
+func (tm *ProviderCatalogManager) findTemplateByProvider(provider *typ.Provider) *ProviderCatalog {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return matchProviderTemplate(provider, tm.searchTemplates)
@@ -600,11 +600,11 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 
 // matchProviderTemplate holds the provider→template matching rules once; the
 // search parameter selects the template set (active vs embedded-only).
-func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTemplate) bool) *ProviderTemplate) *ProviderTemplate {
+func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderCatalog) bool) *ProviderCatalog) *ProviderCatalog {
 	// OAuth providers: match by OAuthProvider only, no fallback
 	if provider.IsOAuth() && provider.OAuthDetail != nil {
 		issuer := provider.OAuthDetail.Issuer
-		return search(func(tmpl *ProviderTemplate) bool {
+		return search(func(tmpl *ProviderCatalog) bool {
 			return tmpl.OAuthProvider == string(issuer)
 		})
 	}
@@ -634,8 +634,8 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTem
 	// the longest prefix of the provider's, rather than the first hit off the
 	// map — the latter picked a random one of the two on every process
 	// restart. A single match keeps the original behavior exactly.
-	var candidates []*ProviderTemplate
-	search(func(tmpl *ProviderTemplate) bool {
+	var candidates []*ProviderCatalog
+	search(func(tmpl *ProviderCatalog) bool {
 		if tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain) &&
 			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle)) {
 			candidates = append(candidates, tmpl)
@@ -652,11 +652,11 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTem
 	// Fallback: Determine which base URL field to match based on APIStyle
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		return search(func(tmpl *ProviderTemplate) bool {
+		return search(func(tmpl *ProviderCatalog) bool {
 			return tmpl.BaseURLAnthropic == apiBase
 		})
 	default:
-		return search(func(tmpl *ProviderTemplate) bool {
+		return search(func(tmpl *ProviderCatalog) bool {
 			return tmpl.BaseURLOpenAI == apiBase
 		})
 	}
@@ -666,7 +666,7 @@ func matchProviderTemplate(provider *typ.Provider, search func(func(*ProviderTem
 // longest prefix of apiBase, among templates that matched on canonical_domain
 // alone. Falls back to the first candidate if none qualifies (malformed
 // template data — not expected in practice).
-func mostSpecificTemplate(candidates []*ProviderTemplate, apiBase string) *ProviderTemplate {
+func mostSpecificTemplate(candidates []*ProviderCatalog, apiBase string) *ProviderCatalog {
 	best := candidates[0]
 	bestLen := -1
 	for _, tmpl := range candidates {
@@ -687,8 +687,8 @@ func mostSpecificTemplate(candidates []*ProviderTemplate, apiBase string) *Provi
 // cloudTemplateMatcher matches a multi-field cloud provider to its template by
 // auth_type, with api_style disambiguating templates that share an auth type
 // (Vertex Claude vs Gemini).
-func cloudTemplateMatcher(provider *typ.Provider) func(*ProviderTemplate) bool {
-	return func(tmpl *ProviderTemplate) bool {
+func cloudTemplateMatcher(provider *typ.Provider) func(*ProviderCatalog) bool {
+	return func(tmpl *ProviderCatalog) bool {
 		return tmpl.AuthType == string(provider.AuthType) &&
 			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle))
 	}
@@ -699,7 +699,7 @@ func cloudTemplateMatcher(provider *typ.Provider) func(*ProviderTemplate) bool {
 // always a superset of the embedded ids — no separate embedded scan is needed
 // here. searchEmbedded exists for callers that deliberately bypass a possibly
 // disk-cached set.
-func (tm *TemplateManager) searchTemplates(matcher func(*ProviderTemplate) bool) *ProviderTemplate {
+func (tm *ProviderCatalogManager) searchTemplates(matcher func(*ProviderCatalog) bool) *ProviderCatalog {
 	for _, tmpl := range tm.templates {
 		if matcher(tmpl) {
 			return tmpl
@@ -709,7 +709,7 @@ func (tm *TemplateManager) searchTemplates(matcher func(*ProviderTemplate) bool)
 }
 
 // searchEmbedded searches only tm.embedded, bypassing the (possibly disk-cached) tm.templates.
-func (tm *TemplateManager) searchEmbedded(matcher func(*ProviderTemplate) bool) *ProviderTemplate {
+func (tm *ProviderCatalogManager) searchEmbedded(matcher func(*ProviderCatalog) bool) *ProviderCatalog {
 	for _, tmpl := range tm.embedded {
 		if matcher(tmpl) {
 			return tmpl
@@ -718,8 +718,8 @@ func (tm *TemplateManager) searchEmbedded(matcher func(*ProviderTemplate) bool) 
 	return nil
 }
 
-// deepCopyTemplate creates a deep copy of a ProviderTemplate
-func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
+// deepCopyTemplate creates a deep copy of a ProviderCatalog
+func deepCopyTemplate(tmpl *ProviderCatalog) *ProviderCatalog {
 	result := *tmpl
 
 	// Copy models slice (NEW: ModelInfo array)
@@ -764,12 +764,12 @@ func deepCopyCapabilitySchema(schema *CapabilitySchema) *CapabilitySchema {
 // 1. GitHub/embedded templates with models list
 // Note: API-based model fetching is now handled by the client layer (client.ModelLister)
 // This method only returns static models from templates
-func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]string, TemplateSource, error) {
+func (tm *ProviderCatalogManager) GetModelsForProvider(provider *typ.Provider) ([]string, CatalogSource, error) {
 	// Find template by matching APIBase or OAuthProvider
 	tmpl := tm.findTemplateByProvider(provider)
 
 	if tmpl == nil {
-		return nil, TemplateSourceLocal, fmt.Errorf("no matching template found for provider with api_base '%s'", provider.APIBase)
+		return nil, CatalogSourceLocal, fmt.Errorf("no matching template found for provider with api_base '%s'", provider.APIBase)
 	}
 
 	// Get source info
@@ -786,13 +786,13 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 		return modelIDs, source, nil
 	}
 
-	return nil, TemplateSourceLocal, fmt.Errorf("no models found for provider with api_base '%s'", provider.APIBase)
+	return nil, CatalogSourceLocal, fmt.Errorf("no models found for provider with api_base '%s'", provider.APIBase)
 }
 
 // GetEmbeddedModelsForProvider returns models from the compile-time embedded providers.json,
 // bypassing any disk cache. Use this for fallback paths where the provider API is unavailable,
 // so the result is always the binary's built-in defaults rather than a potentially stale cache.
-func (tm *TemplateManager) GetEmbeddedModelsForProvider(provider *typ.Provider) ([]string, error) {
+func (tm *ProviderCatalogManager) GetEmbeddedModelsForProvider(provider *typ.Provider) ([]string, error) {
 	tmpl := tm.findEmbeddedTemplateByProvider(provider)
 	if tmpl == nil {
 		return nil, fmt.Errorf("no embedded template found for provider with api_base '%s'", provider.APIBase)
@@ -809,7 +809,7 @@ func (tm *TemplateManager) GetEmbeddedModelsForProvider(provider *typ.Provider) 
 
 // findEmbeddedTemplateByProvider is like findTemplateByProvider but searches only tm.embedded,
 // not the (possibly disk-cached) tm.templates.
-func (tm *TemplateManager) findEmbeddedTemplateByProvider(provider *typ.Provider) *ProviderTemplate {
+func (tm *ProviderCatalogManager) findEmbeddedTemplateByProvider(provider *typ.Provider) *ProviderCatalog {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return matchProviderTemplate(provider, tm.searchEmbedded)
@@ -822,7 +822,7 @@ func (tm *TemplateManager) findEmbeddedTemplateByProvider(provider *typ.Provider
 // 1. Exact match in Models array (ModelInfo.MaxOutput)
 // 2. ModelCapacities override (for capacity-based limits)
 // 3. Global default
-func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
+func (tm *ProviderCatalogManager) GetMaxTokensForModel(provider, model string) int {
 	// Try templates first if available
 	if tm != nil {
 		tmpl, _ := tm.GetTemplate(provider)
@@ -849,7 +849,7 @@ func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 // GetMaxTokensForModelByProvider returns the maximum allowed tokens for a specific model
 // using the provider templates matched by APIBase or OAuthProvider.
 // This is the preferred method as it correctly matches templates regardless of user-defined provider name.
-func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider, model string) int {
+func (tm *ProviderCatalogManager) GetMaxTokensForModelByProvider(provider *typ.Provider, model string) int {
 	if tm == nil || provider == nil {
 		return constant.DefaultMaxTokens
 	}
@@ -881,7 +881,7 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 // function didn't exist. Matched by template like
 // GetMaxTokensForModelByProvider, so it works regardless of the provider's
 // display name.
-func (tm *TemplateManager) GetOpenAIEndpointOverrideForModel(provider *typ.Provider, model string) ai.OpenAIEndpointMode {
+func (tm *ProviderCatalogManager) GetOpenAIEndpointOverrideForModel(provider *typ.Provider, model string) ai.OpenAIEndpointMode {
 	if tm == nil || provider == nil || model == "" {
 		return ai.EndpointModeUnknown
 	}
@@ -926,7 +926,7 @@ func openAIEndpointModeFromList(endpoints []string) ai.OpenAIEndpointMode {
 
 // GetWebSearchSchemaForProvider returns the web search capability schema for a provider
 // Returns nil if the provider doesn't have web_search_schema defined or the schema doesn't exist
-func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider) *CapabilitySchema {
+func (tm *ProviderCatalogManager) GetWebSearchSchemaForProvider(provider *typ.Provider) *CapabilitySchema {
 	if tm == nil || provider == nil {
 		return nil
 	}
@@ -956,7 +956,7 @@ func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider)
 
 // ProviderHasBuiltInWebSearch checks if a provider has built-in web_search capability
 // Returns true if the provider has a web_search_schema with BuiltIn=true
-func (tm *TemplateManager) ProviderHasBuiltInWebSearch(provider *typ.Provider) bool {
+func (tm *ProviderCatalogManager) ProviderHasBuiltInWebSearch(provider *typ.Provider) bool {
 	if tm == nil || provider == nil {
 		return false
 	}

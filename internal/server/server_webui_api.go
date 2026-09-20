@@ -15,7 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
 	providermodule "github.com/tingly-dev/tingly-box/internal/server/module/provider"
-	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
+	"github.com/tingly-dev/tingly-box/internal/server/module/providercatalog"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
 	shortcutmodule "github.com/tingly-dev/tingly-box/internal/server/module/shortcut"
@@ -412,9 +412,9 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
 	providermodule.RegisterRoutes(apiV2, providerHandler)
 
-	// Provider template endpoints
-	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
-	providertemplate.RegisterRoutes(apiV2, providerTemplateHandler)
+	// Provider catalog endpoints
+	providerCatalogHandler := providercatalog.NewHandler(s.templateManager)
+	providercatalog.RegisterRoutes(apiV2, providerCatalogHandler)
 }
 
 // ValidateAuthToken validates an authentication token without requiring auth

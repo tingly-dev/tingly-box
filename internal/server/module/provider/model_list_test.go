@@ -27,7 +27,7 @@ func newTestConfigWithTemplates(t *testing.T) *config.Config {
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	tm := catalog.NewEmbeddedOnlyTemplateManager()
+	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
 	require.NoError(t, tm.Initialize(context.Background()))
 	cfg.SetTemplateManager(tm)
 

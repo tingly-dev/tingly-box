@@ -90,9 +90,9 @@ export const api = {
         return body;
     },
 
-    // Get provider templates (service providers for dropdown)
-    getProviderTemplates: async (): Promise<any> =>
-        controlApi((client, headers) => client.GET('/api/v2/provider-templates', {headers})),
+    // Get provider catalog entries (service providers for dropdown)
+    getProviderCatalogs: async (): Promise<any> =>
+        controlApi((client, headers) => client.GET('/api/v2/provider-catalog', {headers})),
 
     // Model ordering is authoritative from the backend (config.SortProviderModels); do not re-sort here.
     updateProviderModelsByUUID: async (uuid: string): Promise<any> =>

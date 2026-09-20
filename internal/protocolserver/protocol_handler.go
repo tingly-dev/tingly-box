@@ -16,9 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -66,7 +66,7 @@ type ProtocolHandlerDeps struct {
 
 	// TemplateManager resolves per-provider model metadata (max tokens,
 	// description, context window) from the provider template catalog.
-	TemplateManager *catalog.TemplateManager
+	TemplateManager *catalog.ProviderCatalogManager
 
 	// RoutingSelector runs the full selection pipeline (health → smart →
 	// affinity → strategy) for a scenario/rule/request, used by the top-level

@@ -35,7 +35,7 @@ type quickstartState struct {
 	providerCreated bool
 	useExisting     bool
 
-	selectedTemplate *catalog.ProviderTemplate // nil = custom provider
+	selectedTemplate *catalog.ProviderCatalog // nil = custom provider
 	providerName     string
 	apiBase          string
 	apiToken         string
@@ -161,17 +161,17 @@ func qsCredential(ctx StepContext, s quickstartState) (quickstartState, StepResu
 
 func qsProvider(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
 	cfg := s.mgr.GetGlobalConfig()
-	var tm *catalog.TemplateManager
+	var tm *catalog.ProviderCatalogManager
 	if cfg != nil {
 		tm = cfg.GetTemplateManager()
 	}
 	if tm == nil {
-		tm = catalog.NewEmbeddedOnlyTemplateManager()
+		tm = catalog.NewEmbeddedOnlyProviderCatalogManager()
 	}
 	_ = tm.Initialize(context.Background())
 
 	// All non-OAuth templates that have at least one usable base URL.
-	var avail []*catalog.ProviderTemplate
+	var avail []*catalog.ProviderCatalog
 	for _, t := range tm.GetAllTemplates() {
 		if !t.Valid || t.AuthType == "oauth" {
 			continue
@@ -293,7 +293,7 @@ func qsAPIStyle(ctx StepContext, s quickstartState) (quickstartState, StepResult
 
 // templateStylesLabel returns a short description of which API styles a
 // template supports, e.g. "openai · anthropic" or just "openai".
-func templateStylesLabel(t *catalog.ProviderTemplate) string {
+func templateStylesLabel(t *catalog.ProviderCatalog) string {
 	var styles []string
 	if t.BaseURLOpenAI != "" {
 		styles = append(styles, "openai")

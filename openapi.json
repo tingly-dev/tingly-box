@@ -7106,6 +7106,105 @@
         }
       }
     },
+    "/api/v2/provider-catalog": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get all provider catalog entries",
+        "description": "Get all provider catalog entries",
+        "operationId": "apiV2Provider-catalogGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-catalog/refresh": {
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Refresh the provider catalog from GitHub",
+        "description": "Refresh the provider catalog from GitHub",
+        "operationId": "apiV2Provider-catalogRefreshPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-catalog/version": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get current provider catalog registry version",
+        "description": "Get current provider catalog registry version",
+        "operationId": "apiV2Provider-catalogVersionGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-catalog/{id}": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get a specific provider catalog entry by ID",
+        "description": "Get a specific provider catalog entry by ID",
+        "operationId": "apiV2Provider-catalogIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/provider-export": {
       "get": {
         "tags": [
@@ -7249,105 +7348,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProviderModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/provider-templates": {
-      "get": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Get all provider templates",
-        "description": "Get all provider templates",
-        "operationId": "apiV2Provider-templatesGet",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/provider-templates/refresh": {
-      "post": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Refresh provider templates from GitHub",
-        "description": "Refresh provider templates from GitHub",
-        "operationId": "apiV2Provider-templatesRefreshPost",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/provider-templates/version": {
-      "get": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Get current provider template registry version",
-        "description": "Get current provider template registry version",
-        "operationId": "apiV2Provider-templatesVersionGet",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/provider-templates/{id}": {
-      "get": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Get a specific provider template by ID",
-        "description": "Get a specific provider template by ID",
-        "operationId": "apiV2Provider-templatesIdGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
                 }
               }
             }
@@ -13243,6 +13243,172 @@
           }
         }
       },
+      "ProviderCatalog": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "api_doc": {
+            "type": "string",
+            "description": "Field api_doc"
+          },
+          "api_style": {
+            "type": "string",
+            "description": "Field api_style"
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "base_url_anthropic": {
+            "type": "string",
+            "description": "Field base_url_anthropic"
+          },
+          "base_url_openai": {
+            "type": "string",
+            "description": "Field base_url_openai"
+          },
+          "canonical_domain": {
+            "type": "string",
+            "description": "Field canonical_domain"
+          },
+          "default_model_capacity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field default_model_capacity"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Field icon"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "model_capacities": {
+            "type": "object",
+            "description": "Field model_capacities",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "model_doc": {
+            "type": "string",
+            "description": "Field model_doc"
+          },
+          "models": {
+            "type": "array",
+            "description": "Field models",
+            "items": {
+              "$ref": "#/components/schemas/ModelInfo"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "oauth_provider": {
+            "type": "string",
+            "description": "Field oauth_provider"
+          },
+          "openai_endpoint_mode": {
+            "type": "string",
+            "description": "Field openai_endpoint_mode"
+          },
+          "plan": {
+            "type": "string",
+            "description": "Field plan"
+          },
+          "pricing_doc": {
+            "type": "string",
+            "description": "Field pricing_doc"
+          },
+          "region": {
+            "type": "string",
+            "description": "Field region"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          },
+          "supports_models_endpoint": {
+            "type": "boolean",
+            "description": "Field supports_models_endpoint"
+          },
+          "total_capacity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total_capacity"
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "Field valid"
+          },
+          "vendor_family": {
+            "type": "string",
+            "description": "Field vendor_family"
+          },
+          "web_search_schema": {
+            "type": "string",
+            "description": "Field web_search_schema"
+          },
+          "website": {
+            "type": "string",
+            "description": "Field website"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "valid",
+          "website",
+          "canonical_domain",
+          "vendor_family",
+          "region",
+          "plan",
+          "description",
+          "api_doc",
+          "model_doc",
+          "pricing_doc",
+          "models",
+          "supports_models_endpoint"
+        ]
+      },
+      "ProviderCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Field data",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderCatalog"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          },
+          "version": {
+            "type": "string",
+            "description": "Field version"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "ProviderImportInfo": {
         "type": "object",
         "properties": {
@@ -13448,145 +13614,6 @@
           "token",
           "no_key_required",
           "enabled"
-        ]
-      },
-      "ProviderTemplate": {
-        "type": "object",
-        "properties": {
-          "alias": {
-            "type": "string",
-            "description": "Field alias"
-          },
-          "api_doc": {
-            "type": "string",
-            "description": "Field api_doc"
-          },
-          "api_style": {
-            "type": "string",
-            "description": "Field api_style"
-          },
-          "auth_type": {
-            "type": "string",
-            "description": "Field auth_type"
-          },
-          "base_url_anthropic": {
-            "type": "string",
-            "description": "Field base_url_anthropic"
-          },
-          "base_url_openai": {
-            "type": "string",
-            "description": "Field base_url_openai"
-          },
-          "canonical_domain": {
-            "type": "string",
-            "description": "Field canonical_domain"
-          },
-          "default_model_capacity": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field default_model_capacity"
-          },
-          "description": {
-            "type": "string",
-            "description": "Field description"
-          },
-          "icon": {
-            "type": "string",
-            "description": "Field icon"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "model_capacities": {
-            "type": "object",
-            "description": "Field model_capacities",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          "model_doc": {
-            "type": "string",
-            "description": "Field model_doc"
-          },
-          "models": {
-            "type": "array",
-            "description": "Field models",
-            "items": {
-              "$ref": "#/components/schemas/ModelInfo"
-            }
-          },
-          "name": {
-            "type": "string",
-            "description": "Field name"
-          },
-          "oauth_provider": {
-            "type": "string",
-            "description": "Field oauth_provider"
-          },
-          "openai_endpoint_mode": {
-            "type": "string",
-            "description": "Field openai_endpoint_mode"
-          },
-          "plan": {
-            "type": "string",
-            "description": "Field plan"
-          },
-          "pricing_doc": {
-            "type": "string",
-            "description": "Field pricing_doc"
-          },
-          "region": {
-            "type": "string",
-            "description": "Field region"
-          },
-          "status": {
-            "type": "string",
-            "description": "Field status"
-          },
-          "supports_models_endpoint": {
-            "type": "boolean",
-            "description": "Field supports_models_endpoint"
-          },
-          "total_capacity": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field total_capacity"
-          },
-          "valid": {
-            "type": "boolean",
-            "description": "Field valid"
-          },
-          "vendor_family": {
-            "type": "string",
-            "description": "Field vendor_family"
-          },
-          "web_search_schema": {
-            "type": "string",
-            "description": "Field web_search_schema"
-          },
-          "website": {
-            "type": "string",
-            "description": "Field website"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "status",
-          "valid",
-          "website",
-          "canonical_domain",
-          "vendor_family",
-          "region",
-          "plan",
-          "description",
-          "api_doc",
-          "model_doc",
-          "pricing_doc",
-          "models",
-          "supports_models_endpoint"
         ]
       },
       "ProviderUsage": {
@@ -15459,33 +15486,6 @@
           "is_default",
           "created_at",
           "updated_at"
-        ]
-      },
-      "TemplateResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "object",
-            "description": "Field data",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ProviderTemplate"
-            }
-          },
-          "message": {
-            "type": "string",
-            "description": "Field message"
-          },
-          "success": {
-            "type": "boolean",
-            "description": "Field success"
-          },
-          "version": {
-            "type": "string",
-            "description": "Field version"
-          }
-        },
-        "required": [
-          "success"
         ]
       },
       "TimeSeriesData": {

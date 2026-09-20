@@ -11,8 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
@@ -308,14 +308,14 @@ func (c *Config) GetModelManager() *catalog.ModelListManager {
 }
 
 // SetTemplateManager sets the template manager for provider templates
-func (c *Config) SetTemplateManager(tm *catalog.TemplateManager) {
+func (c *Config) SetTemplateManager(tm *catalog.ProviderCatalogManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.templateManager = tm
 }
 
 // GetTemplateManager returns the template manager
-func (c *Config) GetTemplateManager() *catalog.TemplateManager {
+func (c *Config) GetTemplateManager() *catalog.ProviderCatalogManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.templateManager

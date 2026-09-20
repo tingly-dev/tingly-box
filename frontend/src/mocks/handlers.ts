@@ -441,13 +441,15 @@ const getMockProviderModels = (uuid: string): string[] => {
     return mockVirtualProviders.find((provider) => provider.uuid === uuid)?.vmodel_detail.models ?? []
 }
 
-// Catalog of *addable* provider templates (ConnectProviderDialog's Cloud /
+// Catalog of *addable* provider catalog entries (ConnectProviderDialog's Cloud /
 // Self-hosted / API key providers sections) — distinct from getMockProviders
-// above, which is the *already-connected* provider list. Real data comes
-// from the backend catalog (dozens of entries); this is a small
-// representative slice — one of each region/type — just enough for the
-// picker's every section to have something to show in mock mode.
-const getMockProviderTemplates = () => ({
+// above, which is the *already-connected* provider list, and from
+// mockStandardProviderCatalog/mockOAuthProviderCatalog below, which back the
+// provider-management CRUD endpoints. Real data comes from the backend
+// catalog (dozens of entries); this is a small representative slice — one of
+// each region/type — just enough for the picker's every section to have
+// something to show in mock mode.
+const getMockProviderCatalogs = () => ({
     anthropic: {
         id: 'anthropic', name: 'Anthropic', status: 'active', valid: true,
         website: 'https://anthropic.com', description: 'Official Anthropic API',
@@ -2014,12 +2016,12 @@ export const handlers = [
     }),
 
     // ============================================
-    // v2 Provider Templates API (catalog for ConnectProviderDialog)
+    // v2 Provider Catalog API (for ConnectProviderDialog)
     // ============================================
-    http.get('/api/v2/provider-templates', () => {
+    http.get('/api/v2/provider-catalog', () => {
         return HttpResponse.json({
             success: true,
-            data: getMockProviderTemplates(),
+            data: getMockProviderCatalogs(),
         })
     }),
 
