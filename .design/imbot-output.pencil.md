@@ -273,9 +273,9 @@ Weixin、WeCom、WhatsApp 是同一个类别——`SupportsInteraction()` 全部
 
 ---
 
-## 新增：消息-会话身份落地后是什么样子（`msg-session-identity` 系列分支）
+## 新增：一个 chat 里两个来源同时 pending 时，回复该给谁（`msg-session-identity` → `reply-to` 系列分支）
 
-以上所有画的都是"一条消息长什么样"。这一节画的是另一件事——**同一个 chat 里，两个互不相干的来源同时想让用户回答，系统现在怎么分辨"这句回复该给谁"**。背景见 `.design/imbot-output.md` §8，代码见分支 `claude/gifted-feynman-lwrxtb-msg-session-identity`（commit `cab1786`、`440946f`）。
+以上所有画的都是"一条消息长什么样"。这一节画的是另一件事——**同一个 chat 里，两个互不相干的来源同时想让用户回答，系统怎么分辨"这句回复该给谁"**。背景、分析、结论、设计见 `.design/imbot-output.md` §8；代码分两阶段：Source 优先级兜底（分支 `claude/gifted-feynman-lwrxtb-msg-session-identity`，commit `cab1786`、`440946f`），原生 reply-to 精确匹配（分支 `claude/gifted-feynman-lwrxtb-reply-to`，commit `91eb37c`、`5d7f5b7`、`de0c9f3`）。
 
 ### 场景：一个 chat，两个同时 pending 的请求
 
@@ -341,7 +341,7 @@ GetPendingRequestsForChat("alice-dm")
                           budget/timeout 到期按策略兜底
 ```
 
-### 这个规则赌对了会怎样，赌错了会怎样
+### 这个规则赌对了会怎样，赌错了会怎样——以及现在的结局
 
 ```
 ✅ 赌对（大多数情况）：            ❌ 赌错（少数情况）：
@@ -354,8 +354,4 @@ Alice 就是在回 @cc 的确认        Alice 其实是想回那条 notify
                                 直到自己超时按默认策略处理
 ```
 
-这不是"修好了"，是"把一个纯随机的猜测，换成一个有理由但仍然会猜错的默认值"——理由是"用户此刻在跟 agent 对话，回复大概率是回它"，赌错的那一半目前没有更强的信号能避免（原生 reply-to 能解决，但还没接，见下一节）。这个取舍是讨论后主动接受的，不是发现晚了没来得及修。
-
-### 和"⚠️1 重复确认"这些画的关系
-
-上面几节的 ⚠️ 编号画的是"一条消息本身的问题"（重复发送、调试格式、按钮残留/缺失、文字降级）。这一节画的是"两条独立消息互相干扰"的问题——层次不一样：前者哪怕只有一个来源在发消息也会发生，后者必须两个来源同时活跃才会暴露。`SessionID`/`Source` 这两个字段是为了给后者兜底，顺带也是回答 `.design/imbot-output.md` §8 那条"每条消息该知道自己是哪个 session/service 发出去的"根因记录——不过目前只接到了"能排出优先级"这一步，`SendResult.MessageID` 持久化、`SessionMgr` 记录助手回复这些还没做。
+上面这张图画的是"只有 Source 优先级排序、没有 reply-to"时的局面——**这个局面现在只在 DingTalk 上还存在**。`claude/gifted-feynman-lwrxtb-reply-to` 分支接上了原生 reply-to 精确匹配后，Alice 只要真的点"回复"那条具体消息（而不是在 chat 里裸打字），8/9 个平台上系统就直接知道她回的是哪一条，不用再猜；只有裸打字、或者在 DingTalk 上（协议层没有回复信号），才会退回这张图画的赌法。分析、结论和设计细节见 `.design/imbot-output.md` §8"赌错会怎样"一节，这里不重复。

@@ -120,22 +120,25 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 
   **进一步讨论后又加了一层（commit `440946f`）**：纯按时间排序还是"猜"，只是猜得确定了。讨论时先提过"排队"（同一时间只放一个 pending，参考 `Executions.begin` 的单飞模式）——这个方向被否了，因为 Flow A（notify）和 Flow B（remote_agent）是刻意解耦的两个 consumer（见 `bot-arch.md` §1），排队等于把两者重新耦合，而且会莫名卡住 Flow A 里外部 Claude Code 进程的 hook 请求。改成给 `ask.Request` 加一个 `Source` 字段（`ask.SourceNotify` / `ask.SourceRemoteAgent`，字面量对应 `bot.NotifyConsumerName`/`binding.RemoteAgentScenario` 现成的名字，不引入新概念），在两个来源分别打标签，`GetPendingRequestsForChat` 排序规则升级成两级：**同一个 chat 里，`remote_agent` 来源永远排在 `notify` 来源前面，同来源内部再按时间**。原本也考虑过在 prompt 文案里加图标区分来源（🔔/💬）方便人眼分辨，但这本身是给"减少视觉噪声"这个大方向增负担，权衡后放弃——标签只用于内部排序，不体现在文案里。
 
-  **这条优先级规则本身站不站得住**：`remote_agent` 优先的假设是"用户此刻在跟 agent 对话，回复大概率是回它"——如果用户其实是特意去处理那条 notify 推送，这条规则会猜错。**这个规则现在已经降级成兜底**——见下面"赌错会怎样"一节：reply-to 精确匹配已经实现并覆盖 8/9 平台，只有匹配不到（没有 reply-to 信号，或用户没有真的点"回复"这条具体消息，就是直接在 chat 里打字）时，才会退回到这条 Source 优先级规则去猜。
-
   **没做的**：`SendResult.MessageID` 仍然没人持久化，`SessionMgr.AppendMessage` 仍然只记 inbound——这两块本轮明确排除在范围外，之前讨论时已经确认。
 
-  **"赌错会怎样"这个问题的解法梳理（讨论后决定：先记录，不执行）**——`Source` 优先级排序不是"解决"，是"把纯随机的猜测换成一个有理由但仍会猜错的默认值"，真正能做到"不用猜"的方案有以下几层，按"彻底程度 vs 成本"排列：
+  ### "赌错会怎样"：分析 / 结论 / 设计
 
-  1. ~~原生 reply-to 匹配~~ **已实现（分支 `claude/gifted-feynman-lwrxtb-reply-to`，commit `91eb37c`、`5d7f5b7`）**：调研之前的假设（只有 Telegram/Discord/Slack/Feishu/Lark 5 个平台有原生回复）是错的——查了 imbot 每个平台的入站适配器，Weixin、WeCom 其实也已经把原生回复能力（`ReplyToID`）接进了 `core.Message.ThreadContext.ParentMessageID`；WhatsApp 的 webhook 本来就带 `context.id`，只是 `MessageEvent` 结构体没声明这个字段，字段一直被静默丢弃，这次补上了。**最终覆盖 8 个平台**（Telegram/Discord/Feishu/Lark/Slack/Weixin/WeCom/WhatsApp），真正没有任何原生回复信号的只剩 **DingTalk**（Stream 模式的 `BotCallbackDataModel` 里确实没有任何 context/parent 字段）。实现上：`ask.Request` 加了 `MessageID` 字段（`GetPendingRequestsForChat` 返回时回填，构造请求时还不知道），新增 `bot.ReplyToMessageID(msg)` 读取入站消息的回复目标，`bot.SelectPendingRequest(pendingReqs, replyToID)` 把"精确匹配"和"Source+时间兜底"这两层判断分开，精确匹配命中就直接用，不命中/没有回复目标才退回旧的启发式。
+  **分析**：`Source` 优先级排序不是"解决"，只是"把纯随机的猜测换成一个有理由但仍会猜错的默认值"——`remote_agent` 优先的假设是"用户此刻在跟 agent 对话，回复大概率是回它"，如果用户其实是特意去处理那条 notify 推送，就会猜错，而且目前没有别的信号能纠正这个猜测。真正能做到"不用猜"的方案有三层，按"彻底程度 vs 成本"排列：① 原生 reply-to 匹配（平台支持时零 UX 成本，直接知道回的是哪一条）；② 没有原生回复的平台上用短标记文字兜底（UX 成本小，但只在稀有的"同时 ≥2 个 pending"场景才有感知）；③ 撞车时直接问一句消歧（要多发一条消息，只在真撞车时触发）。
 
-     **DingTalk 这条结论额外做了联网核实（不只看我们 vendor 的 SDK 代码），结论不变，但性质更明确了**：钉钉官方"机器人接收消息"协议文档（`open.dingtalk.com/document/robots/receive-message`）列出的回调字段——`conversationId`/`atUsers`/`chatbotCorpId`/`chatbotUserId`/`msgId`/`senderNick`/`isAdmin`/`senderStaffId`/`sessionWebhook(ExpiredTime)`/`createAt`/`senderCorpId`/`conversationType`/`senderId`/`conversationTitle`/`isInAtList`/`text`/`robotCode`/`msgtype`/`content`——和我们 vendor 的 `dingtalk-stream-sdk-go@v0.9.2-beta.1` 里 `chatbot.BotCallbackDataModel` 逐字段对得上，协议本身就没有 `quotedMsgId`/`parentMsgId` 这类字段，**不是 SDK 没跟上协议、是协议里压根没有这个概念**。阿里云开发者社区上也有开发者问过同样的问题（"机器人单聊，如何查看被引用（回复）的消息"），至今没有官方给出字段级别的答案，侧面印证这不是一个大家都知道怎么解的常见能力。也就是说，DingTalk 这个平台上"reply-to 精确匹配"从根上就不可能做到零成本——第②层（`[2]` 短标记文字兜底）就是它唯一可行的"真解决"路径，不是"暂时没查"，是"协议层限制，查了也没有"。
+  **结论**：
+  - **① 原生 reply-to 匹配：做**——收益最大、零成本、覆盖面最广，已实现（见下方"设计"）。
+  - **② 短标记文字兜底：放弃**——调研后需要它的平台已经从最初以为的 4 个（DingTalk/Weixin/WeCom/WhatsApp）缩小到只剩 DingTalk 一个（Weixin/WeCom/WhatsApp 都被①覆盖了）。为一个平台单独引入"`[2]` 标记 + `2y` 回复格式"的特殊交互，边际收益（DingTalk 上两个 pending 同时撞车本身就是稀有事件）配不上引入的特殊分支和用户要多记一种回复格式的成本。
+  - **③ 撞车时直接问：放弃**——②不做之后，③（撞车时改问一句消歧）也就没有单独存在的理由，一并归为不做。
+  - **④ `Source` 优先级排序**（commit `440946f`）：**定位从"主力机制"降级为"①命中不了时的兜底"**——覆盖 8/9 平台之后，只有 DingTalk、或者 reply-to 信号丢失/不匹配的边缘情况才会真正用到它。DingTalk 因此永久停在这一层：猜错时用户依然可以在同一个 chat 里正常说话纠正，不是不可恢复的错误。
 
-     **测试验证（commit 待补）**：上面"8 个平台"这个结论最初只靠读代码，没有测试兜底——WhatsApp 之外的 7 个平台，只有 Feishu 有一个 e2e 测试会 `t.Logf` 打印 `ThreadContext`，不构成断言。补了 `AdaptMessage`/`handleMessage` 级别的单测后（`imbot/platform/{telegram,discord,feishu,weixin,wecom,slack}/*_reply_test.go`，每个平台覆盖"有回复信号→` ParentMessageID` 命中"和"无回复信号→ `ThreadContext` 为 nil"两个场景），跑出来发现了**两个之前一直存在、文档误认为"已实现"的真 bug**，都已经修：
-     - **Discord**：`adapter.go` 原来读的是 `msg.Reference()`，这是 discordgo 提供的"生成一个指向本消息的引用"的方法（给别人回复这条消息用），文档原文写得很清楚——"This does not contain the reference *to* this message; this is for when *this* message references another"——不是"本消息在回复谁"。结果是 `ParentMessageID` 永远等于消息自己的 ID，自己指自己，从来没真正匹配上过任何 pending request。改成读 `msg.MessageReference`（网关在这条消息本身是回复/thread-starter 时才会填的字段）。
-     - **Weixin**：`adapter.go` 原来把 `ThreadContext`（连带 `ParentMessageID`）整体套在 `if sessionID != ""` 里——`sessionID` 是微信客服会话 ID，跟"这条消息在回复哪条"（`msg.ReplyToID`）是两个独立概念，上游 SDK 自己的 `message/monitor.go` 也有 `msg.SessionID != ""` 的判断，说明 `SessionID` 确实会为空。只要那一刻 `SessionID` 恰好是空的，哪怕 `ReplyToID` 是真实有效的，回复信号也会被整体吞掉。改成 `sessionID != "" || msg.ReplyToID != ""`，两个信号不再互相牵连。
-     
-     Telegram、Feishu（连带继承的 Lark）、WeCom、Slack 四个平台测试一次性通过，没有暴露问题——这四个是真的按文档说的那样在正确工作。
-  2. ~~文字平台的短标记兜底~~ **放弃，不做**：调研后范围已经缩小成只剩 DingTalk 一个平台需要它，但评估后认为这条路线本身不值得——为一个平台单独引入一套"`[2]` 标记 + `2y` 回复格式"的特殊交互，边际收益（DingTalk 上两个 pending 同时撞车本来就是稀有事件）配不上引入的特殊分支和用户要多记一种回复格式的成本。**结论：DingTalk 就接受现状**——落回 Source 优先级兜底，猜错时用户依然可以在同一个 chat 里正常说话，不是不可恢复的错误，只是偶尔要多说一句话纠正。
-  3. **兜底不猜，直接问**：连带②一起放弃考虑——②都不做了，③（撞车时改成主动问一句）也就没有单独存在的理由，一并归为不做。
-  4. **`Source` 优先级排序**（commit `440946f`）：现在是 DingTalk 上**唯一在跑、也是最终形态**的兜底——覆盖 8/9 平台之后，只有 DingTalk、或者 reply-to 信号丢失/不匹配的边缘情况才会用到它，其余情况都已经被①的精确匹配吃掉了。
+  **设计**（分支 `claude/gifted-feynman-lwrxtb-reply-to`，commit `91eb37c`、`5d7f5b7`、`de0c9f3`）：
+
+  - **覆盖范围**：调研之前假设只有 Telegram/Discord/Slack/Feishu/Lark 5 个平台有原生回复；实际查了 imbot 每个平台的入站适配器后发现 Weixin、WeCom 也已经把原生回复能力（`ReplyToID`）接进了 `core.Message.ThreadContext.ParentMessageID`；WhatsApp 的 webhook 本来就带 `context.id`，只是 `MessageEvent` 结构体没声明这个字段，字段一直被静默丢弃，这次补上了。**最终覆盖 8 个平台**（Telegram/Discord/Feishu/Lark/Slack/Weixin/WeCom/WhatsApp），只有 **DingTalk** 完全没有原生回复信号——这一点额外做了联网核实（不只看 vendor 的 SDK 代码）：钉钉官方"机器人接收消息"协议文档列出的回调字段和 vendor 的 `dingtalk-stream-sdk-go@v0.9.2-beta.1` 里 `chatbot.BotCallbackDataModel` 逐字段对得上，协议本身就没有 `quotedMsgId`/`parentMsgId` 这类字段——是**协议层限制，不是 SDK 没跟上**（阿里云开发者社区上也有人问过同样的问题，至今没有官方给出字段级别的答案，侧面印证这不是常见能力）。
+  - **实现**：`ask.Request` 加了 `MessageID` 字段（`GetPendingRequestsForChat` 返回时回填，构造请求时还不知道），新增 `bot.ReplyToMessageID(msg)` 读取入站消息的回复目标，`bot.SelectPendingRequest(pendingReqs, replyToID)` 把"精确匹配"和"Source+时间兜底"这两层判断分开，精确匹配命中就直接用，不命中/没有回复目标才退回④的启发式。
+  - **测试验证发现并修复的两个真 bug**：最初"8 个平台"的结论只靠读代码得出，只有 WhatsApp（新接的）有真断言测试。补了 `AdaptMessage`/`handleMessage` 级别的单测（`imbot/platform/{telegram,discord,feishu,weixin,wecom,slack}/*_reply_test.go`，每个平台覆盖"有回复信号→`ParentMessageID` 命中"和"无回复信号→`ThreadContext` 为 nil"）后，跑出来两个此前一直存在、文档误认为"已实现"的真 bug：
+    - **Discord**：读的是 `msg.Reference()`——discordgo 提供的"生成一个指向本消息的引用"方法（给别人回复这条消息用），不是"本消息在回复谁"，结果 `ParentMessageID` 永远等于消息自己的 ID。改成读 `msg.MessageReference`（网关在这条消息本身是回复/thread-starter 时才会填的字段）。
+    - **Weixin**：`ThreadContext`（连带 `ParentMessageID`）整体被套在 `if sessionID != ""` 里——`sessionID` 是微信客服会话 ID，跟"这条消息在回复哪条"（`msg.ReplyToID`）是两个独立概念，上游 SDK 自己的代码也证实 `SessionID` 确实会为空。改成 `sessionID != "" || msg.ReplyToID != ""`，两个信号不再互相牵连。
+
+    Telegram、Feishu（连带继承的 Lark）、WeCom、Slack 四个平台测试一次性通过，是真的按文档说的那样在正确工作。
 - 是否值得把 Flow A（hook notify）和 Flow B（`@cc` 流式）在同一个 chat 里共存时做去重/合流——目前没有证据表明这是常见用法，暂不列入本轮范围，但架构上两条路径完全独立这一点值得记录以防未来踩坑。
