@@ -318,7 +318,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	} else {
 		templateURL = catalog.CatalogGitHubURL
 	}
-	templateManager := catalog.NewProviderCatalogManager(templateURL)
+	templateManager := catalog.NewProviderCatalogManager(catalog.WithGitHubURL(templateURL))
 	if err := templateManager.Initialize(context.Background()); err != nil {
 		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {

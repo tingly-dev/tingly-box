@@ -166,7 +166,7 @@ func qsProvider(ctx StepContext, s quickstartState) (quickstartState, StepResult
 		tm = cfg.GetTemplateManager()
 	}
 	if tm == nil {
-		tm = catalog.NewEmbeddedOnlyProviderCatalogManager()
+		tm = catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
 	}
 	_ = tm.Initialize(context.Background())
 

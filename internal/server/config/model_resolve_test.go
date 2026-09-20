@@ -20,7 +20,7 @@ func newResolveTestConfig(t *testing.T) *Config {
 	t.Helper()
 	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
-	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
 	require.NoError(t, tm.Initialize(context.Background()))
 	cfg.SetTemplateManager(tm)
 	return cfg
