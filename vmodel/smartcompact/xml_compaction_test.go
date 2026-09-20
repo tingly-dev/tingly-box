@@ -1,4 +1,4 @@
-package smart_compact
+package smartcompact
 
 import (
 	"testing"

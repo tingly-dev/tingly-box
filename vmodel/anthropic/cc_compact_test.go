@@ -7,7 +7,7 @@ import (
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/smart_compact"
+	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 )
 
 // TestClaudeCodeCompact_Compression tests that claude-code-compact actually compresses messages.
@@ -120,7 +120,7 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
 	vm := NewTransformModel(&TransformModelConfig{
 		ID:    "claude-code-compact",
-		Chain: transform.NewTransformChain([]transform.Transform{smart_compact.NewXMLCompactTransform()}),
+		Chain: transform.NewTransformChain([]transform.Transform{smartcompact.NewXMLCompactTransform()}),
 	})
 
 	originalMessages := []sdk.BetaMessageParam{
