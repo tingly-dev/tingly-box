@@ -77,6 +77,19 @@ type SendMessageOptions struct {
 	// logs a deprecation warning.
 	Actions *ActionSet `json:"actions,omitempty"`
 
+	// SessionID identifies the agent session (Claude Code run, SmartGuide
+	// turn, ...) that produced this message, when the send happens on behalf
+	// of one. Empty for sends that aren't session-scoped (slash-command
+	// replies, bind-flow prompts, ...). No platform reads this for wire
+	// formatting — it exists so the outbound message itself carries the
+	// identity that today only lives on the inbound ask.Request, which is
+	// what let a chat with multiple pending requests resolve a text reply
+	// against the wrong one (see .design/imbot-output.md §8's message/session
+	// association root-cause entry). Callers that know their session set it;
+	// nothing currently persists or indexes it beyond that struct field, so
+	// this alone does not yet fix cross-session disambiguation.
+	SessionID string `json:"sessionId,omitempty"`
+
 	// Metadata carries platform-specific escape-hatch values. It is no longer
 	// the transport for interactive payloads — use Actions.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`

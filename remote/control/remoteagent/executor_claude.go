@@ -108,7 +108,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		"ccProfile":      profileID,
 	}).Info("Starting Claude Code execution")
 
-	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx)
+	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, sessionID)
 
 	// Route the Claude Code CLI through the tingly-box gateway. Two distinct
 	// mechanisms, matching what a local launch does for each case:

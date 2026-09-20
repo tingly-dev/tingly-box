@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"sort"
 	"sync"
 	"time"
 
@@ -162,6 +163,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	opts := &imbot.SendMessageOptions{
 		Text:      promptText,
 		ParseMode: imbot.ParseModeMarkdown,
+		SessionID: req.SessionID,
 	}
 	if supportsKeyboard {
 		opts.Actions = keyboard.ToActionSet()
@@ -371,15 +373,33 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 }
 
 // GetPendingRequestsForChat returns all pending requests for a specific chat
+// GetPendingRequestsForChat returns the chat's pending requests sorted
+// most-recently-created first. p.pendingRequests is a map, so without this
+// sort a caller treating the first result as "the latest" (as
+// bot.HandlePromptTextReply does) would get whatever order Go's unspecified
+// map iteration happened to produce — an effectively random pick whenever a
+// chat has more than one pending request. Sorting by creation time makes
+// that deterministic. It does not by itself say which SESSION a reply is
+// answering when multiple sessions have prompts pending in the same chat
+// concurrently — the message layer still has no such association; see
+// .design/imbot-output.md §8.
 func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var requests []ask.Request
-	for _, pending := range p.pendingRequests {
-		if pending.chatID == chatID {
-			requests = append(requests, pending.request)
+	var pending []*pendingIMRequest
+	for _, pr := range p.pendingRequests {
+		if pr.chatID == chatID {
+			pending = append(pending, pr)
 		}
+	}
+	sort.Slice(pending, func(i, j int) bool {
+		return pending[i].createdAt.After(pending[j].createdAt)
+	})
+
+	requests := make([]ask.Request, len(pending))
+	for i, pr := range pending {
+		requests[i] = pr.request
 	}
 	return requests
 }
@@ -479,6 +499,7 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 		_, _ = bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
 			Text:      resultText,
 			ParseMode: imbot.ParseModeMarkdown,
+			SessionID: req.SessionID,
 		})
 	}
 }

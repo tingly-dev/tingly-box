@@ -99,9 +99,11 @@ func (c *Channel) Send(ctx context.Context, target channel.Target, msg interacti
 			text = msg.Title + "\n" + msg.Body
 		}
 	}
+	sessionID, _ := msg.Meta["session_id"].(string)
 	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
+		SessionID: sessionID,
 		Metadata:  c.tokenMetadata(target.ChatID),
 	})
 	return err

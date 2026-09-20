@@ -101,6 +101,7 @@ func (p *Plugin) Trigger(ctx context.Context, ev scenario.Event, rt scenario.Run
 			_ = rt.Notify(pCtx, ch, target, interaction.Notification{
 				Title: "Claude Code · " + shortenPath(input.Cwd, 2),
 				Body:  text,
+				Meta:  map[string]any{"session_id": input.SessionID},
 			})
 		}()
 		rt.Audit("claude_code.push", map[string]any{
