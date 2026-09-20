@@ -122,6 +122,38 @@ func FilterSpecialFields(extras map[string]interface{}) map[string]interface{} {
 	return result
 }
 
+// ExtractReasoningText normalizes upstream thinking text from a decoded
+// message/delta map into the DeepSeek-style reasoning_content spelling:
+// reasoning_content passes through, reasoning is taken as-is, and
+// reasoning_details entries concatenate by their text field, in that priority
+// order. Only string values count — object-shaped variants stay untouched
+// rather than being stringified. Returns "" when the map carries no thinking
+// text, so callers can skip emitting the field entirely (#1773).
+func ExtractReasoningText(extras map[string]interface{}) string {
+	if len(extras) == 0 {
+		return ""
+	}
+	if s, ok := extras[OpenaiFieldReasoningContent].(string); ok && s != "" {
+		return s
+	}
+	if s, ok := extras["reasoning"].(string); ok && s != "" {
+		return s
+	}
+	details, ok := extras["reasoning_details"].([]interface{})
+	if !ok {
+		return ""
+	}
+	var text strings.Builder
+	for _, detail := range details {
+		if m, ok := detail.(map[string]interface{}); ok {
+			if s, ok := m["text"].(string); ok {
+				text.WriteString(s)
+			}
+		}
+	}
+	return text.String()
+}
+
 // FilterOpenAIProtocolFields removes OpenAI protocol fields that should NOT appear in Anthropic message_delta.
 // These fields are already properly handled via content_block events and should not be duplicated.
 func FilterOpenAIProtocolFields(extras map[string]interface{}) map[string]interface{} {
