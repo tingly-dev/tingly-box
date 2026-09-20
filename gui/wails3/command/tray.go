@@ -3,12 +3,12 @@ package command
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 )
 
 // TrayCommand returns the cobra command for starting tray GUI mode
-func TrayCommand(appManager *command.AppManager, launcher AppLauncher) *cobra.Command {
+func TrayCommand(appManager *app.AppManager, launcher AppLauncher) *cobra.Command {
 	var flags options.StartFlags
 
 	cmd := &cobra.Command{

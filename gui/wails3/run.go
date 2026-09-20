@@ -9,7 +9,7 @@ import (
 
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
 	"github.com/tingly-dev/tingly-box/gui/wails3/services"
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/pkg/network"
@@ -212,7 +212,7 @@ func NewAppLauncher() commandgui.AppLauncher {
 }
 
 // StartGUI launches the full GUI application
-func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error {
+func (l *appLauncher) StartGUI(appManager *app.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting full GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
 	// Check if port is available before starting the app
@@ -232,7 +232,7 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 	opts.EnableOpenBrowser = false
 
 	// Create ServerManager with options
-	serverManager := command.NewServerManager(
+	serverManager := app.NewServerManager(
 		appManager.AppConfig(),
 		server.WithUI(opts.EnableUI),
 		server.WithDebug(opts.EnableDebug),
@@ -253,7 +253,7 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 }
 
 // StartTray launches a systray only application with webui in menu
-func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.StartServerOptions) error {
+func (l *appLauncher) StartTray(appManager *app.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting tray GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
 	// Check if port is available before starting the app
@@ -272,7 +272,7 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 	opts.EnableOpenBrowser = false
 
 	// Create ServerManager with options
-	serverManager := command.NewServerManager(
+	serverManager := app.NewServerManager(
 		appManager.AppConfig(),
 		server.WithUI(opts.EnableUI),
 		server.WithDebug(opts.EnableDebug),
@@ -292,7 +292,7 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 }
 
 // StartSlim launches the slim GUI application (systray only)
-func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.StartServerOptions) error {
+func (l *appLauncher) StartSlim(appManager *app.AppManager, opts options.StartServerOptions) error {
 	log.Printf("Starting slim GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
 	// Check if port is available before starting the app
@@ -313,7 +313,7 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 	opts.EnableOpenBrowser = false
 
 	// Create ServerManager with options
-	serverManager := command.NewServerManager(
+	serverManager := app.NewServerManager(
 		appManager.AppConfig(),
 		server.WithUI(opts.EnableUI),
 		server.WithDebug(opts.EnableDebug),

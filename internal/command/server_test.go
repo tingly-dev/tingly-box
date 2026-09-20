@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
@@ -15,12 +16,12 @@ func TestServerManagerStopWithoutStart(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	appManager, err := NewAppManager(tempDir)
+	appManager, err := app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create app manager: %v", err)
 	}
 
-	serverManager := NewServerManager(appManager.AppConfig())
+	serverManager := app.NewServerManager(appManager.AppConfig())
 
 	// Stop without starting should not fail
 	err = serverManager.Stop()
@@ -37,7 +38,7 @@ func TestFileLockIntegration(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	_, err = NewAppManager(tempDir)
+	_, err = app.NewAppManager(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create app manager: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestServerPortConfiguration(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	t.Run("Set and get server port", func(t *testing.T) {
-		appManager, err := NewAppManager(tempDir)
+		appManager, err := app.NewAppManager(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create app manager: %v", err)
 		}
@@ -111,7 +112,7 @@ func TestServerPortConfiguration(t *testing.T) {
 	})
 
 	t.Run("Runtime port prefers port file while server is running", func(t *testing.T) {
-		appManager, err := NewAppManager(tempDir)
+		appManager, err := app.NewAppManager(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create app manager: %v", err)
 		}
@@ -150,7 +151,7 @@ func TestServerPortConfiguration(t *testing.T) {
 
 	t.Run("Port persists when explicitly saved", func(t *testing.T) {
 		// First instance: set port
-		appManager1, err := NewAppManager(tempDir)
+		appManager1, err := app.NewAppManager(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create first app manager: %v", err)
 		}

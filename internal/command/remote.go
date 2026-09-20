@@ -19,6 +19,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	builtinserver "github.com/tingly-dev/tingly-box/internal/mcp/builtin_server"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
@@ -43,7 +44,7 @@ type RemoteCmdKong struct {
 // RemoteListCmdKong lists remote sessions
 type RemoteListCmdKong struct{}
 
-func (r *RemoteListCmdKong) Run(appManager *AppManager) error {
+func (r *RemoteListCmdKong) Run(appManager *app.AppManager) error {
 	return runRemoteList(appManager)
 }
 
@@ -56,7 +57,7 @@ type RemoteStartCmdKong struct {
 	Force    bool   `kong:"flag,name='force',help='Skip provider validation and force start'"`
 }
 
-func (r *RemoteStartCmdKong) Run(appManager *AppManager) error {
+func (r *RemoteStartCmdKong) Run(appManager *app.AppManager) error {
 	return runRemoteStart(appManager, r.UUID, r.DataPath, r.Provider, r.Model, r.Force)
 }
 
@@ -68,14 +69,14 @@ type RemoteConfigCmdKong struct {
 	Model    string `kong:"flag,name='model',help='Model name for smartguide'"`
 }
 
-func (r *RemoteConfigCmdKong) Run(appManager *AppManager) error {
+func (r *RemoteConfigCmdKong) Run(appManager *app.AppManager) error {
 	return runRemoteConfig(appManager, r.UUID, r.Show, r.Provider, r.Model)
 }
 
 // RemoteAddCmdKong adds a new bot configuration (interactive).
 type RemoteAddCmdKong struct{}
 
-func (r *RemoteAddCmdKong) Run(appManager *AppManager) error {
+func (r *RemoteAddCmdKong) Run(appManager *app.AppManager) error {
 	// No flag form exists — it's always interactive.
 	if err := requireTTY("add a bot via the Web UI's Remote page instead"); err != nil {
 		return err
@@ -91,7 +92,7 @@ type RemotePairCmdKong struct {
 	Status  RemotePairStatusCmdKong  `kong:"cmd,help='Show pairing status for a bot'"`
 }
 
-func (r *RemotePairCmdKong) Run(appManager *AppManager) error {
+func (r *RemotePairCmdKong) Run(appManager *app.AppManager) error {
 	// Pair management is handled by subcommands
 	return nil
 }
@@ -101,7 +102,7 @@ type RemotePairEnableCmdKong struct {
 	BotUUID string `kong:"arg,help='Bot UUID'"`
 }
 
-func (r *RemotePairEnableCmdKong) Run(appManager *AppManager) error {
+func (r *RemotePairEnableCmdKong) Run(appManager *app.AppManager) error {
 	return RemotePairEnable(appManager, r.BotUUID, true)
 }
 
@@ -110,7 +111,7 @@ type RemotePairDisableCmdKong struct {
 	BotUUID string `kong:"arg,help='Bot UUID'"`
 }
 
-func (r *RemotePairDisableCmdKong) Run(appManager *AppManager) error {
+func (r *RemotePairDisableCmdKong) Run(appManager *app.AppManager) error {
 	return RemotePairEnable(appManager, r.BotUUID, false)
 }
 
@@ -120,7 +121,7 @@ type RemotePairRevokeCmdKong struct {
 	ChatID  string `kong:"arg,help='Chat ID to unpair'"`
 }
 
-func (r *RemotePairRevokeCmdKong) Run(appManager *AppManager) error {
+func (r *RemotePairRevokeCmdKong) Run(appManager *app.AppManager) error {
 	return RemotePairRevoke(appManager, r.BotUUID, r.ChatID)
 }
 
@@ -129,7 +130,7 @@ type RemotePairStatusCmdKong struct {
 	BotUUID string `kong:"arg,help='Bot UUID'"`
 }
 
-func (r *RemotePairStatusCmdKong) Run(appManager *AppManager) error {
+func (r *RemotePairStatusCmdKong) Run(appManager *app.AppManager) error {
 	return RemotePairStatus(appManager, r.BotUUID)
 }
 
@@ -138,7 +139,7 @@ func (r *RemotePairStatusCmdKong) Run(appManager *AppManager) error {
 // internal/mcp/runtime/builtin_registry.go.
 type MCPBuiltinCmdKong struct{}
 
-func (m *MCPBuiltinCmdKong) Run(appManager *AppManager) error {
+func (m *MCPBuiltinCmdKong) Run(appManager *app.AppManager) error {
 	return builtinserver.Serve()
 }
 
@@ -189,7 +190,7 @@ func selectBotInteractively(store *db.ImBotSettingsStore) (string, error) {
 }
 
 // promptForSmartGuideModel prompts the user to select provider and model for SmartGuide
-func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (string, string, error) {
+func promptForSmartGuideModel(reader *bufio.Reader, appManager *app.AppManager) (string, string, error) {
 	providers := usecase.NewProviderUseCase(appManager.GetGlobalConfig()).List().Providers
 	if len(providers) == 0 {
 		return "", "", fmt.Errorf("no providers configured. Please add a provider first using 'tingly-box provider add' / 'tb provider add'")
@@ -331,7 +332,7 @@ func promptForModelInput(reader *bufio.Reader, prompt string) (string, error) {
 }
 
 // runStandaloneBot runs a single bot in standalone mode
-func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string, provider string, model string) error {
+func runStandaloneBot(ctx context.Context, appManager *app.AppManager, setting db.Settings, dataPath string, provider string, model string) error {
 	botSetting := standaloneBotSetting(setting, provider, model)
 
 	// One store manager for the whole standalone bot: chats and sessions are
@@ -359,7 +360,7 @@ func standaloneBotSetting(setting db.Settings, provider, model string) bot.BotSe
 }
 
 // runBotWithSettingsInternal is an internal wrapper that calls the bot runner
-func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, setting bot.BotSetting, chatStore *db.RemoteChatStore, sessionMgr *session.Manager, agentService *agentboot.AgentService) error {
+func runBotWithSettingsInternal(ctx context.Context, appManager *app.AppManager, setting bot.BotSetting, chatStore *db.RemoteChatStore, sessionMgr *session.Manager, agentService *agentboot.AgentService) error {
 	// Create platform-specific auth config
 	authConfig := buildAuthConfigInternal(setting)
 	platform := imbot.Platform(setting.Platform)
@@ -498,14 +499,14 @@ func buildAuthConfigInternal(setting bot.BotSetting) imbot.AuthConfig {
 }
 
 // runRemoteAdd is a wrapper for runRemoteAddInteractive
-func runRemoteAdd(appManager *AppManager) error {
+func runRemoteAdd(appManager *app.AppManager) error {
 	return runRemoteAddInteractive(bufio.NewReader(os.Stdin), appManager)
 }
 
 // Business logic functions
 
 // runRemoteList lists all configured remote bots
-func runRemoteList(appManager *AppManager) error {
+func runRemoteList(appManager *app.AppManager) error {
 	cfg := appManager.AppConfig().GetGlobalConfig()
 	store, err := db.NewImBotSettingsStore(cfg.ConfigDir)
 	if err != nil {
@@ -546,7 +547,7 @@ func runRemoteList(appManager *AppManager) error {
 }
 
 // runRemoteStart starts a remote bot with full SmartGuide configuration logic
-func runRemoteStart(appManager *AppManager, uuid, dataPath, provider, model string, force bool) error {
+func runRemoteStart(appManager *app.AppManager, uuid, dataPath, provider, model string, force bool) error {
 	ctx := context.Background()
 	cfg := appManager.AppConfig().GetGlobalConfig()
 
@@ -647,7 +648,7 @@ func runRemoteStart(appManager *AppManager, uuid, dataPath, provider, model stri
 }
 
 // runRemoteConfig configures a remote bot with interactive SmartGuide selection
-func runRemoteConfig(appManager *AppManager, uuid string, show bool, provider, model string) error {
+func runRemoteConfig(appManager *app.AppManager, uuid string, show bool, provider, model string) error {
 	cfg := appManager.AppConfig().GetGlobalConfig()
 	botUUID := uuid
 

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 )
 
@@ -38,7 +39,7 @@ type logsResponse struct {
 	Logs  []logEntry `json:"logs"`
 }
 
-func (l *LogCmdKong) Run(appManager *AppManager) error {
+func (l *LogCmdKong) Run(appManager *app.AppManager) error {
 	appConfig := appManager.AppConfig()
 
 	// Make sure the server is actually running, otherwise the API is not reachable.

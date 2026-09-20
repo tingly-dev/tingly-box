@@ -3,19 +3,19 @@ package command
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 )
 
 // AppLauncher defines the interface for launching GUI applications
 type AppLauncher interface {
-	StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error
-	StartSlim(appManager *command.AppManager, opts options.StartServerOptions) error
-	StartTray(appManager *command.AppManager, opts options.StartServerOptions) error
+	StartGUI(appManager *app.AppManager, opts options.StartServerOptions) error
+	StartSlim(appManager *app.AppManager, opts options.StartServerOptions) error
+	StartTray(appManager *app.AppManager, opts options.StartServerOptions) error
 }
 
 // GUICommand returns the cobra command for starting full GUI mode
-func GUICommand(appManager *command.AppManager, launcher AppLauncher) *cobra.Command {
+func GUICommand(appManager *app.AppManager, launcher AppLauncher) *cobra.Command {
 	var flags options.StartFlags
 
 	cmd := &cobra.Command{

@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/browser"
 	"github.com/tingly-dev/tingly-box/ai"
 	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -36,7 +37,7 @@ type OAuthCmdKong struct {
 	ProxyURL string `kong:"flag,name='proxy',short='x',help='Proxy URL for OAuth requests'"`
 }
 
-func (o *OAuthCmdKong) Run(appManager *AppManager) error {
+func (o *OAuthCmdKong) Run(appManager *app.AppManager) error {
 	appConfig := appManager.AppConfig()
 	if o.Provider == "" {
 		if err := requireTTY("pass the provider explicitly, e.g. 'tingly-box oauth claude_code'"); err != nil {
