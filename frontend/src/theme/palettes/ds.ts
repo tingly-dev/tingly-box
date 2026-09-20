@@ -15,13 +15,19 @@ import type { ThemePalette } from '../types';
 // whole admin UI — chart series in particular need to be tellable apart.
 // `secondary` is a teal, analogous to the brand blue (same cool family, so it
 // stays harmonious) but distinct enough to carry contrast on its own.
-export const dsPrimary = '#6799FE';
-export const dsPrimaryLight = '#93B4FF';
+// A step more saturated than the original softened blue (which read as too
+// low-contrast for button fills / nav highlights / selected states), but
+// still short of the raw #4D6BFE brand blue (kept below as `dsPrimaryDark`)
+// to avoid the "harsh neon ring" problem described above on large outlined
+// surfaces. See `.design/ds-theme-palette.md` for the comparison this was
+// picked from.
+export const dsPrimary = '#5580FA';
+export const dsPrimaryLight = '#82A3FF';
 export const dsPrimaryDark = '#4D6BFE'; // the real, full-saturation deepseek.com brand blue
 
-export const dsSecondary = '#14B8A6';
-export const dsSecondaryLight = '#5EEAD4';
-export const dsSecondaryDark = '#0F9488';
+export const dsSecondary = '#109C8C';
+export const dsSecondaryLight = '#3FCDBA';
+export const dsSecondaryDark = '#0C7A70';
 
 // Matches deepseek.com's actual hero recipe (inspected from its shipped CSS/JS):
 // a near-white page base (`--ds-color-bg-page: #f9f8f8`) with a sky-blue wash
@@ -80,28 +86,28 @@ export const dsPalette: ThemePalette = {
     secondary: '#565f70',
     disabled: '#9aa3ac',
   },
-  divider: 'rgba(103, 153, 254, 0.12)',
+  divider: 'rgba(85, 128, 250, 0.18)',
   action: {
-    hover: 'rgba(103, 153, 254, 0.08)',
-    selected: 'rgba(103, 153, 254, 0.15)',
-    disabled: 'rgba(103, 153, 254, 0.04)',
-    focus: 'rgba(103, 153, 254, 0.12)',
+    hover: 'rgba(85, 128, 250, 0.12)',
+    selected: 'rgba(85, 128, 250, 0.2)',
+    disabled: 'rgba(85, 128, 250, 0.06)',
+    focus: 'rgba(85, 128, 250, 0.16)',
   },
   dashboard: {
     token: {
-      input: { main: dsPrimary, gradient: 'rgba(103, 153, 254, 0.75)' },
-      output: { main: dsSecondary, gradient: 'rgba(20, 184, 166, 0.75)' },
+      input: { main: dsPrimary, gradient: 'rgba(85, 128, 250, 0.75)' },
+      output: { main: dsSecondary, gradient: 'rgba(16, 156, 140, 0.75)' },
       cache: { main: '#94a3b8', gradient: 'rgba(148, 163, 184, 0.65)' },
     },
     chart: {
-      grid: 'rgba(103, 153, 254, 0.08)',
-      axis: 'rgba(103, 153, 254, 0.15)',
+      grid: 'rgba(85, 128, 250, 0.1)',
+      axis: 'rgba(85, 128, 250, 0.2)',
       tooltipBg: 'rgba(255, 255, 255, 0.96)',
-      tooltipBorder: 'rgba(103, 153, 254, 0.2)',
+      tooltipBorder: 'rgba(85, 128, 250, 0.25)',
     },
     statCard: {
-      boxShadow: '0 2px 12px rgba(103, 153, 254, 0.12), 0 1px 4px rgba(0, 0, 0, 0.04)',
-      emptyIconBg: 'rgba(103, 153, 254, 0.1)',
+      boxShadow: '0 2px 12px rgba(85, 128, 250, 0.16), 0 1px 4px rgba(0, 0, 0, 0.04)',
+      emptyIconBg: 'rgba(85, 128, 250, 0.12)',
     },
   },
   isSunlit: false,

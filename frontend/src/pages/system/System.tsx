@@ -1,10 +1,12 @@
 import CardGrid from '@/components/CardGrid.tsx';
 import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
-import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Check as IconCheck, AccessTime as IconClock, Router as IconRouter } from '@/components/icons';
+import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Check as IconCheck, AccessTime as IconClock, Router as IconRouter, tablerMui } from '@/components/icons';
+import { IconPalette } from '@tabler/icons-react';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Box, Button, CircularProgress, Divider, IconButton, InputAdornment, Link, Stack, Switch, TextField, Tooltip, Typography, Chip, type SxProps, type Theme } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +18,8 @@ import { useNotify } from '@/hooks/useNotify.ts';
 import { api } from '@/services/api.ts';
 import { getThemeOptions } from '@/theme/options.ts';
 import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
+
+const IconPaletteMui = tablerMui(IconPalette);
 
 // Label column width shared by every settings row — keeps the value column
 // (the actual visual anchor) vertically aligned across cards.
@@ -71,6 +75,55 @@ const chipSx = (selected: boolean): SxProps<Theme> => ({
         bgcolor: selected ? 'primary.dark' : 'action.selected',
     },
 });
+
+/**
+ * ThemePalettePreview — swatches for the *currently active* theme, so
+ * choosing a theme in the chip row above shows what it actually looks like
+ * instead of just a name + a tiny icon. Reads live off `useTheme()` (the
+ * MUI theme created for `themeMode`), so it always reflects the real
+ * palette values — no hand-copied hex codes to keep in sync.
+ *
+ * Includes both base colors (primary/secondary/paper) and the two state
+ * layers (hover/selected) that are easy to get "technically applied but
+ * invisible" — e.g. an action.hover alpha too low to notice in practice.
+ */
+const ThemePalettePreview = () => {
+    const theme = useTheme();
+    const swatchSx = {
+        width: 30,
+        height: 30,
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider',
+        flexShrink: 0,
+    } as const;
+
+    const colorSwatches: { label: string; color: string }[] = [
+        { label: 'primary.main', color: theme.palette.primary.main },
+        { label: 'primary.light', color: theme.palette.primary.light },
+        { label: 'primary.dark', color: theme.palette.primary.dark },
+        { label: 'secondary.main', color: theme.palette.secondary.main },
+        { label: 'secondary.light', color: theme.palette.secondary.light },
+        { label: 'background.paper', color: theme.palette.background.paper as string },
+    ];
+
+    return (
+        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            {colorSwatches.map(({ label, color }) => (
+                <Tooltip key={label} title={`${label} · ${color}`} arrow placement="top">
+                    <Box sx={{ ...swatchSx, bgcolor: color }} />
+                </Tooltip>
+            ))}
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <Tooltip title={`action.hover · ${theme.palette.action.hover}`} arrow placement="top">
+                <Box sx={{ ...swatchSx, bgcolor: 'action.hover' }} />
+            </Tooltip>
+            <Tooltip title={`action.selected · ${theme.palette.action.selected}`} arrow placement="top">
+                <Box sx={{ ...swatchSx, bgcolor: 'action.selected' }} />
+            </Tooltip>
+        </Stack>
+    );
+};
 
 const System = () => {
     const { t, i18n } = useTranslation();
@@ -321,6 +374,9 @@ const System = () => {
                                     />
                                 ))}
                             </Box>
+                        </SettingsRow>
+                        <SettingsRow icon={<IconPaletteMui sx={{ fontSize: 16 }} />} label={t('system.preferences.themePalette')}>
+                            <ThemePalettePreview />
                         </SettingsRow>
                     </Stack>
                 </UnifiedCard>

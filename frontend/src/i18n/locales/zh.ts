@@ -968,7 +968,8 @@ export default {
       "refreshStatus": "刷新状态"
     },
     "preferences": {
-      "title": "外观与语言"
+      "title": "外观与语言",
+      "themePalette": "配色预览"
     }
   },
   "help": {

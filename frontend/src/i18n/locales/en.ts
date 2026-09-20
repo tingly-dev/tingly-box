@@ -967,7 +967,8 @@ export default {
       "refreshStatus": "Refresh status"
     },
     "preferences": {
-      "title": "Appearance & Language"
+      "title": "Appearance & Language",
+      "themePalette": "Palette preview"
     }
   },
   "help": {

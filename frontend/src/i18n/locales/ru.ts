@@ -901,7 +901,8 @@ export default {
       "refreshStatus": "Обновить статус"
     },
     "preferences": {
-      "title": "Оформление и язык"
+      "title": "Оформление и язык",
+      "themePalette": "Предпросмотр палитры"
     }
   },
   "help": {
