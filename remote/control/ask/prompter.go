@@ -25,8 +25,13 @@ type ToolHandler interface {
 type ToolPromptBuilder interface {
 	ToolHandler
 
-	// BuildPrompt creates the prompt message for this tool
-	BuildPrompt(req Request) string
+	// BuildPrompt creates the prompt message for this tool. supportsKeyboard
+	// tells the builder whether the platform will render Actions as
+	// clickable controls: when false, the builder is responsible for
+	// embedding its own "how to reply" instructions in the returned text —
+	// up front, not appended after the tool/question detail, so the
+	// instruction survives a chat client's notification-preview truncation.
+	BuildPrompt(req Request, supportsKeyboard bool) string
 }
 
 // ToolResponseParser parses user responses into results

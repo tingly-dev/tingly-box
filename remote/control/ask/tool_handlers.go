@@ -28,11 +28,21 @@ func (h *AskUserQuestionHandler) Description() string {
 	return "Handler for AskUserQuestion tool with multi-option selection"
 }
 
-// BuildPrompt creates a prompt showing all questions and options
-func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
+// BuildPrompt creates a prompt showing all questions and options. When
+// supportsKeyboard is false, a short reply-with-the-number instruction goes
+// first, right after the header — not appended after the question list — so
+// it survives a chat client's notification-preview truncation (which
+// typically shows only a message's opening line); the trailing
+// "click a button" hint (meaningless with no keyboard) is replaced with
+// usage guidance for a typed reply instead.
+func (h *AskUserQuestionHandler) BuildPrompt(req Request, supportsKeyboard bool) string {
 	var text strings.Builder
 
-	text.WriteString("❓ *Question*\n\n")
+	text.WriteString("❓ *Question*\n")
+	if !supportsKeyboard {
+		text.WriteString("_Reply with the option number._\n")
+	}
+	text.WriteString("\n")
 
 	questions := NormalizeQuestions(req.Input["questions"])
 	if len(questions) == 0 {
@@ -72,7 +82,14 @@ func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
 	}
 
 	text.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
-	text.WriteString("*Click a button below to select*")
+	switch {
+	case supportsKeyboard:
+		text.WriteString("*Click a button below to select*")
+	case len(questions) > 1:
+		text.WriteString("_Reply with answers in order, e.g. `1 2 1` for Q1=opt1, Q2=opt2, Q3=opt1_")
+	default:
+		text.WriteString("_Just type the number to reply_")
+	}
 
 	return text.String()
 }
@@ -188,8 +205,8 @@ func (h *DefaultToolHandler) Description() string {
 }
 
 // BuildPrompt creates a simple permission prompt
-func (h *DefaultToolHandler) BuildPrompt(req Request) string {
-	return BuildDefaultPrompt(req)
+func (h *DefaultToolHandler) BuildPrompt(req Request, supportsKeyboard bool) string {
+	return BuildDefaultPrompt(req, supportsKeyboard)
 }
 
 // ParseResponse parses a simple approve/deny response
@@ -197,10 +214,16 @@ func (h *DefaultToolHandler) ParseResponse(req Request, response Response) (Resu
 	return ParseDefaultResponse(req, response)
 }
 
-// BuildDefaultPrompt creates the default permission prompt text
-func BuildDefaultPrompt(req Request) string {
-	text := "🔐 *Tool Permission Request*\n\n"
-	text += "Tool: `" + req.ToolName + "`\n"
+// BuildDefaultPrompt creates the default permission prompt text. When
+// supportsKeyboard is false, the reply instructions go first, right after
+// the header — not appended after the tool/args detail — so they survive a
+// chat client's notification-preview truncation.
+func BuildDefaultPrompt(req Request, supportsKeyboard bool) string {
+	text := "🔐 *Tool Permission Request*\n"
+	if !supportsKeyboard {
+		text += "\n" + FormatPermissionInstructions()
+	}
+	text += "\nTool: `" + req.ToolName + "`\n"
 
 	// Show relevant input details
 	text += "Args: \n"
