@@ -379,22 +379,52 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 `openai_image_edit_test.go`(JSON mask)。画布交互按惯例走真实浏览器验证:加图 →
 涂 → 反转 → Apply → 缩略图角标 → 重开笔画还在。
 
-### 8.2 Codex 那条:单独一个分支
+### 8.2 Codex 那条(**本分支**:实验性,未验证)
 
-`§2.2` 的 Responses 路线(方案 D)连同"原生端点遇到 mask 明确报错"一起,放在
-**`claude/jolly-rubin-j02e0e-codex-mask`**,不在本分支。理由就是 §2.5 那三个
-实验还没跑:在真实订阅上确认 hosted tool 认不认 `action: edit` 和
-`input_image_mask` 之前,不把一条猜出来的链路混进一个已经能用的功能里。
+§2.2 的 Responses 路线(方案 D)在这里,和它一起的还有"原生端点遇到 mask 明确
+报错"。它与 §8.1 分开成两个分支,是因为 §2.5 那三个实验还没跑:在真实订阅上确认
+hosted tool 认不认 `action: edit` 和 `input_image_mask` 之前,不把一条猜出来的
+链路压在一个已经能用的功能下面。
 
-那个分支带的东西:`internal/client/codex_images_responses.go`(路由 + 请求构造 +
-单测)、`codex_images.go` 的分流与报错、`TINGLY_CODEX_IMAGE_EDIT_ROUTE` 开关。
-实验步骤见 §2.5,跑法见该分支上的 §8.3。
+| 改动 | 位置 |
+|------|------|
+| Responses 请求构造(参考图作为 `input_image` 进消息,mask 作为工具的 `input_image_mask`,`action: edit`)+ 路由决策 + 单测 | `internal/client/codex_images_responses.go`(+ `_test.go`) |
+| `ImagesEdit` 按有没有 mask 分流;原生端点遇到 mask 明确报错(不再 debug 丢弃) | `internal/client/codex_images.go` |
 
-**本分支上 Codex 的行为因此没变**:带 mask 的请求到了 Codex 原生端点仍然是
-"丢掉 mask + 一行 debug log",也就是整图重画。这是已知的、留着的坑——它属于
-Codex 分支要回答的问题,合并顺序上应当在那条路定案时一起解决。
+响应解析复用 generation 那条(`parseImageGenerationStream`),因为 hosted tool 两
+种用法发的是同一串事件。
 
-### 8.3 仍未做
+### 8.3 路由开关与测试脚本
+
+```
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=            # 不设:有 mask 走 Responses,没 mask 走原生
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses   # E1/E3:无 mask 也走 Responses
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=native      # 钉死原生(带 mask 时明确报错)
+```
+
+不设即产品行为:只有 mask 这一个功能性理由会离开已验证的原生端点。实验结束后这个
+变量应该消失。
+
+E1(hosted tool 认不认参考图,先不带 mask):
+
+```bash
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses tingly-box serve
+curl -s http://127.0.0.1:PORT/tingly/imagegen/v1/images/edits \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"image":"data:image/png;base64,...","prompt":"把沙发换成绿色天鹅绒","model":"<codex model>"}'
+```
+
+E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里多带一个
+`"mask":"data:image/png;base64,..."`。判据是**只有涂过的区域变**。
+
+三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认、合并;E2 不过(mask 被
+忽略)→ 退回原生,只留下那条明确报错;E1 不过 → `imageedit.md` §1 的断言成立,
+写回 §2.2 结案,本分支只剩报错值得保留。
+
+链路在日志里:`[Codex] Using Responses image_generation tool for image edit
+(experimental), model: ..., mask: true`。
+
+### 8.4 仍未做
 
 - 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
