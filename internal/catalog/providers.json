@@ -1424,81 +1424,6 @@
         "https://www.minimax.io/models/text/m3"
       ]
     },
-    "minimaxi-com-coding": {
-      "id": "minimaxi-com-coding",
-      "name": "Minimax Coding Plan (CN)",
-      "alias": "Minimax Coding Plan (CN) | Minimax Coding Plan（中国）",
-      "status": "active",
-      "valid": true,
-      "canonical_domain": "api.minimaxi.com",
-      "vendor_family": "minimax",
-      "region": "cn",
-      "plan": "coding",
-      "website": "https://www.minimaxi.com/",
-      "description": "Minimax Coding Plan dedicated endpoints for coding agents (OpenAI + Anthropic compatible)",
-      "type": "official",
-      "api_doc": "https://platform.minimaxi.com/docs/api-reference/text-intro",
-      "model_doc": "https://platform.minimaxi.com/docs/guides/models-intro",
-      "pricing_doc": "https://platform.minimaxi.com/docs/pricing/overview",
-      "base_url_openai": "https://api.minimaxi.com/coding/v1",
-      "base_url_anthropic": "https://api.minimaxi.com/coding/anthropic",
-      "models": [
-        {
-          "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536
-        },
-        {
-          "id": "MiniMax-M3",
-          "context": 1000000,
-          "max_output": 131072,
-          "created": "2026-06"
-        }
-      ],
-      "supports_models_endpoint": false,
-      "icon": "minimax",
-      "last_updated": "2026-09-20",
-      "sources": [
-        "https://platform.minimaxi.com/docs/guides/models-intro"
-      ]
-    },
-    "minimax-io-coding": {
-      "id": "minimax-io-coding",
-      "name": "Minimax Coding Plan",
-      "status": "active",
-      "valid": true,
-      "canonical_domain": "api.minimax.io",
-      "vendor_family": "minimax",
-      "region": "intl",
-      "plan": "coding",
-      "website": "https://www.minimax.io/",
-      "description": "Minimax Coding Plan dedicated endpoints for coding agents (International, OpenAI + Anthropic compatible)",
-      "type": "official",
-      "api_doc": "https://platform.minimax.io/docs/api-reference/text-intro",
-      "model_doc": "https://platform.minimax.io/docs/guides/models-intro",
-      "pricing_doc": "https://platform.minimax.io/docs/pricing/overview",
-      "base_url_openai": "https://api.minimax.io/coding/v1",
-      "base_url_anthropic": "https://api.minimax.io/coding/anthropic",
-      "models": [
-        {
-          "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536
-        },
-        {
-          "id": "MiniMax-M3",
-          "context": 1000000,
-          "max_output": 131072,
-          "created": "2026-06"
-        }
-      ],
-      "supports_models_endpoint": false,
-      "icon": "minimax",
-      "last_updated": "2026-09-20",
-      "sources": [
-        "https://platform.minimax.io/docs/guides/models-intro"
-      ]
-    },
     "z-ai": {
       "id": "z-ai",
       "name": "Z.ai",
@@ -2091,47 +2016,6 @@
         "https://cloud.tencent.com/document/product/1729/105701",
         "https://cloud.tencent.com/document/product/1729/104753",
         "https://www.aihub.cn/ai-model/tencent-hy3/"
-      ]
-    },
-    "tencent-com-coding": {
-      "id": "tencent-com-coding",
-      "name": "Tencent Hunyuan Coding Plan (CN)",
-      "alias": "Tencent Hunyuan Coding Plan (CN) | 腾讯混元 Coding Plan（中国）",
-      "status": "active",
-      "valid": true,
-      "canonical_domain": "api.hunyuan.cloud.tencent.com",
-      "vendor_family": "tencent",
-      "region": "cn",
-      "plan": "coding",
-      "website": "https://cloud.tencent.com/product/hunyuan",
-      "description": "Tencent Hunyuan Coding Plan dedicated endpoints for coding agents (OpenAI + Anthropic compatible)",
-      "type": "official",
-      "api_doc": "https://cloud.tencent.com/document/product/1729/111007",
-      "model_doc": "https://cloud.tencent.com/document/product/1729/104753",
-      "pricing_doc": "https://cloud.tencent.com/document/product/1729/97731",
-      "base_url_openai": "https://api.hunyuan.cloud.tencent.com/coding/v1",
-      "base_url_anthropic": "https://api.hunyuan.cloud.tencent.com/anthropic",
-      "models": [
-        {
-          "id": "hunyuan-turbos-latest",
-          "note": "flagship fast-thinking model"
-        },
-        {
-          "id": "hunyuan-a13b",
-          "context": 224000,
-          "max_output": 32000
-        },
-        {
-          "id": "hy3",
-          "context": 256000,
-          "created": "2026-07"
-        }
-      ],
-      "supports_models_endpoint": false,
-      "icon": "tencent",
-      "last_updated": "2026-09-20",
-      "sources": [
-        "https://cloud.tencent.com/document/product/1729/111007"
       ]
     },
     "xf-yun-com": {
