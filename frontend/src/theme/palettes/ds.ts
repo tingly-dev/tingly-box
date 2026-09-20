@@ -19,7 +19,7 @@ import type { ThemePalette } from '../types';
 // low-contrast for button fills / nav highlights / selected states), but
 // still short of the raw #4D6BFE brand blue (kept below as `dsPrimaryDark`)
 // to avoid the "harsh neon ring" problem described above on large outlined
-// surfaces. See `.design/ds-theme-palette.md` for the comparison this was
+// surfaces. See `.design/theme.md` for the comparison this was
 // picked from.
 export const dsPrimary = '#5580FA';
 export const dsPrimaryLight = '#82A3FF';
@@ -94,7 +94,7 @@ export const dsPalette: ThemePalette = {
     // Chip text — reuse `text.disabled` above so labels stay legible, rather
     // than the near-invisible tint this used to hold. That tint moved to
     // `disabledBackground`, the token MUI actually reads for a disabled
-    // contained Button's fill. See `.design/theme-disabled-state.md`.
+    // contained Button's fill. See `.design/theme.md`.
     disabled: '#9aa3ac',
     disabledBackground: 'rgba(85, 128, 250, 0.1)',
     focus: 'rgba(85, 128, 250, 0.16)',

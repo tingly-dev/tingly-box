@@ -56,7 +56,7 @@ export const claudePalette: ThemePalette = {
     // Chip text — reuse `text.disabled` above so labels stay legible, rather
     // than the near-background tint this used to hold. That tint moved to
     // `disabledBackground`, the token MUI actually reads for a disabled
-    // contained Button's fill. See `.design/theme-disabled-state.md`.
+    // contained Button's fill. See `.design/theme.md`.
     disabled: '#B0AEA5',
     disabledBackground: '#F2EFE3',
     focus: '#E8E6DC',

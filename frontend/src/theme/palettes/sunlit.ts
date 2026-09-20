@@ -62,7 +62,7 @@ export const sunlitPalette: ThemePalette = {
     // Chip text — reuse `text.disabled` above so labels stay legible, rather
     // than the near-invisible tint this used to hold. That tint moved to
     // `disabledBackground`, the token MUI actually reads for a disabled
-    // contained Button's fill. See `.design/theme-disabled-state.md`.
+    // contained Button's fill. See `.design/theme.md`.
     disabled: '#94a3b8',
     disabledBackground: 'rgba(14, 165, 233, 0.06)',
     focus: 'rgba(14, 165, 233, 0.12)',

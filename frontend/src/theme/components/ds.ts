@@ -4,7 +4,7 @@ import { primaryGradientButton } from './buttonVariants';
 
 // DS reusable tokens for component overrides.
 // Alphas raised ~1.4-1.6x over the original softened-blue values (see
-// `.design/ds-theme-palette.md`) — buttons, nav highlights, selected rows
+// `.design/theme.md`) — buttons, nav highlights, selected rows
 // and borders were reading as too low-contrast against the misty background.
 const dsTokens = {
   border: '1px solid rgba(85, 128, 250, 0.26)',

@@ -49,7 +49,7 @@ export const lightPalette: ThemePalette = {
     // Chip text — reuse `text.disabled` above so labels stay legible, rather
     // than the near-white tint this used to hold. That tint moved to
     // `disabledBackground`, the token MUI actually reads for a disabled
-    // contained Button's fill. See `.design/theme-disabled-state.md`.
+    // contained Button's fill. See `.design/theme.md`.
     disabled: '#94a3b8',
     disabledBackground: '#f1f5f9',
     focus: '#e0e7ff',

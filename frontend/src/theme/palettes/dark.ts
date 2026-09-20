@@ -71,7 +71,7 @@ export const darkPalette: ThemePalette = {
     // Chip text — it must match `text.disabled` above for legible labels,
     // not the faint background wash that name suggests. That wash lives in
     // `disabledBackground` instead (the correct token MUI reads for a
-    // disabled contained Button's fill). See `.design/theme-disabled-state.md`.
+    // disabled contained Button's fill). See `.design/theme.md`.
     disabled: 'rgba(255, 255, 255, 0.42)',
     disabledBackground: 'rgba(255, 255, 255, 0.12)',
     focus: 'rgba(255, 255, 255, 0.12)',
