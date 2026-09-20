@@ -134,6 +134,9 @@ func TestPromptTranslatesPermission(t *testing.T) {
 	if p.gotReq.SessionID != "s1" {
 		t.Fatalf("session_id not propagated: %q", p.gotReq.SessionID)
 	}
+	if p.gotReq.Source != ask.SourceNotify {
+		t.Fatalf("Prompt (Flow A, scenario-plugin channel) must tag requests ask.SourceNotify, got %q", p.gotReq.Source)
+	}
 	if reply.Status != interaction.StatusAnswered {
 		t.Fatalf("status = %v", reply.Status)
 	}

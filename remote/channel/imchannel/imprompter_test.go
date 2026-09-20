@@ -178,3 +178,39 @@ func Test_GetPendingRequestsForChat_OrdersByCreatedAtDescending(t *testing.T) {
 		}
 	}
 }
+
+// Test_GetPendingRequestsForChat_PrefersRemoteAgentOverNotify guards the
+// source tie-break: a remote_agent-sourced request must sort before a
+// notify-sourced one even when the notify one was created more recently —
+// the user typing in a chat with an active @cc/SmartGuide conversation is
+// almost always continuing it, not answering an older background notify
+// ping. See the Source type doc comment and .design/imbot-output.md §8 for
+// why this is a heuristic, not a guarantee.
+func Test_GetPendingRequestsForChat_PrefersRemoteAgentOverNotify(t *testing.T) {
+	p := NewIMPrompter(nil)
+
+	base := time.Now()
+	p.pendingRequests = map[string]*pendingIMRequest{
+		"req-notify-newer": {
+			request:   ask.Request{ID: "req-notify-newer", Source: ask.SourceNotify},
+			chatID:    "chat-1",
+			createdAt: base.Add(1 * time.Second), // created after the agent request
+		},
+		"req-agent-older": {
+			request:   ask.Request{ID: "req-agent-older", Source: ask.SourceRemoteAgent},
+			chatID:    "chat-1",
+			createdAt: base,
+		},
+	}
+
+	got := p.GetPendingRequestsForChat("chat-1")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 requests for chat-1, got %d: %+v", len(got), got)
+	}
+	if got[0].ID != "req-agent-older" {
+		t.Errorf("position 0: got %q, want %q — remote_agent must outrank a more recent notify request", got[0].ID, "req-agent-older")
+	}
+	if got[1].ID != "req-notify-newer" {
+		t.Errorf("position 1: got %q, want %q", got[1].ID, "req-notify-newer")
+	}
+}

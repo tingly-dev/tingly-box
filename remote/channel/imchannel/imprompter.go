@@ -372,17 +372,24 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 	return nil, false
 }
 
-// GetPendingRequestsForChat returns all pending requests for a specific chat
-// GetPendingRequestsForChat returns the chat's pending requests sorted
-// most-recently-created first. p.pendingRequests is a map, so without this
-// sort a caller treating the first result as "the latest" (as
-// bot.HandlePromptTextReply does) would get whatever order Go's unspecified
-// map iteration happened to produce — an effectively random pick whenever a
-// chat has more than one pending request. Sorting by creation time makes
-// that deterministic. It does not by itself say which SESSION a reply is
-// answering when multiple sessions have prompts pending in the same chat
-// concurrently — the message layer still has no such association; see
-// .design/imbot-output.md §8.
+// GetPendingRequestsForChat returns the chat's pending requests ordered by a
+// two-level tie-break, most-preferred first:
+//
+//  1. ask.SourceRemoteAgent before ask.SourceNotify. A text reply arriving
+//     while the user has an active remote_agent conversation in this chat is
+//     almost always continuing that conversation, not answering a background
+//     notify ping the user may not even be consciously aware of — so it's a
+//     more defensible default than picking whichever request merely arrived
+//     later. It is a heuristic, not a guarantee: see .design/imbot-output.md
+//     §8 for the known failure case (the user actually meant to answer the
+//     notify ping) and why there is currently no better signal to resolve it
+//     with (no reply-to matching, no per-chat serialization).
+//  2. Within the same Source, most-recently-created first. p.pendingRequests
+//     is a map, so without an explicit sort here, a caller treating the
+//     first result as "the latest" (as bot.HandlePromptTextReply does) would
+//     get whatever order Go's unspecified map iteration happened to
+//     produce — an effectively random pick. Sorting by creation time makes
+//     it deterministic.
 func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -394,6 +401,10 @@ func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 		}
 	}
 	sort.Slice(pending, func(i, j int) bool {
+		si, sj := pending[i].request.Source == ask.SourceRemoteAgent, pending[j].request.Source == ask.SourceRemoteAgent
+		if si != sj {
+			return si
+		}
 		return pending[i].createdAt.After(pending[j].createdAt)
 	})
 
@@ -602,6 +613,7 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (
 		Platform:  req.Platform,
 		BotUUID:   req.BotUUID,
 		SessionID: req.SessionID,
+		Source:    ask.SourceRemoteAgent,
 		AgentType: req.AgentType,
 		ToolName:  req.ToolName,
 		Input:     req.Input,
