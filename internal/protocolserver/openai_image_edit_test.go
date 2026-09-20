@@ -127,6 +127,33 @@ func TestParseImageEditJSON_DataURL(t *testing.T) {
 	assert.Equal(t, editTestPNG, data)
 }
 
+func TestParseImageEditJSON_Mask(t *testing.T) {
+	b64 := base64.StdEncoding.EncodeToString(editTestPNG)
+	body := `{
+		"image": "data:image/png;base64,` + b64 + `",
+		"mask": "data:image/png;base64,` + b64 + `",
+		"prompt": "replace the sofa",
+		"model": "gpt-image-2"
+	}`
+	c := newEditTestContext(t, "POST", "application/json", strings.NewReader(body))
+
+	req, err := parseImageEditRequest(c)
+	require.NoError(t, err)
+	require.NotNil(t, req.Mask)
+	data, err := io.ReadAll(req.Mask)
+	require.NoError(t, err)
+	assert.Equal(t, editTestPNG, data)
+}
+
+func TestParseImageEditJSON_InvalidMask(t *testing.T) {
+	body := `{"image": "` + base64.StdEncoding.EncodeToString(editTestPNG) + `", "mask": "https://example.com/m.png", "prompt": "p", "model": "m"}`
+	c := newEditTestContext(t, "POST", "application/json", strings.NewReader(body))
+
+	_, err := parseImageEditRequest(c)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mask")
+}
+
 func TestParseImageEditJSON_BareBase64Array(t *testing.T) {
 	b64 := base64.StdEncoding.EncodeToString(editTestPNG)
 	body := `{"image": ["` + b64 + `", "` + b64 + `"], "prompt": "p", "model": "m"}`
