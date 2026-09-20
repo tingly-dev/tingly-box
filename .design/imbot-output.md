@@ -101,10 +101,11 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 3. **合并/精简结构性消息**：Processing 横幅 + Task-done 卡片各带一份 footer，能否把 Processing 横幅在支持 `Restate` 的平台（Telegram/Feishu/Lark）上直接原地改写成 Task-done 卡片，而不是分开发两条；不支持 `Restate` 的平台再退化成两条。这样"编辑能力强的平台体验更干净"能自然形成分层，而不是所有平台都按最低能力对齐。
 4. **verbose 默认值按平台能力收敛，而不是按平台白名单强制关闭**：现状是"Weixin 特例静音，其余全部默认 verbose=true"，更一致的做法是让默认值跟着 `SupportsInteraction()`/`TextLimit` 这类已有能力信号走（例如：无按钮能力的平台默认 quiet，因为它们每条消息的相对噪声成本更高），WeCom 至少应该先补上和 Weixin 一致的 `SuppressVerbose`（这是个能力事实，不是产品选择，可以直接修，参考第 4 节第 8 条）。
 5. **（更正）补齐 `Restate` 到 Discord / Slack**：Lark 已经有 `Restate`（继承自 Feishu），**不需要**额外实现，上一版文档把它也列进"待补齐"是错的。Discord/Slack 才是真正缺的两个，但缺的不只是 `Restate`——它们连按钮渲染和按钮点击的入站回调都没有（第 4 节第 5 条），"补 `Restate`" 这个提法本身预设了按钮已经存在，实际上要做的是三件事叠在一起的更大工作：① 把 `core.ActionSet` 渲染成 Discord message components / Slack Block Kit 按钮，② 接入站的 `InteractionCreate`（Discord）/ `interactive_message` 回调（Slack）事件，翻译成现有的 `payload`/`callback_data` 机制，③ 再实现 `Restate`。三者环环相扣，不能只做第③步；工作量和一个新平台接入接近，不是"小改动"，**本轮未做**，留作单独排期。**最小修复已实现**（commit `ae04e93`）：把 `core/platforms.go` 里 Discord/Slack 的 `Features` 去掉 `components`/`blockKit`，`SupportsInteraction()` 如实返回 false——权限确认/多选题现在会正确退化成 DingTalk 同款的文字兜底说明，"用户完全不知道怎么回复"的功能性 bug 已解决；真正的按钮支持仍是待办。
-6. **DingTalk/Weixin/WeCom/WhatsApp 的文字降级问答**：既然这 4 个平台注定要用纯文字，可以把"编号列表 + 回复说明"做得更紧凑（现状已经比较克制，`imprompter.go:474-514`），但更大的收益还是来自 3、4 两条——少发消息本身比优化单条消息的排版更有效。
+6. ~~DingTalk/Weixin/WeCom/WhatsApp（现在也包括 Discord/Slack）的文字降级问答~~ **部分已实现**（commit `d252666`）：回复说明现在放在消息最前面而不是最后——窄预览通知（微信这类平台的推送预览通常只截取开头几个字）之前会把说明截没了，现在不会。顺带修了 `AskUserQuestion` 的文字兜底会把问题/选项渲染两遍、结尾永远显示"Click a button below to select"（明明没有按钮）的问题——两个原因都是同一处代码（`imprompter.go` 在 `buildPromptText` 之后再 `append` 一段独立拼出来的说明）造成的，现在每个 `ToolPromptBuilder.BuildPrompt(req, supportsKeyboard)` 自己一次性拼完，不再有拼接两次的地方。**没做的**：回复内容无法识别时目前是静默 `return false`，交给下游当成普通聊天消息处理（不会给用户任何反馈，也可能被当成发给 agent 的新消息）。要不要在这种情况下改成"claim 消息 + 提示重试"，涉及一个需要产品判断的取舍——会改变"权限确认挂起时，用户还能在同一个 chat 里正常说话"这条现有行为，所以没有直接改，见 §8。
 
 ## 8. 待决策的问题
 
-- 第 7 节第 1 条（重复确认消息）建议直接当 bug 修，不需要等"整体要不要精简输出"的产品决策——需要确认吗？
-- `[RESULT]` 统计块是否要默认隐藏：这涉及"技术用户想看 cost/tokens" vs "普通用户觉得是噪声"的取舍，可能需要一个用户可见的开关，而不是完全去掉（呼应 ux-principles #6：默认值要选对，但"合理默认值优于多一个开关"不代表永远不能有开关，只是默认值要选对）。
+- ~~第 7 节第 1 条（重复确认消息）建议直接当 bug 修~~ 已按此原则处理并实现。
+- `[RESULT]` 统计块是否要默认隐藏：这涉及"技术用户想看 cost/tokens" vs "普通用户觉得是噪声"的取舍，可能需要一个用户可见的开关，而不是完全去掉（呼应 ux-principles #6：默认值要选对，但"合理默认值优于多一个开关"不代表永远不能有开关，只是默认值要选对）。已按"默认隐藏，verbose 下仍可见"实现（commit `0f53c29`），如果需要一个和 verbose 分开的、更细的开关（例如"quiet 但仍想看 cost"），目前还没有。
+- **无法识别的文字回复要不要 claim 并提示重试**（第 7 节第 6 条遗留）：现状是静默放行给下游当普通聊天处理。改成"claim + 提示"能让用户不再对着一段回复了没反应的 prompt 干等，但会改变"权限确认挂起时，用户仍可在同一个 chat 里正常说话/切换 agent"这条现有行为——`prompt_reply.go` 已经对 `@cc`/`@tb`/`/cc`/`/tb`/`/mock` 这类 handoff 命令显式放行，说明"挂起时仍可做别的事"是刻意保留的能力，不是疏漏。这个需要先确认：是否所有其他文字都应该被视为"这是在回答"，还是要留一个逃生舱（比如仍然放行、只是额外发一条不 claim 的提示）——不是纯技术判断，等确认方向再动。
 - 是否值得把 Flow A（hook notify）和 Flow B（`@cc` 流式）在同一个 chat 里共存时做去重/合流——目前没有证据表明这是常见用法，暂不列入本轮范围，但架构上两条路径完全独立这一点值得记录以防未来踩坑。
