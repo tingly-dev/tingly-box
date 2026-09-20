@@ -200,8 +200,11 @@ wire 只认第一张。与其加一个"mask 作用于哪张图"的选择器(一�
 
 - mask 挂在图上,所以删掉首图 = mask 一起走;第二张递补成首张时**不会继承**一个
   不属于它的 mask。
-- 参考图目前不可重排。真要加重排,规则是 mask 跟着它那张图走、离开首位即失效并
-  提示——那是重排功能的账,不在本版。
+- 参考图**可以拖拽重排**(上游后加的能力)。规则:mask 跟着它那张图走,不会因为
+  换了位置就丢;但只有排在第一位的那张会被发送。所以一张带 mask 的图被拖离队首
+  时,不是静默失效——缩略图上的色块压暗、按钮退回普通态,提示行多一句"只有第一
+  张的 mask 会被发送"。**已经画的东西不丢**,拖回去就继续生效(原则 10);而
+  "现在会不会生效"在两个地方写着,不留给用户猜。
 
 ### 3.3 涂的是"要改的地方",不是"要保留的地方"
 
@@ -358,56 +361,40 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 
 ---
 
-## 8. 实现状态与怎么测
+## 8. 实现状态
 
-### 8.1 已落地
+### 8.1 本分支(前端 + 网关直通)
 
 | 部分 | 位置 | 说明 |
 |------|------|------|
-| mask 合成 / 反转 / 导出(纯逻辑 + 单测) | `frontend/src/utils/maskCanvas.ts`(+ `.test.ts`) | 涂 = 改,导出时反转成 alpha 0;反转档由同一份笔画换个方向合成 |
-| 编辑器 | `frontend/src/pages/scenario/components/MaskEditorDialog.tsx` | 笔 / 橡皮 / 粗细 / Invert / Clear / Undo;画布取参考图原始像素;透明底,橡皮走 `destination-out` |
-| 面板接线 | `ImageGenPlaygroundCard.tsx` | 首图缩略图上的 Mask 按钮与角标、prompt 提示语切换、`images.edit({ mask })`、历史卡片 `images/edits · mask`、重试带回同一个 mask |
-| JSON 便捷编码补 `mask` | `internal/protocolserver/openai_image_edit.go` | 与 multipart 对齐,同样只收 data URL / 裸 base64 |
-| Codex:带 mask 改走 Responses | `internal/client/codex_images_responses.go`(新) | 参考图作为 `input_image` 进消息,mask 作为工具的 `input_image_mask`,`action: edit`;响应解析复用 generation 那条 |
-| Codex 原生端点遇到 mask | `internal/client/codex_images.go` | 明确报错,不再 debug 丢弃 |
+| mask 合成 / 反转 / 导出(纯逻辑 + 单测) | `frontend/packages/vision/src/maskCanvas.ts`(+ `.test.ts`) | 涂 = 改,导出时反转成 alpha 0;反转档由同一份笔画换个方向合成。放在 `@tingly/vision` 里,与 `sketchCanvas` 同一层:只碰 canvas/Blob,不碰 MUI/i18n |
+| 编辑器 | `frontend/src/pages/scenario/components/MaskEditorDialog.tsx` | 笔 / 橡皮 / 粗细 / Invert / Clear / Undo / Remove;画布取参考图原始像素;透明底,橡皮走 `destination-out` |
+| 面板接线 | `ImageGenPlaygroundCard.tsx`、`ImageGenPlayground.types.ts` | 缩略图上的 Mask 按钮与色块(含被拖离队首后的失效态,§3.2)、prompt 提示语切换、`images.edit({ mask })`、历史卡片 `images/edits · mask`;`ReferenceMask` 整个存进 run,所以重试和"把这次请求放回面板"拿回的都是**可继续编辑**的 mask |
+| JSON 便捷编码收 `mask` | `internal/protocolserver/openai_image_edit.go` | 与 multipart 对齐,同样只收 data URL / 裸 base64 |
+
+网关这一侧**只做直通**:multipart 早就解析 `mask`,OpenAI 兼容 client 原样透传,
+所以对 OpenAI 及兼容上游,这条链路是通的。
 
 单测:`maskCanvas.test.ts`(合成方向,用记录型 ctx 断言每一笔的 composite)、
-`codex_images_responses_test.go`(路由决策 + 请求构造)、`openai_image_edit_test.go`
-(JSON mask)。画布交互按惯例走真实浏览器验证:加图 → 涂 → 反转 → Apply → 缩略图
-角标 → 重开笔画还在。
+`openai_image_edit_test.go`(JSON mask)。画布交互按惯例走真实浏览器验证:加图 →
+涂 → 反转 → Apply → 缩略图角标 → 重开笔画还在。
 
-### 8.2 路由开关
+### 8.2 Codex 那条:单独一个分支
 
-```
-TINGLY_CODEX_IMAGE_EDIT_ROUTE=            # 不设:有 mask 走 Responses,没 mask 走原生
-TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses   # E1/E3:无 mask 也走 Responses
-TINGLY_CODEX_IMAGE_EDIT_ROUTE=native      # 钉死原生(带 mask 时明确报错)
-```
+`§2.2` 的 Responses 路线(方案 D)连同"原生端点遇到 mask 明确报错"一起,放在
+**`claude/jolly-rubin-j02e0e-codex-mask`**,不在本分支。理由就是 §2.5 那三个
+实验还没跑:在真实订阅上确认 hosted tool 认不认 `action: edit` 和
+`input_image_mask` 之前,不把一条猜出来的链路混进一个已经能用的功能里。
 
-不设即产品行为:只有 mask 这一个功能性理由会离开已验证的原生端点。实验结束后这个
-变量应该消失。
+那个分支带的东西:`internal/client/codex_images_responses.go`(路由 + 请求构造 +
+单测)、`codex_images.go` 的分流与报错、`TINGLY_CODEX_IMAGE_EDIT_ROUTE` 开关。
+实验步骤见 §2.5,跑法见该分支上的 §8.3。
 
-### 8.3 怎么测
+**本分支上 Codex 的行为因此没变**:带 mask 的请求到了 Codex 原生端点仍然是
+"丢掉 mask + 一行 debug log",也就是整图重画。这是已知的、留着的坑——它属于
+Codex 分支要回答的问题,合并顺序上应当在那条路定案时一起解决。
 
-E1(hosted tool 认不认参考图,先不带 mask):
-
-```bash
-TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses tingly-box serve
-curl -s http://127.0.0.1:PORT/tingly/imagegen/v1/images/edits \
-  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"image":"data:image/png;base64,...","prompt":"把沙发换成绿色天鹅绒","model":"<codex model>"}'
-```
-
-E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里多带一个
-`"mask":"data:image/png;base64,..."`。判据是**只有涂过的区域变**。
-
-三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认;E2 不过(mask 被忽略)→
-退回原生 + §3.10 的报错;E1 不过 → `imageedit.md` §1 的断言成立,写回 §2.2 结案。
-
-链路在日志里:`[Codex] Using Responses image_generation tool for image edit
-(experimental), model: ..., mask: true`。
-
-### 8.4 仍未做
+### 8.3 仍未做
 
 - 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
