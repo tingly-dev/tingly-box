@@ -270,3 +270,92 @@ Weixin、WeCom、WhatsApp 是同一个类别——`SupportsInteraction()` 全部
 4. **⚠️4 文字降级**：DingTalk / Weixin / WeCom / WhatsApp 没有按钮能力，权限确认和多选题一律退化成"编号列表 + 手打回复"，比按钮更占屏幕、也更麻烦。
 
 详细代码依据见 `.design/imbot-output.md` 对应章节。
+
+---
+
+## 新增：消息-会话身份落地后是什么样子（`msg-session-identity` 系列分支）
+
+以上所有画的都是"一条消息长什么样"。这一节画的是另一件事——**同一个 chat 里，两个互不相干的来源同时想让用户回答，系统现在怎么分辨"这句回复该给谁"**。背景见 `.design/imbot-output.md` §8，代码见分支 `claude/gifted-feynman-lwrxtb-msg-session-identity`（commit `cab1786`、`440946f`）。
+
+### 场景：一个 chat，两个同时 pending 的请求
+
+```
+用户 Alice 的手机
+┌───────────────────────────────────────────┐
+│ 🤖 my-bot                                  │
+├───────────────────────────────────────────┤
+│                                             │
+│  Alice 正在和 @cc 聊天，改一个 bug：         │
+│                                             │
+│  ┌───────────────────────────────────┐    │
+│  │ 🔐 Tool Permission Request          │    │  ← 消息①
+│  │ Tool: `Edit`                        │    │     Source = remote_agent
+│  │  [✅ Allow] [❌ Deny] [🔄 Always]    │    │     SessionID = "sess-cc-7"
+│  └───────────────────────────────────┘    │     （Flow B：@cc 执行中）
+│                                             │
+│  与此同时，Alice 自己电脑上还跑着一个独立的   │
+│  Claude Code，hook 也配到了同一个 chat：     │
+│                                             │
+│  ┌───────────────────────────────────┐    │
+│  │ 🔐 Tool Permission Request          │    │  ← 消息②
+│  │ Tool: `Bash`                        │    │     Source = notify
+│  │  [✅ Allow] [❌ Deny] [🔄 Always]    │    │     SessionID = "sess-hook-3"
+│  └───────────────────────────────────┘    │     （Flow A：外部 hook 进程）
+│                                             │
+│  Alice 没注意到有两条，直接回了一句：         │
+│  ┌───────────────────────────────────┐    │
+│  │ y                                   │    │  ← 纯文字，不知道点了哪个按钮
+│  └───────────────────────────────────┘    │     对应的按钮
+└───────────────────────────────────────────┘
+```
+
+### "y" 这句话现在怎么被处理
+
+```
+HandlePromptTextReply(chatID="alice-dm", text="y")
+        │
+        ▼
+GetPendingRequestsForChat("alice-dm")
+        │
+        │  chat 里有两条 pending：
+        │  ┌───────────────────────────────┐
+        │  │ req①  Source=remote_agent      │
+        │  │        createdAt=10:02:00      │
+        │  ├───────────────────────────────┤
+        │  │ req②  Source=notify            │
+        │  │        createdAt=10:02:05      │  ← 更晚创建，
+        │  └───────────────────────────────┘     单纯按时间排会排前面
+        │
+        ▼
+   排序规则（两级）：
+   ① Source == remote_agent 的排最前
+      （不管谁先来，"当下在聊的" 优先）
+   ② 同 Source 内再按时间，最新的优先
+        │
+        ▼
+   排序结果：[ req①(remote_agent) , req②(notify) ]
+        │
+        ▼
+   latestReq = req①   ← "y" 被当成回答 @cc 的权限确认
+                          req②（notify）继续挂着，等它自己的
+                          budget/timeout 到期按策略兜底
+```
+
+### 这个规则赌对了会怎样，赌错了会怎样
+
+```
+✅ 赌对（大多数情况）：            ❌ 赌错（少数情况）：
+Alice 就是在回 @cc 的确认        Alice 其实是想回那条 notify
+        │                              │
+        ▼                              ▼
+"y" 正确地批准了 Edit           "y" 被误判成批准了 Edit，
+（remote_agent 那条）           而 Alice 真正想批准的 Bash
+                                （notify 那条）还在干等，
+                                直到自己超时按默认策略处理
+```
+
+这不是"修好了"，是"把一个纯随机的猜测，换成一个有理由但仍然会猜错的默认值"——理由是"用户此刻在跟 agent 对话，回复大概率是回它"，赌错的那一半目前没有更强的信号能避免（原生 reply-to 能解决，但还没接，见下一节）。这个取舍是讨论后主动接受的，不是发现晚了没来得及修。
+
+### 和"⚠️1 重复确认"这些画的关系
+
+上面几节的 ⚠️ 编号画的是"一条消息本身的问题"（重复发送、调试格式、按钮残留/缺失、文字降级）。这一节画的是"两条独立消息互相干扰"的问题——层次不一样：前者哪怕只有一个来源在发消息也会发生，后者必须两个来源同时活跃才会暴露。`SessionID`/`Source` 这两个字段是为了给后者兜底，顺带也是回答 `.design/imbot-output.md` §8 那条"每条消息该知道自己是哪个 session/service 发出去的"根因记录——不过目前只接到了"能排出优先级"这一步，`SendResult.MessageID` 持久化、`SessionMgr` 记录助手回复这些还没做。
