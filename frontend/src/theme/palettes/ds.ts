@@ -90,7 +90,13 @@ export const dsPalette: ThemePalette = {
   action: {
     hover: 'rgba(85, 128, 250, 0.12)',
     selected: 'rgba(85, 128, 250, 0.2)',
-    disabled: 'rgba(85, 128, 250, 0.06)',
+    // `disabled` is the *foreground* MUI uses for disabled Button/IconButton/
+    // Chip text — reuse `text.disabled` above so labels stay legible, rather
+    // than the near-invisible tint this used to hold. That tint moved to
+    // `disabledBackground`, the token MUI actually reads for a disabled
+    // contained Button's fill. See `.design/theme-disabled-state.md`.
+    disabled: '#9aa3ac',
+    disabledBackground: 'rgba(85, 128, 250, 0.1)',
     focus: 'rgba(85, 128, 250, 0.16)',
   },
   dashboard: {

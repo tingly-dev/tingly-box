@@ -67,7 +67,13 @@ export const darkPalette: ThemePalette = {
   action: {
     hover: 'rgba(255, 255, 255, 0.08)',
     selected: 'rgba(59, 130, 246, 0.28)',
-    disabled: 'rgba(255, 255, 255, 0.05)',
+    // `disabled` is the *foreground* MUI uses for disabled Button/IconButton/
+    // Chip text — it must match `text.disabled` above for legible labels,
+    // not the faint background wash that name suggests. That wash lives in
+    // `disabledBackground` instead (the correct token MUI reads for a
+    // disabled contained Button's fill). See `.design/theme-disabled-state.md`.
+    disabled: 'rgba(255, 255, 255, 0.42)',
+    disabledBackground: 'rgba(255, 255, 255, 0.12)',
     focus: 'rgba(255, 255, 255, 0.12)',
   },
   dashboard: {
