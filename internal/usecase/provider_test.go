@@ -26,7 +26,7 @@ func newTestProviderConfig(t *testing.T) *serverconfig.Config {
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("template manager Initialize: %v", err)
 	}

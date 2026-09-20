@@ -43,7 +43,7 @@ func runInitConfig(output string) error {
 	}
 
 	// Load embedded provider templates (no network).
-	tm := catalog.NewEmbeddedOnlyProviderCatalogManager()
+	tm := catalog.NewProviderCatalogManager(catalog.EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		return fmt.Errorf("load provider templates: %w", err)
 	}

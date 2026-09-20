@@ -34,7 +34,7 @@ func TestNewTemplateManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewProviderCatalogManager(tt.githubURL)
+			tm := NewProviderCatalogManager(WithGitHubURL(tt.githubURL))
 			if tm == nil {
 				t.Fatal("NewTemplateManager returned nil")
 			}
@@ -53,7 +53,7 @@ func TestNewTemplateManager(t *testing.T) {
 
 // TestTemplateManagerInitialize tests initialization with embedded templates
 func TestTemplateManagerInitialize(t *testing.T) {
-	tm := NewProviderCatalogManager("")
+	tm := NewProviderCatalogManager(WithGitHubURL(""))
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestTemplateManagerInitialize(t *testing.T) {
 
 // TestTemplateManagerGetTemplate tests retrieving individual templates
 func TestTemplateManagerGetTemplate(t *testing.T) {
-	tm := NewProviderCatalogManager("")
+	tm := NewProviderCatalogManager(WithGitHubURL(""))
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestTemplateManagerFetchTemplates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewProviderCatalogManager(tt.githubURL)
+			tm := NewProviderCatalogManager(WithGitHubURL(tt.githubURL))
 			// Initialize first to load embedded templates
 			_ = tm.Initialize(context.Background())
 
@@ -278,7 +278,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tm := NewProviderCatalogManager(tt.githubURL)
+			tm := NewProviderCatalogManager(WithGitHubURL(tt.githubURL))
 			if err := tm.Initialize(context.Background()); err != nil {
 				t.Fatalf("Initialize failed: %v", err)
 			}
@@ -426,7 +426,7 @@ func TestValidateTemplate(t *testing.T) {
 
 // TestTemplateManagerConcurrentAccess tests concurrent access to templates
 func TestTemplateManagerConcurrentAccess(t *testing.T) {
-	tm := NewProviderCatalogManager("")
+	tm := NewProviderCatalogManager(WithGitHubURL(""))
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 // (missing required fields, malformed model entries) introduced by hand-edits to
 // providers.json before they reach production.
 func TestEmbeddedTemplatesAreValid(t *testing.T) {
-	tm := NewEmbeddedOnlyProviderCatalogManager()
+	tm := NewProviderCatalogManager(EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -562,7 +562,7 @@ func TestTemplateManagerHTTPTimeout(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	tm := NewProviderCatalogManager(svr.URL)
+	tm := NewProviderCatalogManager(WithGitHubURL(svr.URL))
 	if tm.httpClient == nil {
 		t.Fatal("httpClient should be initialized")
 	}
@@ -579,7 +579,7 @@ func TestTemplateManagerHTTPTimeout(t *testing.T) {
 // declared api_style — and return their seeded model lists. It also proves the
 // two Vertex templates (same canonical_domain) are disambiguated by api_style.
 func TestCloudTemplatesResolveModels(t *testing.T) {
-	tm := NewEmbeddedOnlyProviderCatalogManager()
+	tm := NewProviderCatalogManager(EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestCloudTemplatesResolveModels(t *testing.T) {
 // Vertex templates share canonical_domain "aiplatform.googleapis.com", so
 // without api_style matching the wrong model family could be returned.
 func TestVertexDisambiguationByStyle(t *testing.T) {
-	tm := NewEmbeddedOnlyProviderCatalogManager()
+	tm := NewProviderCatalogManager(EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
 		t.Fatalf("write registry: %v", err)
 	}
 
-	tm := NewProviderCatalogManager("file://" + registryPath)
+	tm := NewProviderCatalogManager(WithGitHubURL("file://" + registryPath))
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		t.Fatalf("loadEmbeddedTemplates: %v", err)
 	}
@@ -739,7 +739,7 @@ func TestExternalRegistryKeepsEmbeddedOnlyTemplates(t *testing.T) {
 // the base-URL-specificity tiebreak. This must resolve to the template whose
 // own base URL is the more specific prefix of the provider's, deterministically.
 func TestOpenCodeTemplateDisambiguation(t *testing.T) {
-	tm := NewEmbeddedOnlyProviderCatalogManager()
+	tm := NewProviderCatalogManager(EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestOpenCodeTemplateDisambiguation(t *testing.T) {
 // typo in the endpoint string) fails a test instead of surfacing as a live
 // 500 for whichever model it broke.
 func TestGetOpenAIEndpointOverrideForModel(t *testing.T) {
-	tm := NewEmbeddedOnlyProviderCatalogManager()
+	tm := NewProviderCatalogManager(EmbeddedOnly())
 	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}

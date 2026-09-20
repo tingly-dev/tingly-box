@@ -199,37 +199,59 @@ type ProviderCatalogManager struct {
 	cacheTTL          time.Duration // Cache TTL (default 24h)
 }
 
-func NewDefaultProviderCatalogManager() *ProviderCatalogManager {
-	return NewProviderCatalogManagerWithPreference(CatalogGitHubURL, PreferenceDefault)
+// ProviderCatalogManagerOption configures a ProviderCatalogManager at
+// construction time.
+type ProviderCatalogManagerOption func(*ProviderCatalogManager)
+
+// WithGitHubURL sets where the manager syncs templates from. Unset (the
+// default), it means no GitHub sync — embedded templates only.
+func WithGitHubURL(url string) ProviderCatalogManagerOption {
+	return func(m *ProviderCatalogManager) {
+		m.githubURL = url
+	}
 }
 
-// NewEmbeddedOnlyProviderCatalogManager creates a template manager that only uses embedded templates
-// This is useful for development, testing, or offline scenarios
-func NewEmbeddedOnlyProviderCatalogManager() *ProviderCatalogManager {
-	return NewProviderCatalogManagerWithPreference("", PreferenceEmbedded)
+// WithSourcePreference sets the priority order for loading templates
+// (Cache -> GitHub -> Embedded by default; see CatalogSourcePreference).
+func WithSourcePreference(preference CatalogSourcePreference) ProviderCatalogManagerOption {
+	return func(m *ProviderCatalogManager) {
+		m.sourcePreference = preference
+	}
 }
 
-// NewProviderCatalogManager creates a new template manager with default preference.
-// If githubURL is empty, only embedded templates will be used (no GitHub sync).
-func NewProviderCatalogManager(githubURL string) *ProviderCatalogManager {
-	return NewProviderCatalogManagerWithPreference(githubURL, PreferenceDefault)
+// EmbeddedOnly restricts the manager to embedded templates only, with no
+// GitHub sync. Behaviorally the same as the zero-value default (no
+// WithGitHubURL), but states that intent explicitly for callers — tests and
+// offline/development scenarios that must never touch the network or the
+// on-disk cache, and want that guaranteed even if the default ever changes.
+func EmbeddedOnly() ProviderCatalogManagerOption {
+	return func(m *ProviderCatalogManager) {
+		m.githubURL = ""
+		m.sourcePreference = PreferenceEmbedded
+	}
 }
 
-// NewProviderCatalogManagerWithPreference creates a new template manager with specified source preference.
-// If githubURL is empty, only embedded templates will be used (no GitHub sync).
-func NewProviderCatalogManagerWithPreference(githubURL string, preference CatalogSourcePreference) *ProviderCatalogManager {
-	configDir := constant.GetTinglyConfDir()
-	return &ProviderCatalogManager{
-		githubURL:         githubURL,
-		sourcePreference:  preference,
+// NewProviderCatalogManager creates a new provider catalog manager. With no
+// options it uses only the embedded catalog — no network or cache I/O —
+// since an unset githubURL makes Initialize skip straight to embedded
+// templates regardless of source preference. Pass WithGitHubURL to opt into
+// syncing from GitHub (CatalogGitHubURL for the real catalog, or a test
+// double).
+func NewProviderCatalogManager(opts ...ProviderCatalogManagerOption) *ProviderCatalogManager {
+	m := &ProviderCatalogManager{
+		sourcePreference:  PreferenceDefault,
 		templates:         make(map[string]*ProviderCatalog),
 		capabilitySchemas: make(map[string]*CapabilitySchema),
 		httpClient: &http.Client{
 			Timeout: DefaultCatalogHTTPTimeout,
 		},
-		cachePath: configDir, // Will store in .tingly-box directory
+		cachePath: constant.GetTinglyConfDir(), // Will store in .tingly-box directory
 		cacheTTL:  DefaultCatalogCacheTTL,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // GetTemplate returns a provider template by ID
