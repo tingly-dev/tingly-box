@@ -2375,14 +2375,19 @@
       "region": "global",
       "plan": "standard",
       "website": "https://groq.com",
-      "description": "Groq LPU-based high-speed inference API (OpenAI compatible)",
+      "description": "Groq LPU-based high-speed inference API (OpenAI + Anthropic compatible)",
       "type": "official",
       "api_doc": "https://console.groq.com/docs/overview",
       "model_doc": "https://console.groq.com/docs/models",
       "pricing_doc": "https://groq.com/pricing",
       "base_url_openai": "https://api.groq.com/openai/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.groq.com/anthropic",
       "models": [
+        {
+          "id": "claude-haiku-4-5-20251001",
+          "context": 200000,
+          "max_output": 8192
+        },
         {
           "id": "llama-3.3-70b-versatile",
           "context": 131072
@@ -2398,9 +2403,10 @@
       ],
       "supports_models_endpoint": true,
       "icon": "groq",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-20",
       "sources": [
-        "https://console.groq.com/docs/models"
+        "https://console.groq.com/docs/models",
+        "https://console.groq.com/docs/anthropic"
       ]
     },
     "together-xyz": {
@@ -2413,13 +2419,13 @@
       "region": "global",
       "plan": "standard",
       "website": "https://together.ai",
-      "description": "Together AI hosted open-source models (OpenAI compatible)",
+      "description": "Together AI hosted open-source models (OpenAI + Anthropic compatible)",
       "type": "reseller",
       "api_doc": "https://docs.together.ai/docs/quickstart",
       "model_doc": "https://docs.together.ai/docs/serverless-models",
       "pricing_doc": "https://www.together.ai/pricing",
       "base_url_openai": "https://api.together.xyz/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.together.xyz/",
       "models": [
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
