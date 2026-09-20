@@ -62,6 +62,6 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 }
 
 // newStreamingMessageHandler creates the per-execution streaming chat writer.
-func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
-	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
+func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext, sessionID string) *streamingMessageHandler {
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, sessionID, h.GetVerbose(hCtx.ChatID))
 }

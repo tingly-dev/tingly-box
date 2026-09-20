@@ -72,7 +72,7 @@ type ExecutorDependencies struct {
 	SendText                   func(hCtx HandlerContext, text string)
 	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
 	SendFile                   func(hCtx HandlerContext, filePath, caption string) error
-	NewStreamingMessageHandler func(hCtx HandlerContext) *streamingMessageHandler
+	NewStreamingMessageHandler func(hCtx HandlerContext, sessionID string) *streamingMessageHandler
 }
 
 // GetBotSettingOrCache returns the current bot setting.
