@@ -17,7 +17,7 @@
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。"
   },
   "version": "2.1.0",
-  "last_updated": "2026-07-20T00:00:00Z",
+  "last_updated": "2026-09-20T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -2136,6 +2136,43 @@
         "https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code"
       ]
     },
+    "stepfun-com-coding": {
+      "id": "stepfun-com-coding",
+      "name": "Step Plan (CN)",
+      "alias": "Step Plan (CN) | 阶跃方案（中国）",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.stepfun.com",
+      "vendor_family": "stepfun",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://platform.stepfun.com",
+      "description": "Stepfun Step Plan dedicated endpoints for coding agents (China site)",
+      "type": "official",
+      "api_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
+      "model_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
+      "pricing_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
+      "base_url_openai": "https://api.stepfun.com/step-plan/v1",
+      "base_url_anthropic": "https://api.stepfun.com/step-plan/anthropic",
+      "models": [
+        {
+          "id": "step-3.7-flash",
+          "context": 256000,
+          "max_output": 256000
+        },
+        {
+          "id": "step-3.5-flash",
+          "context": 256000,
+          "max_output": 256000
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "stepfun",
+      "last_updated": "2026-09-20",
+      "sources": [
+        "https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code"
+      ]
+    },
     "stepfun-ai": {
       "id": "stepfun-ai",
       "name": "Stepfun",
@@ -2172,6 +2209,42 @@
       "last_updated": "2026-08-19",
       "sources": [
         "https://models.dev/labs/stepfun/",
+        "https://platform.stepfun.ai/docs/en/step-plan/integrations/claude-code"
+      ]
+    },
+    "stepfun-ai-coding": {
+      "id": "stepfun-ai-coding",
+      "name": "Step Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.stepfun.ai",
+      "vendor_family": "stepfun",
+      "region": "intl",
+      "plan": "coding",
+      "website": "https://platform.stepfun.ai",
+      "description": "Stepfun Step Plan dedicated endpoints for coding agents (International)",
+      "type": "official",
+      "api_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
+      "model_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
+      "pricing_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
+      "base_url_openai": "https://api.stepfun.ai/step-plan/v1",
+      "base_url_anthropic": "https://api.stepfun.ai/step-plan/anthropic",
+      "models": [
+        {
+          "id": "step-3.7-flash",
+          "context": 256000,
+          "max_output": 256000
+        },
+        {
+          "id": "step-3.5-flash",
+          "context": 256000,
+          "max_output": 256000
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "stepfun",
+      "last_updated": "2026-09-20",
+      "sources": [
         "https://platform.stepfun.ai/docs/en/step-plan/integrations/claude-code"
       ]
     },
@@ -2251,6 +2324,44 @@
       "icon": "xiaomi",
       "last_updated": "2026-07-20",
       "sources": [
+        "https://mimo.mi.com/docs/zh-CN/updates/model"
+      ]
+    },
+    "xiaomimimo-com-coding": {
+      "id": "xiaomimimo-com-coding",
+      "name": "Mimo Coding Plan",
+      "alias": "Mimo Coding Plan | 小米 Mimo Coding Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.xiaomimimo.com",
+      "vendor_family": "xiaomi",
+      "region": "global",
+      "plan": "coding",
+      "website": "https://platform.xiaomimimo.com",
+      "description": "Xiaomi Mimo Coding Plan dedicated endpoints for coding agents (OpenAI + Anthropic compatible)",
+      "type": "official",
+      "api_doc": "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
+      "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "pricing_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "base_url_openai": "https://api.xiaomimimo.com/coding/v1",
+      "base_url_anthropic": "https://api.xiaomimimo.com/coding/anthropic",
+      "models": [
+        {
+          "id": "mimo-v2.5",
+          "context": 1048576,
+          "max_output": 131072
+        },
+        {
+          "id": "mimo-v2.5-pro",
+          "context": 1048576,
+          "max_output": 16384
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "xiaomi",
+      "last_updated": "2026-09-20",
+      "sources": [
+        "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
         "https://mimo.mi.com/docs/zh-CN/updates/model"
       ]
     },
