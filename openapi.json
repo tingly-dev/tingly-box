@@ -7355,6 +7355,109 @@
         }
       }
     },
+    "/api/v2/provider-templates": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get all provider catalog entries",
+        "description": "Get all provider catalog entries\n\nDEPRECATED: Use /provider-catalog instead; this alias is kept for backward compatibility.",
+        "operationId": "apiV2Provider-templatesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/v2/provider-templates/refresh": {
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Refresh the provider catalog from GitHub",
+        "description": "Refresh the provider catalog from GitHub\n\nDEPRECATED: Use /provider-catalog instead; this alias is kept for backward compatibility.",
+        "operationId": "apiV2Provider-templatesRefreshPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/v2/provider-templates/version": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get current provider catalog registry version",
+        "description": "Get current provider catalog registry version\n\nDEPRECATED: Use /provider-catalog instead; this alias is kept for backward compatibility.",
+        "operationId": "apiV2Provider-templatesVersionGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/v2/provider-templates/{id}": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get a specific provider catalog entry by ID",
+        "description": "Get a specific provider catalog entry by ID\n\nDEPRECATED: Use /provider-catalog instead; this alias is kept for backward compatibility.",
+        "operationId": "apiV2Provider-templatesIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
     "/api/v2/providers": {
       "get": {
         "tags": [
