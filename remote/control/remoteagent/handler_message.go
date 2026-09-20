@@ -292,7 +292,7 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.Media
 func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
 	return bot.HandlePromptTextReply(h.imPrompter,
 		func(text string) { h.SendText(hCtx, text) },
-		hCtx.ChatID, hCtx.SenderID, hCtx.Text())
+		hCtx.ChatID, hCtx.SenderID, hCtx.Text(), bot.ReplyToMessageID(hCtx.Message))
 }
 
 // SendText sends a plain text message

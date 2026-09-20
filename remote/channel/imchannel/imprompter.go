@@ -372,8 +372,9 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 	return nil, false
 }
 
-// GetPendingRequestsForChat returns the chat's pending requests ordered by a
-// two-level tie-break, most-preferred first:
+// GetPendingRequestsForChat returns the chat's pending requests, each
+// stamped with its sent prompt's MessageID (see the field doc comment on
+// ask.Request), ordered by a two-level tie-break, most-preferred first:
 //
 //  1. ask.SourceRemoteAgent before ask.SourceNotify. A text reply arriving
 //     while the user has an active remote_agent conversation in this chat is
@@ -382,8 +383,11 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 //     more defensible default than picking whichever request merely arrived
 //     later. It is a heuristic, not a guarantee: see .design/imbot-output.md
 //     §8 for the known failure case (the user actually meant to answer the
-//     notify ping) and why there is currently no better signal to resolve it
-//     with (no reply-to matching, no per-chat serialization).
+//     notify ping). This tie-break is a fallback: callers should prefer
+//     matching MessageID against a native reply-to (bot.ReplyToMessageID)
+//     when one is present, which is a real match, not a guess — not every
+//     platform captures one (DingTalk, WhatsApp today), which is when this
+//     ordering is actually load-bearing.
 //  2. Within the same Source, most-recently-created first. p.pendingRequests
 //     is a map, so without an explicit sort here, a caller treating the
 //     first result as "the latest" (as bot.HandlePromptTextReply does) would
@@ -410,7 +414,13 @@ func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 
 	requests := make([]ask.Request, len(pending))
 	for i, pr := range pending {
-		requests[i] = pr.request
+		req := pr.request
+		// pr.messageID is only known once the prompt has actually been sent
+		// (set in Prompt, after bot.SendMessage returns), so it can't be on
+		// pr.request from the moment the request was created — stamp it onto
+		// the copy here, where the caller can rely on it being current.
+		req.MessageID = pr.messageID
+		requests[i] = req
 	}
 	return requests
 }
