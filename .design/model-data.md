@@ -31,7 +31,7 @@
   `mandatory` / `default_enabled` / `default_effort`(OpenRouter schema 里有)目前**未采用**——
   没有可核实的官方数据支撑每个模型的取值,填 false/编造属于捏造事实,等有可靠来源
   (或代码出现真实消费方)再补。
-- 每个 vendor 一对文件:`claude.models.json`(数据)+ `claude.go`(加载与查询,如
+- 每个 vendor 一对文件:`claude.models.json`(数据)+ `claude_model_catalog.go`(加载与查询,如
   `catalog.LookupClaudeThinkingCaps`)。openai / gemini 需要能力判定时按同样模式扩展,
   字段集合由各自实际消费方决定,不必与 claude 的 schema 一致。
 - `claude.models.snapshot.json`:未经改动的 Anthropic `/v1/models` 响应镜像(**不是**
@@ -40,7 +40,7 @@
   10 个),按需人工从线上 API 刷新,不必每次改动都同步。
 - 查询按"完整 id + 去日期 family 名"双索引、最长 key 优先做子串匹配,所以裸名
   (`claude-opus-4-5`)、带日期 id、云厂商修饰名(`us.anthropic.…-v1:0`、`…@20251001`)都能解析。
-- **完备性不变式**:`catalog/completeness_test.go` 断言 providers.json 中出现的每个 Claude
+- **完备性不变式**:`catalog/claude_model_catalog_completeness_test.go` 断言 providers.json 中出现的每个 Claude
   模型 id 去除已知云厂商修饰后必须与 catalog 的完整 id 或去日期 family **精确相等**。
   完备性检查不复用运行时的宽松子串查询,避免新模型误借旧 family 的能力。加新模型先加
   catalog,再加 providers.json,否则测试失败。
