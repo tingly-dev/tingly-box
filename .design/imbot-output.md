@@ -120,16 +120,14 @@ Remote 里能往 IM 发消息的代码只有两条源头，二者共用同一个
 
   **进一步讨论后又加了一层（commit `440946f`）**：纯按时间排序还是"猜"，只是猜得确定了。讨论时先提过"排队"（同一时间只放一个 pending，参考 `Executions.begin` 的单飞模式）——这个方向被否了，因为 Flow A（notify）和 Flow B（remote_agent）是刻意解耦的两个 consumer（见 `bot-arch.md` §1），排队等于把两者重新耦合，而且会莫名卡住 Flow A 里外部 Claude Code 进程的 hook 请求。改成给 `ask.Request` 加一个 `Source` 字段（`ask.SourceNotify` / `ask.SourceRemoteAgent`，字面量对应 `bot.NotifyConsumerName`/`binding.RemoteAgentScenario` 现成的名字，不引入新概念），在两个来源分别打标签，`GetPendingRequestsForChat` 排序规则升级成两级：**同一个 chat 里，`remote_agent` 来源永远排在 `notify` 来源前面，同来源内部再按时间**。原本也考虑过在 prompt 文案里加图标区分来源（🔔/💬）方便人眼分辨，但这本身是给"减少视觉噪声"这个大方向增负担，权衡后放弃——标签只用于内部排序，不体现在文案里。
 
-  **这条优先级规则本身站不站得住，讨论后的结论是"暂时没有更好的解法，先当已知限制记下来"**：`remote_agent` 优先的假设是"用户此刻在跟 agent 对话，回复大概率是回它"——但如果用户其实是特意去处理那条 notify 推送（比如专门跑去确认一个后台任务），这条规则会猜错，把回复错误地喂给了 agent 那边的 pending request。目前没有更强的信号能解决这个（reply-to 原生回复可以，但没做；见上面"reply-to 值得记录"那条），所以这是一个已知的、被主动接受的局限，不是遗漏。
+  **这条优先级规则本身站不站得住**：`remote_agent` 优先的假设是"用户此刻在跟 agent 对话，回复大概率是回它"——如果用户其实是特意去处理那条 notify 推送，这条规则会猜错。**这个规则现在已经降级成兜底**——见下面"赌错会怎样"一节：reply-to 精确匹配已经实现并覆盖 8/9 平台，只有匹配不到（没有 reply-to 信号，或用户没有真的点"回复"这条具体消息，就是直接在 chat 里打字）时，才会退回到这条 Source 优先级规则去猜。
 
   **没做的**：`SendResult.MessageID` 仍然没人持久化，`SessionMgr.AppendMessage` 仍然只记 inbound——这两块本轮明确排除在范围外，之前讨论时已经确认。
 
   **"赌错会怎样"这个问题的解法梳理（讨论后决定：先记录，不执行）**——`Source` 优先级排序不是"解决"，是"把纯随机的猜测换成一个有理由但仍会猜错的默认值"，真正能做到"不用猜"的方案有以下几层，按"彻底程度 vs 成本"排列：
 
-  1. **原生 reply-to 匹配（真解决，零 UX 成本）**：Telegram/Discord/Slack/Feishu/Lark 都支持"回复某条具体消息"，把 `msg.ReplyTo` 和 `pendingIMRequest.messageID` 对上，就知道用户回的是哪一条，不用猜、不用管 Source。覆盖了这 5 个平台之后，真正还会撞车的只剩下没有原生回复能力的 DingTalk/Weixin/WeCom/WhatsApp。这是唯一一个"彻底解决"而不是"猜得更准"的方案，优先级应该最高。
-  2. **文字平台的短标记兜底（真解决，UX 成本极小且只在稀有场景出现）**：DingTalk/Weixin/WeCom/WhatsApp 没有原生回复。方案是：一个 chat 里**第二条**才落地的 pending request（本身就是稀有事件——必须两个来源同时活跃）在提示文案里带一个短标记（比如 `[2]`），对应的回复格式变成"回 `2y` 批准"，第一条维持"回 `y`"不变，平时只有一条 pending 时完全无感。
-  3. **兜底不猜，直接问（真解决，但要多发一条消息，且只在真撞车时触发）**：如果 ①② 都没接，真遇到 ≥2 个 pending 又分不清来源/没有 reply-to，与其继续用 Source 优先级赌，不如问一句"你现在有 2 个待确认，回 1 是 Edit，回 2 是 Bash"。这条消息只在稀有的撞车场景才会发，和"每轮固定发几条消息"那种系统性噪声不是一回事，不违背"减少噪声"的大方向。
-  4. **已实现的 `Source` 优先级排序**：在这个分层里应该降级成"以上都没接时的最后兜底"，而不是主力机制——它是今天唯一在跑的一层，但注定会赌错一部分（记录见上）。
-
-  建议的实施顺序（未执行，等决定要不要做再排期）：先做①（收益最大，零代价，覆盖 5 个平台），再看要不要做②兜底剩下 4 个文字平台，③优先级最低——它牺牲的是"零消息"这个我们这一路都在争取的东西，只有在①②都不做/都失效时才值得考虑。
+  1. ~~原生 reply-to 匹配~~ **已实现（分支 `claude/gifted-feynman-lwrxtb-reply-to`，commit `91eb37c`、`5d7f5b7`）**：调研之前的假设（只有 Telegram/Discord/Slack/Feishu/Lark 5 个平台有原生回复）是错的——查了 imbot 每个平台的入站适配器，Weixin、WeCom 其实也已经把原生回复能力（`ReplyToID`）接进了 `core.Message.ThreadContext.ParentMessageID`；WhatsApp 的 webhook 本来就带 `context.id`，只是 `MessageEvent` 结构体没声明这个字段，字段一直被静默丢弃，这次补上了。**最终覆盖 8 个平台**（Telegram/Discord/Feishu/Lark/Slack/Weixin/WeCom/WhatsApp），真正没有任何原生回复信号的只剩 **DingTalk**（Stream 模式的 `BotCallbackDataModel` 里确实没有任何 context/parent 字段，是平台/SDK 本身的限制，不是没解析）。实现上：`ask.Request` 加了 `MessageID` 字段（`GetPendingRequestsForChat` 返回时回填，构造请求时还不知道），新增 `bot.ReplyToMessageID(msg)` 读取入站消息的回复目标，`bot.SelectPendingRequest(pendingReqs, replyToID)` 把"精确匹配"和"Source+时间兜底"这两层判断分开，精确匹配命中就直接用，不命中/没有回复目标才退回旧的启发式。
+  2. **文字平台的短标记兜底**：调研后范围缩小成**只剩 DingTalk 一个平台**需要它（不再是 4 个）。方案不变：一个 chat 里第二条才落地的 pending request 在提示文案里带一个短标记（比如 `[2]`），回复格式变成"回 `2y` 批准"，第一条维持"回 `y`"不变，平时只有一条 pending 时完全无感。**未实现**，等评估是否值得为 DingTalk 单独做。
+  3. **兜底不猜，直接问**：①②都没接、或者 DingTalk 上真的撞车了，才问一句"你现在有 2 个待确认，回 1 是 Edit，回 2 是 Bash"。只在稀有场景触发，不是系统性噪声。**未实现**。
+  4. **`Source` 优先级排序**（commit `440946f`）：现在的定位是"①命中不了时的兜底"——覆盖 8/9 平台之后，只有 DingTalk、或者 reply-to 信号丢失/不匹配的边缘情况才会真正用到它。
 - 是否值得把 Flow A（hook notify）和 Flow B（`@cc` 流式）在同一个 chat 里共存时做去重/合流——目前没有证据表明这是常见用法，暂不列入本轮范围，但架构上两条路径完全独立这一点值得记录以防未来踩坑。
