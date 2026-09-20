@@ -1,6 +1,7 @@
 package ask
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -73,13 +74,36 @@ func questionRequest() Request {
 func TestAskUserQuestionHandler_BuildPrompt(t *testing.T) {
 	h := NewAskUserQuestionHandler()
 
-	prompt := h.BuildPrompt(questionRequest())
+	prompt := h.BuildPrompt(questionRequest(), true)
 	assert.Contains(t, prompt, "Which color?")
 	assert.Contains(t, prompt, "Red")
 	assert.Contains(t, prompt, "Option 2")
+	assert.Contains(t, prompt, "Click a button below to select")
 
-	empty := h.BuildPrompt(Request{Input: map[string]interface{}{}})
+	empty := h.BuildPrompt(Request{Input: map[string]interface{}{}}, true)
 	assert.Contains(t, empty, "No questions provided")
+}
+
+// TestAskUserQuestionHandler_BuildPrompt_NoKeyboard covers the text-only
+// fallback: the reply instruction must lead the message (so it survives a
+// chat client's notification-preview truncation), the question/options must
+// render exactly once (not duplicated by a separately-appended instructions
+// block), and the misleading "click a button" trailer must not appear since
+// there is no button to click.
+func TestAskUserQuestionHandler_BuildPrompt_NoKeyboard(t *testing.T) {
+	h := NewAskUserQuestionHandler()
+
+	prompt := h.BuildPrompt(questionRequest(), false)
+
+	instrIdx := strings.Index(prompt, "Reply with the option number")
+	require.GreaterOrEqual(t, instrIdx, 0, "reply instruction must be present")
+	questionIdx := strings.Index(prompt, "Which color?")
+	require.GreaterOrEqual(t, questionIdx, 0)
+	assert.Less(t, instrIdx, questionIdx, "reply instruction must come before the question, not after")
+
+	assert.NotContains(t, prompt, "Click a button below to select")
+	assert.Equal(t, 1, strings.Count(prompt, "Which color?"), "question must render exactly once, not duplicated")
+	assert.Equal(t, 1, strings.Count(prompt, "Red"), "options must render exactly once, not duplicated")
 }
 
 func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
@@ -107,6 +131,24 @@ func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
 }
 
 // --- default permission handler ---
+
+// TestBuildDefaultPrompt_NoKeyboard asserts the reply instructions lead the
+// message (before the tool/args detail) when the platform has no keyboard,
+// so they survive a chat client's notification-preview truncation, and are
+// absent when the platform does have one (the keyboard is the instruction).
+func TestBuildDefaultPrompt_NoKeyboard(t *testing.T) {
+	req := Request{ID: "req-3", ToolName: "Bash", Input: map[string]interface{}{"command": "ls"}}
+
+	withKeyboard := BuildDefaultPrompt(req, true)
+	assert.NotContains(t, withKeyboard, "Reply to approve or deny")
+
+	noKeyboard := BuildDefaultPrompt(req, false)
+	instrIdx := strings.Index(noKeyboard, "Reply to approve or deny")
+	require.GreaterOrEqual(t, instrIdx, 0, "reply instructions must be present")
+	toolIdx := strings.Index(noKeyboard, "Tool: `Bash`")
+	require.GreaterOrEqual(t, toolIdx, 0)
+	assert.Less(t, instrIdx, toolIdx, "reply instructions must come before the tool detail, not after")
+}
 
 func TestParseDefaultResponse(t *testing.T) {
 	req := Request{ID: "req-2", Input: map[string]interface{}{"command": "ls"}}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"strings"
 	"sync"
 	"time"
 
@@ -152,20 +151,12 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	// Check if platform supports inline keyboards
 	supportsKeyboard := imbot.GetPlatformCapabilities(string(platform)).SupportsInteraction()
 
-	// Build prompt using tool handler (pass platform for text fallback)
+	// Build prompt using tool handler (pass platform for text fallback). Each
+	// handler embeds its own "how to reply" instructions up front when the
+	// platform has no keyboard (AskUserQuestionHandler.BuildPrompt /
+	// BuildDefaultPrompt), so there is nothing to append here.
 	promptText := p.buildPromptText(req, supportsKeyboard)
 	keyboard := p.buildKeyboard(req)
-
-	// For platforms without keyboard support, append text-based instructions
-	if !supportsKeyboard {
-		if req.ToolName == "AskUserQuestion" {
-			// Append option selection instructions
-			promptText += "\n\n" + p.buildTextSelectionInstructions(req)
-		} else {
-			// Append permission response instructions
-			promptText += "\n\n" + p.buildTextPermissionInstructions()
-		}
-	}
 
 	// Send the prompt message (only include keyboard markup if platform supports it)
 	opts := &imbot.SendMessageOptions{
@@ -398,7 +389,7 @@ func (p *IMPrompter) buildPromptText(req ask.Request, supportsKeyboard bool) str
 	// Try to use tool-specific prompt builder
 	builder := p.registry.FindPromptBuilder(req.ToolName, req.Input)
 	if builder != nil {
-		prompt := builder.BuildPrompt(req)
+		prompt := builder.BuildPrompt(req, supportsKeyboard)
 		logrus.WithFields(logrus.Fields{
 			"tool_name":  req.ToolName,
 			"prompt_len": len(prompt),
@@ -468,55 +459,6 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 	kb.AddRow(imbot.ActionButton("❌ Cancel", "perm", "deny", req.ID))
 
 	return kb.Build()
-}
-
-// buildTextSelectionInstructions builds text instructions for platforms without keyboard support
-func (p *IMPrompter) buildTextSelectionInstructions(req ask.Request) string {
-	var text strings.Builder
-
-	questions := ask.NormalizeQuestions(req.Input["questions"])
-	if len(questions) == 0 {
-		// Fallback: use permission instructions from shared config
-		return ask.FormatPermissionInstructions()
-	}
-
-	// For AskUserQuestion - list all questions and options
-	for qIdx, question := range questions {
-		questionText, _ := question["question"].(string)
-		options := ask.NormalizeOptions(question["options"])
-		if len(options) == 0 {
-			continue
-		}
-		if len(questions) > 1 {
-			text.WriteString(fmt.Sprintf("*Q%d: %s*\n", qIdx+1, questionText))
-		} else {
-			text.WriteString("*To select an option, reply with the number:*\n\n")
-		}
-		for i, option := range options {
-			label, _ := option["label"].(string)
-			desc, hasDesc := option["description"].(string)
-			if hasDesc && desc != "" {
-				text.WriteString(fmt.Sprintf("• `%d` - %s - %s\n", i+1, label, desc))
-			} else {
-				text.WriteString(fmt.Sprintf("• `%d` - %s\n", i+1, label))
-			}
-		}
-		text.WriteString("\n")
-	}
-
-	if len(questions) > 1 {
-		text.WriteString("_Reply with answers in order, e.g. `1 2 1` for Q1=opt1, Q2=opt2, Q3=opt1_")
-	} else {
-		text.WriteString("_Just type the number to reply_")
-	}
-
-	return text.String()
-}
-
-// buildTextPermissionInstructions builds text instructions for permission prompts
-// on platforms without keyboard support. Delegates to the shared config in ask package.
-func (p *IMPrompter) buildTextPermissionInstructions() string {
-	return ask.FormatPermissionInstructions()
 }
 
 // editPromptToResult edits the prompt message to show the result
