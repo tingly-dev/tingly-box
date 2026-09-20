@@ -76,6 +76,12 @@ type MessageEvent struct {
 					Text      struct {
 						Body string `json:"body"`
 					} `json:"text,omitempty"`
+					// Context carries the replied-to message's ID when this
+					// message is a native WhatsApp quoted reply. Absent
+					// (nil) for a message that isn't a reply.
+					Context *struct {
+						ID string `json:"id"`
+					} `json:"context,omitempty"`
 				} `json:"messages"`
 			} `json:"value"`
 		} `json:"changes"`
@@ -499,6 +505,9 @@ func (b *Bot) handleWhatsAppMessages(messages []struct {
 	Text      struct {
 		Body string `json:"body"`
 	} `json:"text,omitempty"`
+	Context *struct {
+		ID string `json:"id"`
+	} `json:"context,omitempty"`
 }) {
 	for _, msg := range messages {
 		// Only handle text messages for now
@@ -540,6 +549,12 @@ func (b *Bot) handleWhatsAppMessages(messages []struct {
 			Content:   content,
 			ChatType:  core.ChatTypeDirect,
 			Metadata:  make(map[string]interface{}),
+		}
+		if msg.Context != nil && msg.Context.ID != "" {
+			message.ThreadContext = &core.ThreadContext{
+				ID:              msg.ID,
+				ParentMessageID: msg.Context.ID,
+			}
 		}
 
 		b.EmitMessage(message)
