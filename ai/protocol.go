@@ -14,6 +14,8 @@ const (
 	APIStyleOpenAI    APIStyle = "openai"
 	APIStyleAnthropic APIStyle = "anthropic"
 	APIStyleGoogle    APIStyle = "google"
+	// APIStyleDecision is the native structured-decision protocol used by Jev.
+	APIStyleDecision APIStyle = "decision"
 )
 
 // APIType represents the target API style for protocol conversion
@@ -34,6 +36,9 @@ const (
 
 	// TypeGoogle converts requests to Google Gemini API format
 	TypeGoogle APIType = "google"
+
+	// TypeDecision preserves native typed decision requests and responses.
+	TypeDecision APIType = "decision"
 )
 
 // Client is the unified interface for AI provider clients

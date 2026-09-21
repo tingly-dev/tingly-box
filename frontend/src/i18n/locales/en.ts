@@ -57,6 +57,7 @@ export default {
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
       "useImageGen": "Image",
+      "useDecision": "Decision",
       "useTeam": "Team",
       "useCustom": "Custom",
       "apiKeys": "API Keys",
@@ -2144,6 +2145,7 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation and editing through Tingly Box.",
+      "decision": "Route native typed choices, scores, and probabilities through Tingly Box.",
       "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default."
     }
   },

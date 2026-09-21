@@ -114,6 +114,9 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	// endpoint, everyone else gets the SDK's multipart /images/edits).
 	group.POST("/images/edits", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("image_edit"), ph.HandleOpenAIImageEdit)...)
 
+	// Native structured decisions (Jev-compatible).
+	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decision"), ph.HandleDecision)...)
+
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.ListModelsByScenario)...)
 }

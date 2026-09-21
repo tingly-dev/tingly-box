@@ -8,6 +8,7 @@ import {
     Extension as IconExtension,
     Photo as IconPhoto,
     Vector as IconVector,
+    Psychology as IconDecision,
 } from '@/components/icons';
 import {
     Anthropic,
@@ -144,6 +145,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.imagegen',
         path: '/agent/image',
         icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'decision',
+        labelKey: 'layout.nav.useDecision',
+        descKey: 'scenarioOverview.descriptions.decision',
+        path: '/agent/decision',
+        icon: (size) => <IconDecision sx={{ fontSize: size }} />,
         hideable: true,
     },
 ];

@@ -15,6 +15,7 @@ const (
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
 	TransportImageGen  ScenarioTransport = "imagegen"
+	TransportDecision  ScenarioTransport = "decision"
 )
 
 type ScenarioDescriptor struct {
@@ -72,6 +73,13 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			// (image_generation tool), TransportImageGen for /images/generations.
 			// The caller chooses; tingly-box does not probe the upstream.
 			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportImageGen},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioDecision:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportDecision},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}

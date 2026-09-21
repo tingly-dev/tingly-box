@@ -147,6 +147,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
             { id: 'imagegen', nav: { path: '/agent/image', label: t('layout.nav.useImageGen', { defaultValue: 'Image' }), icon: <IconPhoto sx={{ fontSize: 20 }} /> } },
+            { id: 'decision', nav: { path: '/agent/decision', label: t('layout.nav.useDecision', { defaultValue: 'Decision' }), icon: <IconBrain sx={{ fontSize: 20 }} /> } },
         ]);
 
         const scenarioChildren: NavItem[] = [];

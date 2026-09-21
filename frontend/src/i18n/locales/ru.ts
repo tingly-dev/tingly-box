@@ -57,6 +57,7 @@ export default {
       "useCursor": "Cursor",
       "useEmbed": "Эмбеддинги",
       "useImageGen": "Изображения",
+      "useDecision": "Решения",
       "useTeam": "Команда",
       "useCustom": "Свой сценарий",
       "apiKeys": "API-ключи",
