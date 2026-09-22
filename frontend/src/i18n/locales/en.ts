@@ -1475,8 +1475,19 @@ export default {
       "viewModes": {
         "summary": "Summary",
         "byRequest": "By Request",
-        "activity": "Activity"
+        "activity": "Activity",
+        "quotaHistory": "Quota history"
       }
+    },
+    "quotaHistory": {
+      "title": "Quota history",
+      "subtitle": "Stored provider quota snapshots for this time range. The Provider filter applies; Model and Identity do not.",
+      "snapshotCount": "{{snapshots}} snapshots · {{providers}} providers",
+      "loadError": "Quota history could not be loaded.",
+      "empty": "No quota snapshots in this period",
+      "emptyHint": "Snapshots appear after a supported provider quota is refreshed.",
+      "noWindows": "No quota windows reported",
+      "notCountable": "Not limited"
     },
     "requestsView": {
       "title": "Requests",

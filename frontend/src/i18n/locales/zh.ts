@@ -1471,8 +1471,19 @@ export default {
       "viewModes": {
         "summary": "概览",
         "byRequest": "按请求",
-        "activity": "活动"
+        "activity": "活动",
+        "quotaHistory": "Quota 历史"
       }
+    },
+    "quotaHistory": {
+      "title": "Quota 历史",
+      "subtitle": "当前时间范围内保存的 Provider quota 快照。Provider 筛选有效；模型和账号筛选不适用。",
+      "snapshotCount": "{{snapshots}} 个快照 · {{providers}} 个 Provider",
+      "loadError": "无法加载 quota 历史。",
+      "empty": "此时间段内没有 quota 快照",
+      "emptyHint": "支持 quota 的 Provider 刷新后，快照会显示在这里。",
+      "noWindows": "Provider 未返回 quota 窗口",
+      "notCountable": "不限额"
     },
     "requestsView": {
       "title": "请求",

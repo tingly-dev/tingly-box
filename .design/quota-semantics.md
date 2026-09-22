@@ -1,5 +1,16 @@
 # Quota 语义归一
 
+## 快照历史
+
+每次 quota 刷新现在会在同一个事务里产生两个结果：更新供当前 quota
+低延迟读取使用的单行 `provider_usage` 缓存，并向 `provider_usage_history`
+追加完整快照。历史表复用当前 quota 表的列映射，只是额外使用自增 ID 允许同一个
+provider 存在多条记录；`windows`、`breakdowns` 和 `raw_response` 等字段的保存方式与当前表一致。
+provider/time 组合索引用于限定范围查询。
+
+过期清理和删除不支持 quota 的 provider 只影响当前缓存。历史快照是上游在当时返回内容的
+不可变记录，不会被这些缓存维护操作删除。
+
 > 适用对象：改 `ai/quota/**`、`internal/server/module/statusline`、`internal/command/quota.go`、
 > `frontend/src/types/quota.ts` 的贡献者。
 > 结构：调研（§1–§2）→ 设计（§3–§4）→ 实现（§5–§6）→ 结果（§7）→ 范围外决定（§8）→ 待定（§9）。

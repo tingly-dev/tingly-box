@@ -33,11 +33,15 @@ Three global filters apply to the stat cards, chart, request view, activity heat
 - **Model** — concrete model name.
 - **Identity** — `user_id`; `admin` is the main account and the remaining options are sharing keys from `listAPITokens`.
 
-The main analysis pane has three modes:
+The main analysis pane has four modes:
 
 - **Summary** — stacked token trend.
 - **By Request** — paginated request table for concrete diagnosis; only available for `today` and `yesterday`.
 - **Activity** — fixed 365-day heatmap.
+- **Quota history** — immutable provider-quota snapshots captured by quota
+  refreshes. It follows the selected dashboard time range and Provider filter;
+  Model and Identity do not apply because upstream quota is provider/account
+  scoped rather than request scoped.
 
 If a stale `requests` selection survives a route change into a daily range, `effectiveViewMode` renders Summary instead.
 
@@ -119,6 +123,12 @@ Four gzip-compressed JSON endpoints live under `/api/v1/usage/`:
 | `/timeseries` | Dashboard Summary and Activity | `interval=minute\|hour\|day\|week`, time bounds, provider/model/scenario/user filters |
 | `/records` | Dashboard By Request | time bounds, provider/model/scenario/user/status filters, `limit` ≤ 1000, `offset` |
 | `/performance` | Dashboard Summary | time bounds and provider/model/scenario/user filters; successful requests only |
+
+Provider quota history is served separately by
+`GET /api/v1/provider-quota/history`. It accepts `start_time`, exclusive
+`end_time`, optional provider UUID (`provider`), and a bounded `limit`. Results
+are newest first. This separation prevents request usage and upstream account
+allowances from being conflated into one metric model.
 
 The stats response is `{ meta, data }`; `data` contains additive counts plus derived rates. The records response uses `meta: { total, limit, offset }` for the real filtered range.
 

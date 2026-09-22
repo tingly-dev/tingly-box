@@ -2132,6 +2132,39 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: result })
     }),
 
+    // Keep the static history route before /:uuid so MSW does not interpret
+    // "history" as a provider UUID. The snapshots mirror the append-only
+    // backend contract and make the Dashboard view useful in mock mode.
+    http.get('/api/v1/provider-quota/history', ({ request }) => {
+        const searchParams = new URL(request.url).searchParams
+        const providerFilter = searchParams.get('provider')
+        const startTime = Date.parse(searchParams.get('start_time') || '') || 0
+        const endTime = Date.parse(searchParams.get('end_time') || '') || Number.MAX_SAFE_INTEGER
+        const now = Date.now()
+        const ages = [20, 75, 180, 300]
+        const data = Object.values(mockQuotas)
+            .filter((quota: any) => !providerFilter || quota.provider_uuid === providerFilter)
+            .flatMap((quota: any, providerIndex) => ages.map((minutesAgo, index) => ({
+                ...quota,
+                fetched_at: new Date(now - (minutesAgo + providerIndex * 10) * 60_000).toISOString(),
+                windows: (quota.windows || []).map((window: any) => {
+                    if (!window.limit || window.unknown || window.unlimited) return window
+                    const usedPercent = Math.max(0, window.used_percent - (ages.length - index - 1) * 7)
+                    return {
+                        ...window,
+                        used_percent: usedPercent,
+                        used: window.limit * usedPercent / 100,
+                    }
+                }),
+            })))
+            .filter((snapshot: any) => {
+                const fetchedAt = Date.parse(snapshot.fetched_at)
+                return fetchedAt >= startTime && fetchedAt < endTime
+            })
+            .sort((a: any, b: any) => Date.parse(b.fetched_at) - Date.parse(a.fetched_at))
+        return HttpResponse.json({ meta: { total: data.length, updated_at: new Date(now).toISOString() }, data })
+    }),
+
     // Shape matches the Go handler: GetQuota / RefreshProvider answer with the
     // usage record itself, not a {success, data} envelope (only /batch wraps).
     // While these wrapped it, the hook read no provider_uuid and treated every

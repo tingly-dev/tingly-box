@@ -4511,6 +4511,67 @@
         }
       }
     },
+    "/api/v1/provider-quota/history": {
+      "get": {
+        "tags": [
+          "provider-quota"
+        ],
+        "summary": "List immutable quota snapshots for dashboard trends",
+        "description": "List immutable quota snapshots for dashboard trends",
+        "operationId": "apiV1Provider-quotaHistoryGet",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Query parameter provider",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "Query parameter start_time",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "Query parameter end_time",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Query parameter limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListQuotaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/provider-quota/refresh": {
       "post": {
         "tags": [
@@ -10834,6 +10895,34 @@
           "status",
           "service",
           "health"
+        ]
+      },
+      "HistoryRequest": {
+        "type": "object",
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "description": "ISO 8601 exclusive end time"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum snapshots (1-5000)"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider UUID"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "ISO 8601 start time"
+          }
+        },
+        "required": [
+          "provider",
+          "start_time",
+          "end_time",
+          "limit"
         ]
       },
       "HistoryResponse": {

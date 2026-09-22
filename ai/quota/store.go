@@ -28,9 +28,17 @@ var (
 
 // ProviderUsageRecord is the GORM persistence model for provider usage.
 type ProviderUsageRecord struct {
-	ProviderUUID string `gorm:"primaryKey;column:provider_uuid"`
+	ProviderUUID              string `gorm:"primaryKey;column:provider_uuid"`
+	ProviderUsageRecordFields `gorm:"embedded"`
+}
+
+// ProviderUsageRecordFields is the shared relational mapping used by both the
+// latest-value table and the append-only history table. ProviderUUID stays on
+// the containing records because it is the primary key only for the latest
+// table; history uses an auto-increment ID and indexes the provider instead.
+type ProviderUsageRecordFields struct {
 	ProviderName string `gorm:"column:provider_name"`
-	ProviderType string `gorm:"column:provider_type;index:idx_provider_usage_type"`
+	ProviderType string `gorm:"column:provider_type"`
 
 	// Primary window
 	PrimaryUsed       *float64   `gorm:"column:primary_used"`
@@ -81,11 +89,30 @@ type ProviderUsageRecord struct {
 	BreakdownsJSON *string `gorm:"column:breakdowns;type:text"`
 
 	// Metadata
-	FetchedAt   time.Time  `gorm:"column:fetched_at;index:idx_provider_usage_fetched"`
+	FetchedAt   time.Time  `gorm:"column:fetched_at"`
 	ExpiresAt   time.Time  `gorm:"column:expires_at"`
 	LastError   *string    `gorm:"column:last_error"`
 	LastErrorAt *time.Time `gorm:"column:last_error_at"`
 	RawResponse *string    `gorm:"column:raw_response;type:text"` // Raw API response JSON.
+}
+
+// ProviderUsageHistoryRecord uses the same quota column mapping as
+// ProviderUsageRecord, but permits multiple rows for each provider.
+type ProviderUsageHistoryRecord struct {
+	ID                        uint   `gorm:"primaryKey"`
+	ProviderUUID              string `gorm:"column:provider_uuid"`
+	ProviderUsageRecordFields `gorm:"embedded"`
+}
+
+func (ProviderUsageHistoryRecord) TableName() string { return "provider_usage_history" }
+
+// HistoryQuery bounds a history read. Limit is capped by the store so API
+// callers cannot accidentally load an unbounded snapshot table.
+type HistoryQuery struct {
+	ProviderUUID string
+	StartTime    *time.Time
+	EndTime      *time.Time
+	Limit        int
 }
 
 func (ProviderUsageRecord) TableName() string {
@@ -94,8 +121,16 @@ func (ProviderUsageRecord) TableName() string {
 
 // toProviderUsage converts record to domain model
 func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
+	return providerUsageFromRecord(r.ProviderUUID, &r.ProviderUsageRecordFields)
+}
+
+func (r *ProviderUsageHistoryRecord) toProviderUsage() *ProviderUsage {
+	return providerUsageFromRecord(r.ProviderUUID, &r.ProviderUsageRecordFields)
+}
+
+func providerUsageFromRecord(providerUUID string, r *ProviderUsageRecordFields) *ProviderUsage {
 	usage := &ProviderUsage{
-		ProviderUUID: r.ProviderUUID,
+		ProviderUUID: providerUUID,
 		ProviderName: r.ProviderName,
 		ProviderType: ProviderType(r.ProviderType),
 		FetchedAt:    r.FetchedAt,
@@ -144,10 +179,12 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 	record := &ProviderUsageRecord{
 		ProviderUUID: usage.ProviderUUID,
-		ProviderName: usage.ProviderName,
-		ProviderType: string(usage.ProviderType),
-		FetchedAt:    usage.FetchedAt,
-		ExpiresAt:    usage.ExpiresAt,
+		ProviderUsageRecordFields: ProviderUsageRecordFields{
+			ProviderName: usage.ProviderName,
+			ProviderType: string(usage.ProviderType),
+			FetchedAt:    usage.FetchedAt,
+			ExpiresAt:    usage.ExpiresAt,
+		},
 	}
 
 	if usage.LastError != "" {
@@ -323,7 +360,20 @@ func NewGormStore(dbPath string, logger *logrus.Logger) (*GormStore, error) {
 }
 
 func (s *GormStore) migrate() error {
-	return s.db.AutoMigrate(&ProviderUsageRecord{})
+	if err := s.db.AutoMigrate(&ProviderUsageRecord{}, &ProviderUsageHistoryRecord{}); err != nil {
+		return err
+	}
+	for _, statement := range []string{
+		"CREATE INDEX IF NOT EXISTS idx_provider_usage_type ON provider_usage(provider_type)",
+		"CREATE INDEX IF NOT EXISTS idx_provider_usage_fetched ON provider_usage(fetched_at)",
+		"CREATE INDEX IF NOT EXISTS idx_quota_history_provider_fetched ON provider_usage_history(provider_uuid, fetched_at)",
+		"CREATE INDEX IF NOT EXISTS idx_quota_history_fetched ON provider_usage_history(fetched_at)",
+	} {
+		if err := s.db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *GormStore) Save(ctx context.Context, usage *ProviderUsage) error {
@@ -331,7 +381,16 @@ func (s *GormStore) Save(ctx context.Context, usage *ProviderUsage) error {
 	defer s.mu.Unlock()
 
 	record := toRecord(usage)
-	return s.db.WithContext(ctx).Save(record).Error
+	history := &ProviderUsageHistoryRecord{
+		ProviderUUID:              record.ProviderUUID,
+		ProviderUsageRecordFields: record.ProviderUsageRecordFields,
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(record).Error; err != nil {
+			return err
+		}
+		return tx.Create(history).Error
+	})
 }
 
 func (s *GormStore) Get(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
@@ -368,6 +427,35 @@ func (s *GormStore) List(ctx context.Context) ([]*ProviderUsage, error) {
 		usages[i] = r.toProviderUsage()
 	}
 
+	return usages, nil
+}
+
+func (s *GormStore) History(ctx context.Context, query HistoryQuery) ([]*ProviderUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	limit := query.Limit
+	if limit <= 0 || limit > 5000 {
+		limit = 1000
+	}
+	db := s.db.WithContext(ctx).Model(&ProviderUsageHistoryRecord{})
+	if query.ProviderUUID != "" {
+		db = db.Where("provider_uuid = ?", query.ProviderUUID)
+	}
+	if query.StartTime != nil {
+		db = db.Where("fetched_at >= ?", *query.StartTime)
+	}
+	if query.EndTime != nil {
+		db = db.Where("fetched_at < ?", *query.EndTime)
+	}
+	var records []ProviderUsageHistoryRecord
+	if err := db.Order("fetched_at DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
+		return nil, err
+	}
+	usages := make([]*ProviderUsage, 0, len(records))
+	for i := range records {
+		usages = append(usages, records[i].toProviderUsage())
+	}
 	return usages, nil
 }
 

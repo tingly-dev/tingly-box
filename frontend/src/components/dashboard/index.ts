@@ -6,6 +6,7 @@ export type { AggregatedStat } from './ServiceStatsTable';
 export { default as TokenHeatmap } from './TokenHeatmap';
 export type { DailyUsage } from './TokenHeatmap';
 export { default as DashboardHeatmapSection } from './DashboardHeatmapSection';
+export { default as QuotaHistoryView } from './QuotaHistoryView';
 export { default as AgentQuickNav } from './AgentQuickNav';
 export { default as RequestsView } from './RequestsView';
 export type { UsageRecord } from './RequestsView';
