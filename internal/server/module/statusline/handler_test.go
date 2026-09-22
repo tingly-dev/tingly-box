@@ -607,6 +607,29 @@ func TestFormatQuotaWindowShowsRemaining(t *testing.T) {
 	assert.Equal(t, "65/100", formatQuotaWindow(&quota.UsageWindow{Used: 30, Limit: 100, Available: &available, Unit: quota.UsageUnitRequests}))
 	assert.Equal(t, "70/100", formatQuotaWindow(&quota.UsageWindow{Used: 30, Limit: 100, Unit: quota.UsageUnitRequests}))
 	assert.Equal(t, "0/100", formatQuotaWindow(&quota.UsageWindow{Used: 120, Limit: 100, Unit: quota.UsageUnitRequests}))
+	assert.Equal(t, "70%", formatQuotaWindow(&quota.UsageWindow{Used: 30, Limit: 100, Unit: quota.UsageUnitPercent}))
+}
+
+func TestFormatQuotaInlineSeparatesAllowanceAndBalance(t *testing.T) {
+	usd, cny, empty := 12.4, 81.41, 0.0
+	usage := &quota.ProviderUsage{Windows: []*quota.UsageWindow{
+		{Type: quota.WindowTypeSession, Used: 30, Limit: 100, Unit: quota.UsageUnitPercent},
+		{Type: quota.WindowTypeBalance, Available: &usd, Unknown: true, Unit: quota.UsageUnitCurrency, CurrencyCode: "USD"},
+		{Type: quota.WindowTypeBalance, Available: &cny, Unknown: true, Unit: quota.UsageUnitCurrency, CurrencyCode: "CNY"},
+		{Type: quota.WindowTypeBalance, Available: &empty, Unknown: true, Unit: quota.UsageUnitCredits},
+		{Type: quota.WindowTypeBalance, Unknown: true, Unit: quota.UsageUnitCurrency},
+		{Type: quota.WindowTypeCustom, Unknown: true, Unit: quota.UsageUnitCurrency},
+	}}
+	assert.Equal(t, " | Quota: 70% left | Balance: $12.40 · 81.41 CNY · 0 credits", formatQuotaInline(usage))
+	assert.Equal(t, " | Balance: $12.40", formatQuotaInline(&quota.ProviderUsage{Windows: []*quota.UsageWindow{usage.Windows[1]}}))
+	assert.Empty(t, formatQuotaInline(&quota.ProviderUsage{Windows: []*quota.UsageWindow{usage.Windows[4]}}))
+}
+
+func TestFormatQuotaInlineCountableBalanceNotDuplicated(t *testing.T) {
+	usage := &quota.ProviderUsage{Windows: []*quota.UsageWindow{
+		{Type: quota.WindowTypeBalance, Used: 30, Limit: 100, Unit: quota.UsageUnitCredits},
+	}}
+	assert.Equal(t, " | Balance: 70 credits", formatQuotaInline(usage))
 }
 
 // --- pure helper tests ---

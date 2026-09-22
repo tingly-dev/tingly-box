@@ -120,7 +120,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 
 	// Build status line as two rows, split by semantic dimension:
 	//   row 1 (session + requested routing): ruleModel @ profile  📁 <cwd>  <session>
-	//   row 2 (real model + consumption):     realModel @ provider | ▓▓░░░░░░ 7% | $0.05 | Cache: 87% | Quota: 60K/100K
+	//   row 2 (real model + consumption):     realModel @ provider | ▓▓░░░░░░ 7% | $0.05 | Cache: 87% | Quota: 60% left | Balance: $12.40
 	ccModel := cmp.Or(merged.Model.DisplayName, "unknown")
 
 	usedPct := int(merged.ContextWindow.UsedPercentage)
@@ -158,7 +158,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	row2 += fmt.Sprintf("%s %d%% | $%.2f", bar, usedPct, cost)
 	row2 += buildCacheInline(merged.ContextWindow.CurrentUsage)
 
-	// Add usage info to the same line if available
+	// Add remaining quota and balance to the same line if available.
 	quotaInfo := h.buildQuotaInline(mapping)
 	if quotaInfo != "" {
 		row2 += quotaInfo
@@ -353,19 +353,61 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	// Unknown and uncapped windows carry no usable used/limit pair, so they
-	// have nothing to render here.
-	var parts []string
-	for _, window := range usage.Windows {
-		if window.Countable() {
-			parts = append(parts, formatQuotaWindow(window))
-		}
-	}
-	if len(parts) == 0 {
+	return formatQuotaInline(usage)
+}
+
+func formatQuotaInline(usage *quota.ProviderUsage) string {
+	if usage == nil {
 		return ""
 	}
 
-	return " | Quota: " + strings.Join(parts, " ")
+	var quotas, balances []string
+	for _, window := range usage.Windows {
+		if window == nil {
+			continue
+		}
+		// A balance may have no reported cap. An explicit available amount
+		// remains useful even when its usage percentage is unknown.
+		if window.Type == quota.WindowTypeBalance && (window.Available != nil || window.Countable()) {
+			balances = append(balances, formatQuotaBalance(window))
+		} else if window.Countable() {
+			quotas = append(quotas, formatQuotaWindow(window)+" left")
+		}
+	}
+	var sections []string
+	if len(quotas) > 0 {
+		sections = append(sections, "Quota: "+strings.Join(quotas, " "))
+	}
+	if len(balances) > 0 {
+		sections = append(sections, "Balance: "+strings.Join(balances, " · "))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return " | " + strings.Join(sections, " | ")
+}
+
+func formatQuotaBalance(window *quota.UsageWindow) string {
+	value := max(0, window.Limit-window.Used)
+	if window.Available != nil {
+		value = max(0, *window.Available)
+	}
+	switch window.Unit {
+	case quota.UsageUnitCurrency:
+		if window.CurrencyCode == "USD" {
+			return fmt.Sprintf("$%.2f", value)
+		}
+		if window.CurrencyCode != "" {
+			return fmt.Sprintf("%.2f %s", value, window.CurrencyCode)
+		}
+		return fmt.Sprintf("%.2f", value)
+	case quota.UsageUnitCredits:
+		return fmt.Sprintf("%.0f credits", value)
+	case quota.UsageUnitPercent:
+		return fmt.Sprintf("%.0f%%", value)
+	default:
+		return fmt.Sprintf("%.0f %s", value, window.Unit)
+	}
 }
 
 // formatQuotaWindow formats a single quota window
@@ -373,6 +415,9 @@ func formatQuotaWindow(window *quota.UsageWindow) string {
 	remaining, limit := max(0, window.Limit-window.Used), window.Limit
 	if window.Available != nil {
 		remaining = max(0, *window.Available)
+	}
+	if window.Unit == quota.UsageUnitPercent {
+		return fmt.Sprintf("%.0f%%", remaining)
 	}
 
 	// Requests and credits always show actual numbers, never a K/M suffix.
