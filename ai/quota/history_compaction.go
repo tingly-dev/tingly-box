@@ -34,7 +34,7 @@ func (s *GormStore) CompactHistory(ctx context.Context, now time.Time) error {
 		for _, provider := range providers {
 			var records []ProviderUsageHistoryRecord
 			if err := tx.Where("provider_uuid = ? AND unixepoch(fetched_at) >= ? AND unixepoch(fetched_at) < ?", provider, retention.Unix(), today.Unix()).
-				Order("unixepoch(fetched_at) ASC, id ASC").Find(&records).Error; err != nil {
+				Omit("raw_response", "breakdowns").Order("unixepoch(fetched_at) ASC, id ASC").Find(&records).Error; err != nil {
 				return fmt.Errorf("load quota history for %s: %w", provider, err)
 			}
 			keep := quotaDailyExtremes(records, today.Location())
@@ -60,7 +60,7 @@ func quotaDailyExtremes(records []ProviderUsageHistoryRecord, location *time.Loc
 	numericDay := make(map[string]bool)
 	for i := range records {
 		record := &records[i]
-		day := record.FetchedAt.In(location).Format("2006-01-02")
+		day := record.ProviderUUID + ":" + record.FetchedAt.In(location).Format("2006-01-02")
 		lastByDay[day] = record.ID
 		for _, window := range record.toProviderUsage().Windows {
 			if window == nil {

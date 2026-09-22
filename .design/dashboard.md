@@ -54,10 +54,12 @@ then groups stored samples by provider and quota window. Each window has
 its own sampled time series, so unrelated providers, units, and quota windows
 are never stacked into one trend. The time axis uses the selected rolling
 quota-scale range, even when only part of that range has samples. Hovering a point shows its exact sample time
-and quota values. Today's five-minute samples remain detailed; completed local
-days retain the original snapshots containing each window's daily low and high.
-History older than 30 days is removed. The read is bounded to the latest 5,000 snapshots; the UI
-calls out that limit and offers provider or range filtering when it is reached.
+and quota values. The 5H and 1D views show detailed samples; the 7D and 30D
+views show each provider window's daily low and high, including today. Completed
+local days retain the original snapshots containing those extrema. History older
+than 30 days is removed. Each response is limited to 1,000 points; in the 7D
+and 30D views, the limit applies after daily selection. The UI offers provider
+or range filtering when that limit is reached.
 
 ### Team Usage
 

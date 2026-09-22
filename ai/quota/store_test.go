@@ -279,7 +279,12 @@ func TestGormStoreHistoryDailyAppliesLimitAfterSelectingExtrema(t *testing.T) {
 		{"one", 1, 10}, {"one", 2, 90}, {"one", 3, 50},
 		{"two", 1, 20}, {"two", 2, 80}, {"two", 3, 50},
 	} {
-		usage := &ProviderUsage{ProviderUUID: sample.provider, FetchedAt: day.Add(time.Duration(sample.hour) * time.Hour)}
+		usage := &ProviderUsage{
+			ProviderUUID: sample.provider,
+			FetchedAt:    day.Add(time.Duration(sample.hour) * time.Hour),
+			RawResponse:  json.RawMessage(`{"large":"payload"}`),
+			Breakdowns:   []*UsageBreakdown{{Key: "model", Label: "Model", Group: "model"}},
+		}
 		usage.AddWindow("session", &UsageWindow{Used: sample.used, Limit: 100, Unit: UsageUnitPercent})
 		if err := store.Save(context.Background(), usage); err != nil {
 			t.Fatal(err)
@@ -297,6 +302,9 @@ func TestGormStoreHistoryDailyAppliesLimitAfterSelectingExtrema(t *testing.T) {
 		if sample.FetchedAt.Equal(day.Add(3 * time.Hour)) {
 			t.Fatalf("non-extreme sample returned: %#v", sample)
 		}
+		if len(sample.RawResponse) != 0 || len(sample.Breakdowns) != 0 {
+			t.Fatalf("daily history loaded raw payload or breakdowns: %#v", sample)
+		}
 	}
 	one, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "one", Daily: true, Limit: 1})
 	if err != nil {
@@ -311,5 +319,8 @@ func TestGormStoreHistoryDailyAppliesLimitAfterSelectingExtrema(t *testing.T) {
 	}
 	if len(raw) != 1 || raw[0].Windows[0].Used != 50 {
 		t.Fatalf("raw history = %#v, want latest sample (50)", raw)
+	}
+	if len(raw[0].RawResponse) == 0 || len(raw[0].Breakdowns) != 1 {
+		t.Fatalf("raw history lost full snapshot: %#v", raw[0])
 	}
 }

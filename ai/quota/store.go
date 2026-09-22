@@ -455,19 +455,10 @@ func (s *GormStore) History(ctx context.Context, query HistoryQuery) ([]*Provide
 		// Apply the response cap after selecting daily extrema. Limiting raw
 		// samples first would let today's five-minute data hide older days.
 		var candidates []ProviderUsageHistoryRecord
-		if err := db.Order("unixepoch(fetched_at) ASC, id ASC").Find(&candidates).Error; err != nil {
+		if err := db.Omit("raw_response", "breakdowns").Order("unixepoch(fetched_at) ASC, id ASC").Find(&candidates).Error; err != nil {
 			return nil, err
 		}
-		byProvider := make(map[string][]ProviderUsageHistoryRecord)
-		for _, record := range candidates {
-			byProvider[record.ProviderUUID] = append(byProvider[record.ProviderUUID], record)
-		}
-		keep := make(map[uint]bool)
-		for _, providerRecords := range byProvider {
-			for id := range quotaDailyExtremes(providerRecords, time.Local) {
-				keep[id] = true
-			}
-		}
+		keep := quotaDailyExtremes(candidates, time.Local)
 		for i := len(candidates) - 1; i >= 0 && len(records) < limit; i-- {
 			if keep[candidates[i].ID] {
 				records = append(records, candidates[i])
