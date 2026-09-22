@@ -1,4 +1,5 @@
 import {Close, ContentCopy, ExpandLess, ExpandMore, Launch, OpenInNew} from '@/components/icons';
+import { copyText } from '@/utils/clipboard';
 import {
     Alert,
     Box,
@@ -309,7 +310,7 @@ const OAuthAuthorizationDialog = ({
 
     const copyUserCode = () => {
         if (authData?.user_code) {
-            void navigator.clipboard.writeText(authData.user_code);
+            void copyText(authData.user_code);
         }
     };
 

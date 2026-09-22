@@ -1,4 +1,5 @@
 import { PageLayout } from '@/components/PageLayout';
+import { copyText } from '@/utils/clipboard';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { Add as IconPlus, Delete as IconTrash } from '@/components/icons';
@@ -120,7 +121,7 @@ const SharingKeysPage = () => {
                         visibleTokens={visibleTokens}
                         onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
                         onCopy={(tokenId) => {
-                            navigator.clipboard.writeText(tokenId);
+                            copyText(tokenId);
                             notify.success('Token copied to clipboard');
                         }}
                         onToggleEnabled={async (token) => {

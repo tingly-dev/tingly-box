@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
 import { notify } from '@/utils/notify';
+import { copyText } from '@/utils/clipboard';
 
 export interface NotificationState {
     open: boolean;
@@ -32,7 +33,7 @@ export const useFunctionPanelData = () => {
 
     const copyToClipboard = useCallback(async (text: string, label: string) => {
         try {
-            await navigator.clipboard.writeText(text);
+            await copyText(text);
             showNotification(`${label} copied to clipboard!`, 'success');
         } catch (err) {
             showNotification('Failed to copy to clipboard', 'error');

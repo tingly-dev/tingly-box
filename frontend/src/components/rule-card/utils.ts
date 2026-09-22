@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { copyText } from '@/utils/clipboard';
 import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi, FlagSpec } from '@/components/RoutingGraphTypes';
 import { getFlagValue, setFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
@@ -591,20 +592,5 @@ export function decodeBase64Export(base64Content: string): string {
  * Copies text to clipboard
  */
 async function copyToClipboard(text: string): Promise<void> {
-    if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-    } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-        } finally {
-            document.body.removeChild(textArea);
-        }
-    }
+    return copyText(text);
 }
