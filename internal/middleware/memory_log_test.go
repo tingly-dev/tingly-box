@@ -73,6 +73,34 @@ func TestMiddleware_LogsHTTPRequests(t *testing.T) {
 	assert.NotNil(t, entry.Data["client_ip"])
 }
 
+// TestMiddleware_EchoesRequestIDHeader guards the correlation handle a
+// client needs to look up this request's full server-side trace (raw
+// upstream error, host, timing) after getting a deliberately generic
+// client-facing error message (see .design/logging.md §3, §7).
+func TestMiddleware_EchoesRequestIDHeader(t *testing.T) {
+	middleware, _ := setupTestMiddleware()
+
+	engine := gin.New()
+	engine.Use(middleware.Middleware())
+	engine.GET("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	engine.ServeHTTP(w, req)
+
+	requestID := w.Header().Get("X-Request-Id")
+	assert.NotEmpty(t, requestID, "expected X-Request-Id to be echoed back on the response")
+
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/test", nil)
+	req2.Header.Set("X-Request-Id", "caller-supplied-id")
+	engine.ServeHTTP(w2, req2)
+	assert.Equal(t, "caller-supplied-id", w2.Header().Get("X-Request-Id"),
+		"an inbound X-Request-Id should be echoed back unchanged, not replaced by a fresh uuid")
+}
+
 func TestMiddleware_LogLevelByStatusCode(t *testing.T) {
 	tests := []struct {
 		name          string
