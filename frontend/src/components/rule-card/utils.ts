@@ -22,7 +22,7 @@ export function isWildcardModelName(modelName: string): boolean {
 /**
  * Converts a service from Rule format to ConfigProvider format
  */
-export function serviceToConfigProvider(service: any): ConfigProvider {
+function serviceToConfigProvider(service: any): ConfigProvider {
     return {
         uuid: service.id || service.uuid || uuidv4(),
         provider: service.provider || '',
@@ -69,7 +69,7 @@ export function normalizeConfigRecordTiers(record: ConfigRecord): ConfigRecord {
  * Converts smart routing services to ensure UUID presence
  * NOTE: Also ensures smart routing rules have UUIDs (backend may not preserve them)
  */
-export function normalizeSmartRoutingServices(smartRouting: SmartRouting[]): SmartRouting[] {
+function normalizeSmartRoutingServices(smartRouting: SmartRouting[]): SmartRouting[] {
     return smartRouting.map((routing) => ({
         ...routing,
         // Ensure the routing itself has a UUID (backend might not preserve it)
@@ -112,7 +112,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
  * user assigns at least one tier, the rule is flipped into the
  * "tier" (direct + fallback) tactic.
  */
-export function hasTierAssigned(record: ConfigRecord): boolean {
+function hasTierAssigned(record: ConfigRecord): boolean {
     return record.providers.some((p) => (p.tier ?? 0) > 0);
 }
 
@@ -326,22 +326,6 @@ export function parseRuleFlags(input: string, registry: FlagSpec[], currentFlags
 
 
 
-// Generic export handler
-async function exportData(
-    jsonlContent: string,
-    format: ExportFormat,
-    filename: string,
-    notificationMsg: string,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    const content = format === 'jsonl' ? jsonlContent : `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
-    const extension = format === 'jsonl' ? 'jsonl' : 'txt';
-    const mimeType = format === 'jsonl' ? 'application/jsonl' : 'text/plain';
-
-    downloadText(content, `${filename}.${extension}`, mimeType);
-    onNotification(notificationMsg, 'success');
-}
-
 // Generic clipboard export handler
 async function exportToClipboard(
     jsonlContent: string,
@@ -359,27 +343,6 @@ async function exportJsonlToClipboard(
 ): Promise<void> {
     await copyToClipboard(jsonlContent);
     onNotification('JSONL export copied to clipboard! You can now paste it anywhere.', 'success');
-}
-
-/**
- * Exports a rule with its associated providers to the specified format
- */
-export async function exportRuleWithProviders(
-    rule: Rule,
-    format: ExportFormat,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    try {
-        const jsonlContent = await buildJsonlExport(rule);
-        const filename = `${rule.request_model || 'rule'}-${rule.scenario}`;
-        const message = format === 'jsonl'
-            ? 'Rule with API keys exported successfully!'
-            : 'Rule exported as Base64! You can copy and share this file.';
-        await exportData(jsonlContent, format, filename, message, onNotification);
-    } catch (error) {
-        console.error('Error exporting rule:', error);
-        onNotification('Failed to export rule', 'error');
-    }
 }
 
 /**
@@ -563,28 +526,6 @@ function createProviderLine(provider: any): string {
 
 function buildJsonlLines(lines: string[]): string {
     return lines.join('\n');
-}
-
-/**
- * Decodes Base64 export content back to JSONL
- */
-export function decodeBase64Export(base64Content: string): string {
-    const trimmed = base64Content.trim();
-    if (!trimmed.startsWith(`${BASE64_PREFIX}:`)) {
-        throw new Error('Invalid Base64 export format: missing prefix');
-    }
-
-    const parts = trimmed.split(':');
-    if (parts.length !== 3) {
-        throw new Error('Invalid Base64 export format: expected prefix:version:payload');
-    }
-
-    const [version, payload] = [parts[1], parts[2]];
-    if (version !== CURRENT_VERSION) {
-        throw new Error(`Unsupported version: ${version} (supported: ${CURRENT_VERSION})`);
-    }
-
-    return atob(payload);
 }
 
 /**

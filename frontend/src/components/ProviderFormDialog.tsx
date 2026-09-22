@@ -1,8 +1,5 @@
-import {ArrowBack, Close, ExpandMore} from '@/components/icons';
+import {ArrowBack, Close} from '@/components/icons';
 import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Alert,
     Box,
     Button,
@@ -105,7 +102,6 @@ const ProviderFormDialog = ({
     const [showNameField, setShowNameField] = useState(false);
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
 
     // ── Protocol slot state (independent from provider selection) ──
@@ -690,35 +686,6 @@ const ProviderFormDialog = ({
                             onUseGlobalProxyChange={handleUseGlobalProxyChange}
                         />
 
-                        {/* ── Advanced accordion ─────────────── */}
-                        <Accordion
-                            disableGutters elevation={0}
-                            expanded={advancedOpen}
-                            onChange={(_, expanded) => setAdvancedOpen(expanded)}
-                            sx={{
-                                border: 0, borderTop: 1, borderColor: 'divider',
-                                '&:before': {display: 'none'}, bgcolor: 'transparent',
-                            }}
-                        >
-                            <AccordionSummary
-                                expandIcon={<ExpandMore fontSize="small"/>}
-                                sx={{px: 0, minHeight: 40, '& .MuiAccordionSummary-content': {my: 0.5}}}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        color: "text.secondary",
-                                        fontWeight: 600
-                                    }}>
-                                    {t('providerDialog.advanced.title')}
-                                </Typography>
-                            </AccordionSummary>
-                            {/* Empty for now — reserved for future advanced options
-                                (enabled toggle moved to the dialog title). */}
-                            <AccordionDetails sx={{px: 0, pb: 1}}>
-                                <Stack spacing={2.5} />
-                            </AccordionDetails>
-                        </Accordion>
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2}}>

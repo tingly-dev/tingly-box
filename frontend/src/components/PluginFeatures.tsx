@@ -11,7 +11,7 @@ import {
 import type { VisionService } from './flags';
 import type { Provider } from '@/types/provider';
 
-export interface PluginFeaturesProps {
+interface PluginFeaturesProps {
     scenario: string;
 }
 

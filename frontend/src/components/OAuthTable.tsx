@@ -1,6 +1,5 @@
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
-import type {ExportFormat} from "@/components/rule-card/utils";
 import {
     exportProviderAsBase64ToClipboard,
     exportProviderAsJsonlToClipboard,

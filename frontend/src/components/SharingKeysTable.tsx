@@ -26,13 +26,13 @@ export interface SharingKey {
     created_by?: string;
 }
 
-export const maskToken = (token: string): string => {
+const maskToken = (token: string): string => {
     if (!token) return '';
     if (token.length <= 16) return `${token.slice(0, 8)}...${token.slice(-4)}`;
     return `${token.slice(0, 12)}...${token.slice(-4)}`;
 };
 
-export const formatDate = (dateStr?: string) => {
+const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleString();
 };

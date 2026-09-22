@@ -6,9 +6,6 @@ import {
     IconButton,
     Tooltip,
     TextField,
-    Menu,
-    MenuItem,
-    ListItemText,
     Switch,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
@@ -124,7 +121,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
-    const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
     React.useEffect(() => {
         setTempValue(modelName);
@@ -153,17 +149,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const handleCopy = () => {
         void navigator.clipboard.writeText(modelName);
         notify.success(`Model name "${modelName}" copied to clipboard`);
-    };
-
-    const handleMenuClose = () => {
-        setMenuAnchor(null);
-    };
-
-    const handleSetWildcard = () => {
-        handleMenuClose();
-        if (onModelChange) {
-            onModelChange('*');
-        }
     };
 
     const isWildcard = isWildcardModelName(modelName);
@@ -416,30 +401,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
             </TitleSection>
 
             {renderActions()}
-
-            {/* Context Menu for Model Name */}
-            <Menu
-                anchorEl={menuAnchor}
-                open={Boolean(menuAnchor)}
-                onClose={handleMenuClose}
-                onClick={(e) => e.stopPropagation()}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
-                <MenuItem onClick={handleSetWildcard}>
-                    <ListItemText sx={{ fontWeight: isWildcard ? 600 : 400 }}>
-                        Match any model (* or [any])
-                    </ListItemText>
-                </MenuItem>
-                <MenuItem onClick={() => { handleMenuClose(); setEditMode(true); }}>
-                    <ListItemText sx={{ fontWeight: !isWildcard ? 600 : 400 }}>
-                        Custom model name
-                    </ListItemText>
-                </MenuItem>
-                <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
-                    <ListItemText>Cancel</ListItemText>
-                </MenuItem>
-            </Menu>
         </HeaderContainer>
     );
 };

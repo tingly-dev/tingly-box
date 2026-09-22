@@ -2,7 +2,7 @@ import { Add } from '@/components/icons';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { type ReactNode } from 'react';
 
-export interface EmptyStateAction {
+interface EmptyStateAction {
     label: ReactNode;
     onClick: () => void;
     icon?: ReactNode;
