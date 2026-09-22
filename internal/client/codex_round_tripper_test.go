@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -285,6 +287,80 @@ func TestValidateCodexStreamResponse_AllowsAmbiguousNonSSEContentType(t *testing
 	}
 
 	require.NoError(t, validateCodexStreamResponse(resp))
+}
+
+// fakeRoundTripper returns a fixed response for every request, standing in
+// for the real transport underneath codexRoundTripper.
+type codexFakeRoundTripper struct {
+	status int
+	body   string
+}
+
+func (f codexFakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: f.status,
+		Status:     http.StatusText(f.status),
+		Body:       io.NopCloser(strings.NewReader(f.body)),
+		Header:     make(http.Header),
+	}, nil
+}
+
+// TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError guards against a
+// non-200 Codex response (e.g. a 400 content_policy_violation on image
+// generation) being turned into a generic Go error. Previously this
+// RoundTripper returned a bare fmt.Errorf, which net/http's Client.Do wraps
+// in *url.Error — and *url.Error satisfies net.Error (it has a Timeout()
+// method), so protocol.ClassifyUpstreamFailure's transport-failure fallback
+// mis-reported a real, actionable 400 as a generic 502 "network_error",
+// discarding the real status and message entirely.
+func TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError(t *testing.T) {
+	rt := &codexRoundTripper{RoundTripper: codexFakeRoundTripper{
+		status: http.StatusBadRequest,
+		body:   `{"error":{"message":"Your request was rejected due to content policy.","code":"content_policy_violation"}}`,
+	}}
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/images/generations", nil)
+	require.NoError(t, err)
+
+	httpClient := &http.Client{Transport: rt}
+	_, doErr := httpClient.Do(req)
+	require.Error(t, doErr)
+
+	var oaiErr *openai.Error
+	require.ErrorAs(t, doErr, &oaiErr, "expected the wrapped error to unwrap to *openai.Error")
+	assert.Equal(t, http.StatusBadRequest, oaiErr.StatusCode)
+	assert.Equal(t, "content_policy_violation", oaiErr.Code)
+	assert.Equal(t, "Your request was rejected due to content policy.", oaiErr.Message)
+
+	// This is the end-to-end shape the client-facing error goes through:
+	// the real 400 and message must survive, not the "502 network_error"
+	// catch-all a bare fmt.Errorf here used to produce.
+	failure := protocol.ClassifyUpstreamFailure(doErr, http.StatusInternalServerError)
+	assert.Equal(t, http.StatusBadRequest, failure.Status)
+	assert.Contains(t, failure.Message, "content_policy_violation")
+	assert.Contains(t, failure.Message, "Your request was rejected due to content policy.")
+	assert.NotContains(t, failure.Message, "network_error")
+}
+
+// TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper covers Codex's
+// ChatGPT backend not always nesting its error under an "error" key the way
+// the public OpenAI API does — the message must still make it through.
+func TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper(t *testing.T) {
+	rt := &codexRoundTripper{RoundTripper: codexFakeRoundTripper{
+		status: http.StatusTooManyRequests,
+		body:   `{"message":"rate limited","code":"rate_limit_exceeded"}`,
+	}}
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/v1/images/generations", nil)
+	require.NoError(t, err)
+
+	httpClient := &http.Client{Transport: rt}
+	_, doErr := httpClient.Do(req)
+	require.Error(t, doErr)
+
+	var oaiErr *openai.Error
+	require.ErrorAs(t, doErr, &oaiErr)
+	assert.Equal(t, http.StatusTooManyRequests, oaiErr.StatusCode)
+	assert.Equal(t, "rate_limit_exceeded", oaiErr.Code)
+	assert.Equal(t, "rate limited", oaiErr.Message)
 }
 
 // TestCodexBodyIsStableAcrossBreakpointRotation is the end-to-end guard for the
