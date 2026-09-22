@@ -12,8 +12,9 @@ provider/time 组合索引用于限定范围查询。
 当天保留 5 分钟采样；结束的本地日按 provider 和 quota 窗口保留当日最低、最高值
 对应的原始快照，其余清理；30 天前的历史删除。没有可比较 quota 值的日期保留最后一条。
 后台 refresher 启动时及每天执行一次整理，当前 `provider_usage` 缓存不受影响。
-历史 API 单次最多返回 1,000 条。5H/1D 读取采样明细；7D/30D 使用每日极值，
+历史 API 单次最多返回 1,000 条，按时间倒序。5H/1D 读取采样明细；7D/30D 使用每日极值，
 当天也在查询时按相同规则选点，先选极值再限制返回数量，不需要新增聚合表。
+长范围读取和后台整理只加载选点所需字段；明细查询仍返回包含原始响应和 breakdown 的完整快照。
 
 ## 展示口径
 
@@ -239,12 +240,13 @@ return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
 
 ### 5.4 消费方
 
-- **statusline**：`Tightest()` 供 `TBQuota*` 字段；`Usage:` 段只列 `Countable()` 窗口。
+- **statusline**：`Tightest()` 供 `TBQuota*` 结构化字段（`TBQuotaPercent` 仍表示已用比例）；
+  文本行把可计量窗口列为 `Quota: … left`，已知余额单列为 `Balance: …`。
   原先按 tier 取第一个窗口——tier 各家规则不同，5h 刚重置时会盖住 96% 的周窗口。
 - **Summary**：`Pct() >= 80` 计 warning，不可知不再计入"未用"。
-- **CLI**：不可比窗口打 `· <label>: <description>` 一行，不画伪 0% 进度条。
+- **CLI**：可计量窗口显示剩余量和剩余比例；不可比窗口只显示已知余额或描述，不画伪 0% 进度条。
 - **前端**：`isCountable` 同款门闩；无比例的窗口显示数值不画条；排序同后端
-  （`kind`/`unknown`/`unlimited` 以 `QuotaWindow` 交集类型声明，等 codegen 后收编）；
+  （`kind` 在旧版 `api.ts` 中仍缺失，前端用 `QuotaWindow` 局部类型收窄，见下文遗留）；
   mock（`frontend/src/mocks/handlers.ts`）按 taskfile 真实样本重写，覆盖全部渲染态。
 
 ---
@@ -277,15 +279,17 @@ return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
   Copilot            无配额 API                         不可知  —
 ```
 
-statusline：`Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复`。
+statusline 文本行分别列出可计量窗口的剩余值，例如 `Quota: 88% left 4% left`；
+结构化 `TBQuotaPercent` 对此例仍为最紧窗口的已用比例 `96`。
 四个 provider 的用量第一次能放在一起比大小，且每个数字都是同一个意思。
 
 **改动前**同一组数据：Anthropic 报 5h 的 12%（"还早呢"）；Gemini 类报平均值；
 MiniMax 打满的视频额度让全账号显得耗尽；OpenRouter 的月度花费显示 "$8.10 / $0.00"
 并排在真窗口前面；Copilot 静默消失，与"额度充足"无法区分。
 
-**遗留**：`task codegen` 未跑——`kind`/`unknown`/`unlimited` 未进 `openapi.json`，
-删掉的 `tier` 还在里面（optional，无消费方）；前端的 `QuotaWindow` 交集类型是过渡。
+**契约现状**：`openapi.json` 和 `frontend/src/client/schema.d.ts` 已包含
+`kind`/`unknown`/`unlimited` 及历史接口；前端当前引用的旧版 `client/api.ts`
+仍保留 `tier`，缺少这些新字段，因此 `QuotaWindow` 暂时在本地收窄类型。
 
 ---
 

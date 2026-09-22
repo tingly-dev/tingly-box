@@ -142,9 +142,12 @@ Four gzip-compressed JSON endpoints live under `/api/v1/usage/`:
 
 Provider quota history is served separately by
 `GET /api/v1/provider-quota/history`. It accepts `start_time`, exclusive
-`end_time`, optional provider UUID (`provider`), and a bounded `limit`. Results
-are newest first. This separation prevents request usage and upstream account
-allowances from being conflated into one metric model.
+`end_time`, optional provider UUID (`provider`), `daily`, and a `limit` capped at
+1,000. Results are newest first. With `daily=true`, the API selects each
+provider window's local-day low and high (including today) before applying the
+limit; without it, the API returns detailed samples. This separation prevents
+request usage and upstream account allowances from being conflated into one
+metric model.
 
 The stats response is `{ meta, data }`; `data` contains additive counts plus derived rates. The records response uses `meta: { total, limit, offset }` for the real filtered range.
 
