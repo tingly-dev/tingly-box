@@ -25,6 +25,12 @@ type Options struct {
 	// (device-code, polling, refresh, code exchange). Escape hatch for
 	// per-flow header state like Kimi's X-Msh-Device-Id binding.
 	ExtraHeaders http.Header
+
+	// ZCodeAPIBase / ZCodeBizHost override the ZCode control plane and business
+	// API hosts. Only tests set them; production always uses the constants, and
+	// a server-poll flow has no callback whose BaseURL could stand in for them.
+	ZCodeAPIBase string
+	ZCodeBizHost string
 }
 
 // WithProxyURL sets a proxy URL for the request
@@ -86,6 +92,15 @@ func WithExtraHeader(key, value string) Option {
 			o.ExtraHeaders = make(http.Header)
 		}
 		o.ExtraHeaders.Set(key, value)
+	}
+}
+
+// WithZCodeEndpoints overrides the ZCode control-plane and business-API hosts.
+// Test-only: it is what lets the whole login run against an httptest server.
+func WithZCodeEndpoints(apiBase, bizHost string) Option {
+	return func(o *Options) {
+		o.ZCodeAPIBase = apiBase
+		o.ZCodeBizHost = bizHost
 	}
 }
 

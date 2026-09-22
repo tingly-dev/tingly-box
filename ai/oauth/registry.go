@@ -192,6 +192,34 @@ func DefaultRegistry() *Registry {
 		Hook:               &CodexHook{},
 	})
 
+	// ZCode OAuth (server-mediated CLI flow) — GLM Coding Plan.
+	//
+	// Not an OAuth 2.0 client: zcode.z.ai owns the callback, so there is no
+	// client id, no secret, and no redirect of ours. AuthURL is informational
+	// (the real authorize URL is minted per flow by oauth/cli/init); the flow
+	// itself lives in zcode.go. Two issuers, one per account platform.
+	registry.Register(&ProviderConfig{
+		Type:        ai.IssuerZCode,
+		DisplayName: "ZCode (Z.ai GLM Coding Plan)",
+		AuthURL:     ZCodeAPIBase + "/oauth/cli/init",
+		TokenURL:    ZCodeAPIBase + "/oauth/cli/poll",
+		AuthStyle:   AuthStyleInNone,
+		OAuthMethod: OAuthMethodServerPoll,
+		ConsoleURL:  "https://z.ai/subscribe",
+		Hook:        &NoopHook{},
+	})
+
+	registry.Register(&ProviderConfig{
+		Type:        ai.IssuerZCodeCN,
+		DisplayName: "ZCode (BigModel GLM Coding Plan)",
+		AuthURL:     ZCodeAPIBase + "/oauth/cli/init",
+		TokenURL:    ZCodeAPIBase + "/oauth/cli/poll",
+		AuthStyle:   AuthStyleInNone,
+		OAuthMethod: OAuthMethodServerPoll,
+		ConsoleURL:  "https://bigmodel.cn/claude-code",
+		Hook:        &NoopHook{},
+	})
+
 	// Kimi OAuth (Device Authorization Flow)
 	// Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 	// Public device flow, no client secret; no scope parameter on the wire.
