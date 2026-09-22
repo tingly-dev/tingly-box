@@ -4,7 +4,7 @@ import { Code as CodeIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
-import { QuotaBarRow, useQuotaBars } from './QuotaBarRow';
+import { useQuotaBars } from './useQuotaBars';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import type { ProviderQuota } from '@/types/quota';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable } from '@/types/quota';

@@ -117,15 +117,10 @@ export function quotaToDisplayItems(quota: ProviderQuota): QuotaDisplayItem[] {
 }
 
 interface FormatQuotaUsageOptions {
-    includePercent?: boolean;
     formatNumber?: (value: number) => string;
 }
 
 type QuotaUsageValues = CountableFields & Pick<QuotaWindow, 'used' | 'used_percent' | 'unit' | 'available' | 'currency_code'>;
-
-export function formatQuotaPercent(window: QuotaUsageValues): string {
-    return `${window.used_percent.toFixed(0)}%`;
-}
 
 export function quotaRemainingPercent(window: QuotaUsageValues): number {
     if (!isCountable(window)) return 0;
@@ -162,7 +157,7 @@ export function formatQuotaAvailable(
 
 export function formatQuotaUsage(
     window: QuotaUsageValues,
-    { includePercent = false, formatNumber = String }: FormatQuotaUsageOptions = {}
+    { formatNumber = String }: FormatQuotaUsageOptions = {}
 ): string {
     if (!isCountable(window)) {
         const available = formatQuotaAvailable(window, formatNumber);
@@ -171,10 +166,8 @@ export function formatQuotaUsage(
         return window.unknown ? 'not reported' : 'no limit';
     }
     if (window.unit === 'percent') {
-        const usage = `${formatNumber(window.used)}% / ${formatNumber(window.limit)}%`;
-        return includePercent ? `${usage} (${formatQuotaPercent(window)})` : usage;
+        return `${formatNumber(window.used)}% / ${formatNumber(window.limit)}%`;
     }
 
-    const usage = `${formatNumber(window.used)} / ${formatNumber(window.limit)} ${window.unit}`;
-    return includePercent ? `${usage} (${formatQuotaPercent(window)})` : usage;
+    return `${formatNumber(window.used)} / ${formatNumber(window.limit)} ${window.unit}`;
 }

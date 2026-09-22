@@ -1,12 +1,7 @@
 import React from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import type { ProviderQuota, QuotaWindow } from '@/types/quota';
 import { quotaToWindows } from '@/types/quota';
-import { QuotaBarItem } from './QuotaBarItem';
-
-interface QuotaBarRowProps {
-  quota: ProviderQuota | undefined;
-}
 
 interface ResourceItem {
   key: string;
@@ -79,40 +74,4 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
   const hasAny = windows.length > 0 || resourceItems.length > 0;
 
   return { windows, resourceItems, hasAny };
-}
-
-/**
- * Horizontal row of quota bar items — percentage windows + resource items.
- * Shared between credential detail rows and model-select panels.
- */
-export function QuotaBarRow({ quota }: QuotaBarRowProps) {
-  const { windows, resourceItems, hasAny } = useQuotaBars(quota);
-
-  if (!hasAny) return null;
-
-  return (
-    <Stack
-      direction="row"
-      spacing={2}
-      sx={{
-        alignItems: "center",
-        overflowX: 'auto',
-        '&::-webkit-scrollbar': { display: 'none' },
-        msOverflowStyle: 'none',
-        scrollbarWidth: 'none'
-      }}>
-      {windows.map(({ key, window }) => (
-        <QuotaBarItem key={key} window={window} />
-      ))}
-      {resourceItems.map(item => (
-        <QuotaBarItem
-          key={item.key}
-          window={item.window}
-          percentLabel={item.countLabel}
-          barColor="#22c55e"
-          tooltipContent={item.tooltipContent}
-        />
-      ))}
-    </Stack>
-  );
 }
