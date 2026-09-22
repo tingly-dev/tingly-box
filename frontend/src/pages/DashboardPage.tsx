@@ -18,7 +18,7 @@ import {
     Divider,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, QuotaHistoryView, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
@@ -138,9 +138,8 @@ export default function DashboardPage() {
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
 
     // Analysis mode: token trend ('summary'), per-request list ('requests',
-    // hourly ranges only), fixed 12-month heatmap ('activity'), or persisted
-    // upstream allowance snapshots ('quota').
-    const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity' | 'quota'>('summary');
+    // hourly ranges only), or the fixed 12-month heatmap ('activity').
+    const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity'>('summary');
     // "By Request" only exists for hourly ranges; fall back to the trend if a
     // stale 'requests' selection carries into a daily range.
     const effectiveViewMode = viewMode === 'requests' && !isHourlyRange ? 'summary' : viewMode;
@@ -755,18 +754,10 @@ export default function DashboardPage() {
                             <ToggleButton value="summary">{t('dashboard.overview.viewModes.summary', { defaultValue: 'Summary' })}</ToggleButton>
                             {isHourlyRange && <ToggleButton value="requests">{t('dashboard.overview.viewModes.byRequest', { defaultValue: 'By Request' })}</ToggleButton>}
                             <ToggleButton value="activity">{t('dashboard.overview.viewModes.activity', { defaultValue: 'Activity' })}</ToggleButton>
-                            <ToggleButton value="quota">{t('dashboard.overview.viewModes.quotaHistory', { defaultValue: 'Quota history' })}</ToggleButton>
                         </ToggleButtonGroup>
                     </Box>
 
-                    {effectiveViewMode === 'quota' && recordsParams ? (
-                        <QuotaHistoryView
-                            startTime={recordsParams.start_time}
-                            endTime={recordsParams.end_time}
-                            provider={selectedProvider}
-                            refreshKey={heatmapRefresh}
-                        />
-                    ) : effectiveViewMode === 'activity' ? (
+                    {effectiveViewMode === 'activity' ? (
                         <DashboardHeatmapSection
                             provider={selectedProvider}
                             model={selectedModel}

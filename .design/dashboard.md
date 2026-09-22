@@ -33,17 +33,24 @@ Three global filters apply to the stat cards, chart, request view, activity heat
 - **Model** — concrete model name.
 - **Identity** — `user_id`; `admin` is the main account and the remaining options are sharing keys from `listAPITokens`.
 
-The main analysis pane has four modes:
+The main analysis pane has three modes:
 
 - **Summary** — stacked token trend.
 - **By Request** — paginated request table for concrete diagnosis; only available for `today` and `yesterday`.
 - **Activity** — fixed 365-day heatmap.
-- **Quota history** — immutable provider-quota snapshots captured by quota
-  refreshes. It follows the selected dashboard time range and Provider filter;
-  Model and Identity do not apply because upstream quota is provider/account
-  scoped rather than request scoped.
 
 If a stale `requests` selection survives a route change into a daily range, `effectiveViewMode` renders Summary instead.
+
+### Quota History
+
+Route: `/dashboard/quota-history`.
+
+Quota History is a separate Dashboard page and sidebar destination rather than
+an analysis mode inside Usage Dashboard. It answers a different question — how
+an upstream account allowance or balance changed — and therefore does not share
+the request-oriented Model and Identity filters. The page provides its own
+Provider filter, `today | 7d | 30d | 90d` range selector, and refresh action,
+then renders immutable provider-quota snapshots newest first.
 
 ### Team Usage
 

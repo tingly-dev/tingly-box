@@ -64,6 +64,7 @@ const GuardrailsGroupsPage = lazy(() => import('./pages/guardrails/GroupsPage'))
 const GuardrailsHistoryPage = lazy(() => import('./pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const UserUsagePage = lazy(() => import('./pages/UserUsagePage'));
+const QuotaHistoryPage = lazy(() => import('./pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 const BenchPage = lazy(() => import('./pages/bench/BenchPage'));
 const UserPage = lazy(() => import('./pages/prompt/UserPage'));
@@ -273,6 +274,7 @@ function AppContent() {
                     {/* Dashboard routes with time range */}
                     <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
                     <Route path="/dashboard/users" element={<UserUsagePage />} />
+                    <Route path="/dashboard/quota-history" element={<QuotaHistoryPage />} />
                     <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
                     {/* Token Heatmap merged into the Usage Dashboard; keep old
                         /overview links working by redirecting to the dashboard. */}

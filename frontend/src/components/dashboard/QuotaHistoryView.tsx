@@ -23,6 +23,7 @@ interface QuotaHistoryViewProps {
     endTime: string;
     provider: string;
     refreshKey?: number;
+    showHeading?: boolean;
 }
 
 const formatValue = (value: number, unit: string): string => {
@@ -31,7 +32,7 @@ const formatValue = (value: number, unit: string): string => {
     return `${formatted} ${unit}`.trim();
 };
 
-export default function QuotaHistoryView({ startTime, endTime, provider, refreshKey = 0 }: QuotaHistoryViewProps) {
+export default function QuotaHistoryView({ startTime, endTime, provider, refreshKey = 0, showHeading = true }: QuotaHistoryViewProps) {
     const { t, i18n } = useTranslation();
     const [snapshots, setSnapshots] = useState<ProviderQuota[]>([]);
     const [loading, setLoading] = useState(true);
@@ -67,14 +68,14 @@ export default function QuotaHistoryView({ startTime, endTime, provider, refresh
     return (
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, minHeight: 280 }}>
             <Stack sx={{ flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', gap: 1, mb: 2 }}>
-                <Box>
+                {showHeading ? <Box>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {t('dashboard.quotaHistory.title', { defaultValue: 'Quota history' })}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {t('dashboard.quotaHistory.subtitle', { defaultValue: 'Stored provider quota snapshots for this time range. The Provider filter applies; Model and Identity do not.' })}
+                        {t('dashboard.quotaHistory.subtitle', { defaultValue: 'Stored provider quota snapshots for the selected time range.' })}
                     </Typography>
-                </Box>
+                </Box> : <Box />}
                 {!loading && snapshots.length > 0 && (
                     <Chip
                         size="small"

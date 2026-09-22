@@ -109,6 +109,7 @@ export default {
     "usage": "用量",
     "bench": "测试台",
     "userUsage": "团队用量",
+    "quotaHistory": "Quota 历史",
     "heatmap": "热力图",
     "today": "今天",
     "yesterday": "昨天",
@@ -1471,13 +1472,13 @@ export default {
       "viewModes": {
         "summary": "概览",
         "byRequest": "按请求",
-        "activity": "活动",
-        "quotaHistory": "Quota 历史"
+        "activity": "活动"
       }
     },
     "quotaHistory": {
       "title": "Quota 历史",
-      "subtitle": "当前时间范围内保存的 Provider quota 快照。Provider 筛选有效；模型和账号筛选不适用。",
+      "pageSubtitle": "查看 Provider 限额和余额如何随时间变化。",
+      "subtitle": "所选时间范围内保存的 Provider quota 快照。",
       "snapshotCount": "{{snapshots}} 个快照 · {{providers}} 个 Provider",
       "loadError": "无法加载 quota 历史。",
       "empty": "此时间段内没有 quota 快照",

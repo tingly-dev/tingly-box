@@ -187,6 +187,7 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/dashboard/today',
                 children: [
                     { path: '/dashboard/users', label: t('layout.userUsage', { defaultValue: 'Team usage' }), icon: <IconUsers sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/quota-history', label: t('layout.quotaHistory', { defaultValue: 'Quota history' }), icon: <IconHistory sx={{ fontSize: 20 }} /> },
                     { type: 'divider' },
                     { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock sx={{ fontSize: 20 }} /> },
                     { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar sx={{ fontSize: 20 }} /> },

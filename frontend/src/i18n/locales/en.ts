@@ -108,6 +108,7 @@ export default {
     "usage": "Usage",
     "bench": "Bench",
     "userUsage": "Team usage",
+    "quotaHistory": "Quota history",
     "heatmap": "Heatmap",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -1475,13 +1476,13 @@ export default {
       "viewModes": {
         "summary": "Summary",
         "byRequest": "By Request",
-        "activity": "Activity",
-        "quotaHistory": "Quota history"
+        "activity": "Activity"
       }
     },
     "quotaHistory": {
       "title": "Quota history",
-      "subtitle": "Stored provider quota snapshots for this time range. The Provider filter applies; Model and Identity do not.",
+      "pageSubtitle": "Track how provider allowances and balances changed over time.",
+      "subtitle": "Stored provider quota snapshots for the selected time range.",
       "snapshotCount": "{{snapshots}} snapshots · {{providers}} providers",
       "loadError": "Quota history could not be loaded.",
       "empty": "No quota snapshots in this period",
