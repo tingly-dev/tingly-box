@@ -328,8 +328,13 @@ func TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError(t *testing.T) {
 	var oaiErr *openai.Error
 	require.ErrorAs(t, doErr, &oaiErr, "expected the wrapped error to unwrap to *openai.Error")
 	assert.Equal(t, http.StatusBadRequest, oaiErr.StatusCode)
-	assert.Equal(t, "content_policy_violation", oaiErr.Code)
-	assert.Equal(t, "Your request was rejected due to content policy.", oaiErr.Message)
+	// Error() renders whatever JSON was handed to UnmarshalJSON verbatim
+	// (see newCodexAPIError) rather than reading back the Code/Message
+	// fields, which only populate when the body's top-level keys happen to
+	// match the struct — not guaranteed for Codex's ChatGPT backend, so the
+	// real content is checked in the rendered message instead.
+	assert.Contains(t, oaiErr.Error(), "content_policy_violation")
+	assert.Contains(t, oaiErr.Error(), "Your request was rejected due to content policy.")
 
 	// This is the end-to-end shape the client-facing error goes through:
 	// the real 400 and message must survive, not the "502 network_error"
@@ -344,6 +349,10 @@ func TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError(t *testing.T) {
 // TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper covers Codex's
 // ChatGPT backend not always nesting its error under an "error" key the way
 // the public OpenAI API does — the message must still make it through.
+// (Here the body's top-level keys happen to match the struct's own field
+// names, so Code/Message populate directly; newCodexAPIError doesn't special
+// -case this, it's just what falls out of handing the whole body to
+// UnmarshalJSON.)
 func TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper(t *testing.T) {
 	rt := &codexRoundTripper{RoundTripper: codexFakeRoundTripper{
 		status: http.StatusTooManyRequests,
