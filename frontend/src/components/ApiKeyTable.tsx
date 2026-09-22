@@ -6,6 +6,7 @@ import {
 } from "@/components/rule-card/utils";
 import {ProviderQuotaDetailRow} from "@/components/credential/ProviderQuotaDetailRow";
 import {
+    Check,
     Cancel,
     ContentCopy,
     DataUsage,
@@ -16,6 +17,7 @@ import {
     Route,
     Visibility,
 } from '@/components/icons';
+import ConfirmDialog from "@/components/ConfirmDialog";
 import {
     Box,
     Button,
@@ -39,6 +41,7 @@ import {
 } from "@mui/material";
 import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
+import {useCopyFeedback} from "@/hooks/useCopyFeedback";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
 
@@ -117,6 +120,7 @@ const ApiKeyTable = ({
         anchorEl: null,
         providerUuid: "",
     });
+    const {copied: tokenCopied, copy: copyToken} = useCopyFeedback();
 
     const handleMoreOpen = (
         e: React.MouseEvent<HTMLElement>,
@@ -602,23 +606,16 @@ const ApiKeyTable = ({
                     <Stack direction="row" spacing={2} sx={{
                         justifyContent: "flex-end"
                     }}>
-                        <IconButton
-                            aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
-                            color="primary"
-                            disabled={tokenModal.loading || !tokenModal.token}
-                            onClick={async () => {
-                                if (tokenModal.token) {
-                                    try {
-                                        await navigator.clipboard.writeText(tokenModal.token);
-                                    } catch (err) {
-                                        console.error("Failed to copy token:", err);
-                                    }
-                                }
-                            }}
-                            title={tokenModal.loading ? "Loading..." : "Copy Token"}
-                        >
-                            <ContentCopy/>
-                        </IconButton>
+                        <Tooltip title={tokenCopied ? "Copied!" : tokenModal.loading ? "Loading..." : "Copy Token"}>
+                            <IconButton
+                                aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
+                                color="primary"
+                                disabled={tokenModal.loading || !tokenModal.token}
+                                onClick={() => tokenModal.token && copyToken(tokenModal.token)}
+                            >
+                                {tokenCopied ? <Check/> : <ContentCopy/>}
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title="Close">
                             <IconButton aria-label="Close API key dialog" onClick={handleCloseTokenModal}>
                                 <Cancel/>
@@ -627,45 +624,16 @@ const ApiKeyTable = ({
                     </Stack>
                 </Box>
             </Modal>
-            {/* Delete Confirmation Modal */}
-            <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
-                <Box
-                    sx={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        width: 400,
-                        maxWidth: "80vw",
-                        bgcolor: "background.paper",
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                    }}
-                >
-                    <Typography variant="h6" sx={{mb: 2}}>
-                        Delete Provider
-                    </Typography>
-                    <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete the provider "
-                        {deleteModal.providerName}"? This action cannot be undone.
-                    </Typography>
-                    <Stack direction="row" spacing={2} sx={{
-                        justifyContent: "flex-end"
-                    }}>
-                        <Button onClick={handleCloseDeleteModal} color="inherit">
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirmDelete}
-                            color="error"
-                            variant="contained"
-                        >
-                            Delete
-                        </Button>
-                    </Stack>
-                </Box>
-            </Modal>
+            {/* Delete Confirmation */}
+            <ConfirmDialog
+                open={deleteModal.open}
+                title="Delete Provider"
+                description={`Are you sure you want to delete the provider "${deleteModal.providerName}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                confirmColor="error"
+                onClose={handleCloseDeleteModal}
+                onConfirm={handleConfirmDelete}
+            />
             {/* Model List Dialog */}
             <ModelListDialog
                 open={modelListDialog.open}

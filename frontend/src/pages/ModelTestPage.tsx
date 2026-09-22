@@ -222,10 +222,10 @@ const ModelTestPage = () => {
             <Box sx={{ p: 3 }}>
                 <Button
                     startIcon={<ArrowBackIcon />}
-                    onClick={() => navigate('/api-keys')}
+                    onClick={() => navigate(-1)}
                     sx={{ mb: 2 }}
                 >
-                    Back to API Keys
+                    Back
                 </Button>
                 <Alert severity="error">{error || 'Provider not found'}</Alert>
             </Box>
@@ -245,10 +245,10 @@ const ModelTestPage = () => {
                 <Stack spacing={1}>
                     <Button
                         startIcon={<ArrowBackIcon />}
-                        onClick={() => navigate('/api-keys')}
+                        onClick={() => navigate(-1)}
                         sx={{ alignSelf: 'flex-start' }}
                     >
-                        Back to API Keys
+                        Back
                     </Button>
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         Choose Model

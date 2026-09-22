@@ -16,7 +16,7 @@ import {
     TableSortLabel,
     Tooltip,
 } from '@mui/material';
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
@@ -360,9 +360,8 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                             </TableRow>
                         ) : (
                             logs.map((log, index) => (
-                                <>
+                                <Fragment key={index}>
                                     <TableRow
-                                        key={index}
                                         hover
                                         sx={{ cursor: 'pointer' }}
                                         onClick={() => toggleRow(index)}
@@ -413,7 +412,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                             {log.message}
                                         </TableCell>
                                     </TableRow>
-                                    <TableRow key={`${index}-expanded`}>
+                                    <TableRow>
                                         <TableCell colSpan={5} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                             <Collapse in={expandedRows.has(index)} timeout="auto" unmountOnExit>
                                                 <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
@@ -458,7 +457,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                             </Collapse>
                                         </TableCell>
                                     </TableRow>
-                                </>
+                                </Fragment>
                             ))
                         )}
                     </TableBody>

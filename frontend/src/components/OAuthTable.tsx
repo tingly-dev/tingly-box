@@ -5,6 +5,7 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {ProviderQuotaDetailRow} from "@/components/credential/ProviderQuotaDetailRow";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import {
     ContentCopy,
     DataUsage,
@@ -25,7 +26,6 @@ import {
     IconButton,
     Menu,
     MenuItem,
-    Modal,
     Paper,
     Stack,
     Switch,
@@ -559,97 +559,28 @@ const OAuthTable = ({
                     ].filter(Boolean);
                 })()}
             </Menu>
-            {/* Delete Confirmation Modal */}
-            <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
-                <Box
-                    sx={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        width: 400,
-                        maxWidth: "80vw",
-                        bgcolor: "background.paper",
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                    }}
-                >
-                    <Typography variant="h6" sx={{mb: 2}}>
-                        Delete OAuth Provider
-                    </Typography>
-                    <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete the OAuth provider "
-                        {deleteModal.providerName}"? This action cannot be undone.
-                    </Typography>
-                    <Stack direction="row" spacing={2} sx={{
-                        justifyContent: "flex-end"
-                    }}>
-                        <Button onClick={handleCloseDeleteModal} color="inherit">
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirmDelete}
-                            color="error"
-                            variant="contained"
-                        >
-                            Delete
-                        </Button>
-                    </Stack>
-                </Box>
-            </Modal>
-            {/* Refresh Token Confirmation Modal */}
-            <Modal open={refreshModal.open} onClose={handleCloseRefreshModal}>
-                <Box
-                    sx={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        width: 400,
-                        maxWidth: "80vw",
-                        bgcolor: "background.paper",
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                    }}
-                >
-                    <Typography variant="h6" sx={{mb: 2}}>
-                        Refresh OAuth Token
-                    </Typography>
-                    <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to refresh the OAuth token for "
-                        {refreshModal.providerName}"? This will update the access token
-                        using the refresh token.
-                    </Typography>
-                    <Stack direction="row" spacing={2} sx={{
-                        justifyContent: "flex-end"
-                    }}>
-                        <Button
-                            onClick={handleCloseRefreshModal}
-                            color="inherit"
-                            disabled={refreshing !== null}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirmRefresh}
-                            color="info"
-                            variant="contained"
-                            disabled={refreshing !== null}
-                            startIcon={
-                                refreshing !== null ? (
-                                    <CircularProgress size={16}/>
-                                ) : (
-                                    <RefreshIcon fontSize="small"/>
-                                )
-                            }
-                        >
-                            {refreshing !== null ? "Refreshing..." : "Refresh"}
-                        </Button>
-                    </Stack>
-                </Box>
-            </Modal>
+            {/* Delete Confirmation */}
+            <ConfirmDialog
+                open={deleteModal.open}
+                title="Delete OAuth Provider"
+                description={`Are you sure you want to delete the OAuth provider "${deleteModal.providerName}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                confirmColor="error"
+                onClose={handleCloseDeleteModal}
+                onConfirm={handleConfirmDelete}
+            />
+            {/* Refresh Token Confirmation */}
+            <ConfirmDialog
+                open={refreshModal.open}
+                title="Refresh OAuth Token"
+                description={`Are you sure you want to refresh the OAuth token for "${refreshModal.providerName}"? This will update the access token using the refresh token.`}
+                confirmLabel="Refresh"
+                confirmingLabel="Refreshing..."
+                confirmColor="info"
+                loading={refreshing !== null}
+                onClose={handleCloseRefreshModal}
+                onConfirm={handleConfirmRefresh}
+            />
             {/* Model List Dialog */}
             <ModelListDialog
                 open={modelListDialog.open}

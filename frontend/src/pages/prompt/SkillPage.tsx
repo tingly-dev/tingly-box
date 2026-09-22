@@ -44,7 +44,8 @@ import { api } from '@/services/api';
 import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
 import DeleteSkillLocationDialog from '@/components/prompt/skill/DeleteSkillLocationDialog';
-import { notify } from '@/utils/notify';
+import useNotify from '@/hooks/useNotify';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import {
     formatFileSize,
     getRelativePath,
@@ -59,6 +60,8 @@ interface AddSkillLocationData {
 }
 
 const SkillPage = () => {
+    const notify = useNotify();
+    const { copy } = useCopyFeedback();
     const [locations, setLocations] = useState<SkillLocation[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -115,7 +118,7 @@ const SkillPage = () => {
     }, [selectedSkill]);
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
-        notify.show(severity, message);
+        notify.notify(severity, message);
     };
 
     const loadLocations = async () => {
@@ -264,14 +267,12 @@ const SkillPage = () => {
     };
 
     const handleCopyContent = () => {
-        navigator.clipboard.writeText(skillContent);
-        showNotification('Copied to clipboard!', 'success');
+        copy(skillContent, () => notify.success('Copied to clipboard!'));
     };
 
     const handleCopyPath = () => {
         if (selectedSkill) {
-            navigator.clipboard.writeText(selectedSkill.path);
-            showNotification('Path copied to clipboard!', 'success');
+            copy(selectedSkill.path, () => notify.success('Path copied to clipboard!'));
         }
     };
 
