@@ -41,6 +41,26 @@ The main analysis pane has three modes:
 
 If a stale `requests` selection survives a route change into a daily range, `effectiveViewMode` renders Summary instead.
 
+### Quota History
+
+Route: `/dashboard/quota-history`.
+
+Quota History is a separate Dashboard page and sidebar destination rather than
+an analysis mode inside Usage Dashboard. It answers a different question — how
+an upstream account allowance or balance changed — and therefore does not share
+the request-oriented Model and Identity filters. The page provides its own
+Provider filter, rolling `5h | 1d | 7d | 30d` range selector, and refresh action,
+then groups stored samples by provider and quota window. Each window has
+its own sampled time series, so unrelated providers, units, and quota windows
+are never stacked into one trend. The time axis uses the selected rolling
+quota-scale range, even when only part of that range has samples. Hovering a point shows its exact sample time
+and quota values. The 5H and 1D views show detailed samples; the 7D and 30D
+views show each provider window's daily low and high, including today. Completed
+local days retain the original snapshots containing those extrema. History older
+than 30 days is removed. Each response is limited to 1,000 points; in the 7D
+and 30D views, the limit applies after daily selection. The UI offers provider
+or range filtering when that limit is reached.
+
 ### Team Usage
 
 Route: `/dashboard/users`.
@@ -119,6 +139,15 @@ Four gzip-compressed JSON endpoints live under `/api/v1/usage/`:
 | `/timeseries` | Dashboard Summary and Activity | `interval=minute\|hour\|day\|week`, time bounds, provider/model/scenario/user filters |
 | `/records` | Dashboard By Request | time bounds, provider/model/scenario/user/status filters, `limit` ≤ 1000, `offset` |
 | `/performance` | Dashboard Summary | time bounds and provider/model/scenario/user filters; successful requests only |
+
+Provider quota history is served separately by
+`GET /api/v1/provider-quota/history`. It accepts `start_time`, exclusive
+`end_time`, optional provider UUID (`provider`), `daily`, and a `limit` capped at
+1,000. Results are newest first. With `daily=true`, the API selects each
+provider window's local-day low and high (including today) before applying the
+limit; without it, the API returns detailed samples. This separation prevents
+request usage and upstream account allowances from being conflated into one
+metric model.
 
 The stats response is `{ meta, data }`; `data` contains additive counts plus derived rates. The records response uses `meta: { total, limit, offset }` for the real filtered range.
 

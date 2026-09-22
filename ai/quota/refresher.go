@@ -10,12 +10,13 @@ import (
 
 // Refresher runs periodic quota refreshes in the background.
 type Refresher struct {
-	manager  *Manager
-	interval time.Duration
-	stopCh   chan struct{}
-	mu       sync.RWMutex
-	running  bool
-	logger   *logrus.Logger
+	manager          *Manager
+	interval         time.Duration
+	stopCh           chan struct{}
+	mu               sync.RWMutex
+	running          bool
+	logger           *logrus.Logger
+	lastCompactedDay string
 }
 
 // NewRefresher creates a background quota refresher.
@@ -92,6 +93,7 @@ func (r *Refresher) run(ctx context.Context) {
 // refresh performs one scheduled refresh.
 func (r *Refresher) refresh(ctx context.Context) {
 	r.logger.Debug("running scheduled quota refresh")
+	r.compactHistory(ctx)
 
 	usages, err := r.manager.Refresh(ctx)
 	if err != nil {
@@ -114,6 +116,30 @@ func (r *Refresher) refresh(ctx context.Context) {
 		"success": successCount,
 		"errors":  errorCount,
 	}).Debug("scheduled refresh completed")
+}
+
+func (r *Refresher) compactHistory(ctx context.Context) {
+	compactor, ok := r.manager.store.(interface {
+		CompactHistory(context.Context, time.Time) error
+	})
+	if !ok {
+		return
+	}
+	now := time.Now()
+	day := now.Format("2006-01-02")
+	r.mu.RLock()
+	done := r.lastCompactedDay == day
+	r.mu.RUnlock()
+	if done {
+		return
+	}
+	if err := compactor.CompactHistory(ctx, now); err != nil {
+		r.logger.WithError(err).Warn("quota history compaction failed")
+		return
+	}
+	r.mu.Lock()
+	r.lastCompactedDay = day
+	r.mu.Unlock()
 }
 
 // SetInterval updates the refresh interval.

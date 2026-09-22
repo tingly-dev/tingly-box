@@ -66,11 +66,11 @@ const LIGHT_DASHBOARD_COLORS = {
     },
 };
 
-// Quota bar colors based on usage percentage
+// Quota bar colors based on remaining percentage
 export const QUOTA_COLORS = {
-    success: '#10b981',  // emerald-500 - < 50%
-    warning: '#f59e0b',  // amber-500 - 50-80%
-    error: '#ef4444',    // red-500 - > 80%
+    success: '#10b981',  // emerald-500 - > 50% remaining
+    warning: '#f59e0b',  // amber-500 - 20-50% remaining
+    error: '#ef4444',    // red-500 - <= 20% remaining
     secondary: '#94a3b8', // slate-400 - secondary quota
     background: '#f1f5f9', // slate-100 - background bar
 };

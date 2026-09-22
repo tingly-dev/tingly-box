@@ -137,9 +137,8 @@ export default function DashboardPage() {
     // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
 
-    // Chart view mode: the trend chart ('summary'), the per-request list
-    // ('requests', hourly ranges only), or the fixed 12-month activity heatmap
-    // ('activity').
+    // Analysis mode: token trend ('summary'), per-request list ('requests',
+    // hourly ranges only), or the fixed 12-month heatmap ('activity').
     const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity'>('summary');
     // "By Request" only exists for hourly ranges; fall back to the trend if a
     // stale 'requests' selection carries into a daily range.

@@ -4,10 +4,10 @@ import { Code as CodeIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
-import { QuotaBarRow, useQuotaBars } from './QuotaBarRow';
+import { useQuotaBars } from './useQuotaBars';
 import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import type { ProviderQuota } from '@/types/quota';
-import { formatQuotaUsage } from '@/types/quota';
+import { formatQuotaRemaining, formatQuotaUsage, isCountable } from '@/types/quota';
 
 interface QuotaInlineDisplayProps {
   quota: ProviderQuota | undefined;
@@ -84,8 +84,11 @@ export function QuotaInlineDisplay({
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {formatQuotaUsage(window, { includePercent: true })}
+            {formatQuotaRemaining(window)}{isCountable(window) || window.available != null ? ' left' : ''}
           </Typography>
+          {isCountable(window) && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Used: {formatQuotaUsage(window)}
+          </Typography>}
           {window.resets_at && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               Resets: {new Date(window.resets_at).toLocaleString()}
@@ -99,7 +102,7 @@ export function QuotaInlineDisplay({
             Cost
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {quota.cost.currency_code || '$'}{quota.cost.used.toFixed(2)} / {quota.cost.currency_code || '$'}{quota.cost.limit.toFixed(2)}
+            {quota.cost.limit > 0 ? `${quota.cost.currency_code || '$'}${Math.max(0, quota.cost.limit - quota.cost.used).toFixed(2)} / ${quota.cost.currency_code || '$'}${quota.cost.limit.toFixed(2)} left` : `${quota.cost.currency_code || '$'}${quota.cost.used.toFixed(2)} used`}
           </Typography>
         </Box>
       )}

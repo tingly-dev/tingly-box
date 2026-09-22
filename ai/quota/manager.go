@@ -162,6 +162,17 @@ func (m *Manager) ListQuota(ctx context.Context) ([]*ProviderUsage, error) {
 	return m.store.List(ctx)
 }
 
+// QuotaHistory returns stored snapshots without contacting upstream providers.
+func (m *Manager) QuotaHistory(ctx context.Context, query HistoryQuery) ([]*ProviderUsage, error) {
+	historyStore, ok := m.store.(interface {
+		History(context.Context, HistoryQuery) ([]*ProviderUsage, error)
+	})
+	if !ok {
+		return nil, errors.New("quota store does not support history")
+	}
+	return historyStore.History(ctx, query)
+}
+
 // Summary returns aggregate quota statistics.
 func (m *Manager) Summary(ctx context.Context) (*Summary, error) {
 	usages, err := m.store.List(ctx)

@@ -108,6 +108,7 @@ export default {
     "usage": "Usage",
     "bench": "Bench",
     "userUsage": "Team usage",
+    "quotaHistory": "Quota history",
     "heatmap": "Heatmap",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -1478,6 +1479,19 @@ export default {
         "byRequest": "By Request",
         "activity": "Activity"
       }
+    },
+    "quotaHistory": {
+      "title": "Quota history",
+      "pageSubtitle": "Short ranges show samples; longer ranges show daily highs and lows.",
+      "subtitle": "Stored provider quota snapshots for the selected time range.",
+      "snapshotCount": "{{snapshots}} snapshots · {{providers}} providers",
+      "loadError": "Quota history could not be loaded.",
+      "empty": "No quota snapshots in this period",
+      "emptyHint": "Snapshots appear after a supported provider quota is refreshed.",
+      "noWindows": "No quota windows reported",
+      "notCountable": "Not limited",
+      "sampleCount": "{{count}} samples",
+      "limitHint": "Showing the latest 1,000 points. Choose a provider or shorter time range to see more."
     },
     "requestsView": {
       "title": "Requests",

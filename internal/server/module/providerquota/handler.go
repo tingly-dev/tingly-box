@@ -20,6 +20,8 @@ type Manager interface {
 	GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 	// ListQuota returns the quota list for every provider.
 	ListQuota(ctx context.Context) ([]*quota.ProviderUsage, error)
+	// QuotaHistory returns today's samples and past days' extrema.
+	QuotaHistory(ctx context.Context, query quota.HistoryQuery) ([]*quota.ProviderUsage, error)
 	// Refresh refreshes quota for every enabled provider.
 	Refresh(ctx context.Context) ([]*quota.ProviderUsage, error)
 	// RefreshProvider refreshes quota for one provider.
@@ -74,6 +76,54 @@ type ListQuotaResponse struct {
 type MetaData struct {
 	Total     int       `json:"total"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// HistoryRequest filters historical snapshots. EndTime is exclusive.
+type HistoryRequest struct {
+	ProviderUUID string `json:"provider" form:"provider" description:"Provider UUID"`
+	StartTime    string `json:"start_time" form:"start_time" description:"ISO 8601 start time"`
+	EndTime      string `json:"end_time" form:"end_time" description:"ISO 8601 exclusive end time"`
+	Limit        int    `json:"limit" form:"limit" description:"Maximum snapshots (1-1000)"`
+	Daily        bool   `json:"daily" form:"daily" description:"Return daily quota extrema instead of every sample"`
+}
+
+// QuotaHistory returns stored snapshots, newest first.
+// GET /api/v1/provider-quota/history
+func (h *Handler) QuotaHistory(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
+	var req HistoryRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid history query"})
+		return
+	}
+	query := quota.HistoryQuery{ProviderUUID: req.ProviderUUID, Limit: req.Limit, Daily: req.Daily}
+	parseTime := func(value string) (*time.Time, error) {
+		if value == "" {
+			return nil, nil
+		}
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return nil, err
+		}
+		return &parsed, nil
+	}
+	var err error
+	if query.StartTime, err = parseTime(req.StartTime); err == nil {
+		query.EndTime, err = parseTime(req.EndTime)
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_time and end_time must be ISO 8601 timestamps"})
+		return
+	}
+	usages, err := h.manager.QuotaHistory(c.Request.Context(), query)
+	if err != nil {
+		h.logger.WithError(err).Error("failed to list quota history")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list quota history"})
+		return
+	}
+	c.JSON(http.StatusOK, ListQuotaResponse{Meta: MetaData{Total: len(usages), UpdatedAt: time.Now()}, Data: usages})
 }
 
 // ListQuota returns quota for every provider.

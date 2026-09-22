@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
 import type { ProviderQuota, ProviderUsage } from '@/types/quota';
 import { QuotaBarItem } from '@/components/credential/QuotaBarItem';
-import { useQuotaBars } from '@/components/credential/QuotaBarRow';
+import { useQuotaBars } from '@/components/credential/useQuotaBars';
 import SearchField from '@/components/SearchField';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';

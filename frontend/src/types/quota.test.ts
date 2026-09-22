@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatQuotaAvailable, formatQuotaUsage } from './quota';
+import { formatQuotaAvailable, formatQuotaRemaining, formatQuotaUsage, quotaRemainingPercent } from './quota';
 
 const baseWindow = {
     used: 0,
@@ -40,5 +40,23 @@ describe('formatQuotaUsage', () => {
             available: 0,
             currency_code: 'CNY',
         })).toBe('0 CNY');
+    });
+});
+
+describe('remaining quota', () => {
+    it('prefers an explicit available amount in both value and bar', () => {
+        const window = { used: 30, limit: 100, used_percent: 30, available: 65, unit: 'credits' };
+        expect(formatQuotaRemaining(window)).toBe('65 / 100 credits');
+        expect(quotaRemainingPercent(window)).toBe(65);
+    });
+
+    it('derives and clamps remaining quota when available is absent', () => {
+        expect(formatQuotaRemaining({ used: 30, limit: 100, used_percent: 30, unit: 'requests' })).toBe('70 / 100 requests');
+        expect(quotaRemainingPercent({ used: 110, limit: 100, used_percent: 110, unit: 'requests' })).toBe(0);
+    });
+
+    it('does not imply a full bar when quota is unknown', () => {
+        expect(formatQuotaRemaining(baseWindow)).toBe('not reported');
+        expect(quotaRemainingPercent(baseWindow)).toBe(0);
     });
 });

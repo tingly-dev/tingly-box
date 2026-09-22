@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import type { QuotaWindow } from '@/types/quota';
-import { formatQuotaAvailable, formatQuotaPercent, formatQuotaUsage, isCountable } from '@/types/quota';
+import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent } from '@/types/quota';
 import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 
 interface QuotaBarItemProps {
@@ -35,8 +35,8 @@ interface QuotaBarItemProps {
  */
 export function QuotaBarItem({ window, showDetails = false, percentLabel, barColor: forcedBarColor, tooltipContent: customTooltip }: QuotaBarItemProps) {
   const getColor = (percent: number) => {
-    if (percent >= 80) return QUOTA_COLORS.error;
-    if (percent >= 50) return QUOTA_COLORS.warning;
+    if (percent <= 20) return QUOTA_COLORS.error;
+    if (percent <= 50) return QUOTA_COLORS.warning;
     return QUOTA_COLORS.success;
   };
 
@@ -45,7 +45,8 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
   // upstream withholds — so the figure it does have takes the bar's place
   // rather than a green one filled to 0%.
   const countable = isCountable(window);
-  const barColor = forcedBarColor ?? getColor(window.used_percent);
+  const remainingPercent = quotaRemainingPercent(window);
+  const barColor = forcedBarColor ?? getColor(remainingPercent);
 
   // Format reset time
   const formatResetTime = () => {
@@ -66,10 +67,8 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
   };
 
   const resetTime = formatResetTime();
-  const detailedInfo = formatQuotaUsage(window, { formatNumber: formatNumber });
-  const availableInfo = countable
-    ? formatQuotaAvailable(window, formatNumber)
-    : undefined;
+  const detailedInfo = formatQuotaRemaining(window, formatNumber);
+  const usedInfo = countable ? formatQuotaUsage(window, { formatNumber }) : undefined;
 
   const tooltipContent = (
     <Box
@@ -88,9 +87,9 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
       <Typography variant="body2" sx={{ display: 'block', mb: 0.5 }}>
         {detailedInfo}
       </Typography>
-      {availableInfo && (
+      {usedInfo && (
         <Typography variant="caption" sx={{ color: "text.secondary", display: 'block' }}>
-          Available: {availableInfo}
+          Used: {usedInfo}
         </Typography>
       )}
       {resetTime && (
@@ -173,7 +172,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
             <Box
               sx={{
                 height: '100%',
-                width: `${Math.min(window.used_percent, 100)}%`,
+                width: `${remainingPercent}%`,
                 bgcolor: barColor,
                 borderRadius: 1,
                 transition: 'width 0.3s ease',
@@ -191,7 +190,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
             whiteSpace: 'nowrap',
           }}
         >
-          {percentLabel ?? (countable ? formatQuotaPercent(window) : formatQuotaUsage(window))}
+          {percentLabel ?? (countable ? `${remainingPercent.toFixed(0)}% left` : detailedInfo)}
         </Typography>
 
         {/* Optional details inline */}

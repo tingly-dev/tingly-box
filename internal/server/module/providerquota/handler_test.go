@@ -17,8 +17,10 @@ import (
 // fakeManager lets each test configure exactly what GetQuota returns per
 // provider UUID, without a real store/fetcher.
 type fakeManager struct {
-	quotas map[string]*quota.ProviderUsage
-	errs   map[string]error
+	quotas       map[string]*quota.ProviderUsage
+	errs         map[string]error
+	history      []*quota.ProviderUsage
+	historyQuery quota.HistoryQuery
 }
 
 func (f *fakeManager) GetQuota(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
@@ -31,7 +33,39 @@ func (f *fakeManager) GetQuota(_ context.Context, providerUUID string) (*quota.P
 	return nil, quota.ErrUsageNotFound
 }
 func (f *fakeManager) ListQuota(context.Context) ([]*quota.ProviderUsage, error) { return nil, nil }
-func (f *fakeManager) Refresh(context.Context) ([]*quota.ProviderUsage, error)   { return nil, nil }
+func (f *fakeManager) QuotaHistory(_ context.Context, query quota.HistoryQuery) ([]*quota.ProviderUsage, error) {
+	f.historyQuery = query
+	return f.history, nil
+}
+
+func TestQuotaHistoryParsesFiltersAndReturnsSnapshots(t *testing.T) {
+	mgr := &fakeManager{history: []*quota.ProviderUsage{{ProviderUUID: "provider-1"}}}
+	h := NewHandler(mgr, logrus.StandardLogger())
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/provider-quota/history?provider=provider-1&start_time=2026-09-22T00%3A00%3A00Z&end_time=2026-09-23T00%3A00%3A00Z&limit=25&daily=true", nil)
+
+	h.QuotaHistory(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	if mgr.historyQuery.ProviderUUID != "provider-1" || mgr.historyQuery.Limit != 25 || !mgr.historyQuery.Daily {
+		t.Fatalf("query = %#v", mgr.historyQuery)
+	}
+	if mgr.historyQuery.StartTime == nil || mgr.historyQuery.EndTime == nil {
+		t.Fatalf("time bounds were not parsed: %#v", mgr.historyQuery)
+	}
+	var response ListQuotaResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Meta.Total != 1 || len(response.Data) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+}
+func (f *fakeManager) Refresh(context.Context) ([]*quota.ProviderUsage, error) { return nil, nil }
 func (f *fakeManager) RefreshProvider(context.Context, string) (*quota.ProviderUsage, error) {
 	return nil, nil
 }

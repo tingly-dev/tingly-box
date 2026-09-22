@@ -109,6 +109,7 @@ export default {
     "usage": "用量",
     "bench": "测试台",
     "userUsage": "团队用量",
+    "quotaHistory": "Quota 历史",
     "heatmap": "热力图",
     "today": "今天",
     "yesterday": "昨天",
@@ -1474,6 +1475,19 @@ export default {
         "byRequest": "按请求",
         "activity": "活动"
       }
+    },
+    "quotaHistory": {
+      "title": "Quota 历史",
+      "pageSubtitle": "短时间范围显示采样明细，较长时间范围显示每日最高和最低值。",
+      "subtitle": "所选时间范围内保存的 Provider quota 快照。",
+      "snapshotCount": "{{snapshots}} 个快照 · {{providers}} 个 Provider",
+      "loadError": "无法加载 quota 历史。",
+      "empty": "此时间段内没有 quota 快照",
+      "emptyHint": "支持 quota 的 Provider 刷新后，快照会显示在这里。",
+      "noWindows": "Provider 未返回 quota 窗口",
+      "notCountable": "不限额",
+      "sampleCount": "{{count}} 次采样",
+      "limitHint": "仅显示最近 1,000 个数据点。选择 Provider 或缩短时间范围可查看更多。"
     },
     "requestsView": {
       "title": "请求",
