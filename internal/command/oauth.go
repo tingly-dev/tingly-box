@@ -170,11 +170,45 @@ func runAddFlow(appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, cus
 	fmt.Println(strings.Repeat("=", 60))
 
 	// Handle based on OAuth method
-	if config.OAuthMethod == "device_code" {
+	switch config.OAuthMethod {
+	case "device_code":
 		return runDeviceCodeFlow(ctx, manager, appConfig, config, providerName)
+	case "server_poll":
+		return runServerPollFlow(ctx, manager, appConfig, config, providerName)
 	}
 
 	return runAuthCodeFlow(ctx, manager, appConfig, config, providerName, callbackPort)
+}
+
+// runServerPollFlow handles the server-mediated poll flow (ZCode / GLM Coding
+// Plan). There is no user code and no local callback: the URL is the whole
+// handshake, so it can be opened on any device — a phone works for a headless
+// server.
+func runServerPollFlow(ctx context.Context, manager *oauth2.Manager, appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, providerName string) error {
+	issuer := ai.Issuer(config.Type)
+
+	fmt.Println("\n🌐 Initiating login...")
+	flow, err := manager.InitiateZCodeFlow(ctx, "cli-user", issuer, "", providerName)
+	if err != nil {
+		return fmt.Errorf("failed to initiate login: %w", err)
+	}
+
+	fmt.Println("\n✅ Login link ready!")
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("🔗 Open this URL (any device): %s\n", flow.AuthorizeURL)
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Println("\n📝 Instructions:")
+	fmt.Println("1. Open the URL above in a browser and sign in")
+	fmt.Println("2. Approve the authorization — nothing needs to come back to this machine")
+	fmt.Println("\n⏳ Waiting for authorization and resolving the plan credential...")
+
+	token, err := manager.CompleteZCodeFlow(ctx, flow)
+	if err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+	fmt.Println("\n✅ Authentication successful!")
+
+	return createProviderFromToken(appConfig, config, providerName, token)
 }
 
 // runDeviceCodeFlow handles device code flow (e.g., qwen_code)
@@ -359,6 +393,12 @@ func createProviderFromToken(appConfig *appconfig.AppConfig, config *ProviderOAu
 		// Issuer-specific endpoint mode (e.g. Codex → responses).
 		OpenAIEndpointMode: ai.OpenAIEndpointModeForIssuer(ai.Issuer(config.Type)),
 	}
+	// ZCode's plan key is accepted on both protocol endpoints, so the provider
+	// is dual (same as the web flow, see oauth handler createProviderFromToken).
+	if anthropicBase, openaiBase := ai.ZCodeEndpoints(ai.Issuer(config.Type)); anthropicBase != "" {
+		provider.APIBaseAnthropic = anthropicBase
+		provider.APIBaseOpenAI = openaiBase
+	}
 
 	// Add to global config
 	if err := globalCfg.AddProvider(provider); err != nil {
@@ -448,6 +488,8 @@ func supportedProviders() []ProviderInfo {
 			switch providerCfg.OAuthMethod {
 			case oauth2.OAuthMethodDeviceCode, oauth2.OAuthMethodDeviceCodePKCE:
 				description = "Device Code flow - requires manual code entry"
+			case oauth2.OAuthMethodServerPoll:
+				description = "Login link flow - open the URL on any device, no callback needed"
 			case oauth2.OAuthMethodPKCE:
 				description = "PKCE flow"
 			default:
@@ -496,6 +538,8 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 	switch providerCfg.OAuthMethod {
 	case oauth2.OAuthMethodDeviceCode, oauth2.OAuthMethodDeviceCodePKCE:
 		oauthMethod = "device_code"
+	case oauth2.OAuthMethodServerPoll:
+		oauthMethod = "server_poll"
 	case oauth2.OAuthMethodPKCE:
 		oauthMethod = "pkce"
 	default:
@@ -526,6 +570,11 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		// Gemini CLI uses Google Code Assist API
 		apiBase = "https://cloudcode-pa.googleapis.com"
 		apiStyle = "google"
+	case ai.IssuerZCode, ai.IssuerZCodeCN:
+		// GLM Coding Plan: Anthropic endpoint is primary, OpenAI endpoint is
+		// attached as the dual URL in createProviderFromToken.
+		apiBase, _ = ai.ZCodeEndpoints(ai.Issuer(issuer))
+		apiStyle = "anthropic"
 	default:
 		// For other providers, use a default
 		apiBase = "https://api.example.com/v1"
@@ -548,7 +597,7 @@ type ProviderOAuthConfig struct {
 	DisplayName   string
 	APIBase       string
 	APIStyle      string
-	OAuthMethod   string // "pkce" or "device_code"
+	OAuthMethod   string // "pkce", "device_code" or "server_poll"
 	NeedsPort1455 bool
 }
 

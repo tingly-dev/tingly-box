@@ -7,8 +7,10 @@ recovers them when they break.
 ## Concepts
 
 - **Issuer** — the upstream OAuth identity (`claude_code`, `codex`, `openai`,
-  `gemini`, `antigravity`, `qwen_code`, `kimi_code`, `github`, `google`, `mock`, …).
-  Validated by `ParseProviderType` (`ai/oauth/config.go`).
+  `gemini`, `antigravity`, `qwen_code`, `kimi_code`, `zcode_cn`, `zcode`,
+  `github`, `google`, `mock`, …). Validated by `ParseProviderType`
+  (`ai/oauth/config.go`). The ZCode issuers (GLM Coding Plan) use a
+  server-mediated poll flow and resolve a static plan key — see `zcode-oauth.md`.
 - **Provider** — a stored credential + endpoint (`ai/provider.go`, `Provider` struct).
   An OAuth provider has `AuthType = oauth` and an `OAuthDetail` (`ai/provider.go`)
   holding the access/refresh tokens, `ExpiresAt`, `Issuer`, a per-credential
@@ -175,6 +177,7 @@ authorize(provider_uuid) ──▶ SessionState.TargetProviderUUID
 | `internal/server/module/oauth/types.go` | request/response models; `OAuthAuthorizeRequest.provider_uuid` |
 | `internal/server/module/oauth/routes.go` | route registration |
 | `internal/server/module/tokenrefresh/refresher.go` | periodic background refresh; expiry/credential guards |
+| `ai/oauth/zcode.go` | ZCode (GLM Coding Plan) server-poll login + credential resolver; `zcode-oauth.md` |
 | `internal/server/config/provider.go` | `AddProvider` / `UpdateProvider` / `DeleteProvider` + rule cleanup |
 | `frontend/src/components/OAuthDialog.tsx` | provider picker + direct/re-auth mode (`reauthProviderUuid`) |
 | `frontend/src/components/OAuthTable.tsx` | provider list, expiry display, Refresh / Reauthorize actions |
