@@ -11,9 +11,10 @@ import type { BotSettings } from '@/types/bot';
 import { defaultAgentForCCProfile } from '@/types/bot';
 import type { Provider } from '@/types/provider';
 import { Add } from '@/components/icons';
-import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import { useTranslation } from 'react-i18next';
 
 interface PlatformRemoteAgentPageProps {
@@ -56,15 +57,13 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
     const [restartingBotUuid, setRestartingBotUuid] = useState<string | null>(null);
     const [selectedBot, setSelectedBot] = useState<BotSettings | null>(null);
 
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error' | 'info' | 'warning';
-    }>({ open: false, message: '', severity: 'success' });
+    const notify = useNotify();
 
+    // Notification adapter (message first, severity second) — shared with
+    // BotConfigDialog's `notify` prop; rendered globally by NotificationProvider.
     const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    }, []);
+        notify[severity](message);
+    }, [notify]);
 
     // Same platform filter as the Bots page — the two sections paginate
     // identically and differ only in what they show for each bot.
@@ -321,20 +320,6 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
                 onTogglePersistentSession={handleTogglePersistentSession}
                 onClose={() => setProfileDialogBot(null)}
             />
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={snackbar.severity === 'error' ? null : 4000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

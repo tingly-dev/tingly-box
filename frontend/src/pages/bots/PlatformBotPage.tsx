@@ -6,8 +6,9 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { api, enrichBotsWithCapabilities } from '@/services/api';
 import type { BotSettings } from '@/types/bot';
 import { useBotToggle } from '@/hooks/useBotToggle';
+import { useNotify } from '@/hooks/useNotify';
 import { Add } from '@/components/icons';
-import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -39,17 +40,13 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
     // Toggle loading state
     const [restartingBotUuid, setRestartingBotUuid] = useState<string | null>(null);
 
-    // Snackbar notification state
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error' | 'info' | 'warning';
-    }>({ open: false, message: '', severity: 'success' });
+    const notify = useNotify();
 
-    // Notification helper - errors require manual dismissal, others auto-hide
+    // Notification adapter (message first, severity second) — shared with
+    // BotConfigDialog's `notify` prop; rendered globally by NotificationProvider.
     const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    }, []);
+        notify[severity](message);
+    }, [notify]);
 
     // Filter bots by platform. useMemo (not a derived-state effect) so this
     // is never one render behind `bots` - a lagging value here previously
@@ -104,8 +101,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
         }
     }, [searchParams, setSearchParams, dialogOpen, openAddDialog]);
 
-    // Toggle uses the shared useBotToggle hook (same op across all bot pages);
-    // restart/delete keep the page's own Snackbar.
+    // Toggle uses the shared useBotToggle hook (same op across all bot pages).
     const {toggle: handleBotToggle, isToggling} = useBotToggle({onDone: loadBotSettings});
 
     const handleBotRestart = useCallback(async (uuid: string) => {
@@ -205,22 +201,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 onSaved={loadBotSettings}
                 notify={showNotification}
             />
-			<BotAccessDialog open={Boolean(accessBot)} bot={accessBot} onClose={()=>setAccessBot(null)} onChanged={loadBotSettings}/>
-            {/* Snackbar for notifications */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={snackbar.severity === 'error' ? null : 4000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
+            <BotAccessDialog open={Boolean(accessBot)} bot={accessBot} onClose={()=>setAccessBot(null)} onChanged={loadBotSettings}/>
         </PageLayout>
     );
 };
