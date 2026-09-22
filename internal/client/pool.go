@@ -67,6 +67,14 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 				logrus.WithContext(ctx).Errorf("Failed to create Kimi client for provider %s: %v", provider.Name, err)
 				return nil
 			}
+		case ai.IssuerZCode, ai.IssuerZCodeCN:
+			// ZCode's credential is the plan's static API key, so its OpenAI
+			// endpoint (reached via the dual URL) is a plain bearer client.
+			client, err = NewOpenAIClient(provider, model, sessionID)
+			if err != nil {
+				logrus.WithContext(ctx).Errorf("Failed to create ZCode client for provider %s: %v", provider.Name, err)
+				return nil
+			}
 		default:
 			logrus.Errorf("Unsupported oauth issuer: %s", issuer)
 			return nil

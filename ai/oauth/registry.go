@@ -303,6 +303,11 @@ func (r *Registry) GetProviderInfo() []ProviderInfo {
 		// - PKCE/DeviceCode flows: only need ClientID
 		// - Standard flows: need both ClientID and ClientSecret
 		configured := config.ClientID != ""
+		// A server-mediated poll flow (ZCode) has no client credentials at
+		// all: the provider's server identifies the flow by a per-login token.
+		if config.OAuthMethod == OAuthMethodServerPoll {
+			configured = true
+		}
 		if config.AuthStyle != AuthStyleInNone &&
 			config.OAuthMethod != OAuthMethodPKCE &&
 			config.OAuthMethod != OAuthMethodDeviceCode &&

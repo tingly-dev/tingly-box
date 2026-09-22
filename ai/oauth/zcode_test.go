@@ -362,9 +362,9 @@ func TestZCodeResolveCredential(t *testing.T) {
 		}
 	})
 
-	// The plan endpoints reject the bare key, so a login that cannot read the
-	// secret must fail here instead of surfacing later as an opaque 401.
-	t.Run("a key with no secret fails the login", func(t *testing.T) {
+	// Z.ai rejects the bare key, so a login that cannot read the secret must
+	// fail here instead of surfacing later as an opaque 401.
+	t.Run("zai: a key with no secret fails the login", func(t *testing.T) {
 		handler := &zcodeBizHandler{t: t, secret: ""}
 		client := newZCodeTestClient(t, ZCodeVariantZai, handler)
 
@@ -374,6 +374,21 @@ func TestZCodeResolveCredential(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "secret") {
 			t.Errorf("error %q should name the missing secret", err)
+		}
+	})
+
+	// BigModel mirrors the desktop client: a key whose secret cannot be read
+	// still completes the login with the bare key.
+	t.Run("bigmodel: a key with no secret still logs in", func(t *testing.T) {
+		handler := &zcodeBizHandler{t: t, secret: ""}
+		client := newZCodeTestClient(t, ZCodeVariantBigModel, handler)
+
+		cred, err := client.ResolveCredential(context.Background(), "account-token")
+		if err != nil {
+			t.Fatalf("ResolveCredential: %v", err)
+		}
+		if cred.FullKey() != "created-key" {
+			t.Errorf("FullKey = %q, want the bare key", cred.FullKey())
 		}
 	})
 

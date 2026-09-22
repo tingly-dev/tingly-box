@@ -315,12 +315,32 @@ func (p *Provider) HasDualURL(clientStyle APIStyle) bool {
 }
 
 // IsDual reports whether the provider has BOTH dual URLs configured.
-// OAuth providers are never considered dual (issuer-bound to one protocol).
+// OAuth providers are not dual unless their issuer's credential is a plain API
+// key valid on both endpoints (see IssuerSupportsDual).
 func (p *Provider) IsDual() bool {
-	if p == nil || p.AuthType == AuthTypeOAuth {
+	if p == nil || !p.dualEligible() {
 		return false
 	}
 	return p.APIBaseOpenAI != "" && p.APIBaseAnthropic != ""
+}
+
+// dualEligible reports whether this provider's auth type allows dual URLs.
+// A bearer minted by an OAuth issuer is normally scoped to one protocol
+// endpoint, so OAuth providers are excluded — except for issuers whose
+// "token" is really a static API key the vendor accepts on both endpoints.
+func (p *Provider) dualEligible() bool {
+	if p.AuthType != AuthTypeOAuth {
+		return true
+	}
+	return IssuerSupportsDual(p.OAuthIssuer())
+}
+
+// IssuerSupportsDual reports whether an OAuth issuer's credential may drive
+// a dual-URL provider. ZCode resolves the coding plan's api_key.secret, which
+// api.z.ai / open.bigmodel.cn accept on both /api/anthropic and
+// /api/coding/paas/v4; every other issuer's bearer is bound to one endpoint.
+func IssuerSupportsDual(issuer Issuer) bool {
+	return issuer == IssuerZCode || issuer == IssuerZCodeCN
 }
 
 // ResolveEndpoint returns the (baseURL, providerStyle) pair to use for an
@@ -332,7 +352,7 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 	if p == nil {
 		return "", ""
 	}
-	if p.AuthType != AuthTypeOAuth {
+	if p.dualEligible() {
 		switch clientStyle {
 		case APIStyleOpenAI:
 			if p.APIBaseOpenAI != "" {

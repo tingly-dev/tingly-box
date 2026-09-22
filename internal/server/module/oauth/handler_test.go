@@ -17,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -443,4 +444,88 @@ func TestHandler_Reauth_OverwritesInPlace(t *testing.T) {
 	require.NotNil(t, rule)
 	require.Len(t, rule.Services, 1)
 	assert.Equal(t, targetUUID, rule.Services[0].Provider, "rule reference survives re-auth")
+}
+
+// A ZCode login produces a static plan credential: no expiry (the background
+// refresher must stay out of the way), the account token kept as the
+// "refresh token" for re-resolve, and the dual endpoints untouched by re-auth.
+func TestHandler_ZCodeReauth_KeepsStaticCredentialShape(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg, err := config.NewConfigWithDir(t.TempDir(), config.WithDisableMigration(), config.WithDisableBuiltIn())
+	require.NoError(t, err)
+
+	anthropicBase, openaiBase := ai.ZCodeEndpoints(ai.IssuerZCodeCN)
+	const targetUUID = "u-zcode-1"
+	require.NoError(t, cfg.AddProvider(&typ.Provider{
+		UUID: targetUUID,
+		Name: "BigModel Coding Plan",
+		// Unreachable on purpose: the post-reauth model fetch fails fast and is
+		// non-fatal, keeping the test offline.
+		APIBase:          "http://127.0.0.1:1",
+		APIStyle:         protocol.APIStyleAnthropic,
+		APIBaseAnthropic: anthropicBase,
+		APIBaseOpenAI:    openaiBase,
+		AuthType:         typ.AuthTypeOAuth,
+		Enabled:          false,
+		OAuthDetail: &typ.OAuthDetail{
+			Issuer:       ai.IssuerZCodeCN,
+			AccessToken:  "old-key.old-secret",
+			RefreshToken: "old-account-token",
+		},
+	}))
+
+	oauthManager := oauth.NewManager(oauth.WithConfig(oauth.DefaultConfig()), oauth.WithRegistry(oauth.DefaultRegistry()))
+	handler := NewHandler(oauthManager, cfg)
+
+	sessionID := uuid.New().String()
+	now := time.Now()
+	oauthManager.StoreSession(&oauth.SessionState{
+		SessionID:          sessionID,
+		Status:             oauth.SessionStatusPending,
+		Issuer:             ai.IssuerZCodeCN,
+		CreatedAt:          now,
+		ExpiresAt:          now.Add(oauth.DefaultSessionExpiry),
+		TargetProviderUUID: targetUUID,
+	})
+
+	// The shape CompleteZCodeFlow produces: static key, account token, no expiry.
+	token := &oauth.Token{
+		AccessToken:  "new-key.new-secret",
+		RefreshToken: "new-account-token",
+		Issuer:       ai.IssuerZCodeCN,
+		Metadata: map[string]any{
+			oauth.ZCodeMetaPlatform: oauth.ZCodeVariantBigModel,
+			oauth.ZCodeMetaAPIKey:   "new-key",
+			oauth.ZCodeMetaUserID:   "u-1",
+		},
+	}
+
+	gotUUID, err := handler.createProviderFromToken(token, ai.IssuerZCodeCN, "", sessionID, "")
+	require.NoError(t, err)
+	assert.Equal(t, targetUUID, gotUUID)
+
+	p, err := cfg.GetProviderByUUID(targetUUID)
+	require.NoError(t, err)
+	require.NotNil(t, p.OAuthDetail)
+	assert.Equal(t, "new-key.new-secret", p.OAuthDetail.AccessToken, "the plan key is the credential")
+	assert.Equal(t, "new-account-token", p.OAuthDetail.RefreshToken, "the account token is kept for re-resolve")
+	assert.Equal(t, "", p.OAuthDetail.ExpiresAt, "a static credential has no expiry")
+	assert.Equal(t, "new-key", p.OAuthDetail.ExtraFields[oauth.ZCodeMetaAPIKey])
+	assert.True(t, p.Enabled, "re-auth re-enables the provider")
+	// Dual endpoints survive, and the provider still counts as dual despite
+	// being OAuth — the ZCode issuer is the sanctioned exception.
+	assert.Equal(t, anthropicBase, p.APIBaseAnthropic)
+	assert.Equal(t, openaiBase, p.APIBaseOpenAI)
+	assert.True(t, p.IsDual(), "a ZCode OAuth provider serves both protocols natively")
+	gotBase, gotStyle := p.ResolveEndpoint(protocol.APIStyleOpenAI)
+	assert.Equal(t, openaiBase, gotBase)
+	assert.Equal(t, protocol.APIStyleOpenAI, gotStyle)
+}
+
+func TestZCodeProviderName(t *testing.T) {
+	assert.Equal(t, "custom", zcodeProviderName(ai.IssuerZCodeCN, "custom"), "a user-supplied name wins")
+	assert.Equal(t, "BigModel Coding Plan", zcodeProviderName(ai.IssuerZCodeCN, ""))
+	assert.Equal(t, "Z.ai Coding Plan", zcodeProviderName(ai.IssuerZCode, ""))
+	assert.Equal(t, "", zcodeProviderName(ai.IssuerKimiCode, ""), "non-ZCode issuers keep the generic naming path")
 }

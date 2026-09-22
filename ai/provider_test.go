@@ -636,6 +636,22 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleAnthropic,
 		},
 		{
+			// ZCode's "token" is the plan's static API key, accepted on both
+			// endpoints, so its OAuth provider is allowed to be dual.
+			name: "ZCode OAuth provider honors dual fields",
+			provider: &Provider{
+				AuthType:         AuthTypeOAuth,
+				OAuthDetail:      &OAuthDetail{Issuer: IssuerZCodeCN},
+				APIBase:          ZCodeBigModelAnthropicBase,
+				APIStyle:         APIStyleAnthropic,
+				APIBaseOpenAI:    ZCodeBigModelOpenAIBase,
+				APIBaseAnthropic: ZCodeBigModelAnthropicBase,
+			},
+			clientStyle: APIStyleOpenAI,
+			wantURL:     ZCodeBigModelOpenAIBase,
+			wantStyle:   APIStyleOpenAI,
+		},
+		{
 			name:        "nil provider returns empty",
 			provider:    nil,
 			clientStyle: APIStyleOpenAI,
@@ -684,6 +700,26 @@ func TestProvider_IsDual(t *testing.T) {
 			name: "both dual URLs set, oauth auth",
 			provider: &Provider{
 				AuthType:         AuthTypeOAuth,
+				APIBaseOpenAI:    "https://oai.example.com/v1",
+				APIBaseAnthropic: "https://ant.example.com",
+			},
+			want: false,
+		},
+		{
+			name: "both dual URLs set, ZCode oauth issuer",
+			provider: &Provider{
+				AuthType:         AuthTypeOAuth,
+				OAuthDetail:      &OAuthDetail{Issuer: IssuerZCode},
+				APIBaseOpenAI:    ZCodeZaiOpenAIBase,
+				APIBaseAnthropic: ZCodeZaiAnthropicBase,
+			},
+			want: true,
+		},
+		{
+			name: "both dual URLs set, non-ZCode oauth issuer",
+			provider: &Provider{
+				AuthType:         AuthTypeOAuth,
+				OAuthDetail:      &OAuthDetail{Issuer: IssuerKimiCode},
 				APIBaseOpenAI:    "https://oai.example.com/v1",
 				APIBaseAnthropic: "https://ant.example.com",
 			},

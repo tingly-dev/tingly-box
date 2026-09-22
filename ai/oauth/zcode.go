@@ -390,11 +390,23 @@ func (c *ZCodeClient) ResolveCredential(ctx context.Context, accountToken string
 		return nil, err
 	}
 	secret, err := c.copyAPIKeySecret(ctx, authorization, orgID, projectID, apiKey)
+	if c.Variant == ZCodeVariantBigModel {
+		// BigModel: the desktop client tolerates a key whose secret cannot be
+		// read and sends the bare key. Mirror that — an account the copy
+		// endpoint refuses should still complete the login, and a bad key
+		// shows up immediately in the model list / quota fetch rather than
+		// blocking the sign-in.
+		if err != nil {
+			secret = ""
+		}
+		return &ZCodeCredential{APIKey: apiKey, Secret: secret}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	// The plan endpoints reject the bare key, so a missing secret is a login
-	// that would only fail later as an opaque 401.
+	// Z.ai rejects the bare key (the desktop client requires the secret here
+	// too), so a missing secret is a login that would only fail later as an
+	// opaque 401.
 	if secret == "" {
 		return nil, fmt.Errorf("zcode credential: API key has no secret; the plan endpoints would reject it")
 	}
