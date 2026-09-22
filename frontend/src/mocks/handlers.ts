@@ -1459,7 +1459,7 @@ const mockQuotas: Record<string, any> = {
                 used_percent: 25,
                 unit: 'currency',
                 label: 'Booster balance',
-                description: '37.50 USD remaining',
+                description: '37.50 USD left',
             },
         ],
         cost: {

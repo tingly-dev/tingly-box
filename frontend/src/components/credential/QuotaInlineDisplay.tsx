@@ -84,7 +84,7 @@ export function QuotaInlineDisplay({
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {formatQuotaRemaining(window)}{isCountable(window) || window.available != null ? ' remaining' : ''}
+            {formatQuotaRemaining(window)}{isCountable(window) || window.available != null ? ' left' : ''}
           </Typography>
           {isCountable(window) && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
             Used: {formatQuotaUsage(window)}
@@ -102,7 +102,7 @@ export function QuotaInlineDisplay({
             Cost
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {quota.cost.limit > 0 ? `${quota.cost.currency_code || '$'}${Math.max(0, quota.cost.limit - quota.cost.used).toFixed(2)} / ${quota.cost.currency_code || '$'}${quota.cost.limit.toFixed(2)} remaining` : `${quota.cost.currency_code || '$'}${quota.cost.used.toFixed(2)} used`}
+            {quota.cost.limit > 0 ? `${quota.cost.currency_code || '$'}${Math.max(0, quota.cost.limit - quota.cost.used).toFixed(2)} / ${quota.cost.currency_code || '$'}${quota.cost.limit.toFixed(2)} left` : `${quota.cost.currency_code || '$'}${quota.cost.used.toFixed(2)} used`}
           </Typography>
         </Box>
       )}

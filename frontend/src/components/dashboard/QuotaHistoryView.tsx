@@ -52,8 +52,8 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
     const { t } = useTranslation();
     const latest = series.samples[series.samples.length - 1];
     const valueLabel = (sample: Sample) => series.mode === 'percent'
-        ? `${number(sample.value)}% remaining${sample.window.unit === 'percent' ? '' : ` · ${formatQuotaRemaining(sample.window, number)}`}`
-        : `${number(sample.value)} ${sample.window.currency_code || sample.window.unit} remaining`;
+        ? `${number(sample.value)}% left${sample.window.unit === 'percent' ? '' : ` · ${formatQuotaRemaining(sample.window, number)}`}`
+        : `${number(sample.value)} ${sample.window.currency_code || sample.window.unit} left`;
     const tooltipLabel = (sample: Sample) => series.mode === 'percent'
         ? `${valueLabel(sample)} · used ${formatQuotaUsage(sample.window, { formatNumber: number })}`
         : valueLabel(sample);
