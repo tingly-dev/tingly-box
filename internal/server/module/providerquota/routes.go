@@ -33,7 +33,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 
 	router.GET("/provider-quota/history", handler.QuotaHistory,
 		swagger.WithTags("provider-quota"),
-		swagger.WithDescription("List immutable quota snapshots for dashboard trends"),
+		swagger.WithDescription("List today's quota samples and past days' extrema for dashboard trends"),
 		swagger.WithRequestModel(HistoryRequest{}),
 		swagger.WithResponseModel(ListQuotaResponse{}),
 	)

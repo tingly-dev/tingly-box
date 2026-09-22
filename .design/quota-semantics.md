@@ -8,8 +8,10 @@
 provider 存在多条记录；`windows`、`breakdowns` 和 `raw_response` 等字段的保存方式与当前表一致。
 provider/time 组合索引用于限定范围查询。
 
-过期清理和删除不支持 quota 的 provider 只影响当前缓存。历史快照是上游在当时返回内容的
-不可变记录，不会被这些缓存维护操作删除。
+过期清理和删除不支持 quota 的 provider 只影响当前缓存。历史表不改变快照结构：
+当天保留 5 分钟采样；结束的本地日按 provider 和 quota 窗口保留当日最低、最高值
+对应的原始快照，其余清理；30 天前的历史删除。没有可比较 quota 值的日期保留最后一条。
+后台 refresher 启动时及每天执行一次整理，当前 `provider_usage` 缓存不受影响。
 
 > 适用对象：改 `ai/quota/**`、`internal/server/module/statusline`、`internal/command/quota.go`、
 > `frontend/src/types/quota.ts` 的贡献者。

@@ -20,7 +20,7 @@ type Manager interface {
 	GetQuota(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 	// ListQuota returns the quota list for every provider.
 	ListQuota(ctx context.Context) ([]*quota.ProviderUsage, error)
-	// QuotaHistory returns immutable stored snapshots.
+	// QuotaHistory returns today's samples and past days' extrema.
 	QuotaHistory(ctx context.Context, query quota.HistoryQuery) ([]*quota.ProviderUsage, error)
 	// Refresh refreshes quota for every enabled provider.
 	Refresh(ctx context.Context) ([]*quota.ProviderUsage, error)

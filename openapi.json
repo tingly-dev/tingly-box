@@ -4516,8 +4516,8 @@
         "tags": [
           "provider-quota"
         ],
-        "summary": "List immutable quota snapshots for dashboard trends",
-        "description": "List immutable quota snapshots for dashboard trends",
+        "summary": "List today's quota samples and past days' extrema for dashboard trends",
+        "description": "List today's quota samples and past days' extrema for dashboard trends",
         "operationId": "apiV1Provider-quotaHistoryGet",
         "parameters": [
           {

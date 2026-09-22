@@ -368,6 +368,7 @@ func (s *GormStore) migrate() error {
 		"CREATE INDEX IF NOT EXISTS idx_provider_usage_fetched ON provider_usage(fetched_at)",
 		"CREATE INDEX IF NOT EXISTS idx_quota_history_provider_fetched ON provider_usage_history(provider_uuid, fetched_at)",
 		"CREATE INDEX IF NOT EXISTS idx_quota_history_fetched ON provider_usage_history(fetched_at)",
+		"CREATE INDEX IF NOT EXISTS idx_quota_history_epoch ON provider_usage_history(unixepoch(fetched_at))",
 	} {
 		if err := s.db.Exec(statement).Error; err != nil {
 			return err
@@ -443,13 +444,13 @@ func (s *GormStore) History(ctx context.Context, query HistoryQuery) ([]*Provide
 		db = db.Where("provider_uuid = ?", query.ProviderUUID)
 	}
 	if query.StartTime != nil {
-		db = db.Where("fetched_at >= ?", *query.StartTime)
+		db = db.Where("unixepoch(fetched_at) >= ?", query.StartTime.Unix())
 	}
 	if query.EndTime != nil {
-		db = db.Where("fetched_at < ?", *query.EndTime)
+		db = db.Where("unixepoch(fetched_at) < ?", query.EndTime.Unix())
 	}
 	var records []ProviderUsageHistoryRecord
-	if err := db.Order("fetched_at DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
+	if err := db.Order("unixepoch(fetched_at) DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
 		return nil, err
 	}
 	usages := make([]*ProviderUsage, 0, len(records))

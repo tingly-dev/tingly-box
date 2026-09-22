@@ -170,3 +170,61 @@ func TestGormStoreHistoryFiltersTimeAndProvider(t *testing.T) {
 		t.Fatalf("filtered history = %#v", got)
 	}
 }
+
+func TestGormStoreCompactsCompletedDaysToQuotaExtremes(t *testing.T) {
+	store, err := NewGormStore(filepath.Join(t.TempDir(), "test.db"), logrus.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	zone := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Date(2026, 9, 22, 12, 30, 0, 0, zone)
+	at := func(day, hour int) time.Time {
+		return time.Date(2026, 9, day, hour, 0, 0, 0, zone)
+	}
+	save := func(provider string, when time.Time, short, weekly float64) {
+		t.Helper()
+		usage := &ProviderUsage{ProviderUUID: provider, FetchedAt: when, ExpiresAt: when.Add(time.Hour)}
+		usage.AddWindow("short", &UsageWindow{Used: short, Limit: 100, Label: "5h"})
+		usage.AddWindow("weekly", &UsageWindow{Used: weekly, Limit: 100, Label: "7d"})
+		if err := store.Save(context.Background(), usage); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save("one", now.Add(-31*24*time.Hour), 1, 1)
+	save("one", at(21, 9), 10, 80)  // short minimum, weekly maximum
+	save("one", at(21, 10), 90, 60) // short maximum
+	save("one", at(21, 11), 50, 10) // weekly minimum
+	save("one", at(21, 12), 55, 55) // redundant
+	save("two", at(21, 9), 15, 15)
+	save("two", at(21, 10), 85, 85)
+	save("one", at(22, 9), 25, 25)
+	save("one", at(22, 10), 30, 30)
+
+	for range 2 {
+		if err := store.CompactHistory(context.Background(), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	one, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one) != 5 {
+		t.Fatalf("provider one has %d history records, want 3 daily extremes + 2 today", len(one))
+	}
+	for _, sample := range one {
+		if sample.FetchedAt.Equal(at(21, 12)) || sample.FetchedAt.Before(now.Add(-30*24*time.Hour)) {
+			t.Fatalf("redundant or expired sample retained at %s", sample.FetchedAt)
+		}
+	}
+	two, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "two"})
+	if err != nil || len(two) != 2 {
+		t.Fatalf("provider two history = %d records, error %v", len(two), err)
+	}
+	latest, err := store.Get(context.Background(), "one")
+	if err != nil || latest.Windows[0].Used != 30 {
+		t.Fatalf("latest quota changed by history compaction: usage=%#v error=%v", latest, err)
+	}
+}
