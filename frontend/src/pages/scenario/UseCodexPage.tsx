@@ -7,7 +7,7 @@ import { defaultCodexPrefs } from "./components/CodexQuickConfig";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, IconButton, Tooltip, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
+import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

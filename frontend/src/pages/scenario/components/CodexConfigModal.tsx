@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoOutlined, RestartAlt } from '@/components/icons';
@@ -21,7 +21,6 @@ interface CodexConfigModalProps {
 
 type MainTab = 'quick' | 'manual';
 type ScriptTab = 'json' | 'windows' | 'unix';
-type SessionAction = 'import' | 'undo';
 // The three mutually-exclusive ways to authenticate Codex. Modeled as one
 // 3-way select rather than routing×keep-login axes: those axes aren't truly
 // orthogonal (direct routing always keeps the official login), so a grid would
@@ -36,8 +35,6 @@ interface CodexOAuthProviderOption {
     uuid: string;
     name: string;
 }
-
-const SHOW_CODEX_SESSION_IMPORT = false;
 
 const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     open,
@@ -66,12 +63,6 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
     const [authTab, setAuthTab] = React.useState<ScriptTab>('json');
     const [catalogTab, setCatalogTab] = React.useState<ScriptTab>('json');
-    const [sessionAction, setSessionAction] = React.useState<SessionAction | null>(null);
-    const [isSubmitting, setIsSubmitting] = React.useState(false);
-    const [result, setResult] = React.useState<any | null>(null);
-    const [error, setError] = React.useState<string | null>(null);
-    const [createBackup, setCreateBackup] = React.useState(false);
-    const [autoUndoOnStop, setAutoUndoOnStop] = React.useState(false);
     const [configToml, setConfigToml] = React.useState<string>('# Loading...');
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
     const [catalogJson, setCatalogJson] = React.useState<string>('');
@@ -223,31 +214,6 @@ ${authJson}
 cat > ~/.codex/auth.json <<'EOF'
 ${authJson}
 EOF`;
-
-    const handleSessionAction = async () => {
-        if (!sessionAction) {
-            return;
-        }
-        setIsSubmitting(true);
-        setError(null);
-        setResult(null);
-        try {
-            const payload = sessionAction === 'import'
-                ? { createBackup, autoUndoOnStop }
-                : { sourceProvider: 'tingly-box', targetProvider: 'openai', createBackup };
-            const response = await api.importCodexOpenAISessions(payload);
-            if (!response?.success) {
-                setError(response?.error || response?.message || 'Failed to update Codex sessions');
-                return;
-            }
-            setResult(response);
-        } catch (err: any) {
-            setError(err?.message || 'Failed to update Codex sessions');
-        } finally {
-            setIsSubmitting(false);
-            setSessionAction(null);
-        }
-    };
 
     const handleApplyConfiguration = async () => {
         if (authMode === 'chatgpt' && !selectedOAuthProvider) {
@@ -645,46 +611,6 @@ EOF`;
                                 </Box>
                             </Box>
                         )}
-
-                        {SHOW_CODEX_SESSION_IMPORT && (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                <Typography variant="subtitle2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    Step 3 · Optional: import previous OpenAI sessions
-                                </Typography>
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                    <Button
-                                        variant="contained"
-                                        onClick={() => setSessionAction('import')}
-                                        disabled={isSubmitting}
-                                    >
-                                        Import Sessions
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        onClick={() => setSessionAction('undo')}
-                                        disabled={isSubmitting}
-                                    >
-                                        Undo Import
-                                    </Button>
-                                </Box>
-                                {error && <Alert severity="error">{error}</Alert>}
-                                {result && (
-                                    <Alert severity="success">
-                                        Updated {result.updatedSessionFiles || 0} active sessions, {result.updatedArchivedFiles || 0} archived sessions, and {result.updatedThreadRows || 0} SQLite thread records.
-                                        {Array.isArray(result.skippedLockedFiles) && result.skippedLockedFiles.length > 0
-                                            ? ` Skipped ${result.skippedLockedFiles.length} locked files; close Codex and retry if needed.`
-                                            : ''}
-                                    </Alert>
-                                )}
-                            </Box>
-                        )}
                     </Box>
                 )}
             </DialogContent>
@@ -703,81 +629,6 @@ EOF`;
                     </Button>
                 </Box>
             </DialogActions>
-            <Dialog
-                open={SHOW_CODEX_SESSION_IMPORT && sessionAction !== null}
-                onClose={(event, reason) => {
-                    if (isSubmitting || shouldIgnoreDialogClose(reason)) {
-                        return;
-                    }
-                    setSessionAction(null);
-                }}
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>
-                    {sessionAction === 'import' ? 'Import Sessions' : 'Undo Import'}
-                </DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="body2" sx={{
-                        color: "text.secondary"
-                    }}>
-                        {sessionAction === 'import'
-                            ? 'This will rewrite local Codex session metadata from `openai` to `tingly-box`, and update the local SQLite thread index so those sessions are visible after switching providers.'
-                            : 'This will rewrite local Codex session metadata from `tingly-box` back to `openai`, and update the local SQLite thread index so those sessions are visible again under the default OpenAI provider.'}
-                    </Typography>
-                    <Typography variant="body2" sx={{
-                        color: "text.secondary"
-                    }}>
-                        {sessionAction === 'import'
-                            ? 'Backups are optional. Enable them only if you need a rollback copy of local session files and the SQLite thread index.'
-                            : 'Undo import rewrites local session metadata back to `openai` without creating backups.'}
-                    </Typography>
-                    {sessionAction === 'import' && (
-                        <>
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={createBackup}
-                                        onChange={(event) => setCreateBackup(event.target.checked)}
-                                        disabled={isSubmitting}
-                                    />
-                                }
-                                label="Create backup before modifying local Codex files"
-                                sx={{ my: -0.5 }}
-                            />
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={autoUndoOnStop}
-                                        onChange={(event) => setAutoUndoOnStop(event.target.checked)}
-                                        disabled={isSubmitting}
-                                    />
-                                }
-                                label="Automatically undo import when Tingly Box exits"
-                                sx={{ my: -0.5 }}
-                            />
-                        </>
-                    )}
-                    {error && <Alert severity="error">{error}</Alert>}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setSessionAction(null)} color="inherit" disabled={isSubmitting}>
-                        Close
-                    </Button>
-                    <Button
-                        onClick={handleSessionAction}
-                        variant="contained"
-                        disabled={isSubmitting || !sessionAction}
-                        startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
-                    >
-                        {isSubmitting
-                            ? 'Processing...'
-                            : sessionAction === 'import'
-                                ? 'Confirm Import'
-                                : 'Confirm Undo'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </Dialog>
     );
 };

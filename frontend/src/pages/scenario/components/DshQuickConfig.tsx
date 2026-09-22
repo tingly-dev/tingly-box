@@ -25,7 +25,7 @@ export interface DshPrefs {
 
 // PROTOCOL_VALUES lists the wire protocols dsh's llm-pi-ai adapter supports
 // for a custom provider (see dshProtocolValues in Go's apply_config_dsh.go).
-export const PROTOCOL_VALUES = ['openai-completions', 'openai-responses', 'anthropic-messages'] as const;
+const PROTOCOL_VALUES = ['openai-completions', 'openai-responses', 'anthropic-messages'] as const;
 
 export function defaultDshPrefs(): DshPrefs {
     // Conservative default for defaultInput: no key written, so dsh treats

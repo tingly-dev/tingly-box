@@ -1,8 +1,8 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, Tooltip, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
-import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
+import { Box, Button, Tooltip, IconButton } from '@mui/material';
+import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
