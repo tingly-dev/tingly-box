@@ -174,27 +174,20 @@ func applyCodexSessionAffinityHeader(req *http.Request, body []byte) {
 // Building the SDK's own error type here means errors.As still finds it
 // through url.Error's Unwrap, so it classifies exactly like any other
 // provider's HTTP error.
+//
+// The whole body is handed to UnmarshalJSON as-is, not just a nested
+// "error" object unwrapped the way the public OpenAI API shapes it: Error()
+// prints .JSON.raw (whatever valid JSON it's given) regardless of which
+// struct fields match, so the real message text survives even when Codex's
+// ChatGPT backend doesn't follow that shape — no "error" key, or "error"
+// itself a bare string — without needing to detect and branch on each case.
 func newCodexAPIError(req *http.Request, resp *http.Response) error {
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 
 	aerr := &openai.Error{Request: req, Response: resp, StatusCode: resp.StatusCode}
-	// Only unwrap a nested "error" object the way the public OpenAI API
-	// shapes it (Code/Message/Param/Type fields). Codex's ChatGPT backend
-	// doesn't always follow that shape — sometimes there's no "error" key,
-	// sometimes "error" itself is a bare string — so anything else falls
-	// back to handing the whole body to UnmarshalJSON: apijson stores
-	// whatever valid JSON it's given as .JSON.raw regardless of which
-	// struct fields match, which is what Error() prints, so the real text
-	// still survives even when it doesn't parse into named fields.
-	unwrapped := body
-	if errObj := gjson.GetBytes(body, "error"); errObj.IsObject() {
-		unwrapped = []byte(errObj.Raw)
-	}
-	if err := aerr.UnmarshalJSON(unwrapped); err != nil {
-		logrus.WithContext(req.Context()).Debugf("[Codex] could not parse error body as JSON: %v", err)
-	}
+	_ = aerr.UnmarshalJSON(body)
 	return aerr
 }
 
