@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/recording"
@@ -21,6 +22,10 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
+	// RequestID is the gateway's own correlation id, not an upstream-provider
+	// id — see protocol.ErrorDetail.RequestID for why this is here instead of
+	// more of the raw error.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // ProbeSyntheticRuleUUID marks the throwaway rule built for an
@@ -63,8 +68,9 @@ func (ph *ProtocolHandler) respondMCPError(c *gin.Context, err error, msg string
 	ph.trackUsageFromContext(c, 0, 0, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Message: msg + ": " + protocol.UpstreamMessage(err),
-			Type:    "api_error",
+			Message:   msg + ": " + protocol.UpstreamMessage(err),
+			Type:      "api_error",
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 	if recorder != nil {
@@ -87,9 +93,10 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(failure.Status, ErrorResponse{
 		Error: ErrorDetail{
-			Message: fmt.Sprintf("%s: %s", failure.Message, desc),
-			Type:    "protocol_error",
-			Code:    desc,
+			Message:   fmt.Sprintf("%s: %s", failure.Message, desc),
+			Type:      "protocol_error",
+			Code:      desc,
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 }

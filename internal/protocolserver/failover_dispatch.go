@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -64,8 +65,9 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Message: protocol.UpstreamMessage(err),
-			Type:    "api_error",
+			Message:   protocol.UpstreamMessage(err),
+			Type:      "api_error",
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 }
