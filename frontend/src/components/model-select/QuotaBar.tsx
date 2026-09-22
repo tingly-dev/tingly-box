@@ -2,7 +2,7 @@ import { Box, Tooltip } from '@mui/material';
 import { QuotaTooltipContent } from './QuotaTooltip';
 import type { QuotaTooltipData, QuotaWindowDisplay } from './QuotaTooltip';
 import { QUOTA_COLORS } from '../dashboard/chartStyles';
-import type { ProviderQuota, QuotaWindow } from '../../types/quota';
+import { quotaRemainingPercent, type ProviderQuota, type QuotaWindow } from '../../types/quota';
 
 interface QuotaBarProps {
   quota: ProviderQuota;
@@ -32,14 +32,15 @@ export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: Quo
     }
   }
 
-  // Get color based on usage
+  // Get color based on remaining quota
   const getColor = (percent: number) => {
-    if (percent >= 80) return QUOTA_COLORS.error;
-    if (percent >= 50) return QUOTA_COLORS.warning;
+    if (percent <= 20) return QUOTA_COLORS.error;
+    if (percent <= 50) return QUOTA_COLORS.warning;
     return QUOTA_COLORS.success;
   };
 
-  const barColor = getColor(window.used_percent);
+  const remainingPercent = quotaRemainingPercent(window);
+  const barColor = getColor(remainingPercent);
 
   // Build primary tooltip data
   const primaryData: QuotaTooltipData = {
@@ -47,6 +48,9 @@ export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: Quo
     used: window.used,
     limit: window.limit,
     percent: window.used_percent,
+    available: window.available,
+    unknown: window.unknown,
+    unlimited: window.unlimited,
     unit: window.unit,
     resetsAt: window.resets_at,
     color: barColor,
@@ -98,7 +102,7 @@ export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: Quo
           <Box
             sx={{
               height: '100%',
-              width: `${Math.min(window.used_percent, 100)}%`,
+              width: `${remainingPercent}%`,
               bgcolor: barColor,
               borderRadius: 1,
               transition: 'width 0.3s ease',
@@ -110,7 +114,7 @@ export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: Quo
         <Box
           sx={{
             position: 'absolute',
-            left: `${Math.min(window.used_percent, 100)}%`,
+            left: `${remainingPercent}%`,
             top: '50%',
             transform: 'translate(-50%, -50%)',
             width: 0,

@@ -4,7 +4,7 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { fetchUIAPI } from '@/services/api';
-import { isCountable, quotaToWindows, type ProviderQuota, type QuotaWindow } from '@/types/quota';
+import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent, quotaToWindows, type ProviderQuota, type QuotaWindow } from '@/types/quota';
 
 interface QuotaHistoryResponse { data?: ProviderQuota[] }
 interface Props { startTime: string; endTime: string; provider: string; refreshKey?: number }
@@ -35,7 +35,7 @@ function groupSnapshots(snapshots: ProviderQuota[]): ProviderSeries[] {
                 const seriesKey = [key, window.window_minutes ?? 0, mode, window.unit, window.currency_code ?? ''].join(':');
                 const series = windows.get(seriesKey) ?? { key: seriesKey, label, mode, samples: [] };
                 series.label = label;
-                series.samples.push({ time, value: mode === 'percent' ? window.used_percent : window.available!, window });
+                series.samples.push({ time, value: mode === 'percent' ? quotaRemainingPercent(window) : window.available!, window });
                 windows.set(seriesKey, series);
             }
         }
@@ -52,8 +52,11 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
     const { t } = useTranslation();
     const latest = series.samples[series.samples.length - 1];
     const valueLabel = (sample: Sample) => series.mode === 'percent'
-        ? `${number(sample.window.used_percent)}% · ${number(sample.window.used)} / ${number(sample.window.limit)}${sample.window.unit === 'percent' ? '' : ` ${sample.window.unit}`}`
-        : `${number(sample.value)} ${sample.window.currency_code || sample.window.unit}`;
+        ? `${number(sample.value)}% remaining${sample.window.unit === 'percent' ? '' : ` · ${formatQuotaRemaining(sample.window, number)}`}`
+        : `${number(sample.value)} ${sample.window.currency_code || sample.window.unit} remaining`;
+    const tooltipLabel = (sample: Sample) => series.mode === 'percent'
+        ? `${valueLabel(sample)} · used ${formatQuotaUsage(sample.window, { formatNumber: number })}`
+        : valueLabel(sample);
     const tickTime = (time: number) => new Date(time).toLocaleString(language, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     return (
@@ -70,7 +73,7 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
                         <YAxis domain={series.mode === 'percent' ? [0, 100] : ['auto', 'auto']} tickFormatter={(value: number) => series.mode === 'percent' ? `${value}%` : number(value)} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} tickLine={false} width={54} />
                         <Tooltip
                             labelFormatter={(value) => new Date(Number(value)).toLocaleString(language)}
-                            formatter={(_value, _name, item) => [valueLabel(item.payload as Sample), series.label]}
+                            formatter={(_value, _name, item) => [tooltipLabel(item.payload as Sample), series.label]}
                             contentStyle={{ background: theme.palette.background.paper, borderColor: theme.palette.divider, borderRadius: 8 }}
                         />
                         <Line type="linear" dataKey="value" stroke={theme.palette.primary.main} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} isAnimationActive={false} />

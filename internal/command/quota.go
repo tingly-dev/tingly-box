@@ -318,28 +318,34 @@ func printWindowWithProgress(window *quota.UsageWindow) {
 		return
 	}
 
-	// Status icon based on usage percentage
-	statusIcon := getStatusIcon(window.UsedPercent)
-
-	usageStr := fmt.Sprintf("%s / %s (%.1f%%)",
-		formatUsageValue(window.Used, window.Unit),
+	remaining := window.Limit - window.Used
+	if window.Available != nil {
+		remaining = *window.Available
+	}
+	if remaining < 0 {
+		remaining = 0
+	}
+	remainingPercent := 100 - window.UsedPercent
+	if window.Available != nil {
+		remainingPercent = remaining / window.Limit * 100
+	}
+	remainingPercent = max(0, min(100, remainingPercent))
+	statusIcon := getStatusIcon(100 - remainingPercent)
+	quotaStr := fmt.Sprintf("%s / %s remaining (%.1f%%)",
+		formatUsageValue(remaining, window.Unit),
 		formatUsageValue(window.Limit, window.Unit),
-		window.UsedPercent)
+		remainingPercent)
 
 	// Progress bar
-	progressBar := renderProgressBar(window.UsedPercent, 20)
+	progressBar := renderProgressBar(remainingPercent, 20)
 
 	// Reset time
 	resetInfo := ""
 	if window.ResetsAt != nil {
 		resetInfo = fmt.Sprintf(" — %s", formatResetTime(*window.ResetsAt))
 	}
-	if available := formatAvailableQuota(window); available != "" {
-		resetInfo += " — available " + available
-	}
 
-	// Print line: [icon] Label: usage [progress_bar] reset_info
-	fmt.Printf("%s %s: %s [%s]%s\n", statusIcon, window.Label, usageStr, progressBar, resetInfo)
+	fmt.Printf("%s %s: %s [%s]%s\n", statusIcon, window.Label, quotaStr, progressBar, resetInfo)
 }
 
 func formatAvailableQuota(window *quota.UsageWindow) string {

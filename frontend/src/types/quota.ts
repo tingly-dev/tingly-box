@@ -127,11 +127,31 @@ export function formatQuotaPercent(window: QuotaUsageValues): string {
     return `${window.used_percent.toFixed(0)}%`;
 }
 
+export function quotaRemainingPercent(window: QuotaUsageValues): number {
+    if (!isCountable(window)) return 0;
+    const percent = window.available == null
+        ? 100 - window.used_percent
+        : window.available / window.limit * 100;
+    return Math.max(0, Math.min(100, percent));
+}
+
+export function formatQuotaRemaining(
+    window: QuotaUsageValues,
+    formatNumber: (value: number) => string = String
+): string {
+    if (!isCountable(window)) {
+        return formatQuotaAvailable(window, formatNumber) ?? (window.unknown ? 'not reported' : 'no limit');
+    }
+    const remaining = Math.max(0, window.available ?? window.limit - window.used);
+    if (window.unit === 'percent') return `${formatNumber(remaining)}%`;
+    return `${formatNumber(remaining)} / ${formatNumber(window.limit)} ${window.currency_code || window.unit}`;
+}
+
 export function formatQuotaAvailable(
     window: Pick<QuotaWindow, 'available' | 'currency_code' | 'unit'>,
     formatNumber: (value: number) => string = String
 ): string | undefined {
-    if (window.available === undefined) return undefined;
+    if (window.available == null) return undefined;
 
     const unit = window.currency_code || window.unit;
     const value = window.unit === 'currency'

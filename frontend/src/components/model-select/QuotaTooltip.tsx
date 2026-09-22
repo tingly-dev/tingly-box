@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import { tooltipStyle, tooltipTextStyles, formatNumber } from '../dashboard/chartStyles';
-import { formatQuotaUsage } from '../../types/quota';
+import { formatQuotaRemaining, formatQuotaUsage, isCountable } from '../../types/quota';
 import type { UsageWindow } from '../../types/quota';
 
 export interface QuotaTooltipData {
@@ -8,6 +8,9 @@ export interface QuotaTooltipData {
   used: number;
   limit: number;
   percent: number;
+  available?: number;
+  unknown?: boolean;
+  unlimited?: boolean;
   unit: string;
   resetsAt?: string;
   color?: string;
@@ -33,15 +36,17 @@ export interface QuotaTooltipProps {
 }
 
 export function QuotaTooltipContent({ title, primary, secondary, cost, breakdowns }: QuotaTooltipProps) {
-  // Helper function to format usage display
-  const formatUsageDisplay = (data: QuotaTooltipData) => formatQuotaUsage(
-    {
-      used: data.used,
-      limit: data.limit,
-      used_percent: data.percent,
-      unit: data.unit,
-    },
-    { formatNumber }
+  const asWindow = (data: QuotaTooltipData) => ({
+    used: data.used,
+    limit: data.limit,
+    used_percent: data.percent,
+    available: data.available,
+    unknown: data.unknown,
+    unlimited: data.unlimited,
+    unit: data.unit,
+  });
+  const formatRemainingDisplay = (data: QuotaTooltipData) => formatQuotaRemaining(
+    asWindow(data), formatNumber
   );
 
   return (
@@ -50,7 +55,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
         {title}
       </Typography>
 
-      {/* Primary usage */}
+      {/* Primary remaining quota */}
       <Box
         sx={{
           display: 'flex',
@@ -68,9 +73,13 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
           }}
         />
         <Typography sx={tooltipTextStyles.body}>
-          {formatUsageDisplay(primary)}
+          {formatRemainingDisplay(primary)}{isCountable(asWindow(primary)) || primary.available != null ? ' remaining' : ''}
         </Typography>
       </Box>
+
+      {isCountable(asWindow(primary)) && <Typography sx={{ ...tooltipTextStyles.caption, display: 'block', ml: 3.25 }}>
+        Used: {formatQuotaUsage(asWindow(primary), { formatNumber })}
+      </Typography>}
 
       {primary.resetsAt && (
         <Typography
@@ -108,7 +117,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
               }}
             />
             <Typography sx={tooltipTextStyles.body}>
-              {secondary.label}: {formatUsageDisplay(secondary)}
+              {secondary.label}: {formatRemainingDisplay(secondary)}{isCountable(asWindow(secondary)) || secondary.available != null ? ' remaining' : ''}
             </Typography>
           </Box>
         </Box>
@@ -145,7 +154,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
                 }}
               />
               <Typography sx={{ ...tooltipTextStyles.caption, fontSize: '11px' }}>
-                {bd.label}: {formatQuotaUsage(bd.window, { includePercent: true, formatNumber })}
+                {bd.label}: {formatQuotaRemaining(bd.window, formatNumber)}{isCountable(bd.window) || bd.window.available != null ? ' remaining' : ''}
               </Typography>
             </Box>
           ))}
@@ -166,7 +175,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
               fontWeight: 500,
             }}
           >
-            💰 Cost: {cost.currency || '$'}{cost.used.toFixed(2)} / {cost.currency || '$'}{cost.limit.toFixed(2)}
+            💰 Cost: {cost.limit > 0 ? `${cost.currency || '$'}${Math.max(0, cost.limit - cost.used).toFixed(2)} / ${cost.currency || '$'}${cost.limit.toFixed(2)} remaining` : `${cost.currency || '$'}${cost.used.toFixed(2)} used`}
           </Typography>
         </Box>
       )}

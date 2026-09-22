@@ -13,6 +13,12 @@ provider/time 组合索引用于限定范围查询。
 对应的原始快照，其余清理；30 天前的历史删除。没有可比较 quota 值的日期保留最后一条。
 后台 refresher 启动时及每天执行一次整理，当前 `provider_usage` 缓存不受影响。
 
+## 展示口径
+
+Quota 面向用户表示**剩余额度**：进度条的填充和历史曲线随消耗下降，主值显示剩余量或剩余百分比。上游明确给出 `available` 时优先采用；否则对有上限的窗口用 `max(0, limit - used)` 推算。未知或无限制的窗口不画百分比进度条。用量只在明细中以 `Used` 明确标注。
+
+底层 `used` / `used_percent` 以及机器接口字段仍表示已用量，供路由和内部判定使用；历史快照也保持原始数据，不在写入时反转。
+
 > 适用对象：改 `ai/quota/**`、`internal/server/module/statusline`、`internal/command/quota.go`、
 > `frontend/src/types/quota.ts` 的贡献者。
 > 结构：调研（§1–§2）→ 设计（§3–§4）→ 实现（§5–§6）→ 结果（§7）→ 范围外决定（§8）→ 待定（§9）。

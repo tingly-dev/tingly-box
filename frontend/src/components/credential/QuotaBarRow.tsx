@@ -67,7 +67,7 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
           label,
           used: 0,
           limit: total,
-          used_percent: 100,
+          used_percent: 0,
           unit: 'percent' as const,
         } as QuotaWindow,
         countLabel: `${total}`,

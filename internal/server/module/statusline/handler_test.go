@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -601,21 +602,11 @@ func TestGetClaudeCodeStatusLine_FallbackToShortID(t *testing.T) {
 	assert.NotContains(t, row1, `"`, "no quoted title when session_name absent")
 }
 
-func TestGetClaudeCodeStatusLine_UsageLabelNotQuota(t *testing.T) {
-	// Sanity: the inline quota label is "Usage:", never "Quota:". This test
-	// passes even without a quota manager (no segment rendered), but guards
-	// against accidental regression of the label string.
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	router := setupTestRouter(cfg)
-
-	body := `{"model":{"id":"cc[1m]"},"session_id":"s1"}`
-	req, _ := http.NewRequest("POST", "/statusline/claude_code", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	out := w.Body.String()
-	assert.NotContains(t, out, "Quota:")
+func TestFormatQuotaWindowShowsRemaining(t *testing.T) {
+	available := 65.0
+	assert.Equal(t, "65/100", formatQuotaWindow(&quota.UsageWindow{Used: 30, Limit: 100, Available: &available, Unit: quota.UsageUnitRequests}))
+	assert.Equal(t, "70/100", formatQuotaWindow(&quota.UsageWindow{Used: 30, Limit: 100, Unit: quota.UsageUnitRequests}))
+	assert.Equal(t, "0/100", formatQuotaWindow(&quota.UsageWindow{Used: 120, Limit: 100, Unit: quota.UsageUnitRequests}))
 }
 
 // --- pure helper tests ---
