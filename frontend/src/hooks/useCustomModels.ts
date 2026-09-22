@@ -9,13 +9,11 @@ const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
 type CustomModelsData = { [providerUuid: string]: string | string[] };
 const DEFAULT_CUSTOM_MODELS = {};
 
-// Event system for custom model updates
+// Event system for custom model updates — dispatching from one hook instance
+// (e.g. the dialog) makes other mounted instances (e.g. ModelsPanel) refetch.
 const customModelEvent = createEventSystem<{ providerUuid: string; modelName: string }>(
     'tingly_custom_model_update'
 );
-
-// Export event name for backward compatibility
-export const CUSTOM_MODEL_UPDATE_EVENT = customModelEvent.eventName;
 
 // Helper to convert storage data to array format
 const toArrayFormat = (value: string | string[]): string[] => {
@@ -24,7 +22,7 @@ const toArrayFormat = (value: string | string[]): string[] => {
 
 // Custom hook to manage custom models
 export const useCustomModels = () => {
-    const { data, version, saveData, removeKey, loadData, refetch } =
+    const { data, saveData, removeKey, loadData, refetch } =
         useLocalStorage<CustomModelsData>(CUSTOM_MODELS_STORAGE_KEY, DEFAULT_CUSTOM_MODELS);
 
     // Convert storage data to normalized array format
@@ -135,59 +133,10 @@ export const useCustomModels = () => {
         return false;
     }, [customModels, saveCustomModelToStorage, refetch]);
 
-    // Get all custom models for a specific provider
-    const getCustomModels = useCallback((providerUuid: string): string[] => {
-        return customModels[providerUuid] || [];
-    }, [customModels]);
-
-    // Get the first/custom model for backward compatibility
-    const getCustomModel = useCallback((providerUuid: string): string | undefined => {
-        const models = customModels[providerUuid];
-        return models && models.length > 0 ? models[0] : undefined;
-    }, [customModels]);
-
-    // Check if a model is a custom model for a provider
-    const isCustomModel = useCallback((model: string, providerUuid: string): boolean => {
-        return customModels[providerUuid]?.includes(model) || false;
-    }, [customModels]);
-
-    // Helper functions for backward compatibility
-    const loadCustomModelsFromStorage = useCallback((): CustomModelsData => {
-        return loadData();
-    }, [loadData]);
-
-    const removeCustomModelFromStorage = useCallback((providerUuid: string): boolean => {
-        return removeKey(providerUuid);
-    }, [removeKey]);
-
-    // Helper to dispatch custom model update event (backward compatibility)
-    const dispatchCustomModelUpdate = (providerUuid: string, modelName: string) => {
-        customModelEvent.dispatch({ providerUuid, modelName });
-    };
-
-    // Helper to listen for custom model updates (backward compatibility)
-    const listenForCustomModelUpdates = (callback: (providerUuid: string, modelName: string) => void) => {
-        return customModelEvent.listen((data) => {
-            if (!data) return;
-            const { providerUuid, modelName } = data;
-            callback(providerUuid, modelName);
-        });
-    };
-
     return {
         customModels,
-        version,
-        refetch,
         saveCustomModel,
         removeCustomModel,
         updateCustomModel,
-        getCustomModels,
-        getCustomModel, // Keep for backward compatibility
-        isCustomModel,
-        loadCustomModelsFromStorage,
-        saveCustomModelToStorage,
-        removeCustomModelFromStorage,
-        dispatchCustomModelUpdate,
-        listenForCustomModelUpdates,
     };
 };
