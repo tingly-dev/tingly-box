@@ -250,6 +250,12 @@ export const useProviderDialog = (
         onProviderAdded?.();
     }, [onProviderAdded]);
 
+    // Add-flow wire payload. Note: this intentionally differs from
+    // useProviderEditDialog's buildEditProviderPayload — here empty optional
+    // URLs are dropped (`|| undefined`) and token/no_key_required/enabled are
+    // sent as-is, while the edit flow sends `?? ''` for URLs and normalizes
+    // token/no_key_required. The backend treats the two endpoints differently,
+    // so don't merge the mappers without checking both.
     const buildProviderData = (fd: EnhancedProviderFormData) => ({
         name: fd.name,
         api_base: fd.apiBase,

@@ -57,6 +57,7 @@ import {
 } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, SortField, SortDirection, UsageMetricLabels, ShareBarItem } from '@/components/dashboard';
 import api from '@/services/api';
+import { toLocalISOString } from '@/utils/datetime';
 
 type TimeRange = 'today' | '7d' | '30d' | '90d';
 type ViewMode = 'account' | 'model' | 'provider';
@@ -87,15 +88,6 @@ const RANGE_DAYS: Record<TimeRange, number> = {
     '7d': 7,
     '30d': 30,
     '90d': 90,
-};
-
-const toLocalISOString = (date: Date): string => {
-    const offset = -date.getTimezoneOffset();
-    const sign = offset >= 0 ? '+' : '-';
-    const pad = (value: number) => String(Math.floor(Math.abs(value))).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-        `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
-        `${sign}${pad(offset / 60)}:${pad(offset % 60)}`;
 };
 
 const buildTimeParams = (range: TimeRange) => {

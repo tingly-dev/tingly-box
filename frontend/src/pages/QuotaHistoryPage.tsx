@@ -16,6 +16,7 @@ import { Refresh } from '@/components/icons';
 import PageHeader from '@/components/PageHeader';
 import { QuotaHistoryView } from '@/components/dashboard';
 import api from '@/services/api';
+import { toLocalISOString } from '@/utils/datetime';
 
 type TimeRange = '5h' | '1d' | '7d' | '30d';
 
@@ -29,15 +30,6 @@ const RANGE_MINUTES: Record<TimeRange, number> = {
     '1d': 24 * 60,
     '7d': 7 * 24 * 60,
     '30d': 30 * 24 * 60,
-};
-
-const toLocalISOString = (date: Date): string => {
-    const offset = -date.getTimezoneOffset();
-    const sign = offset >= 0 ? '+' : '-';
-    const pad = (value: number) => String(Math.floor(Math.abs(value))).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-        `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
-        `${sign}${pad(offset / 60)}:${pad(offset % 60)}`;
 };
 
 const buildTimeRange = (range: TimeRange) => {

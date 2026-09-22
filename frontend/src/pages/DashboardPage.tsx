@@ -18,12 +18,13 @@ import {
     Divider,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor, computeUsageSummary } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
+import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 import { useTranslation } from 'react-i18next';
 
 interface Provider {
@@ -61,27 +62,6 @@ const TIME_RANGE_CONFIG: Record<TimeRange, { labelKey: string; days: number; int
     '7d': { labelKey: 'dashboard.overview.range.7d', days: 7, interval: 'day' },
     '30d': { labelKey: 'dashboard.overview.range.30d', days: 30, interval: 'day' },
     '90d': { labelKey: 'dashboard.overview.range.90d', days: 90, interval: 'day' },
-};
-
-// Format date to local ISO string (with timezone offset)
-// Backend stores local time, so we send local time with timezone offset
-const toLocalISOString = (date: Date): string => {
-    const tzOffset = -date.getTimezoneOffset();
-    const sign = tzOffset >= 0 ? '+' : '-';
-    const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
-    return date.getFullYear() +
-        '-' + pad(date.getMonth() + 1) +
-        '-' + pad(date.getDate()) +
-        'T' + pad(date.getHours()) +
-        ':' + pad(date.getMinutes()) +
-        ':' + pad(date.getSeconds()) +
-        sign + pad(tzOffset / 60) + ':' + pad(tzOffset % 60);
-};
-
-// Create a Date at local midnight (00:00:00 local time)
-const getLocalMidnight = (date: Date): Date => {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    return d;
 };
 
 const DashboardSkeleton = () => (
@@ -383,26 +363,28 @@ export default function DashboardPage() {
         setHeatmapRefresh((n) => n + 1);
     };
 
-    // Calculate totals from stats
-    const totalRequests = stats.reduce((sum, s) => sum + (s.request_count || 0), 0);
-    const totalInputTokens = stats.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0);
-    const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
-    const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_read_tokens || 0), 0);
-    // Cache writes are already inside total_input_tokens (they are billed at a
-    // premium but are still this prompt's input), so they are reported next to
-    // the read hits rather than added to any total.
-    const totalCacheWriteTokens = stats.reduce((sum, s) => sum + (s.cache_write_tokens || 0), 0);
-    const totalTokens = totalInputTokens + totalOutputTokens + totalCacheTokens;
-
-    // Calculate error rate
-    const totalErrors = stats.reduce((sum, s) => sum + (s.error_count || 0), 0);
-    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+    // Calculate totals from stats — single shared pass over the rows (same
+    // helper the Team Usage page uses for its stat cards). The streamed rate
+    // is not part of computeUsageSummary, so it stays a local reduce.
+    const summary = computeUsageSummary(stats);
+    const {
+        requests: totalRequests,
+        tokens: totalTokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        cacheTokens: totalCacheTokens,
+        // Cache writes are already inside total_input_tokens (they are billed at a
+        // premium but are still this prompt's input), so they are reported next to
+        // the read hits rather than added to any total.
+        cacheWriteTokens: totalCacheWriteTokens,
+        errors: totalErrors,
+        errorRate,
+        cacheHitRate,
+    } = summary;
 
     // Calculate streamed rate
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
-
-    const cacheHitRate = getCacheHitRate(totalCacheTokens, totalInputTokens);
 
     // Group providers by auth_type for the dropdown
     const authTypeLabel = (authType: string): string => {
