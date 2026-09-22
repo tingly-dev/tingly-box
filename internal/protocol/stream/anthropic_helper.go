@@ -78,8 +78,9 @@ func SendStreamingError(c *gin.Context, err error) {
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to create streaming request: " + failure.Message,
-			Type:    "api_error",
+			Message:   "Failed to create streaming request: " + failure.Message,
+			Type:      "api_error",
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 }
@@ -91,8 +92,9 @@ func SendForwardingError(c *gin.Context, err error) {
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
-			Message: "Failed to forward request: " + failure.Message,
-			Type:    "api_error",
+			Message:   "Failed to forward request: " + failure.Message,
+			Type:      "api_error",
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 }
