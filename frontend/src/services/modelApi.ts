@@ -19,14 +19,6 @@ const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
 
-export const setModelToken = (token: string): void => {
-    localStorage.setItem('model_token', token);
-};
-
-export const removeModelToken = (): void => {
-    localStorage.removeItem('model_token');
-};
-
 // Fetch helper for model API endpoints (OpenAI/Anthropic compatible).
 async function modelAPI(path: string, options: RequestInit = {}): Promise<any> {
     let token = getModelToken();
@@ -64,14 +56,6 @@ async function modelAPI(path: string, options: RequestInit = {}): Promise<any> {
     }
 }
 
-export const openAIChatCompletions = (data: any): Promise<any> => modelAPI('/openai/v1/chat/completions', {
-    method: 'POST',
-    body: JSON.stringify(data),
-});
-export const anthropicMessages = (data: any): Promise<any> => modelAPI('/anthropic/v1/messages', {
-    method: 'POST',
-    body: JSON.stringify(data),
-});
 export const listOpenAIModels = (): Promise<any> => modelAPI('/openai/v1/models');
 export const listAnthropicModels = (): Promise<any> => modelAPI('/anthropic/v1/models');
 

@@ -75,26 +75,3 @@ export function getModelTypeInfo(
         standardModelsForDisplay
     };
 }
-
-export function filterModels(models: string[], searchTerm: string): string[] {
-    if (!searchTerm) return models;
-    return models.filter(model =>
-        model.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-}
-
-export function navigateToModelPage(
-    selectedModel: string,
-    provider: Provider,
-    modelsPerPage: number,
-    setCurrentPage: React.Dispatch<React.SetStateAction<{ [key: string]: number }>>,
-    getStandardModels: () => string[]
-): void {
-    const standardModels = getStandardModels();
-    const modelIndex = standardModels.indexOf(selectedModel);
-
-    if (modelIndex !== -1) {
-        const targetPage = Math.floor(modelIndex / modelsPerPage) + 1;
-        setCurrentPage(prev => ({ ...prev, [provider.uuid]: targetPage }));
-    }
-}
