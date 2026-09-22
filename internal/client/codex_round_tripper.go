@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -91,14 +92,27 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
-	// A non-200 goes back to the SDK as a response, not a RoundTrip error: the
-	// SDK turns it into an *openai.Error that keeps the upstream status and
-	// body (a moderation block's own message), and retries only statuses worth
-	// retrying. Returned as an error it became a *url.Error, which the SDK
-	// retries as a dropped connection — re-sending a policy-blocked prompt —
-	// and the gateway reports as network_error / 502.
+	// A non-200 used to come back as a bare fmt.Errorf: net/http's Client.Do
+	// wraps any RoundTrip error in *url.Error, which satisfies net.Error, so
+	// protocol.ClassifyUpstreamFailure's transport-failure fallback caught it
+	// and reported a generic 502 "network_error" — discarding the real status
+	// and a moderation block's own message, and (while the SDK's own
+	// MaxRetries could be nonzero) making the SDK retry it as a dropped
+	// connection, re-sending a policy-blocked prompt.
+	//
+	// The simplest fix is letting the raw response fall through to the SDK's
+	// own res.StatusCode >= 400 handling (build a *openai.Error there
+	// instead) — no custom parsing needed here. But that SDK path only
+	// extracts a nested "error" *object* (gjson.GetBytes(contents,
+	// "error").Raw) and doesn't fall back to the whole body otherwise, so a
+	// body shaped like {"error":"bad image"} (string, not object — see
+	// TestCodexRoundTripper_ImagesErrorStatusSurfaced) fails
+	// UnmarshalJSON and the caller gets a bare *json.UnmarshalTypeError, not
+	// even an *openai.Error: real status and message both lost again, just
+	// via a different route. newCodexAPIError keeps building the error here
+	// specifically to preserve that fallback.
 	if resp.StatusCode != http.StatusOK {
-		return resp, nil
+		return nil, newCodexAPIError(req, resp)
 	}
 
 	if imagesEndpoint {
@@ -145,6 +159,43 @@ func applyCodexSessionAffinityHeader(req *http.Request, body []byte) {
 		return
 	}
 	req.Header.Set(codexSessionIDHeader, key)
+}
+
+// newCodexAPIError turns a non-200 Codex response into the same typed
+// *openai.Error the SDK builds itself for a normal (non-Codex) provider.
+//
+// A plain fmt.Errorf here used to swallow the real status/body: any error
+// returned from RoundTrip gets wrapped by net/http's Client.Do into a
+// *url.Error, which happens to satisfy net.Error (it has a Timeout()
+// method) — so protocol.ClassifyUpstreamFailure's transport-failure
+// fallback caught it and reported a generic 502 "network_error" instead of
+// the real status and message (e.g. a 400 content_policy_violation from
+// Codex's image generation), discarding both (see .design/logging.md §3).
+// Building the SDK's own error type here means errors.As still finds it
+// through url.Error's Unwrap, so it classifies exactly like any other
+// provider's HTTP error.
+func newCodexAPIError(req *http.Request, resp *http.Response) error {
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
+	aerr := &openai.Error{Request: req, Response: resp, StatusCode: resp.StatusCode}
+	// Only unwrap a nested "error" object the way the public OpenAI API
+	// shapes it (Code/Message/Param/Type fields). Codex's ChatGPT backend
+	// doesn't always follow that shape — sometimes there's no "error" key,
+	// sometimes "error" itself is a bare string — so anything else falls
+	// back to handing the whole body to UnmarshalJSON: apijson stores
+	// whatever valid JSON it's given as .JSON.raw regardless of which
+	// struct fields match, which is what Error() prints, so the real text
+	// still survives even when it doesn't parse into named fields.
+	unwrapped := body
+	if errObj := gjson.GetBytes(body, "error"); errObj.IsObject() {
+		unwrapped = []byte(errObj.Raw)
+	}
+	if err := aerr.UnmarshalJSON(unwrapped); err != nil {
+		logrus.WithContext(req.Context()).Debugf("[Codex] could not parse error body as JSON: %v", err)
+	}
+	return aerr
 }
 
 func validateCodexStreamResponse(resp *http.Response) error {
