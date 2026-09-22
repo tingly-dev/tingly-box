@@ -512,6 +512,53 @@ func TestEmbeddedTemplatesAreValid(t *testing.T) {
 	}
 }
 
+// TestEmbeddedGatewayProtocolEndpoints locks the officially documented SDK
+// base URLs for catalog gateways that expose both OpenAI and Anthropic protocols.
+func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
+	tm := NewProviderCatalogManager(EmbeddedOnly())
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	tests := []struct {
+		id                     string
+		openAIBaseURL          string
+		anthropicBaseURL       string
+		supportsModelsEndpoint bool
+	}{
+		{
+			id:                     "vercel-ai-gateway",
+			openAIBaseURL:          "https://ai-gateway.vercel.sh/v1",
+			anthropicBaseURL:       "https://ai-gateway.vercel.sh",
+			supportsModelsEndpoint: true,
+		},
+		{
+			id:                     "cloudflare-ai-gateway",
+			openAIBaseURL:          "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat",
+			anthropicBaseURL:       "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic",
+			supportsModelsEndpoint: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			tmpl, err := tm.GetTemplate(tt.id)
+			if err != nil {
+				t.Fatalf("GetTemplate(%q) failed: %v", tt.id, err)
+			}
+			if tmpl.BaseURLOpenAI != tt.openAIBaseURL {
+				t.Errorf("BaseURLOpenAI = %q, want %q", tmpl.BaseURLOpenAI, tt.openAIBaseURL)
+			}
+			if tmpl.BaseURLAnthropic != tt.anthropicBaseURL {
+				t.Errorf("BaseURLAnthropic = %q, want %q", tmpl.BaseURLAnthropic, tt.anthropicBaseURL)
+			}
+			if tmpl.SupportsModelsEndpoint != tt.supportsModelsEndpoint {
+				t.Errorf("SupportsModelsEndpoint = %v, want %v", tmpl.SupportsModelsEndpoint, tt.supportsModelsEndpoint)
+			}
+		})
+	}
+}
+
 // TestEmbeddedTemplatesLastUpdatedSourcesPaired checks the optional per-provider
 // last_updated/sources convention documented in providers.json's
 // _naming_rules.provider_meta_fields: whenever one is set, the other must be too,
