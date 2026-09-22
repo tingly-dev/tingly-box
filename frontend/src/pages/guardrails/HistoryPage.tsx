@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
     Box,
     Button,
     Chip,
@@ -30,6 +29,7 @@ import {
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -115,13 +115,13 @@ const withinTimeWindow = (timestamp: string, timeFilter: TimeFilter) => {
 };
 
 const GuardrailsHistoryPage = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [entries, setEntries] = useState<GuardrailsHistoryEntry[]>([]);
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [selectedVerdicts, setSelectedVerdicts] = useState<string[]>([]);
     const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const loadHistory = async () => {
         try {
@@ -129,7 +129,7 @@ const GuardrailsHistoryPage = () => {
             const result = await api.getGuardrailsHistory();
             setEntries(Array.isArray(result?.data) ? result.data : []);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to load guardrails history.' });
+            notify.error(error?.message || 'Failed to load guardrails history.');
             setEntries([]);
         } finally {
             setLoading(false);
@@ -144,15 +144,15 @@ const GuardrailsHistoryPage = () => {
         try {
             const result = await api.clearGuardrailsHistory();
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to clear history.' });
+                notify.error(result?.error || 'Failed to clear history.');
                 return;
             }
             setEntries([]);
             setExpandedRows(new Set());
             setClearConfirmOpen(false);
-            setActionMessage({ type: 'success', text: 'Guardrails history cleared.' });
+            notify.success('Guardrails history cleared.');
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to clear history.' });
+            notify.error(error?.message || 'Failed to clear history.');
         }
     };
 
@@ -199,13 +199,7 @@ const GuardrailsHistoryPage = () => {
                             </Button>
                         </Stack>
                     }
-                >
-                    {actionMessage && (
-                        <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
-                            {actionMessage.text}
-                        </Alert>
-                    )}
-                </UnifiedCard>
+                />
 
                 <UnifiedCard title={rowCountLabel} size="full">
                     <Stack spacing={2}>

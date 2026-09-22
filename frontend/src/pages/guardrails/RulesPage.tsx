@@ -57,6 +57,8 @@ import EmptyState from '@/components/EmptyState';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
+import { blurActiveElement } from '@/utils/dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type PolicyGroup = {
@@ -244,11 +246,11 @@ const removePendingRegistryInstallId = (policyId: string) => {
 };
 
 const GuardrailsRulesPage = () => {
+    const notify = useNotify();
     const location = useLocation();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [supportedScenarios, setSupportedScenarios] = useState<string[]>([]);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
@@ -693,15 +695,6 @@ const GuardrailsRulesPage = () => {
         return verdict || 'block';
     };
 
-    // MUI restores focus to the trigger after a dialog closes. Blur it so toolbar buttons
-    // do not keep the white focus overlay after closing policy/group dialogs.
-    const blurActiveElement = () => {
-        const active = document.activeElement;
-        if (active instanceof HTMLElement) {
-            active.blur();
-        }
-    };
-
     const makeEditorState = (policy?: GuardrailsPolicy): PreparedEditorState => {
         const scenarios =
             policy?.scope?.scenarios && policy.scope.scenarios.length > 0
@@ -866,12 +859,12 @@ const GuardrailsRulesPage = () => {
                     severity: 'high',
                 });
                 if (!result?.success) {
-                    setActionMessage({ type: 'error', text: result?.error || 'Failed to create default group' });
+                    notify.error(result?.error || 'Failed to create default group');
                     return;
                 }
                 await loadPolicies(true);
             } catch (error: any) {
-                setActionMessage({ type: 'error', text: error?.message || 'Failed to create default group' });
+                notify.error(error?.message || 'Failed to create default group');
             } finally {
                 setInitializingDefaultGroup(false);
             }
@@ -1005,11 +998,11 @@ const GuardrailsRulesPage = () => {
 
     const handleSavePolicy = async (): Promise<boolean> => {
         if (!editorState.kind) {
-            setActionMessage({ type: 'error', text: 'Choose a policy kind first.' });
+            notify.error('Choose a policy kind first.');
             return false;
         }
         if (!editorState.name.trim()) {
-            setActionMessage({ type: 'error', text: 'Policy name is required before saving.' });
+            notify.error('Policy name is required before saving.');
             return false;
         }
         const effectiveEditorState =
@@ -1020,7 +1013,7 @@ const GuardrailsRulesPage = () => {
                       id: generatePolicyId(editorState.name, editorState.kind, isNewPolicy ? undefined : selectedPolicyId || editorState.id),
                   };
         if (editorState.kind === 'content' && effectiveListValues('patterns', editorState.patterns).length === 0) {
-            setActionMessage({ type: 'error', text: 'Privacy policies require at least one pattern.' });
+            notify.error('Privacy policies require at least one pattern.');
             return false;
         }
         if (
@@ -1029,7 +1022,7 @@ const GuardrailsRulesPage = () => {
             editorState.actions.length === 0 &&
             effectiveListValues('toolNames', editorState.toolNames).length === 0
         ) {
-            setActionMessage({ type: 'error', text: 'Resource access policies require at least one action, resource, or tool filter.' });
+            notify.error('Resource access policies require at least one action, resource, or tool filter.');
             return false;
         }
         if (
@@ -1038,7 +1031,7 @@ const GuardrailsRulesPage = () => {
             effectiveListValues('toolNames', editorState.toolNames).length === 0 &&
             effectiveListValues('resources', editorState.resources).length === 0
         ) {
-            setActionMessage({ type: 'error', text: 'Command execution policies require a term match, tool filter, or resource filter.' });
+            notify.error('Command execution policies require a term match, tool filter, or resource filter.');
             return false;
         }
 
@@ -1050,7 +1043,7 @@ const GuardrailsRulesPage = () => {
                 ? await api.createGuardrailsPolicy(payload)
                 : await api.updateGuardrailsPolicy(targetPolicyId, payload);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to save policy' });
+                notify.error(result?.error || 'Failed to save policy');
                 return false;
             }
             await loadPolicies(true);
@@ -1058,12 +1051,12 @@ const GuardrailsRulesPage = () => {
             setSelectedPolicyId(effectiveEditorState.id);
             setIsNewPolicy(false);
             setEditorSnapshot(JSON.stringify(effectiveEditorState));
-            setActionMessage({ type: 'success', text: `Policy "${effectiveEditorState.id}" saved.` });
+            notify.success(`Policy "${effectiveEditorState.id}" saved.`);
             setEditorOpen(false);
             setConfirmCloseOpen(false);
             return true;
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to save policy' });
+            notify.error(error?.message || 'Failed to save policy');
             return false;
         } finally {
             setPendingSave(false);
@@ -1096,7 +1089,7 @@ const GuardrailsRulesPage = () => {
         setSelectedPatternRow(splitLines(nextState.patterns).length > 0 ? 0 : -1);
         setEditorState(nextState);
         setEditorSnapshot(JSON.stringify(editorState));
-        setActionMessage({ type: 'success', text: `Draft copy "${nextId}" is ready. Save to create it.` });
+        notify.success(`Draft copy "${nextId}" is ready. Save to create it.`);
     };
 
     const handleTogglePolicy = async (policyId: string, enabled: boolean) => {
@@ -1114,7 +1107,7 @@ const GuardrailsRulesPage = () => {
                               : {}),
                       });
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy' });
+                notify.error(result?.error || 'Failed to update policy');
                 return;
             }
             await loadPolicies(true);
@@ -1136,9 +1129,9 @@ const GuardrailsRulesPage = () => {
                     return JSON.stringify(nextSnapshot);
                 });
             }
-            setActionMessage({ type: 'success', text: `Policy "${policyId}" updated.` });
+            notify.success(`Policy "${policyId}" updated.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy' });
+            notify.error(error?.message || 'Failed to update policy');
         } finally {
             setPendingPolicyId(null);
         }
@@ -1151,12 +1144,11 @@ const GuardrailsRulesPage = () => {
                 enabled ? policyNeedsEnableWithDefault(policy) : policyNeedsDisable(policy)
             );
             if (policiesToUpdate.length === 0) {
-                setActionMessage({
-                    type: 'success',
-                    text: enabled
+                notify.success(
+                    enabled
                         ? `All ${selectedTabLabel} policies are already enabled and assigned to Default.`
-                        : `All ${selectedTabLabel} policies are already disabled.`,
-                });
+                        : `All ${selectedTabLabel} policies are already disabled.`
+                );
                 return;
             }
             const results: Array<{ id: string; result: any }> = [];
@@ -1207,24 +1199,21 @@ const GuardrailsRulesPage = () => {
             }
 
             if (failed.length > 0) {
-                setActionMessage({
-                    type: 'error',
-                    text: `${enabled ? 'Enabled' : 'Disabled'} ${results.length - failed.length} ${selectedTabLabel} policies. ${failed.length} failed.`,
-                });
+                notify.error(
+                    `${enabled ? 'Enabled' : 'Disabled'} ${results.length - failed.length} ${selectedTabLabel} policies. ${failed.length} failed.`
+                );
                 return;
             }
 
-            setActionMessage({
-                type: 'success',
-                text: enabled
+            notify.success(
+                enabled
                     ? `Enabled ${results.length} ${selectedTabLabel} policies and assigned them to Default.`
-                    : `Disabled ${results.length} ${selectedTabLabel} policies.`,
-            });
+                    : `Disabled ${results.length} ${selectedTabLabel} policies.`
+            );
         } catch (error: any) {
-            setActionMessage({
-                type: 'error',
-                text: error?.message || `Failed to ${enabled ? 'enable' : 'disable'} ${selectedTabLabel.toLowerCase()} policies`,
-            });
+            notify.error(
+                error?.message || `Failed to ${enabled ? 'enable' : 'disable'} ${selectedTabLabel.toLowerCase()} policies`
+            );
         } finally {
             setPendingBulkPolicyAction(null);
         }
@@ -1238,7 +1227,7 @@ const GuardrailsRulesPage = () => {
             setPendingPolicyId(deletePolicyId);
             const result = await api.deleteGuardrailsPolicy(deletePolicyId);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete policy' });
+                notify.error(result?.error || 'Failed to delete policy');
                 return;
             }
             await loadPolicies(true);
@@ -1246,9 +1235,9 @@ const GuardrailsRulesPage = () => {
                 setSelectedPolicyId(null);
                 setEditorOpen(false);
             }
-            setActionMessage({ type: 'success', text: `Policy "${deletePolicyId}" deleted.` });
+            notify.success(`Policy "${deletePolicyId}" deleted.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete policy' });
+            notify.error(error?.message || 'Failed to delete policy');
         } finally {
             setPendingPolicyId(null);
             setDeletePolicyId(null);
@@ -1268,13 +1257,13 @@ const GuardrailsRulesPage = () => {
             });
             const result = await api.installGuardrailsRegistryPolicy(policyId);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to install policy' });
+                notify.error(result?.error || 'Failed to install policy');
                 return;
             }
             await loadPolicies(true);
-            setActionMessage({ type: 'success', text: `Policy "${policyId}" installed.` });
+            notify.success(`Policy "${policyId}" installed.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to install policy' });
+            notify.error(error?.message || 'Failed to install policy');
         } finally {
             removePendingRegistryInstallId(policyId);
             setPendingRegistryInstallIds((prev) => {
@@ -1805,9 +1794,6 @@ const GuardrailsRulesPage = () => {
                 >
                     <Stack spacing={1.5}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionMessage && !editorOpen && (
-                            <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>
-                        )}
                     </Stack>
                 </UnifiedCard>
 
@@ -1986,7 +1972,6 @@ const GuardrailsRulesPage = () => {
                 <DialogTitle>{isNewPolicy ? 'New Policy' : `Edit Policy${selectedPolicyId ? ` · ${selectedPolicyId}` : ''}`}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Stack spacing={1}>
                             <Stack direction="row" spacing={0.75} sx={{
                                 alignItems: "center"

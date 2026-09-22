@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import {
     Add,
-    ContentCopy,
     DeleteOutline,
     Refresh as RefreshIcon,
     Visibility,
@@ -33,7 +32,10 @@ import {
 } from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import CopyIconButton from '@/components/CopyIconButton';
 import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
+import { blurActiveElement } from '@/utils/dom';
 
 type ProtectedCredential = {
     id: string;
@@ -76,10 +78,10 @@ const emptyEditorState: CredentialEditorState = {
 };
 
 const GuardrailsCredentialsPage = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [credentials, setCredentials] = useState<ProtectedCredential[]>([]);
     const [selectedIDs, setSelectedIDs] = useState<string[]>([]);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [editingCredentialId, setEditingCredentialId] = useState<string | null>(null);
@@ -94,29 +96,19 @@ const GuardrailsCredentialsPage = () => {
     const [editorState, setEditorState] = useState<CredentialEditorState>(emptyEditorState);
     const [editorMessage, setEditorMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Dialog-trigger buttons can keep MUI focus styling after the pointer leaves.
-    // Blur the active element on open/close paths so toolbar actions return to a neutral state.
-    const blurActiveElement = () => {
-        const active = document.activeElement;
-        if (active instanceof HTMLElement) {
-            active.blur();
-        }
-    };
-
     const loadCredentials = async () => {
         try {
             setLoading(true);
             const result = await api.getGuardrailsCredentials();
             if (Array.isArray(result?.data)) {
                 setCredentials(result.data);
-                setActionMessage(null);
                 return;
             }
             setCredentials([]);
-            setActionMessage({ type: 'error', text: result?.error || 'Failed to load protected credentials.' });
+            notify.error(result?.error || 'Failed to load protected credentials.');
         } catch (error: any) {
             setCredentials([]);
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to load protected credentials.' });
+            notify.error(error?.message || 'Failed to load protected credentials.');
         } finally {
             setLoading(false);
         }
@@ -129,7 +121,7 @@ const GuardrailsCredentialsPage = () => {
     const loadImportableProviders = async () => {
         const result = await api.getProviders();
         if (!result?.success || !Array.isArray(result?.data)) {
-            setActionMessage({ type: 'error', text: result?.error || 'Failed to load credentials.' });
+            notify.error(result?.error || 'Failed to load credentials.');
             return;
         }
         const importable = result.data.filter((provider: ImportableProvider) => {
@@ -217,7 +209,7 @@ const GuardrailsCredentialsPage = () => {
             setEditorOpen(false);
             setEditorMessage(null);
             await loadCredentials();
-            setActionMessage({ type: 'success', text: 'Protected credential saved.' });
+            notify.success('Protected credential saved.');
         } catch (error: any) {
             setEditorMessage({ type: 'error', text: error?.message || 'Failed to save protected credential.' });
         } finally {
@@ -232,15 +224,15 @@ const GuardrailsCredentialsPage = () => {
         try {
             const result = await api.deleteGuardrailsCredential(deleteCredentialId);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete protected credential.' });
+                notify.error(result?.error || 'Failed to delete protected credential.');
                 return;
             }
             setDeleteCredentialId(null);
             setSelectedIDs((current) => current.filter((id) => id !== deleteCredentialId));
             await loadCredentials();
-            setActionMessage({ type: 'success', text: 'Protected credential deleted.' });
+            notify.success('Protected credential deleted.');
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete protected credential.' });
+            notify.error(error?.message || 'Failed to delete protected credential.');
         }
     };
 
@@ -252,19 +244,18 @@ const GuardrailsCredentialsPage = () => {
             for (const credentialID of selectedIDs) {
                 const result = await api.deleteGuardrailsCredential(credentialID);
                 if (!result?.success) {
-                    setActionMessage({ type: 'error', text: result?.error || 'Failed to delete protected credentials.' });
+                    notify.error(result?.error || 'Failed to delete protected credentials.');
                     return;
                 }
             }
             setDeleteSelectedOpen(false);
             setSelectedIDs([]);
             await loadCredentials();
-            setActionMessage({
-                type: 'success',
-                text: selectedIDs.length === 1 ? 'Deleted 1 protected credential.' : `Deleted ${selectedIDs.length} protected credentials.`,
-            });
+            notify.success(
+                selectedIDs.length === 1 ? 'Deleted 1 protected credential.' : `Deleted ${selectedIDs.length} protected credentials.`
+            );
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete protected credentials.' });
+            notify.error(error?.message || 'Failed to delete protected credentials.');
         }
     };
 
@@ -277,7 +268,7 @@ const GuardrailsCredentialsPage = () => {
             enabled,
         });
         if (!result?.success) {
-            setActionMessage({ type: 'error', text: result?.error || 'Failed to update protected credential.' });
+            notify.error(result?.error || 'Failed to update protected credential.');
             return;
         }
         await loadCredentials();
@@ -285,7 +276,7 @@ const GuardrailsCredentialsPage = () => {
 
     const handleImportProviders = async () => {
         if (selectedProviderIDs.length === 0) {
-            setActionMessage({ type: 'error', text: 'Select at least one credential to import.' });
+            notify.error('Select at least one credential to import.');
             return;
         }
 
@@ -309,17 +300,16 @@ const GuardrailsCredentialsPage = () => {
                 };
                 const result = await api.createGuardrailsCredential(payload);
                 if (!result?.success) {
-                    setActionMessage({ type: 'error', text: result?.error || `Failed to import ${provider.name}.` });
+                    notify.error(result?.error || `Failed to import ${provider.name}.`);
                     return;
                 }
                 imported += 1;
             }
             setImportDialogOpen(false);
             await loadCredentials();
-            setActionMessage({
-                type: 'success',
-                text: imported === 1 ? 'Imported 1 credential from Credentials.' : `Imported ${imported} credentials from Credentials.`,
-            });
+            notify.success(
+                imported === 1 ? 'Imported 1 credential from Credentials.' : `Imported ${imported} credentials from Credentials.`
+            );
         } finally {
             setPendingImport(false);
         }
@@ -336,18 +326,6 @@ const GuardrailsCredentialsPage = () => {
 
     const allSelected = credentials.length > 0 && selectedIDs.length === credentials.length;
     const allImportableSelected = importableProviders.length > 0 && selectedProviderIDs.length === importableProviders.length;
-
-    const handleCopyAliasToken = async () => {
-        if (!editorState.aliasToken) {
-            return;
-        }
-        try {
-            await navigator.clipboard.writeText(editorState.aliasToken);
-            setEditorMessage({ type: 'success', text: 'Alias token copied.' });
-        } catch {
-            setEditorMessage({ type: 'error', text: 'Failed to copy alias token.' });
-        }
-    };
 
     const handleCloseEditor = () => {
         blurActiveElement();
@@ -372,8 +350,6 @@ const GuardrailsCredentialsPage = () => {
             }
         >
             <Stack spacing={3}>
-                {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-
                 <UnifiedCard
                     title="Protected Credentials"
                     subtitle="Add sensitive credentials here when you do not want the model to see them directly."
@@ -560,14 +536,11 @@ const GuardrailsCredentialsPage = () => {
                                         input: {
                                             readOnly: true,
                                             endAdornment: (
-                                                <Button
-                                                    size="small"
-                                                    startIcon={<ContentCopy fontSize="small" />}
-                                                    onClick={handleCopyAliasToken}
-                                                    sx={{ minWidth: 'auto', ml: 1 }}
-                                                >
-                                                    Copy
-                                                </Button>
+                                                <CopyIconButton
+                                                    value={editorState.aliasToken}
+                                                    label="Copy alias token"
+                                                    edge="end"
+                                                />
                                             ),
                                         },
                                     }}

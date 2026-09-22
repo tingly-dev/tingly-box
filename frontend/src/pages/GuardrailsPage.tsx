@@ -27,6 +27,8 @@ import PageLayout from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
+import { blurActiveElement } from '@/utils/dom';
 import { downloadText } from '@/utils/download';
 
 type GuardrailsHistoryEntry = {
@@ -46,13 +48,13 @@ type GuardrailsImportRef = {
 };
 
 const GuardrailsPage = () => {
+    const notify = useNotify();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [policies, setPolicies] = useState<any[]>([]);
     const [imports, setImports] = useState<GuardrailsImportRef[]>([]);
     const [historyEntries, setHistoryEntries] = useState<GuardrailsHistoryEntry[]>([]);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [importText, setImportText] = useState('');
     const [importFileName, setImportFileName] = useState('');
@@ -119,13 +121,6 @@ const GuardrailsPage = () => {
         };
     }, [historyEntries, policies]);
 
-    const blurActiveElement = () => {
-        const active = document.activeElement;
-        if (active instanceof HTMLElement) {
-            active.blur();
-        }
-    };
-
     const closeImportDialog = () => {
         setImportDialogOpen(false);
         blurActiveElement();
@@ -152,7 +147,7 @@ const GuardrailsPage = () => {
             setImportText(content);
             setImportFileName(file.name);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to read config file' });
+            notify.error(error?.message || 'Failed to read config file');
         } finally {
             e.target.value = '';
         }
@@ -160,7 +155,7 @@ const GuardrailsPage = () => {
 
     const handleImportSubmit = async () => {
         if (!importText.trim()) {
-            setActionMessage({ type: 'error', text: 'Paste config text or choose a file first.' });
+            notify.error('Paste config text or choose a file first.');
             return;
         }
 
@@ -168,20 +163,19 @@ const GuardrailsPage = () => {
             setImporting(true);
             const result = await api.importGuardrailsFragment(importText, importFileName || undefined);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to import policy fragment' });
+                notify.error(result?.error || 'Failed to import policy fragment');
                 return;
             }
             closeImportDialog();
             setImportText('');
             setImportFileName('');
             const importedCount = Array.isArray(result?.policy_ids) ? result.policy_ids.length : 0;
-            setActionMessage({
-                type: 'success',
-                text: importedCount > 0 ? `Imported ${importedCount} policy fragment item(s).` : 'Imported policy fragment.',
-            });
+            notify.success(
+                importedCount > 0 ? `Imported ${importedCount} policy fragment item(s).` : 'Imported policy fragment.'
+            );
             await loadGuardrails();
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to import policy fragment' });
+            notify.error(error?.message || 'Failed to import policy fragment');
         } finally {
             setImporting(false);
         }
@@ -189,7 +183,7 @@ const GuardrailsPage = () => {
 
     const handleExportClick = () => {
         if (imports.length === 0) {
-            setActionMessage({ type: 'error', text: 'No imported policy fragments are available to export.' });
+            notify.error('No imported policy fragments are available to export.');
             return;
         }
         setSelectedExportPaths(imports.map((item) => item.path));
@@ -212,7 +206,7 @@ const GuardrailsPage = () => {
 
     const handleExportSubmit = async () => {
         if (selectedExportPaths.length === 0) {
-            setActionMessage({ type: 'error', text: 'Select at least one imported fragment to export.' });
+            notify.error('Select at least one imported fragment to export.');
             return;
         }
 
@@ -220,34 +214,27 @@ const GuardrailsPage = () => {
             setExporting(true);
             const result = await api.exportGuardrailsFragments(selectedExportPaths);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to export policy fragments' });
+                notify.error(result?.error || 'Failed to export policy fragments');
                 return;
             }
             const files = Array.isArray(result?.files) ? result.files : [];
             if (files.length === 0) {
-                setActionMessage({ type: 'error', text: 'No fragment files were returned for export.' });
+                notify.error('No fragment files were returned for export.');
                 return;
             }
             files.forEach((file: { content?: string; name?: string }) => {
                 downloadText(file.content || '', file.name || 'guardrails-fragment.yaml', 'text/yaml');
             });
             closeExportDialog();
-            setActionMessage({
-                type: 'success',
-                text: files.length === 1 ? `Exported ${files[0].name || 'fragment'}.` : `Exported ${files.length} fragment files.`,
-            });
+            notify.success(
+                files.length === 1 ? `Exported ${files[0].name || 'fragment'}.` : `Exported ${files.length} fragment files.`
+            );
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to export policy fragments' });
+            notify.error(error?.message || 'Failed to export policy fragments');
         } finally {
             setExporting(false);
         }
     };
-
-    const actionAlert = actionMessage ? (
-        <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
-            {actionMessage.text}
-        </Alert>
-    ) : null;
 
     return (
         <PageLayout loading={loading}>
@@ -266,12 +253,7 @@ const GuardrailsPage = () => {
                         </Stack>
                     }
                 />
-                {(loadError || actionAlert) && (
-                    <Stack spacing={2}>
-                        {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionAlert}
-                    </Stack>
-                )}
+                {loadError && <Alert severity="error">{loadError}</Alert>}
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -437,11 +419,6 @@ const GuardrailsPage = () => {
                 <DialogTitle>Import Policy Fragment</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {importDialogOpen && actionMessage && (
-                            <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
-                                {actionMessage.text}
-                            </Alert>
-                        )}
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>
@@ -485,11 +462,6 @@ const GuardrailsPage = () => {
                 <DialogTitle>Export Imported Fragments</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {exportDialogOpen && actionMessage && (
-                            <Alert severity={actionMessage.type} onClose={() => setActionMessage(null)}>
-                                {actionMessage.text}
-                            </Alert>
-                        )}
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>

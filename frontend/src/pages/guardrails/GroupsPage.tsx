@@ -26,6 +26,7 @@ import {
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { useNotify } from '@/hooks/useNotify';
 
 const DEFAULT_GROUP_ID = 'default';
 
@@ -63,9 +64,9 @@ type GroupEditorState = {
 };
 
 const GuardrailsGroupsPage = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [groups, setGroups] = useState<PolicyGroup[]>([]);
     const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<string>(DEFAULT_GROUP_ID);
@@ -192,12 +193,12 @@ const GuardrailsGroupsPage = () => {
                     severity: 'high',
                 });
                 if (!result?.success) {
-                    setActionMessage({ type: 'error', text: result?.error || 'Failed to create default group.' });
+                    notify.error(result?.error || 'Failed to create default group.');
                     return;
                 }
                 await loadConfig(true);
             } catch (error: any) {
-                setActionMessage({ type: 'error', text: error?.message || 'Failed to create default group.' });
+                notify.error(error?.message || 'Failed to create default group.');
             } finally {
                 setInitializingDefaultGroup(false);
             }
@@ -227,11 +228,11 @@ const GuardrailsGroupsPage = () => {
 
     const handleSaveGroup = async () => {
         if (!groupEditorState.name.trim()) {
-            setActionMessage({ type: 'error', text: 'Group name is required before saving.' });
+            notify.error('Group name is required before saving.');
             return;
         }
         if (!groupEditorState.id.trim()) {
-            setActionMessage({ type: 'error', text: 'Group ID could not be generated.' });
+            notify.error('Group ID could not be generated.');
             return;
         }
 
@@ -248,15 +249,15 @@ const GuardrailsGroupsPage = () => {
                 ? await api.updateGuardrailsGroup(editingGroupId, payload)
                 : await api.createGuardrailsGroup(payload);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to save group.' });
+                notify.error(result?.error || 'Failed to save group.');
                 return;
             }
             await loadConfig(true);
             setSelectedGroupId(payload.id);
             setGroupDialogOpen(false);
-            setActionMessage({ type: 'success', text: `Group "${groupEditorState.id}" saved.` });
+            notify.success(`Group "${groupEditorState.id}" saved.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to save group.' });
+            notify.error(error?.message || 'Failed to save group.');
         } finally {
             setPendingGroupSave(false);
         }
@@ -270,14 +271,14 @@ const GuardrailsGroupsPage = () => {
             setPendingGroupId(deleteGroupId);
             const result = await api.deleteGuardrailsGroup(deleteGroupId);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete group.' });
+                notify.error(result?.error || 'Failed to delete group.');
                 return;
             }
             await loadConfig(true);
             setDeleteGroupId(null);
-            setActionMessage({ type: 'success', text: `Group "${deleteGroupId}" deleted.` });
+            notify.success(`Group "${deleteGroupId}" deleted.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete group.' });
+            notify.error(error?.message || 'Failed to delete group.');
         } finally {
             setPendingGroupId(null);
         }
@@ -298,13 +299,13 @@ const GuardrailsGroupsPage = () => {
                 severity: group.severity || 'medium',
             });
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update group.' });
+                notify.error(result?.error || 'Failed to update group.');
                 return;
             }
             await loadConfig(true);
-            setActionMessage({ type: 'success', text: `Group "${groupId}" updated.` });
+            notify.success(`Group "${groupId}" updated.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update group.' });
+            notify.error(error?.message || 'Failed to update group.');
         } finally {
             setPendingGroupId(null);
         }
@@ -324,18 +325,17 @@ const GuardrailsGroupsPage = () => {
                 groups: nextGroups,
             });
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy group.' });
+                notify.error(result?.error || 'Failed to update policy group.');
                 return;
             }
             await loadConfig(true);
-            setActionMessage({
-                type: 'success',
-                text: checked
+            notify.success(
+                checked
                     ? `Policy "${policy.id}" added to ${selectedGroup.name || selectedGroup.id}.`
-                    : `Policy "${policy.id}" removed from ${selectedGroup.name || selectedGroup.id}.`,
-            });
+                    : `Policy "${policy.id}" removed from ${selectedGroup.name || selectedGroup.id}.`
+            );
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy group.' });
+            notify.error(error?.message || 'Failed to update policy group.');
         }
     };
 
@@ -362,7 +362,6 @@ const GuardrailsGroupsPage = () => {
                 >
                     <Stack spacing={1.5}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>
@@ -585,8 +584,6 @@ const GuardrailsGroupsPage = () => {
                 <DialogTitle>{editingGroupId ? 'Edit Group' : 'New Group'}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-
                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
                             <Stack spacing={2}>
                                 <Typography variant="subtitle2">Basic Settings</Typography>
