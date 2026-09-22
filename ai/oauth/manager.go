@@ -661,9 +661,16 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 		"client_id":     config.ClientID,
 	}
 
-	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
-	// codex DO NOT require client_secret
-	if issuer != ai.IssuerCodex {
+	// Only send client_secret when the provider actually has one. Public
+	// clients (Codex, Kimi, Qwen, …) register with ClientSecret == "" — the
+	// same guard used by the device-code poll and the auth-code exchange
+	// (devicecode.go, exchangeCodeForToken). Kimi's token endpoint validates
+	// the form body strictly (see KimiHook docs: an unexpected `scope` param
+	// already breaks device_authorization), so sending an empty
+	// `client_secret=` field on refresh was silently rejecting every
+	// background refresh for Kimi credentials while the initial device-code
+	// login — which already had this guard — kept working.
+	if config.ClientSecret != "" {
 		params["client_secret"] = config.ClientSecret
 	}
 

@@ -110,6 +110,20 @@ Token polling and refresh both go through `oauth.Manager.PollForToken` /
 `X-Msh-Device-Id` extra header), so the device ID is consistent across the
 entire credential lifetime.
 
+**No `client_secret` on refresh, even empty.** kimi-cli's own
+`refresh_token()` (`src/kimi_cli/auth/oauth.py`) posts exactly `client_id`,
+`grant_type`, `refresh_token` — no `client_secret` field at all, matching
+Kimi being a public client. `Manager.refreshToken` used to add
+`client_secret` to the form body for every issuer except Codex, which for
+Kimi (`ClientSecret == ""`) meant sending an empty `client_secret=` field.
+Kimi's token endpoint validates the form body strictly — the same reason an
+unwanted `scope` param breaks `device_authorization` (§2.1) — and rejected
+it, so background refresh silently failed for every Kimi credential while
+the initial device-code login (`pollTokenRequest`, which already guarded
+with `if config.ClientSecret != ""`) kept working. Fixed by using the same
+guard in `refreshToken`, matching `pollTokenRequest` and
+`exchangeCodeForToken`.
+
 ---
 
 ## 3. Client round tripper — inference impersonation
