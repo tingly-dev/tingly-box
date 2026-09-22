@@ -67,10 +67,15 @@ func quotaDailyExtremes(records []ProviderUsageHistoryRecord, location *time.Loc
 				continue
 			}
 			var value float64
-			mode := "used"
+			mode := "percent"
 			switch {
 			case window.Countable():
-				value = window.UsedPercent
+				value = max(0, min(100, 100-window.UsedPercent))
+				if window.Available != nil {
+					// The chart prefers reported available over derived usage.
+					// Select daily extrema from that same displayed value.
+					value = max(0, min(100, *window.Available/window.Limit*100))
+				}
 			case window.Available != nil:
 				value = *window.Available
 				mode = "available"

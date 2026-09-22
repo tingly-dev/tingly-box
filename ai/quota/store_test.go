@@ -228,3 +228,37 @@ func TestGormStoreCompactsCompletedDaysToQuotaExtremes(t *testing.T) {
 		t.Fatalf("latest quota changed by history compaction: usage=%#v error=%v", latest, err)
 	}
 }
+
+func TestGormStoreCompactsUsingReportedAvailable(t *testing.T) {
+	store, err := NewGormStore(filepath.Join(t.TempDir(), "test.db"), logrus.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	day := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
+	for hour, sample := range []struct{ used, available float64 }{
+		{10, 40}, {50, 90}, {90, 20}, {95, -1},
+	} {
+		var available *float64
+		if sample.available >= 0 {
+			value := sample.available
+			available = &value
+		}
+		usage := &ProviderUsage{ProviderUUID: "one", FetchedAt: day.Add(time.Duration(hour) * time.Hour)}
+		usage.AddWindow("session", &UsageWindow{Used: sample.used, Limit: 100, Available: available, Unit: UsageUnitRequests})
+		if err := store.Save(context.Background(), usage); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.CompactHistory(context.Background(), day.Add(36*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 || history[0].Windows[0].Used != 95 || *history[1].Windows[0].Available != 90 {
+		t.Fatalf("daily remaining extrema = %#v; want 5 and 90", history)
+	}
+}
