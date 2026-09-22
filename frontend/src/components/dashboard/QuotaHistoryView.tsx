@@ -7,7 +7,7 @@ import { fetchUIAPI } from '@/services/api';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent, quotaToWindows, type ProviderQuota, type QuotaWindow } from '@/types/quota';
 
 interface QuotaHistoryResponse { data?: ProviderQuota[] }
-interface Props { startTime: string; endTime: string; provider: string; refreshKey?: number }
+interface Props { startTime: string; endTime: string; provider: string; daily: boolean; refreshKey?: number }
 interface Sample { time: number; value: number; window: QuotaWindow }
 interface Series { key: string; label: string; mode: 'percent' | 'available'; samples: Sample[] }
 interface ProviderSeries { uuid: string; name: string; count: number; latestError?: string; windows: Series[] }
@@ -87,7 +87,7 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
     );
 }
 
-export default function QuotaHistoryView({ startTime, endTime, provider, refreshKey = 0 }: Props) {
+export default function QuotaHistoryView({ startTime, endTime, provider, daily, refreshKey = 0 }: Props) {
     const { t, i18n } = useTranslation();
     const [snapshots, setSnapshots] = useState<ProviderQuota[]>([]);
     const [loading, setLoading] = useState(true);
@@ -96,7 +96,8 @@ export default function QuotaHistoryView({ startTime, endTime, provider, refresh
 
     useEffect(() => {
         const seq = ++requestSeq.current;
-        const params = new URLSearchParams({ start_time: startTime, end_time: endTime, limit: '5000' });
+        const params = new URLSearchParams({ start_time: startTime, end_time: endTime, limit: '1000' });
+        if (daily) params.set('daily', 'true');
         if (provider !== 'all') params.set('provider', provider);
         setLoading(true);
         setError(false);
@@ -110,7 +111,7 @@ export default function QuotaHistoryView({ startTime, endTime, provider, refresh
             .finally(() => {
                 if (seq === requestSeq.current) setLoading(false);
             });
-    }, [startTime, endTime, provider, refreshKey]);
+    }, [startTime, endTime, provider, daily, refreshKey]);
 
     const providers = useMemo(() => groupSnapshots(snapshots), [snapshots]);
     if (loading) return <Paper variant="outlined" sx={{ display: 'grid', placeItems: 'center', minHeight: 220 }}><CircularProgress size={28} /></Paper>;
@@ -125,7 +126,7 @@ export default function QuotaHistoryView({ startTime, endTime, provider, refresh
     );
     return (
         <Stack sx={{ gap: 2 }}>
-            {snapshots.length >= 5000 && <Alert severity="info">{t('dashboard.quotaHistory.limitHint', { defaultValue: 'Showing the latest 5,000 samples. Choose a provider or shorter time range to see older samples.' })}</Alert>}
+            {snapshots.length >= 1000 && <Alert severity="info">{t('dashboard.quotaHistory.limitHint', { defaultValue: 'Showing the latest 1,000 points. Choose a provider or shorter time range to see more.' })}</Alert>}
             {providers.map((item) => (
                 <Paper key={item.uuid} variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2 }}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mb: 2 }}>

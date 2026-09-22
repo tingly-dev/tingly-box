@@ -83,7 +83,8 @@ type HistoryRequest struct {
 	ProviderUUID string `json:"provider" form:"provider" description:"Provider UUID"`
 	StartTime    string `json:"start_time" form:"start_time" description:"ISO 8601 start time"`
 	EndTime      string `json:"end_time" form:"end_time" description:"ISO 8601 exclusive end time"`
-	Limit        int    `json:"limit" form:"limit" description:"Maximum snapshots (1-5000)"`
+	Limit        int    `json:"limit" form:"limit" description:"Maximum snapshots (1-1000)"`
+	Daily        bool   `json:"daily" form:"daily" description:"Return daily quota extrema instead of every sample"`
 }
 
 // QuotaHistory returns stored snapshots, newest first.
@@ -97,7 +98,7 @@ func (h *Handler) QuotaHistory(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid history query"})
 		return
 	}
-	query := quota.HistoryQuery{ProviderUUID: req.ProviderUUID, Limit: req.Limit}
+	query := quota.HistoryQuery{ProviderUUID: req.ProviderUUID, Limit: req.Limit, Daily: req.Daily}
 	parseTime := func(value string) (*time.Time, error) {
 		if value == "" {
 			return nil, nil

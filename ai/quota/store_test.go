@@ -262,3 +262,54 @@ func TestGormStoreCompactsUsingReportedAvailable(t *testing.T) {
 		t.Fatalf("daily remaining extrema = %#v; want 5 and 90", history)
 	}
 }
+
+func TestGormStoreHistoryDailyAppliesLimitAfterSelectingExtrema(t *testing.T) {
+	store, err := NewGormStore(filepath.Join(t.TempDir(), "test.db"), logrus.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	day := time.Date(2026, 9, 22, 0, 0, 0, 0, time.Local)
+	for _, sample := range []struct {
+		provider string
+		hour     int
+		used     float64
+	}{
+		{"one", 1, 10}, {"one", 2, 90}, {"one", 3, 50},
+		{"two", 1, 20}, {"two", 2, 80}, {"two", 3, 50},
+	} {
+		usage := &ProviderUsage{ProviderUUID: sample.provider, FetchedAt: day.Add(time.Duration(sample.hour) * time.Hour)}
+		usage.AddWindow("session", &UsageWindow{Used: sample.used, Limit: 100, Unit: UsageUnitPercent})
+		if err := store.Save(context.Background(), usage); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := store.History(context.Background(), HistoryQuery{Daily: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("daily history has %d snapshots, want two extrema for each provider", len(all))
+	}
+	for _, sample := range all {
+		if sample.FetchedAt.Equal(day.Add(3 * time.Hour)) {
+			t.Fatalf("non-extreme sample returned: %#v", sample)
+		}
+	}
+	one, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "one", Daily: true, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one) != 1 || one[0].Windows[0].Used != 90 {
+		t.Fatalf("limited daily history = %#v, want latest extreme (90)", one)
+	}
+	raw, err := store.History(context.Background(), HistoryQuery{ProviderUUID: "one", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 || raw[0].Windows[0].Used != 50 {
+		t.Fatalf("raw history = %#v, want latest sample (50)", raw)
+	}
+}

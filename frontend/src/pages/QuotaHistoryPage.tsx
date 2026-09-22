@@ -84,7 +84,7 @@ export default function QuotaHistoryPage() {
             <PageHeader
                 title={t('dashboard.quotaHistory.title', { defaultValue: 'Quota history' })}
                 subtitle={t('dashboard.quotaHistory.pageSubtitle', {
-                    defaultValue: "Today's samples and past days' quota highs and lows.",
+                    defaultValue: 'Short ranges show samples; longer ranges show daily highs and lows.',
                 })}
                 actions={
                     <>
@@ -128,6 +128,7 @@ export default function QuotaHistoryPage() {
                 startTime={timeRange.startTime}
                 endTime={timeRange.endTime}
                 provider={provider}
+                daily={range === '7d' || range === '30d'}
                 refreshKey={refreshKey}
             />
         </Box>

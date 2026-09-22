@@ -44,14 +44,14 @@ func TestQuotaHistoryParsesFiltersAndReturnsSnapshots(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/provider-quota/history?provider=provider-1&start_time=2026-09-22T00%3A00%3A00Z&end_time=2026-09-23T00%3A00%3A00Z&limit=25", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/provider-quota/history?provider=provider-1&start_time=2026-09-22T00%3A00%3A00Z&end_time=2026-09-23T00%3A00%3A00Z&limit=25&daily=true", nil)
 
 	h.QuotaHistory(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
 	}
-	if mgr.historyQuery.ProviderUUID != "provider-1" || mgr.historyQuery.Limit != 25 {
+	if mgr.historyQuery.ProviderUUID != "provider-1" || mgr.historyQuery.Limit != 25 || !mgr.historyQuery.Daily {
 		t.Fatalf("query = %#v", mgr.historyQuery)
 	}
 	if mgr.historyQuery.StartTime == nil || mgr.historyQuery.EndTime == nil {

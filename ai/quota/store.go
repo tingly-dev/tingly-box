@@ -113,6 +113,7 @@ type HistoryQuery struct {
 	StartTime    *time.Time
 	EndTime      *time.Time
 	Limit        int
+	Daily        bool
 }
 
 func (ProviderUsageRecord) TableName() string {
@@ -436,7 +437,7 @@ func (s *GormStore) History(ctx context.Context, query HistoryQuery) ([]*Provide
 	defer s.mu.RUnlock()
 
 	limit := query.Limit
-	if limit <= 0 || limit > 5000 {
+	if limit <= 0 || limit > 1000 {
 		limit = 1000
 	}
 	db := s.db.WithContext(ctx).Model(&ProviderUsageHistoryRecord{})
@@ -450,7 +451,29 @@ func (s *GormStore) History(ctx context.Context, query HistoryQuery) ([]*Provide
 		db = db.Where("unixepoch(fetched_at) < ?", query.EndTime.Unix())
 	}
 	var records []ProviderUsageHistoryRecord
-	if err := db.Order("unixepoch(fetched_at) DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
+	if query.Daily {
+		// Apply the response cap after selecting daily extrema. Limiting raw
+		// samples first would let today's five-minute data hide older days.
+		var candidates []ProviderUsageHistoryRecord
+		if err := db.Order("unixepoch(fetched_at) ASC, id ASC").Find(&candidates).Error; err != nil {
+			return nil, err
+		}
+		byProvider := make(map[string][]ProviderUsageHistoryRecord)
+		for _, record := range candidates {
+			byProvider[record.ProviderUUID] = append(byProvider[record.ProviderUUID], record)
+		}
+		keep := make(map[uint]bool)
+		for _, providerRecords := range byProvider {
+			for id := range quotaDailyExtremes(providerRecords, time.Local) {
+				keep[id] = true
+			}
+		}
+		for i := len(candidates) - 1; i >= 0 && len(records) < limit; i-- {
+			if keep[candidates[i].ID] {
+				records = append(records, candidates[i])
+			}
+		}
+	} else if err := db.Order("unixepoch(fetched_at) DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
 		return nil, err
 	}
 	usages := make([]*ProviderUsage, 0, len(records))

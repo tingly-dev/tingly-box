@@ -4556,6 +4556,15 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "daily",
+            "in": "query",
+            "description": "Query parameter daily",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -10900,6 +10909,10 @@
       "HistoryRequest": {
         "type": "object",
         "properties": {
+          "daily": {
+            "type": "boolean",
+            "description": "Return daily quota extrema instead of every sample"
+          },
           "end_time": {
             "type": "string",
             "description": "ISO 8601 exclusive end time"
@@ -10907,7 +10920,7 @@
           "limit": {
             "type": "integer",
             "format": "int64",
-            "description": "Maximum snapshots (1-5000)"
+            "description": "Maximum snapshots (1-1000)"
           },
           "provider": {
             "type": "string",
@@ -10922,7 +10935,8 @@
           "provider",
           "start_time",
           "end_time",
-          "limit"
+          "limit",
+          "daily"
         ]
       },
       "HistoryResponse": {
