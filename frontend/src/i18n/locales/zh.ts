@@ -1477,14 +1477,16 @@ export default {
     },
     "quotaHistory": {
       "title": "Quota 历史",
-      "pageSubtitle": "查看 Provider 限额和余额如何随时间变化。",
+      "pageSubtitle": "查看当天采样明细，以及往日 quota 的最高和最低值。",
       "subtitle": "所选时间范围内保存的 Provider quota 快照。",
       "snapshotCount": "{{snapshots}} 个快照 · {{providers}} 个 Provider",
       "loadError": "无法加载 quota 历史。",
       "empty": "此时间段内没有 quota 快照",
       "emptyHint": "支持 quota 的 Provider 刷新后，快照会显示在这里。",
       "noWindows": "Provider 未返回 quota 窗口",
-      "notCountable": "不限额"
+      "notCountable": "不限额",
+      "sampleCount": "{{count}} 次采样",
+      "limitHint": "仅显示最近 5,000 次采样。选择 Provider 或缩短时间范围可查看更早的记录。"
     },
     "requestsView": {
       "title": "请求",

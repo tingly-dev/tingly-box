@@ -49,8 +49,15 @@ Quota History is a separate Dashboard page and sidebar destination rather than
 an analysis mode inside Usage Dashboard. It answers a different question — how
 an upstream account allowance or balance changed — and therefore does not share
 the request-oriented Model and Identity filters. The page provides its own
-Provider filter, `today | 7d | 30d | 90d` range selector, and refresh action,
-then renders immutable provider-quota snapshots newest first.
+Provider filter, rolling `5h | 1d | 7d | 30d` range selector, and refresh action,
+then groups stored samples by provider and quota window. Each window has
+its own sampled time series, so unrelated providers, units, and quota windows
+are never stacked into one trend. The time axis uses the selected rolling
+quota-scale range, even when only part of that range has samples. Hovering a point shows its exact sample time
+and quota values. Today's five-minute samples remain detailed; completed local
+days retain the original snapshots containing each window's daily low and high.
+History older than 30 days is removed. The read is bounded to the latest 5,000 snapshots; the UI
+calls out that limit and offers provider or range filtering when it is reached.
 
 ### Team Usage
 

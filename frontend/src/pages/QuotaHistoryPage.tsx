@@ -17,18 +17,18 @@ import PageHeader from '@/components/PageHeader';
 import { QuotaHistoryView } from '@/components/dashboard';
 import api from '@/services/api';
 
-type TimeRange = 'today' | '7d' | '30d' | '90d';
+type TimeRange = '5h' | '1d' | '7d' | '30d';
 
 interface Provider {
     uuid: string;
     name: string;
 }
 
-const RANGE_DAYS: Record<TimeRange, number> = {
-    today: 1,
-    '7d': 7,
-    '30d': 30,
-    '90d': 90,
+const RANGE_MINUTES: Record<TimeRange, number> = {
+    '5h': 5 * 60,
+    '1d': 24 * 60,
+    '7d': 7 * 24 * 60,
+    '30d': 30 * 24 * 60,
 };
 
 const toLocalISOString = (date: Date): string => {
@@ -42,14 +42,13 @@ const toLocalISOString = (date: Date): string => {
 
 const buildTimeRange = (range: TimeRange) => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    start.setDate(start.getDate() - (RANGE_DAYS[range] - 1));
+    const start = new Date(now.getTime() - RANGE_MINUTES[range] * 60_000);
     return { startTime: toLocalISOString(start), endTime: toLocalISOString(now) };
 };
 
 export default function QuotaHistoryPage() {
     const { t } = useTranslation();
-    const [range, setRange] = useState<TimeRange>('7d');
+    const [range, setRange] = useState<TimeRange>('5h');
     const [provider, setProvider] = useState('all');
     const [providers, setProviders] = useState<Provider[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -66,7 +65,7 @@ export default function QuotaHistoryPage() {
         loadProviders().catch((error) => console.error('Failed to load quota history providers:', error));
     }, [loadProviders]);
 
-    const timeRange = useMemo(() => buildTimeRange(range), [range]);
+    const timeRange = useMemo(() => buildTimeRange(range), [range, refreshKey]);
 
     const refresh = async () => {
         setRefreshing(true);
@@ -85,7 +84,7 @@ export default function QuotaHistoryPage() {
             <PageHeader
                 title={t('dashboard.quotaHistory.title', { defaultValue: 'Quota history' })}
                 subtitle={t('dashboard.quotaHistory.pageSubtitle', {
-                    defaultValue: 'Track how provider allowances and balances changed over time.',
+                    defaultValue: "Today's samples and past days' quota highs and lows.",
                 })}
                 actions={
                     <>
@@ -109,10 +108,10 @@ export default function QuotaHistoryPage() {
                             onChange={(_, value: TimeRange | null) => value && setRange(value)}
                             aria-label={t('dashboard.userUsage.timeRange', { defaultValue: 'Time range' })}
                         >
-                            <ToggleButton value="today">{t('layout.today')}</ToggleButton>
+                            <ToggleButton value="5h">5H</ToggleButton>
+                            <ToggleButton value="1d">1D</ToggleButton>
                             <ToggleButton value="7d">7D</ToggleButton>
                             <ToggleButton value="30d">30D</ToggleButton>
-                            <ToggleButton value="90d">90D</ToggleButton>
                         </ToggleButtonGroup>
                         <Tooltip title={t('common.refresh', { defaultValue: 'Refresh' })}>
                             <span>
@@ -130,7 +129,6 @@ export default function QuotaHistoryPage() {
                 endTime={timeRange.endTime}
                 provider={provider}
                 refreshKey={refreshKey}
-                showHeading={false}
             />
         </Box>
     );
