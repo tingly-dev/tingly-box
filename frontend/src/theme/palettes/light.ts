@@ -45,7 +45,13 @@ export const lightPalette: ThemePalette = {
   action: {
     hover: '#f1f5f9',
     selected: '#e0e7ff',
-    disabled: '#f1f5f9',
+    // `disabled` is the *foreground* MUI uses for disabled Button/IconButton/
+    // Chip text — reuse `text.disabled` above so labels stay legible, rather
+    // than the near-white tint this used to hold. That tint moved to
+    // `disabledBackground`, the token MUI actually reads for a disabled
+    // contained Button's fill. See `.design/theme.md`.
+    disabled: '#94a3b8',
+    disabledBackground: '#f1f5f9',
     focus: '#e0e7ff',
   },
   dashboard: {

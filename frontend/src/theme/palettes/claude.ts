@@ -52,7 +52,13 @@ export const claudePalette: ThemePalette = {
   action: {
     hover: '#F2EFE3',
     selected: '#E8E6DC',
-    disabled: '#F2EFE3',
+    // `disabled` is the *foreground* MUI uses for disabled Button/IconButton/
+    // Chip text — reuse `text.disabled` above so labels stay legible, rather
+    // than the near-background tint this used to hold. That tint moved to
+    // `disabledBackground`, the token MUI actually reads for a disabled
+    // contained Button's fill. See `.design/theme.md`.
+    disabled: '#B0AEA5',
+    disabledBackground: '#F2EFE3',
     focus: '#E8E6DC',
   },
   dashboard: {

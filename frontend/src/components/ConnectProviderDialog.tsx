@@ -374,7 +374,12 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                     scrollbarWidth: 'thin',
                     '&::-webkit-scrollbar': {width: 8},
                     '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: 'action.disabled',
+                        // Was `action.disabled` — that token now carries a
+                        // legible foreground value (for disabled Button/Chip
+                        // text) instead of a faint tint, so it's too bold for
+                        // a scrollbar thumb. `divider` is the subtle,
+                        // theme-matched value this was actually going for.
+                        backgroundColor: 'divider',
                         borderRadius: 4,
                     },
                     '&::-webkit-scrollbar-track': {backgroundColor: 'transparent'},

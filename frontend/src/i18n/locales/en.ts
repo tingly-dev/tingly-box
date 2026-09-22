@@ -91,7 +91,7 @@ export default {
       "system": "System",
       "sunlit": "Sunlit",
       "claude": "Claude",
-      "ds": "DS",
+      "ds": "DeepSeek",
       "click": "Click",
       "feedback": "Feedback",
       "feedbackTooltip": "Send Feedback (opens GitHub Issues)"
@@ -967,7 +967,8 @@ export default {
       "refreshStatus": "Refresh status"
     },
     "preferences": {
-      "title": "Appearance & Language"
+      "title": "Appearance & Language",
+      "themePalette": "Palette preview"
     }
   },
   "help": {

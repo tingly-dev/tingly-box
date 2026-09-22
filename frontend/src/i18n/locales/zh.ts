@@ -92,7 +92,7 @@ export default {
       "system": "跟随系统",
       "sunlit": "日光",
       "claude": "Claude",
-      "ds": "DS",
+      "ds": "DeepSeek",
       "click": "点击",
       "feedback": "反馈",
       "feedbackTooltip": "发送反馈（跳转到 GitHub Issues）"
@@ -968,7 +968,8 @@ export default {
       "refreshStatus": "刷新状态"
     },
     "preferences": {
-      "title": "外观与语言"
+      "title": "外观与语言",
+      "themePalette": "配色预览"
     }
   },
   "help": {

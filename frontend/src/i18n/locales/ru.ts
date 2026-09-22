@@ -91,7 +91,7 @@ export default {
       "system": "Системная",
       "sunlit": "Солнечная",
       "claude": "Claude",
-      "ds": "DS",
+      "ds": "DeepSeek",
       "click": "Нажмите",
       "feedback": "Обратная связь",
       "feedbackTooltip": "Отправить отзыв (откроется GitHub Issues)"
@@ -979,7 +979,8 @@ export default {
       "refreshStatus": "Обновить статус"
     },
     "preferences": {
-      "title": "Оформление и язык"
+      "title": "Оформление и язык",
+      "themePalette": "Предпросмотр палитры"
     }
   },
   "help": {
