@@ -24,7 +24,7 @@ interface UnifiedCardProps {
   /** Space between the header and body; defaults to the standard 2-unit gap. */
   titleMarginBottom?: number | string;
   subtitle?: string | ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'full' | 'header' | 'footer';
   variant?: 'default' | 'outlined' | 'elevated';
   // Custom width, prioritized if provided
