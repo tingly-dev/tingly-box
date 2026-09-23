@@ -1,4 +1,4 @@
-name: Docker NPX Image Build and Push
+name: Docker npm Image Build and Push
 
 on:
   workflow_dispatch:
@@ -7,8 +7,6 @@ on:
         description: 'Release tag (e.g., v1.0.0)'
         required: true
         type: string
-
-env: {}
 
 jobs:
   build-and-push:
@@ -37,3 +35,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           build_args: |
             TINGLY_VERSION=${{ steps.validate.outputs.npm_version }}
+          expected_version: ${{ steps.validate.outputs.npm_version }}

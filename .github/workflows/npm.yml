@@ -45,7 +45,7 @@ on:
         type: boolean
         default: false
       build_docker:
-        description: '[docker] build and push Docker NPX image after CLI publish'
+        description: '[docker] build and push the npm-installed Docker image after CLI publish'
         required: false
         type: boolean
         default: true
@@ -583,10 +583,10 @@ jobs:
           echo "Updating release $RELEASE_TAG notes..."
           gh release edit "$RELEASE_TAG" --repo "$REPO" --notes-file npx_release_notes.md
 
-  # Build Docker NPX image after npm release is created
-  build-docker-npx:
+  # Build the npm-installed Docker image after the package is published
+  build-docker-npm:
     needs: [setup, publish-cli, publish-cli-review, create-release]
-    name: Build Docker NPX Image
+    name: Build Docker npm Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -613,6 +613,7 @@ jobs:
           github_token: ${{ github.token }}
           build_args: |
             TINGLY_VERSION=${{ needs.setup.outputs.npx_version }}
+          expected_version: ${{ needs.setup.outputs.npx_version }}
 
   # Publish GUI NPX package
   publish-gui:

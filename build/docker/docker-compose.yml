@@ -2,10 +2,10 @@ services:
   # Tingly Box Server
   tingly-box:
     build:
-      # Repo root: the Dockerfile COPYs build/docker/docker-entrypoint-npx.sh,
+      # Repo root: the Dockerfile COPYs build/docker/docker-entrypoint-npm.sh,
       # so the context can't be this directory (build/docker) itself.
       context: ../..
-      dockerfile: build/docker/docker.npx.Dockerfile
+      dockerfile: build/docker/docker.npm.Dockerfile
     container_name: tingly-box
     ports:
       - "12581:12580"
@@ -29,7 +29,7 @@ services:
   tingly-box-dev:
     build:
       context: ../..
-      dockerfile: build/docker/docker.npx.Dockerfile
+      dockerfile: build/docker/docker.npm.Dockerfile
     container_name: tingly-box-dev
     ports:
       - "12581:12580"

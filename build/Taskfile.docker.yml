@@ -8,7 +8,7 @@ tasks:
     summary: Build Docker image
     cmds:
       - |
-        docker build --platform linux/amd64 -t tingly-box:amd64 -f build/docker/docker.npx.Dockerfile .
+        docker build --platform linux/amd64 -t tingly-box:amd64 -f build/docker/docker.npm.Dockerfile .
 
   test:amd64:
     summary: Run tests in Linux AMD64 Docker container
