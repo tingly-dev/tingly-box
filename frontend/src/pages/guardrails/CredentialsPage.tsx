@@ -9,7 +9,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    IconButton,
     Paper,
     Stack,
     Switch,
@@ -19,23 +18,21 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    TextField,
     Typography,
 } from '@mui/material';
 import {
     Add,
     DeleteOutline,
     Refresh as RefreshIcon,
-    Visibility,
-    VisibilityOff,
     VpnKey,
 } from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import CopyIconButton from '@/components/CopyIconButton';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { blurActiveElement } from '@/utils/dom';
+import CredentialEditorDialog, { type CredentialEditorState } from './CredentialEditorDialog';
+import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
 
 type ProtectedCredential = {
     id: string;
@@ -46,26 +43,6 @@ type ProtectedCredential = {
     tags?: string[];
     enabled: boolean;
     secret_mask: string;
-};
-
-type ImportableProvider = {
-    uuid: string;
-    name: string;
-    auth_type?: string;
-    token?: string;
-    oauth_detail?: {
-        access_token?: string;
-    };
-    enabled?: boolean;
-};
-
-type CredentialEditorState = {
-    name: string;
-    type: 'api_key' | 'token' | 'private_key';
-    secret: string;
-    aliasToken: string;
-    secretMask: string;
-    currentSecret: string;
 };
 
 const emptyEditorState: CredentialEditorState = {
@@ -325,7 +302,6 @@ const GuardrailsCredentialsPage = () => {
     };
 
     const allSelected = credentials.length > 0 && selectedIDs.length === credentials.length;
-    const allImportableSelected = importableProviders.length > 0 && selectedProviderIDs.length === importableProviders.length;
 
     const handleCloseEditor = () => {
         blurActiveElement();
@@ -508,126 +484,19 @@ const GuardrailsCredentialsPage = () => {
                     )}
                 </UnifiedCard>
             </Stack>
-            <Dialog open={editorOpen} onClose={handleCloseEditor} fullWidth maxWidth="sm" disableRestoreFocus>
-                <DialogTitle>{editingCredentialId ? 'Edit Protected Credential' : 'New Protected Credential'}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        {editorMessage && <Alert severity={editorMessage.type}>{editorMessage.text}</Alert>}
-                        <Alert severity="info">
-                            The real secret is hidden in the UI. When editing an existing credential, leave the secret field empty to keep the current value.
-                        </Alert>
-                        <TextField
-                            label="Name"
-                            value={editorState.name}
-                            onChange={(event) => setEditorState((state) => ({ ...state, name: event.target.value }))}
-                            fullWidth
-                            required
-                            size="small"
-                            disabled={editorLoading}
-                        />
-                        {editingCredentialId && (
-                            <Stack spacing={1.5}>
-                                <TextField
-                                    label="Alias Token"
-                                    value={editorState.aliasToken}
-                                    fullWidth
-                                    size="small"
-                                    slotProps={{
-                                        input: {
-                                            readOnly: true,
-                                            endAdornment: (
-                                                <CopyIconButton
-                                                    value={editorState.aliasToken}
-                                                    label="Copy alias token"
-                                                    edge="end"
-                                                />
-                                            ),
-                                        },
-                                    }}
-                                />
-                                <TextField
-                                    label="Current Secret"
-                                    value={showCurrentSecret ? editorState.currentSecret : editorState.secretMask}
-                                    fullWidth
-                                    size="small"
-                                    type={showCurrentSecret ? 'text' : 'password'}
-                                    slotProps={{
-                                        input: {
-                                            readOnly: true,
-                                            endAdornment: (
-                                                <IconButton
-                                                    edge="end"
-                                                    onClick={() => setShowCurrentSecret((current) => !current)}
-                                                    size="small"
-                                                >
-                                                    {showCurrentSecret ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                                                </IconButton>
-                                            ),
-                                        },
-                                    }}
-                                />
-                            </Stack>
-                        )}
-                        <Box>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                Credential Type
-                            </Typography>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                                {[
-                                    { value: 'api_key', label: 'API Key', description: 'Static API keys and service secrets.' },
-                                    { value: 'token', label: 'Token', description: 'Bearer tokens, session tokens, and access tokens.' },
-                                    { value: 'private_key', label: 'Private Key', description: 'Multi-line private keys and PEM content.' },
-                                ].map((option) => {
-                                    const selected = editorState.type === option.value;
-                                    return (
-                                        <Box
-                                            key={option.value}
-                                            onClick={() => setEditorState((state) => ({ ...state, type: option.value as CredentialEditorState['type'] }))}
-                                            sx={{
-                                                flex: 1,
-                                                border: '1px solid',
-                                                borderColor: selected ? 'primary.main' : 'divider',
-                                                borderRadius: 2,
-                                                p: 1.5,
-                                                cursor: 'pointer',
-                                                bgcolor: selected ? 'action.selected' : 'transparent',
-                                            }}
-                                        >
-                                            <Stack spacing={0.5}>
-                                                <Typography variant="body2" sx={{
-                                                    fontWeight: 600
-                                                }}>
-                                                    {option.label}
-                                                </Typography>
-                                                <Typography variant="caption" sx={{
-                                                    color: "text.secondary"
-                                                }}>
-                                                    {option.description}
-                                                </Typography>
-                                            </Stack>
-                                        </Box>
-                                    );
-                                })}
-                            </Stack>
-                        </Box>
-                        <TextField
-                            label={editingCredentialId ? 'Secret (leave empty to keep current value)' : 'Secret'}
-                            value={editorState.secret}
-                            onChange={(event) => setEditorState((state) => ({ ...state, secret: event.target.value }))}
-                            fullWidth
-                            multiline
-                            minRows={editorState.type === 'private_key' ? 4 : 2}
-                            type="password"
-                            size="small"
-                            disabled={editorLoading}
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseEditor}>Cancel</Button>
-                    <Button variant="contained" disabled={pendingSave || editorLoading} onClick={handleSaveCredential}>Save</Button>
-                </DialogActions>
-            </Dialog>
+            <CredentialEditorDialog
+                open={editorOpen}
+                editingCredentialId={editingCredentialId}
+                editorState={editorState}
+                editorMessage={editorMessage}
+                editorLoading={editorLoading}
+                saving={pendingSave}
+                showCurrentSecret={showCurrentSecret}
+                onEditorStateChange={setEditorState}
+                onToggleShowCurrentSecret={() => setShowCurrentSecret((current) => !current)}
+                onClose={handleCloseEditor}
+                onSave={handleSaveCredential}
+            />
             <Dialog
                 open={!!deleteCredentialId}
                 onClose={() => {
@@ -688,102 +557,31 @@ const GuardrailsCredentialsPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-            <Dialog
+            <ProviderImportDialog
                 open={importDialogOpen}
+                pendingImport={pendingImport}
+                importableProviders={importableProviders}
+                selectedProviderIDs={selectedProviderIDs}
+                onToggleAll={(checked) =>
+                    setSelectedProviderIDs(checked ? importableProviders.map((provider) => provider.uuid) : [])
+                }
+                onToggleProvider={(uuid) =>
+                    setSelectedProviderIDs((current) =>
+                        current.includes(uuid) ? current.filter((id) => id !== uuid) : [...current, uuid]
+                    )
+                }
                 onClose={() => {
                     if (!pendingImport) {
                         setImportDialogOpen(false);
                         blurActiveElement();
                     }
                 }}
-                fullWidth
-                maxWidth="sm"
-                disableRestoreFocus
-            >
-                <DialogTitle>Import from Credentials</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ pt: 1 }}>
-                        <Alert severity="info">
-                            Import existing credentials from the main Credentials page into Guardrails protection. The imported value will be stored locally as a protected credential with its own alias token.
-                        </Alert>
-                        {importableProviders.length === 0 ? (
-                            <Typography variant="body2" sx={{
-                                color: "text.secondary"
-                            }}>
-                                No importable credentials found.
-                            </Typography>
-                        ) : (
-                            <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell padding="checkbox">
-                                                <Checkbox
-                                                    checked={allImportableSelected}
-                                                    indeterminate={selectedProviderIDs.length > 0 && !allImportableSelected}
-                                                    onChange={(event) =>
-                                                        setSelectedProviderIDs(
-                                                            event.target.checked ? importableProviders.map((provider) => provider.uuid) : []
-                                                        )
-                                                    }
-                                                />
-                                            </TableCell>
-                                            <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                                            <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {importableProviders.map((provider) => {
-                                            const selected = selectedProviderIDs.includes(provider.uuid);
-                                            return (
-                                                <TableRow
-                                                    key={provider.uuid}
-                                                    hover
-                                                    selected={selected}
-                                                    onClick={() =>
-                                                        setSelectedProviderIDs((current) =>
-                                                            current.includes(provider.uuid)
-                                                                ? current.filter((id) => id !== provider.uuid)
-                                                                : [...current, provider.uuid]
-                                                        )
-                                                    }
-                                                    sx={{ cursor: 'pointer' }}
-                                                >
-                                                    <TableCell padding="checkbox">
-                                                        <Checkbox checked={selected} />
-                                                    </TableCell>
-                                                    <TableCell>{provider.name}</TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            size="small"
-                                                            label={provider.auth_type === 'oauth' ? 'token' : 'api key'}
-                                                            variant="outlined"
-                                                        />
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        )}
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button
-                        onClick={() => {
-                            setImportDialogOpen(false);
-                            blurActiveElement();
-                        }}
-                        disabled={pendingImport}
-                    >
-                        Cancel
-                    </Button>
-                    <Button variant="contained" onClick={handleImportProviders} disabled={pendingImport || selectedProviderIDs.length === 0}>
-                        Import
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                onCancel={() => {
+                    setImportDialogOpen(false);
+                    blurActiveElement();
+                }}
+                onImport={handleImportProviders}
+            />
         </PageLayout>
     );
 };
