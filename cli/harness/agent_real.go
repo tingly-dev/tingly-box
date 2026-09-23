@@ -34,8 +34,17 @@ func missingFields(entry protocoltest.RealModelEntry) []string {
 	if strings.TrimSpace(entry.BaseURL) == "" {
 		miss = append(miss, "baseurl")
 	}
+	// Credential: an oauth_token (Claude Code OAuth) stands in for apikey. A
+	// token left as an unexpanded ${VAR} is reported as the missing field the
+	// user actually wrote, not as a missing apikey.
 	apiKey := strings.TrimSpace(entry.APIKey)
-	if apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey) {
+	token := strings.TrimSpace(entry.OAuthToken)
+	switch {
+	case token != "" && looksLikeUnexpandedEnvRef(token):
+		miss = append(miss, "oauth_token")
+	case token != "":
+		// OAuth credential present; apikey not needed.
+	case apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey):
 		miss = append(miss, "apikey")
 	}
 	model := strings.TrimSpace(entry.Model)
@@ -60,6 +69,19 @@ var (
 
 func looksLikeUnexpandedEnvRef(s string) bool {
 	return unexpandedBraced.MatchString(s) || unexpandedBare.MatchString(s)
+}
+
+// setupRealUpstream binds the agent's built-in rule to the entry's live
+// provider: the Claude Code OAuth path when the entry carries an oauth_token
+// (signed as the newest native client), the API-key path otherwise.
+func setupRealUpstream(env *protocoltest.AgentTestEnv, agentType protocoltest.AgentType, providerName string, entry protocoltest.RealModelEntry, apiStyle string) error {
+	if entry.IsOAuth() {
+		if apiStyle != "anthropic" {
+			return fmt.Errorf("oauth_token requires api_style: anthropic (entry %q has %q)", entry.Name, apiStyle)
+		}
+		return env.SetupRealOAuthAgent(agentType, providerName, entry.Model, entry.BaseURL, strings.TrimSpace(entry.OAuthToken))
+	}
+	return env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle)
 }
 
 // loadProvidersConfig reads and parses a providers config file (YAML).
@@ -246,7 +268,7 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 	result.APIStyle = apiStyle
 	providerName := fmt.Sprintf("%s", entry.Name)
 
-	if err := env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
+	if err := setupRealUpstream(env, agentType, providerName, entry, apiStyle); err != nil {
 		result.Error = fmt.Sprintf("setup real Agent: %v", err)
 		result.Duration = time.Since(start)
 		return result

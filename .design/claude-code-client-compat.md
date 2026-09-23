@@ -96,6 +96,8 @@
 | clean header | 非 Claude OAuth provider 上剥离 billing header / 隐写标记 | ✅ | ✅ | ✅ | 未改 |
 | 其他 | 隐写 normalizer | ✅ 保留 | ✅ 保留 | ✅ 保留 | 三版 bundle 均无该代码 |
 | 其他 | 中继 host 上的 Claude OAuth issuer 也做 identity 注入 | ✅（flag 无关的 bugfix） | ✅ | ✅ | 原来 panic |
+| 验证 | 网关级 harness（真实网关 → 虚拟上游，逐项断言 wire） | ✅ | ✅ | ✅ | `TestRuleFlags/claude_code_version`、`harness matrix --mode=flags` |
+| 验证 | **真实上游**（OAuth token → api.anthropic.com） | ❌ 不再验证 | ❌ 不再验证 | ✅ 手动 / nightly | `harness replay claude --upstream real --config providers.yaml`，entry 带 `oauth_token`，固定签成 `ClaudeCodeVersionLatest`；见 §4 与 `cli/harness/README.md` |
 
 触发事件：用户在真实使用中先后收到
 
@@ -509,6 +511,27 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 2.1.258 走完真实网关（claude_code scenario → Claude OAuth provider → 虚拟上游），逐项断言上游收到的 UA / beta /
 子 agent 头 / billing header / metadata。升版后先跑它。
 
+**真实上游（唯一能证明服务端接受 `cch` / 指纹的方式）**：harness 的 real-provider 模式支持 Claude Code OAuth entry
+（`providers.yaml` 里用 `oauth_token` 代替 `apikey`，`harness init-config` 会生成带 `${CLAUDE_CODE_OAUTH_TOKEN}` 占位的
+`claude-code` 条目）。这类 entry 走 `AgentTestEnv.SetupRealOAuthAgent`：anthropic-style OAuth provider（issuer
+`claude_code`、Bearer token），built-in rule 固定 `claude_code_version = typ.ClaudeCodeVersionLatest`（只验证最新
+profile，Legacy / 258 已被 Anthropic 拒绝，不再验证）。
+
+```bash
+export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)      # 或从 tingly-box 的 Claude Code OAuth provider 复制 access_token
+go run ./cli/harness init-config --output providers.yaml   # 已含 claude-code 条目；其余 provider 留空即跳过
+go run ./cli/harness replay claude --upstream real --config providers.yaml   # 三个 fixture 走真实 Anthropic，200 即通过
+go run ./cli/harness agent  claude --config providers.yaml                   # 同上，但由真实 claude CLI 发请求
+```
+
+`TestSetupRealOAuthAgent_ClaudeCode`（`internal/protocoltest/agent_oauth_test.go`）是它的封闭版：把虚拟上游当"真实
+provider"，断言 Bearer 认证、UA `claude-cli/<latest>`、`x-claude-code-request-class: main`、billing header 版本 / `cch`
+已打补丁、preamble 保留——所以 live 一旦跑绿，被接受的就是这一形态。
+
+顺带观察（未改代码）：tingly-box 的 OAuth 登录把 `OAuthDetail.UserID` 设为随机 uuid（`oauth/handler.go`），真实账号 uuid
+只存在 `ExtraFields["account_id"]`；而 2.1.280 在只有 token 时会请求 `/api/oauth/profile` 取账号信息填 `account_uuid`。
+harness 沿用生产行为（随机 uuid），生产至今未因此被拒。
+
 ---
 
 ## 5. 决策与取舍
@@ -568,7 +591,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 其余 §0 表格中的项全部已实现并有测试覆盖。
 
 
-- **`cch` 的服务端校验方式未知**：我们哈希自己发出的字节并已做 JS 形态归一化；若服务端在重算前还做 key 重排等归一化，Go SDK 的 key 顺序（与 JS 不同）会导致不匹配。上线后若 OAuth 流量出现异常（限流/拒绝），优先怀疑这里。
+- **`cch` 的服务端校验方式未知**：我们哈希自己发出的字节并已做 JS 形态归一化；若服务端在重算前还做 key 重排等归一化，Go SDK 的 key 顺序（与 JS 不同）会导致不匹配。上线后若 OAuth 流量出现异常（限流/拒绝），优先怀疑这里。现在可以用 §4 的 real-provider harness（`oauth_token` entry）直接对 Anthropic 验证，合入前 / 升版后跑一次。
 - **`thinking.display`**：`Guard` 在 thinking 未指定时强制 `disabled` 的逻辑未动；2.1.258 交互式会显式给 `adaptive` + `display`，通常不会触发。
 - 抓包用的假服务与脚本没有入库（§2.4 已内联足以复现）；若需要常态化回归，可以放到 `tests/` 下做成可选的集成测试。
 

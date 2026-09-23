@@ -9,6 +9,9 @@
       ]
     }
   ],
+  "system": [
+    { "type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude." }
+  ],
   "tools": [
     {
       "name": "get_weather",

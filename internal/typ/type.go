@@ -309,6 +309,10 @@ const (
 	// ClaudeCodeVersion2_1_280 reproduces the native 2.1.280 client (adds
 	// cc_turn_origin, the request-class hint headers and the 2026-09 betas).
 	ClaudeCodeVersion2_1_280 = "2.1.280"
+	// ClaudeCodeVersionLatest is the newest profile the chain reproduces: the
+	// one Anthropic currently accepts for OAuth traffic, and the one the
+	// harness's real-provider OAuth mode signs requests as.
+	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_280
 )
 
 // ClaudeCodeVersionEnabled reports whether v selects a non-legacy Claude Code

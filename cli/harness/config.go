@@ -19,7 +19,9 @@ type InitConfigCmd struct {
 // Help returns extended help for `harness init-config --help`.
 func (*InitConfigCmd) Help() string {
 	return `The template is pre-filled with all known providers from the embedded provider
-templates (OAuth-only providers are skipped). Fill in the apikey and configure
+templates. OAuth-only providers are skipped, except Claude Code, which is
+emitted with an oauth_token placeholder (Claude Code OAuth is the one OAuth
+chain the gateway re-signs). Fill in the apikey / oauth_token and configure
 the models array for each provider you want to test.
 
 Examples:
@@ -58,7 +60,7 @@ func runInitConfig(output string) error {
 	fmt.Printf("✅ Created %s (%d providers)\n", output, providerCount)
 	fmt.Printf("📝 Fill in your API keys and configure models, then run:\n")
 	fmt.Printf("   harness agent claude --config %s\n", output)
-	fmt.Printf("   (providers with empty apikey are automatically skipped)\n")
+	fmt.Printf("   (providers with empty apikey / oauth_token are automatically skipped)\n")
 	return nil
 }
 
@@ -68,15 +70,32 @@ type providerEntry struct {
 	BaseURL  string
 	APIStyle string
 	Models   []string
+	// OAuthTokenRef, when set, emits `oauth_token: "<ref>"` instead of an
+	// empty apikey (Claude Code OAuth entries).
+	OAuthTokenRef string
 }
+
+// claudeCodeOAuthTemplateID is the catalog template of the Claude Code OAuth
+// provider; claudeCodeOAuthTokenEnv is the env var the generated entry reads
+// its token from.
+const (
+	claudeCodeOAuthTemplateID = "claude-code"
+	claudeCodeOAuthTokenEnv   = "CLAUDE_CODE_OAUTH_TOKEN"
+)
 
 // buildProvidersConfig converts provider templates into the new YAML format.
 func buildProvidersConfig(templates map[string]*catalog.ProviderCatalog) string {
 	var entries []providerEntry
 	for _, tmpl := range templates {
 		// Skip OAuth-only providers — they can't be tested with an API key.
+		// Claude Code is the exception: its OAuth chain is what the gateway
+		// re-signs, so it gets an oauth_token entry instead.
+		oauthTokenRef := ""
 		if tmpl.AuthType == "oauth" {
-			continue
+			if tmpl.ID != claudeCodeOAuthTemplateID {
+				continue
+			}
+			oauthTokenRef = "${" + claudeCodeOAuthTokenEnv + "}"
 		}
 		// Skip providers with no usable base URL.
 		baseURL := tmpl.BaseURLAnthropic
@@ -96,10 +115,11 @@ func buildProvidersConfig(templates map[string]*catalog.ProviderCatalog) string 
 		}
 
 		entries = append(entries, providerEntry{
-			ID:       tmpl.ID,
-			BaseURL:  baseURL,
-			APIStyle: apiStyle,
-			Models:   modelIDs,
+			ID:            tmpl.ID,
+			BaseURL:       baseURL,
+			APIStyle:      apiStyle,
+			Models:        modelIDs,
+			OAuthTokenRef: oauthTokenRef,
 		})
 	}
 
@@ -139,11 +159,22 @@ func buildProvidersYAML(entries []providerEntry) string {
 	sb.WriteString("# entry; provider-level prompts are then ignored, only CLI --prompt wins.\n")
 	sb.WriteString("# Set `enable: false` on a provider to skip it (unset/true = enabled).\n")
 	sb.WriteString("#\n")
+	sb.WriteString("# Claude Code OAuth: set `oauth_token` instead of `apikey` (env-expanded the\n")
+	sb.WriteString("# same way). The token is the Bearer credential of a Claude Code login —\n")
+	sb.WriteString("# `claude setup-token` prints a long-lived one, or copy access_token from a\n")
+	sb.WriteString("# tingly-box Claude Code OAuth provider. Such an entry is routed through the\n")
+	sb.WriteString("# gateway's Claude OAuth chain signed as the newest native Claude Code client\n")
+	sb.WriteString("# (claude_code_version latest); only `api_style: anthropic` + the claude agent.\n")
+	sb.WriteString("#\n")
 	sb.WriteString("providers:\n")
 	for _, e := range entries {
 		sb.WriteString(fmt.Sprintf("  - name: %q\n", e.ID))
 		sb.WriteString(fmt.Sprintf("    baseurl: %q\n", e.BaseURL))
-		sb.WriteString("    apikey: \"\"\n")
+		if e.OAuthTokenRef != "" {
+			sb.WriteString(fmt.Sprintf("    oauth_token: %q\n", e.OAuthTokenRef))
+		} else {
+			sb.WriteString("    apikey: \"\"\n")
+		}
 		sb.WriteString(fmt.Sprintf("    api_style: %q\n", e.APIStyle))
 		if len(e.Models) > 0 {
 			sb.WriteString("    models:\n")

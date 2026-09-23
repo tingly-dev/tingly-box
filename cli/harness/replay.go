@@ -91,7 +91,10 @@ Upstreams:
   vmodel    Route to a seeded builtin virtual-model provider (private
             in-process HTTP listener). Structural assertions only.
   real      Route to a live provider read from --config (first runnable
-            entry). Structural assertions only.
+            entry). Structural assertions only. An entry with oauth_token
+            (Claude Code OAuth) is sent through the Claude OAuth chain signed
+            as the newest native client (claude_code_version latest), which
+            is the live check that Anthropic accepts our re-signed request.
 
 Examples:
   harness replay claude
@@ -226,8 +229,7 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocolte
 			err = sErr
 			break
 		}
-		err = env.SetupRealAgent(agentType, realEntry.Name, realEntry.Model,
-			realEntry.BaseURL, realEntry.APIKey, apiStyle)
+		err = setupRealUpstream(env, agentType, realEntry.Name, *realEntry, apiStyle)
 	default:
 		err = fmt.Errorf("unknown upstream %q", r.Upstream)
 	}

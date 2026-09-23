@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 
+	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -285,6 +287,46 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 	}
 
 	return env.repointBuiltinRule(AgentType, providerName, modelName)
+}
+
+// SetupRealOAuthAgent is SetupRealAgent for a Claude Code OAuth credential:
+// the provider is an anthropic-style OAuth provider (issuer claude_code,
+// bearer token) and the built-in rule is pinned to
+// claude_code_version=ClaudeCodeVersionLatest, so the request leaves the
+// gateway re-signed as the newest native Claude Code client — the only shape
+// Anthropic still accepts for OAuth traffic. Only the claude agent is
+// supported; other agents have no OAuth chain to exercise here.
+func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName string, modelName string, apiBase string, token string) error {
+	if agentType != AgentTypeClaudeCode {
+		return fmt.Errorf("oauth_token is only supported for the claude agent (Claude Code OAuth), got %q", agentType)
+	}
+	if token == "" {
+		return fmt.Errorf("oauth_token is empty")
+	}
+	provider := &typ.Provider{
+		UUID:     providerName,
+		Name:     providerName,
+		APIBase:  apiBase,
+		APIStyle: protocol.APIStyleAnthropic,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
+			Issuer:      ai.IssuerClaudeCode,
+			AccessToken: token,
+			// Same as a tingly-box Claude Code login (oauth handler): the
+			// metadata account_uuid is a per-provider random uuid, not the
+			// Anthropic account id, so the harness sends what production sends.
+			UserID: uuid.New().String(),
+		},
+		Enabled: true,
+		Timeout: 60000,
+	}
+
+	if err := env.appConfig.AddProvider(provider); err != nil {
+		return fmt.Errorf("add provider: %w", err)
+	}
+
+	return env.repointBuiltinRuleWithFlags(agentType, providerName, modelName,
+		typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersionLatest})
 }
 
 // SetupVModelAgent configures the environment so the agent's built-in rule
