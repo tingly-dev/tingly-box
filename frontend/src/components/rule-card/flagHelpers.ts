@@ -17,6 +17,20 @@ export function getFlagValue(flags: RuleFlags | undefined, key: string): unknown
     return (flags as Record<string, unknown>)[snakeToCamel(key)];
 }
 
+// Typed readers over a flag value — thin views of getFlagValue used by the
+// catalog dialog's per-type editors.
+export const flagToBool = (flags: RuleFlags | undefined, key: string): boolean =>
+    !!getFlagValue(flags, key);
+
+export const flagToInt = (flags: RuleFlags | undefined, key: string): number =>
+    (getFlagValue(flags, key) as number) ?? 0;
+
+export const flagToString = (flags: RuleFlags | undefined, key: string): string =>
+    (getFlagValue(flags, key) as string) ?? '';
+
+export const flagToServiceRef = (flags: RuleFlags | undefined, key: string): VisionProxyServiceRef | undefined =>
+    getFlagValue(flags, key) as VisionProxyServiceRef | undefined;
+
 export function setFlagValue(flags: RuleFlags, key: string, value: unknown): RuleFlags {
     return { ...flags, [snakeToCamel(key)]: value };
 }

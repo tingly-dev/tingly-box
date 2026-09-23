@@ -40,6 +40,7 @@ import {
     timezoneLabel,
     timezoneOptions,
 } from './timeRange';
+import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -118,11 +119,6 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     ],
 };
 
-interface CategoryMeta {
-    label: string;
-    icon: React.ReactElement;
-}
-
 const CATEGORY_META: Record<string, CategoryMeta> = {
     agent: { label: 'Agent', icon: <AutoAwesomeIcon fontSize="small" /> },
     context: { label: 'Context', icon: <ArticleIcon fontSize="small" /> },
@@ -136,8 +132,10 @@ const CATEGORY_ORDER = ['agent', 'context', 'request', 'time', 'service'];
 const positionMeta = (value: string): PositionMeta | undefined =>
     POSITION_OPTIONS.find((p) => p.value === value);
 
-const categoryMeta = (cat: string): CategoryMeta =>
-    CATEGORY_META[cat] || { label: cat, icon: <HelpOutlineIcon fontSize="small" /> };
+const categoryMeta = makeCategoryMeta(CATEGORY_META, (cat) => ({
+    label: cat,
+    icon: <HelpOutlineIcon fontSize="small" />,
+}));
 
 const formatNumberWithCommas = (value: string): string => {
     if (!value) return '';

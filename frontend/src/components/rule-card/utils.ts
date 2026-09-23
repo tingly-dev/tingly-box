@@ -3,6 +3,7 @@ import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi, FlagSpec } from '@/components/RoutingGraphTypes';
 import { getFlagValue, setFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
 import { downloadText } from '@/utils/download';
+import { writeToClipboard } from '@/utils/clipboard';
 
 // ============================================================================
 // Helper Functions
@@ -326,23 +327,41 @@ export function parseRuleFlags(input: string, registry: FlagSpec[], currentFlags
 
 
 
-// Generic clipboard export handler
-async function exportToClipboard(
-    jsonlContent: string,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    const base64Content = `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
-    await copyToClipboard(base64Content);
-    onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
-}
+type ExportNotifier = (message: string, severity: 'success' | 'error') => void;
 
-// Generic JSONL clipboard export handler
-async function exportJsonlToClipboard(
-    jsonlContent: string,
-    onNotification: (message: string, severity: 'success' | 'error') => void
-): Promise<void> {
-    await copyToClipboard(jsonlContent);
-    onNotification('JSONL export copied to clipboard! You can now paste it anywhere.', 'success');
+const toBase64Export = (jsonlContent: string): string => `${BASE64_PREFIX}:${CURRENT_VERSION}:${btoa(jsonlContent)}`;
+
+/**
+ * deliverExport is the single pipeline behind every rule/provider export:
+ * obtain the content, deliver it (clipboard copy or file download), notify,
+ * and surface any failure as an error toast.
+ */
+async function deliverExport(options: {
+    getContent: () => Promise<string>;
+    dest: 'clipboard' | 'download';
+    /** Download destination only: file name without extension and the export format. */
+    basename?: string;
+    format?: ExportFormat;
+    successMessage: string;
+    errorLogMessage: string;
+    errorMessage: string;
+    onNotification: ExportNotifier;
+}): Promise<void> {
+    const { getContent, dest, basename, format, successMessage, errorLogMessage, errorMessage, onNotification } = options;
+    try {
+        const content = await getContent();
+        if (dest === 'clipboard') {
+            await writeToClipboard(content);
+        } else {
+            const extension = format === 'jsonl' ? 'jsonl' : 'txt';
+            const mimeType = format === 'jsonl' ? 'application/jsonl' : 'text/plain';
+            downloadText(content, `${basename}.${extension}`, mimeType);
+        }
+        onNotification(successMessage, 'success');
+    } catch (error) {
+        console.error(errorLogMessage, error);
+        onNotification(errorMessage, 'error');
+    }
 }
 
 /**
@@ -350,15 +369,16 @@ async function exportJsonlToClipboard(
  */
 export async function exportRuleAsBase64ToClipboard(
     rule: Rule,
-    onNotification: (message: string, severity: 'success' | 'error') => void
+    onNotification: ExportNotifier
 ): Promise<void> {
-    try {
-        const jsonlContent = await buildJsonlExport(rule);
-        await exportToClipboard(jsonlContent, onNotification);
-    } catch (error) {
-        console.error('Error exporting rule to clipboard:', error);
-        onNotification('Failed to copy to clipboard', 'error');
-    }
+    await deliverExport({
+        getContent: async () => toBase64Export(await buildJsonlExport(rule)),
+        dest: 'clipboard',
+        successMessage: 'Base64 export copied to clipboard! You can now paste it anywhere.',
+        errorLogMessage: 'Error exporting rule to clipboard:',
+        errorMessage: 'Failed to copy to clipboard',
+        onNotification,
+    });
 }
 
 /**
@@ -366,15 +386,16 @@ export async function exportRuleAsBase64ToClipboard(
  */
 export async function exportRuleAsJsonlToClipboard(
     rule: Rule,
-    onNotification: (message: string, severity: 'success' | 'error') => void
+    onNotification: ExportNotifier
 ): Promise<void> {
-    try {
-        const jsonlContent = await buildJsonlExport(rule);
-        await exportJsonlToClipboard(jsonlContent, onNotification);
-    } catch (error) {
-        console.error('Error exporting rule to clipboard:', error);
-        onNotification('Failed to copy to clipboard', 'error');
-    }
+    await deliverExport({
+        getContent: () => buildJsonlExport(rule),
+        dest: 'clipboard',
+        successMessage: 'JSONL export copied to clipboard! You can now paste it anywhere.',
+        errorLogMessage: 'Error exporting rule to clipboard:',
+        errorMessage: 'Failed to copy to clipboard',
+        onNotification,
+    });
 }
 
 /**
@@ -389,22 +410,20 @@ export async function exportRuleAsJsonlToClipboard(
 export async function exportProvider(
     provider: any,
     format: ExportFormat,
-    onNotification: (message: string, severity: 'success' | 'error') => void
+    onNotification: ExportNotifier
 ): Promise<void> {
-    try {
-        const content = await fetchProviderExportContent(provider.uuid, format);
-        const filename = `${provider.name || 'provider'}-${provider.api_style}`;
-        const extension = format === 'jsonl' ? 'jsonl' : 'txt';
-        const mimeType = format === 'jsonl' ? 'application/jsonl' : 'text/plain';
-        const message = format === 'jsonl'
+    await deliverExport({
+        getContent: () => fetchProviderExportContent(provider.uuid, format),
+        dest: 'download',
+        basename: `${provider.name || 'provider'}-${provider.api_style}`,
+        format,
+        successMessage: format === 'jsonl'
             ? 'Provider exported successfully!'
-            : 'Provider exported as Base64! You can copy and share this file.';
-        downloadText(content, `${filename}.${extension}`, mimeType);
-        onNotification(message, 'success');
-    } catch (error) {
-        console.error('Error exporting provider:', error);
-        onNotification('Failed to export provider', 'error');
-    }
+            : 'Provider exported as Base64! You can copy and share this file.',
+        errorLogMessage: 'Error exporting provider:',
+        errorMessage: 'Failed to export provider',
+        onNotification,
+    });
 }
 
 /**
@@ -412,16 +431,16 @@ export async function exportProvider(
  */
 export async function exportProviderAsBase64ToClipboard(
     provider: any,
-    onNotification: (message: string, severity: 'success' | 'error') => void
+    onNotification: ExportNotifier
 ): Promise<void> {
-    try {
-        const content = await fetchProviderExportContent(provider.uuid, 'base64');
-        await copyToClipboard(content);
-        onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
-    } catch (error) {
-        console.error('Error exporting provider to clipboard:', error);
-        onNotification('Failed to copy to clipboard', 'error');
-    }
+    await deliverExport({
+        getContent: () => fetchProviderExportContent(provider.uuid, 'base64'),
+        dest: 'clipboard',
+        successMessage: 'Base64 export copied to clipboard! You can now paste it anywhere.',
+        errorLogMessage: 'Error exporting provider to clipboard:',
+        errorMessage: 'Failed to copy to clipboard',
+        onNotification,
+    });
 }
 
 /**
@@ -429,16 +448,16 @@ export async function exportProviderAsBase64ToClipboard(
  */
 export async function exportProviderAsJsonlToClipboard(
     provider: any,
-    onNotification: (message: string, severity: 'success' | 'error') => void
+    onNotification: ExportNotifier
 ): Promise<void> {
-    try {
-        const content = await fetchProviderExportContent(provider.uuid, 'jsonl');
-        await copyToClipboard(content);
-        onNotification('JSONL export copied to clipboard! You can now paste it anywhere.', 'success');
-    } catch (error) {
-        console.error('Error exporting provider to clipboard:', error);
-        onNotification('Failed to copy to clipboard', 'error');
-    }
+    await deliverExport({
+        getContent: () => fetchProviderExportContent(provider.uuid, 'jsonl'),
+        dest: 'clipboard',
+        successMessage: 'JSONL export copied to clipboard! You can now paste it anywhere.',
+        errorLogMessage: 'Error exporting provider to clipboard:',
+        errorMessage: 'Failed to copy to clipboard',
+        onNotification,
+    });
 }
 
 /**
@@ -526,26 +545,4 @@ function createProviderLine(provider: any): string {
 
 function buildJsonlLines(lines: string[]): string {
     return lines.join('\n');
-}
-
-/**
- * Copies text to clipboard
- */
-async function copyToClipboard(text: string): Promise<void> {
-    if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-    } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-        } finally {
-            document.body.removeChild(textArea);
-        }
-    }
 }
