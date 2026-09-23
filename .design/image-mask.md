@@ -7,7 +7,8 @@
 > `sketch-canvas.md`(同一面板的画布输入)、`image-slice.md`(同一面板的后置切分)。
 >
 > **状态:前端已实现(方案 A);Codex 走 Responses 的那条(方案 D)按实验性实现,
-> 待真实订阅验证。见 §8。**
+> 待真实订阅验证(§8)。多张图(n)的扇出、各 vendor 的核对、Playground 的多图
+> 槽位与 lightbox 调整见 §9。**
 
 ---
 
@@ -53,8 +54,7 @@ POST /tingly/imagegen/v1/images/edits
 "相对隔离"的物理基础——它是一个前端功能,后端那两处(§6.2)是顺手补齐的对称性,
 不是前置条件。
 
-> 未在本环境编译验证:`frontend/node_modules` 未安装。openai-js v6 的
-> `ImageEditParams.mask?: Uploadable` 需要在实现时确认一次字段名。
+> 字段名已在实现时确认:openai-js v6 的 `ImageEditParams.mask?: Uploadable`。
 
 ### 2.1 Codex 原生协议核对:确认不支持 mask
 
@@ -137,7 +137,7 @@ reference image",这正是当初要为 edit 另开 endpoint 的理由。但公�
 | **mask** | **`mask` 字段 ✓** | **✗ 协议无此字段** | **`input_image_mask{image_url\|file_id}` ✓** |
 | 相关旋钮 | `input_fidelity`、`background`、`size`、`quality` | `background`、`size`、`quality`、`n` | `action: generate\|edit\|auto`、`input_fidelity`、`background`、`moderation` |
 | Codex CLI 自己用不用 | — | **用**(`ImagesClient::edit`) | **不用**,且断言不挂(`responses_lite.rs`) |
-| 我们现在的代码 | `OpenAIClient.ImagesEdit` 原样透传 | `CodexClient.ImagesEdit` 丢弃 mask | `CodexClient.ImagesGenerate` 建了 tool,没填 mask、没挂参考图 |
+| 我们现在的代码 | `OpenAIClient.ImagesEdit` 原样透传 | 无 mask 时走这里;mask 到这里明确报错 | 有 mask 的 edit 走这里(参考图作 `input_image`,mask 挂工具,§8.2) |
 | mask 可行性 | 已通,零后端改动 | 不可能(除非上游加字段) | **未验证,值得实验** |
 
 ### 2.4 方案矩阵
@@ -266,8 +266,11 @@ run 上记一个 `maskUsed: boolean`,元信息行写 `images/edits · mask`,sour
 `CodexClient` 把 mask 丢掉、只打一行 debug log——用户涂了一块,拿回来的是整张
 重画,而且没有任何地方告诉他为什么。Codex 原生协议确认没有 mask 字段(§2.1),
 所以这里没有"接上去"的选项,只有"说清楚"。这与"不允许把 edit 静默降级成
-generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确报错**(§6.2),
-而不是退化成一次用户没要求的整图重画。
+generation"是同一条原则:**带 mask 的请求落到 Codex 原生端点上应当明确报错**
+(§6.2),而不是退化成一次用户没要求的整图重画。
+
+> 现状:带 mask 的 Codex 请求默认改走 Responses 工具(§8.2),原生端点的报错只在
+> 路由被钉到 `native` 时触发;§9.4 记录了原生端点可能直接收 `mask` 的线索。
 
 ---
 
@@ -363,7 +366,7 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 
 ## 8. 实现状态
 
-### 8.1 本分支(前端 + 网关直通)
+### 8.1 前端 + 网关直通(#1818)
 
 | 部分 | 位置 | 说明 |
 |------|------|------|
@@ -379,12 +382,13 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 `openai_image_edit_test.go`(JSON mask)。画布交互按惯例走真实浏览器验证:加图 →
 涂 → 反转 → Apply → 缩略图角标 → 重开笔画还在。
 
-### 8.2 Codex 那条(**本分支**:实验性,未验证)
+### 8.2 Codex 那条(实验性,未验证)
 
 §2.2 的 Responses 路线(方案 D)在这里,和它一起的还有"原生端点遇到 mask 明确
-报错"。它与 §8.1 分开成两个分支,是因为 §2.5 那三个实验还没跑:在真实订阅上确认
-hosted tool 认不认 `action: edit` 和 `input_image_mask` 之前,不把一条猜出来的
-链路压在一个已经能用的功能下面。
+报错"。它最初与 §8.1 分成两个分支(#1818 先合),因为 §2.5 那三个实验还没跑:
+在真实订阅上确认 hosted tool 认不认 `action: edit` 和 `input_image_mask` 之前,
+不把一条猜出来的链路压在一个已经能用的功能下面。现在随 #1820 一起合入:无 mask
+的请求仍然走已验证的原生端点,只有带 mask 的请求会走这条。
 
 | 改动 | 位置 |
 |------|------|
@@ -419,7 +423,7 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 
 三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认、合并;E2 不过(mask 被
 忽略)→ 退回原生,只留下那条明确报错;E1 不过 → `imageedit.md` §1 的断言成立,
-写回 §2.2 结案,本分支只剩报错值得保留。
+写回 §2.2 结案,只剩原生端点的明确报错值得保留。
 
 链路在日志里:`[Codex] Using Responses image_generation tool for image edit
 (experimental), model: ..., mask: true`。
@@ -428,6 +432,7 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 
 - 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
+- ~~lightbox 里看不到 mask~~:已做,见 §9.2 最后一条。
 - §7 的羽化 / 自动分割 / outpainting 全部未动。
 
 ---
@@ -457,7 +462,7 @@ mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
 - **mask**:透传就正确的只有 OpenAI / Azure / DeepInfra。其余大多数 compat 上游
   **根本没有 `/images/edits`**,请求会被拒,而不是 mask 被静默吃掉——原先担心的
   "静默忽略"风险比预想小。真正能接 mask 但协议不同的是千帆和 DashScope 万相
-  (JSON + 白=改的黑白图),需要各自的适配器,不在本分支。
+  (JSON + 白=改的黑白图),需要各自的适配器,还没做。
 - **即便在 OpenAI 上,gpt-image 的 mask 也是软约束**。编辑器底部那句
   "Painted areas are what the model may change" 措辞是对的(may,不是 will)。
 - **n**:Codex 之外,StepFun / qwen-image 等也是一次一张。现在由卡片上的空槽位

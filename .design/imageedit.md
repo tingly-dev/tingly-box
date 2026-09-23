@@ -46,6 +46,10 @@ generation 我们继续沿用已验证的 Responses API(image_generation tool)
 路径——Responses surface 无法给该 tool 挂 reference image,这正是 edit
 必须走独立 endpoint 的原因。
 
+> 更新:这条断言后来被证据削弱——codex 自己大量往 `/codex/responses` 发
+> `input_image`。带 mask 的 edit 现在按实验性方式走 Responses 工具,见
+> `image-mask.md` §2.2 / §8.2;无 mask 的 edit 仍走本节的原生端点。
+
 ---
 
 ## 2. 分层设计
@@ -58,7 +62,7 @@ POST /tingly/{scenario}/v1/images/edits            ← routes.go(mixin group)
     ↓ forwarding.ForwardOpenAIImageEdit            ← 薄转发
     ↓ OpenAIClientInterface.ImagesEdit             ← vendor 分发点
         ├─ OpenAIClient  → SDK multipart /v1/images/edits(OpenAI 兼容上游)
-        ├─ CodexClient   → JSON POST images/edits(原生协议,见 §3)
+        ├─ CodexClient   → JSON POST images/edits(原生协议,见 §3);带 mask 走 Responses 工具(实验);n > 1 扇出成 n 次单图调用
         ├─ KimiClient    → ErrKimiNotSupported
         ├─ vmodel        → not supported
         └─ DashScope/MiniMax → 明确报错(适配器无 edit surface)
@@ -153,6 +157,9 @@ JSON 请求/响应,二者都会把它打死。所以:
 | 功能 | 文件 |
 |------|------|
 | Codex 原生 edit 协议(types + ImagesEdit + data URL 转换) | `internal/client/codex_images.go` |
+| Codex 带 mask 的 edit(Responses 工具)+ 路由开关 | `internal/client/codex_images_responses.go` |
+| Codex n > 1 扇出与合并 | `internal/client/codex_images_fanout.go` |
+| Codex 出图流解析(generation 与 Responses edit 共用) | `internal/client/codex_client.go` `parseImageGenerationStream` |
 | RoundTripper images 特例 + path 重写 | `internal/client/codex_round_tripper.go` |
 | 接口成员 + OpenAI 兼容实现 | `internal/client/openai.go` |
 | Kimi / vmodel 的 not-supported 存根 | `internal/client/kimi_client.go`、`vmodel/client/openai.go` |
@@ -168,7 +175,10 @@ JSON 请求/响应,二者都会把它打死。所以:
 
 | 层 | 用例 |
 |----|------|
-| Codex 请求构造 | 单图→data URL;多图+options;quality standard→medium/hd→high;n 透传;无图报错(`codex_images_test.go`) |
+| Codex 请求构造 | 单图→data URL;多图+options;quality standard→medium/hd→high;`n` 不上线;无图报错;mask 报错(`codex_images_test.go`) |
+| Codex Responses edit | 路由开关;参考图进消息、mask 挂工具、`action: edit`(`codex_images_responses_test.go`) |
+| Codex 扇出 | 按序合并 + usage 相加;并发不超过窗口;部分失败保留成功的;全失败报错;取消(`codex_images_fanout_test.go`) |
+| Codex 流解析 | done 的 `result` 优先于 partial(即便 status 仍是 generating);只有 partial 时取最后一张;无图报错(`codex_image_stream_test.go`) |
 | RoundTripper | images path 重写 + 协议分类(`codexProtocol`);JSON body 不被注入 stream/store;JSON 200 透传;非 200 报错(`codex_images_test.go`) |
 | 入站解析 | multipart `image`/`image[]`/字段;JSON data URL/裸 base64/数组;拒绝远程 URL;必填校验(`openai_image_edit_test.go`) |
 | decodeInlineImage | 声明 mime / 嗅探 mime / 非 base64 data URL / 非法 base64 |
