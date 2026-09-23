@@ -1,5 +1,11 @@
 # Frontend Refactoring Plan — 2026-09
 
+> **Status: COMPLETE (2026-09-23).** P0–P6 all executed — 26 commits from `ac91bab70` (docs) to `8935bfed4`, 174 files, net −2,020 lines (≥3,000 lines of pure dead code removed; the additions are the extracted small modules). Verified per batch: `pnpm typecheck` (no new errors vs baseline), `pnpm build`, modulepreload list unchanged, vitest 278 passing. RulesPage + guardrails pages screenshot-verified via ui-preview mock mode.
+>
+> Deferred (assessed, intentionally not done): `ScenarioPageContext` relocation out of `pages/` (page-free today, zero bundle impact, 28-importer churn); SkillPage i18n (needs en/zh/ru key parity decision); App.tsx routing-widget extraction (cosmetic); ApiKeyTable/OAuthTable full table-shell merge (row rendering diverges; overflow-menu/delete-confirm hooks extracted instead); ModelTestPage in-app entry (product decision — back-links fixed to `navigate(-1)`); Codex statusline `.ps1` (scripts point at the real repo path but no ps1 exists in-repo yet).
+>
+> Known behavior changes (intentional, review-worthy): SystemLogViewer/AILogViewer no longer refetch on sort clicks; GroupsPage policy summaries use the rich shared formatter; Escape now closes ClaudeCode/OpenCode config modals uniformly; useCopyFeedback gained the execCommand fallback (secure contexts unaffected); ProbeDialog curl keeps loading-state through the debounce window.
+
 Branch: `refactor/0922`. Baseline: `pnpm build` passes; `pnpm typecheck` clean except pre-existing WIP `src/services/api.errorHandling.test.ts` (untracked, not ours — ignore its errors). `frontend/package.json` has an unrelated pending dependency-bump diff — **do not touch package.json / pnpm-lock.yaml in refactor commits.**
 
 Five area reports (all grep-verified) feed this plan:
