@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -38,6 +39,63 @@ func newCodexImagesTestClient(t *testing.T, handler http.HandlerFunc) *CodexClie
 	t.Cleanup(func() { _ = base.Close() })
 
 	return &CodexClient{OpenAIClient: base}
+}
+
+// newCodexImagesTestClientAt is newCodexImagesTestClient but lets the caller
+// pick the API base path. The native images/edits endpoint only classifies
+// as codexProtocolPlainJSON (see rewriteCodexAPIPath) when the request path
+// starts with "/backend-api/images/", so ImagesEdit needs APIBase to end in
+// "/backend-api" the way the real Codex OAuth provider's does — plain
+// server.URL (used for the Responses-API-based ImagesGenerate tests) isn't
+// representative here.
+func newCodexImagesTestClientAt(t *testing.T, apiBaseSuffix string, handler http.HandlerFunc) *CodexClient {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	provider := &typ.Provider{APIBase: server.URL + apiBaseSuffix}
+	base, err := NewOpenAIClient(provider, "gpt-image-2", typ.SessionID{}, option.WithHTTPClient(&http.Client{
+		Transport: &codexRoundTripper{RoundTripper: http.DefaultTransport},
+	}))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = base.Close() })
+
+	return &CodexClient{OpenAIClient: base}
+}
+
+// TestCodexImagesEdit_E2E_NonOKStatusSurfacesRealCause is the end-to-end
+// proof for the native Codex images/edits endpoint (codex_images.go), the
+// other image-gen path besides the Responses-API-based ImagesGenerate.
+// ImagesEdit wraps the SDK error with fmt.Errorf("codex image edit failed:
+// %w", err), so this also confirms that extra wrap doesn't break errors.As's
+// walk down to the underlying *openai.Error, mirroring
+// TestCodexImagesGenerate_E2E_PreStreamErrorSurfacesRealCause for the other
+// image-gen entry point.
+func TestCodexImagesEdit_E2E_NonOKStatusSurfacesRealCause(t *testing.T) {
+	var gotPath string
+	client := newCodexImagesTestClientAt(t, "/backend-api", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Your request was rejected due to content policy.","code":"content_policy_violation"}}`))
+	})
+
+	req := &openai.ImageEditParams{Prompt: "add a red hat", Model: "gpt-image-2"}
+	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
+
+	_, err := client.ImagesEdit(context.Background(), *req)
+	require.Error(t, err)
+
+	// Confirms the request actually took the native plain-JSON images route
+	// (codexProtocolPlainJSON), not the Responses API path — the two are
+	// classified by URL path in rewriteCodexAPIPath.
+	assert.Equal(t, "/backend-api/codex/images/edits", gotPath)
+
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	assert.Equal(t, http.StatusBadRequest, failure.Status, "must be the real 400, not a flattened 500/502")
+	assert.Contains(t, failure.Message, "content_policy_violation")
+	assert.Contains(t, failure.Message, "Your request was rejected due to content policy.")
+	assert.NotContains(t, failure.Message, "network_error")
 }
 
 // TestCodexImagesGenerate_E2E_PreStreamErrorSurfacesRealCause is the
