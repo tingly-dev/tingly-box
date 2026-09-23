@@ -11,10 +11,12 @@ export interface UseResponsesToggleOptions {
 }
 
 export interface UseResponsesToggleResult {
-    enabled: boolean;
+    selection: OpenAIEndpointSelection;
     probing: boolean;
-    onToggle: () => void;
+    onSelect: (selection: OpenAIEndpointSelection) => Promise<void>;
 }
+
+export type OpenAIEndpointSelection = 'auto' | 'chat' | 'responses';
 
 // probeResponsesSupport runs the direct, real-upstream capability check the
 // toggle needs before trusting a provider/model with /responses traffic —
@@ -31,7 +33,7 @@ async function probeResponsesSupport(service: ConfigProvider) {
     });
 }
 
-// useResponsesToggle owns the "native OpenAI Responses API" switch shown on
+// useResponsesToggle owns the OpenAI upstream endpoint choice shown on
 // any rule card whose primary provider is OpenAI-style — it's the rule-level
 // `openaiEndpointOverride` flag (see .design/openai-endpoint-routing.md §3,
 // Layer 2), which is per-rule and provider-agnostic by design, not a
@@ -44,7 +46,8 @@ export function useResponsesToggle({
     onUpdateRecord,
 }: UseResponsesToggleOptions): UseResponsesToggleResult {
     const [probing, setProbing] = useState(false);
-    const enabled = record.flags?.openaiEndpointOverride === 'responses';
+    const rawSelection = record.flags?.openaiEndpointOverride;
+    const selection: OpenAIEndpointSelection = rawSelection === 'chat' || rawSelection === 'responses' ? rawSelection : 'auto';
 
     // The pre-flight probe only validates the provider+model bound *at toggle
     // time*. If the user later swaps the rule's provider/model (drag a new
@@ -63,25 +66,25 @@ export function useResponsesToggle({
         if (lastCheckedServiceKeyRef.current === primaryServiceKey) return;
         lastCheckedServiceKeyRef.current = primaryServiceKey;
 
-        if (!enabled || !primaryService) return;
+        if (selection !== 'responses' || !primaryService) return;
 
         let cancelled = false;
         setProbing(true);
         const revertWithNotice = (message: string) => {
             if (cancelled) return;
             onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: 'auto'});
-            notify.error(message, {title: 'Responses API disabled'});
+            notify.error(message, {title: 'Endpoint returned to Auto'});
         };
         probeResponsesSupport(primaryService).then((result) => {
             if (!result.success) {
                 revertWithNotice(
-                    `The provider/model for this rule changed and no longer supports the Responses API — reverted to Chat Completions. (${result.error?.message || 'check failed'})`,
+                    `The provider/model for this rule changed and no longer supports the Responses API — returned to Auto. (${result.error?.message || 'check failed'})`,
                 );
             }
         }).catch(() => {
             // Fail closed: don't leave a possibly-broken override silently
             // forcing traffic at a 404 just because the re-check itself failed.
-            revertWithNotice('Could not re-verify Responses API support after the model changed — reverted to Chat Completions.');
+            revertWithNotice('Could not re-verify Responses API support after the model changed — returned to Auto.');
         }).finally(() => {
             if (!cancelled) setProbing(false);
         });
@@ -94,15 +97,17 @@ export function useResponsesToggle({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [primaryServiceKey]);
 
-    const onToggle = async () => {
-        if (!primaryService) return;
+    const onSelect = async (nextSelection: OpenAIEndpointSelection) => {
+        if (nextSelection === selection || probing) return;
 
-        // Disabling never needs a probe — it's just reverting to the
-        // conservative default, always safe.
-        if (enabled) {
-            onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: 'auto'});
+        // Auto follows the model catalog and provider declaration; forcing
+        // Chat is also an immediate, explicit choice. Neither needs a probe.
+        if (nextSelection !== 'responses') {
+            onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: nextSelection});
             return;
         }
+
+        if (!primaryService) return;
 
         setProbing(true);
         try {
@@ -123,5 +128,5 @@ export function useResponsesToggle({
         }
     };
 
-    return {enabled, probing, onToggle};
+    return {selection, probing, onSelect};
 }

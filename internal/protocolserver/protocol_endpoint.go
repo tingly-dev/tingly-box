@@ -107,8 +107,7 @@ func resolveEndpointMode(mode ai.OpenAIEndpointMode, incoming IncomingAPIType) p
 
 // EndpointOverride is the typed value of the openai_endpoint_override rule
 // flag. It forces an OpenAI request onto a specific endpoint, overriding the
-// provider's declared OpenAIEndpointMode default (provider declarations
-// trump conflicting overrides — see ResolveOpenAIEndpoint).
+// model Catalog entry and the provider's declared OpenAIEndpointMode default.
 type EndpointOverride string
 
 const (

@@ -264,20 +264,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return [...list].sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0));
     }, [record.providers]);
 
-    // Native OpenAI Responses API toggle. The underlying `openaiEndpointOverride`
-    // rule flag is per-rule and provider-agnostic by design (see
-    // .design/openai-endpoint-routing.md §3, Layer 2) — it isn't a Codex-only
-    // capability, so the toggle shows for any rule whose primary provider is
-    // OpenAI-style. useResponsesToggle runs the pre-flight probe against the
-    // real upstream before trusting a provider/model with it, and gates the
-    // rest: unsupported providers simply fail the probe and stay off.
+    // The rule override is separate from catalog and provider defaults. Auto
+    // lets the resolver consult those declarations; forcing Responses is
+    // checked against the current upstream before saving.
     const primaryService = sortedDefaultProviders.find((p) => p.active !== false) || sortedDefaultProviders[0];
-    const showResponsesToggle = !!primaryService
+    const showEndpointSelection = !!primaryService
         && getApiStyle(primaryService.provider) === 'openai';
     const {
-        enabled: responsesEnabled,
+        selection: endpointSelection,
         probing: responsesProbing,
-        onToggle: handleResponsesToggle,
+        onSelect: handleEndpointSelect,
     } = useResponsesToggle({record, primaryService, onUpdateRecord});
 
     // Group already-sorted providers into tiers (single pass — order preserved from sortedDefaultProviders)
@@ -505,9 +501,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     // Notify parent for scenario-specific handling
                     onContext1MToggle?.(newState, record.uuid);
                 }}
-                responsesEnabled={responsesEnabled}
+                endpointSelection={endpointSelection}
                 responsesProbing={responsesProbing}
-                onResponsesToggle={showResponsesToggle ? handleResponsesToggle : undefined}
+                onEndpointSelect={showEndpointSelection ? handleEndpointSelect : undefined}
             />
 
             {/* Tier Guide Dialog */}
