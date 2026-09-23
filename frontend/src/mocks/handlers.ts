@@ -2162,7 +2162,9 @@ export const handlers = [
                 fetched_at: new Date(now - (minutesAgo + providerIndex * 10) * 60_000).toISOString(),
                 windows: (quota.windows || []).map((window: any) => {
                     if (!window.limit || window.unknown || window.unlimited) return window
-                    const usedPercent = Math.max(0, window.used_percent - (ages.length - index - 1) * 7)
+                    // Older samples have consumed less of the same quota window;
+                    // the remaining allowance should fall toward the latest sample.
+                    const usedPercent = Math.max(0, window.used_percent - index * 7)
                     return {
                         ...window,
                         used_percent: usedPercent,
