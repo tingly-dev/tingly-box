@@ -2,7 +2,7 @@ name: Docker Source Image Build and Push
 
 # Builds the image from the checked-out source via
 # build/docker/docker.build.Dockerfile, rather than repackaging a published
-# npm release the way docker-npx.yml does. Dispatch this against the ref you
+# npm release the way docker-npm.yml does. Dispatch this against the ref you
 # want built, so a branch's own changes actually reach the image.
 
 on:
@@ -44,7 +44,7 @@ jobs:
           submodules: recursive
 
       # image_tag reaches a run: block through the composite action's step
-      # summary. Dispatch is limited to write-access users, but docker-npx.yml
+      # summary. Dispatch is limited to write-access users, but docker-npm.yml
       # validates its tag for the same reason and this one should too.
       - name: Validate image tag
         env:

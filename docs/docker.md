@@ -6,8 +6,8 @@ This guide explains how to use Tingly Box with Docker.
 
 Two Dockerfiles live under `build/docker/`:
 
-1. **`docker.build.Dockerfile`** - Multi-stage build from source (Go + frontend). This is what the published `ghcr.io/tingly-dev/tingly-box` images are built from.
-2. **`docker.npx.Dockerfile`** - Lightweight image that installs the published `tingly-box` npm package. Used by `docker-compose.yml`.
+1. **`docker.build.Dockerfile`** - Multi-stage image built directly from the Go and frontend source.
+2. **`docker.npm.Dockerfile`** - Lightweight image that installs the published `tingly-box` package directly with npm. This is used by the release pipeline and `docker-compose.yml`.
 
 Both run as a non-root `tingly` user and both ship an entrypoint that fixes up
 ownership of the bind-mounted data directory at container start, so a plain
@@ -22,7 +22,7 @@ mkdir tingly-data
 docker run -d \
   --name tingly-box \
   -p 12580:12580 \
-  -v "$(pwd)/tingly-data:/home/tingly/.tingly-box" \
+  -v "$(pwd)/tingly-data:/app/.tingly-box" \
   ghcr.io/tingly-dev/tingly-box
 ```
 
@@ -75,7 +75,7 @@ docker run -it --rm \
 
 - `TINGLY_PORT` - Server port (default: `12580`)
 - `TINGLY_HOST` - Server host (default: `0.0.0.0`)
-- `TINGLY_DEBUG` - Enable debug mode (npx image only, default: `false`)
+- `TINGLY_DEBUG` - Enable debug mode (npm image only, default: `false`)
 
 ### Volume Mounts
 
@@ -83,7 +83,7 @@ Config, memory, logs and the database all live under a single directory tree
 (see `internal/config/app_config.go`), so only one bind mount is needed:
 
 - `docker.build.Dockerfile`: `/home/tingly/.tingly-box`
-- `docker.npx.Dockerfile` / `docker-compose.yml`: `/app/.tingly-box`
+- `docker.npm.Dockerfile` / `docker-compose.yml`: `/app/.tingly-box`
 
 ### Running as a specific host UID/GID
 
@@ -136,7 +136,7 @@ tar czf tingly-config-backup.tar.gz -C data .tingly-box
 3. **Configuration not persisting**
    - Check the volume mount path matches the image you're running
      (`/home/tingly/.tingly-box` for the source-build image,
-     `/app/.tingly-box` for the npx image / Compose).
+     `/app/.tingly-box` for the npm image / Compose).
 
 ## Building for Different Platforms
 

@@ -196,7 +196,7 @@ the defaults:
    | `npm_tag` | npm dist-tag (`latest` / `rc`) | `rc` |
    | `publish_cli` | Publish the CLI package (`tingly-box`) and its platform packages | `true` |
    | `publish_gui` | Publish GUI package (`tingly-box-gui`) | `false` |
-   | `build_docker` | Build and push the Docker NPX image after the CLI publish | `true` |
+   | `build_docker` | Build and push the npm-installed Docker image after the CLI publish | `true` |
 
 5. **Important**: The `tag` must match an existing GitHub Release tag; the npm
    version is always the tag without the `v` prefix

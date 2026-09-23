@@ -21,9 +21,13 @@ inputs:
   dockerfile:
     description: 'Path to Dockerfile'
     required: false
-    default: './build/docker/docker.npx.Dockerfile'
+    default: './build/docker/docker.npm.Dockerfile'
   build_args:
     description: 'Additional build arguments (key=value pairs, one per line)'
+    required: false
+    default: ''
+  expected_version:
+    description: 'Expected tingly-box version inside the image; empty skips verification'
     required: false
     default: ''
   platforms:
@@ -75,6 +79,23 @@ runs:
         cache-to: type=gha,mode=max
         platforms: ${{ inputs.platforms }}
         build-args: ${{ inputs.build_args }}
+
+    - name: Verify image version
+      if: ${{ inputs.expected_version != '' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ inputs.version }}
+        EXPECTED_VERSION: ${{ inputs.expected_version }}
+      run: |
+        docker pull "$IMAGE"
+        VERSION_OUTPUT="$(docker run --rm --entrypoint tingly-box "$IMAGE" version)"
+        echo "$VERSION_OUTPUT"
+
+        INSTALLED_VERSION="$(awk '$1 == "Version:" { print $2 }' <<< "$VERSION_OUTPUT")"
+        if [ "$INSTALLED_VERSION" != "v${EXPECTED_VERSION#v}" ]; then
+          echo "::error::Image $IMAGE does not contain tingly-box v${EXPECTED_VERSION#v}"
+          exit 1
+        fi
 
     - name: Generate image digest summary
       shell: bash

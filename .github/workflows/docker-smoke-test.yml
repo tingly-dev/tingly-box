@@ -43,8 +43,8 @@ jobs:
             tingly-box-smoke:build \
             /home/tingly/.tingly-box
 
-  smoke-test-npx-image:
-    name: Smoke test docker.npx.Dockerfile
+  smoke-test-npm-image:
+    name: Smoke test docker.npm.Dockerfile
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -52,10 +52,10 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -f build/docker/docker.npx.Dockerfile -t tingly-box-smoke:npx .
+          docker build -f build/docker/docker.npm.Dockerfile -t tingly-box-smoke:npm .
 
       - name: Run against a freshly-created, unchowned bind mount
         run: |
           .github/scripts/docker-smoke-test.sh \
-            tingly-box-smoke:npx \
+            tingly-box-smoke:npm \
             /app/.tingly-box
