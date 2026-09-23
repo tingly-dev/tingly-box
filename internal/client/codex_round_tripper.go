@@ -91,10 +91,14 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
+	// A non-200 goes back to the SDK as a response, not a RoundTrip error: the
+	// SDK turns it into an *openai.Error that keeps the upstream status and
+	// body (a moderation block's own message), and retries only statuses worth
+	// retrying. Returned as an error it became a *url.Error, which the SDK
+	// retries as a dropped connection — re-sending a policy-blocked prompt —
+	// and the gateway reports as network_error / 502.
 	if resp.StatusCode != http.StatusOK {
-		errorBody, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("request failed with status %s: %s", resp.Status, string(errorBody))
+		return resp, nil
 	}
 
 	if imagesEndpoint {

@@ -454,11 +454,18 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 //  2. response.output_item.done - the image_generation_call item, whose result
 //     is the final image. It wins over any preview, whatever its status: the
 //     upstream has been seen leaving a finished call at status "generating".
+//
+// When no image arrives, the reason does not come as an HTTP error: a policy
+// block ends the stream with response.failed (response.error), an `error`
+// event, response.incomplete, or the model answering in text instead of
+// calling the tool. Those are collected so the caller sees why — "no image
+// data" alone hides a moderation block behind what reads like a gateway bug.
 func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
 	defer stream.Close()
 
 	var finalB64, partialB64 string
 	var imageCallID string
+	var failure codexImageFailure
 
 	for stream.Next() {
 		event := stream.Current()
@@ -485,7 +492,28 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 				if imageCallID == "" || imageCall.Result != "" {
 					imageCallID = imageCall.ID
 				}
+				if imageCall.Result == "" && imageCall.Status == "failed" {
+					failure.add("image_generation_call failed")
+				}
+			} else if item.Type == "message" {
+				for _, part := range item.AsMessage().Content {
+					failure.add(part.Text)
+					failure.add(part.Refusal)
+				}
 			}
+
+		case "response.failed":
+			respErr := event.AsResponseFailed().Response.Error
+			failure.addCoded(string(respErr.Code), respErr.Message)
+
+		case "response.incomplete":
+			if reason := event.AsResponseIncomplete().Response.IncompleteDetails.Reason; reason != "" {
+				failure.add("incomplete: " + reason)
+			}
+
+		case "error":
+			errEvent := event.AsError()
+			failure.addCoded(errEvent.Code, errEvent.Message)
 		}
 	}
 
@@ -499,6 +527,9 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 		b64JSON = partialB64
 	}
 	if b64JSON == "" {
+		if reason := failure.String(); reason != "" {
+			return nil, fmt.Errorf("codex returned no image: %s (image_call_id: %s)", reason, imageCallID)
+		}
 		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
 	}
 
@@ -511,6 +542,40 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 			},
 		},
 	}, nil
+}
+
+// codexImageFailure collects the upstream's own account of why an image call
+// produced no image, in stream order and without repeats.
+type codexImageFailure struct {
+	reasons []string
+}
+
+func (f *codexImageFailure) add(reason string) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return
+	}
+	for _, r := range f.reasons {
+		if r == reason {
+			return
+		}
+	}
+	f.reasons = append(f.reasons, reason)
+}
+
+func (f *codexImageFailure) addCoded(code, message string) {
+	switch {
+	case code != "" && message != "":
+		f.add(code + ": " + message)
+	case message != "":
+		f.add(message)
+	default:
+		f.add(code)
+	}
+}
+
+func (f *codexImageFailure) String() string {
+	return strings.Join(f.reasons, "; ")
 }
 
 // parseResponsesStream parses the streaming Responses API response

@@ -54,3 +54,48 @@ func TestParseImageGenerationStream_NoImage(t *testing.T) {
 	_, err := c.parseImageGenerationStream(context.Background(), imageStream(`{"type":"response.completed","sequence_number":1}`))
 	assert.Error(t, err)
 }
+
+// When the upstream declines to draw, the stream says why in its own events.
+// That reason must be the error, not a bare "no image data".
+func TestParseImageGenerationStream_NoImageCarriesUpstreamReason(t *testing.T) {
+	cases := map[string]struct {
+		events []string
+		want   string
+	}{
+		"response.failed": {
+			events: []string{`{"type":"response.failed","sequence_number":1,"response":{"id":"resp_1","status":"failed","error":{"code":"image_content_policy_violation","message":"Your request was rejected by the safety system."}}}`},
+			want:   "image_content_policy_violation: Your request was rejected by the safety system.",
+		},
+		"error event": {
+			events: []string{`{"type":"error","sequence_number":1,"code":"moderation_blocked","message":"Blocked by moderation.","param":null}`},
+			want:   "moderation_blocked: Blocked by moderation.",
+		},
+		"model refused in text": {
+			events: []string{
+				`{"type":"response.output_item.done","output_index":0,"sequence_number":1,"item":{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"I can't create that image.","annotations":[]}]}}`,
+				`{"type":"response.completed","sequence_number":2}`,
+			},
+			want: "I can't create that image.",
+		},
+		"refusal part": {
+			events: []string{`{"type":"response.output_item.done","output_index":0,"sequence_number":1,"item":{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"refusal","refusal":"Not allowed."}]}}`},
+			want:   "Not allowed.",
+		},
+		"failed image call": {
+			events: []string{`{"type":"response.output_item.done","output_index":0,"sequence_number":1,"item":{"type":"image_generation_call","id":"ig_9","status":"failed"}}`},
+			want:   "image_generation_call failed",
+		},
+		"incomplete": {
+			events: []string{`{"type":"response.incomplete","sequence_number":1,"response":{"id":"resp_1","status":"incomplete","incomplete_details":{"reason":"content_filter"}}}`},
+			want:   "incomplete: content_filter",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := &CodexClient{}
+			_, err := c.parseImageGenerationStream(context.Background(), imageStream(tc.events...))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
