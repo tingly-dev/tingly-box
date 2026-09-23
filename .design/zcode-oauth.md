@@ -101,8 +101,8 @@ frontend opens URL, polls /oauth/status     CompleteZCodeFlow = Poll + ResolveCr
   or re-created plan key is picked up without a browser round trip. When the
   account token itself has expired the error reaches the "Token refresh failed"
   dialog, which offers Reauthorize — the same recovery path as every issuer.
-- **Provider name** defaults to the plan ("BigModel Coding Plan" / "Z.ai Coding
-  Plan"): ZCode returns no email to name the provider after, and the account id
+- **Provider name** defaults to the plan ("ZCode CN" / "ZCode International"):
+  ZCode returns no email to name the provider after, and the account id
   is deliberately not shown.
 
 ## Dual endpoints: both protocols, natively
@@ -140,10 +140,8 @@ them moving like any other OAuth provider.
 
 ## Rollout
 
-BigModel (China) ships first: its card is enabled in Connect AI, the Z.ai card
-is present but `enabled: false` in `OAuthDialog.tsx` until the international
-flow has been verified against a live account. The backend and CLI accept both
-issuers already — enabling Z.ai is that one flag.
+Both ZCode CN (BigModel) and ZCode International (Z.ai) cards are enabled in
+Connect AI. The backend and CLI accept both issuers already.
 
 ## Not mirrored (on purpose)
 

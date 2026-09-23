@@ -459,7 +459,7 @@ func TestHandler_ZCodeReauth_KeepsStaticCredentialShape(t *testing.T) {
 	const targetUUID = "u-zcode-1"
 	require.NoError(t, cfg.AddProvider(&typ.Provider{
 		UUID: targetUUID,
-		Name: "BigModel Coding Plan",
+		Name: "ZCode CN",
 		// Unreachable on purpose: the post-reauth model fetch fails fast and is
 		// non-fatal, keeping the test offline.
 		APIBase:          "http://127.0.0.1:1",
@@ -525,7 +525,7 @@ func TestHandler_ZCodeReauth_KeepsStaticCredentialShape(t *testing.T) {
 
 func TestZCodeProviderName(t *testing.T) {
 	assert.Equal(t, "custom", zcodeProviderName(ai.IssuerZCodeCN, "custom"), "a user-supplied name wins")
-	assert.Equal(t, "BigModel Coding Plan", zcodeProviderName(ai.IssuerZCodeCN, ""))
-	assert.Equal(t, "Z.ai Coding Plan", zcodeProviderName(ai.IssuerZCode, ""))
+	assert.Equal(t, "ZCode CN", zcodeProviderName(ai.IssuerZCodeCN, ""))
+	assert.Equal(t, "ZCode International", zcodeProviderName(ai.IssuerZCode, ""))
 	assert.Equal(t, "", zcodeProviderName(ai.IssuerKimiCode, ""), "non-ZCode issuers keep the generic naming path")
 }

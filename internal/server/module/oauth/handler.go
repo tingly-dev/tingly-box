@@ -543,9 +543,9 @@ func zcodeProviderName(issuer ai.Issuer, customName string) string {
 	}
 	switch issuer {
 	case ai.IssuerZCode:
-		return "Z.ai Coding Plan"
+		return "ZCode International"
 	case ai.IssuerZCodeCN:
-		return "BigModel Coding Plan"
+		return "ZCode CN"
 	default:
 		return ""
 	}

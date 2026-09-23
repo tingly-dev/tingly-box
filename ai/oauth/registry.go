@@ -200,7 +200,7 @@ func DefaultRegistry() *Registry {
 	// itself lives in zcode.go. Two issuers, one per account platform.
 	registry.Register(&ProviderConfig{
 		Type:        ai.IssuerZCode,
-		DisplayName: "ZCode (Z.ai GLM Coding Plan)",
+		DisplayName: "ZCode International",
 		AuthURL:     ZCodeAPIBase + "/oauth/cli/init",
 		TokenURL:    ZCodeAPIBase + "/oauth/cli/poll",
 		AuthStyle:   AuthStyleInNone,
@@ -211,7 +211,7 @@ func DefaultRegistry() *Registry {
 
 	registry.Register(&ProviderConfig{
 		Type:        ai.IssuerZCodeCN,
-		DisplayName: "ZCode (BigModel GLM Coding Plan)",
+		DisplayName: "ZCode CN",
 		AuthURL:     ZCodeAPIBase + "/oauth/cli/init",
 		TokenURL:    ZCodeAPIBase + "/oauth/cli/poll",
 		AuthStyle:   AuthStyleInNone,
