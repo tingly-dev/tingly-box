@@ -14,6 +14,14 @@ import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 
 /**
+ * Deliberate total-width cap for the header card's rows (Start/Base URL/API
+ * Key/Plugins ConfigRows): on wide screens the card stays full-width but its
+ * content stops at this value so the row actions don't drift far from the
+ * row content — keeps every use page's header visually consistent.
+ */
+export const SCENARIO_HEADER_CONTENT_MAX_WIDTH = 960;
+
+/**
  * UnifiedCard header title block shared by every scenario page: the card
  * title plus an optional i18n-keyed info tooltip. Pages that keep their own
  * structure (Codex, ImageGen) reuse this instead of re-rolling the Box.
@@ -162,6 +170,7 @@ export const ScenarioPage: React.FC<ScenarioPageProps> = ({
                     titleHeadingLevel={1}
                     title={<ScenarioCardHeader title={title} tooltipKey={tooltipKey} />}
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={renderRightAction ? renderRightAction(slot) : rightAction}
                 >
                     <ProviderConfigCard

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
-import { ScenarioCardHeader } from './ScenarioPage';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './ScenarioPage';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
@@ -44,6 +44,7 @@ const UseImageGenPageContent: React.FC = () => {
                         <ScenarioCardHeader title="Image API" tooltipKey="scenarioPage.tooltip.imagegen" />
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={
                         <Button
                             onClick={() => setQuickStartOpen(true)}

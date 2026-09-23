@@ -7,6 +7,7 @@ import { derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode } from './components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioPage';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import TemplatePage from './components/TemplatePage.tsx';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
@@ -234,6 +235,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                         </Box>
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                             <ToggleButtonGroup

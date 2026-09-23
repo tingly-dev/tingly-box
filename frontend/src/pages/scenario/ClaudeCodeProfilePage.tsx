@@ -1,6 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioPage';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ConfigRow from "@/components/ConfigRow.tsx";
@@ -188,6 +189,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
             <CardGrid>
                 <UnifiedCard
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     title={
                         <Stack spacing={0.25} sx={{ minWidth: 0 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

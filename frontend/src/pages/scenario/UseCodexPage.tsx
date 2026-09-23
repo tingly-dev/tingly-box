@@ -16,7 +16,7 @@ import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
-import { ScenarioCardHeader } from './ScenarioPage';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './ScenarioPage';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 const scenario = "codex";
 const UseCodexPageContent: React.FC = () => {
@@ -72,6 +72,7 @@ const UseCodexPageContent: React.FC = () => {
                         <ScenarioCardHeader title="Codex" tooltipKey="scenarioPage.tooltip.codex" />
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={
                         <Button
                             onClick={() => setConfigModalOpen(true)}
