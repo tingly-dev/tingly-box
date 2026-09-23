@@ -74,6 +74,11 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
 	}
+	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
+		// Hands the selected profile to the vendor transform's Claude Code
+		// identity rewrite (ops.ClaudeCodeVersionFromExtra).
+		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))
+	}
 	return preVendor
 }
 
@@ -165,6 +170,12 @@ func ResolveRuleFlagsWithScenario(
 			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
 		}
 
+		// Inject scenario-level ClaudeCodeVersion if rule hasn't set one
+		// explicitly (same override semantics as CustomUserAgent).
+		if flags.ClaudeCodeVersion == "" && scenarioConfig.Flags.ClaudeCodeVersion != "" {
+			flags.ClaudeCodeVersion = scenarioConfig.Flags.ClaudeCodeVersion
+		}
+
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
 		// migrate20260610), so there is nothing to inject here.
@@ -214,7 +225,36 @@ func ResolveRuleFlagsWithScenario(
 	// SDK default), so no precedence judgment is duplicated here.
 	applyClientUserAgent(c)
 
+	// Likewise the inbound Claude Code facts (beta flags, subagent ids) are
+	// attached unconditionally; only the Claude OAuth chain reads them, and
+	// it decides what is replayed (see client.composeClaudeCodeBetas).
+	applyClaudeCodeClientHints(c)
+
 	return flags
+}
+
+// applyClaudeCodeClientHints attaches the inbound anthropic-beta flags and
+// the Claude Code subagent headers to the request context for the Claude
+// OAuth chain (typ.GetClaudeCodeClientHints). No-op when the client sent none.
+func applyClaudeCodeClientHints(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	hints := typ.ClaudeCodeClientHints{
+		AgentID:       strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID: strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+	}
+	for _, v := range c.Request.Header.Values("anthropic-beta") {
+		for _, flag := range strings.Split(v, ",") {
+			if flag = strings.TrimSpace(flag); flag != "" {
+				hints.Betas = append(hints.Betas, flag)
+			}
+		}
+	}
+	if hints.IsZero() {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithClaudeCodeClientHints(c.Request.Context(), hints))
 }
 
 // applyRuleFlags attaches the resolved RuleFlags to the request context for
