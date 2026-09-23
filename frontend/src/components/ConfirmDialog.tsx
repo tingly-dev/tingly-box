@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { type ReactNode, useId } from 'react';
 
-export interface ConfirmDialogProps {
+interface ConfirmDialogProps {
     open: boolean;
     title: ReactNode;
     description?: ReactNode;

@@ -32,7 +32,7 @@ import { api } from './services/api';
 // is lazy-loaded: each becomes its own chunk that downloads on first visit
 // instead of being bundled into the initial page load.
 const HelpPage = lazy(() => import('./pages/HelpPage'));
-const SharingKeysPage = lazy(() => import('./pages/SharingKeysPage.tsx'));
+const SharingKeysPage = lazy(() => import('./pages/SharingKeysPage'));
 const VirtualModelsPage = lazy(() => import('./pages/VirtualModelsPage'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
@@ -52,8 +52,8 @@ const UseCursorPage = lazy(() => import('./pages/scenario/UseCursorPage'));
 const UseEmbedPage = lazy(() => import('./pages/scenario/UseEmbedPage'));
 const UseImageGenPage = lazy(() => import('./pages/scenario/UseImageGenPage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
-const System = lazy(() => import('./pages/system/System.tsx'));
-const AccessControl = lazy(() => import('./pages/system/AccessControl.tsx'));
+const System = lazy(() => import('./pages/system/System'));
+const AccessControl = lazy(() => import('./pages/system/AccessControl'));
 const LogsPage = lazy(() => import('./pages/system/LogsPage'));
 const ExperimentalPage = lazy(() => import('./pages/system/ExperimentalPage'));
 const DevelopPage = lazy(() => import('./pages/system/DevelopPage'));

@@ -3,7 +3,7 @@ import { Chip } from '@mui/material';
 import { LocationOn as LocationOnIcon } from '@/components/icons';
 import { EMPTY_SX } from '@/constants/defaults';
 
-export interface RegionBadgeProps {
+interface RegionBadgeProps {
   region: 'cn' | 'global' | 'self-hosted';
   size?: 'small' | 'medium';
   sx?: SxProps;

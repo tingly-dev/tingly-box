@@ -1,12 +1,12 @@
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
-import type {ExportFormat} from "@/components/rule-card/utils";
 import {
     exportProviderAsBase64ToClipboard,
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {ProviderQuotaDetailRow} from "@/components/credential/ProviderQuotaDetailRow";
 import {
+    Check,
     Cancel,
     ContentCopy,
     DataUsage,
@@ -17,6 +17,7 @@ import {
     Route,
     Visibility,
 } from '@/components/icons';
+import ConfirmDialog from "@/components/ConfirmDialog";
 import {
     Box,
     Button,
@@ -40,6 +41,9 @@ import {
 } from "@mui/material";
 import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
+import {useCopyFeedback} from "@/hooks/useCopyFeedback";
+import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
+import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
 
@@ -59,12 +63,6 @@ interface TokenModalState {
     providerName: string;
     token: string;
     loading: boolean;
-}
-
-interface DeleteModalState {
-    open: boolean;
-    providerUuid: string;
-    providerName: string;
 }
 
 interface ModelListDialogState {
@@ -102,32 +100,17 @@ const ApiKeyTable = ({
         token: "",
         loading: false,
     });
-    const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
-        open: false,
-        providerUuid: "",
-        providerName: "",
-    });
+    const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
+        useDeleteConfirm(
+            onDelete,
+            (uuid) => providers.find((p) => p.uuid === uuid)?.name,
+        );
     const [modelListDialog, setModelListDialog] = useState<ModelListDialogState>({
         open: false,
         provider: null,
     });
-    const [moreMenu, setMoreMenu] = useState<{
-        anchorEl: HTMLElement | null;
-        providerUuid: string;
-    }>({
-        anchorEl: null,
-        providerUuid: "",
-    });
-
-    const handleMoreOpen = (
-        e: React.MouseEvent<HTMLElement>,
-        providerUuid: string,
-    ) => {
-        e.stopPropagation();
-        setMoreMenu({anchorEl: e.currentTarget, providerUuid});
-    };
-    const handleMoreClose = () =>
-        setMoreMenu({anchorEl: null, providerUuid: ""});
+    const {menu: moreMenu, openMenu: handleMoreOpen, closeMenu: handleMoreClose} = useRowOverflowMenu();
+    const {copied: tokenCopied, copy: copyToken} = useCopyFeedback();
 
     const fetchFullToken = async (providerUuid: string): Promise<string> => {
         try {
@@ -174,26 +157,6 @@ const ApiKeyTable = ({
 
     const handleCloseTokenModal = () => {
         setTokenModal({open: false, providerName: "", token: "", loading: false});
-    };
-
-    const handleDeleteClick = (providerUuid: string) => {
-        const provider = providers.find((p) => p.uuid === providerUuid);
-        setDeleteModal({
-            open: true,
-            providerUuid,
-            providerName: provider?.name || "Unknown Provider",
-        });
-    };
-
-    const handleCloseDeleteModal = () => {
-        setDeleteModal({open: false, providerUuid: "", providerName: ""});
-    };
-
-    const handleConfirmDelete = () => {
-        if (onDelete && deleteModal.providerUuid) {
-            onDelete(deleteModal.providerUuid);
-        }
-        handleCloseDeleteModal();
     };
 
     const formatTokenDisplay = (provider: Provider) => {
@@ -504,7 +467,7 @@ const ApiKeyTable = ({
                 transformOrigin={{vertical: "top", horizontal: "right"}}
             >
                 {(() => {
-                    const p = providers.find((p) => p.uuid === moreMenu.providerUuid);
+                    const p = providers.find((p) => p.uuid === moreMenu.rowId);
                     if (!p) return null;
                     return [
                         p.token && (
@@ -603,23 +566,16 @@ const ApiKeyTable = ({
                     <Stack direction="row" spacing={2} sx={{
                         justifyContent: "flex-end"
                     }}>
-                        <IconButton
-                            aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
-                            color="primary"
-                            disabled={tokenModal.loading || !tokenModal.token}
-                            onClick={async () => {
-                                if (tokenModal.token) {
-                                    try {
-                                        await navigator.clipboard.writeText(tokenModal.token);
-                                    } catch (err) {
-                                        console.error("Failed to copy token:", err);
-                                    }
-                                }
-                            }}
-                            title={tokenModal.loading ? "Loading..." : "Copy Token"}
-                        >
-                            <ContentCopy/>
-                        </IconButton>
+                        <Tooltip title={tokenCopied ? "Copied!" : tokenModal.loading ? "Loading..." : "Copy Token"}>
+                            <IconButton
+                                aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
+                                color="primary"
+                                disabled={tokenModal.loading || !tokenModal.token}
+                                onClick={() => tokenModal.token && copyToken(tokenModal.token)}
+                            >
+                                {tokenCopied ? <Check/> : <ContentCopy/>}
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title="Close">
                             <IconButton aria-label="Close API key dialog" onClick={handleCloseTokenModal}>
                                 <Cancel/>
@@ -628,45 +584,16 @@ const ApiKeyTable = ({
                     </Stack>
                 </Box>
             </Modal>
-            {/* Delete Confirmation Modal */}
-            <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
-                <Box
-                    sx={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        width: 400,
-                        maxWidth: "80vw",
-                        bgcolor: "background.paper",
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                    }}
-                >
-                    <Typography variant="h6" sx={{mb: 2}}>
-                        Delete Provider
-                    </Typography>
-                    <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete the provider "
-                        {deleteModal.providerName}"? This action cannot be undone.
-                    </Typography>
-                    <Stack direction="row" spacing={2} sx={{
-                        justifyContent: "flex-end"
-                    }}>
-                        <Button onClick={handleCloseDeleteModal} color="inherit">
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirmDelete}
-                            color="error"
-                            variant="contained"
-                        >
-                            Delete
-                        </Button>
-                    </Stack>
-                </Box>
-            </Modal>
+            {/* Delete Confirmation */}
+            <ConfirmDialog
+                open={deleteModal.open}
+                title="Delete Provider"
+                description={`Are you sure you want to delete the provider "${deleteModal.rowName}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                confirmColor="error"
+                onClose={handleCloseDeleteModal}
+                onConfirm={handleConfirmDelete}
+            />
             {/* Model List Dialog */}
             <ModelListDialog
                 open={modelListDialog.open}

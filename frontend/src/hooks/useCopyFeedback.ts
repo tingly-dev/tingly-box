@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { writeToClipboard } from '@/utils/clipboard';
 
 // useCopyFeedback: copy text to the clipboard and flip a "copied" flag for a
 // couple seconds so the caller can swap a tooltip/icon to acknowledge it.
@@ -8,7 +9,7 @@ export function useCopyFeedback(resetMs = 2000) {
     const [copied, setCopied] = useState(false);
     const copy = useCallback(
         (text: string, onCopied?: () => void) => {
-            navigator.clipboard.writeText(text).then(() => {
+            writeToClipboard(text).then(() => {
                 setCopied(true);
                 onCopied?.();
                 setTimeout(() => setCopied(false), resetMs);

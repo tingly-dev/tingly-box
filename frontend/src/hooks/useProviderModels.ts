@@ -14,11 +14,6 @@ type ModelCacheEvent =
 // Event system for provider models updates — crossTab:true propagates to other browser tabs
 const modelCacheEvent = createEventSystem<ModelCacheEvent>('tingly_model_cache', true);
 
-// Export event name for backward compatibility
-export const MODEL_CACHE_EVENT = modelCacheEvent.eventName;
-// Legacy event name (deprecated)
-export const PROVIDER_MODELS_UPDATE_EVENT = 'tingly_provider_models_update';
-
 // Custom hook to manage provider models
 export const useProviderModels = () => {
     const [providerModels, setProviderModels] = useState<ProviderModelsDataByUuid>({});
@@ -180,22 +175,6 @@ export const useProviderModels = () => {
         });
     }, []);
 
-    // Refetch all providers that have cached data
-    const refetchAll = useCallback(async () => {
-        const promises = Object.keys(providerModels).map(uuid => refreshModels(uuid));
-        await Promise.allSettled(promises);
-    }, [providerModels, refreshModels]);
-
-    // Check if a provider is currently refreshing
-    const isRefreshing = useCallback((providerUuid: string): boolean => {
-        return refreshingProviders.has(providerUuid);
-    }, [refreshingProviders]);
-
-    // Get models for a specific provider
-    const getModels = useCallback((providerUuid: string): ProviderModelData | undefined => {
-        return providerModels[providerUuid];
-    }, [providerModels]);
-
     // Listen for cross-tab cache events
     useEffect(() => {
         const cleanup = modelCacheEvent.listen((event) => {
@@ -255,8 +234,5 @@ export const useProviderModels = () => {
         refreshModels,
         setModels,
         removeModels,
-        refetchAll,
-        isRefreshing,
-        getModels,
     };
 };

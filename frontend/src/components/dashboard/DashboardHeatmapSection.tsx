@@ -4,6 +4,7 @@ import { Box, Paper, Skeleton, Tooltip, Typography } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { format } from 'date-fns';
 import api from '@/services/api';
+import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
 
 // The activity heatmap is a fixed, long-window overview: it always shows the
@@ -13,20 +14,6 @@ import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
 // Provider / Model / Identity filters are shared with the rest of the
 // dashboard; only the time range is fixed.
 const HEATMAP_DAYS = 365;
-
-const toLocalISOString = (date: Date): string => {
-    const tzOffset = -date.getTimezoneOffset();
-    const sign = tzOffset >= 0 ? '+' : '-';
-    const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
-    return (
-        date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-        'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
-        sign + pad(tzOffset / 60) + ':' + pad(tzOffset % 60)
-    );
-};
-
-const getLocalMidnight = (date: Date): Date =>
-    new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 interface DashboardHeatmapSectionProps {
     /** Provider uuid filter, or 'all'. Shared with the rest of the dashboard. */

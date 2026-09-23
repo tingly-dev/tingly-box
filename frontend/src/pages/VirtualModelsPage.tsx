@@ -2,25 +2,18 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import VirtualModelsTable from '@/components/VirtualModelsTable';
 import EmptyState from '@/components/EmptyState';
-import { Alert, Snackbar, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNotify } from '@/hooks/useNotify';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
 
 const VirtualModelsPage = () => {
     const { t } = useTranslation();
+    const notify = useNotify();
     const [providers, setProviders] = useState<Provider[]>([]);
     const [loading, setLoading] = useState(true);
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error';
-    }>({ open: false, message: '', severity: 'success' });
-
-    const showNotification = (message: string, severity: 'success' | 'error') => {
-        setSnackbar({ open: true, message, severity });
-    };
 
     const loadProviders = async () => {
         setLoading(true);
@@ -28,7 +21,7 @@ const VirtualModelsPage = () => {
         if (result.success) {
             setProviders(result.data);
         } else {
-            showNotification(`Failed to load providers: ${result.error}`, 'error');
+            notify.error(`Failed to load providers: ${result.error}`);
         }
         setLoading(false);
     };
@@ -45,10 +38,10 @@ const VirtualModelsPage = () => {
     const handleToggleProvider = async (uuid: string) => {
         const result = await api.toggleProvider(uuid);
         if (result.success) {
-            showNotification(result.message, 'success');
+            notify.success(result.message);
             loadProviders();
         } else {
-            showNotification(`Failed to toggle provider: ${result.error}`, 'error');
+            notify.error(`Failed to toggle provider: ${result.error}`);
         }
     };
 
@@ -84,21 +77,6 @@ const VirtualModelsPage = () => {
                     Builtin providers are seeded on every startup; they cannot be deleted, only enabled or disabled here.
                 </Typography>
             </UnifiedCard>
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={snackbar.severity === 'error' ? null : 6000}
-                onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

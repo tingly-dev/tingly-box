@@ -26,34 +26,11 @@ import {
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
-
-const DEFAULT_GROUP_ID = 'default';
-
-type PolicyGroup = {
-    id: string;
-    name?: string;
-    severity?: string;
-    enabled?: boolean;
-};
-
-type GuardrailsPolicy = {
-    id: string;
-    name?: string;
-    groups?: string[];
-    kind: 'resource_access' | 'command_execution' | 'content' | 'operation';
-    enabled?: boolean;
-    verdict?: string;
-    scope?: {
-        scenarios?: string[];
-    };
-    match?: {
-        actions?: { include?: string[] };
-        resources?: { values?: string[] };
-        terms?: string[];
-        patterns?: string[];
-        credential_refs?: string[];
-    };
-};
+import { useNotify } from '@/hooks/useNotify';
+import { uniqueIdFromName } from './rules/editorState';
+import { buildPolicySummary } from './rules/policyPresentation';
+import { DEFAULT_GROUP_ID, type GuardrailsPolicy, type PolicyGroup } from './rules/types';
+import { useGuardrailsConfig } from './rules/useGuardrailsConfig';
 
 type GroupEditorState = {
     id: string;
@@ -63,18 +40,20 @@ type GroupEditorState = {
 };
 
 const GuardrailsGroupsPage = () => {
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState<string | null>(null);
-    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [groups, setGroups] = useState<PolicyGroup[]>([]);
-    const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
+    const notify = useNotify();
+    const {
+        loading,
+        loadError,
+        groups,
+        policies,
+        loadPolicies: loadConfig,
+    } = useGuardrailsConfig({ defaultGroupErrorMessage: 'Failed to create default group.' });
     const [selectedGroupId, setSelectedGroupId] = useState<string>(DEFAULT_GROUP_ID);
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
     const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
     const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
     const [pendingGroupSave, setPendingGroupSave] = useState(false);
-    const [initializingDefaultGroup, setInitializingDefaultGroup] = useState(false);
     const [groupEditorState, setGroupEditorState] = useState<GroupEditorState>({
         id: '',
         name: '',
@@ -107,20 +86,6 @@ const GuardrailsGroupsPage = () => {
 
     const buildGroupSummary = (group: PolicyGroup) => `${group.severity || 'medium'} severity`;
 
-    const buildPolicySummary = (policy: GuardrailsPolicy) => {
-        if (policy.kind === 'command_execution') {
-            const terms = policy.match?.terms?.join(', ') || 'any command';
-            return terms;
-        }
-        if (policy.kind === 'resource_access' || policy.kind === 'operation') {
-            const actions = policy.match?.actions?.include?.join(', ') || 'any action';
-            const resources = policy.match?.resources?.values?.join(', ') || 'any resource';
-            return `${actions} · ${resources}`;
-        }
-        const patterns = policy.match?.patterns || [];
-        return patterns.slice(0, 2).join(', ') || 'No patterns configured';
-    };
-
     const buildPolicyKindLabel = (policy: GuardrailsPolicy) => {
         if (policy.kind === 'resource_access' || policy.kind === 'operation') return 'Resource Access';
         if (policy.kind === 'command_execution') return 'Command Execution';
@@ -134,77 +99,16 @@ const GuardrailsGroupsPage = () => {
         severity: group?.severity || 'medium',
     });
 
-    const generateGroupId = (name: string, currentId?: string) => {
-        const normalizedName = name
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        const baseId = normalizedName || 'group';
-        const existingIds = new Set(groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId));
-
-        let candidate = baseId;
-        let suffix = 2;
-        while (existingIds.has(candidate)) {
-            candidate = `${baseId}-${suffix}`;
-            suffix += 1;
-        }
-        return candidate;
-    };
-
-    const loadConfig = async (silent = false) => {
-        try {
-            if (!silent) setLoading(true);
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            const config = guardrailsConfig?.config || {};
-            setGroups(Array.isArray(config.groups) ? config.groups : []);
-            setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setLoadError(null);
-        } catch (error) {
-            console.error('Failed to load guardrails config:', error);
-            setGroups([]);
-            setPolicies([]);
-            setLoadError('Failed to load guardrails config');
-        } finally {
-            if (!silent) setLoading(false);
-        }
-    };
+    const generateGroupId = (name: string, currentId?: string) =>
+        uniqueIdFromName(
+            name,
+            groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId),
+            'group'
+        );
 
     useEffect(() => {
         loadConfig();
     }, []);
-
-    useEffect(() => {
-        if (loading || loadError || initializingDefaultGroup) {
-            return;
-        }
-        if (groups.some((group) => group.id === DEFAULT_GROUP_ID)) {
-            return;
-        }
-
-        const ensureDefaultGroup = async () => {
-            try {
-                setInitializingDefaultGroup(true);
-                const result = await api.createGuardrailsGroup({
-                    id: DEFAULT_GROUP_ID,
-                    name: 'Default',
-                    enabled: true,
-                    severity: 'high',
-                });
-                if (!result?.success) {
-                    setActionMessage({ type: 'error', text: result?.error || 'Failed to create default group.' });
-                    return;
-                }
-                await loadConfig(true);
-            } catch (error: any) {
-                setActionMessage({ type: 'error', text: error?.message || 'Failed to create default group.' });
-            } finally {
-                setInitializingDefaultGroup(false);
-            }
-        };
-
-        ensureDefaultGroup();
-    }, [groups, initializingDefaultGroup, loadError, loading]);
 
     useEffect(() => {
         if (groups.length === 0) return;
@@ -227,11 +131,11 @@ const GuardrailsGroupsPage = () => {
 
     const handleSaveGroup = async () => {
         if (!groupEditorState.name.trim()) {
-            setActionMessage({ type: 'error', text: 'Group name is required before saving.' });
+            notify.error('Group name is required before saving.');
             return;
         }
         if (!groupEditorState.id.trim()) {
-            setActionMessage({ type: 'error', text: 'Group ID could not be generated.' });
+            notify.error('Group ID could not be generated.');
             return;
         }
 
@@ -248,15 +152,15 @@ const GuardrailsGroupsPage = () => {
                 ? await api.updateGuardrailsGroup(editingGroupId, payload)
                 : await api.createGuardrailsGroup(payload);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to save group.' });
+                notify.error(result?.error || 'Failed to save group.');
                 return;
             }
             await loadConfig(true);
             setSelectedGroupId(payload.id);
             setGroupDialogOpen(false);
-            setActionMessage({ type: 'success', text: `Group "${groupEditorState.id}" saved.` });
+            notify.success(`Group "${groupEditorState.id}" saved.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to save group.' });
+            notify.error(error?.message || 'Failed to save group.');
         } finally {
             setPendingGroupSave(false);
         }
@@ -270,14 +174,14 @@ const GuardrailsGroupsPage = () => {
             setPendingGroupId(deleteGroupId);
             const result = await api.deleteGuardrailsGroup(deleteGroupId);
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to delete group.' });
+                notify.error(result?.error || 'Failed to delete group.');
                 return;
             }
             await loadConfig(true);
             setDeleteGroupId(null);
-            setActionMessage({ type: 'success', text: `Group "${deleteGroupId}" deleted.` });
+            notify.success(`Group "${deleteGroupId}" deleted.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to delete group.' });
+            notify.error(error?.message || 'Failed to delete group.');
         } finally {
             setPendingGroupId(null);
         }
@@ -298,13 +202,13 @@ const GuardrailsGroupsPage = () => {
                 severity: group.severity || 'medium',
             });
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update group.' });
+                notify.error(result?.error || 'Failed to update group.');
                 return;
             }
             await loadConfig(true);
-            setActionMessage({ type: 'success', text: `Group "${groupId}" updated.` });
+            notify.success(`Group "${groupId}" updated.`);
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update group.' });
+            notify.error(error?.message || 'Failed to update group.');
         } finally {
             setPendingGroupId(null);
         }
@@ -324,18 +228,17 @@ const GuardrailsGroupsPage = () => {
                 groups: nextGroups,
             });
             if (!result?.success) {
-                setActionMessage({ type: 'error', text: result?.error || 'Failed to update policy group.' });
+                notify.error(result?.error || 'Failed to update policy group.');
                 return;
             }
             await loadConfig(true);
-            setActionMessage({
-                type: 'success',
-                text: checked
+            notify.success(
+                checked
                     ? `Policy "${policy.id}" added to ${selectedGroup.name || selectedGroup.id}.`
-                    : `Policy "${policy.id}" removed from ${selectedGroup.name || selectedGroup.id}.`,
-            });
+                    : `Policy "${policy.id}" removed from ${selectedGroup.name || selectedGroup.id}.`
+            );
         } catch (error: any) {
-            setActionMessage({ type: 'error', text: error?.message || 'Failed to update policy group.' });
+            notify.error(error?.message || 'Failed to update policy group.');
         }
     };
 
@@ -362,7 +265,6 @@ const GuardrailsGroupsPage = () => {
                 >
                     <Stack spacing={1.5}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>
@@ -585,8 +487,6 @@ const GuardrailsGroupsPage = () => {
                 <DialogTitle>{editingGroupId ? 'Edit Group' : 'New Group'}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-
                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
                             <Stack spacing={2}>
                                 <Typography variant="subtitle2">Basic Settings</Typography>

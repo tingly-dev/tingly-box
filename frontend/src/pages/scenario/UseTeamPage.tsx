@@ -13,9 +13,10 @@ import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioPage';
 import TemplatePage from './components/TemplatePage.tsx';
 import SharingKeysDialog from './components/SharingKeysDialog.tsx';
-import TeamGuideDialog from './components/TeamGuideDialog.tsx';
+import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
 import {api} from '@/services/api';
@@ -175,6 +176,7 @@ const UseTeamPageContent: React.FC = () => {
                             </Stack>
                         )}
                         size="full"
+                        contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                         rightAction={(
                             <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                                 <FormControlLabel

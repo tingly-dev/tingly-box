@@ -30,11 +30,12 @@ import {
     Visibility as VisibilityIcon,
 } from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
+import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
-import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue } from './flagHelpers';
+import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue, flagToBool, flagToInt, flagToString, flagToServiceRef } from './flagHelpers';
+import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import HeadersEditor from '@/components/flags/HeadersEditor';
 
 export interface FlagCatalogDialogProps {
@@ -46,23 +47,6 @@ export interface FlagCatalogDialogProps {
     providers?: Provider[];
     onClose: () => void;
     onSave: (next: RuleFlags) => void;
-}
-
-const flagToBool = (flags: RuleFlags | undefined, key: string): boolean =>
-    !!getFlagValue(flags, key);
-
-const flagToInt = (flags: RuleFlags | undefined, key: string): number =>
-    (getFlagValue(flags, key) as number) ?? 0;
-
-const flagToString = (flags: RuleFlags | undefined, key: string): string =>
-    (getFlagValue(flags, key) as string) ?? '';
-
-const flagToServiceRef = (flags: RuleFlags | undefined, key: string): VisionProxyServiceRef | undefined =>
-    getFlagValue(flags, key) as VisionProxyServiceRef | undefined;
-
-interface CategoryMeta {
-    label: string;
-    icon: React.ReactElement;
 }
 
 // Display order for the category sidebar. Unknown categories are appended.
@@ -80,10 +64,10 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     observability:     { label: 'Observe',     icon: <RecordIcon     fontSize="small" /> },
 };
 
-const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] ?? {
+const categoryMeta = makeCategoryMeta(CATEGORY_META, (category) => ({
     label: category.charAt(0).toUpperCase() + category.slice(1),
     icon: <ExtensionIcon fontSize="small" />,
-};
+}));
 
 export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     open,

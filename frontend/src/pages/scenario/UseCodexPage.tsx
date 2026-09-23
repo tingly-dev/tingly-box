@@ -7,14 +7,16 @@ import { defaultCodexPrefs } from "./components/CodexQuickConfig";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, IconButton, Tooltip, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
-import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
+import { Button } from '@mui/material';
+import { Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './ScenarioPage';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 const scenario = "codex";
 const UseCodexPageContent: React.FC = () => {
@@ -33,7 +35,8 @@ const UseCodexPageContent: React.FC = () => {
     const connectAI = useProviderDialog(showNotification, {
         onProviderAdded: () => window.location.reload(),
     });
-    const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
+    // Context-1M toggle plumbing shared with ScenarioPage (hooks/useContext1MToggle).
+    const context1M = useContext1MToggle(() => setConfigModalOpen(true));
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
@@ -60,27 +63,16 @@ const UseCodexPageContent: React.FC = () => {
             setIsApplyLoading(false);
         }
     };
-    const handleContext1MToggle = (newState: boolean) => {
-        // Store the pending change and directly open config panel
-        setPendingContext1MChange(newState);
-        setConfigModalOpen(true);
-    };
     return (
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     titleHeadingLevel={1}
                     title={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Codex</span>
-                            <Tooltip title={t('scenarioPage.tooltip.codex')}>
-                                <IconButton size="small" sx={{ ml: 0.5 }}>
-                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
+                        <ScenarioCardHeader title="Codex" tooltipKey="scenarioPage.tooltip.codex" />
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={
                         <Button
                             onClick={() => setConfigModalOpen(true)}
@@ -116,17 +108,17 @@ const UseCodexPageContent: React.FC = () => {
                     scenario={scenario}
                     collapsible={true}
                     allowDeleteRule={true}
-                    onContext1MToggle={handleContext1MToggle}
+                    onContext1MToggle={context1M.handleContext1MToggle}
                 />
                 <CodexConfigModal
                     open={configModalOpen}
                     onClose={() => {
                         setConfigModalOpen(false);
-                        setPendingContext1MChange(null);
+                        context1M.clearPendingContext1MChange();
                     }}
                     copyToClipboard={copyToClipboard}
                     showNotification={showNotification}
-                    pendingContext1MChange={pendingContext1MChange}
+                    pendingContext1MChange={context1M.pendingContext1MChange}
                 />
                 <ConnectAIDialogs flow={connectAI}/>
             </CardGrid>

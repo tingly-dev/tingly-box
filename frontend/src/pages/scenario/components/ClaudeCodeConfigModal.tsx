@@ -7,6 +7,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveLanguage } from '@/i18n';
 import CodeBlock from '@/components/CodeBlock';
+import { shouldIgnoreDialogClose } from '@/components/dialogClose';
+import { ManualFileSection, type ManualFileTab } from './config/ManualFileSection';
 import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
@@ -15,6 +17,12 @@ import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
+
+// Raw statusline script URLs in the tingly-box repo — the installers must
+// download from the same source the JSON tab links below (they used to point
+// at a placeholder your-repo URL).
+const STATUSLINE_SCRIPT_URL = 'https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh';
+const STATUSLINE_SCRIPT_PS1_URL = 'https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.ps1';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -36,7 +44,6 @@ interface ClaudeCodeConfigModalProps {
 }
 
 type MainTab = 'quick' | 'manual';
-type ScriptTab = 'json' | 'windows' | 'unix';
 
 // Modal-local copy that doesn't fit either `claudeCode.*` (English-only
 // today) or QuickConfig's bundled text. One flat map per language, picked at
@@ -126,9 +133,6 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const { t, i18n } = useTranslation();
     const modalText = MODAL_TEXT[resolveLanguage(i18n.language)];
     const [mainTab, setMainTab] = React.useState<MainTab>('quick');
-    const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
-    const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
-    const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
     const [installStatusLine, setInstallStatusLine] = React.useState(true);
@@ -278,7 +282,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
     const generateStatusLineScriptWindows = React.useCallback(() => {
-        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.ps1";
+        const downloadUrl = STATUSLINE_SCRIPT_PS1_URL;
         const nodeCode = `const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -311,7 +315,7 @@ ${nodeCode}
     }, []);
 
     const generateStatusLineScriptUnix = React.useCallback(() => {
-        const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.sh";
+        const downloadUrl = STATUSLINE_SCRIPT_URL;
         const nodeCode = `const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -356,12 +360,97 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const canApply = isFullEdition && !!onApplyWithPrefs;
 
+    // Shared "manual setup" link line for the statusline tab descriptions —
+    // points at the real repo script (same URL the installers download from).
+    const statuslineManualSetup = (
+        <Typography variant="body2" sx={{
+            color: "text.secondary"
+        }}>
+            {t('claudeCode.statusLine.manualSetup')}{' '}
+            <Link
+                href={STATUSLINE_SCRIPT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {t('claudeCode.statusLine.downloadLink')}
+            </Link>
+        </Typography>
+    );
+
+    const statuslineTabs: ManualFileTab[] = [
+        {
+            label: 'JSON',
+            value: 'json',
+            code: generateStatusLineConfig(),
+            language: 'json',
+            filename: 'Add statusLine config to ~/.claude/settings.json',
+            copyLabel: 'statusLine config',
+            maxHeight: 200,
+            minHeight: 150,
+            description: (
+                <>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        {t('claudeCode.statusLine.jsonDescription')}
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 1
+                        }}>
+                        {t('claudeCode.statusLine.addToSettingsJson')}
+                    </Typography>
+                    {statuslineManualSetup}
+                </>
+            ),
+        },
+        {
+            label: 'Windows',
+            value: 'windows',
+            code: generateStatusLineScriptWindows(),
+            language: 'js',
+            filename: 'PowerShell script to install status line',
+            copyLabel: 'Status line script',
+            maxHeight: 280,
+            minHeight: 280,
+            description: (
+                <>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        {t('claudeCode.statusLine.description')}
+                    </Typography>
+                    {statuslineManualSetup}
+                </>
+            ),
+        },
+        {
+            label: 'Linux/macOS',
+            value: 'unix',
+            code: generateStatusLineScriptUnix(),
+            language: 'js',
+            filename: 'Bash script to install status line',
+            copyLabel: 'Status line script',
+            maxHeight: 280,
+            minHeight: 280,
+            description: (
+                <>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        {t('claudeCode.statusLine.description')}
+                    </Typography>
+                    {statuslineManualSetup}
+                </>
+            ),
+        },
+    ];
+
     return (
         <>
             <Dialog
                 open={open}
+                // Intentional UX-consistency fix: guard backdrop clicks only
+                // (via shouldIgnoreDialogClose), so Escape closes this modal
+                // just like the Codex/Dsh/OpenCode config modals.
                 onClose={(_event, reason) => {
-                    if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+                    if (shouldIgnoreDialogClose(reason)) return;
                     onClose();
                 }}
                 maxWidth="lg"
@@ -474,218 +563,87 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     {mainTab === 'manual' && (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {/* settings.json section */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        {t('claudeCode.step1')}
-                                    </Typography>
-                                    <Tabs
-                                        value={settingsTab}
-                                        onChange={(_, value) => setSettingsTab(value)}
-                                        variant="standard"
-                                        sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                                    >
-                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    </Tabs>
-                                </Box>
-                                <Box>
-                                    {settingsTab === 'json' && (
-                                        <CodeBlock
-                                            code={generateSettingsConfig()}
-                                            language="json"
-                                            filename="Add the env section into ~/.claude/settings.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'settings.json')}
-                                            maxHeight={280}
-                                            minHeight={280}
-                                        />
-                                    )}
-                                    {settingsTab === 'windows' && (
-                                        <CodeBlock
-                                            code={generateSettingsScriptWindows()}
-                                            language="js"
-                                            filename="PowerShell script to setup ~/.claude/settings.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                            maxHeight={280}
-                                            minHeight={280}
-                                        />
-                                    )}
-                                    {settingsTab === 'unix' && (
-                                        <CodeBlock
-                                            code={generateSettingsScriptUnix()}
-                                            language="js"
-                                            filename="Bash script to setup ~/.claude/settings.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                            maxHeight={280}
-                                            minHeight={280}
-                                        />
-                                    )}
-                                </Box>
-                            </Box>
+                            <ManualFileSection
+                                heading={t('claudeCode.step1')}
+                                copyToClipboard={copyToClipboard}
+                                tabs={[
+                                    {
+                                        label: 'JSON',
+                                        value: 'json',
+                                        code: generateSettingsConfig(),
+                                        language: 'json',
+                                        filename: 'Add the env section into ~/.claude/settings.json',
+                                        copyLabel: 'settings.json',
+                                        maxHeight: 280,
+                                        minHeight: 280,
+                                    },
+                                    {
+                                        label: 'Windows',
+                                        value: 'windows',
+                                        code: generateSettingsScriptWindows(),
+                                        language: 'js',
+                                        filename: 'PowerShell script to setup ~/.claude/settings.json',
+                                        copyLabel: 'Windows script',
+                                        maxHeight: 280,
+                                        minHeight: 280,
+                                    },
+                                    {
+                                        label: 'Linux/macOS',
+                                        value: 'unix',
+                                        code: generateSettingsScriptUnix(),
+                                        language: 'js',
+                                        filename: 'Bash script to setup ~/.claude/settings.json',
+                                        copyLabel: 'Unix script',
+                                        maxHeight: 280,
+                                        minHeight: 280,
+                                    },
+                                ]}
+                            />
 
                             {/* .claude.json section */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        {t('claudeCode.step2')}
-                                    </Typography>
-                                    <Tabs
-                                        value={claudeJsonTab}
-                                        onChange={(_, value) => setClaudeJsonTab(value)}
-                                        variant="standard"
-                                        sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                                    >
-                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    </Tabs>
-                                </Box>
-                                <Box>
-                                    {claudeJsonTab === 'json' && (
-                                        <CodeBlock
-                                            code={generateClaudeJsonConfig()}
-                                            language="json"
-                                            filename="Set hasCompletedOnboarding as true into ~/.claude.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, '.claude.json')}
-                                            maxHeight={120}
-                                            minHeight={80}
-                                        />
-                                    )}
-                                    {claudeJsonTab === 'windows' && (
-                                        <CodeBlock
-                                            code={generateScriptWindows()}
-                                            language="js"
-                                            filename="PowerShell script to setup ~/.claude.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                            maxHeight={120}
-                                            minHeight={80}
-                                        />
-                                    )}
-                                    {claudeJsonTab === 'unix' && (
-                                        <CodeBlock
-                                            code={generateScriptUnix()}
-                                            language="js"
-                                            filename="Bash script to setup ~/.claude.json"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                            maxHeight={120}
-                                            minHeight={80}
-                                        />
-                                    )}
-                                </Box>
-                            </Box>
+                            <ManualFileSection
+                                heading={t('claudeCode.step2')}
+                                copyToClipboard={copyToClipboard}
+                                tabs={[
+                                    {
+                                        label: 'JSON',
+                                        value: 'json',
+                                        code: generateClaudeJsonConfig(),
+                                        language: 'json',
+                                        filename: 'Set hasCompletedOnboarding as true into ~/.claude.json',
+                                        copyLabel: '.claude.json',
+                                        maxHeight: 120,
+                                        minHeight: 80,
+                                    },
+                                    {
+                                        label: 'Windows',
+                                        value: 'windows',
+                                        code: generateScriptWindows(),
+                                        language: 'js',
+                                        filename: 'PowerShell script to setup ~/.claude.json',
+                                        copyLabel: 'Windows script',
+                                        maxHeight: 120,
+                                        minHeight: 80,
+                                    },
+                                    {
+                                        label: 'Linux/macOS',
+                                        value: 'unix',
+                                        code: generateScriptUnix(),
+                                        language: 'js',
+                                        filename: 'Bash script to setup ~/.claude.json',
+                                        copyLabel: 'Unix script',
+                                        maxHeight: 120,
+                                        minHeight: 80,
+                                    },
+                                ]}
+                            />
 
                             {/* Status Line section */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        {t('claudeCode.step3')}
-                                    </Typography>
-                                    <Tabs
-                                        value={statusLineTab}
-                                        onChange={(_, value) => setStatusLineTab(value)}
-                                        variant="standard"
-                                        sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                                    >
-                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                    </Tabs>
-                                </Box>
-                                <Box>
-                                    {statusLineTab === 'json' && (
-                                        <>
-                                            <Box sx={{ mb: 2 }}>
-                                                <Typography variant="body2" sx={{ mb: 1 }}>
-                                                    {t('claudeCode.statusLine.jsonDescription')}
-                                                </Typography>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        color: "text.secondary",
-                                                        mb: 1
-                                                    }}>
-                                                    {t('claudeCode.statusLine.addToSettingsJson')}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{
-                                                    color: "text.secondary"
-                                                }}>
-                                                    {t('claudeCode.statusLine.manualSetup')}{' '}
-                                                    <Link
-                                                        href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        {t('claudeCode.statusLine.downloadLink')}
-                                                    </Link>
-                                                </Typography>
-                                            </Box>
-                                            <CodeBlock
-                                                code={generateStatusLineConfig()}
-                                                language="json"
-                                                filename="Add statusLine config to ~/.claude/settings.json"
-                                                wrap={true}
-                                                onCopy={(code) => copyToClipboard(code, 'statusLine config')}
-                                                maxHeight={200}
-                                                minHeight={150}
-                                            />
-                                        </>
-                                    )}
-                                    {(statusLineTab === 'windows' || statusLineTab === 'unix') && (
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="body2" sx={{ mb: 1 }}>
-                                                {t('claudeCode.statusLine.description')}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{
-                                                color: "text.secondary"
-                                            }}>
-                                                {t('claudeCode.statusLine.manualSetup')}{' '}
-                                                <Link
-                                                    href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                >
-                                                    {t('claudeCode.statusLine.downloadLink')}
-                                                </Link>
-                                            </Typography>
-                                        </Box>
-                                    )}
-                                    {statusLineTab === 'windows' && (
-                                        <CodeBlock
-                                            code={generateStatusLineScriptWindows()}
-                                            language="js"
-                                            filename="PowerShell script to install status line"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Status line script')}
-                                            maxHeight={280}
-                                            minHeight={280}
-                                        />
-                                    )}
-                                    {statusLineTab === 'unix' && (
-                                        <CodeBlock
-                                            code={generateStatusLineScriptUnix()}
-                                            language="js"
-                                            filename="Bash script to install status line"
-                                            wrap={true}
-                                            onCopy={(code) => copyToClipboard(code, 'Status line script')}
-                                            maxHeight={280}
-                                            minHeight={280}
-                                        />
-                                    )}
-                                </Box>
-                            </Box>
+                            <ManualFileSection
+                                heading={t('claudeCode.step3')}
+                                copyToClipboard={copyToClipboard}
+                                tabs={statuslineTabs}
+                            />
                         </Box>
                     )}
 

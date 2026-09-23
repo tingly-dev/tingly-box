@@ -1,16 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { Provider } from '@/types/provider';
 import { notify } from '@/utils/notify';
-
-export interface SnackbarState {
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error';
-}
-
-// Snackbars now render through the global NotificationProvider; this stub keeps
-// the context shape stable for consumers that still read `snackbar`.
-const CLOSED_SNACKBAR: SnackbarState = { open: false, message: '', severity: 'error' };
 
 export interface CustomModelDialogState {
     open: boolean;
@@ -26,16 +16,8 @@ export interface ModelSelectContextValue {
     isInitialized: boolean;
     setIsInitialized: (initialized: boolean) => void;
 
-    // Probing state
-    probingModels: Set<string>;
-    addProbingModel: (key: string) => void;
-    removeProbingModel: (key: string) => void;
-    isModelProbing: (key: string) => boolean;
-
-    // Snackbar state
-    snackbar: SnackbarState;
+    // Notification forwarding (global NotificationProvider)
     showSnackbar: (message: string, severity: 'success' | 'error') => void;
-    hideSnackbar: () => void;
 
     // Custom model dialog state
     customModelDialog: CustomModelDialogState;
@@ -68,7 +50,6 @@ export interface ModelSelectProviderProps {
 export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState<string | undefined>(undefined);
     const [isInitialized, setIsInitialized] = useState(false);
-    const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
     const [customModelDialog, setCustomModelDialog] = useState<CustomModelDialogState>({
         open: false,
         provider: null,
@@ -80,28 +61,8 @@ export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
         setRefreshTrigger(prev => prev + 1);
     }, []);
 
-    const addProbingModel = useCallback((key: string) => {
-        setProbingModels(prev => new Set(prev).add(key));
-    }, []);
-
-    const removeProbingModel = useCallback((key: string) => {
-        setProbingModels(prev => {
-            const next = new Set(prev);
-            next.delete(key);
-            return next;
-        });
-    }, []);
-
-    const isModelProbing = useCallback((key: string) => {
-        return probingModels.has(key);
-    }, [probingModels]);
-
     const showSnackbar = useCallback((message: string, severity: 'success' | 'error') => {
         notify.show(severity, message);
-    }, []);
-
-    const hideSnackbar = useCallback(() => {
-        // No-op: notifications are dismissed by the global NotificationProvider.
     }, []);
 
     const openCustomModelDialog = useCallback((provider: Provider, value?: string) => {
@@ -121,25 +82,21 @@ export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
         setCustomModelDialog(prev => ({ ...prev, value }));
     }, []);
 
-    const value: ModelSelectContextValue = {
+    // Memoized so tab switches only re-render actual consumers of the changed
+    // slice, not every useModelSelectContext call site in the dialog tree.
+    const value: ModelSelectContextValue = useMemo(() => ({
         internalCurrentTab,
         setInternalCurrentTab,
         isInitialized,
         setIsInitialized,
-        probingModels,
-        addProbingModel,
-        removeProbingModel,
-        isModelProbing,
-        snackbar: CLOSED_SNACKBAR,
         showSnackbar,
-        hideSnackbar,
         customModelDialog,
         openCustomModelDialog,
         closeCustomModelDialog,
         updateCustomModelDialogValue,
         refreshTrigger,
         triggerRefresh,
-    };
+    }), [internalCurrentTab, isInitialized, showSnackbar, customModelDialog, openCustomModelDialog, closeCustomModelDialog, updateCustomModelDialogValue, refreshTrigger, triggerRefresh]);
 
     return (
         <ModelSelectContext.Provider value={value}>

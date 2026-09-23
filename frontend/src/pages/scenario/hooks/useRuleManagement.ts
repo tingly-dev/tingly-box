@@ -44,10 +44,8 @@ export const useRuleManagement = () => {
 
     return {
         rules,
-        setRules,
         loadingRule,
         newlyCreatedRuleUuids,
-        setNewlyCreatedRuleUuids,
         handleRuleDelete,
         handleRulesChange,
         loadRules,

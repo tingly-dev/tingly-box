@@ -8,8 +8,9 @@ import type { FlagSpec, RuleFlagsApi } from '@/components/RoutingGraphTypes';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { apiToFlags, flagsToApi } from '@/components/rule-card/flagHelpers';
 import type { Provider } from '@/types/provider';
-import type { ProbeRequest, ProbeResult } from '@/types/probe';
-import { runProbe, buildProbeCurl, type ProbeCurlResult } from '@/components/probe/runProbe';
+import type { ProbeResult } from '@/types/probe';
+import { runProbe } from '@/components/probe/runProbe';
+import { useDebouncedProbeCurl } from '@/components/probe/useDebouncedProbeCurl';
 import { protocolAvailability, visionAvailable } from '@/components/probe/probeConfig';
 import type { ProbeProtocol } from '@/types/probe';
 import { StatusBar, Journey, CollapsibleSection, CopyBlock, extractText, defaultMessage } from '@/components/probe/ResultSections';
@@ -42,30 +43,6 @@ import { MESSAGE_ID, matchTemplateId, templatesForProtocol } from './contentOpti
 // it is reached only through its own nav entry.
 
 const MAX_RUNS = 10;
-
-// useDebouncedCurl: rebuild the curl preview 500 ms after the last change to
-// `request` — pure construction, so debouncing just avoids redundant work,
-// never a stale result. Shared by the live payload and the preset-preview
-// fetch below, which differ only in which request they track.
-function useDebouncedCurl(request: ProbeRequest | null): { data: ProbeCurlResult | null; loading: boolean } {
-    const [data, setData] = useState<ProbeCurlResult | null>(null);
-    const [loading, setLoading] = useState(false);
-    const key = useMemo(() => JSON.stringify(request), [request]);
-    useEffect(() => {
-        if (!request) { setData(null); setLoading(false); return; }
-        let cancelled = false;
-        setLoading(true);
-        const timer = setTimeout(async () => {
-            const res = await buildProbeCurl(request);
-            if (cancelled) return;
-            setData(res);
-            setLoading(false);
-        }, 500);
-        return () => { cancelled = true; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key]);
-    return { data, loading };
-}
 
 const prettyBody = (raw: string): string => {
     try {
@@ -189,14 +166,14 @@ const BenchPage: React.FC = () => {
     }, [provider]);
 
     // Live payload: pure construction, so debouncing just avoids redundant work.
-    const { data: curl, loading: curlLoading } = useDebouncedCurl(request);
+    const { data: curl, loading: curlLoading } = useDebouncedProbeCurl(request);
 
     // Preset preview: the same construction, but with raw forced off, so
     // "Copy the preset request" stays accurate once a custom request is
     // active. Only runs while raw is active — otherwise `request` above
     // already is the preset request and this would just duplicate the fetch.
     const presetPreviewRequest = useMemo(() => (state.raw ? buildProbeRequest({ ...state, raw: null }).request : null), [state]);
-    const { data: presetPreviewCurl } = useDebouncedCurl(presetPreviewRequest);
+    const { data: presetPreviewCurl } = useDebouncedProbeCurl(presetPreviewRequest);
 
     const seedBody = state.raw
         ? (presetPreviewCurl?.success && presetPreviewCurl.data?.body ? prettyBody(presetPreviewCurl.data.body) : undefined)

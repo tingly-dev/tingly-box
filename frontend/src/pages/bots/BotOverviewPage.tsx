@@ -4,12 +4,13 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
-import { api, enrichBotsWithCapabilities } from '@/services/api';
 import { countBotsByPlatform } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
+import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
+import { useNotify } from '@/hooks/useNotify';
 import { Add, ListAlt } from '@/components/icons';
-import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -28,43 +29,31 @@ const BotOverviewPage = () => {
     const selectedPlatform = searchParams.get('platform') || 'all';
     const guideConfig = usePlatformGuide(selectedPlatform === 'all' ? '' : selectedPlatform);
 
-    const [bots, setBots] = useState<BotSettings[]>([]);
-
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [dialogEditUuid, setDialogEditUuid] = useState<string | null>(null);
     const [dialogPlatformId, setDialogPlatformId] = useState('telegram');
     const [accessBot, setAccessBot] = useState<BotSettings | null>(null);
 
-    const [botLoading, setBotLoading] = useState(true);
-    const [restartingBotUuid, setRestartingBotUuid] = useState<string | null>(null);
+    const notify = useNotify();
 
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error' | 'info' | 'warning';
-    }>({ open: false, message: '', severity: 'success' });
-
+    // Notification adapter (message first, severity second) — shared with
+    // BotConfigDialog's `notify` prop; rendered globally by NotificationProvider.
     const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    }, []);
+        notify[severity](message);
+    }, [notify]);
 
-    const loadBotSettings = useCallback(async () => {
-        try {
-            setBotLoading(true);
-            const data = await api.getImBotSettingsList();
-            if (data?.success && Array.isArray(data.settings)) {
-                setBots(await enrichBotsWithCapabilities(data.settings));
-            } else if (data?.success === false) {
-                showNotification(data.error || t('remoteControl.notify.loadFailed', { defaultValue: 'Failed to load bot settings' }), 'error');
-            }
-        } catch (err) {
-            console.error('Failed to load bot settings:', err);
-            showNotification(t('remoteControl.notify.loadFailed', { defaultValue: 'Failed to load bot settings' }), 'error');
-        } finally {
-            setBotLoading(false);
-        }
-    }, [showNotification, t]);
+    // Bot list + restart/delete via the shared useBotList hook (same ops
+    // across all bot pages). `spinnerOnRefresh` keeps this page's behavior of
+    // re-showing the loading spinner on every reload, not just the first.
+    const {
+        bots,
+        loading: botLoading,
+        load: loadBotSettings,
+        restart: handleBotRestart,
+        isRestarting,
+        remove: handleDeleteBot,
+    } = useBotList({notify: showNotification, spinnerOnRefresh: true});
 
     useEffect(() => {
         loadBotSettings();
@@ -135,41 +124,8 @@ const BotOverviewPage = () => {
         }
     }, [searchParams, setSearchParams, dialogOpen, openAddDialog]);
 
-    // Toggle uses the shared useBotToggle hook (same op across all bot pages);
-    // restart/delete keep the page's own Snackbar.
+    // Toggle uses the shared useBotToggle hook (same op across all bot pages).
     const {toggle: handleBotToggle, isToggling} = useBotToggle({onDone: loadBotSettings});
-
-    const handleBotRestart = useCallback(async (uuid: string) => {
-        setRestartingBotUuid(uuid);
-        try {
-            const result = await api.restartImBot(uuid);
-            if (result?.success) {
-                showNotification(t('remoteControl.notify.botRestarted', { defaultValue: 'Bot restarted' }), 'success');
-                await loadBotSettings();
-            } else {
-                showNotification(t('remoteControl.notify.restartFailed', { defaultValue: 'Failed to restart bot: {{error}}', error: result?.error || 'Unknown error' }), 'error');
-            }
-        } catch (err) {
-            console.error('Failed to restart bot:', err);
-            showNotification(t('remoteControl.notify.restartFailedGeneric', { defaultValue: 'Failed to restart bot' }), 'error');
-        } finally {
-            setRestartingBotUuid(null);
-        }
-    }, [loadBotSettings, showNotification, t]);
-
-    const handleDeleteBot = useCallback(async (uuid: string) => {
-        try {
-            const result = await api.deleteImBotSetting(uuid);
-            if (result?.success) {
-                showNotification(t('remoteControl.notify.botDeleted', { defaultValue: 'Bot deleted successfully' }), 'success');
-                await loadBotSettings();
-            } else {
-                showNotification(t('remoteControl.notify.deleteFailed', { defaultValue: 'Failed to delete bot: {{error}}', error: result?.error }), 'error');
-            }
-        } catch (err) {
-            showNotification(t('remoteControl.notify.deleteFailedGeneric', { defaultValue: 'Failed to delete bot' }), 'error');
-        }
-    }, [loadBotSettings, showNotification, t]);
 
     const platformName = selectedPlatform === 'all' ? '' : platformDisplayName(selectedPlatform, t);
 
@@ -218,7 +174,7 @@ const BotOverviewPage = () => {
                         onBotToggle={(uuid, enabled) => handleBotToggle(uuid, enabled)}
                         onRestart={(uuid) => handleBotRestart(uuid)}
                         isToggling={isToggling}
-                        isRestarting={(uuid) => restartingBotUuid === uuid}
+                        isRestarting={isRestarting}
                         onManageAccess={setAccessBot}
                     />
                 )}
@@ -250,20 +206,6 @@ const BotOverviewPage = () => {
                 onClose={() => setAccessBot(null)}
                 onChanged={loadBotSettings}
             />
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={snackbar.severity === 'error' ? null : 4000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

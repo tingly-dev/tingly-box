@@ -4,16 +4,18 @@ import EmptyState from '@/components/EmptyState';
 import GuideAction from '@/components/GuideAction';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import { api, enrichBotsWithCapabilities } from '@/services/api';
+import { api } from '@/services/api';
 import { usePlatformGuide } from '@/constants/platformGuides';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useBotList } from '@/hooks/useBotList';
 import type { BotSettings } from '@/types/bot';
 import { defaultAgentForCCProfile } from '@/types/bot';
 import type { Provider } from '@/types/provider';
 import { Add } from '@/components/icons';
-import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import { useTranslation } from 'react-i18next';
 
 interface PlatformRemoteAgentPageProps {
@@ -49,22 +51,29 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
         setDialogOpen(true);
     }, []);
 
-    const [bots, setBots] = useState<BotSettings[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
-    const [loading, setLoading] = useState(true);
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
-    const [restartingBotUuid, setRestartingBotUuid] = useState<string | null>(null);
     const [selectedBot, setSelectedBot] = useState<BotSettings | null>(null);
 
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error' | 'info' | 'warning';
-    }>({ open: false, message: '', severity: 'success' });
+    const notify = useNotify();
 
+    // Notification adapter (message first, severity second) — shared with
+    // BotConfigDialog's `notify` prop; rendered globally by NotificationProvider.
     const showNotification = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-        setSnackbar({ open: true, message, severity });
-    }, []);
+        notify[severity](message);
+    }, [notify]);
+
+    // Bot list + restart/delete via the shared useBotList hook (same ops
+    // across the bot pages). No `spinnerOnRefresh` here: this page only spins
+    // on the first load, keeping the list rendered during refreshes.
+    const {
+        bots,
+        loading,
+        load: loadBots,
+        restart: handleBotRestart,
+        restartingUuid: restartingBotUuid,
+        remove: handleDeleteBot,
+    } = useBotList({notify: showNotification});
 
     // Same platform filter as the Bots page — the two sections paginate
     // identically and differ only in what they show for each bot.
@@ -72,22 +81,6 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
         () => bots.filter(b => b.platform === platformId),
         [bots, platformId]
     );
-
-    const loadBots = useCallback(async () => {
-        try {
-            const data = await api.getImBotSettingsList();
-            if (data?.success && Array.isArray(data.settings)) {
-                setBots(await enrichBotsWithCapabilities(data.settings));
-            } else if (data?.success === false) {
-                showNotification(data.error || t('remoteControl.notify.loadFailed', { defaultValue: 'Failed to load bot settings' }), 'error');
-            }
-        } catch (err) {
-            console.error('Failed to load bot settings:', err);
-            showNotification(t('remoteControl.notify.loadFailed', { defaultValue: 'Failed to load bot settings' }), 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [showNotification, t]);
 
     const loadProviders = useCallback(async () => {
         const data = await api.getProviders();
@@ -130,38 +123,6 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
             );
         } finally {
             setTogglingBotUuid(null);
-        }
-    }, [loadBots, showNotification, t]);
-
-    const handleBotRestart = useCallback(async (uuid: string) => {
-        setRestartingBotUuid(uuid);
-        try {
-            const result = await api.restartImBot(uuid);
-            if (result?.success) {
-                showNotification(t('remoteControl.notify.botRestarted', { defaultValue: 'Bot restarted' }), 'success');
-                await loadBots();
-            } else {
-                showNotification(t('remoteControl.notify.restartFailed', { defaultValue: 'Failed to restart bot: {{error}}', error: result?.error || 'Unknown error' }), 'error');
-            }
-        } catch (err) {
-            console.error('Failed to restart bot:', err);
-            showNotification(t('remoteControl.notify.restartFailedGeneric', { defaultValue: 'Failed to restart bot' }), 'error');
-        } finally {
-            setRestartingBotUuid(null);
-        }
-    }, [loadBots, showNotification, t]);
-
-    const handleDeleteBot = useCallback(async (uuid: string) => {
-        try {
-            const result = await api.deleteImBotSetting(uuid);
-            if (result?.success) {
-                showNotification(t('remoteControl.notify.botDeleted', { defaultValue: 'Bot deleted successfully' }), 'success');
-                await loadBots();
-            } else {
-                showNotification(t('remoteControl.notify.deleteFailed', { defaultValue: 'Failed to delete bot: {{error}}', error: result?.error }), 'error');
-            }
-        } catch (err) {
-            showNotification(t('remoteControl.notify.deleteFailedGeneric', { defaultValue: 'Failed to delete bot' }), 'error');
         }
     }, [loadBots, showNotification, t]);
 
@@ -321,20 +282,6 @@ const PlatformRemoteAgentPage = ({ platformId, platformName, platformPicker }: P
                 onTogglePersistentSession={handleTogglePersistentSession}
                 onClose={() => setProfileDialogBot(null)}
             />
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={snackbar.severity === 'error' ? null : 4000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

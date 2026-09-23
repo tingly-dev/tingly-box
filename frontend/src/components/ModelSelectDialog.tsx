@@ -5,7 +5,6 @@ import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
 import { useGridLayout } from '@/hooks/useGridLayout';
 import { useProviderGroups } from '@/hooks/useProviderGroups';
-import { useModelSelection } from '@/hooks/useModelSelection';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { ModelSelectProvider, useModelSelectContext } from '@/contexts/ModelSelectContext';
@@ -57,8 +56,13 @@ function ModelSelectTabInner({
         showSnackbar,
     } = useModelSelectContext();
 
-    const { handleModelSelect } = useModelSelection({ onSelected });
-    const { recentModels, lastProvider } = useRecentModels();
+    const { recentModels, lastProvider, addRecentModel } = useRecentModels();
+
+    const handleModelSelect = useCallback(async (provider: Provider, model: string) => {
+        onSelected?.({ provider, model });
+        // Track recent model
+        addRecentModel(provider.uuid, model);
+    }, [onSelected, addRecentModel]);
 
     // Providers edited through the in-dialog "Edit Provider" button. Callers
     // own the providers prop and only refetch it on their own surfaces, so an

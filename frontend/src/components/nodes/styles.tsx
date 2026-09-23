@@ -81,8 +81,7 @@ export const SMART_NODE_STYLES = {
     padding: 5,
 } as const;
 
-export const { modelNode, providerNode, smartNode } = {
-    modelNode: MODEL_NODE_STYLES,
+export const { providerNode, smartNode } = {
     providerNode: PROVIDER_NODE_STYLES,
     smartNode: SMART_NODE_STYLES,
 };
@@ -259,29 +258,6 @@ export const ServiceNodeContainer = styled(Box)(({ theme }: { theme: Theme }) =>
 
 /** @deprecated Use ServiceNodeContainer */
 export const ProviderNodeContainer = ServiceNodeContainer;
-
-// Styled model node with unified fixed size
-export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'compact' })<{
-    compact?: boolean;
-}>(({ compact, theme }: { compact?: boolean; theme: Theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: modelNode.padding,
-    borderRadius: theme.shape.borderRadius,
-    border: '1px solid',
-    borderColor: getRouteGraphBorderColor(theme),
-    backgroundColor: 'background.paper',
-    textAlign: 'center',
-    width: compact ? modelNode.widthCompact : modelNode.width,
-    height: compact ? modelNode.heightCompact : modelNode.height,
-    transition: 'border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
-    position: 'relative',
-    cursor: 'pointer',
-    ...graphNodeBaseHoverStyles,
-    '&:hover': graphNodeHoverStyles(theme),
-}));
 
 // Action button container — appears on hover with a solid backing so buttons
 // are always readable regardless of node opacity or background content.

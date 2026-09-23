@@ -27,7 +27,3 @@ export type IDESourceKey = keyof typeof IDE_SOURCES;
 export const getIdeSourceLabel = (source: string): string => {
     return IDE_SOURCES[source as IDESourceKey]?.name || source;
 };
-
-export const getIdeSourceIcon = (source: string): string => {
-    return IDE_SOURCES[source as IDESourceKey]?.icon || '📂';
-};

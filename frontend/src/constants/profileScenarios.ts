@@ -6,5 +6,3 @@
 export const PROFILE_SCENARIOS = [
     'claude_code',
 ] as const;
-
-export type ProfileScenario = typeof PROFILE_SCENARIOS[number];

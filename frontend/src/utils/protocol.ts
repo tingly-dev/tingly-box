@@ -65,13 +65,6 @@ export function getDisplayOrigin(): string {
 }
 
 /**
- * Check if running in HTTPS mode
- */
-export function isHttps(): boolean {
-  return getRuntimeMode() !== RuntimeMode.GUI && window.location.protocol === 'https:';
-}
-
-/**
  * Check if running in GUI mode
  */
 export function isGuiMode(): boolean {

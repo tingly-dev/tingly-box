@@ -3,13 +3,13 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import ImageGenQuickStartDialog from "./components/ImageGenQuickStartDialog";
 import ImageGenPlaygroundCard from "./components/ImageGenPlaygroundCard";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
-import { Info as InfoIcon } from '@/components/icons';
+import { Button } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './ScenarioPage';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
@@ -41,16 +41,10 @@ const UseImageGenPageContent: React.FC = () => {
                 <UnifiedCard
                     titleHeadingLevel={1}
                     title={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Image API</span>
-                            <Tooltip title={t('scenarioPage.tooltip.imagegen')}>
-                                <IconButton size="small" sx={{ ml: 0.5 }}>
-                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
+                        <ScenarioCardHeader title="Image API" tooltipKey="scenarioPage.tooltip.imagegen" />
                     }
                     size="full"
+                    contentMaxWidth={SCENARIO_HEADER_CONTENT_MAX_WIDTH}
                     rightAction={
                         <Button
                             onClick={() => setQuickStartOpen(true)}

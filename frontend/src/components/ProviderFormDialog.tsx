@@ -1,8 +1,5 @@
-import {ArrowBack, Close, ExpandMore} from '@/components/icons';
+import {ArrowBack, Close} from '@/components/icons';
 import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Alert,
     Box,
     Button,
@@ -105,7 +102,6 @@ const ProviderFormDialog = ({
     const [showNameField, setShowNameField] = useState(false);
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
 
     // ── Protocol slot state (independent from provider selection) ──
@@ -178,15 +174,6 @@ const ProviderFormDialog = ({
     useEffect(() => {
         if (!open) return;
 
-        console.log('[ProviderFormDialog] open mode=%s, data:', mode, {
-            selectedProviderId: data.selectedProviderId,
-            apiBase: data.apiBase,
-            apiBaseOpenAI: data.apiBaseOpenAI,
-            apiBaseAnthropic: data.apiBaseAnthropic,
-            apiStyle: data.apiStyle,
-            providerBaseUrls: data.providerBaseUrls,
-        });
-
         setVerificationResult(null);
         setBaseUrlError(false);
         setShowNameField(false);
@@ -224,21 +211,16 @@ const ProviderFormDialog = ({
                 // Legacy single apiBase
                 return p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase;
             });
-            console.log('[ProviderFormDialog] edit mode urlMatches count=%d:', urlMatches.length,
-                urlMatches.map(p => ({id: p.id, name: p.name, alias: p.alias})));
             // When there's a selectedProviderId and it's among the urlMatches,
             // treat it as unique (the user previously picked this exact preset).
             const idMatch = data.selectedProviderId
                 ? urlMatches.find(p => p.id === data.selectedProviderId)
                 : null;
             if (idMatch) {
-                console.log('[ProviderFormDialog] edit → idMatch:', {id: idMatch.id, name: idMatch.name, alias: idMatch.alias});
                 setSelectedProvider(idMatch);
             } else if (urlMatches.length === 1) {
-                console.log('[ProviderFormDialog] edit → unique match:', {id: urlMatches[0].id, name: urlMatches[0].name, alias: urlMatches[0].alias});
                 setSelectedProvider(urlMatches[0]);
             } else {
-                console.log('[ProviderFormDialog] edit → no auto-select (matches=%d)', urlMatches.length);
                 // Multiple matches (or none) — don't auto-select.
                 // urlCandidates shows them as clickable chips above the slots.
                 setSelectedProvider(null);
@@ -247,8 +229,6 @@ const ProviderFormDialog = ({
             // Add mode with a preselected provider from screen 1 — strictly
             // follow the clicked provider, don't recalculate from URLs.
             const provider = allProviders.find(p => p.id === data.selectedProviderId);
-            console.log('[ProviderFormDialog] add preselected: lookup id=%s → found=%s',
-                data.selectedProviderId, provider ? `${provider.id} / ${provider.name} / ${provider.alias}` : 'NOT FOUND');
             if (provider) {
                 setSelectedProvider(provider);
                 const nextOpenAI: ProtocolSlotData = {
@@ -259,10 +239,6 @@ const ProviderFormDialog = ({
                     url: provider.baseUrlAnthropic || '',
                     enabled: !!provider.baseUrlAnthropic,
                 };
-                console.log('[ProviderFormDialog] add preselected → slots:', {
-                    openAI: nextOpenAI,
-                    anthropic: nextAnthropic,
-                });
                 setSlotOpenAI(nextOpenAI);
                 setSlotAnthropic(nextAnthropic);
                 commitProtocolState(nextOpenAI, nextAnthropic);
@@ -274,9 +250,6 @@ const ProviderFormDialog = ({
                      (data.providerBaseUrls?.anthropic && p.baseUrlAnthropic === data.providerBaseUrls.anthropic) ||
                      (data.apiBase && (p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase))
             ) || null;
-            console.log('[ProviderFormDialog] add url-match:', matchingProvider
-                ? `found ${matchingProvider.id} / ${matchingProvider.name}`
-                : 'no match');
             setSelectedProvider(matchingProvider);
             if (matchingProvider) {
                 // Fill slots from template
@@ -302,8 +275,9 @@ const ProviderFormDialog = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    // ── Sync protocol slots to parent form data ───────────────────
-    const syncProtocolsToParent = useCallback((openAI: ProtocolSlotData, anthropic: ProtocolSlotData) => {
+    // Delegate to parent onChange + sync protocol fields (called by every
+    // slot mutation handler and by submit).
+    const commitProtocolState = useCallback((openAI: ProtocolSlotData, anthropic: ProtocolSlotData) => {
         const cb = onChangeRef.current;
         const protocols: ('openai' | 'anthropic')[] = [];
         if (openAI.enabled) protocols.push('openai');
@@ -314,11 +288,6 @@ const ProviderFormDialog = ({
         cb('apiBaseAnthropic', anthropic.enabled ? anthropic.url : '');
         cb('apiBase', openAI.enabled ? openAI.url : anthropic.enabled ? anthropic.url : '');
     }, []);
-
-    // Delegate to parent onChange + sync protocol fields
-    const commitProtocolState = useCallback((openAI: ProtocolSlotData, anthropic: ProtocolSlotData) => {
-        syncProtocolsToParent(openAI, anthropic);
-    }, [syncProtocolsToParent]);
 
     // ── Slot mutation handlers ────────────────────────────────────
     const updateOpenAIUrl = (url: string) => {
@@ -339,8 +308,9 @@ const ProviderFormDialog = ({
             setSelectedProvider(null);
         }
     };
-    const commitOpenAI = () => commitProtocolState(slotOpenAI, slotAnthropic);
-    const commitAnthropic = () => commitProtocolState(slotOpenAI, slotAnthropic);
+    // Commit-on-blur is the same for both slots — it always syncs the current
+    // state of both, so one handler serves either ProtocolSlot.
+    const commitSlots = () => commitProtocolState(slotOpenAI, slotAnthropic);
 
     const toggleSlot = (kind: ProtocolKind) => {
         if (kind === 'anthropic') {
@@ -602,7 +572,7 @@ const ProviderFormDialog = ({
                                     slot={slotOpenAI}
                                     onToggle={() => toggleSlot('openai')}
                                     onUrlChange={updateOpenAIUrl}
-                                    onUrlBlur={commitOpenAI}
+                                    onUrlBlur={commitSlots}
                                     urlError={baseUrlError && !slotOpenAI.url.trim() && !slotAnthropic.url.trim()}
                                     v1Hint={{show: persistentV1Hint, onApply: handleApplyV1Suffix}}
                                     helperText={selectedProvider
@@ -616,7 +586,7 @@ const ProviderFormDialog = ({
                                     slot={slotAnthropic}
                                     onToggle={() => toggleSlot('anthropic')}
                                     onUrlChange={updateAnthropicUrl}
-                                    onUrlBlur={commitAnthropic}
+                                    onUrlBlur={commitSlots}
                                     urlError={baseUrlError && !slotAnthropic.url.trim() && !slotOpenAI.url.trim()}
                                     helperText={selectedProvider
                                         ? (slotAnthropic.enabled
@@ -690,35 +660,6 @@ const ProviderFormDialog = ({
                             onUseGlobalProxyChange={handleUseGlobalProxyChange}
                         />
 
-                        {/* ── Advanced accordion ─────────────── */}
-                        <Accordion
-                            disableGutters elevation={0}
-                            expanded={advancedOpen}
-                            onChange={(_, expanded) => setAdvancedOpen(expanded)}
-                            sx={{
-                                border: 0, borderTop: 1, borderColor: 'divider',
-                                '&:before': {display: 'none'}, bgcolor: 'transparent',
-                            }}
-                        >
-                            <AccordionSummary
-                                expandIcon={<ExpandMore fontSize="small"/>}
-                                sx={{px: 0, minHeight: 40, '& .MuiAccordionSummary-content': {my: 0.5}}}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        color: "text.secondary",
-                                        fontWeight: 600
-                                    }}>
-                                    {t('providerDialog.advanced.title')}
-                                </Typography>
-                            </AccordionSummary>
-                            {/* Empty for now — reserved for future advanced options
-                                (enabled toggle moved to the dialog title). */}
-                            <AccordionDetails sx={{px: 0, pb: 1}}>
-                                <Stack spacing={2.5} />
-                            </AccordionDetails>
-                        </Accordion>
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2}}>

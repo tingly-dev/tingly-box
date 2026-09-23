@@ -1,6 +1,8 @@
-import { Alert, Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
+import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
 import React from 'react';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
+import { InstructionSteps } from './config/InstructionSteps';
 
 interface CursorConfigModalProps {
     open: boolean;
@@ -70,47 +72,32 @@ const CursorConfigModal: React.FC<CursorConfigModalProps> = ({
                                 pasting it into Cursor.</>
                         )}
                     </Alert>
-                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>1.</strong> Open <strong>Cursor</strong> → <strong>Settings</strong> → <strong>Models</strong>
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>2.</strong> Under <strong>OpenAI API Key</strong>, enable <strong>Override OpenAI Base URL</strong>
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            <strong>3.</strong> Enter:
-                        </Typography>
-                        <Box sx={{ pl: 2, mb: 0.5 }}>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                Base URL: <strong>{baseUrl}/tingly/cursor</strong>
-                            </Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                API Key: <strong>{token.slice(0, 16)}...</strong>
-                            </Typography>
-                        </Box>
-                        <Typography variant="subtitle2" sx={{ mt: 1.5 }}>
-                            <strong>4.</strong> Click <strong>Verify</strong> to save
-                        </Typography>
-                    </Box>
+                    <InstructionSteps
+                        steps={[
+                            <><strong>1.</strong> Open <strong>Cursor</strong> → <strong>Settings</strong> → <strong>Models</strong></>,
+                            <><strong>2.</strong> Under <strong>OpenAI API Key</strong>, enable <strong>Override OpenAI Base URL</strong></>,
+                            <><strong>3.</strong> Enter:</>,
+                        ]}
+                        values={
+                            <>
+                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                    Base URL: <strong>{baseUrl}/tingly/cursor</strong>
+                                </Typography>
+                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                    API Key: <strong>{token.slice(0, 16)}...</strong>
+                                </Typography>
+                            </>
+                        }
+                        trailingStep={
+                            <><strong>4.</strong> Click <strong>Verify</strong> to save</>
+                        }
+                    />
 
-                    <Stack direction="row" spacing={1}>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(`${baseUrl}/tingly/cursor`, 'URL')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy URL
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(token, 'API Key')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy API Key
-                        </Button>
-                    </Stack>
+                    <CopyUrlKeyButtons
+                        url={`${baseUrl}/tingly/cursor`}
+                        token={token}
+                        copyToClipboard={copyToClipboard}
+                    />
                 </Stack>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>

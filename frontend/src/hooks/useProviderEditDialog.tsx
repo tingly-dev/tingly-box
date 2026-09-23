@@ -39,6 +39,12 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
         setProviderFormData(prev => ({ ...prev, [field]: value }));
     }, []);
 
+    // Edit-flow wire payload. Note: this intentionally differs from
+    // useProviderDialog's buildProviderData — here empty optional URLs are
+    // sent as `?? ''` (explicitly clearing them) and token/no_key_required
+    // are normalized, while the add flow drops empty URLs (`|| undefined`).
+    // The backend treats the two endpoints differently, so don't merge the
+    // mappers without checking both.
     const buildEditProviderPayload = useCallback((override?: Partial<ProviderFormData>) => {
         const fd: any = { ...providerFormData, ...(override || {}) };
         return {

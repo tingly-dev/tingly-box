@@ -80,6 +80,12 @@ export function ModelsPanel({
     onCustomModelDelete,
     onProviderEdit,
 }: ModelsPanelProps) {
+    // NOTE: this panel mounts inside ModelSelectDialog, which instantiates the
+    // same collection hooks — two live instances per open dialog, kept
+    // consistent by each hook's cross-instance event sync (dispatch here
+    // refetches the dialog's instance and vice versa). Hoisting these into a
+    // shared provider was assessed and deferred: it would restructure the
+    // dialog's prop wiring for a modest win.
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
     const { refreshTrigger } = useModelSelectContext();

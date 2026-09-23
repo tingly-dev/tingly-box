@@ -1,9 +1,9 @@
+export { default as DashboardFilterBar } from './DashboardFilterBar';
 export { default as StatCard } from './StatCard';
 export { default as TokenHistoryChart, DailyTokenHistoryChart, HourlyTokenHistoryChart } from './TokenHistoryChart';
 export type { TimeSeriesData } from './TokenHistoryChart';
 export { default as ServiceStatsTable } from './ServiceStatsTable';
 export type { AggregatedStat } from './ServiceStatsTable';
-export { default as TokenHeatmap } from './TokenHeatmap';
 export type { DailyUsage } from './TokenHeatmap';
 export { default as DashboardHeatmapSection } from './DashboardHeatmapSection';
 export { default as QuotaHistoryView } from './QuotaHistoryView';
@@ -13,7 +13,6 @@ export type { UsageRecord } from './RequestsView';
 export { default as PerformanceSummary } from './PerformanceSummary';
 export type { PerformanceQueryParams } from './PerformanceSummary';
 export {
-    UsageMetricHeaderCells,
     UsageMetricValueCells,
 } from './UsageMetricCells';
 export { getUsageMetricColumns } from './usageMetricColumns';
@@ -25,7 +24,6 @@ export type {
 } from './usageMetricColumns';
 export {
     formatNumber,
-    TOKEN_COLORS,
     getTotalTokens,
     getCacheHitRate,
     getCacheHitRateColor,
@@ -33,11 +31,10 @@ export {
     hasCacheWrites,
     getErrorRateColor,
 } from './chartStyles';
-export { default as RosterTopList, computeShare } from './RosterTopList';
+export { default as RosterTopList } from './RosterTopList';
 export type { ShareBarItem, ShareBarRow, ShareResult } from './RosterTopList';
 export {
     computeUsageSummary,
-    filterAndSort,
     useRosterAxis,
     RosterBreakdownTable,
 } from './RosterAxis';

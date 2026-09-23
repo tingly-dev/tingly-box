@@ -1,41 +1,32 @@
-import { useCallback, useEffect } from 'react';
-import { useLocalStorage } from './useLocalStorage';
-import { createEventSystem } from '../utils/eventSystem';
+import { useCallback } from 'react';
+import { createPersistedCollection } from './createPersistedCollection';
 
 // Local storage key for new models
 const NEW_MODELS_STORAGE_KEY = 'tingly_new_models';
 const DEFAULT_NEW_MODELS = {};
 
 // Type definition for new models diff
-export interface NewModelsDiff {
+interface NewModelsDiff {
     newModels: string[];
     removedModels?: string[];
     timestamp: string;
 }
 
 // Type for the entire storage structure
-export type NewModelsData = { [providerUuid: string]: NewModelsDiff };
+type NewModelsData = { [providerUuid: string]: NewModelsDiff };
 
-// Event system for new models updates
-const newModelsEvent = createEventSystem<{ providerUuid: string; diff: NewModelsDiff | null }>(
-    'tingly_new_models_update'
+// Storage + cross-instance event sync are shared with the other model
+// collection hooks (see createPersistedCollection). Dispatching from one hook
+// instance makes other mounted instances refetch.
+const useNewModelsStorage = createPersistedCollection<NewModelsData, { providerUuid: string; diff: NewModelsDiff | null }>(
+    NEW_MODELS_STORAGE_KEY,
+    'tingly_new_models_update',
+    DEFAULT_NEW_MODELS
 );
-
-// Export event name for backward compatibility
-export const NEW_MODELS_UPDATE_EVENT = newModelsEvent.eventName;
 
 // Custom hook to manage new models
 export const useNewModels = () => {
-    const { data: newModels, version, saveData, removeKey, setData, refetch } =
-        useLocalStorage<NewModelsData>(NEW_MODELS_STORAGE_KEY, DEFAULT_NEW_MODELS);
-
-    // Listen for new models updates from other components and reload
-    useEffect(() => {
-        const cleanup = newModelsEvent.listen(() => {
-            refetch();
-        });
-        return cleanup;
-    }, [refetch]);
+    const { data: newModels, saveData, removeKey, setData, notify } = useNewModelsStorage();
 
     // Clear new models for a specific provider
     const clearNewModels = useCallback((providerUuid: string) => {
@@ -45,9 +36,9 @@ export const useNewModels = () => {
                 delete newModelsData[providerUuid];
                 return newModelsData;
             });
-            newModelsEvent.dispatch({ providerUuid, diff: null });
+            notify({ providerUuid, diff: null });
         }
-    }, [removeKey, setData]);
+    }, [removeKey, setData, notify]);
 
     // Detect and store new models after a refresh
     const detectAndStoreNewModels = useCallback((
@@ -85,58 +76,17 @@ export const useNewModels = () => {
 
             if (saveData(providerUuid, diff)) {
                 setData(prev => ({ ...prev, [providerUuid]: diff }));
-                newModelsEvent.dispatch({ providerUuid, diff });
+                notify({ providerUuid, diff });
             }
         } else {
             // No new models left (all were removed), clear the entry
             clearNewModels(providerUuid);
         }
-    }, [newModels, clearNewModels, saveData, setData]);
-
-    // Get new models diff for a specific provider
-    const getNewModels = useCallback((providerUuid: string): NewModelsDiff | undefined => {
-        return newModels[providerUuid];
-    }, [newModels]);
-
-    // Helper functions for backward compatibility
-    const loadNewModelsFromStorage = useCallback(() => {
-        const stored = localStorage.getItem(NEW_MODELS_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
-    }, []);
-
-    const saveNewModelsToStorage = useCallback((providerUuid: string, diff: NewModelsDiff) => {
-        return saveData(providerUuid, diff);
-    }, [saveData]);
-
-    const removeNewModelsFromStorage = useCallback((providerUuid: string) => {
-        return removeKey(providerUuid);
-    }, [removeKey]);
-
-    // Helper to dispatch new models update event (backward compatibility)
-    const dispatchNewModelsUpdate = (providerUuid: string, diff: NewModelsDiff | null) => {
-        newModelsEvent.dispatch({ providerUuid, diff });
-    };
-
-    // Helper to listen for new models updates (backward compatibility)
-    const listenForNewModelsUpdates = (callback: (providerUuid: string, diff: NewModelsDiff | null) => void) => {
-        return newModelsEvent.listen((data) => {
-            if (!data) return;
-            const { providerUuid, diff } = data;
-            callback(providerUuid, diff);
-        });
-    };
+    }, [newModels, clearNewModels, saveData, setData, notify]);
 
     return {
         newModels,
-        version,
-        refetch,
         detectAndStoreNewModels,
-        getNewModels,
         clearNewModels,
-        loadNewModelsFromStorage,
-        saveNewModelsToStorage,
-        removeNewModelsFromStorage,
-        dispatchNewModelsUpdate,
-        listenForNewModelsUpdates,
     };
 };

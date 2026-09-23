@@ -1,60 +1,16 @@
-import CardGrid from "@/components/CardGrid.tsx";
 import { useTranslation } from 'react-i18next';
-import UnifiedCard from "@/components/UnifiedCard.tsx";
-import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box } from '@mui/material';
-import PageLayout from '@/components/PageLayout';
-import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
-import TemplatePage from './components/TemplatePage.tsx';
-import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPage } from './ScenarioPage';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
-const scenario = "embed";
-
-const UseEmbedPageContent: React.FC = () => {
-    const { t } = useTranslation();
-    const {
-        isLoading,
-        notification,
-        copyToClipboard,
-        baseUrl,
-    } = useScenarioPageInternal(scenario);
-
-    return (
-        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
-            <CardGrid>
-                <UnifiedCard
-                    titleHeadingLevel={1}
-                    title={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Embed API</span>
-                        </Box>
-                    }
-                    size="full"
-                >
-                    <ProviderConfigCard
-                        title="Embed API"
-                        baseUrlPath="/tingly/embed"
-                        baseUrl={baseUrl}
-                        onCopy={copyToClipboard}
-                        scenario={scenario}
-                    />
-                </UnifiedCard>
-                <TemplatePage
-                    scenario={scenario}
-                    title={t('scenarioPage.embedModelRules')}
-                    collapsible={true}
-                    allowDeleteRule={true}
-                />
-            </CardGrid>
-        </PageLayout>
-    );
-};
-
 const UseEmbedPage: React.FC = () => {
+    const { t } = useTranslation();
     return (
         <ScenarioPageModalProvider>
-            <UseEmbedPageContent />
+            <ScenarioPage
+                scenario="embed"
+                title="Embed API"
+                templateTitle={t('scenarioPage.embedModelRules')}
+            />
         </ScenarioPageModalProvider>
     );
 };

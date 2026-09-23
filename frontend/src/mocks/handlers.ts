@@ -1902,6 +1902,16 @@ export const handlers = [
     // Alternates success/failure so both pill states are previewable.
     http.post('/api/v2/probe', async ({ request }) => {
         const body = await request.json() as any
+        const provider = body?.target_type === 'provider'
+            ? getMockProviders().find((item) => item.uuid === body.provider_uuid)
+            : undefined
+        const protocol = body?.protocol || (provider?.api_style === 'anthropic' ? 'anthropic_v1' : 'openai_chat')
+        const requestPath = protocol === 'anthropic_v1'
+            ? '/tingly/anthropic/v1/messages'
+            : protocol === 'openai_responses' ? '/tingly/openai/responses' : '/tingly/openai/chat/completions'
+        const upstreamApi = provider?.api_style === 'anthropic' ? 'anthropic_v1' : 'openai_chat'
+        const upstreamPath = upstreamApi === 'anthropic_v1' ? '/messages' : '/chat/completions'
+        const upstreamBase = provider?.api_base_openai || provider?.api_base_anthropic || provider?.api_base
         probeRequestCount++
         const isSuccess = probeRequestCount % 3 !== 0
         await new Promise((r) => setTimeout(r, 800))
@@ -1926,19 +1936,22 @@ export const handlers = [
             data: {
                 content,
                 latency_ms: Math.floor(Math.random() * 2200) + 400,
-                request_url: 'http://localhost:12222/tingly/openai/chat/completions',
+                request_url: `http://localhost:12222${requestPath}`,
                 stream: isStream,
                 usage: {
                     input_tokens: 21,
                     output_tokens: 14,
                     cache_read_tokens: 0,
                 },
-                selected_provider: 'Anthropic',
-                selected_model: 'claude-opus-4-8',
-                routing_source: 'load_balancer',
-                upstream_api: 'anthropic_message',
-                upstream_url: 'https://api.anthropic.com/v1/messages',
-                matched_rule_desc: 'Route gpt-5.6-sol to Anthropic claude-opus-4-8',
+                selected_provider: provider?.name || 'Anthropic',
+                selected_provider_uuid: provider?.uuid,
+                selected_model: provider ? body.model : 'claude-opus-4-8',
+                routing_source: provider ? (body.direct ? undefined : 'probe_pin') : 'load_balancer',
+                upstream_api: provider ? upstreamApi : 'anthropic_v1',
+                upstream_url: provider && upstreamBase
+                    ? `${upstreamBase.replace(/\/$/, '')}${upstreamPath}`
+                    : 'https://api.anthropic.com/v1/messages',
+                matched_rule_desc: provider ? undefined : 'Route gpt-5.6-sol to Anthropic claude-opus-4-8',
                 applied_flags: '',
             },
         })
@@ -2149,7 +2162,9 @@ export const handlers = [
                 fetched_at: new Date(now - (minutesAgo + providerIndex * 10) * 60_000).toISOString(),
                 windows: (quota.windows || []).map((window: any) => {
                     if (!window.limit || window.unknown || window.unlimited) return window
-                    const usedPercent = Math.max(0, window.used_percent - (ages.length - index - 1) * 7)
+                    // Older samples have consumed less of the same quota window;
+                    // the remaining allowance should fall toward the latest sample.
+                    const usedPercent = Math.max(0, window.used_percent - index * 7)
                     return {
                         ...window,
                         used_percent: usedPercent,
@@ -2782,7 +2797,6 @@ export const handlers = [
                 cache_write_tokens: 2863200,
                 avg_latency_ms: 1240,
                 error_count: 12,
-                error_rate: 0.65,
                 streamed_count: 1800,
             },
             {
@@ -2799,7 +2813,6 @@ export const handlers = [
                 cache_write_tokens: 861600,
                 avg_latency_ms: 2100,
                 error_count: 3,
-                error_rate: 0.71,
                 streamed_count: 415,
             },
             {
@@ -2816,7 +2829,6 @@ export const handlers = [
                 cache_write_tokens: 637200,
                 avg_latency_ms: 980,
                 error_count: 8,
-                error_rate: 0.85,
                 streamed_count: 920,
             },
             {
@@ -2833,7 +2845,6 @@ export const handlers = [
                 cache_write_tokens: 421200,
                 avg_latency_ms: 420,
                 error_count: 5,
-                error_rate: 0.23,
                 streamed_count: 2100,
             },
             {
@@ -2850,7 +2861,6 @@ export const handlers = [
                 cache_write_tokens: 21600,
                 avg_latency_ms: 3200,
                 error_count: 2,
-                error_rate: 0.64,
                 streamed_count: 308,
             },
         ]
@@ -2888,16 +2898,21 @@ export const handlers = [
         return HttpResponse.json({
             success: true,
             data: modelUsageBase
-                .map((model) => ({
-                    ...model,
-                    request_count: scale(model.request_count),
-                    total_tokens: scale(model.total_tokens),
-                    total_input_tokens: scale(model.total_input_tokens),
-                    total_output_tokens: scale(model.total_output_tokens),
-                    cache_read_tokens: scale(model.cache_read_tokens),
-                    cache_write_tokens: scale(model.cache_write_tokens),
-                    error_count: scale(model.error_count),
-                }))
+                .map((model) => {
+                    const requestCount = scale(model.request_count)
+                    const errorCount = scale(model.error_count)
+                    return {
+                        ...model,
+                        request_count: requestCount,
+                        total_tokens: scale(model.total_tokens),
+                        total_input_tokens: scale(model.total_input_tokens),
+                        total_output_tokens: scale(model.total_output_tokens),
+                        cache_read_tokens: scale(model.cache_read_tokens),
+                        cache_write_tokens: scale(model.cache_write_tokens),
+                        error_count: errorCount,
+                        error_rate: requestCount > 0 ? errorCount / requestCount : 0,
+                    }
+                })
                 .filter((stat) => !userID || stat.total_tokens > 0),
         })
     }),

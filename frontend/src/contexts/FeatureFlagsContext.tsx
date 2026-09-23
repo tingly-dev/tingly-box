@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '@/services/api';
 import { useAuth } from './AuthContext';
@@ -36,7 +36,9 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const [enableBench, setEnableBench] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const loadFlags = async () => {
+    // Only touches stable setters, so it never needs to be recreated (and the
+    // memoized context value below can depend on a stable `refresh`).
+    const loadFlags = useCallback(async () => {
         try {
             const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
@@ -56,7 +58,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         // Only load flags after auth initialization is complete
@@ -68,8 +70,12 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
 
     const refresh = loadFlags;
 
+    const value = useMemo(() => ({
+        skillUser, skillIde, enableGuardrails, enableMCP, enableBench, loading, refresh,
+    }), [skillUser, skillIde, enableGuardrails, enableMCP, enableBench, loading, refresh]);
+
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, enableMCP, enableBench, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={value}>
             {children}
         </FeatureFlagsContext.Provider>
     );
