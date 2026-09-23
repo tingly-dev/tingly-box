@@ -3,10 +3,13 @@ import {
     Typography,
     Chip,
     CircularProgress,
+    Button,
     IconButton,
+    Menu,
+    MenuItem,
+    ListItemText,
     Tooltip,
     TextField,
-    Switch,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -19,18 +22,33 @@ import {
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
 import { fontMono } from '@/theme/fonts';
+import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
 const HEADER_PADDING_Y = 6;
 // Fixed (not just minimum) width for the "name + edit icon" slot, so the
-// toggles that follow (1M, Responses, …) line up at the same x-position
+// controls that follow (1M, Endpoint, …) line up at the same x-position
 // across every rule card. Sized to fit common model names in full (e.g.
 // "deepseek-v4-flash" measures ~140px in this font) with some headroom;
 // names that still don't fit truncate with an ellipsis — the hover tooltip
 // shows the full name and click-to-copy still copies it in full, so an
 // outlier-long name never re-breaks the alignment this exists to guarantee.
 const NAME_SLOT_WIDTH = 190;
+
+const strategyButtonSx = {
+    height: 26,
+    minWidth: 0,
+    px: 1,
+    borderRadius: 1.5,
+    borderColor: 'divider',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    textTransform: 'none' as const,
+    whiteSpace: 'nowrap' as const,
+    '&:hover': {borderColor: 'text.secondary', backgroundColor: 'action.hover'},
+    '& .MuiButton-endIcon': {ml: 0.5},
+};
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
@@ -91,14 +109,11 @@ export interface ModelRequestHeaderProps {
     // 1M context window props
     context1M?: boolean;
     onContext1MToggle?: () => void;
-    // Native OpenAI Responses API toggle. Provided only when the rule's
-    // primary provider is OpenAI-style — same gating pattern as context1M.
-    // Not Codex-specific: any OpenAI-style rule can opt in, the pre-flight
-    // probe is what actually gates support. responsesProbing shows a spinner
-    // while that check runs before the flag is actually set.
-    responsesEnabled?: boolean;
+    // Rule-level upstream endpoint choice. Auto follows model catalog and
+    // provider declarations; Responses is checked before it is forced.
+    endpointSelection?: OpenAIEndpointSelection;
     responsesProbing?: boolean;
-    onResponsesToggle?: () => void;
+    onEndpointSelect?: (selection: OpenAIEndpointSelection) => void;
 }
 
 export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
@@ -115,12 +130,14 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onToggleExpanded,
     context1M = false,
     onContext1MToggle,
-    responsesEnabled = false,
+    endpointSelection = 'auto',
     responsesProbing = false,
-    onResponsesToggle,
+    onEndpointSelect,
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
+    const [contextMenuAnchor, setContextMenuAnchor] = useState<HTMLElement | null>(null);
+    const [endpointMenuAnchor, setEndpointMenuAnchor] = useState<HTMLElement | null>(null);
 
     React.useEffect(() => {
         setTempValue(modelName);
@@ -266,86 +283,108 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     </Tooltip>
                 </Box>
 
-                {/* 1M Context Toggle */}
+                {/* Keep 1M visible; Off only means this rule does not add 1M. */}
                 {onContext1MToggle && (
-                    <Tooltip title={context1M ? "Disable 1M context window" : "Enable 1M context window"}>
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                ml: 0.5,
-                                opacity: active ? 1 : 0.5,
-                                pointerEvents: active ? 'auto' : 'none',
-                            }}
+                    <Box sx={{ml: 0.5}} onClick={(e) => e.stopPropagation()}>
+                        <Tooltip title="Choose whether this rule adds 1M context">
+                            <span>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color={context1M ? 'primary' : 'inherit'}
+                                    endIcon={<ExpandMoreIcon sx={{fontSize: 14}} />}
+                                    disabled={!active}
+                                    aria-label={`1M context: ${context1M ? 'On' : 'Off'}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={Boolean(contextMenuAnchor)}
+                                    onClick={(e) => setContextMenuAnchor(e.currentTarget)}
+                                    sx={strategyButtonSx}
+                                >
+                                    1M: {context1M ? 'On' : 'Off'}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                        <Menu
+                            anchorEl={contextMenuAnchor}
+                            open={Boolean(contextMenuAnchor)}
+                            onClose={() => setContextMenuAnchor(null)}
+                            onClick={(e) => e.stopPropagation()}
+                            slotProps={{paper: {sx: {maxWidth: 320}}}}
                         >
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.7rem',
-                                    fontWeight: 600,
-                                    color: context1M ? 'primary.main' : 'text.secondary',
-                                    userSelect: 'none'
+                            <MenuItem
+                                selected={!context1M}
+                                onClick={() => {
+                                    setContextMenuAnchor(null);
+                                    if (context1M) onContext1MToggle();
                                 }}
+                                sx={{whiteSpace: 'normal', alignItems: 'flex-start', py: 0.75}}
                             >
-                                1M
-                            </Typography>
-                            <Switch
-                                size="small"
-                                checked={context1M}
-                                onChange={(e) => {
-                                    e.stopPropagation();
-                                    onContext1MToggle();
+                                <ListItemText primary="Off" secondary="Do not add 1M for this rule. Client-requested 1M still works where supported." slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
+                            </MenuItem>
+                            <MenuItem
+                                selected={context1M}
+                                onClick={() => {
+                                    setContextMenuAnchor(null);
+                                    if (!context1M) onContext1MToggle();
                                 }}
-                            />
-                        </Box>
-                    </Tooltip>
+                                sx={{whiteSpace: 'normal', alignItems: 'flex-start', py: 0.75}}
+                            >
+                                <ListItemText primary="On" secondary="Add 1M for this rule. The upstream model must support it." slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}} />
+                            </MenuItem>
+                        </Menu>
+                    </Box>
                 )}
 
-                {/* Native OpenAI Responses API Toggle */}
-                {onResponsesToggle && (
-                    <Tooltip title={
-                        responsesProbing
-                            ? "Checking whether the provider supports the Responses API…"
-                            : responsesEnabled
-                                ? "Disable native Responses API"
-                                : "Enable native Responses API (checks provider support first)"
-                    }>
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                ml: 0.5,
-                                opacity: active ? 1 : 0.5,
-                                pointerEvents: active && !responsesProbing ? 'auto' : 'none',
-                            }}
-                        >
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontSize: '0.7rem',
-                                    fontWeight: 600,
-                                    color: responsesEnabled ? 'primary.main' : 'text.secondary',
-                                    userSelect: 'none'
-                                }}
-                            >
-                                Responses
-                            </Typography>
-                            {responsesProbing ? (
-                                <CircularProgress size={16} thickness={5} sx={{ mx: 0.75 }} />
-                            ) : (
-                                <Switch
+                {onEndpointSelect && (
+                    <Box sx={{ml: 0.5}} onClick={(e) => e.stopPropagation()}>
+                        <Tooltip title="Choose the upstream OpenAI endpoint for this rule">
+                            <span>
+                                <Button
                                     size="small"
-                                    checked={responsesEnabled}
-                                    onChange={(e) => {
-                                        e.stopPropagation();
-                                        onResponsesToggle();
+                                    variant="outlined"
+                                    color={endpointSelection === 'auto' ? 'inherit' : 'primary'}
+                                    endIcon={responsesProbing ? <CircularProgress size={12} /> : <ExpandMoreIcon sx={{fontSize: 14}} />}
+                                    disabled={!active || responsesProbing}
+                                    aria-label={`OpenAI endpoint: ${endpointSelection}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={Boolean(endpointMenuAnchor)}
+                                    onClick={(e) => setEndpointMenuAnchor(e.currentTarget)}
+                                    sx={strategyButtonSx}
+                                >
+                                    Endpoint: {endpointSelection === 'auto' ? 'Auto' : endpointSelection === 'chat' ? 'Chat' : 'Responses'}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                        <Menu
+                            anchorEl={endpointMenuAnchor}
+                            open={Boolean(endpointMenuAnchor)}
+                            onClose={() => setEndpointMenuAnchor(null)}
+                            onClick={(e) => e.stopPropagation()}
+                            slotProps={{paper: {sx: {maxWidth: 320}}}}
+                        >
+                            {([
+                                ['auto', 'Auto', 'Use the model Catalog, then the provider setting; default to Chat. When both are supported, follow the client request.'],
+                                ['chat', 'Chat', 'Always send Chat Completions to the upstream provider.'],
+                                ['responses', 'Responses', 'Always send Responses to the upstream provider. Support is checked before saving.'],
+                            ] as const).map(([value, label, description]) => (
+                                <MenuItem
+                                    key={value}
+                                    selected={endpointSelection === value}
+                                    onClick={() => {
+                                        setEndpointMenuAnchor(null);
+                                        onEndpointSelect(value);
                                     }}
-                                />
-                            )}
-                        </Box>
-                    </Tooltip>
+                                    sx={{whiteSpace: 'normal', alignItems: 'flex-start', py: 0.75}}
+                                >
+                                    <ListItemText
+                                        primary={label}
+                                        secondary={description}
+                                        slotProps={{secondary: {sx: {whiteSpace: 'normal', lineHeight: 1.3}}}}
+                                    />
+                                </MenuItem>
+                            ))}
+                        </Menu>
+                    </Box>
                 )}
             </Box>
         );

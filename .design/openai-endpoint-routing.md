@@ -306,3 +306,13 @@ map、遍历顺序不确定——同一个 provider，`GetMaxTokensForModelByPro
 - Smart routing / load balance 选哪个 service（在 endpoint 选择之前）
 - vmodel loopback（独立处理）
 - `IsCodexProvider()` 在 client 层的用法（UA pin、system message 注入等 quirk）
+
+## 12. 路由图上的选择语义
+
+路由图将 rule flag 展示为 `Endpoint: Auto / Chat / Responses`，而不是 Responses 开关：
+
+- **Auto**：不设置显式 endpoint；resolver 先查模型 Catalog，再看 provider 声明，未声明时走 Chat。模型或 provider 声明 `both` 时按入站协议选择。
+- **Chat**：为这条 rule 强制上游 Chat。
+- **Responses**：为这条 rule 强制上游 Responses；保存前对当前主要 service 的 provider/model 做直连探测。service 在当前会话中改变时重新探测，失败则回到 Auto。
+
+这三个选项只描述用户为 rule 选的策略；Auto 不是“Responses 已关闭”，也不保证最终上游一定是 Chat。规则里若有多个 service，实际 endpoint 仍在每次请求选中 service 后按上述优先级决定。

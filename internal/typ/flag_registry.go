@@ -138,11 +138,11 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "openai_endpoint_override",
 			Label:       "OpenAI endpoint override",
-			Description: "Force OpenAI Chat Completions or Responses for this rule, overriding the provider's declared OpenAIEndpointMode default. OpenAI providers only; Anthropic/Google providers ignore this. If the provider declares mode=responses (e.g. Codex), \"chat\" is ignored; if mode=chat, \"responses\" is ignored.",
+			Description: "Choose the upstream OpenAI endpoint for this rule. Auto uses a matching model Catalog entry first, then the provider's declared mode, and defaults to Chat; a provider or model supporting both follows the incoming request. Force Chat and Force Responses override those defaults. Anthropic/Google providers ignore this flag.",
 			Type:        FlagTypeEnum,
 			Category:    FlagCategoryRequestOpenAI,
 			Options: []FlagOption{
-				{Value: "auto", Label: "Auto (use provider default)"},
+				{Value: "auto", Label: "Auto (Catalog, then provider default)"},
 				{Value: "chat", Label: "Force Chat Completions"},
 				{Value: "responses", Label: "Force Responses API"},
 			},
@@ -293,7 +293,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "context_1m",
 			Label:       "1M Context Window",
-			Description: "Enable Anthropic's 1M token context window for supported models (Sonnet 4.6+, Opus 4.6+). Injects the context-1m-2025-08-07 beta flag into the upstream anthropic-beta header; the model name sent to the provider is unchanged. Only enable for models that support the 1M context window.",
+			Description: "When enabled, always request Anthropic's 1M token context window for supported models by adding the context-1m-2025-08-07 beta flag upstream. When unset, leave requests unchanged; clients that request 1M themselves are still honored. The model name sent to the provider is unchanged.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequestAnthropic,
 		},

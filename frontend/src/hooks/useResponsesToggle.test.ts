@@ -38,10 +38,10 @@ describe('useResponsesToggle', () => {
         const service = makeService();
 
         const {result} = renderHook(() => useResponsesToggle({record, primaryService: service, onUpdateRecord}));
-        expect(result.current.enabled).toBe(false);
+        expect(result.current.selection).toBe('auto');
 
         await act(async () => {
-            await result.current.onToggle();
+            await result.current.onSelect('responses');
         });
 
         expect(mockRunProbe).toHaveBeenCalledWith(expect.objectContaining({
@@ -63,26 +63,42 @@ describe('useResponsesToggle', () => {
         const {result} = renderHook(() => useResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
 
         await act(async () => {
-            await result.current.onToggle();
+            await result.current.onSelect('responses');
         });
 
         expect(onUpdateRecord).not.toHaveBeenCalled();
         expect(notify.error).toHaveBeenCalled();
     });
 
-    it('disabling never probes and reverts to auto immediately', async () => {
+    it('selecting Auto never probes and retains automatic routing', async () => {
         const onUpdateRecord = vi.fn();
         const record = makeRecord({openaiEndpointOverride: 'responses'});
 
         const {result} = renderHook(() => useResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
-        expect(result.current.enabled).toBe(true);
+        expect(result.current.selection).toBe('responses');
 
         await act(async () => {
-            await result.current.onToggle();
+            await result.current.onSelect('auto');
         });
 
         expect(mockRunProbe).not.toHaveBeenCalled();
         expect(onUpdateRecord).toHaveBeenCalledWith('flags', expect.objectContaining({openaiEndpointOverride: 'auto'}));
+    });
+
+    it('forces Chat without probing', async () => {
+        const onUpdateRecord = vi.fn();
+        const {result} = renderHook(() => useResponsesToggle({
+            record: makeRecord({openaiEndpointOverride: 'responses'}),
+            primaryService: makeService(),
+            onUpdateRecord,
+        }));
+
+        await act(async () => {
+            await result.current.onSelect('chat');
+        });
+
+        expect(mockRunProbe).not.toHaveBeenCalled();
+        expect(onUpdateRecord).toHaveBeenCalledWith('flags', expect.objectContaining({openaiEndpointOverride: 'chat'}));
     });
 
     it('re-validates and reverts when the bound provider/model changes while enabled', async () => {
