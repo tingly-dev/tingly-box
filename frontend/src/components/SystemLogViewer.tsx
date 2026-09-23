@@ -16,10 +16,13 @@ import {
     TableSortLabel,
     Tooltip,
 } from '@mui/material';
-import { Fragment, useState, useEffect, useRef } from 'react';
+import { Fragment, useMemo, useState, useEffect, useRef } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useTableSort } from '@/hooks/useTableSort';
+import { formatTimestamp } from '@/utils/datetime';
 
 export interface SystemLogEntry {
     time: string;
@@ -38,7 +41,6 @@ interface SystemLogViewerProps {
 }
 
 type SortField = 'time' | 'level' | 'status' | 'message';
-type SortOrder = 'asc' | 'desc';
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
@@ -51,36 +53,15 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(true);
     const tableContainerRef = useRef<HTMLDivElement>(null);
-    // Sorting state
-    const [sortField, setSortField] = useState<SortField>('time');
-    const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+    // Sorting is client-side only — never triggers a refetch.
+    const { sortField, sortOrder, handleSort } = useTableSort<SortField>('time');
 
     const loadLogs = async () => {
         setLoading(true);
         try {
             const response = await getLogs({ limit: 200 });
             if (response && response.logs) {
-                const sortedLogs = [...response.logs].sort((a, b) => {
-                    let comparison = 0;
-                    switch (sortField) {
-                        case 'time':
-                            comparison = new Date(a.time).getTime() - new Date(b.time).getTime();
-                            break;
-                        case 'level':
-                            comparison = a.level.localeCompare(b.level);
-                            break;
-                        case 'message':
-                            comparison = a.message.localeCompare(b.message);
-                            break;
-                        case 'status':
-                            const statusA = (a.fields?.status as number) ?? 0;
-                            const statusB = (b.fields?.status as number) ?? 0;
-                            comparison = statusA - statusB;
-                            break;
-                    }
-                    return sortOrder === 'asc' ? comparison : -comparison;
-                });
-                setAllLogs(sortedLogs);
+                setAllLogs(response.logs);
             }
         } catch (error) {
             console.error('Failed to load system logs:', error);
@@ -131,14 +112,6 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         return '#6b7280';
     };
 
-    const formatTimestamp = (timestamp: string): string => {
-        try {
-            return new Date(timestamp).toLocaleString();
-        } catch {
-            return timestamp;
-        }
-    };
-
     // Client-side filter by level
     useEffect(() => {
         let next = allLogs;
@@ -154,28 +127,38 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
         setLogs(next);
     }, [selectedLevels, allLogs]);
 
+    // Fetch only on mount / refresh — sorting is derived client-side below.
     useEffect(() => {
         loadLogs();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortField, sortOrder]);
+    }, []);
 
-    useEffect(() => {
-        if (autoRefresh) {
-            const interval = setInterval(loadLogs, 5000);
-            return () => clearInterval(interval);
-        }
-    }, [autoRefresh]);
+    useAutoRefresh(autoRefresh, loadLogs);
 
-    const handleSort = (field: SortField) => {
-        if (sortField === field) {
-            // Toggle between asc/desc
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-            // New field, default to desc for time, asc for others
-            setSortField(field);
-            setSortOrder(field === 'time' ? 'desc' : 'asc');
-        }
-    };
+    // Client-side sort — re-sorts the already-fetched rows instead of
+    // refetching from the network on every sort change.
+    const sortedLogs = useMemo(() => {
+        return [...logs].sort((a, b) => {
+            let comparison = 0;
+            switch (sortField) {
+                case 'time':
+                    comparison = new Date(a.time).getTime() - new Date(b.time).getTime();
+                    break;
+                case 'level':
+                    comparison = a.level.localeCompare(b.level);
+                    break;
+                case 'message':
+                    comparison = a.message.localeCompare(b.message);
+                    break;
+                case 'status':
+                    const statusA = (a.fields?.status as number) ?? 0;
+                    const statusB = (b.fields?.status as number) ?? 0;
+                    comparison = statusA - statusB;
+                    break;
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
+    }, [logs, sortField, sortOrder]);
 
     return (
         <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -348,7 +331,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                             </TableRow>
                         </TableHead>
                     <TableBody>
-                        {logs.length === 0 ? (
+                        {sortedLogs.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                     <Typography sx={{
@@ -359,7 +342,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            logs.map((log, index) => (
+                            sortedLogs.map((log, index) => (
                                 <Fragment key={index}>
                                     <TableRow
                                         hover

@@ -42,6 +42,8 @@ import {
 import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
 import {useCopyFeedback} from "@/hooks/useCopyFeedback";
+import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
+import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
 
@@ -61,12 +63,6 @@ interface TokenModalState {
     providerName: string;
     token: string;
     loading: boolean;
-}
-
-interface DeleteModalState {
-    open: boolean;
-    providerUuid: string;
-    providerName: string;
 }
 
 interface ModelListDialogState {
@@ -104,33 +100,17 @@ const ApiKeyTable = ({
         token: "",
         loading: false,
     });
-    const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
-        open: false,
-        providerUuid: "",
-        providerName: "",
-    });
+    const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
+        useDeleteConfirm(
+            onDelete,
+            (uuid) => providers.find((p) => p.uuid === uuid)?.name,
+        );
     const [modelListDialog, setModelListDialog] = useState<ModelListDialogState>({
         open: false,
         provider: null,
     });
-    const [moreMenu, setMoreMenu] = useState<{
-        anchorEl: HTMLElement | null;
-        providerUuid: string;
-    }>({
-        anchorEl: null,
-        providerUuid: "",
-    });
+    const {menu: moreMenu, openMenu: handleMoreOpen, closeMenu: handleMoreClose} = useRowOverflowMenu();
     const {copied: tokenCopied, copy: copyToken} = useCopyFeedback();
-
-    const handleMoreOpen = (
-        e: React.MouseEvent<HTMLElement>,
-        providerUuid: string,
-    ) => {
-        e.stopPropagation();
-        setMoreMenu({anchorEl: e.currentTarget, providerUuid});
-    };
-    const handleMoreClose = () =>
-        setMoreMenu({anchorEl: null, providerUuid: ""});
 
     const fetchFullToken = async (providerUuid: string): Promise<string> => {
         try {
@@ -177,26 +157,6 @@ const ApiKeyTable = ({
 
     const handleCloseTokenModal = () => {
         setTokenModal({open: false, providerName: "", token: "", loading: false});
-    };
-
-    const handleDeleteClick = (providerUuid: string) => {
-        const provider = providers.find((p) => p.uuid === providerUuid);
-        setDeleteModal({
-            open: true,
-            providerUuid,
-            providerName: provider?.name || "Unknown Provider",
-        });
-    };
-
-    const handleCloseDeleteModal = () => {
-        setDeleteModal({open: false, providerUuid: "", providerName: ""});
-    };
-
-    const handleConfirmDelete = () => {
-        if (onDelete && deleteModal.providerUuid) {
-            onDelete(deleteModal.providerUuid);
-        }
-        handleCloseDeleteModal();
     };
 
     const formatTokenDisplay = (provider: Provider) => {
@@ -507,7 +467,7 @@ const ApiKeyTable = ({
                 transformOrigin={{vertical: "top", horizontal: "right"}}
             >
                 {(() => {
-                    const p = providers.find((p) => p.uuid === moreMenu.providerUuid);
+                    const p = providers.find((p) => p.uuid === moreMenu.rowId);
                     if (!p) return null;
                     return [
                         p.token && (
@@ -628,7 +588,7 @@ const ApiKeyTable = ({
             <ConfirmDialog
                 open={deleteModal.open}
                 title="Delete Provider"
-                description={`Are you sure you want to delete the provider "${deleteModal.providerName}"? This action cannot be undone.`}
+                description={`Are you sure you want to delete the provider "${deleteModal.rowName}"? This action cannot be undone.`}
                 confirmLabel="Delete"
                 confirmColor="error"
                 onClose={handleCloseDeleteModal}

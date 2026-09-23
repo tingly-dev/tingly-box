@@ -30,6 +30,7 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
+import { formatTimestamp } from '@/utils/datetime';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -83,14 +84,6 @@ const compactList = (values?: string[]) => {
     if (!values || values.length === 0) return '-';
     if (values.length === 1) return values[0];
     return `${values[0]} +${values.length - 1}`;
-};
-
-const formatTimestamp = (timestamp: string) => {
-    try {
-        return new Date(timestamp).toLocaleString();
-    } catch {
-        return timestamp;
-    }
 };
 
 const toggleVerdict = (values: string[], target: string) => {

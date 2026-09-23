@@ -17,9 +17,12 @@ import {
     Switch,
     Tooltip,
 } from '@mui/material';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon, KeyboardArrowUp as KeyboardArrowUpIcon, Refresh as RefreshIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
 import RequestJourney, { type TraceDetail } from '@/components/RequestJourney';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useTableSort } from '@/hooks/useTableSort';
+import { formatTimestamp } from '@/utils/datetime';
 
 export interface ModelRequestSummary {
     request_id: string;
@@ -59,7 +62,6 @@ export interface RequestFilters {
 }
 
 type SortField = 'time' | 'scenario' | 'model' | 'provider' | 'status' | 'latency';
-type SortOrder = 'asc' | 'desc';
 
 interface RequestsViewerProps {
     getRequests: (params?: RequestFilters) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
@@ -79,14 +81,6 @@ const statusColor = (status?: number): 'default' | 'success' | 'warning' | 'erro
     return 'default';
 };
 
-const formatTime = (s: string): string => {
-    try {
-        return new Date(s).toLocaleString();
-    } catch {
-        return s;
-    }
-};
-
 const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
@@ -98,9 +92,8 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
     // initialScenario is kept as a prop only to power the quick-filter chip.
     const [scenario, setScenario] = useState('');
     const tableContainerRef = useRef<HTMLDivElement>(null);
-    // Sorting state
-    const [sortField, setSortField] = useState<SortField>('time');
-    const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+    // Sorting is client-side only — never triggers a refetch.
+    const { sortField, sortOrder, handleSort } = useTableSort<SortField>('time');
 
     const loadRequests = async () => {
         setLoading(true);
@@ -111,31 +104,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                 scenario: scenario || undefined,
             });
             if (response && response.requests) {
-                const sorted = [...response.requests].sort((a, b) => {
-                    let comparison = 0;
-                    switch (sortField) {
-                        case 'time':
-                            comparison = new Date(a.time).getTime() - new Date(b.time).getTime();
-                            break;
-                        case 'scenario':
-                            comparison = (a.scenario || '').localeCompare(b.scenario || '');
-                            break;
-                        case 'model':
-                            comparison = (a.request_model || '').localeCompare(b.request_model || '');
-                            break;
-                        case 'provider':
-                            comparison = (a.provider || '').localeCompare(b.provider || '');
-                            break;
-                        case 'status':
-                            comparison = (a.status || 0) - (b.status || 0);
-                            break;
-                        case 'latency':
-                            comparison = (a.latency_ms || 0) - (b.latency_ms || 0);
-                            break;
-                    }
-                    return sortOrder === 'asc' ? comparison : -comparison;
-                });
-                setRequests(sorted);
+                setRequests(response.requests);
             }
         } catch (e: any) {
             setError(e instanceof Error ? e.message : 'Failed to load requests');
@@ -148,26 +117,38 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
     useEffect(() => {
         loadRequests();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scenario, sortField, sortOrder]);
+    }, [scenario]);
 
-    useEffect(() => {
-        if (autoRefresh) {
-            const id = setInterval(loadRequests, 5000);
-            return () => clearInterval(id);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoRefresh, scenario]);
+    useAutoRefresh(autoRefresh, loadRequests, [scenario]);
 
-    const handleSort = (field: SortField) => {
-        if (sortField === field) {
-            // Toggle between asc/desc
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-            // New field, default to desc for time, asc for others
-            setSortField(field);
-            setSortOrder(field === 'time' ? 'desc' : 'asc');
-        }
-    };
+    // Client-side sort — re-sorts the already-fetched rows instead of
+    // refetching from the network on every sort change.
+    const sortedRequests = useMemo(() => {
+        return [...requests].sort((a, b) => {
+            let comparison = 0;
+            switch (sortField) {
+                case 'time':
+                    comparison = new Date(a.time).getTime() - new Date(b.time).getTime();
+                    break;
+                case 'scenario':
+                    comparison = (a.scenario || '').localeCompare(b.scenario || '');
+                    break;
+                case 'model':
+                    comparison = (a.request_model || '').localeCompare(b.request_model || '');
+                    break;
+                case 'provider':
+                    comparison = (a.provider || '').localeCompare(b.provider || '');
+                    break;
+                case 'status':
+                    comparison = (a.status || 0) - (b.status || 0);
+                    break;
+                case 'latency':
+                    comparison = (a.latency_ms || 0) - (b.latency_ms || 0);
+                    break;
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
+    }, [requests, sortField, sortOrder]);
 
     const toggleRow = async (id: string) => {
         if (expandedId === id) {
@@ -329,7 +310,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {requests.length === 0 ? (
+                            {sortedRequests.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                                         <Typography sx={{
@@ -340,7 +321,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                requests.map((req) => {
+                                sortedRequests.map((req) => {
                                     const expanded = expandedId === req.request_id;
                                     const detail = details[req.request_id];
                                     return (
@@ -360,7 +341,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario 
                                                         alignItems: "center"
                                                     }}>
                                                         {req.has_error && <ErrorOutlineIcon sx={{ fontSize: 16, color: 'error.main' }} />}
-                                                        <span>{formatTime(req.time)}</span>
+                                                        <span>{formatTimestamp(req.time)}</span>
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell sx={{ fontSize: '0.75rem' }}>

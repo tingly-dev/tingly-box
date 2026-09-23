@@ -16,3 +16,13 @@ export const getLocalMidnight = (date: Date): Date => {
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     return d;
 };
+
+// Display formatter: local datetime string for a timestamp, falling back to
+// the raw input when it can't be parsed.
+export const formatTimestamp = (timestamp: string): string => {
+    try {
+        return new Date(timestamp).toLocaleString();
+    } catch {
+        return timestamp;
+    }
+};

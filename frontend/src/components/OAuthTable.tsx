@@ -40,6 +40,8 @@ import {
 } from "@mui/material";
 import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
+import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
+import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
 
 interface OAuthTableProps {
@@ -53,12 +55,6 @@ interface OAuthTableProps {
     providerQuotas?: { [uuid: string]: ProviderQuota };
     refreshingQuotas?: Set<string>;
     onQuotaRefresh?: (providerUuid: string) => void;
-}
-
-interface DeleteModalState {
-    open: boolean;
-    providerUuid: string;
-    providerName: string;
 }
 
 interface RefreshModalState {
@@ -98,11 +94,11 @@ const OAuthTable = ({
                         refreshingQuotas,
                         onQuotaRefresh,
                     }: OAuthTableProps) => {
-    const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
-        open: false,
-        providerUuid: "",
-        providerName: "",
-    });
+    const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
+        useDeleteConfirm(
+            onDelete,
+            (uuid) => providers.find((p) => p.uuid === uuid)?.name,
+        );
 
     const [refreshModal, setRefreshModal] = useState<RefreshModalState>({
         open: false,
@@ -116,43 +112,7 @@ const OAuthTable = ({
         open: false,
         provider: null,
     });
-    const [moreMenu, setMoreMenu] = useState<{
-        anchorEl: HTMLElement | null;
-        providerUuid: string;
-    }>({
-        anchorEl: null,
-        providerUuid: "",
-    });
-
-    const handleMoreOpen = (
-        e: React.MouseEvent<HTMLElement>,
-        providerUuid: string,
-    ) => {
-        e.stopPropagation();
-        setMoreMenu({anchorEl: e.currentTarget, providerUuid});
-    };
-    const handleMoreClose = () =>
-        setMoreMenu({anchorEl: null, providerUuid: ""});
-
-    const handleDeleteClick = (providerUuid: string) => {
-        const provider = providers.find((p) => p.uuid === providerUuid);
-        setDeleteModal({
-            open: true,
-            providerUuid,
-            providerName: provider?.name || "Unknown Provider",
-        });
-    };
-
-    const handleCloseDeleteModal = () => {
-        setDeleteModal({open: false, providerUuid: "", providerName: ""});
-    };
-
-    const handleConfirmDelete = () => {
-        if (onDelete && deleteModal.providerUuid) {
-            onDelete(deleteModal.providerUuid);
-        }
-        handleCloseDeleteModal();
-    };
+    const {menu: moreMenu, openMenu: handleMoreOpen, closeMenu: handleMoreClose} = useRowOverflowMenu();
 
     const handleRefreshClick = (providerUuid: string) => {
         const provider = providers.find((p) => p.uuid === providerUuid);
@@ -487,7 +447,7 @@ const OAuthTable = ({
                 transformOrigin={{vertical: "top", horizontal: "right"}}
             >
                 {(() => {
-                    const p = providers.find((p) => p.uuid === moreMenu.providerUuid);
+                    const p = providers.find((p) => p.uuid === moreMenu.rowId);
                     if (!p) return null;
                     const hasRefreshToken =
                         onRefreshToken && p.oauth_detail?.refresh_token;
@@ -563,7 +523,7 @@ const OAuthTable = ({
             <ConfirmDialog
                 open={deleteModal.open}
                 title="Delete OAuth Provider"
-                description={`Are you sure you want to delete the OAuth provider "${deleteModal.providerName}"? This action cannot be undone.`}
+                description={`Are you sure you want to delete the OAuth provider "${deleteModal.rowName}"? This action cannot be undone.`}
                 confirmLabel="Delete"
                 confirmColor="error"
                 onClose={handleCloseDeleteModal}
