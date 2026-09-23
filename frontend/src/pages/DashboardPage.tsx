@@ -1,68 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Box, Grid, Skeleton } from '@mui/material';
+import { Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon } from '@/components/icons';
 import {
-    Box,
-    Grid,
-    IconButton,
-    Tooltip,
-    Typography,
-    Switch,
-    FormControlLabel,
-    CircularProgress,
-    Skeleton,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    ListSubheader,
-    Divider,
-} from '@mui/material';
-import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor, computeUsageSummary } from '@/components/dashboard';
-import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
+    StatCard,
+    DailyTokenHistoryChart,
+    HourlyTokenHistoryChart,
+    ServiceStatsTable,
+    RequestsView,
+    PerformanceSummary,
+    DashboardHeatmapSection,
+    DashboardFilterBar,
+    formatNumber,
+    getCacheHitRateColor,
+    formatCacheBreakdown,
+    getErrorRateColor,
+    computeUsageSummary,
+} from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
-import { switchControlLabelStyle } from '@/styles/toggleStyles';
-import api from '../services/api';
-import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 import { useTranslation } from 'react-i18next';
-
-interface Provider {
-    uuid: string;
-    name: string;
-    auth_type?: string;
-}
-
-interface APIToken {
-    user_id?: string;
-    display_name?: string;
-    enabled?: boolean;
-}
-
-interface UsageIdentity {
-    userId: string;
-    label: string;
-    type: 'owner' | 'sharing_key';
-    enabled: boolean;
-}
-
-const MAIN_ACCOUNT_USER_ID = 'admin';
-
-const shortenUserId = (userId: string): string => {
-    if (userId.length <= 12) return userId;
-    return `${userId.slice(0, 4)}…${userId.slice(-4)}`;
-};
-
-type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
-
-const TIME_RANGE_CONFIG: Record<TimeRange, { labelKey: string; days: number; interval: string }> = {
-    today: { labelKey: 'dashboard.overview.range.today', days: 1, interval: 'minute' },
-    yesterday: { labelKey: 'dashboard.overview.range.yesterday', days: 1, interval: 'minute' },
-    '3d': { labelKey: 'dashboard.overview.range.3d', days: 3, interval: 'day' },
-    '7d': { labelKey: 'dashboard.overview.range.7d', days: 7, interval: 'day' },
-    '30d': { labelKey: 'dashboard.overview.range.30d', days: 30, interval: 'day' },
-    '90d': { labelKey: 'dashboard.overview.range.90d', days: 90, interval: 'day' },
-};
+import { useDashboardData, TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
+import type { TimeRange } from '@/hooks/useDashboardData';
 
 const DashboardSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -102,205 +61,39 @@ export default function DashboardPage() {
 
     const isHourlyRange = timeRange === 'today' || timeRange === 'yesterday';
 
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [autoRefresh, setAutoRefresh] = useState(false);
-    const [stats, setStats] = useState<AggregatedStat[]>([]);
-    const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
-    const [providers, setProviders] = useState<Provider[]>([]);
-    const [usageIdentities, setUsageIdentities] = useState<UsageIdentity[]>([
-        { userId: MAIN_ACCOUNT_USER_ID, label: t('dashboard.overview.mainAccount', { defaultValue: 'Main account' }), type: 'owner', enabled: true },
-    ]);
-    const [selectedProvider, setSelectedProvider] = useState<string>('all');
-    const [selectedModel, setSelectedModel] = useState<string>('all');
-    const [selectedUser, setSelectedUser] = useState<string>('all');
-    // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
-    const [heatmapRefresh, setHeatmapRefresh] = useState(0);
-
     // Analysis mode: token trend ('summary'), per-request list ('requests',
     // hourly ranges only), or the fixed 12-month heatmap ('activity').
     const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity'>('summary');
     // "By Request" only exists for hourly ranges; fall back to the trend if a
     // stale 'requests' selection carries into a daily range.
     const effectiveViewMode = viewMode === 'requests' && !isHourlyRange ? 'summary' : viewMode;
-    const [records, setRecords] = useState<UsageRecord[]>([]);
-    const [recordsLoading, setRecordsLoading] = useState(false);
-    // Real total in range from the server (records itself is capped at 500).
-    const [recordsTotal, setRecordsTotal] = useState(0);
-    // Full parameter set for the records query (time window + filters),
-    // written by loadData after each load. A fresh object per load means the
-    // requests-view effect refires exactly once per dashboard load — records
-    // used to be fetched twice per filter change (once from the filter deps,
-    // once from the new time params).
-    const [recordsParams, setRecordsParams] = useState<{
-        start_time: string;
-        end_time: string;
-        provider: string;
-        model: string;
-        user: string;
-    } | null>(null);
 
-    const buildTimeParams = useCallback((provider: string, model: string, user: string, range: TimeRange) => {
-        const now = new Date();
-        const config = TIME_RANGE_CONFIG[range];
-        const todayStart = getLocalMidnight(now);
-        const startTime = new Date(todayStart);
-        let endTime: Date;
-
-        if (range === 'today') {
-            endTime = now;
-        } else if (range === 'yesterday') {
-            startTime.setDate(startTime.getDate() - 1);
-            endTime = new Date(todayStart);
-        } else {
-            startTime.setDate(startTime.getDate() - (config.days - 1));
-            endTime = new Date(todayStart);
-            endTime.setDate(endTime.getDate() + 1);
-        }
-
-        const params: Record<string, string> = {
-            start_time: toLocalISOString(startTime),
-            end_time: toLocalISOString(endTime),
-        };
-        if (provider && provider !== 'all') {
-            params.provider = provider;
-        }
-        if (model && model !== 'all') {
-            params.model = model;
-        }
-        if (user && user !== 'all') {
-            params.user_id = user;
-        }
-        return params;
-    }, []);
-
-    // Monotonic sequence used to drop out-of-order responses when filters
-    // change faster than requests complete.
-    const requestSeq = useRef(0);
-
-    // Providers and API tokens are filter metadata that doesn't depend on the
-    // selected time range or filters — fetch them once (and on manual
-    // refresh) instead of on every filter change / auto-refresh tick.
-    const loadFilterOptions = useCallback(async () => {
-        try {
-            const [providersResult, tokensResult] = await Promise.all([
-                api.getProviders(),
-                api.listAPITokens({ limit: 500 }),
-            ]);
-
-            if (providersResult?.success && providersResult?.data) {
-                setProviders(providersResult.data);
-            }
-            if (tokensResult?.success && tokensResult?.data) {
-                const tokens: APIToken[] = Array.isArray(tokensResult.data) ? tokensResult.data : tokensResult.data.tokens || [];
-                const sharingKeysByUserId = new Map<string, UsageIdentity>();
-                tokens.forEach((token) => {
-                    if (!token.user_id) return;
-                    sharingKeysByUserId.set(token.user_id, {
-                        userId: token.user_id,
-                        label: token.display_name?.trim() || t('dashboard.overview.unnamedSharingKey', { defaultValue: 'Unnamed sharing key' }),
-                        type: 'sharing_key',
-                        enabled: token.enabled !== false,
-                    });
-                });
-                const sharingKeys = Array.from(sharingKeysByUserId.values())
-                    .sort((a, b) => a.label.localeCompare(b.label));
-                setUsageIdentities([
-                    { userId: MAIN_ACCOUNT_USER_ID, label: t('dashboard.overview.mainAccount', { defaultValue: 'Main account' }), type: 'owner', enabled: true },
-                    ...sharingKeys,
-                ]);
-            }
-        } catch (error) {
-            console.error('Failed to load dashboard filter options:', error);
-        }
-    }, []);
-
-    const loadData = useCallback(async (provider: string, model: string, user: string, range: TimeRange) => {
-        const seq = ++requestSeq.current;
-        try {
-            const config = TIME_RANGE_CONFIG[range];
-            const params = buildTimeParams(provider, model, user, range);
-
-            const [statsResult, timeSeriesResult] = await Promise.all([
-                // limit is the server-side max (1000): the stat-card totals are
-                // summed from these groups, so a low limit silently under-counts.
-                api.getUsageStats({ ...params, group_by: 'model', limit: 1000 }),
-                api.getUsageTimeSeries({ ...params, interval: config.interval }),
-            ]);
-
-            // A newer request was issued while this one was in flight —
-            // discard the stale response instead of overwriting fresh data.
-            if (seq !== requestSeq.current) {
-                return;
-            }
-
-            if (statsResult?.data) {
-                setStats(statsResult.data);
-            }
-            if (timeSeriesResult?.data) {
-                setTimeSeries(timeSeriesResult.data);
-            }
-
-            // Store the records query params for the requests view
-            setRecordsParams({ start_time: params.start_time, end_time: params.end_time, provider, model, user });
-        } catch (error) {
-            console.error('Failed to load dashboard data:', error);
-        } finally {
-            if (seq === requestSeq.current) {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }
-    }, [buildTimeParams]);
-
-    // Same out-of-order protection as loadData: without it, a slow earlier
-    // response could overwrite the requests view after a newer one landed.
-    const recordsSeq = useRef(0);
-
-    const loadRecords = useCallback(async (params: typeof recordsParams) => {
-        if (!params) return;
-        const seq = ++recordsSeq.current;
-        setRecordsLoading(true);
-        try {
-            const filters: Record<string, any> = {
-                start_time: params.start_time,
-                end_time: params.end_time,
-                limit: 500,
-                offset: 0,
-            };
-            if (params.provider !== 'all') {
-                filters.provider = params.provider;
-            }
-            if (params.model !== 'all') {
-                filters.model = params.model;
-            }
-            if (params.user !== 'all') {
-                filters.user_id = params.user;
-            }
-            const result = await api.getUsageRecords(filters);
-            if (seq !== recordsSeq.current) {
-                return;
-            }
-            if (result?.data) {
-                setRecords(result.data);
-                setRecordsTotal(result.meta?.total ?? result.data.length);
-            }
-        } catch (error) {
-            console.error('Failed to load records:', error);
-        } finally {
-            if (seq === recordsSeq.current) {
-                setRecordsLoading(false);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        loadFilterOptions();
-    }, [loadFilterOptions]);
-
-    useEffect(() => {
-        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
-    }, [loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
+    const {
+        loading,
+        refreshing,
+        autoRefresh,
+        setAutoRefresh,
+        handleRefresh,
+        stats,
+        timeSeries,
+        records,
+        recordsLoading,
+        recordsTotal,
+        recordsParams,
+        heatmapRefresh,
+        selectedProvider,
+        setSelectedProvider,
+        selectedModel,
+        setSelectedModel,
+        selectedUser,
+        setSelectedUser,
+        hasActiveFilters,
+        handleClearFilters,
+        groupedProviderOptions,
+        modelOptions,
+        usageIdentities,
+        selectedIdentityLabel,
+    } = useDashboardData({ timeRange, isHourlyRange, viewMode });
 
     // Reset view mode when switching away from hourly ranges
     useEffect(() => {
@@ -308,60 +101,6 @@ export default function DashboardPage() {
             setViewMode('summary');
         }
     }, [isHourlyRange]);
-
-    // Provider/model options are snapshotted from the current range's stats, so a
-    // selection from one range can be stale (or simply absent) in another. Clear
-    // them when the user switches time range. The user filter is kept — it names
-    // whose usage you're looking at, which stays meaningful across ranges.
-    const prevTimeRangeRef = useRef(timeRange);
-    useEffect(() => {
-        if (prevTimeRangeRef.current !== timeRange) {
-            setSelectedProvider('all');
-            setSelectedModel('all');
-            prevTimeRangeRef.current = timeRange;
-        }
-    }, [timeRange]);
-
-    // Load records when entering the requests view or when a dashboard load
-    // publishes new query params (filters are carried inside recordsParams).
-    useEffect(() => {
-        if (viewMode === 'requests') {
-            loadRecords(recordsParams);
-        }
-    }, [viewMode, recordsParams, loadRecords]);
-
-    // Reset a selection only when it disappears from the configured metadata
-    // (a deleted provider / sharing key). Checking against the already-filtered
-    // stats used to wipe BOTH provider and model back to "all" whenever a
-    // combination simply had no data in the selected range.
-    useEffect(() => {
-        if (selectedProvider !== 'all' && providers.length > 0 && !providers.some((p) => p.uuid === selectedProvider)) {
-            setSelectedProvider('all');
-        }
-        if (selectedUser !== 'all' && !usageIdentities.some((identity) => identity.userId === selectedUser)) {
-            setSelectedUser('all');
-        }
-    }, [providers, usageIdentities, selectedProvider, selectedUser]);
-
-    useEffect(() => {
-        if (autoRefresh) {
-            const interval = setInterval(() => {
-                // loadData refreshes charts and, via the fresh recordsParams
-                // object it publishes, the requests view. Bump the heatmap key
-                // too — the Activity view used to go stale under auto-refresh.
-                loadData(selectedProvider, selectedModel, selectedUser, timeRange);
-                setHeatmapRefresh((n) => n + 1);
-            }, 60000);
-            return () => clearInterval(interval);
-        }
-    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        loadFilterOptions();
-        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
-        setHeatmapRefresh((n) => n + 1);
-    };
 
     // Calculate totals from stats — single shared pass over the rows (same
     // helper the Team Usage page uses for its stat cards). The streamed rate
@@ -386,257 +125,29 @@ export default function DashboardPage() {
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
 
-    // Group providers by auth_type for the dropdown
-    const authTypeLabel = (authType: string): string => {
-        switch (authType) {
-            case 'oauth': return 'OAuth';
-            case 'api_key': return t('dashboard.overview.authType.apiKey', { defaultValue: 'API Key' });
-            case 'bearer_token': return t('dashboard.overview.authType.bearerToken', { defaultValue: 'Bearer Token' });
-            case 'basic_auth': return t('dashboard.overview.authType.basicAuth', { defaultValue: 'Basic Auth' });
-            case 'vmodel': return t('dashboard.overview.authType.vmodel', { defaultValue: 'Virtual Model' });
-            default: return authType || t('dashboard.overview.authType.other', { defaultValue: 'Other' });
-        }
-    };
-
-    const AUTH_TYPE_ORDER = ['oauth', 'api_key', 'bearer_token', 'basic_auth', 'vmodel'];
-
-    // Providers that appear in the data — snapshotted only while no provider
-    // is selected. Deriving this from the live (already filtered) stats
-    // collapsed the dropdown to just the selected provider, forcing a
-    // clear-filters round-trip to switch to a different one.
-    const [providerUuidsInData, setProviderUuidsInData] = useState<Set<string>>(() => new Set());
-    useEffect(() => {
-        if (selectedProvider === 'all') {
-            setProviderUuidsInData(new Set(
-                stats
-                    .map(s => s.provider_uuid)
-                    .filter((uuid): uuid is string => uuid != null && uuid !== '')
-            ));
-        }
-    }, [stats, selectedProvider]);
-
-    const groupedProviderOptions = useMemo(() => {
-        const groups: Record<string, Provider[]> = {};
-        providers
-            .filter(p => providerUuidsInData.has(p.uuid))  // Only include providers in current data
-            .forEach((p) => {
-                const authType = p.auth_type || 'api_key';
-                if (!groups[authType]) groups[authType] = [];
-                groups[authType].push(p);
-            });
-        // Sort providers within each group by name
-        Object.values(groups).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
-
-        // Return in predefined order, skip empty groups
-        return AUTH_TYPE_ORDER
-            .filter((t) => groups[t]?.length)
-            .map((authType) => ({
-                authType,
-                label: authTypeLabel(authType),
-                providers: groups[authType],
-            }));
-    }, [providers, providerUuidsInData]);
-
-    // Unique models from stats, sorted by usage — same snapshot pattern as the
-    // provider options: only recompute while no model is selected, so sibling
-    // models stay selectable after picking one.
-    const [modelOptions, setModelOptions] = useState<string[]>([]);
-    useEffect(() => {
-        if (selectedModel !== 'all') return;
-        const modelMap = new Map<string, { model: string; totalTokens: number }>();
-        stats.forEach((stat) => {
-            const model = stat.model || stat.key || 'Unknown';
-            const totalTokens = getTotalTokens(stat);
-            const existing = modelMap.get(model);
-            if (!existing || totalTokens > existing.totalTokens) {
-                modelMap.set(model, { model, totalTokens });
-            }
-        });
-        setModelOptions(Array.from(modelMap.values())
-            .sort((a, b) => b.totalTokens - a.totalTokens)
-            .map((m) => m.model));
-    }, [stats, selectedModel]);
-
-    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all';
-
-    // Owner label is rendered through t() so a live language switch updates it;
-    // sharing-key labels carry their own display name instead.
-    const identityLabel = (identity: UsageIdentity): string =>
-        identity.type === 'owner'
-            ? t('dashboard.overview.mainAccount', { defaultValue: 'Main account' })
-            : identity.label;
-
-    const selectedIdentity = usageIdentities.find((i) => i.userId === selectedUser);
-    const selectedIdentityLabel = selectedUser === 'all'
-        ? t('dashboard.overview.allIdentities', { defaultValue: 'All identities' })
-        : selectedIdentity
-            ? identityLabel(selectedIdentity)
-            : shortenUserId(selectedUser);
-
-    const handleClearFilters = () => {
-        setSelectedProvider('all');
-        setSelectedModel('all');
-        setSelectedUser('all');
-    };
-
     if (loading) {
         return <DashboardSkeleton />;
     }
 
     const headerActions = (
-        <>
-            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
-                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
-                <Select
-                    value={selectedProvider}
-                    label={t('dashboard.overview.provider', { defaultValue: 'Provider' })}
-                    onChange={(e) => setSelectedProvider(e.target.value)}
-                    sx={{
-                        borderRadius: 2,
-                        '& .MuiOutlinedInput-input': { py: 1 },
-                    }}
-                >
-                    <MenuItem value="all">{t('dashboard.overview.allProviders', { defaultValue: 'All providers' })}</MenuItem>
-                    {groupedProviderOptions.map((group) => [
-                        <ListSubheader
-                            key={`header-${group.authType}`}
-                            sx={{
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                lineHeight: '28px',
-                                pt: 1,
-                                pl: 1.5,
-                                borderLeft: '3px solid',
-                                borderLeftColor: 'primary.main',
-                                backgroundColor: 'action.hover',
-                            }}
-                        >
-                            {group.label}
-                        </ListSubheader>,
-                        ...group.providers.map((p) => (
-                            <MenuItem key={p.uuid} value={p.uuid}>
-                                {p.name}
-                            </MenuItem>
-                        )),
-                    ])}
-                </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
-                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.model', { defaultValue: 'Model' })}</InputLabel>
-                <Select
-                    value={selectedModel}
-                    label={t('dashboard.overview.model', { defaultValue: 'Model' })}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    sx={{
-                        borderRadius: 2,
-                        '& .MuiOutlinedInput-input': { py: 1 },
-                    }}
-                >
-                    <MenuItem value="all">{t('dashboard.overview.allModels', { defaultValue: 'All models' })}</MenuItem>
-                    {modelOptions.map((model) => (
-                        <MenuItem key={model} value={model}>
-                            {model}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: { xs: 160, sm: 200 } }}>
-                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.identity', { defaultValue: 'Identity' })}</InputLabel>
-                <Select
-                    value={selectedUser}
-                    label={t('dashboard.overview.identity', { defaultValue: 'Identity' })}
-                    onChange={(e) => setSelectedUser(e.target.value)}
-                    renderValue={() => selectedIdentityLabel}
-                    sx={{
-                        borderRadius: 2,
-                        '& .MuiOutlinedInput-input': { py: 1 },
-                    }}
-                >
-                    <MenuItem value="all">{t('dashboard.overview.allIdentities', { defaultValue: 'All identities' })}</MenuItem>
-                    {usageIdentities.filter((identity) => identity.type === 'owner').map((identity) => (
-                        <MenuItem key={identity.userId} value={identity.userId}>
-                            {identity.label}
-                        </MenuItem>
-                    ))}
-                    {usageIdentities.some((identity) => identity.type === 'sharing_key') && (
-                        <ListSubheader>{t('dashboard.overview.sharingKeys', { defaultValue: 'Sharing Keys' })}</ListSubheader>
-                    )}
-                    {usageIdentities.filter((identity) => identity.type === 'sharing_key').map((identity) => (
-                        <MenuItem key={identity.userId} value={identity.userId}>
-                            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
-                                <Typography variant="body2" noWrap>
-                                    {identityLabel(identity)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
-                                </Typography>
-                                <Tooltip title={identity.userId} placement="right">
-                                    <Typography
-                                        variant="caption"
-                                        sx={{
-                                            color: "text.secondary",
-                                            fontFamily: 'monospace',
-                                            flexShrink: 0
-                                        }}>
-                                        {shortenUserId(identity.userId)}
-                                    </Typography>
-                                </Tooltip>
-                            </Box>
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-
-            {hasActiveFilters && (
-                <>
-                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
-                    <Tooltip title={t('dashboard.overview.clearFilters', { defaultValue: 'Clear all filters' })}>
-                        <IconButton
-                            size="small"
-                            onClick={handleClearFilters}
-                            sx={{
-                                backgroundColor: 'action.hover',
-                                '&:hover': { backgroundColor: 'action.selected' },
-                            }}
-                        >
-                            <FilterOff />
-                        </IconButton>
-                    </Tooltip>
-                </>
-            )}
-
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <FormControlLabel
-                    control={
-                        <Switch
-                            size="small"
-                            checked={autoRefresh}
-                            onChange={(e) => setAutoRefresh(e.target.checked)}
-                            color="primary"
-                        />
-                    }
-                    label={<Typography variant="body2">{t('dashboard.overview.auto', { defaultValue: 'Auto' })}</Typography>}
-                    sx={switchControlLabelStyle}
-                />
-                <Tooltip title={t('dashboard.overview.refreshData', { defaultValue: 'Refresh data' })}>
-                    <IconButton
-                        size="small"
-                        onClick={handleRefresh}
-                        disabled={refreshing}
-                        sx={{
-                            backgroundColor: 'action.hover',
-                            '&:hover': { backgroundColor: 'action.selected' },
-                            '&:disabled': { backgroundColor: 'transparent' },
-                        }}
-                    >
-                        {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
-                    </IconButton>
-                </Tooltip>
-            </Box>
-        </>
+        <DashboardFilterBar
+            providerGroups={groupedProviderOptions}
+            modelOptions={modelOptions}
+            usageIdentities={usageIdentities}
+            selectedProvider={selectedProvider}
+            onProviderChange={setSelectedProvider}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            selectedUser={selectedUser}
+            onUserChange={setSelectedUser}
+            selectedIdentityLabel={selectedIdentityLabel}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={handleClearFilters}
+            autoRefresh={autoRefresh}
+            onAutoRefreshChange={setAutoRefresh}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+        />
     );
 
     return (
