@@ -204,21 +204,25 @@ func GetClientUserAgent(ctx context.Context) string {
 //   - AgentID / ParentAgentID: the x-claude-code-agent-id and
 //     x-claude-code-parent-agent-id headers a Claude Code subagent sends;
 //     forwarded so subagent traffic keeps its lineage.
+//   - BackgroundSession: the client sent x-app: cli-bg (a background
+//     session, CLAUDE_CODE_SESSION_KIND=bg); replayed so the upstream sees the
+//     same session kind instead of the interactive default.
 //   - RequestClass / AgentType: the x-claude-code-request-class and
 //     x-claude-code-agent-type hint headers 2.1.280+ sends on direct
 //     traffic (request class main / subagent / auxiliary / compaction /
 //     workflow; agent type for subagent requests); replayed when present.
 type ClaudeCodeClientHints struct {
-	Betas         []string
-	AgentID       string
-	ParentAgentID string
-	RequestClass  string
-	AgentType     string
+	Betas             []string
+	AgentID           string
+	ParentAgentID     string
+	RequestClass      string
+	AgentType         string
+	BackgroundSession bool
 }
 
 // IsZero reports whether no hint was captured.
 func (h ClaudeCodeClientHints) IsZero() bool {
-	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == ""
+	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == "" && !h.BackgroundSession
 }
 
 // ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.

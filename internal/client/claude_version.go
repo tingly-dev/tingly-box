@@ -34,6 +34,10 @@ const (
 	claudeRequestClassHeader = "x-claude-code-request-class"
 	claudeAgentTypeHeader    = "x-claude-code-agent-type"
 	claudeRequestClassMain   = "main"
+
+	// claudeXAppBackground is x-app for a background session
+	// (CLAUDE_CODE_SESSION_KIND=bg); replayed from the inbound client.
+	claudeXAppBackground = "cli-bg"
 )
 
 // nativeClaudeCLIUserAgent is "claude-cli/<version> (external, cli)": the
@@ -131,6 +135,9 @@ func (c *ClaudeClient) nativeRequestOptions(ctx context.Context, sig claudeBetaS
 		anthropicOption.WithMiddleware(claudeCodeCCHMiddleware),
 	}
 	hints := typ.GetClaudeCodeClientHints(ctx)
+	if hints.BackgroundSession {
+		options = append(options, anthropicOption.WithHeader("x-app", claudeXAppBackground))
+	}
 	if hints.AgentID != "" {
 		options = append(options, anthropicOption.WithHeader("x-claude-code-agent-id", sanitizeClaudeHeaderValue(hints.AgentID)))
 	}

@@ -16,6 +16,7 @@ func TestApplyClaudeCodeClientHints_AttachesBetasAndAgentHeaders(t *testing.T) {
 	c.Request.Header.Set("x-claude-code-parent-agent-id", "agent-main")
 	c.Request.Header.Set("x-claude-code-request-class", "subagent")
 	c.Request.Header.Set("x-claude-code-agent-type", "explore")
+	c.Request.Header.Set("x-app", "cli-bg")
 
 	applyClaudeCodeClientHints(c)
 
@@ -25,6 +26,16 @@ func TestApplyClaudeCodeClientHints_AttachesBetasAndAgentHeaders(t *testing.T) {
 	assert.Equal(t, "agent-main", got.ParentAgentID)
 	assert.Equal(t, "subagent", got.RequestClass)
 	assert.Equal(t, "explore", got.AgentType)
+	assert.True(t, got.BackgroundSession)
+}
+
+func TestApplyClaudeCodeClientHints_InteractiveXAppIsNotAHint(t *testing.T) {
+	c := newGinContext(t)
+	c.Request.Header.Set("x-app", "cli")
+
+	applyClaudeCodeClientHints(c)
+
+	assert.True(t, typ.GetClaudeCodeClientHints(c.Request.Context()).IsZero())
 }
 
 func TestApplyClaudeCodeClientHints_NoHeadersIsNoOp(t *testing.T) {

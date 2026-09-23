@@ -377,7 +377,7 @@ func TestClaudeClient_LegacyProfileUnchanged(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{AgentID: "agent-7"})
+	ctx := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{AgentID: "agent-7", BackgroundSession: true})
 	provider := &typ.Provider{
 		Name: "legacy", APIBase: srv.URL, AuthType: ai.AuthTypeOAuth,
 		OAuthDetail: &ai.OAuthDetail{AccessToken: "sk-ant-oat01-testtoken"},
@@ -401,6 +401,7 @@ func TestClaudeClient_LegacyProfileUnchanged(t *testing.T) {
 	assert.Equal(t, stainlessRuntimeVersion, captured.Get("X-Stainless-Runtime-Version"))
 	assert.Equal(t, anthropicBeta, captured.Get("Anthropic-Beta"))
 	assert.Empty(t, captured.Get("X-Claude-Code-Agent-Id"))
+	assert.Equal(t, "cli", captured.Get("X-App"), "legacy chain ignores the background-session hint")
 	assert.Contains(t, string(body), "cch=00000;", "legacy chain does not hash cch")
 	assert.Contains(t, string(body), `\u003csystem-reminder\u003e`, "legacy chain keeps Go's JSON escaping")
 }
@@ -448,4 +449,24 @@ func TestClaudeClient_WireHeaders280(t *testing.T) {
 	_, err = c3.BetaMessagesNew(ctx3, betaRequestWithMetadata())
 	require.NoError(t, err)
 	assert.Empty(t, captured.Get("X-Claude-Code-Request-Class"))
+}
+
+// A background session (x-app: cli-bg) keeps its kind upstream on the native
+// profiles; the interactive default and the legacy chain send "cli".
+func TestClaudeClient_XAppBackgroundSession(t *testing.T) {
+	var captured http.Header
+	srv := newCapturingAnthropicServer(t, &captured)
+	defer srv.Close()
+
+	ctx := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{BackgroundSession: true})
+	c := newTestClaudeClient(t, ctx, srv.URL)
+	_, err := c.BetaMessagesNew(ctx, betaRequestWithMetadata())
+	require.NoError(t, err)
+	assert.Equal(t, "cli-bg", captured.Get("X-App"))
+
+	ctx2 := context.Background()
+	c2 := newTestClaudeClient(t, ctx2, srv.URL)
+	_, err = c2.BetaMessagesNew(ctx2, betaRequestWithMetadata())
+	require.NoError(t, err)
+	assert.Equal(t, "cli", captured.Get("X-App"))
 }

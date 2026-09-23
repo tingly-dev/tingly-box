@@ -233,6 +233,10 @@ func ResolveRuleFlagsWithScenario(
 	return flags
 }
 
+// claudeXAppBackground is the x-app value Claude Code sends for background
+// sessions (CLAUDE_CODE_SESSION_KIND=bg); the interactive value is "cli".
+const claudeXAppBackground = "cli-bg"
+
 // applyClaudeCodeClientHints attaches the inbound anthropic-beta flags and
 // the Claude Code subagent headers to the request context for the Claude
 // OAuth chain (typ.GetClaudeCodeClientHints). No-op when the client sent none.
@@ -245,6 +249,8 @@ func applyClaudeCodeClientHints(c *gin.Context) {
 		ParentAgentID: strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
 		RequestClass:  strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
 		AgentType:     strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
+		// x-app is "cli" or "cli-bg"; only the background kind is a hint.
+		BackgroundSession: strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
 	}
 	for _, v := range c.Request.Header.Values("anthropic-beta") {
 		for _, flag := range strings.Split(v, ",") {

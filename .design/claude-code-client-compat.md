@@ -68,7 +68,7 @@
 | client header | `X-Stainless-OS/Arch` SDK 映射名 | ❌ 发 GOOS/GOARCH | ✅ | ✅ | |
 | client header | 去掉 `x-stainless-helper-method` | ❌ 仍发 | ✅ | ✅ | |
 | client header | `x-app: cli` | ✅ | ✅ | ✅ | |
-| client header | `x-app: cli-bg`（后台会话） | ❌ | ❌ | ❌ | 未读入站头；一行可补 |
+| client header | `x-app: cli-bg`（后台会话） | ❌ 一律 `cli` | ✅ 入站为 `cli-bg` 时透传 | ✅ 同 | `typ.ClaudeCodeClientHints.BackgroundSession` |
 | client header | `X-Claude-Code-Session-Id` | ✅ | ✅ | ✅ | |
 | client header | 子 agent 头 `x-claude-code-agent-id` / `-parent-agent-id` | ❌ 丢弃 | ✅ 透传 | ✅ 透传 | |
 | client header | `x-claude-code-request-class` | 不存在 | 不存在 | ✅ 默认 `main`，入站回放 | 280 直连专属 |
@@ -497,7 +497,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | `anthropic-beta` | `internal/client/claude_betas.go` | `composeClaudeCodeBetas`、`claudeCodeBetaEmissionOrder`、`claudeCodeClientReplayableBetas` + `claudeCodeReplayableBetasSince`（按版本门控）、`claudeBetaSignals.Version/versionAtLeast` |
 | 逐请求头（beta / agent id / 280 hint 头 / cch 中间件） | `claude_version.go::nativeRequestOptions`（Guard / GuardBeta 在 `c.native` 时追加；`c.nativeVersion` 决定 280 增量） | `sanitizeClaudeHeaderValue`、`claudeHintHeaderValueRe` |
 | count_tokens beta 子集 | `claude_version.go::nativeCountTokensClient` | `filterClaudeCodeCountTokensBetas` |
-| 入站 hint 采集 | `internal/protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints`（Betas / AgentID / ParentAgentID / RequestClass / AgentType） |
+| 入站 hint 采集 | `internal/protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints`（Betas / AgentID / ParentAgentID / RequestClass / AgentType / BackgroundSession） |
 | billing header + metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头按 `ClaudeCodeVersionFromExtra` 分派（Legacy 路径原样）；调用方 `transform/vendor.go::isClaudeCodeBackend`（host 为 `api.anthropic.com`/`claude.ai`，**或** provider 是 Claude Code OAuth issuer） | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader(version, …)`（preserved field 带 `since`）、`computeCCVersionFor`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
 | clean header | `internal/protocolserver/transform/transform_clean_header.go`（未改） | — |
 | UA 预设 | `internal/typ/flag_registry.go::DefaultUserAgents`（未改，仍是 2.1.86 字面量；它只是 `custom_user_agent` 的快选建议，与本 flag 无关） | — |
@@ -561,7 +561,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 | 项 | 状态 | 官方行为 | 我们的行为 | 原因 / 补法 |
 |---|---|---|---|---|
-| `x-app: cli-bg` | 未做 | `CLAUDE_CODE_SESSION_KIND=bg` 的后台会话发 `cli-bg`，其余 `cli` | 一律 `cli` | 未读入站 `x-app` 头。补法：入站为 `cli-bg` 时透传，一行改动。影响仅是把少量后台流量标成了前台。 |
+| `x-app: cli-bg` | 已做（透传） | `CLAUDE_CODE_SESSION_KIND=bg` 的后台会话发 `cli-bg`，其余 `cli` | 入站 `x-app: cli-bg` → 上游 `cli-bg`，否则 `cli`（Legacy 一律 `cli`） | 2026-09-23 补上；`applyClaudeCodeClientHints` 采集，`nativeRequestOptions` 覆盖。 |
 | `cc_prev_req` / `cc_prompt_id` 合成 | 未做，只透传入站已有的 | 直连时每请求带 `cc_prompt_id`（当前人类 prompt 的 UUID），第二个请求起带 `cc_prev_req`（上一响应的 `request-id`） | 入站没有就省略（= 官方"经代理"形态） | `cc_prev_req` 需按 session 记上一响应的 `request-id`（内存 map 即可）；`cc_prompt_id` 可由"最后一条人类 user 消息"确定性派生。语义未验证、收益未知，等观察到 cache 命中率差异再做。见 §5.3。 |
 | `structured-outputs-2025-12-15` 的灰度分支 | 无法做 | `growthbook("tengu_tool_pear") && supportsStructured(model)` 时加入基线 | 仅当请求体带 `output_config.format` / `output_format` 时加（官方的第二条路径 `T5o`），另接受入站回放 | 灰度值由 Anthropic 服务端按用户下发，代理侧看不到。"灰度开 + 请求未用结构化输出"时官方带而我们不带，但该形态本就因用户而异。 |
 
@@ -592,7 +592,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | `cch` | xxHash64(seed `0x4D659218E32A3268`) | **同**：seed 唯一一处不变、Zig `PRIME64_4` 17 处、三组直连抓包逐字节复现 | 无 |
 | `metadata.user_id` | 同 | 同（`ti`/`tk` 仍是 remote 专属） | 无 |
 | 默认头 | — | 新增 **`x-claude-code-request-class`**（`Js(querySource)`：`main` / `subagent` / `auxiliary`，或 `compaction` / `workflow`）与 **`x-claude-code-agent-type`**（仅 `agent:*` 来源：内置 agent 名 / `custom` / `teammate`）。门控 `S5t()`：env `CLAUDE_CODE_GATEWAY_HINT_HEADERS`，否则**直连即发**（`Ba()`），代理走灰度 `tengu_splendid_sutton`（默认 false） | 直连 persona：默认 `x-claude-code-request-class: main`；入站带这两个头时校验后回放（`^[a-z][a-z0-9_-]{0,63}$`）；仅 ≥280 |
-| `x-app` | `cli` / `cli-bg` | 同 | 仍固定 `cli`（§7.1） |
+| `x-app` | `cli` / `cli-bg` | 同 | 入站 `cli-bg` 透传（§7.1） |
 | preamble 三句 | 同 | 同 | 无 |
 | `-p` 请求体 | — | 新增顶层 `diagnostics:{previous_message_id:null}`（直连时） | 透传，作为 `cache-diagnosis` 的信号 |
 
