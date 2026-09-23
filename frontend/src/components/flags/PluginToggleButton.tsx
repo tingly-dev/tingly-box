@@ -1,6 +1,7 @@
 import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import { Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
+import {pluginControlStateStyles} from './pluginControlStyles';
 
 interface PluginToggleButtonProps {
     label: string;
@@ -22,18 +23,13 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
                     endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
-                    sx={{
+                    sx={(theme) => ({
                         minWidth: 100,
                         textTransform: 'none',
                         whiteSpace: 'nowrap',
-                        bgcolor: value ? 'primary.main' : 'transparent',
-                        color: value ? 'primary.contrastText' : 'text.primary',
-                        fontWeight: value ? 600 : 400,
-                        border: value ? 'none' : '1px solid',
-                        borderColor: 'divider',
+                        ...pluginControlStateStyles(theme, value),
                         opacity: disabled ? 0.6 : 1,
-                        '&:hover': { bgcolor: value ? 'primary.dark' : 'action.selected' },
-                    }}
+                    })}
                 >
                     {label}: {value ? 'On' : 'Off'}
                 </Button>

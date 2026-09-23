@@ -40,6 +40,7 @@ import HeadersEditor from '@/components/flags/HeadersEditor';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
+    initialFlagKey?: string;
     flags?: RuleFlags;
     registry?: FlagSpec[];
     loading?: boolean;
@@ -71,6 +72,7 @@ const categoryMeta = makeCategoryMeta(CATEGORY_META, (category) => ({
 
 export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     open,
+    initialFlagKey,
     flags,
     registry,
     loading,
@@ -107,12 +109,32 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         return ordered.map((cat) => ({ category: cat, specs: groups.get(cat) || [] }));
     }, [registry]);
 
+    // Open directly on the clicked plugin, including when its category differs
+    // from the one selected during a previous visit to the dialog.
+    useEffect(() => {
+        if (!open || !initialFlagKey) return;
+        const spec = (registry || []).find((item) => item.key === initialFlagKey);
+        if (spec) setActiveCategory(spec.category);
+    }, [open, initialFlagKey, registry]);
+
+    useEffect(() => {
+        if (!open || !initialFlagKey) return;
+        const spec = (registry || []).find((item) => item.key === initialFlagKey);
+        if (!spec || activeCategory !== spec.category) return;
+        const frame = requestAnimationFrame(() => {
+            flagRefs.current[initialFlagKey]?.scrollIntoView({ block: 'center' });
+            setPulseKey(initialFlagKey);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [open, initialFlagKey, registry, activeCategory]);
+
     // Default the selected category to the first one with content.
     useEffect(() => {
         if (!open) return;
+        if (initialFlagKey && (registry || []).some((spec) => spec.key === initialFlagKey)) return;
         if (activeCategory && grouped.some((g) => g.category === activeCategory)) return;
         if (grouped.length > 0) setActiveCategory(grouped[0].category);
-    }, [open, grouped, activeCategory]);
+    }, [open, grouped, activeCategory, initialFlagKey, registry]);
 
     const activeFlags = useMemo(() => {
         return (registry || []).filter((spec) => isFlagActive(spec, draft));

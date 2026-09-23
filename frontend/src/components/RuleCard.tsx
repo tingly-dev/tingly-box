@@ -18,7 +18,7 @@ import { Box } from '@mui/material';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
-import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
+import { flagDefault, setFlagValue } from '@/components/rule-card/flagHelpers';
 import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 
@@ -136,6 +136,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Catalog dialog state + registry
     const [catalogOpen, setCatalogOpen] = useState(false);
+    const [catalogFocusKey, setCatalogFocusKey] = useState<string | undefined>();
     const [flagRegistry, setFlagRegistry] = useState<FlagSpec[]>(flagRegistryCache ?? []);
     const [registryLoaded, setRegistryLoaded] = useState(flagRegistryCache !== undefined);
     const [registryLoading, setRegistryLoading] = useState(false);
@@ -281,12 +282,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         if (success) setCatalogOpen(false);
     }, [configRecord, updateField, setConfigRecord]);
 
-    const handleToggleFlagFromCard = useCallback((key: string) => {
+    const handleRemoveFlagFromCard = useCallback((key: string) => {
         if (!configRecord) return;
+        const spec = flagRegistry.find((item) => item.key === key);
+        if (!spec) return;
         const current = configRecord.flags || {};
-        const next = setFlagValue(current, key, !getFlagValue(current, key));
+        const next = setFlagValue(current, key, flagDefault(spec));
         void updateField(configRecord, setConfigRecord, 'flags', next);
-    }, [configRecord, updateField, setConfigRecord]);
+    }, [configRecord, flagRegistry, updateField, setConfigRecord]);
 
     if (!configRecord) return null;
 
@@ -295,8 +298,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             flags={configRecord.flags}
             registry={flagRegistry}
             active={configRecord.active}
-            onOpenCatalog={() => setCatalogOpen(true)}
-            onToggleFlag={handleToggleFlagFromCard}
+            onOpenCatalog={(flagKey) => {
+                setCatalogFocusKey(flagKey);
+                setCatalogOpen(true);
+            }}
+            onRemoveFlag={handleRemoveFlagFromCard}
         />
     );
 
@@ -381,6 +387,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             {/* Flag Catalog Dialog - rich UI for picking + configuring rule flags */}
             <FlagCatalogDialog
                 open={catalogOpen}
+                initialFlagKey={catalogFocusKey}
                 flags={configRecord.flags}
                 registry={flagRegistry}
                 loading={registryLoading}
@@ -393,6 +400,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             <SmartRuleCatalogDialog
                 open={smartDialogState.open}
                 smartRouting={smartDialogState.editingRule}
+                initialOpUuid={smartDialogState.editingOpUuid}
                 onClose={smartHandlers.handleCancelSmartRuleEdit}
                 onSave={smartHandlers.handleSaveSmartRule}
             />

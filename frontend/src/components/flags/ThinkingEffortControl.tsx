@@ -1,6 +1,7 @@
 import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
+import {pluginControlStateStyles} from './pluginControlStyles';
 
 // "minimal" and "xhigh" are intentionally left out: outside a handful of the
 // newest OpenAI/Anthropic models they silently collapse onto "low"/"high"/
@@ -42,18 +43,13 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
                     endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
-                    sx={{
+                    sx={(theme) => ({
                         minWidth: 110,
                         textTransform: 'none',
                         whiteSpace: 'nowrap',
-                        bgcolor: isActive ? 'primary.main' : 'transparent',
-                        color: isActive ? 'primary.contrastText' : 'text.primary',
-                        fontWeight: isActive ? 600 : 400,
-                        border: isActive ? 'none' : '1px solid',
-                        borderColor: 'divider',
+                        ...pluginControlStateStyles(theme, isActive),
                         opacity: disabled ? 0.6 : 1,
-                        '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.selected' },
-                    }}
+                    })}
                 >
                     Thinking: {label}
                 </Button>

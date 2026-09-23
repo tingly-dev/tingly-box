@@ -340,7 +340,7 @@ export const NODE_LAYER_STYLES = {
         minWidth: 0,
         padding: '0 8px',
         gap: 0.5,
-        fontSize: '0.68rem',
+        fontSize: '0.75rem',
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',
