@@ -86,6 +86,7 @@ func providerAdd(cfg *serverconfig.Config) error {
 	styleR, err := Select("API style:", []SelectItem[protocol.APIStyle]{
 		{Title: "OpenAI-compatible", Description: "/v1/chat/completions endpoint", Value: protocol.APIStyleOpenAI},
 		{Title: "Anthropic-compatible", Description: "/v1/messages endpoint", Value: protocol.APIStyleAnthropic},
+		{Title: "Decision (Jev)", Description: "/api/v1/decisions endpoint", Value: protocol.APIStyleDecision},
 	}, SelectOptions{CanGoBack: true})
 	if err != nil || styleR.IsCancel() || styleR.IsBack() {
 		return nil
@@ -94,6 +95,8 @@ func providerAdd(cfg *serverconfig.Config) error {
 	defURL := "https://api.example.com/v1"
 	if styleR.Value == protocol.APIStyleAnthropic {
 		defURL = "https://api.anthropic.com"
+	} else if styleR.Value == protocol.APIStyleDecision {
+		defURL = "https://www.jevai.org/api/v1"
 	}
 	baseR, err := Input("Base URL:", InputOptions{Placeholder: defURL, CanGoBack: true})
 	if err != nil || baseR.IsCancel() || baseR.IsBack() {

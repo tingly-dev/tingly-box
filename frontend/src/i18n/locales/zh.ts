@@ -58,6 +58,7 @@ export default {
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
       "useImageGen": "Image",
+      "useDecision": "Decision",
       "useTeam": "Team",
       "useCustom": "Custom",
       "apiKeys": "API 密钥",

@@ -67,6 +67,17 @@ func TestOpenAIScenarioSupportsBothTransports(t *testing.T) {
 	}
 }
 
+func TestDecisionScenarioSupportsOnlyDecisionTransport(t *testing.T) {
+	if !ScenarioSupportsTransport(ScenarioDecision, TransportDecision) {
+		t.Fatal("decision scenario should support decision transport")
+	}
+	for _, transport := range []ScenarioTransport{TransportOpenAI, TransportAnthropic, TransportEmbed, TransportImageGen} {
+		if ScenarioSupportsTransport(ScenarioDecision, transport) {
+			t.Errorf("decision scenario unexpectedly supports %s", transport)
+		}
+	}
+}
+
 func TestScenarioSupportsTransport_UnknownScenario(t *testing.T) {
 	if ScenarioSupportsTransport(RuleScenario("does_not_exist"), TransportOpenAI) {
 		t.Fatalf("unknown scenario must not report transport support")

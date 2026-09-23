@@ -18,12 +18,14 @@ const (
 	APIStyleOpenAI    APIStyle = publicprotocol.APIStyleOpenAI
 	APIStyleAnthropic APIStyle = publicprotocol.APIStyleAnthropic
 	APIStyleGoogle    APIStyle = publicprotocol.APIStyleGoogle
+	APIStyleDecision  APIStyle = publicprotocol.APIStyleDecision
 
 	TypeOpenAIChat      APIType = publicprotocol.TypeOpenAIChat
 	TypeOpenAIResponses APIType = publicprotocol.TypeOpenAIResponses
 	TypeAnthropicV1     APIType = publicprotocol.TypeAnthropicV1
 	TypeAnthropicBeta   APIType = publicprotocol.TypeAnthropicBeta
 	TypeGoogle          APIType = publicprotocol.TypeGoogle
+	TypeDecision        APIType = publicprotocol.TypeDecision
 
 	CodexAPIBase = publicprotocol.CodexAPIBase
 )

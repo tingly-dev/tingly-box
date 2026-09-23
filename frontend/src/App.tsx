@@ -51,6 +51,7 @@ const UseVSCodePage = lazy(() => import('./pages/scenario/UseVSCodePage'));
 const UseCursorPage = lazy(() => import('./pages/scenario/UseCursorPage'));
 const UseEmbedPage = lazy(() => import('./pages/scenario/UseEmbedPage'));
 const UseImageGenPage = lazy(() => import('./pages/scenario/UseImageGenPage'));
+const UseDecisionPage = lazy(() => import('./pages/scenario/UseDecisionPage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/system/System.tsx'));
 const AccessControl = lazy(() => import('./pages/system/AccessControl.tsx'));
@@ -258,6 +259,7 @@ function AppContent() {
                     <Route path="/agent/cursor" element={<UseCursorPage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
                     <Route path="/agent/image" element={<UseImageGenPage />} />
+                    <Route path="/agent/decision" element={<UseDecisionPage />} />
                     <Route path="/agent/playground" element={<Navigate to="/agent/image" replace />} />
                     <Route path="/agent/imagegen" element={<Navigate to="/agent/image" replace />} />
                     {/* Credential routes - new unified page */}

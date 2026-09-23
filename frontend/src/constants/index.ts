@@ -6,6 +6,7 @@ export const DEFAULT_RULE_UUID = "tingly";
 export const API_STYLES = {
   OPENAI: 'openai',
   ANTHROPIC: 'anthropic',
+    DECISION: 'decision',
 } as const;
 
 // Scenarios
@@ -19,6 +20,7 @@ export const SCENARIOS = {
   VSCODE: 'vscode',
   EMBED: 'embed', // Embedding application scenario
   IMAGEGEN: 'imagegen', // Image generation application scenario
+    DECISION: 'decision', // Structured decision application scenario
   GLOBAL: '_global', // Global flags that apply to all scenarios
 } as const;
 
