@@ -1,6 +1,7 @@
 import { Check as IconCheck, KeyboardArrowDown as IconChevronDown, Circle as IconCircleFilled } from '@/components/icons';
 import { Box, Button, Checkbox, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
+import {pluginControlStateStyles} from './pluginControlStyles';
 
 // Capture points along the gateway pipeline (multi-select). Mirrors the
 // backend registry options (typ.RuleFlagRegistry "recording"). Response-side
@@ -80,18 +81,13 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
                     endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
-                    sx={{
+                    sx={(theme) => ({
                         minWidth: 110,
                         textTransform: 'none',
                         whiteSpace: 'nowrap',
-                        bgcolor: isActive ? 'primary.main' : 'transparent',
-                        color: isActive ? 'primary.contrastText' : 'text.primary',
-                        fontWeight: isActive ? 600 : 400,
-                        border: isActive ? 'none' : '1px solid',
-                        borderColor: 'divider',
+                        ...pluginControlStateStyles(theme, isActive),
                         opacity: disabled ? 0.6 : 1,
-                        '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.selected' },
-                    }}
+                    })}
                 >
                     <IconCircleFilled sx={{ fontSize: 14, mr: '4px' }} />
                     Record: {shortLabel}

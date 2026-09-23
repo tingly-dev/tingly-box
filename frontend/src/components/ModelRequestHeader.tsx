@@ -11,7 +11,7 @@ import {
     Tooltip,
     TextField,
 } from '@mui/material';
-import { alpha, styled } from '@mui/material/styles';
+import { alpha, styled, type Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import {
     Edit as EditIcon,
@@ -49,6 +49,17 @@ const strategyButtonSx = {
     '&:hover': {borderColor: 'text.secondary', backgroundColor: 'action.hover'},
     '& .MuiButton-endIcon': {ml: 0.5},
 };
+
+const highlightedStrategyButtonSx = (theme: Theme) => ({
+    ...strategyButtonSx,
+    color: theme.palette.primary.main,
+    borderColor: alpha(theme.palette.primary.main, 0.48),
+    backgroundColor: alpha(theme.palette.primary.main, 0.12),
+    '&:hover': {
+        borderColor: theme.palette.primary.main,
+        backgroundColor: alpha(theme.palette.primary.main, 0.18),
+    },
+});
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
@@ -298,7 +309,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                     aria-haspopup="menu"
                                     aria-expanded={Boolean(contextMenuAnchor)}
                                     onClick={(e) => setContextMenuAnchor(e.currentTarget)}
-                                    sx={strategyButtonSx}
+                                    sx={context1M ? highlightedStrategyButtonSx : strategyButtonSx}
                                 >
                                     1M: {context1M ? 'On' : 'Off'}
                                 </Button>
@@ -349,7 +360,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                     aria-haspopup="menu"
                                     aria-expanded={Boolean(endpointMenuAnchor)}
                                     onClick={(e) => setEndpointMenuAnchor(e.currentTarget)}
-                                    sx={strategyButtonSx}
+                                    sx={endpointSelection === 'auto' ? strategyButtonSx : highlightedStrategyButtonSx}
                                 >
                                     Endpoint: {endpointSelection === 'auto' ? 'Auto' : endpointSelection === 'chat' ? 'Chat' : 'Responses'}
                                 </Button>

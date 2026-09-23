@@ -15,6 +15,7 @@ import React, { useState } from 'react';
 import ModelSelectDialog from '../ModelSelectDialog';
 import type { ProviderSelectTabOption } from '../ModelSelectDialog';
 import type { Provider } from '@/types/provider';
+import {pluginControlStateStyles} from './pluginControlStyles';
 
 export interface VisionService {
     provider: string;
@@ -48,20 +49,15 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
                     endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
-                    sx={{
+                    sx={(theme) => ({
                         minWidth: 100,
                         maxWidth: 260,
                         textTransform: 'none',
                         whiteSpace: 'nowrap',
                         '& .MuiButton-endIcon': { flexShrink: 0 },
-                        bgcolor: isEnabled ? 'primary.main' : 'transparent',
-                        color: isEnabled ? 'primary.contrastText' : 'text.primary',
-                        fontWeight: isEnabled ? 600 : 400,
-                        border: isEnabled ? 'none' : '1px solid',
-                        borderColor: 'divider',
+                        ...pluginControlStateStyles(theme, isEnabled),
                         opacity: disabled ? 0.6 : 1,
-                        '&:hover': { bgcolor: isEnabled ? 'primary.dark' : 'action.selected' },
-                    }}
+                    })}
                 >
                     <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Vision Proxy: {label}
