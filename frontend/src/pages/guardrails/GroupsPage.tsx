@@ -27,34 +27,10 @@ import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
-
-const DEFAULT_GROUP_ID = 'default';
-
-type PolicyGroup = {
-    id: string;
-    name?: string;
-    severity?: string;
-    enabled?: boolean;
-};
-
-type GuardrailsPolicy = {
-    id: string;
-    name?: string;
-    groups?: string[];
-    kind: 'resource_access' | 'command_execution' | 'content' | 'operation';
-    enabled?: boolean;
-    verdict?: string;
-    scope?: {
-        scenarios?: string[];
-    };
-    match?: {
-        actions?: { include?: string[] };
-        resources?: { values?: string[] };
-        terms?: string[];
-        patterns?: string[];
-        credential_refs?: string[];
-    };
-};
+import { uniqueIdFromName } from './rules/editorState';
+import { buildPolicySummary } from './rules/policyPresentation';
+import { DEFAULT_GROUP_ID, type GuardrailsPolicy, type PolicyGroup } from './rules/types';
+import { useGuardrailsConfig } from './rules/useGuardrailsConfig';
 
 type GroupEditorState = {
     id: string;
@@ -65,17 +41,19 @@ type GroupEditorState = {
 
 const GuardrailsGroupsPage = () => {
     const notify = useNotify();
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState<string | null>(null);
-    const [groups, setGroups] = useState<PolicyGroup[]>([]);
-    const [policies, setPolicies] = useState<GuardrailsPolicy[]>([]);
+    const {
+        loading,
+        loadError,
+        groups,
+        policies,
+        loadPolicies: loadConfig,
+    } = useGuardrailsConfig({ defaultGroupErrorMessage: 'Failed to create default group.' });
     const [selectedGroupId, setSelectedGroupId] = useState<string>(DEFAULT_GROUP_ID);
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
     const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
     const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
     const [pendingGroupSave, setPendingGroupSave] = useState(false);
-    const [initializingDefaultGroup, setInitializingDefaultGroup] = useState(false);
     const [groupEditorState, setGroupEditorState] = useState<GroupEditorState>({
         id: '',
         name: '',
@@ -108,20 +86,6 @@ const GuardrailsGroupsPage = () => {
 
     const buildGroupSummary = (group: PolicyGroup) => `${group.severity || 'medium'} severity`;
 
-    const buildPolicySummary = (policy: GuardrailsPolicy) => {
-        if (policy.kind === 'command_execution') {
-            const terms = policy.match?.terms?.join(', ') || 'any command';
-            return terms;
-        }
-        if (policy.kind === 'resource_access' || policy.kind === 'operation') {
-            const actions = policy.match?.actions?.include?.join(', ') || 'any action';
-            const resources = policy.match?.resources?.values?.join(', ') || 'any resource';
-            return `${actions} · ${resources}`;
-        }
-        const patterns = policy.match?.patterns || [];
-        return patterns.slice(0, 2).join(', ') || 'No patterns configured';
-    };
-
     const buildPolicyKindLabel = (policy: GuardrailsPolicy) => {
         if (policy.kind === 'resource_access' || policy.kind === 'operation') return 'Resource Access';
         if (policy.kind === 'command_execution') return 'Command Execution';
@@ -135,77 +99,16 @@ const GuardrailsGroupsPage = () => {
         severity: group?.severity || 'medium',
     });
 
-    const generateGroupId = (name: string, currentId?: string) => {
-        const normalizedName = name
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        const baseId = normalizedName || 'group';
-        const existingIds = new Set(groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId));
-
-        let candidate = baseId;
-        let suffix = 2;
-        while (existingIds.has(candidate)) {
-            candidate = `${baseId}-${suffix}`;
-            suffix += 1;
-        }
-        return candidate;
-    };
-
-    const loadConfig = async (silent = false) => {
-        try {
-            if (!silent) setLoading(true);
-            const guardrailsConfig = await api.getGuardrailsConfig();
-            const config = guardrailsConfig?.config || {};
-            setGroups(Array.isArray(config.groups) ? config.groups : []);
-            setPolicies(Array.isArray(config.policies) ? config.policies : []);
-            setLoadError(null);
-        } catch (error) {
-            console.error('Failed to load guardrails config:', error);
-            setGroups([]);
-            setPolicies([]);
-            setLoadError('Failed to load guardrails config');
-        } finally {
-            if (!silent) setLoading(false);
-        }
-    };
+    const generateGroupId = (name: string, currentId?: string) =>
+        uniqueIdFromName(
+            name,
+            groups.map((group) => group.id).filter((groupId) => groupId && groupId !== currentId),
+            'group'
+        );
 
     useEffect(() => {
         loadConfig();
     }, []);
-
-    useEffect(() => {
-        if (loading || loadError || initializingDefaultGroup) {
-            return;
-        }
-        if (groups.some((group) => group.id === DEFAULT_GROUP_ID)) {
-            return;
-        }
-
-        const ensureDefaultGroup = async () => {
-            try {
-                setInitializingDefaultGroup(true);
-                const result = await api.createGuardrailsGroup({
-                    id: DEFAULT_GROUP_ID,
-                    name: 'Default',
-                    enabled: true,
-                    severity: 'high',
-                });
-                if (!result?.success) {
-                    notify.error(result?.error || 'Failed to create default group.');
-                    return;
-                }
-                await loadConfig(true);
-            } catch (error: any) {
-                notify.error(error?.message || 'Failed to create default group.');
-            } finally {
-                setInitializingDefaultGroup(false);
-            }
-        };
-
-        ensureDefaultGroup();
-    }, [groups, initializingDefaultGroup, loadError, loading]);
 
     useEffect(() => {
         if (groups.length === 0) return;
