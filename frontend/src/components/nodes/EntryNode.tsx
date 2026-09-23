@@ -57,7 +57,6 @@ const ToggleButtonStyled = styled(ToggleButton)<{ compact?: boolean }>(
         flex: 1,
         width: '100%',
         height: compact ? 20 : 22,
-        fontSize: compact ? '0.6rem' : '0.65rem',
         padding: compact ? '0 4px' : '0 6px',
         borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
         color: theme.palette.text.secondary,
@@ -182,7 +181,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             aria-label="Direct routing mode"
                             aria-pressed={!smartEnabled}
                         >
-                            <DirectIcon sx={{ fontSize: 9, transform: 'rotate(90deg)' }} />
+                            <DirectIcon sx={{ fontSize: 10, transform: 'rotate(90deg)' }} />
                             Direct
                         </ToggleButtonStyled>
                         <ToggleButtonStyled
@@ -193,7 +192,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             aria-label="Smart routing mode"
                             aria-pressed={smartEnabled}
                         >
-                            <AutoAwesomeIcon sx={{ fontSize: 9 }} />
+                            <AutoAwesomeIcon sx={{ fontSize: 10 }} />
                             Smart
                         </ToggleButtonStyled>
                     </>)
@@ -208,7 +207,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             aria-label="Direct routing mode"
                             aria-pressed={!smartEnabled}
                         >
-                            <DirectIcon sx={{ fontSize: 10, transform: 'rotate(90deg)' }} />
+                            <DirectIcon sx={{ fontSize: 12, transform: 'rotate(90deg)' }} />
                             Direct
                         </ToggleButtonStyled>
                         <ToggleButtonStyled
@@ -219,7 +218,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             aria-label="Smart routing mode"
                             aria-pressed={smartEnabled}
                         >
-                            <AutoAwesomeIcon sx={{ fontSize: 10 }} />
+                            <AutoAwesomeIcon sx={{ fontSize: 12 }} />
                             Smart
                         </ToggleButtonStyled>
                     </>)

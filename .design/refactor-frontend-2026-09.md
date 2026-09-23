@@ -1,6 +1,6 @@
 # Frontend Refactor 2026-09 — Plan & Survey Reports (merged)
 
-> One-page contents: [Status & Staging Plan](#status--staging-plan) · [Appendix: shared-infra](#appendix-shared-infra) · [Appendix: top-level-components](#appendix-top-level-components) · [Appendix: scenario](#appendix-scenario) · [Appendix: guardrails](#appendix-guardrails) · [Appendix: remaining-pages](#appendix-remaining-pages)
+> One-page contents: [Status & Staging Plan](#status--staging-plan) · [Routing UI follow-up](#routing-ui-follow-up-2026-09-23) · [Appendix: shared-infra](#appendix-shared-infra) · [Appendix: top-level-components](#appendix-top-level-components) · [Appendix: scenario](#appendix-scenario) · [Appendix: guardrails](#appendix-guardrails) · [Appendix: remaining-pages](#appendix-remaining-pages)
 
 ## Status & Staging Plan
 
@@ -19,6 +19,17 @@ Five area reports (all grep-verified) feed this plan:
 - Appendix: scenario report — `pages/scenario/`
 - Appendix: guardrails report — guardrails pages + rule-card/nodes/flags/tier
 - Appendix: remaining-pages report — remaining pages + component subdirs + App/vite
+
+## Routing UI follow-up (2026-09-23)
+
+The route graph and page header received a visual consistency pass after the structural refactor:
+
+- Explicit `1M: On` and forced `Endpoint: Chat/Responses` choices use a soft blue selected state. `1M: Off` and `Endpoint: Auto` remain neutral. Page-header Plugins controls use the same selected treatment.
+- Smart conditions and rule Plugins entries are configuration details, so they use a neutral hover-like background and the existing provider-name typography (`NODE_LAYER_STYLES.typography`, `body2`, regular weight, secondary text). Smart conditions show the field and comparison/value on separate lines so values remain readable at that size.
+- Long plugin names truncate within their row instead of displacing the remove control; the tooltip includes the full name. The pinned Plugins card aligns to the top of the graph, including long Smart routes.
+- Direct and Smart mode buttons share 12px, semibold text and proportionate icons; the selected fill remains their state cue.
+
+UX review: explicit choices are visible without making metadata compete with model names; concrete condition values remain inspectable; the Plugins card is near the first route row. Light/dark mock previews were checked on Claude Code and OpenAI SDK pages, including explicit 1M and Endpoint selections. `pnpm build:dev`, targeted `oxlint`, and a TypeScript check excluding the unrelated untracked `src/services/api.errorHandling.test.ts` passed; the full typecheck is blocked by that file's existing errors.
 
 ## Global staging (risk ascending; each numbered phase = one or more independent commits)
 
