@@ -218,7 +218,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         component="span"
                                         sx={{
                                             ...NODE_LAYER_STYLES.typography,
-                                            fontWeight: 400,
+                                            fontSize: '0.75rem',
+                                            fontWeight: 500,
                                             color: 'text.secondary',
                                             width: '100%',
                                         }}
@@ -232,6 +233,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         component="span"
                                         sx={{
                                             ...NODE_LAYER_STYLES.typography,
+                                            fontSize: '0.75rem',
                                             fontWeight: 400,
                                             color: 'text.secondary',
                                             flexShrink: 0,
@@ -246,6 +248,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                             component="span"
                                             sx={{
                                                 ...NODE_LAYER_STYLES.typography,
+                                                fontSize: '0.75rem',
                                                 fontWeight: 400,
                                                 color: 'text.secondary',
                                                 overflow: 'hidden',
