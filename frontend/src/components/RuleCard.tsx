@@ -400,6 +400,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             <SmartRuleCatalogDialog
                 open={smartDialogState.open}
                 smartRouting={smartDialogState.editingRule}
+                initialOpUuid={smartDialogState.editingOpUuid}
                 onClose={smartHandlers.handleCancelSmartRuleEdit}
                 onSave={smartHandlers.handleSaveSmartRule}
             />

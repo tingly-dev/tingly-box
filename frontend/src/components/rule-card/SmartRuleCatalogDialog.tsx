@@ -28,7 +28,7 @@ import {
     Schedule as ScheduleIcon,
     HelpOutline as HelpOutlineIcon,
 } from '@/components/icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { SmartOp, SmartRouting } from '@/components/RoutingGraphTypes';
 import {
@@ -166,6 +166,7 @@ const opSummary = (op: SmartOp): string => {
 export interface SmartRuleCatalogDialogProps {
     open: boolean;
     smartRouting: SmartRouting | null;
+    initialOpUuid?: string;
     onClose: () => void;
     onSave: (updated: SmartRouting) => void;
 }
@@ -173,25 +174,48 @@ export interface SmartRuleCatalogDialogProps {
 export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
     open,
     smartRouting,
+    initialOpUuid,
     onClose,
     onSave,
 }) => {
     const [description, setDescription] = useState('');
     const [ops, setOps] = useState<SmartOp[]>([]);
     const [activeCategory, setActiveCategory] = useState<string>('agent');
+    const [pulseOpUuid, setPulseOpUuid] = useState<string | undefined>();
+    const opRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const focusedOpUuid = useRef<string | undefined>(undefined);
 
     useEffect(() => {
         if (!open) return;
         const initialOps = smartRouting?.ops ? smartRouting.ops.map((o) => ({ ...o })) : [];
         setDescription(smartRouting?.description || '');
         setOps(initialOps);
+        setPulseOpUuid(undefined);
+        focusedOpUuid.current = undefined;
         if (initialOps.length > 0) {
-            const firstCat = positionMeta(initialOps[0].position)?.category || 'agent';
+            const selectedOp = initialOps.find((op) => op.uuid === initialOpUuid) || initialOps[0];
+            const firstCat = positionMeta(selectedOp.position)?.category || 'agent';
             setActiveCategory(firstCat);
         } else {
             setActiveCategory('agent');
         }
-    }, [open, smartRouting]);
+    }, [open, smartRouting, initialOpUuid]);
+
+    useEffect(() => {
+        if (!open || !initialOpUuid || focusedOpUuid.current === initialOpUuid) return;
+        const selectedOp = ops.find((op) => op.uuid === initialOpUuid);
+        if (!selectedOp || activeCategory !== (positionMeta(selectedOp.position)?.category || 'agent')) return;
+        const frame = requestAnimationFrame(() => {
+            opRefs.current[initialOpUuid]?.scrollIntoView({ block: 'center' });
+            focusedOpUuid.current = initialOpUuid;
+            setPulseOpUuid(initialOpUuid);
+        });
+        const timeout = window.setTimeout(() => setPulseOpUuid(undefined), 1200);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.clearTimeout(timeout);
+        };
+    }, [open, initialOpUuid, ops, activeCategory]);
 
     const handleAddOpForPosition = (position: SmartOp['position']) => {
         const newOp: SmartOp = {
@@ -477,12 +501,15 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                 return (
                                                     <Box
                                                         key={op.uuid}
+                                                        ref={(element: HTMLDivElement | null) => { opRefs.current[op.uuid] = element; }}
                                                         sx={{
                                                             p: 1.25,
                                                             bgcolor: 'background.paper',
                                                             borderRadius: 1,
                                                             border: '1px solid',
-                                                            borderColor: valid ? 'divider' : 'warning.light',
+                                                            borderColor: pulseOpUuid === op.uuid ? 'primary.main' : valid ? 'divider' : 'warning.light',
+                                                            boxShadow: pulseOpUuid === op.uuid ? '0 0 0 3px rgba(25,118,210,0.18)' : 'none',
+                                                            transition: 'box-shadow 0.2s, border-color 0.2s',
                                                         }}
                                                     >
                                                         <Stack direction="row" spacing={1} sx={{

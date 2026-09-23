@@ -94,7 +94,7 @@ export interface UnifiedRoutingGraphProps {
 
     // Smart routing callbacks
     onAddSmartRule?: () => void;
-    onEditSmartRule?: (ruleUuid: string) => void;
+    onEditSmartRule?: (ruleUuid: string, opUuid?: string) => void;
     onDeleteSmartRule?: (ruleUuid: string) => void;
     onMoveSmartRule?: (ruleUuid: string, direction: 'up' | 'down') => void;
     onAddServiceToSmartRule?: (ruleUuid: string) => void;
@@ -379,7 +379,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         smartRouting={rule}
                                         index={index}
                                         active={active}
-                                        onEdit={() => onEditSmartRule?.(rule.uuid)}
+                                        onEdit={(opUuid) => onEditSmartRule?.(rule.uuid, opUuid)}
                                         onDelete={() => onDeleteSmartRule?.(rule.uuid)}
                                         onMoveUp={index > 0 ? () => onMoveSmartRule?.(rule.uuid, 'up') : undefined}
                                         onMoveDown={index < smartRouting.length - 1 ? () => onMoveSmartRule?.(rule.uuid, 'down') : undefined}

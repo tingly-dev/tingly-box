@@ -25,7 +25,7 @@ Five area reports (all grep-verified) feed this plan:
 The route graph and page header received a visual consistency pass after the structural refactor:
 
 - Explicit `1M: On` and forced `Endpoint: Chat/Responses` choices use a soft blue selected state. `1M: Off` and `Endpoint: Auto` remain neutral. Page-header Plugins controls use the same selected treatment.
-- Smart conditions and rule Plugins entries are configuration details, so they use a neutral hover-like background and the existing provider-name typography (`NODE_LAYER_STYLES.typography`, `body2`, regular weight, secondary text). Smart conditions show the field and comparison/value on separate lines so values remain readable at that size.
+- Smart conditions and rule Plugins entries are configuration details, so they use a neutral hover-like background and 12px secondary text. Labels have medium weight and values remain regular. Smart conditions show the field and comparison/value on separate lines; clicking one opens its rule editor at that condition.
 - Long plugin names truncate within their row instead of displacing the remove control; the tooltip includes the full name. The pinned Plugins card aligns to the top of the graph, including long Smart routes.
 - Plugin rows retain their soft background with quieter 12px typography. Clicking a row opens the catalog at that plugin; the × removes any active plugin type without opening the editor.
 - Direct and Smart mode buttons share 12px, semibold text and proportionate icons; the selected fill remains their state cue.

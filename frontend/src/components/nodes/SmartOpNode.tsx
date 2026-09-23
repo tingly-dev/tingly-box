@@ -26,7 +26,7 @@ export interface SmartNodeProps {
     smartRouting: SmartRouting;
     index?: number;
     active: boolean;
-    onEdit: () => void;
+    onEdit: (opUuid?: string) => void;
     onDelete: () => void;
     onMoveUp?: () => void;
     onMoveDown?: () => void;
@@ -70,7 +70,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     return (
         <StyledSmartNodeWrapper>
-            <StyledSmartNodePrimary active={active} onClick={onEdit}>
+            <StyledSmartNodePrimary active={active} onClick={() => onEdit()}>
 
                 {/* ── Header ── */}
                 <Stack
@@ -195,8 +195,10 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                         {ops.map((op) => (
                             <NodeTooltip key={op.uuid} title={opTooltip(op)} placement="right">
                                 <Box
+                                    onClick={(e) => { e.stopPropagation(); onEdit(op.uuid); }}
                                     sx={{
                                         width: '100%',
+                                        cursor: 'pointer',
                                         px: 0.75,
                                         py: 0.35,
                                         borderRadius: 0.75,

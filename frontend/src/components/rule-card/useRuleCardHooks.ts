@@ -223,6 +223,7 @@ export function useSmartRoutingHandlers({
 }: SmartRoutingHandlersProps) {
     const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
     const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
+    const [editingOpUuid, setEditingOpUuid] = useState<string | undefined>();
 
     const handleAddSmartRule = useCallback(async () => {
         if (!configRecord) return;
@@ -240,17 +241,19 @@ export function useSmartRoutingHandlers({
         if (success) {
             // Open the editor on the freshly created rule so the user can configure it.
             setEditingSmartRule(cloneSmartRouting(newSmartRouting));
+            setEditingOpUuid(undefined);
             setSmartRuleDialogOpen(true);
         } else {
             setConfigRecord(previousRecord);
         }
     }, [configRecord, setConfigRecord, autoSave]);
 
-    const handleEditSmartRule = useCallback((ruleUuid: string) => {
+    const handleEditSmartRule = useCallback((ruleUuid: string, opUuid?: string) => {
         if (!configRecord) return;
         const rule = (configRecord.smartRouting || []).find((r) => r.uuid === ruleUuid);
         if (rule) {
             setEditingSmartRule(cloneSmartRouting(rule));
+            setEditingOpUuid(opUuid);
             setSmartRuleDialogOpen(true);
         }
     }, [configRecord]);
@@ -278,6 +281,7 @@ export function useSmartRoutingHandlers({
     const handleCancelSmartRuleEdit = useCallback(() => {
         setSmartRuleDialogOpen(false);
         setEditingSmartRule(null);
+        setEditingOpUuid(undefined);
     }, []);
 
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
@@ -374,6 +378,7 @@ export function useSmartRoutingHandlers({
         dialogState: {
             open: smartRuleDialogOpen,
             editingRule: editingSmartRule,
+            editingOpUuid,
         },
         handlers: {
             handleAddSmartRule,
