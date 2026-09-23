@@ -2,18 +2,23 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 var testPNGBytes = []byte("\x89PNG\r\n\x1a\nfake-image-data")
@@ -159,9 +164,44 @@ func TestCodexRoundTripper_ImagesErrorStatusSurfaced(t *testing.T) {
 	req, err := http.NewRequest("POST", "https://chatgpt.com/backend-api/images/edits", strings.NewReader(`{}`))
 	require.NoError(t, err)
 
-	_, err = rt.RoundTrip(req)
+	// Handed back as a response, so the SDK builds an *openai.Error that keeps
+	// the status and body instead of a transport error it would retry.
+	resp, err := rt.RoundTrip(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	respBody, _ := io.ReadAll(resp.Body)
+	assert.Contains(t, string(respBody), "bad image")
+}
+
+// A policy block on the Codex images endpoint is a 400 with the reason in the
+// body. It must reach the caller as that 400 with that reason, sent once — not
+// retried as a dropped connection and reported as network_error / 502.
+func TestCodexImagesEdit_UpstreamRejectionKeepsStatusAndMessage(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Your request was rejected by the safety system","code":"moderation_blocked"}}`))
+	}))
+	defer srv.Close()
+
+	oc := openai.NewClient(
+		option.WithBaseURL(srv.URL+"/backend-api/"),
+		option.WithAPIKey("test"),
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: http.DefaultTransport}}),
+	)
+	c := &CodexClient{OpenAIClient: &OpenAIClient{client: oc}}
+
+	req := openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2"}
+	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
+	_, err := c.ImagesEdit(context.Background(), req)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bad image")
+
+	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
+	assert.Equal(t, http.StatusBadRequest, failure.Status)
+	assert.Contains(t, failure.Message, "rejected by the safety system")
+	assert.EqualValues(t, 1, atomic.LoadInt32(&hits), "a rejected request must not be retried")
 }
 
 func TestRewriteCodexPath_Images(t *testing.T) {
