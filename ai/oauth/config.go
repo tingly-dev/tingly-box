@@ -20,7 +20,7 @@ const DefaultSessionExpiry = 10 * time.Minute
 func ParseIssuer(i ai.Issuer) (ai.Issuer, error) {
 	// Validate by checking against known providers
 	switch i {
-	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerCursor, ai.IssuerCopilot:
+	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerCursor, ai.IssuerCopilot, ai.IssuerZCode, ai.IssuerZCodeCN:
 		return i, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", i)
@@ -272,6 +272,12 @@ const (
 
 	// OAuthMethodDeviceCodePKCE uses Device Code flow with PKCE (RFC 8628 + RFC 7636)
 	OAuthMethodDeviceCodePKCE
+
+	// OAuthMethodServerPoll uses a server-mediated flow: the provider's own
+	// server owns the callback, so this process only opens an authorize URL and
+	// polls the provider for the outcome. Unlike device code there is no user
+	// code to type — the URL alone carries the flow (ZCode / GLM Coding Plan).
+	OAuthMethodServerPoll
 )
 
 // StateEncoding represents the encoding format for OAuth state parameter

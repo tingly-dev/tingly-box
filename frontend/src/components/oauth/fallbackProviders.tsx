@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Gemini, Google, Kimi, OpenAI, Qwen} from '../BrandIcons';
+import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, Zai, Zhipu} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -82,6 +82,27 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         color: '#6366F1',
         enabled: true,
         deviceCodeFlow: true,
+    },
+    // ZCode / GLM Coding Plan. The sign-in is a login link: zcode.z.ai owns the
+    // callback, so the URL can be opened on any device and the backend polls for
+    // the outcome — the standard auth_url + session status path, no user code.
+    {
+        id: 'zcode_cn',
+        name: 'ZCode CN',
+        displayName: 'ZCode CN (智谱 BigModel)',
+        description: 'Sign in with your BigModel account to use ZCode CN',
+        icon: <Zhipu size={32}/>,
+        color: '#3859FF',
+        enabled: true,
+    },
+    {
+        id: 'zcode',
+        name: 'ZCode International',
+        displayName: 'ZCode International (Z.ai)',
+        description: 'Sign in with your Z.ai account to use ZCode International',
+        icon: <Zai size={32}/>,
+        color: '#3859FF',
+        enabled: true,
     },
     {
         id: 'mock',

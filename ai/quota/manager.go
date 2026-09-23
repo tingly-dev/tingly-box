@@ -376,7 +376,10 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeCopilot
 	case strings.Contains(host, "vertex"):
 		return ProviderTypeVertexAI
-	case hostIs(host, "zai.app"):
+	// Z.ai's API lives on api.z.ai; zai.app is an older alias. Both plan
+	// endpoints (/api/anthropic, /api/coding/paas/v4) share the host, and the
+	// quota endpoint takes the same plan key either way.
+	case hostIs(host, "z.ai", "zai.app"):
 		return ProviderTypeZai
 	case hostIs(host, "bigmodel.cn"):
 		return ProviderTypeGLM

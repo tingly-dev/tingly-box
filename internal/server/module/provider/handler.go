@@ -373,9 +373,11 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	}
 
 	// Dual-mode constraints: validate post-merge so we catch combinations
-	// introduced by partial PATCHes.
+	// introduced by partial PATCHes. A dual-capable OAuth issuer (ZCode) is
+	// created with both URLs by the OAuth flow; editing such a provider must
+	// not be rejected for carrying them.
 	if p.APIBaseOpenAI != "" || p.APIBaseAnthropic != "" {
-		if p.AuthType != typ.AuthTypeAPIKey && p.AuthType != "" {
+		if p.AuthType != typ.AuthTypeAPIKey && p.AuthType != "" && !p.IsDual() {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
