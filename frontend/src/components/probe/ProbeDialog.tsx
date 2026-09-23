@@ -19,7 +19,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeThinking, ProbeTargetType } from '@/types/probe.ts';
 import type { Provider } from '@/types/provider';
-import { runProbe, buildProbeCurl, type ProbeCurlResult } from './runProbe';
+import { runProbe, buildProbeCurl } from './runProbe';
+import { useDebouncedProbeCurl } from './useDebouncedProbeCurl';
 import {
     type ProbeAxes,
     resolveInitialAxes,
@@ -85,8 +86,6 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     const [result, setResult] = useState<ProbeResult | null>(null);
     const { copied: copyTooltipOpen, copy: copyText } = useCopyFeedback();
     const [providerInfo, setProviderInfo] = useState<Provider | null>(provider ?? null);
-    const [curl, setCurl] = useState<ProbeCurlResult | null>(null);
-    const [curlLoading, setCurlLoading] = useState(false);
 
     // Provider record for the Protocol axis: use the prop when the caller has
     // it, otherwise fetch by UUID (provider targets only).
@@ -117,7 +116,6 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             setMessage('');
             setResult(initialResult ?? null);
             setIsLoading(false);
-            setCurl(null);
         }
         // providerInfo intentionally excluded — a late provider load only
         // clamps the protocol axis via the effect below.
@@ -207,25 +205,10 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     }, [buildBody, onResult]);
 
     // cURL section: regenerate (debounced) from the current config while the
-    // dialog is open. Pure construction — nothing is executed.
-    const bodyDeps = useMemo(() => JSON.stringify(buildBody()), [buildBody]);
-    useEffect(() => {
-        if (!open) return;
-        let cancelled = false;
-        setCurlLoading(true);
-        const timer = setTimeout(async () => {
-            const res = await buildProbeCurl(buildBody());
-            if (cancelled) return;
-            setCurl(res);
-            setCurlLoading(false);
-        }, 500);
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-            setCurlLoading(false);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, bodyDeps]);
+    // dialog is open. Pure construction — nothing is executed. The shared
+    // useDebouncedProbeCurl hook keys on the request itself; passing null
+    // while closed clears the preview, so each open refetches fresh.
+    const { data: curl, loading: curlLoading } = useDebouncedProbeCurl(open ? buildBody() : null);
 
     const copyCurl = useCallback(async () => {
         let command = curl?.data?.command;
