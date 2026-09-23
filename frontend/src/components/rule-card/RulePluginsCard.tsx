@@ -185,7 +185,8 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                             component="span"
                                             sx={{
                                                 ...NODE_LAYER_STYLES.typography,
-                                                fontWeight: 400,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 500,
                                                 color: 'text.secondary',
                                                 minWidth: 0,
                                                 overflow: 'hidden',
@@ -201,6 +202,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                                 component="span"
                                                 sx={{
                                                     ...NODE_LAYER_STYLES.typography,
+                                                    fontSize: '0.75rem',
                                                     fontWeight: 400,
                                                     color: 'text.secondary',
                                                     overflow: 'hidden',
