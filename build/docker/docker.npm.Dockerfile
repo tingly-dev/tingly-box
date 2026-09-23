@@ -30,12 +30,18 @@ RUN npm install --global \
 WORKDIR /app
 ENV HOME=/app
 
-# Run the installed CLI as the same unprivileged user used at runtime. Besides
-# checking the reported version, this materializes and executes the packaged
-# platform binary, catching a missing or stale npm payload during the build.
-RUN su tingly -c "tingly-box version" \
-    | awk '$1 == "Version:" { print $2 }' \
-    | grep -Fx "v${TINGLY_VERSION#v}"
+# Run the installed CLI as the same unprivileged user used at runtime. This
+# materializes and executes the packaged platform binary. Exact semver builds
+# additionally assert the version; dist-tags such as the default `latest`
+# cannot be compared literally and only require a valid version response.
+RUN VERSION_OUTPUT="$(su tingly -c "tingly-box version")" \
+    && printf '%s\n' "$VERSION_OUTPUT" \
+    && INSTALLED_VERSION="$(printf '%s\n' "$VERSION_OUTPUT" | awk '$1 == "Version:" { print $2 }')" \
+    && test -n "$INSTALLED_VERSION" \
+    && case "${TINGLY_VERSION#v}" in \
+         [0-9]*.[0-9]*.[0-9]*) test "$INSTALLED_VERSION" = "v${TINGLY_VERSION#v}" ;; \
+         *) true ;; \
+       esac
 
 # This small entrypoint remains necessary for bind mounts. Docker creates a
 # new host bind mount with the host user's ownership; it must be made writable
