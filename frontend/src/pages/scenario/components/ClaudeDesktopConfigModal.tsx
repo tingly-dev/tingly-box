@@ -19,6 +19,7 @@ import { Add as AddIcon } from '@/components/icons';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import Context1MChangeBanner from './Context1MChangeBanner';
+import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
 
 interface ClaudeDesktopConfigModalProps {
@@ -193,24 +194,11 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                     </Box>
 
                     {/* Copy buttons */}
-                    <Stack direction="row" spacing={1}>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(`${baseUrl}/tingly/claude_desktop`, 'URL')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy URL
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(token, 'API Key')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy API Key
-                        </Button>
-                    </Stack>
+                    <CopyUrlKeyButtons
+                        url={`${baseUrl}/tingly/claude_desktop`}
+                        token={token}
+                        copyToClipboard={copyToClipboard}
+                    />
 
                     {/* Step 3 */}
                     <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>

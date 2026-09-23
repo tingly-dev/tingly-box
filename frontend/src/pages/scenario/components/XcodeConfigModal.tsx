@@ -2,6 +2,8 @@ import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typogra
 import React from 'react';
 import xcodeImage from '@/assets/images/xcode.png';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
+import { InstructionSteps } from './config/InstructionSteps';
 
 interface XcodeConfigModalProps {
     open: boolean;
@@ -41,47 +43,32 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 <Stack spacing={2}>
-                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>1.</strong> Open <strong>Xcode</strong> → <strong>Settings</strong> → <strong>Intelligence</strong>
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>2.</strong> Click <strong>Add a Model Provider</strong>, select <strong>Internet-Hosted</strong>
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            <strong>3.</strong> Enter:
-                        </Typography>
-                        <Box sx={{ pl: 2, mb: 0.5 }}>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                URL: <strong>{baseUrl}/tingly/xcode</strong>
-                            </Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                API Key: <strong>{token.slice(0, 16)}...</strong>
-                            </Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                Description: <strong>Tingly Box</strong>
-                            </Typography>
-                        </Box>
-                    </Box>
+                    <InstructionSteps
+                        steps={[
+                            <><strong>1.</strong> Open <strong>Xcode</strong> → <strong>Settings</strong> → <strong>Intelligence</strong></>,
+                            <><strong>2.</strong> Click <strong>Add a Model Provider</strong>, select <strong>Internet-Hosted</strong></>,
+                            <><strong>3.</strong> Enter:</>,
+                        ]}
+                        values={
+                            <>
+                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                    URL: <strong>{baseUrl}/tingly/xcode</strong>
+                                </Typography>
+                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                    API Key: <strong>{token.slice(0, 16)}...</strong>
+                                </Typography>
+                                <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
+                                    Description: <strong>Tingly Box</strong>
+                                </Typography>
+                            </>
+                        }
+                    />
 
-                    <Stack direction="row" spacing={1}>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(`${baseUrl}/tingly/xcode`, 'URL')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy URL
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(token, 'API Key')}
-                            sx={{ flex: 1 }}
-                        >
-                            Copy API Key
-                        </Button>
-                    </Stack>
+                    <CopyUrlKeyButtons
+                        url={`${baseUrl}/tingly/xcode`}
+                        token={token}
+                        copyToClipboard={copyToClipboard}
+                    />
                     <Box
                         component="img"
                         src={xcodeImage}

@@ -1,8 +1,9 @@
-import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Tab, Tabs } from '@mui/material';
+import { Box, CircularProgress, DialogActions, DialogContent, Button, Typography } from '@mui/material';
 import React from 'react';
-import CodeBlock from '@/components/CodeBlock';
 import { useTranslation } from 'react-i18next';
 import { isFullEdition } from '@/utils/edition';
+import { ConfigModalShell } from './config/ConfigModalShell';
+import { ManualFileSection } from './config/ManualFileSection';
 
 interface OpenCodeConfigModalProps {
     open: boolean;
@@ -18,8 +19,6 @@ interface OpenCodeConfigModalProps {
     isLoading?: boolean;
 }
 
-type ScriptTab = 'json' | 'windows' | 'unix';
-
 const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
     open,
     onClose,
@@ -32,50 +31,17 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
     isLoading = false,
 }) => {
     const { t } = useTranslation();
-    const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
 
     // Show loading indicator
     const showLoading = isLoading || !generateConfigJson() || generateConfigJson() === '// Loading...';
 
     return (
-        <Dialog
+        <ConfigModalShell
             open={open}
-            onClose={(event, reason) => {
-                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
-                    return;
-                }
-                onClose();
-            }}
-            maxWidth="lg"
-            fullWidth
-            slotProps={{
-                paper: {
-                    sx: {
-                        borderRadius: 3,
-                        maxHeight: '90vh',
-                    }
-                }
-            }}
+            onClose={onClose}
+            title={t('openCodeConfig.title')}
+            subtitle={t('openCodeConfig.subtitle')}
         >
-            <DialogTitle sx={{
-                pb: 1,
-                borderBottom: 1,
-                borderColor: 'divider',
-            }}>
-                <Typography variant="h6" sx={{
-                    fontWeight: 600
-                }}>
-                    {t('openCodeConfig.title')}
-                </Typography>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: "text.secondary",
-                        mt: 0.5
-                    }}>
-                    {t('openCodeConfig.subtitle')}
-                </Typography>
-            </DialogTitle>
             <DialogContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Config file location info */}
@@ -88,68 +54,47 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                     </Box>
 
                     {/* Config section */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" sx={{
-                                color: "text.secondary"
-                            }}>
-                                {t('openCodeConfig.configurationTitle')}
-                            </Typography>
-                            <Tabs
-                                value={configTab}
-                                onChange={(_, value) => setConfigTab(value)}
-                                variant="standard"
-                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                            >
-                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                            </Tabs>
-                        </Box>
-                        <Box>
-                            {showLoading ? (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-                                    <CircularProgress />
-                                </Box>
-                            ) : (
-                                <>
-                            {configTab === 'json' && (
-                                <CodeBlock
-                                    code={generateConfigJson()}
-                                    language="json"
-                                    filename="~/.config/opencode/opencode.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'opencode.json')}
-                                    maxHeight={350}
-                                    minHeight={300}
-                                />
-                            )}
-                            {configTab === 'windows' && (
-                                <CodeBlock
-                                    code={generateScriptWindows()}
-                                    language="js"
-                                    filename="PowerShell script to setup opencode.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                    maxHeight={350}
-                                    minHeight={300}
-                                />
-                            )}
-                            {configTab === 'unix' && (
-                                <CodeBlock
-                                    code={generateScriptUnix()}
-                                    language="js"
-                                    filename="Bash script to setup opencode.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                    maxHeight={350}
-                                    minHeight={300}
-                                />
-                            )}
-                                </>
-                            )}
-                        </Box>
-                    </Box>
+                    <ManualFileSection
+                        heading={t('openCodeConfig.configurationTitle')}
+                        copyToClipboard={copyToClipboard}
+                        loading={showLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : null}
+                        tabs={[
+                            {
+                                label: 'JSON',
+                                value: 'json',
+                                code: generateConfigJson(),
+                                language: 'json',
+                                filename: '~/.config/opencode/opencode.json',
+                                copyLabel: 'opencode.json',
+                                maxHeight: 350,
+                                minHeight: 300,
+                            },
+                            {
+                                label: 'Windows',
+                                value: 'windows',
+                                code: generateScriptWindows(),
+                                language: 'js',
+                                filename: 'PowerShell script to setup opencode.json',
+                                copyLabel: 'Windows script',
+                                maxHeight: 350,
+                                minHeight: 300,
+                            },
+                            {
+                                label: 'Linux/macOS',
+                                value: 'unix',
+                                code: generateScriptUnix(),
+                                language: 'js',
+                                filename: 'Bash script to setup opencode.json',
+                                copyLabel: 'Unix script',
+                                maxHeight: 350,
+                                minHeight: 300,
+                            },
+                        ]}
+                    />
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end' }}>
@@ -168,7 +113,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                     </Button>
                 )}
             </DialogActions>
-        </Dialog>
+        </ConfigModalShell>
     );
 };
 
