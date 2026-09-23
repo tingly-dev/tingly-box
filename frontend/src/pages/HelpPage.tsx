@@ -8,7 +8,7 @@ import { ShortcutCard, shouldShowShortcutCard } from '@/components/ShortcutCard.
 import { ProvidersCard } from '@/components/ProvidersCard.tsx';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
-import TeamGuideDialog from '@/pages/scenario/components/TeamGuideDialog';
+import TeamGuideDialog from '@/components/TeamGuideDialog';
 
 // The Shortcut card spans full width like every other card; only its content
 // is capped, matching System settings cards. ProvidersCard is left uncapped —

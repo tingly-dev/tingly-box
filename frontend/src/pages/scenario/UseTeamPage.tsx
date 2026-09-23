@@ -15,7 +15,7 @@ import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import SharingKeysDialog from './components/SharingKeysDialog.tsx';
-import TeamGuideDialog from './components/TeamGuideDialog.tsx';
+import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
 import {api} from '@/services/api';
