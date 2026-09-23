@@ -175,10 +175,17 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
             }
             const status = error?.status ? `${error.status}: ` : '';
             const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
+            // request_id doesn't explain the failure itself — the gateway
+            // deliberately keeps that message generic for transport-level
+            // errors — but it's the handle to look this exact call up in the
+            // Requests log, which does have the raw upstream error/host/timing.
+            const requestId = error?.error?.request_id;
+            const suffix = requestId ? ` (request_id: ${requestId})` : '';
+            const fullMessage = `${status}${message}${suffix}`;
             updateRuns((currentRuns) => currentRuns.map((run) => (
-                run.id === runId ? { ...run, status: 'failed', error: `${status}${message}` } : run
+                run.id === runId ? { ...run, status: 'failed', error: fullMessage } : run
             )));
-            showNotification(`${status}${message}`, 'error');
+            showNotification(fullMessage, 'error');
         } finally {
             inFlightRef.current.delete(runId);
         }
