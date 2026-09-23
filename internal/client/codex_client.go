@@ -448,47 +448,41 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 // and extracts the generated image data from the output array.
 //
 // The image data comes through two event types:
-// 1. response.image_generation_call.partial_image - streaming partial image chunks
-// 2. response.output_item.done - final status of the image generation call
+//  1. response.image_generation_call.partial_image - progressive previews. Each
+//     partial_image_b64 is a complete standalone image (OpenAI image
+//     generation guide), not a chunk, so only the latest one is kept.
+//  2. response.output_item.done - the image_generation_call item, whose result
+//     is the final image. It wins over any preview, whatever its status: the
+//     upstream has been seen leaving a finished call at status "generating".
 func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
 	defer stream.Close()
 
-	var b64JSON string
+	var finalB64, partialB64 string
 	var imageCallID string
 
-	// Collect image data from stream events
 	for stream.Next() {
 		event := stream.Current()
 
 		switch event.Type {
 		case "response.image_generation_call.partial_image":
-			// Partial image chunks during generation
 			partialEvent := event.AsResponseImageGenerationCallPartialImage()
 			if partialEvent.PartialImageB64 != "" {
-				b64JSON += partialEvent.PartialImageB64
+				partialB64 = partialEvent.PartialImageB64
 				imageCallID = partialEvent.ItemID
-				logrus.WithContext(ctx).Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
-					partialEvent.ItemID, len(b64JSON))
+				logrus.WithContext(ctx).Debugf("[Codex] Received partial image, item_id: %s, size: %d",
+					partialEvent.ItemID, len(partialB64))
 			}
 
 		case "response.output_item.done":
-			// Final status of output items
-			doneEvent := event.AsResponseOutputItemDone()
-			item := doneEvent.Item
-
+			item := event.AsResponseOutputItemDone().Item
 			if item.Type == "image_generation_call" {
 				imageCall := item.AsImageGenerationCall()
-				// Check for image result in the done event
-				// The status can be "generating", "completed", or other values
-				// If we haven't received partial images, use the Result field
-				if b64JSON == "" && imageCall.Result != "" {
-					b64JSON = imageCall.Result
-					imageCallID = imageCall.ID
+				if imageCall.Result != "" {
+					finalB64 = imageCall.Result
 					logrus.WithContext(ctx).Debugf("[Codex] Received image result in done event, id: %s, status: %s",
 						imageCall.ID, imageCall.Status)
 				}
-				// Update imageCallID even if we already have data from partial events
-				if imageCallID == "" {
+				if imageCallID == "" || imageCall.Result != "" {
 					imageCallID = imageCall.ID
 				}
 			}
@@ -499,13 +493,17 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 		return nil, fmt.Errorf("stream error: %w", err)
 	}
 
+	b64JSON := finalB64
+	if b64JSON == "" {
+		// No final result: fall back to the last preview rather than nothing.
+		b64JSON = partialB64
+	}
 	if b64JSON == "" {
 		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
 	}
 
 	logrus.WithContext(ctx).Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
 
-	// Build standard ImagesResponse from extracted data
 	return &openai.ImagesResponse{
 		Data: []openai.Image{
 			{

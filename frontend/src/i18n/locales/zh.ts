@@ -1814,7 +1814,6 @@ export default {
     "emptyResult": "未返回图像",
     "requestFailed": "请求失败",
     "runFailed": "生成失败",
-    "shortfall": "只返回了 {{received}} / {{requested}} 张",
     "interruptedByReload": "页面刷新时被中断",
     "retry": "重试",
     "cancelRun": "取消",

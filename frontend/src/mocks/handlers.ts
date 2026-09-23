@@ -2614,9 +2614,15 @@ export const handlers = [
         // Simulate a small latency so the loading state is visible
         await new Promise((r) => setTimeout(r, 600))
 
+        // A prompt carrying `[partial]` gets back half of what it asked for
+        // (rounded up), the way a provider that caps n — or a Codex fan-out
+        // with a failed call — does, so the card's missing slots are
+        // exercisable too.
+        const returned = /\[partial\]/i.test(promptText) ? Math.ceil(n / 2) : n
+
         return HttpResponse.json({
             created: Math.floor(Date.now() / 1000),
-            data: Array.from({ length: n }, (_, i) => ({ url: makeSvgDataUrl(i) })),
+            data: Array.from({ length: returned }, (_, i) => ({ url: makeSvgDataUrl(i) })),
         })
     }),
 

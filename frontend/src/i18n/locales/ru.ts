@@ -1840,7 +1840,6 @@ export default {
     "emptyResult": "Изображение не получено",
     "requestFailed": "Запрос не выполнен",
     "runFailed": "Генерация не удалась",
-    "shortfall": "Получено {{received}} из {{requested}} изображений",
     "interruptedByReload": "Прервано перезагрузкой страницы",
     "retry": "Повторить",
     "cancelRun": "Отменить",

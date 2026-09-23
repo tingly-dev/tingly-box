@@ -29,8 +29,9 @@ export const useImageGenLightbox = (runs: GenerationRun[]) => {
         const outputs = lightboxRun.images
             .map((image, index) => ({ src: resultSrc(image), kind: 'output' as const, index }))
             .filter((item) => item.src);
-        // One image with nothing to compare it to is not a filmstrip.
-        return sources.length > 0 ? [...sources, ...outputs] : [];
+        // One image with nothing to compare it to is not a filmstrip; several
+        // outputs of one request are — picking between them is why n > 1.
+        return sources.length > 0 || outputs.length > 1 ? [...sources, ...outputs] : [];
     }, [lightboxRun]);
 
     const showLightboxFrame = useCallback((frame: LightboxFrame) => {
