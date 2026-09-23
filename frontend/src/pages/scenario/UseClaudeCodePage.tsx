@@ -51,7 +51,10 @@ const UseClaudeCodePageContent: React.FC = () => {
         notification,
         copyToClipboard,
         baseUrl,
-    } = useScenarioPageInternal(SCENARIO);
+        // skipRules: this page manages its own rules state below (unified vs
+        // separate mode); the hook's automatic rules load would be a wasted
+        // API call per mount.
+    } = useScenarioPageInternal(SCENARIO, { skipRules: true });
 
     // Custom state for this page
     const [rules, setRules] = useState<any[]>([]);

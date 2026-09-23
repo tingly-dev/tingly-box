@@ -1,101 +1,40 @@
-import CardGrid from "@/components/CardGrid.tsx";
-import UnifiedCard from "@/components/UnifiedCard.tsx";
-import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
-import { Info as InfoIcon } from '@/components/icons';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import PageLayout from '@/components/PageLayout';
-import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
-import TemplatePage from './components/TemplatePage.tsx';
 import ClaudeDesktopConfigModal from './components/ClaudeDesktopConfigModal';
-import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioConfigButton, ScenarioPage } from './ScenarioPage';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+
 const scenario = "claude_desktop";
-const UseClaudeDesktopPageContent: React.FC = () => {
-    const { t } = useTranslation();
-    const {
-        isLoading,
-        notification,
-        copyToClipboard,
-        baseUrl,
-        rules,
-        loadRules,
-        showNotification,
-    } = useScenarioPageInternal(scenario);
-    const [configModalOpen, setConfigModalOpen] = useState(false);
-    const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
-    const handleOpenConfigModal = () => {
-        setConfigModalOpen(true);
-    };
-    const handleContext1MToggle = (newState: boolean) => {
-        // Store the pending change and directly open config panel
-        setPendingContext1MChange(newState);
-        setConfigModalOpen(true);
-    };
-    return (
-        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
-            <CardGrid>
-                <UnifiedCard
-                    titleHeadingLevel={1}
-                    title={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Claude Desktop</span>
-                            <Tooltip title={t('scenarioPage.tooltip.claude_desktop')}>
-                                <IconButton size="small" sx={{ ml: 0.5 }}>
-                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
-                    }
-                    size="full"
-                    rightAction={
-                        <Button
-                            onClick={handleOpenConfigModal}
-                            variant="contained"
-                            size="small"
-                        >
-                            {t('scenarioPage.config')}
-                        </Button>
-                    }
-                >
-                    <ProviderConfigCard
-                        title="Claude Desktop"
-                        baseUrlPath="/tingly/claude_desktop"
-                        baseUrl={baseUrl}
-                        onCopy={copyToClipboard}
-                        scenario={scenario}
-                        showApiKeyRow={true}
-                        showBaseUrlRow={true}
-                        compact={true}
-                    />
-                </UnifiedCard>
-                <TemplatePage
-                    scenario={scenario}
-                    collapsible={true}
-                    allowDeleteRule={true}
-                    onContext1MToggle={handleContext1MToggle}
-                />
-                <ClaudeDesktopConfigModal
-                    open={configModalOpen}
-                    onClose={() => {
-                        setConfigModalOpen(false);
-                        setPendingContext1MChange(null);
-                    }}
-                    baseUrl={baseUrl}
-                    copyToClipboard={copyToClipboard}
-                    rules={rules}
-                    onRulesRefresh={() => loadRules(scenario)}
-                    pendingContext1MChange={pendingContext1MChange}
-                />
-            </CardGrid>
-        </PageLayout>
-    );
-};
 const UseClaudeDesktopPage: React.FC = () => {
+    const { t } = useTranslation();
     return (
         <ScenarioPageModalProvider>
-            <UseClaudeDesktopPageContent />
+            <ScenarioPage
+                scenario={scenario}
+                title="Claude Desktop"
+                tooltipKey="scenarioPage.tooltip.claude_desktop"
+                providerCard={{ compact: true, showApiKeyRow: true, showBaseUrlRow: true }}
+                context1M
+                renderRightAction={(slot) => (
+                    <ScenarioConfigButton
+                        onClick={slot.openConfigModal}
+                        label={t('scenarioPage.config')}
+                    />
+                )}
+                renderConfigModal={(slot) => (
+                    <ClaudeDesktopConfigModal
+                        open={slot.configModalOpen}
+                        onClose={() => {
+                            slot.closeConfigModal();
+                            slot.clearPendingContext1MChange();
+                        }}
+                        baseUrl={slot.baseUrl}
+                        copyToClipboard={slot.copyToClipboard}
+                        rules={slot.rules}
+                        onRulesRefresh={() => slot.loadRules(scenario)}
+                        pendingContext1MChange={slot.pendingContext1MChange}
+                    />
+                )}
+            />
         </ScenarioPageModalProvider>
     );
 };

@@ -31,6 +31,7 @@ import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData'
  * ```
  *
  * @param scenario - The scenario identifier (e.g., "custom", "openai", "anthropic", "codex", "vscode", "xcode", "opencode", "pi")
+ * @param options - `{ skipRules: true }` opts out of the automatic rules load (see above)
  * @returns All the data and handlers needed by TemplatePage and scenario pages
  *
  * @returns {boolean} showTokenModal - Whether the API key modal is open
@@ -54,7 +55,19 @@ import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData'
  *
  * @returns {boolean} isLoading - Combined loading state (providers OR rules)
  */
-export const useScenarioPageInternal = (scenario: string) => {
+export interface UseScenarioPageInternalOptions {
+    /**
+     * Skip the automatic rules load (and rule loading state) for pages that
+     * manage their own rules — e.g. UseClaudeCodePage derives rules from its
+     * config mode and never reads the hook's `rules`, so loading them here is
+     * a wasted GET /rules call on every mount.
+     */
+    skipRules?: boolean;
+}
+
+export const useScenarioPageInternal = (scenario: string, options: UseScenarioPageInternalOptions = {}) => {
+    const { skipRules = false } = options;
+
     // Function panel data (token, providers, notifications, etc.)
     const functionPanelData = useFunctionPanelData();
 
@@ -66,12 +79,13 @@ export const useScenarioPageInternal = (scenario: string) => {
 
     // Load rules for the specified scenario
     useEffect(() => {
+        if (skipRules) return;
         if (!scenario.trim()) return;
         ruleManagement.loadRules(scenario);
-    }, [scenario, ruleManagement.loadRules]);
+    }, [scenario, ruleManagement.loadRules, skipRules]);
 
     // Combined loading state
-    const isLoading = functionPanelData.loading || ruleManagement.loadingRule;
+    const isLoading = functionPanelData.loading || (!skipRules && ruleManagement.loadingRule);
 
     // Return all data in a structured way
     return {
