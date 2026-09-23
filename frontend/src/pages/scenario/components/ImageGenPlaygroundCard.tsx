@@ -39,6 +39,7 @@ import { useImageGenRefs } from './useImageGenRefs';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
+import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
 import type {
     GenerationRun,
@@ -133,6 +134,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleSketchSubmit,
         sketchInitial,
         hasSketchReference,
+        maskTarget,
+        setMaskTarget,
+        handleMaskSubmit,
+        handleRemoveMask,
+        maskInitial,
+        maskedReference,
+        hasMaskedReference,
     } = useImageGenRefs({ showNotification, size });
     const {
         selectedImage,
@@ -500,6 +508,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             promptFileInputRef={promptFileInputRef}
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
+                            onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
                             onReorder={handleReorderReference}
                             onMoveByKey={handleReferenceKeyDown}
@@ -537,7 +546,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             minRows={3}
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
-                            placeholder={hasSketchReference
+                            placeholder={hasMaskedReference
+                                ? t('playground.mask.promptPlaceholder', { defaultValue: 'Describe what should appear in the painted area…' })
+                                : hasSketchReference
                                 ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
                                 : referenceImages.length > 0
                                     ? t('playground.referencePromptPlaceholder', { defaultValue: 'Describe what to make from these images…' })
@@ -857,6 +868,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+            <MaskEditorDialog
+                open={maskTarget !== null}
+                imageUrl={maskedReference?.previewUrl ?? null}
+                imageName={maskedReference?.file.name}
+                initial={maskInitial}
+                onClose={() => setMaskTarget(null)}
+                onSubmit={handleMaskSubmit}
+                onRemove={maskedReference?.mask
+                    ? () => { if (maskTarget !== null) handleRemoveMask(maskTarget); setMaskTarget(null); }
+                    : undefined}
+                showNotification={showNotification}
+            />
             <SketchCanvasDialog
                 open={sketchTarget !== null}
                 size={size}

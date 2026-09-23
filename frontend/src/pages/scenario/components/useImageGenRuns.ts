@@ -5,7 +5,7 @@ import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImportedImage, Quality } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 
@@ -20,7 +20,7 @@ export interface GenerationRequest {
     size: string;
     quality: Quality;
     count: number;
-    sources: { file: File; previewUrl: string }[];
+    sources: { file: File; previewUrl: string; mask?: ReferenceMask }[];
     // Set when re-running a failed run: its card flips back to pending
     // instead of a second card appearing.
     runId?: string;
@@ -127,6 +127,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
+            mask: request.sources[0]?.mask,
             status: 'pending',
         };
         updateRuns((currentRuns) => (currentRuns.some((run) => run.id === runId)
@@ -137,9 +138,13 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const editFiles = request.sources.map((ref) => ref.file);
+            // The mask belongs to the first reference because that is the one
+            // the API applies it to; nothing here chooses which image it is.
+            const mask = request.sources[0]?.mask?.file;
             const response = endpoint === 'edits'
                 ? await client.images.edit({
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
+                    ...(mask ? { mask } : {}),
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
@@ -196,6 +201,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                 previewUrl: src,
                 source: 'upload',
                 ...(size ?? {}),
+                // The mask comes back with the image it was painted on, so a
+                // retry is the request that failed rather than a repaint of
+                // the whole image, and re-entry hands back a mask that can
+                // still be edited.
+                ...(index === 0 && run.mask ? { mask: run.mask } : {}),
             };
         }),
     ), []);

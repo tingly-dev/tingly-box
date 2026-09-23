@@ -1,7 +1,8 @@
 # @tingly/vision
 
 Browser-native image/video processing that the Image Playground's UI is built
-on top of: canvas sketch layers, background matting (chroma-key + auto
+on top of: canvas sketch layers, edit masks (the alpha channel an
+/images/edits request carries), background matting (chroma-key + auto
 background detection), sticker-sheet slicing, GIF encoding (LZW + palette
 quantization), video-to-GIF conversion, and zip archive creation.
 
