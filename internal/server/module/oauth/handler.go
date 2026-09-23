@@ -427,7 +427,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	// background; the frontend already polls /oauth/status for the outcome, so
 	// it needs no flow-specific handling.
 	if config.OAuthMethod == oauth.OAuthMethodServerPoll {
-		flow, err := h.oauthManager.InitiateZCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, zcodeProviderName(issuer, req.Name), OAuthOptions(proxyURL, "")...)
+		flow, err := h.oauthManager.InitiateZCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, zcodeProviderName(config.DisplayName, req.Name), OAuthOptions(proxyURL, "")...)
 		if err != nil {
 			_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
 			c.JSON(http.StatusBadGateway, OAuthErrorResponse{
@@ -447,8 +447,8 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		resp.Data.State = flow.FlowID
 		resp.Data.SessionID = sessionID
 		resp.Data.Provider = string(issuer)
-		if !flow.ExpiresAt.IsZero() {
-			resp.Data.ExpiresIn = int64(time.Until(flow.ExpiresAt).Seconds())
+		if remaining := time.Until(flow.ExpiresAt); !flow.ExpiresAt.IsZero() && remaining > 0 {
+			resp.Data.ExpiresIn = int64(remaining.Seconds())
 		}
 		resp.Data.Interval = int64(flow.PollInterval.Seconds())
 
@@ -523,6 +523,15 @@ func (h *Handler) pollForZCodeToken(flow *oauth.ZCodeFlow, sessionID, proxyURL s
 		return
 	}
 
+	// The dialog may have been closed (session cancelled) while the browser
+	// was still open. Nothing stops the upstream flow from completing after
+	// that, so check the session is still pending before a provider appears
+	// that the user thought they had abandoned.
+	if session, err := h.oauthManager.GetSession(sessionID); err != nil || session == nil || session.Status != oauth.SessionStatusPending {
+		logrus.Infof("[OAuth] ZCode authorization for %s completed after the session ended; discarding", flow.Issuer)
+		return
+	}
+
 	providerUUID, err := h.createProviderFromToken(token, flow.Issuer, flow.Name, sessionID, "")
 	if err != nil {
 		logrus.Errorf("[OAuth] Failed to create ZCode provider for %s: %v", flow.Issuer, err)
@@ -535,20 +544,13 @@ func (h *Handler) pollForZCodeToken(flow *oauth.ZCodeFlow, sessionID, proxyURL s
 
 // zcodeProviderName picks the provider name for a ZCode login. ZCode returns no
 // email or display name to derive one from, and the account id is not shown,
-// so an unnamed login is called after the plan it unlocks rather than falling
-// through to the issuer-plus-timestamp fallback.
-func zcodeProviderName(issuer ai.Issuer, customName string) string {
+// so an unnamed login is called after the registry's display name for the
+// issuer rather than falling through to the issuer-plus-timestamp fallback.
+func zcodeProviderName(displayName, customName string) string {
 	if customName != "" {
 		return customName
 	}
-	switch issuer {
-	case ai.IssuerZCode:
-		return "ZCode International"
-	case ai.IssuerZCodeCN:
-		return "ZCode CN"
-	default:
-		return ""
-	}
+	return displayName
 }
 
 // =============================================

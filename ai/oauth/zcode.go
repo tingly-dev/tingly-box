@@ -563,15 +563,24 @@ func (c *ZCodeClient) envelope(ctx context.Context, method, endpoint string, bod
 		return &zcodeTransientError{err: err}
 	}
 
+	// Retry classification goes by status first: a 4xx is the flow being
+	// rejected (expired, unknown flow id, bad bearer) whatever the body looks
+	// like — retrying it would hang the login until the deadline instead of
+	// reporting why. 408/429 and 5xx are blips; so is a body that is not the
+	// envelope at all (an edge's HTML error page), which is worth one more
+	// round rather than a failed login.
+	retryableStatus := resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests
 	var env zcodeEnvelope
 	if jsonErr := json.Unmarshal(raw, &env); jsonErr != nil {
-		// A body that is not the envelope at all (an HTML error page from an
-		// edge) is worth one more round rather than a failed login.
-		return &zcodeTransientError{err: fmt.Errorf("invalid response envelope (status=%d)", resp.StatusCode)}
+		err := fmt.Errorf("invalid response envelope (status=%d)", resp.StatusCode)
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && !retryableStatus {
+			return err
+		}
+		return &zcodeTransientError{err: err}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 || env.Code != 0 {
 		err := fmt.Errorf("status=%d code=%d msg=%s", resp.StatusCode, env.Code, zcodeMsgOrNone(env.Msg))
-		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests {
+		if retryableStatus {
 			return &zcodeTransientError{err: err}
 		}
 		return err

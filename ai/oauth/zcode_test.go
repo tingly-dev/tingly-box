@@ -236,6 +236,28 @@ func TestZCodePollFatalOnClientError(t *testing.T) {
 	}
 }
 
+// A 4xx whose body is not the envelope (an edge's HTML error page) is still a
+// rejection: only the status decides, or a dead flow would be retried until the
+// deadline instead of being reported.
+func TestZCodePollFatalOnClientErrorWithoutEnvelope(t *testing.T) {
+	var calls int32
+	client := newZCodeTestClient(t, ZCodeVariantZai, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "<html>not found</html>")
+	}))
+
+	flow := &ZCodeFlow{FlowID: "flow-1", PollToken: "tok", Variant: ZCodeVariantZai, PollInterval: time.Second}
+	_, err := client.Poll(context.Background(), flow, 30*time.Second)
+	if err == nil {
+		t.Fatal("Poll succeeded on a 404 HTML page")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("polled %d times, want 1 (a 4xx must not be retried, envelope or not)", got)
+	}
+}
+
 // Reading the other platform's token field would persist a credential aimed at
 // the wrong vendor, so a ready response missing this platform's token is an
 // error rather than a silent cross-platform fallback.

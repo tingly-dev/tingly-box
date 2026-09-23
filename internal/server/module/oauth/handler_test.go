@@ -524,8 +524,6 @@ func TestHandler_ZCodeReauth_KeepsStaticCredentialShape(t *testing.T) {
 }
 
 func TestZCodeProviderName(t *testing.T) {
-	assert.Equal(t, "custom", zcodeProviderName(ai.IssuerZCodeCN, "custom"), "a user-supplied name wins")
-	assert.Equal(t, "ZCode CN", zcodeProviderName(ai.IssuerZCodeCN, ""))
-	assert.Equal(t, "ZCode International", zcodeProviderName(ai.IssuerZCode, ""))
-	assert.Equal(t, "", zcodeProviderName(ai.IssuerKimiCode, ""), "non-ZCode issuers keep the generic naming path")
+	assert.Equal(t, "custom", zcodeProviderName("ZCode CN", "custom"), "a user-supplied name wins")
+	assert.Equal(t, "ZCode CN", zcodeProviderName("ZCode CN", ""), "an unnamed login takes the issuer's display name")
 }
