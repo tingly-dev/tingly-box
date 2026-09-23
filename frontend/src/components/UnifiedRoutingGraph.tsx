@@ -575,7 +575,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     onClick={(e) => e.stopPropagation()}
                                     sx={(theme) => ({
                                         display: 'flex',
-                                        alignItems: 'center',
+                                        alignItems: 'flex-start',
                                         flexShrink: 0,
                                         alignSelf: 'stretch',
                                         ml: 1.5,

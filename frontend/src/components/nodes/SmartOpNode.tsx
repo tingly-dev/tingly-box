@@ -11,14 +11,13 @@ import {
     Typography,
 } from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
-import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SmartRouting, SmartOp } from '../RoutingGraphTypes.ts';
 import { formatTimeRange } from '../rule-card/timeRange.ts';
 import {
     ActionButtonsBox,
-    getRouteGraphActiveColor,
+    NODE_LAYER_STYLES,
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
@@ -106,7 +105,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                     <Typography
                         sx={{
-                            fontSize: '0.65rem',
+                            fontSize: '0.7rem',
                             fontWeight: 700,
                             color: 'text.secondary',
                             flexGrow: 1,
@@ -177,7 +176,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <Typography
                             sx={{
-                                fontSize: '0.65rem',
+                                fontSize: '0.7rem',
                                 color: 'text.disabled',
                                 fontStyle: 'italic',
                                 textAlign: 'center',
@@ -196,49 +195,46 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                         {ops.map((op) => (
                             <NodeTooltip key={op.uuid} title={opTooltip(op)} placement="right">
                                 <Box
-                                    sx={(theme) => ({
+                                    sx={{
                                         width: '100%',
                                         px: 0.75,
                                         py: 0.35,
                                         borderRadius: 0.75,
                                         border: '1px solid',
-                                        borderColor: alpha(
-                                            getRouteGraphActiveColor(theme),
-                                            theme.palette.mode === 'dark' ? 0.28 : 0.18,
-                                        ),
-                                        backgroundColor: alpha(
-                                            getRouteGraphActiveColor(theme),
-                                            theme.palette.mode === 'dark' ? 0.07 : 0.03,
-                                        ),
+                                        borderColor: 'transparent',
+                                        backgroundColor: 'action.hover',
                                         display: 'flex',
+                                        flexWrap: 'wrap',
                                         alignItems: 'center',
-                                        gap: 0.5,
+                                        columnGap: 0.5,
+                                        rowGap: 0.25,
                                         overflow: 'hidden',
-                                        minHeight: 22,
-                                    })}
+                                        minHeight: 34,
+                                    }}
                                 >
-                                    {/* position — accent label */}
+                                    {/* position — primary label */}
                                     <Typography
+                                        variant="body2"
                                         component="span"
-                                        sx={(theme) => ({
-                                            fontSize: '0.6rem',
-                                            fontWeight: 700,
-                                            color: getRouteGraphActiveColor(theme),
-                                            flexShrink: 0,
-                                            lineHeight: 1,
-                                        })}
+                                        sx={{
+                                            ...NODE_LAYER_STYLES.typography,
+                                            fontWeight: 400,
+                                            color: 'text.secondary',
+                                            width: '100%',
+                                        }}
                                     >
                                         {op.position}
                                     </Typography>
 
-                                    {/* operation — muted */}
+                                    {/* operation */}
                                     <Typography
+                                        variant="body2"
                                         component="span"
                                         sx={{
-                                            fontSize: '0.6rem',
-                                            color: 'text.disabled',
+                                            ...NODE_LAYER_STYLES.typography,
+                                            fontWeight: 400,
+                                            color: 'text.secondary',
                                             flexShrink: 0,
-                                            lineHeight: 1,
                                         }}
                                     >
                                         · {op.operation}
@@ -246,16 +242,16 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                                     {op.value && (
                                         <Typography
+                                            variant="body2"
                                             component="span"
                                             sx={{
-                                                fontSize: '0.6rem',
-                                                fontWeight: 500,
-                                                color: 'text.primary',
+                                                ...NODE_LAYER_STYLES.typography,
+                                                fontWeight: 400,
+                                                color: 'text.secondary',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap',
                                                 flexGrow: 1,
-                                                lineHeight: 1,
                                             }}
                                         >
                                             : {opValue(op)}

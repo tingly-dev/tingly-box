@@ -8,6 +8,7 @@ import {
     graphNodeBaseHoverStyles,
     graphNodeHoverStyles,
     MODEL_NODE_STYLES,
+    NODE_LAYER_STYLES,
 } from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 import { getFlagValue, headersValue, isFlagActive } from './flagHelpers';
@@ -162,47 +163,50 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                 ? `${spec.description}\nValue: ${displayVal}`
                                 : spec.description;
                             return (
-                                <Tooltip key={spec.key} title={spec.type === 'int' ? `${spec.description}\nValue: ${formatSeconds(flagIntValue(flags, spec.key))}` : tooltipTitle} placement="left">
+                                <Tooltip key={spec.key} title={spec.type === 'int' ? `${spec.label}: ${spec.description}\nValue: ${formatSeconds(flagIntValue(flags, spec.key))}` : `${spec.label}: ${tooltipTitle}`} placement="left">
                                     <Box
-                                        sx={(theme) => ({
+                                        sx={{
                                             width: '100%',
                                             px: 0.75,
                                             py: 0.35,
                                             borderRadius: 0.75,
                                             border: '1px solid',
-                                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.28 : 0.18),
-                                            backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.07 : 0.03),
+                                            borderColor: 'transparent',
+                                            backgroundColor: 'action.hover',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: 0.5,
                                             overflow: 'hidden',
                                             minHeight: 22,
-                                        })}
+                                        }}
                                     >
                                         <Typography
+                                            variant="body2"
                                             component="span"
-                                            sx={(theme) => ({
-                                                fontSize: '0.6rem',
-                                                fontWeight: 700,
-                                                color: getRouteGraphActiveColor(theme),
-                                                flexShrink: 0,
-                                                lineHeight: 1,
-                                            })}
+                                            sx={{
+                                                ...NODE_LAYER_STYLES.typography,
+                                                fontWeight: 400,
+                                                color: 'text.secondary',
+                                                minWidth: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
                                         >
                                             {spec.label}
                                         </Typography>
                                         {(displayVal || spec.type === 'int') && (
                                             <Typography
+                                                variant="body2"
                                                 component="span"
                                                 sx={{
-                                                    fontSize: '0.6rem',
-                                                    fontWeight: 500,
-                                                    color: 'text.primary',
+                                                    ...NODE_LAYER_STYLES.typography,
+                                                    fontWeight: 400,
+                                                    color: 'text.secondary',
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
                                                     whiteSpace: 'nowrap',
                                                     flexGrow: 1,
-                                                    lineHeight: 1,
                                                 }}
                                             >
                                                 : {spec.type === 'int' ? formatSeconds(flagIntValue(flags, spec.key)) : displayVal}
