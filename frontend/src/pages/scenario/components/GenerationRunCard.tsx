@@ -49,6 +49,14 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
     const copyPromptLabel = t('playground.copyPrompt', { defaultValue: 'Copy prompt' });
     const promptCopiedLabel = t('playground.promptCopied', { defaultValue: 'Copied' });
     const removeRunLabel = t('playground.removeRun', { defaultValue: 'Remove this generation' });
+    // The request as it went over the wire, so the line doubles as the answer
+    // to "what do I send to get this": n only when it was more than one.
+    const requested = run.count ?? 1;
+    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}`;
+    // A provider can hand back fewer images than asked for — some cap n, and
+    // Codex serves n as parallel single-image calls that can fail one by one.
+    // Say so on the card, or a missing image just looks like a layout quirk.
+    const shortfall = run.status === 'completed' && run.images.length > 0 && run.images.length < requested;
 
     const renderRunActions = (runActions: GenerationRun, onRemoveClick?: () => void) => (
         <Stack direction="row" spacing={0} sx={{ flexShrink: 0, alignItems: 'center' }}>
@@ -150,7 +158,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
+                            {runMeta}
                         </Typography>
                         <RunSourceStrip
                             sources={run.sourceImages ?? []}
@@ -209,7 +217,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                             variant="caption"
                             sx={{ color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
-                            {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
+                            {runMeta}
                         </Typography>
                         {/* Retrying blind is not retrying: the images the failed
                             request was built from stay on the card, openable in
@@ -262,8 +270,21 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                     whiteSpace: 'nowrap',
                                 }}
                             >
-                                {run.model} · {run.size} · {run.quality} · images/{run.endpoint}{run.mask ? ' · mask' : ''}
+                                {runMeta}
                             </Typography>
+                            {shortfall && (
+                                <Typography
+                                    variant="caption"
+                                    sx={{ display: 'block', color: 'warning.main' }}
+                                    data-testid="imagegen-run-shortfall"
+                                >
+                                    {t('playground.shortfall', {
+                                        defaultValue: '{{received}} of {{requested}} images came back',
+                                        received: run.images.length,
+                                        requested,
+                                    })}
+                                </Typography>
+                            )}
                             <RunSourceStrip
                                 sources={run.sourceImages ?? []}
                                 onOpen={(index) => onOpenSource(run, index)}

@@ -110,8 +110,8 @@ func TestBuildCodexImageEditRequest_MaskIsAnError(t *testing.T) {
 	assert.Contains(t, err.Error(), "mask")
 }
 
-// Keeps the N-passthrough expectation explicit: the Responses tool returns one
-// image, so n>1 is logged and dropped rather than silently promised.
+// The Responses tool returns one image per call, so n never reaches the wire:
+// n > 1 is served by fanning the same request out (codex_images_fanout.go).
 func TestBuildImageEditResponsesRequest_NIgnored(t *testing.T) {
 	req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2", N: param.NewOpt(int64(3))}
 	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")

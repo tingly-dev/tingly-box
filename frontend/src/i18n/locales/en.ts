@@ -1818,6 +1818,7 @@ export default {
     "emptyResult": "No image returned",
     "requestFailed": "Request failed",
     "runFailed": "Generation failed",
+    "shortfall": "{{received}} of {{requested}} images came back",
     "interruptedByReload": "Interrupted by a page reload",
     "retry": "Retry",
     "cancelRun": "Cancel",

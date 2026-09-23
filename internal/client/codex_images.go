@@ -59,13 +59,13 @@ type codexImageInput struct {
 }
 
 // codexImageEditRequest mirrors codex-rs ImageEditRequest: images, prompt and
-// model are required; background/n/quality/size are omitted when unset.
+// model are required; background/quality/size are omitted when unset. The
+// wire `n` is never sent (see ImagesEdit).
 type codexImageEditRequest struct {
 	Images     []codexImageInput `json:"images"`
 	Prompt     string            `json:"prompt"`
 	Model      string            `json:"model"`
 	Background string            `json:"background,omitempty"`
-	N          *int64            `json:"n,omitempty"`
 	Quality    string            `json:"quality,omitempty"`
 	Size       string            `json:"size,omitempty"`
 }
@@ -87,29 +87,31 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 		return nil, err
 	}
 
-	var resp openai.ImagesResponse
-	opts := []option.RequestOption{
-		// Turn correlation id the Codex CLI sends on image requests
-		// (codex-rs ext/image-generation/src/backend.rs); the gateway has no
-		// Codex turn concept, so a fresh id per call stands in.
-		option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
-	}
-	if err := c.Client().Post(ctx, "images/edits", codexReq, &resp, opts...); err != nil {
-		return nil, fmt.Errorf("codex image edit failed: %w", err)
-	}
-
-	if len(resp.Data) == 0 {
-		return nil, fmt.Errorf("codex image edit returned no image data")
-	}
-
-	logrus.WithContext(ctx).Infof("[Codex] Image edit succeeded, images: %d", len(resp.Data))
-	return &resp, nil
+	// One image per call, n calls in parallel (codex_images_fanout.go). The
+	// body is built once — the reference readers are single-use — and reused.
+	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
+		var resp openai.ImagesResponse
+		opts := []option.RequestOption{
+			// Turn correlation id the Codex CLI sends on image requests
+			// (codex-rs ext/image-generation/src/backend.rs); the gateway has no
+			// Codex turn concept, so a fresh id per call stands in.
+			option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
+		}
+		if err := c.Client().Post(ctx, "images/edits", codexReq, &resp, opts...); err != nil {
+			return nil, fmt.Errorf("codex image edit failed: %w", err)
+		}
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("codex image edit returned no image data")
+		}
+		logrus.WithContext(ctx).Infof("[Codex] Image edit succeeded, images: %d", len(resp.Data))
+		return &resp, nil
+	})
 }
 
 // buildCodexImageEditRequest translates OpenAI ImageEditParams into the Codex
 // JSON edit request. Parameters the Codex wire schema does not carry
 // (response_format, output_format, output_compression, input_fidelity) are
-// dropped, mirroring how ImagesGenerate treats n/style. A mask is the one
+// dropped, mirroring how ImagesGenerate treats style. A mask is the one
 // exception: it changes what the result must be, so it errors rather than
 // being dropped.
 func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditRequest, error) {
@@ -140,10 +142,9 @@ func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditReq
 		Size:       defaultCodexImageOption(string(req.Size)),
 	}
 
-	if req.N.Valid() {
-		n := req.N.Value
-		out.N = &n
-	}
+	// N stays unset: the wire field exists, but the Codex CLI never sends it
+	// and one image per call is the only shape known to work, so ImagesEdit
+	// serves n > 1 by fanning out instead.
 
 	if req.Mask != nil {
 		// Reachable only when the Responses route is pinned off. Dropping the

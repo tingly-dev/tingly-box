@@ -124,14 +124,14 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
 	logrus.WithContext(ctx).Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
 
-	// Build Responses API request
+	// Build Responses API request; it carries no image count, so n > 1 is
+	// served by issuing it n times (codex_images_fanout.go).
 	responsesReq := c.buildImageGenerationResponsesRequest(req)
 
-	// Call streaming Responses API
-	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
-
-	// Parse streaming response
-	return c.parseImageGenerationStream(ctx, stream)
+	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
+		stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
+		return c.parseImageGenerationStream(ctx, stream)
+	})
 }
 
 // fastModelSuffix marks a virtual Codex catalog model id (e.g. "gpt-5.6-sol:fast")
@@ -429,14 +429,6 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	}
 
 	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
-
-	// Log warning for unsupported N parameter
-	if req.N.Valid() {
-		n := req.N.Value
-		if n > 1 {
-			logrus.Debugf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
-		}
-	}
 
 	// Log warning for unsupported style parameter
 	if req.Style != "" {

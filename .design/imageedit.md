@@ -132,8 +132,9 @@ JSON 请求/响应,二者都会把它打死。所以:
 |------|------|------|
 | `quality: standard`/`hd` | 枚举无此值 | 归一为 `medium`/`high`(`normalizeCodexImageQuality`,generation 与 edit 两条路径共用同一份映射,定义于 `codex_images.go`) |
 | `background`/`size` 未设 | — | 填 `auto`(Codex CLI 的默认) |
-| `n` | `n?` | 原样透传(wire schema 支持,虽然 CLI 自己不传) |
-| `mask` / `response_format` / `output_format` / `output_compression` / `input_fidelity` | 无 | 丢弃 + debug log |
+| `n` | `n?` | **不上线**:n > 1 由网关扇出成 n 次单图调用(`image-mask.md` §9.1) |
+| `mask` | 无 | 走 Responses 工具(实验),原生端点明确报错(`image-mask.md` §8.2) |
+| `response_format` / `output_format` / `output_compression` / `input_fidelity` | 无 | 丢弃 + debug log |
 | 超过 5 张 reference | 后端硬限 | 只 log 不截断——让后端明确报错,不静默变更语义 |
 
 `x-codex-image-turn-id` 每次请求生成新 uuid——网关没有 Codex 的 turn

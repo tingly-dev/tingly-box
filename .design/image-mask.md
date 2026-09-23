@@ -45,7 +45,7 @@ POST /tingly/imagegen/v1/images/edits
     ↓ parseImageEditJSON                    ← ✗ 没有 mask(不对称,§6.2)
     ↓ ForwardOpenAIImageEdit → ImagesEdit
         ├─ OpenAIClient  → SDK 原样透传 ✓
-        ├─ CodexClient   → 丢弃 + debug log ⚠(codex_images.go:137)
+        ├─ CodexClient   → 有 mask 走 Responses 工具(实验,§8.2),原生端点报错
         └─ Kimi/vmodel/DashScope/MiniMax → 整个 edits 面就不支持
 ```
 
@@ -429,3 +429,67 @@ E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里
 - 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
 - §7 的羽化 / 自动分割 / outpainting 全部未动。
+
+---
+
+## 9. 各出图 vendor 的核对:mask 与多张图(n)
+
+mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
+`OpenAIClientInterface.ImagesEdit / ImagesGenerate`(`imageedit.md` §2)。
+
+| vendor | edits 面 | mask | n > 1 | 本分支的处理 |
+|---|---|---|---|---|
+| OpenAI(gpt-image-*、dall-e-2) | SDK multipart | ✓ 原样透传,作用于第一张 | ✓ 上游原生 | 不改 |
+| 其他 OpenAI 兼容(x-ai、火山、硅基、Gemini compat、聚合商……) | 看上游:不少根本没有 `/images/edits`(上游 404 原样透出) | **未知**:有 edits 的也可能静默忽略 mask | 看上游:有的封顶、有的忽略 | 网关无从判断,不做 per-vendor 分支;n 的缺口由前端的 shortfall 提示兜住(§9.2),mask 被静默忽略是已知缺口(§9.3) |
+| **Codex** | 原生 JSON `images/edits` / Responses 工具 | 走 Responses(实验,§8.2) | **✗ 每次一张** | **n 在网关扇出**(§9.1) |
+| DashScope | 适配器无 edit 面,明确报错 | 不适用 | ✓ 原生 `n` | 不改 |
+| MiniMax | 同上,明确报错 | 不适用(只有 subject_reference,没有区域概念) | ✓ 原生 `n` | 不改 |
+| Kimi / vmodel | 不支持 | — | — | 不改 |
+
+结论:mask 这一侧**只有 Codex 需要动**(已在 §8.2);其余要么透传即正确,要么整个
+edits 面就被明确拒绝,mask 没有机会被静默吃掉。真正需要补的是 **Codex 的 n**。
+
+### 9.1 Codex:n 张图 = n 次单图调用,并行后合并
+
+Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工具一次只产出一个
+`image_generation_call`;原生 `images/edits` 的 schema 里虽然有 `n`,但 Codex CLI
+从来不传,"一次一张"是唯一被验证过的形状。原来的行为是 `n` 打一行 debug log 然后
+只回一张——用户要 4 张拿到 1 张,且没有任何地方说为什么。
+
+做法(`internal/client/codex_images_fanout.go`):
+
+- `ImagesGenerate`、原生 `ImagesEdit`、Responses 版 `ImagesEdit` 三条路径都经过同一个
+  `fanOutCodexImages(ctx, n, one)`。请求体**只构造一次**——参考图的 `io.Reader` 只能
+  读一次,读成 data URL 之后每次调用复用同一份 body。原生端点的 `n` 字段不再上线。
+- 并发窗口 `codexMaxParallelImageCalls = 4`:每一次都是订阅上的一整次出图,无上限
+  并发主要换来的是限流;4 让常见的 n 基本是一次调用的耗时(Playground 上限 10)。
+- 结果按调用顺序合并 `data[]`,`usage` 逐项相加,`created/size/...` 取第一份。
+- **部分失败返回成功的那几张**:已经出好、已经计费的图不该因为另一次调用被限流而
+  一起丢掉。整次请求的超时在后面几波还没跑完时触发,同样保留已完成的。只有全部
+  失败才是错误(返回第一个失败原因)。部分失败在网关打一行 warn,列出每一次的原因。
+
+为什么在网关而不是前端扇出:能力差异是网关的事(`imageedit.md` §6)。在网关做,
+Playground 以外的调用方(SDK、curl、别的工具)也拿到正确的 n 张;前端扇出则要么
+对所有 provider 都扇(白白放弃 OpenAI 原生的一次多张),要么让前端认识 provider。
+代价是结果一次性回来、没有逐张出现的进度——在 4 并发下总耗时与单张接近,这个代价
+可以接受;真要逐张出现,应该是给 images 面加流式,而不是把扇出搬到前端。
+
+### 9.2 前端:少于请求数时说出来
+
+`GenerationRunCard` 的元信息行在 n > 1 时多一段 `· n=4`(原则 5:写具体值),
+完成的卡片在 `images.length < count` 时多一行 warning 色的
+"3 of 4 images came back"。这条与 provider 无关:Codex 部分失败、兼容上游封顶 n、
+上游忽略 n,都走同一句。缺失的图不说明,看上去只像布局的怪异。
+
+### 9.3 仍然开着的
+
+- **兼容上游静默忽略 mask**:网关看不到上游是否真的用了 mask,返回的整图重画与
+  局部重绘在协议上长得一样。要么按 vendor 维护能力表(与"能力由网关探测"一致,但
+  需要逐家核对),要么做成结果对比(mask 外区域的像素差),都不在本分支。
+- **DashScope 的局部重绘**:万相有自己的图像编辑接口,是否带区域/mask 能力、是否
+  收 inline base64,都未核对;要接也是给适配器新开一个 edit 面,不是改现有的
+  generation 适配器。
+- `parseImageGenerationStream` 把 `partial_image` 事件的 base64 **拼接**起来。每个
+  partial 事件其实是一张完整的预览图,拼接只在"没有 partial、结果在 done 事件里"时
+  碰巧正确。我们从不设 `partial_images`,所以目前不触发;哪天要做逐张预览,先改这里
+  (取最后一个 partial 或直接用 done 事件的 `result`)。

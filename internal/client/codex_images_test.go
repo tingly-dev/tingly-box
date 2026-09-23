@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -41,7 +42,6 @@ func TestBuildCodexImageEditRequest_SingleImage(t *testing.T) {
 	assert.Equal(t, "auto", out.Background)
 	assert.Equal(t, "auto", out.Quality)
 	assert.Equal(t, "auto", out.Size)
-	assert.Nil(t, out.N)
 }
 
 func TestBuildCodexImageEditRequest_MultipleImagesAndOptions(t *testing.T) {
@@ -67,8 +67,10 @@ func TestBuildCodexImageEditRequest_MultipleImagesAndOptions(t *testing.T) {
 	assert.Equal(t, "medium", out.Quality)
 	assert.Equal(t, "1024x1536", out.Size)
 	assert.Equal(t, "opaque", out.Background)
-	require.NotNil(t, out.N)
-	assert.Equal(t, int64(2), *out.N)
+	// n is served by fanning out one-image calls, never sent on the wire.
+	body, err := json.Marshal(out)
+	require.NoError(t, err)
+	assert.False(t, gjson.GetBytes(body, "n").Exists())
 }
 
 func TestBuildCodexImageEditRequest_NoImage(t *testing.T) {

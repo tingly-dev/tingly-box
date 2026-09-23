@@ -74,8 +74,12 @@ func (c *CodexClient) imagesEditViaResponses(ctx context.Context, req openai.Ima
 		return nil, err
 	}
 
-	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
-	return c.parseImageGenerationStream(ctx, stream)
+	// The request is built once — the reference images are already drained into
+	// data URLs — so the n > 1 fan-out repeats it rather than re-reading them.
+	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
+		stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
+		return c.parseImageGenerationStream(ctx, stream)
+	})
 }
 
 // buildImageEditResponsesRequest translates ImageEditParams into a Responses
@@ -163,10 +167,6 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 	}
 
 	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
-
-	if req.N.Valid() && req.N.Value > 1 {
-		logrus.Debugf("[Codex] Multiple images (N=%d) not supported on the Responses image path, using N=1", req.N.Value)
-	}
 
 	params.SetExtraFields(map[string]interface{}{"stream": true})
 
