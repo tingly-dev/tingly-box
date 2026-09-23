@@ -5,14 +5,19 @@
 >
 > 本文记录 tingly-box 如何把发往 Claude OAuth provider 的请求"重签"为官方
 > Claude Code CLI 的样子：哪些 wire 元素是被模拟的、它们在官方客户端里是怎么
-> 生成的、我们逐项对齐到了 2.1.258 的什么行为、哪些地方是有意不对齐的。
+> 生成的、我们逐项对齐到了哪个版本的什么行为、哪些地方是有意不对齐的。
 > 分析结论全部来自官方 npm 包的逆向 + 真实二进制的抓包，可复现（§2）。
+>
+> 当前支持的 profile：**2.1.258**（§3）与 **2.1.280**（§8，2026-09-23 加入）。
+> 全局状态总表见 §0.2；升版流程见 §6。
 
 ---
 
 ## 0. TL;DR
 
-| 项目 | 2.1.86（旧实现） | 2.1.258（当前） | 代码位置 |
+下表是 2.1.86（Legacy）到 2.1.258 的差异；2.1.280 在 2.1.258 之上的增量见 §8.1。
+
+| 项目 | 2.1.86（Legacy，默认） | 2.1.258 profile | 代码位置 |
 |---|---|---|---|
 | 版本选择 | 硬编码 2.1.86 | `claude_code_version` rule flag（§0.1），默认 Legacy | `typ.ClaudeCodeVersion2_1_258`、`internal/client/claude_version.go` |
 | `User-Agent` | `claude-cli/2.1.86 (external, cli)` | `claude-cli/2.1.258 (external, cli)` | `client.nativeClaudeCLIUserAgent` |
@@ -52,12 +57,54 @@
 - 与 flag 无关、始终生效的唯一改动：`transform/vendor.go::isClaudeCodeBackend`——Claude OAuth issuer 挂在非
   `api.anthropic.com` host 上时也做 identity 注入（此前这种配置会因缺 metadata 在 `Guard` 里 panic）。
 
-触发事件：用户在真实使用中收到
+### 0.2 状态总表（做了什么 / 没做什么）
+
+"✅ 做了"= 已实现并有测试；"↩ 透传"= 不合成、只在入站已带时校验后保留；"❌ 未做"= 明知有差异但没处理；"— 无法"= 依赖代理侧看不到的信息。
+
+| 类别 | 项 | Legacy（默认） | 2.1.258 | 2.1.280 | 备注 |
+|---|---|---|---|---|---|
+| client header | `User-Agent` 版本 | 2.1.86 | ✅ | ✅ | 按 flag 版本生成 |
+| client header | `X-Stainless-Package/Runtime-Version` | 0.74.0 / v24.3.0 | ✅ 0.112.1 / v26.3.0 | ✅ 同 | 两版相同 |
+| client header | `X-Stainless-OS/Arch` SDK 映射名 | ❌ 发 GOOS/GOARCH | ✅ | ✅ | |
+| client header | 去掉 `x-stainless-helper-method` | ❌ 仍发 | ✅ | ✅ | |
+| client header | `x-app: cli` | ✅ | ✅ | ✅ | |
+| client header | `x-app: cli-bg`（后台会话） | ❌ | ❌ | ❌ | 未读入站头；一行可补 |
+| client header | `X-Claude-Code-Session-Id` | ✅ | ✅ | ✅ | |
+| client header | 子 agent 头 `x-claude-code-agent-id` / `-parent-agent-id` | ❌ 丢弃 | ✅ 透传 | ✅ 透传 | |
+| client header | `x-claude-code-request-class` | 不存在 | 不存在 | ✅ 默认 `main`，入站回放 | 280 直连专属 |
+| client header | `x-claude-code-agent-type` | 不存在 | 不存在 | ↩ 透传 | 主线程本就不发 |
+| beta | model 基线合成（haiku / claude-3 / 5 系列规则） | ❌ 固定串 | ✅ | ✅ | |
+| beta | 单个 header 值（含 context-1m 折入） | ❌ 两行 | ✅ | ✅ | |
+| beta | 请求体派生：effort / format / task_budget / 1h ttl / fast / display=updates / tool search | ❌ | ✅ | ✅ | tool search 含 `defer_loading` / `ToolSearch` |
+| beta | 请求体派生：`thinking-binding-controls`（thinking 开启）、`cache-diagnosis`（body 有 `diagnostics`） | 不存在 | 不适用 | ✅ | 280 直连抓包证实 |
+| beta | 入站白名单回放（per-turn-control、afk-mode、context-hint…） | ❌ | ✅ | ✅ | |
+| beta | 280 新增 7 项（timing、inline-tools、dangerous-tool-use、thinking-resumption、message-threads、mid-conv-system-clear-at、binding） | 不存在 | 不回放（注册表没有） | ↩ 回放 | 灰度 / env 门控，代理侧看不到，只回放 |
+| beta | `structured-outputs` 灰度分支（`tengu_tool_pear`） | — | — 无法 | — 无法 | 改为按 body `format` 派生 |
+| beta | count_tokens 四项子集 | ❌ | ✅ | ✅ | |
+| system header | `cc_version` 版本号 + fingerprint | 2.1.86 | ✅ | ✅ | 算法与 salt 三版相同 |
+| system header | fingerprint 跳过 `<system-reminder>` | ❌ | ✅ | ✅ | 258 起的语义 |
+| system header | `cc_entrypoint=cli` | ✅ | ✅ | ✅ | |
+| system header | `cch` 请求体 xxHash64（Zig 变体） | ❌ 随机 | ✅ | ✅ | seed 两版相同，6 组抓包逐字节复现 |
+| system header | 保留入站 `cc_workload` / `cc_is_subagent` | ❌ 整块覆盖 | ✅ | ✅ | |
+| system header | `cc_prev_req` / `cc_prompt_id` | ❌ | ↩ 透传 | ↩ 透传 | 合成需跨请求状态，等观察到收益再做 |
+| system header | `cc_turn_origin` | 不存在 | 不存在（按版本门控丢弃） | ↩ 透传 | 同上；交互式值为 `human` |
+| system header | JSON 转义还原为 JS 形态（`\u003c`→`<`） | ❌ | ✅ | ✅ | 也是 cch 预像必需 |
+| metadata | `device_id` / `account_uuid` 改写、`session_id` 保留 | ✅ | ✅ | ✅ | |
+| metadata | `parent_session_id` 透传 | ❌ 丢弃 | ✅ | ✅ | |
+| metadata | `ti` / `tk`（remote 专属） | — | — 不建模 | — 不建模 | 本地 CLI 从不发 |
+| preamble | 三句身份句 | ✅ | ✅ | ✅ | 三版未变 |
+| clean header | 非 Claude OAuth provider 上剥离 billing header / 隐写标记 | ✅ | ✅ | ✅ | 未改 |
+| 其他 | 隐写 normalizer | ✅ 保留 | ✅ 保留 | ✅ 保留 | 三版 bundle 均无该代码 |
+| 其他 | 中继 host 上的 Claude OAuth issuer 也做 identity 注入 | ✅（flag 无关的 bugfix） | ✅ | ✅ | 原来 panic |
+
+触发事件：用户在真实使用中先后收到
 
 ```
 400 {"type":"error","error":{"type":"invalid_request_error",
  "message":"Claude Code 2.1.86 does not support this model; version 2.1.251 or newer is required. ...",
  "details":{"error_code":"claude_code_version_too_old"}}}
+# 2026-09-22 起：
+ "message":"Claude Code 2.1.258 does not support this model; version 2.1.280 or newer is required. ..."
 ```
 
 即 Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控。只改版本号是不够的：
@@ -445,13 +492,13 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 | wire 元素 | 生成/处理位置 | 关键符号 |
 |---|---|---|
-| 版本 / 开关 | `internal/typ/type.go`、`flag_registry.go`（`claude_code_version`）；`protocolserver/rule_flags.go`（scenario 继承 + `ClaudeCodeVersionTransform` 挂载） | `typ.ClaudeCodeVersion2_1_258`、`typ.ClaudeCodeVersionEnabled` |
-| UA / stainless / x-app / 固定头 | Legacy：`internal/client/claude_round_tripper.go` + `claude_client.go::applyClaudeCodeHeaders`（未改）；2.1.258 覆盖层：`claude_version.go::applyNativeClaudeCodeHeaders` | `nativeClaudeCLIUserAgent`、`nativeStainless*`、`stainlessOSName/ArchName` |
-| `anthropic-beta` | `internal/client/claude_betas.go` | `composeClaudeCodeBetas`、`claudeCodeBetaEmissionOrder`、`claudeCodeClientReplayableBetas`、`*ClaudeBetaSignals` |
-| 逐请求头（beta / agent id / cch 中间件） | `claude_version.go::nativeRequestOptions`（Guard / GuardBeta 在 `c.native` 时追加） | `sanitizeClaudeHeaderValue` |
+| 版本 / 开关 | `internal/typ/type.go`、`flag_registry.go`（`claude_code_version`）；`protocolserver/rule_flags.go`（scenario 继承 + `ClaudeCodeVersionTransform` 挂载） | `typ.ClaudeCodeVersion2_1_258` / `2_1_280`、`typ.ClaudeCodeVersionEnabled` |
+| UA / stainless / x-app / 固定头 | Legacy：`internal/client/claude_round_tripper.go` + `claude_client.go::applyClaudeCodeHeaders`（未改）；native 覆盖层：`claude_version.go::applyNativeClaudeCodeHeaders(version, …)` | `nativeClaudeCLIUserAgent(version)`、`nativeStainless*`、`stainlessOSName/ArchName` |
+| `anthropic-beta` | `internal/client/claude_betas.go` | `composeClaudeCodeBetas`、`claudeCodeBetaEmissionOrder`、`claudeCodeClientReplayableBetas` + `claudeCodeReplayableBetasSince`（按版本门控）、`claudeBetaSignals.Version/versionAtLeast` |
+| 逐请求头（beta / agent id / 280 hint 头 / cch 中间件） | `claude_version.go::nativeRequestOptions`（Guard / GuardBeta 在 `c.native` 时追加；`c.nativeVersion` 决定 280 增量） | `sanitizeClaudeHeaderValue`、`claudeHintHeaderValueRe` |
 | count_tokens beta 子集 | `claude_version.go::nativeCountTokensClient` | `filterClaudeCodeCountTokensBetas` |
-| 入站 hint 采集 | `internal/protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
-| billing header + metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头按 `ClaudeCodeVersionFromExtra` 分派（Legacy 路径原样）；调用方 `transform/vendor.go::isClaudeCodeBackend`（host 为 `api.anthropic.com`/`claude.ai`，**或** provider 是 Claude Code OAuth issuer） | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`computeCCVersionFor`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
+| 入站 hint 采集 | `internal/protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints`（Betas / AgentID / ParentAgentID / RequestClass / AgentType） |
+| billing header + metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头按 `ClaudeCodeVersionFromExtra` 分派（Legacy 路径原样）；调用方 `transform/vendor.go::isClaudeCodeBackend`（host 为 `api.anthropic.com`/`claude.ai`，**或** provider 是 Claude Code OAuth issuer） | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader(version, …)`（preserved field 带 `since`）、`computeCCVersionFor`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
 | clean header | `internal/protocolserver/transform/transform_clean_header.go`（未改） | — |
 | UA 预设 | `internal/typ/flag_registry.go::DefaultUserAgents`（未改，仍是 2.1.86 字面量；它只是 `custom_user_agent` 的快选建议，与本 flag 无关） | — |
 
