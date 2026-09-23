@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { api } from '../services/api';
 
 interface HealthContextType {
@@ -73,8 +73,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
         return () => clearInterval(interval);
     }, [checkHealth]);
 
+    // Memoized so the 30s health poll (which toggles `checking`) does not
+    // hand every useHealth consumer a fresh value object twice per cycle.
+    const value = useMemo(() => ({
+        isHealthy, lastCheck, checking, checkHealth, disconnectDialogOpen, showDisconnectDialog, closeDisconnectDialog,
+    }), [isHealthy, lastCheck, checking, checkHealth, disconnectDialogOpen, showDisconnectDialog, closeDisconnectDialog]);
+
     return (
-        <HealthContext.Provider value={{ isHealthy, lastCheck, checking, checkHealth, disconnectDialogOpen, showDisconnectDialog, closeDisconnectDialog }}>
+        <HealthContext.Provider value={value}>
             {children}
         </HealthContext.Provider>
     );

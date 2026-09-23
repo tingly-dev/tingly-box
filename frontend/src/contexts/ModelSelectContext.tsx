@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { Provider } from '@/types/provider';
 import { notify } from '@/utils/notify';
 
@@ -82,7 +82,9 @@ export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
         setCustomModelDialog(prev => ({ ...prev, value }));
     }, []);
 
-    const value: ModelSelectContextValue = {
+    // Memoized so tab switches only re-render actual consumers of the changed
+    // slice, not every useModelSelectContext call site in the dialog tree.
+    const value: ModelSelectContextValue = useMemo(() => ({
         internalCurrentTab,
         setInternalCurrentTab,
         isInitialized,
@@ -94,7 +96,7 @@ export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
         updateCustomModelDialogValue,
         refreshTrigger,
         triggerRefresh,
-    };
+    }), [internalCurrentTab, isInitialized, showSnackbar, customModelDialog, openCustomModelDialog, closeCustomModelDialog, updateCustomModelDialogValue, refreshTrigger, triggerRefresh]);
 
     return (
         <ModelSelectContext.Provider value={value}>

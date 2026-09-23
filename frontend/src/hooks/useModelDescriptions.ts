@@ -2,18 +2,24 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import type { OpenAIModelsResponse, AnthropicModelsResponse, ModelDescriptionMap } from '../types/model';
 
+// Module-level cache: the /v1/models description map is gateway-wide (the
+// `providerUuid` param is accepted for signature compatibility but the
+// endpoints are not provider-scoped), so repeat mounts of ModelsPanel reuse
+// it instead of re-fetching on every open of the model-select dialog.
+let cachedDescriptions: ModelDescriptionMap | null = null;
+
 /**
  * Hook to fetch and cache model descriptions from /v1/models API
  */
 export const useModelDescriptions = (providerUuid?: string) => {
-  const [descriptions, setDescriptions] = useState<ModelDescriptionMap>({});
+  const [descriptions, setDescriptions] = useState<ModelDescriptionMap>(cachedDescriptions ?? {});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDescriptions = useCallback(async (force = false) => {
     // Return cached data if available and not forcing refresh
-    if (!force && Object.keys(descriptions).length > 0) {
-      return descriptions;
+    if (!force && cachedDescriptions !== null) {
+      return cachedDescriptions;
     }
 
     setLoading(true);
@@ -23,27 +29,11 @@ export const useModelDescriptions = (providerUuid?: string) => {
       // Try OpenAI format first
       const openaiResponse = await api.listOpenAIModels() as OpenAIModelsResponse;
 
-      if (openaiResponse?.data) {
-        const map: ModelDescriptionMap = {};
-        openaiResponse.data.forEach((model) => {
-          if (model.description) {
-            map[model.id] = model.description;
-          }
-        });
-        setDescriptions(map);
-        return map;
-      }
+      const map = toDescriptionMap(openaiResponse?.data)
+        ?? toDescriptionMap((await api.listAnthropicModels() as AnthropicModelsResponse)?.data);
 
-      // Fallback to Anthropic format
-      const anthropicResponse = await api.listAnthropicModels() as AnthropicModelsResponse;
-
-      if (anthropicResponse?.data) {
-        const map: ModelDescriptionMap = {};
-        anthropicResponse.data.forEach((model) => {
-          if (model.description) {
-            map[model.id] = model.description;
-          }
-        });
+      if (map) {
+        cachedDescriptions = map;
         setDescriptions(map);
         return map;
       }
@@ -54,7 +44,7 @@ export const useModelDescriptions = (providerUuid?: string) => {
       setLoading(false);
     }
 
-    return descriptions;
+    return cachedDescriptions ?? descriptions;
   }, [descriptions]);
 
   // Auto-fetch on mount if no cached data
@@ -80,3 +70,21 @@ export const useModelDescriptions = (providerUuid?: string) => {
     refresh,
   };
 };
+
+// Normalize either gateway response shape into a {modelId: description} map;
+// returns null when the payload is missing/empty or not the expected format
+// (falls through to the other format, preserving the original
+// OpenAI-then-Anthropic order; nothing is cached until one format yields
+// entries, so a transient empty response is retried next mount).
+function toDescriptionMap(data?: Array<{ id: string; description?: string }>): ModelDescriptionMap | null {
+  if (!data || data.length === 0) {
+    return null;
+  }
+  const map: ModelDescriptionMap = {};
+  data.forEach((model) => {
+    if (model.description) {
+      map[model.id] = model.description;
+    }
+  });
+  return map;
+}
