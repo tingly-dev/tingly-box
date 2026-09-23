@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
-import { createEventSystem } from '../utils/eventSystem';
+import { createPersistedCollection } from './createPersistedCollection';
 
 // Local storage key for recent models
 const RECENT_MODELS_STORAGE_KEY = 'tingly_recent_models';
@@ -12,26 +12,21 @@ const DEFAULT_LAST_PROVIDER_DATA: Record<string, string> = {};
 // Type for recent models data
 type RecentModelsData = { [providerUuid: string]: string[] };
 
-// Event system for recent models updates — dispatching from one hook instance
-// makes other mounted instances refetch.
-const recentModelsEvent = createEventSystem<{ providerUuid: string; modelName: string }>(
-    'tingly_recent_models_update'
+// Storage + cross-instance event sync are shared with the other model
+// collection hooks (see createPersistedCollection). Dispatching from one hook
+// instance makes other mounted instances refetch. The last-provider value is
+// a plain localStorage write (no cross-instance sync needed).
+const useRecentModelsStorage = createPersistedCollection<RecentModelsData, { providerUuid: string; modelName: string }>(
+    RECENT_MODELS_STORAGE_KEY,
+    'tingly_recent_models_update',
+    DEFAULT_RECENT_MODELS
 );
 
 // Custom hook to manage recent models
 export const useRecentModels = () => {
-    const { data: recentModels, saveData, setData, refetch, loadData } =
-        useLocalStorage<RecentModelsData>(RECENT_MODELS_STORAGE_KEY, DEFAULT_RECENT_MODELS);
+    const { data: recentModels, saveData, setData, loadData, notify } = useRecentModelsStorage();
     const { data: lastProvider, saveData: saveLastProvider } =
         useLocalStorage<Record<string, string>>(LAST_PROVIDER_STORAGE_KEY, DEFAULT_LAST_PROVIDER_DATA);
-
-    // Listen for recent models updates from other components and reload
-    useEffect(() => {
-        const cleanup = recentModelsEvent.listen(() => {
-            refetch();
-        });
-        return cleanup;
-    }, [refetch]);
 
     // Add a model to recent list (prepend, keep max 3, remove duplicates)
     const addRecentModel = useCallback((providerUuid: string, model: string) => {
@@ -46,12 +41,12 @@ export const useRecentModels = () => {
         if (saveData(providerUuid, newModels)) {
             const currentData = loadData();
             setData({ ...currentData, [providerUuid]: newModels });
-            recentModelsEvent.dispatch({ providerUuid, modelName: model });
+            notify({ providerUuid, modelName: model });
         }
 
         // Also update last used provider
         saveLastProvider('default', providerUuid);
-    }, [recentModels, saveData, setData, saveLastProvider, loadData]);
+    }, [recentModels, saveData, setData, saveLastProvider, loadData, notify]);
 
     return {
         recentModels,

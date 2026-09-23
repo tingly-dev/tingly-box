@@ -1,6 +1,5 @@
-import { useCallback, useEffect } from 'react';
-import { useLocalStorage } from './useLocalStorage';
-import { createEventSystem } from '../utils/eventSystem';
+import { useCallback } from 'react';
+import { createPersistedCollection } from './createPersistedCollection';
 
 // Local storage key for new models
 const NEW_MODELS_STORAGE_KEY = 'tingly_new_models';
@@ -16,24 +15,18 @@ interface NewModelsDiff {
 // Type for the entire storage structure
 type NewModelsData = { [providerUuid: string]: NewModelsDiff };
 
-// Event system for new models updates — dispatching from one hook instance
-// makes other mounted instances refetch.
-const newModelsEvent = createEventSystem<{ providerUuid: string; diff: NewModelsDiff | null }>(
-    'tingly_new_models_update'
+// Storage + cross-instance event sync are shared with the other model
+// collection hooks (see createPersistedCollection). Dispatching from one hook
+// instance makes other mounted instances refetch.
+const useNewModelsStorage = createPersistedCollection<NewModelsData, { providerUuid: string; diff: NewModelsDiff | null }>(
+    NEW_MODELS_STORAGE_KEY,
+    'tingly_new_models_update',
+    DEFAULT_NEW_MODELS
 );
 
 // Custom hook to manage new models
 export const useNewModels = () => {
-    const { data: newModels, saveData, removeKey, setData, refetch } =
-        useLocalStorage<NewModelsData>(NEW_MODELS_STORAGE_KEY, DEFAULT_NEW_MODELS);
-
-    // Listen for new models updates from other components and reload
-    useEffect(() => {
-        const cleanup = newModelsEvent.listen(() => {
-            refetch();
-        });
-        return cleanup;
-    }, [refetch]);
+    const { data: newModels, saveData, removeKey, setData, notify } = useNewModelsStorage();
 
     // Clear new models for a specific provider
     const clearNewModels = useCallback((providerUuid: string) => {
@@ -43,9 +36,9 @@ export const useNewModels = () => {
                 delete newModelsData[providerUuid];
                 return newModelsData;
             });
-            newModelsEvent.dispatch({ providerUuid, diff: null });
+            notify({ providerUuid, diff: null });
         }
-    }, [removeKey, setData]);
+    }, [removeKey, setData, notify]);
 
     // Detect and store new models after a refresh
     const detectAndStoreNewModels = useCallback((
@@ -83,13 +76,13 @@ export const useNewModels = () => {
 
             if (saveData(providerUuid, diff)) {
                 setData(prev => ({ ...prev, [providerUuid]: diff }));
-                newModelsEvent.dispatch({ providerUuid, diff });
+                notify({ providerUuid, diff });
             }
         } else {
             // No new models left (all were removed), clear the entry
             clearNewModels(providerUuid);
         }
-    }, [newModels, clearNewModels, saveData, setData]);
+    }, [newModels, clearNewModels, saveData, setData, notify]);
 
     return {
         newModels,
