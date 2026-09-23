@@ -1861,6 +1861,8 @@ export default {
       "title": "Mask",
       "addAction": "Mask an area to change",
       "editAction": "Edit mask",
+      "hideOverlay": "Hide mask",
+      "showOverlay": "Show mask",
       "inactive": "Only the first image\u2019s mask is sent — drag this one to the front to use it",
       "close": "Close mask editor",
       "canvasSize": "{{width}} × {{height}} px · matches the reference image",

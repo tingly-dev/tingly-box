@@ -163,6 +163,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 ? t('playground.sketch.title', { defaultValue: 'Sketch' })
                 : ref.file.name,
             caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
+            ...(ref.mask ? { maskSrc: ref.mask.previewUrl } : {}),
         };
     }, [referenceImages, t]);
     const lightboxReferences = useMemo(() => ({

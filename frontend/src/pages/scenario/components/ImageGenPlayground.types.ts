@@ -88,6 +88,12 @@ export interface SelectedImage {
     // The run this image belongs to (`output` / `source`), so the lightbox can
     // offer the same "put this request back in the panel" action the card does.
     runId?: string;
+    // The mask painted on this image, as the same tinted preview the reference
+    // thumbnail shows — set for a reference that has one and for a run's first
+    // source when the run was sent with a mask. The lightbox lays it over the
+    // image so "which part did I let the model change?" is answered where the
+    // image is looked at.
+    maskSrc?: string;
 }
 
 // One tile of the overview. A completed run contributes one tile per image it

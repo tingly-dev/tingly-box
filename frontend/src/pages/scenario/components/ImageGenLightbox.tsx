@@ -9,8 +9,9 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
@@ -66,6 +67,15 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onUseAsReference,
 }) => {
     const { t } = useTranslation();
+    // On by default — a mask was painted to be seen — and remembered while
+    // the lightbox stays mounted, so walking the filmstrip does not reset it.
+    const [showMask, setShowMask] = useState(true);
+    const imageAlt = selectedImage
+        ? selectedImage.label ?? (selectedImage.kind === 'output' ? t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 }) : t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 }))
+        : '';
+    const maskLabel = showMask
+        ? t('playground.mask.hideOverlay', { defaultValue: 'Hide mask' })
+        : t('playground.mask.showOverlay', { defaultValue: 'Show mask' });
     // One plate per kind of frame. The plate carries its group's word once;
     // repeating it on every frame would be noise.
     const renderFilm = (
@@ -227,6 +237,24 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                    {selectedImage?.maskSrc && (
+                        <Tooltip title={maskLabel}>
+                            <IconButton
+                                onClick={() => setShowMask((value) => !value)}
+                                aria-label={maskLabel}
+                                aria-pressed={showMask}
+                                data-testid="imagegen-lightbox-mask-toggle"
+                                sx={{
+                                    ...overlayIconSx,
+                                    // Pressed reads as pressed: the button takes
+                                    // the tint the overlay is drawn in.
+                                    ...(showMask ? { color: 'warning.light', bgcolor: 'rgba(255, 255, 255, 0.2)' } : {}),
+                                }}
+                            >
+                                <Brush fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {!selectedImage?.label && (
                         <Tooltip
                             title={promptCopied
@@ -340,14 +368,44 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     the same corner the inputs of a run sit in. */}
                 {renderFilm('reference', { top: 12, left: 12 }, 'right')}
                 {renderFilm('output', { bottom: 12, right: 12 }, 'left')}
-                {selectedImage && (
+                {selectedImage && (selectedImage.maskSrc ? (
+                    // The mask has the image's exact pixel size (the editor
+                    // paints at the reference's own resolution), so two
+                    // layers filling the same box with `scale-down` line up
+                    // pixel for pixel without measuring anything — and, like
+                    // the unmasked image, a small one is never blown up.
+                    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+                        <Box
+                            component="img"
+                            src={selectedImage.src}
+                            alt={imageAlt}
+                            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'scale-down', display: 'block' }}
+                        />
+                        {showMask && (
+                            <Box
+                                component="img"
+                                src={selectedImage.maskSrc}
+                                alt=""
+                                aria-hidden
+                                data-testid="imagegen-lightbox-mask"
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'scale-down',
+                                    display: 'block',
+                                    opacity: 0.55,
+                                    pointerEvents: 'none',
+                                }}
+                            />
+                        )}
+                    </Box>
+                ) : (
                     <Box
                         component="img"
                         src={selectedImage.src}
-                        alt={selectedImage.label
-                            ?? (selectedImage.kind === 'output'
-                                ? t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })
-                                : t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 }))}
+                        alt={imageAlt}
                         sx={{
                             display: 'block',
                             maxWidth: '100%',
@@ -355,7 +413,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             objectFit: 'contain',
                         }}
                     />
-                )}
+                ))}
             </DialogContent>
         </Dialog>
     );

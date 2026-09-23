@@ -508,6 +508,10 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
   run 卡片的来源缩略图(之前就能点,补上与其他图一致的 hover 放大提示)、Overview
   里每张图左上的来源角标(之前是纯展示,现在每个小图都能点开,落到带 Original /
   Generated 两块条的同一个 lightbox)。
+- **mask 在大图里叠加显示**:带 mask 的参考图(面板里的,或某次 run 的第一张来源图)
+  在 lightbox 里叠一层与缩略图同样的着色预览;右上角控制按钮里多一个画笔按钮切换
+  显示/隐藏,默认显示,在 filmstrip 里切换时保持。mask 与原图像素尺寸完全一致,两层
+  用同样的 `scale-down` 铺满同一个盒子就逐像素对齐,不需要测量。
 
 mock 后端的 prompt 带 `[partial]` 时只返回一半(向上取整),用来验证缺图槽位,
 与已有的 `[fail]` / `[slow]` 同一套约定。

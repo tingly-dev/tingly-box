@@ -53,6 +53,8 @@ export const runImage = (
     index,
     kind,
     runId: run.id,
+    // The mask rides on the first reference, the only one the API applies it to.
+    ...(kind === 'source' && index === 0 && run.mask ? { maskSrc: run.mask.previewUrl } : {}),
 });
 
 /**

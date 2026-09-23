@@ -1857,6 +1857,8 @@ export default {
       "title": "蒙版",
       "addAction": "圈出要修改的区域",
       "editAction": "修改蒙版",
+      "hideOverlay": "隐藏蒙版",
+      "showOverlay": "显示蒙版",
       "inactive": "只有第一张图的蒙版会被发送 — 把这张拖到最前面才会生效",
       "close": "关闭蒙版编辑器",
       "canvasSize": "{{width}} × {{height}} px · 与参考图一致",
