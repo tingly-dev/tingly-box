@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 )
 
 // Native Claude Code identity for the claude_code_version rule flag.
@@ -74,6 +76,9 @@ const (
 type billingHeaderPreservedField struct {
 	key   string
 	valid *regexp.Regexp
+	// since is the first Claude Code version whose renderer emits the field
+	// ("" = every supported version); older impersonated versions drop it.
+	since string
 }
 
 // billingHeaderPreservedFields is the ordered pass-through allowlist. The
@@ -86,6 +91,42 @@ var billingHeaderPreservedFields = []billingHeaderPreservedField{
 	{key: "cc_is_subagent", valid: regexp.MustCompile(`^true$`)},
 	{key: "cc_prev_req", valid: regexp.MustCompile(`^req_[A-Za-z0-9_-]{1,36}$`)},
 	{key: "cc_prompt_id", valid: regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)},
+	// cc_turn_origin (2.1.280+): what started the turn — human / sdk /
+	// scheduled / task_notification / peer / auto_continuation /
+	// host_synthetic / system / unknown, or a host-supplied initiator.
+	// Direct-only like cc_prompt_id; regex mirrors the CLI's own guard.
+	{key: "cc_turn_origin", valid: regexp.MustCompile(`^[a-z][a-z_]{0,31}$`), since: "2.1.280"},
+}
+
+// billingHeaderFieldSince reports whether a preserved field exists in the
+// renderer of the impersonated version. Versions compare as dotted integers.
+func billingHeaderFieldSince(version, since string) bool {
+	if since == "" {
+		return true
+	}
+	return compareDottedVersions(version, since) >= 0
+}
+
+// compareDottedVersions compares "a.b.c" strings numerically, segment by
+// segment; a missing segment counts as 0.
+func compareDottedVersions(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x != y {
+			if x < y {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
 }
 
 // IsBillingHeaderText reports whether a system block carries Claude Code's
@@ -117,14 +158,14 @@ func parseBillingHeaderFields(text string) [][2]string {
 	return fields
 }
 
-// BuildClaudeCodeBillingHeader renders the billing header block. ccVersion is
-// the full "<ver>.<fp>" value; existing is the inbound block (or "") whose
-// pass-through fields are preserved.
+// BuildClaudeCodeBillingHeader renders the billing header block for the
+// impersonated version. ccVersion is the full "<ver>.<fp>" value; existing is
+// the inbound block (or "") whose pass-through fields are preserved.
 //
-// Layout follows the 2.1.258 renderer field-for-field:
+// Layout follows the renderer field-for-field:
 //
-//	cc_version; cc_entrypoint; cch; cc_workload; cc_is_subagent; cc_prev_req; cc_prompt_id
-func BuildClaudeCodeBillingHeader(ccVersion, existing string) string {
+//	cc_version; cc_entrypoint; cch; cc_workload; cc_is_subagent; cc_prev_req; cc_prompt_id[; cc_turn_origin (2.1.280+)]
+func BuildClaudeCodeBillingHeader(version, ccVersion, existing string) string {
 	var b strings.Builder
 	b.WriteString(billingHeaderPrefix)
 	b.WriteString("cc_version=")
@@ -146,7 +187,7 @@ func BuildClaudeCodeBillingHeader(ccVersion, existing string) string {
 	}
 	for _, f := range billingHeaderPreservedFields {
 		v, ok := inbound[f.key]
-		if !ok || !f.valid.MatchString(v) {
+		if !ok || !f.valid.MatchString(v) || !billingHeaderFieldSince(version, f.since) {
 			continue
 		}
 		b.WriteString(" ")
@@ -250,7 +291,7 @@ func buildNativeMetadataUserID(raw string, extra map[string]any) string {
 	m := nativeMetadataUserID{}
 	if raw != "" {
 		if err := json.Unmarshal([]byte(raw), &m); err != nil {
-			if legacy := ParseMetadataUserID(raw); legacy != nil {
+			if legacy := metaid.ParseMetadataUserID(raw); legacy != nil {
 				m.DeviceID, m.AccountUUID, m.SessionID = legacy.DeviceID, legacy.AccountUUID, legacy.SessionID
 			}
 		}
@@ -280,9 +321,9 @@ func buildNativeMetadataUserID(raw string, extra map[string]any) string {
 func applyNativeClaudeCodeIdentityV1(req *anthropic.MessageNewParams, extra map[string]any, version string) *anthropic.MessageNewParams {
 	ccVersion := computeCCVersionFor(extractFirstUserPromptText(req.Messages), version)
 	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
+		req.System[0].Text = BuildClaudeCodeBillingHeader(version, ccVersion, req.System[0].Text)
 	} else {
-		req.System = append([]anthropic.TextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}}, req.System...)
+		req.System = append([]anthropic.TextBlockParam{{Text: BuildClaudeCodeBillingHeader(version, ccVersion, "")}}, req.System...)
 	}
 	if s := buildNativeMetadataUserID(req.Metadata.UserID.String(), extra); s != "" {
 		req.Metadata.UserID = param.NewOpt(s)
@@ -294,9 +335,9 @@ func applyNativeClaudeCodeIdentityV1(req *anthropic.MessageNewParams, extra map[
 func applyNativeClaudeCodeIdentityBeta(req *anthropic.BetaMessageNewParams, extra map[string]any, version string) *anthropic.BetaMessageNewParams {
 	ccVersion := computeCCVersionFor(extractFirstBetaUserPromptText(req.Messages), version)
 	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
+		req.System[0].Text = BuildClaudeCodeBillingHeader(version, ccVersion, req.System[0].Text)
 	} else {
-		req.System = append([]anthropic.BetaTextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}}, req.System...)
+		req.System = append([]anthropic.BetaTextBlockParam{{Text: BuildClaudeCodeBillingHeader(version, ccVersion, "")}}, req.System...)
 	}
 	if s := buildNativeMetadataUserID(req.Metadata.UserID.String(), extra); s != "" {
 		req.Metadata.UserID = param.NewOpt(s)

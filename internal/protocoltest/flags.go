@@ -669,6 +669,7 @@ func ruleFlagCases() []flagCase {
 			}
 			addRule("pv-flag-ccver-legacy", "")
 			addRule("pv-flag-ccver-258", typ.ClaudeCodeVersion2_1_258)
+			addRule("pv-flag-ccver-280", typ.ClaudeCodeVersion2_1_280)
 
 			type upstream struct {
 				headers http.Header
@@ -796,6 +797,25 @@ func ruleFlagCases() []flagCase {
 			}
 			if native.meta["parent_session_id"] != "99999999-8888-7777-6666-555555555555" {
 				t.Errorf("parent_session_id not preserved: %v", native.meta)
+			}
+			if got := native.headers.Get("X-Claude-Code-Request-Class"); got != "" {
+				t.Errorf("2.1.258 must not send the request-class hint, got %q", got)
+			}
+
+			// 2.1.280: same identity one release on, plus the direct-traffic
+			// hint header and the version-specific fingerprint.
+			v280 := send("pv-flag-ccver-280")
+			if got := v280.headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+				t.Errorf("2.1.280 User-Agent = %q", got)
+			}
+			if got := v280.headers.Get("X-Claude-Code-Request-Class"); got != "main" {
+				t.Errorf("2.1.280 x-claude-code-request-class = %q, want main", got)
+			}
+			if len(v280.system) == 0 || !regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`).MatchString(v280.system[0]) {
+				t.Errorf("2.1.280 billing header = %q", v280.system)
+			}
+			if got := v280.headers.Values("Anthropic-Beta"); len(got) != 1 || !strings.HasPrefix(got[0], "claude-code-20250219,oauth-2025-04-20,") {
+				t.Errorf("2.1.280 anthropic-beta = %v", got)
 			}
 		}},
 

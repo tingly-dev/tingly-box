@@ -23,13 +23,13 @@ func TestClaudeCodeVersionFromExtra(t *testing.T) {
 }
 
 func TestBuildClaudeCodeBillingHeader_Fresh(t *testing.T) {
-	got := BuildClaudeCodeBillingHeader("2.1.258.8ee", "")
+	got := BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", "")
 	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000;", got)
 }
 
 func TestBuildClaudeCodeBillingHeader_ReplacesClientOwnedFieldsKeepsSessionFields(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_version=2.1.240.abc; cc_entrypoint=sdk-cli; cch=4f05e; cc_workload=cron; cc_is_subagent=true; cc_prev_req=req_011CeAbCdEf; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;"
-	got := BuildClaudeCodeBillingHeader("2.1.258.8ee", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", inbound)
 	assert.Equal(t,
 		"x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000; cc_workload=cron; cc_is_subagent=true; cc_prev_req=req_011CeAbCdEf; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
 		got)
@@ -37,7 +37,7 @@ func TestBuildClaudeCodeBillingHeader_ReplacesClientOwnedFieldsKeepsSessionField
 
 func TestBuildClaudeCodeBillingHeader_OrderIsCanonicalNotInbound(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b; cc_is_subagent=true; cc_version=1; cc_entrypoint=x;"
-	got := BuildClaudeCodeBillingHeader("2.1.258.8ee", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", inbound)
 	assert.Equal(t,
 		"x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000; cc_is_subagent=true; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
 		got)
@@ -45,13 +45,13 @@ func TestBuildClaudeCodeBillingHeader_OrderIsCanonicalNotInbound(t *testing.T) {
 
 func TestBuildClaudeCodeBillingHeader_DropsInvalidAndUnknownFields(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_version=2; cc_entrypoint=cli; cch=abcde; cc_is_subagent=false; cc_prev_req=nope; cc_prompt_id=not-a-uuid; cc_workload=bad value; cc_evil=1; garbage"
-	got := BuildClaudeCodeBillingHeader("2.1.258.8ee", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", inbound)
 	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000;", got)
 }
 
 func TestBuildClaudeCodeBillingHeader_FirstDuplicateWins(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_workload=cron; cc_workload=other;"
-	got := BuildClaudeCodeBillingHeader("2.1.258.8ee", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", inbound)
 	assert.Contains(t, got, " cc_workload=cron;")
 	assert.NotContains(t, got, "other")
 }
@@ -196,4 +196,32 @@ func TestApplyAnthropicBetaMetadataTransform_LegacyUnchanged(t *testing.T) {
 	assert.Regexp(t, `^x-anthropic-billing-header: cc_version=2\.1\.86\.[0-9a-f]{3}; cc_entrypoint=cli; cch=[0-9a-f]{5};$`, out.System[0].Text)
 	assert.NotContains(t, out.System[0].Text, "cc_is_subagent")
 	assert.Equal(t, `{"device_id":"dev","account_uuid":"acct","session_id":"s"}`, out.Metadata.UserID.String())
+}
+
+func TestBuildClaudeCodeBillingHeader_TurnOriginIsVersionGated(t *testing.T) {
+	inbound := "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=sdk-cli; cch=a803d; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;"
+	// 2.1.258's renderer has no cc_turn_origin: dropped.
+	assert.Equal(t,
+		"x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe;",
+		BuildClaudeCodeBillingHeader("2.1.258", "2.1.258.8ee", inbound))
+	// 2.1.280 keeps it, after cc_prompt_id (live capture order).
+	assert.Equal(t,
+		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;",
+		BuildClaudeCodeBillingHeader("2.1.280", "2.1.280.31f", inbound))
+	// Invalid values are dropped even on 2.1.280.
+	assert.Equal(t,
+		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;",
+		BuildClaudeCodeBillingHeader("2.1.280", "2.1.280.31f", "x-anthropic-billing-header: cc_turn_origin=Human; cc_turn_origin=1x;"))
+}
+
+func TestCompareDottedVersions(t *testing.T) {
+	assert.Equal(t, 0, compareDottedVersions("2.1.280", "2.1.280"))
+	assert.Equal(t, -1, compareDottedVersions("2.1.258", "2.1.280"))
+	assert.Equal(t, 1, compareDottedVersions("2.2.0", "2.1.999"))
+	assert.Equal(t, 0, compareDottedVersions("2.1", "2.1.0"))
+}
+
+// Captured from the 2.1.280 binary: prompt "say hi" → cc_version=2.1.280.31f.
+func TestComputeCCVersionFor_MatchesLiveCapture280(t *testing.T) {
+	assert.Equal(t, "2.1.280.31f", computeCCVersionFor("say hi", "2.1.280"))
 }

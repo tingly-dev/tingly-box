@@ -306,13 +306,20 @@ const (
 	ClaudeCodeVersionLegacy = ""
 	// ClaudeCodeVersion2_1_258 reproduces the native 2.1.258 client.
 	ClaudeCodeVersion2_1_258 = "2.1.258"
+	// ClaudeCodeVersion2_1_280 reproduces the native 2.1.280 client (adds
+	// cc_turn_origin, the request-class hint headers and the 2026-09 betas).
+	ClaudeCodeVersion2_1_280 = "2.1.280"
 )
 
 // ClaudeCodeVersionEnabled reports whether v selects a non-legacy Claude Code
 // profile the chain knows how to reproduce. Unknown values fall back to the
 // legacy behavior rather than a half-applied profile.
 func ClaudeCodeVersionEnabled(v string) bool {
-	return v == ClaudeCodeVersion2_1_258
+	switch v {
+	case ClaudeCodeVersion2_1_258, ClaudeCodeVersion2_1_280:
+		return true
+	}
+	return false
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being

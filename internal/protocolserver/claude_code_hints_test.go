@@ -14,6 +14,8 @@ func TestApplyClaudeCodeClientHints_AttachesBetasAndAgentHeaders(t *testing.T) {
 	c.Request.Header.Add("anthropic-beta", "fast-mode-2026-02-01")
 	c.Request.Header.Set("x-claude-code-agent-id", " agent-7 ")
 	c.Request.Header.Set("x-claude-code-parent-agent-id", "agent-main")
+	c.Request.Header.Set("x-claude-code-request-class", "subagent")
+	c.Request.Header.Set("x-claude-code-agent-type", "explore")
 
 	applyClaudeCodeClientHints(c)
 
@@ -21,6 +23,8 @@ func TestApplyClaudeCodeClientHints_AttachesBetasAndAgentHeaders(t *testing.T) {
 	assert.Equal(t, []string{"claude-code-20250219", "oauth-2025-04-20", "per-turn-control-2026-07-01", "fast-mode-2026-02-01"}, got.Betas)
 	assert.Equal(t, "agent-7", got.AgentID)
 	assert.Equal(t, "agent-main", got.ParentAgentID)
+	assert.Equal(t, "subagent", got.RequestClass)
+	assert.Equal(t, "explore", got.AgentType)
 }
 
 func TestApplyClaudeCodeClientHints_NoHeadersIsNoOp(t *testing.T) {

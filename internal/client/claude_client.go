@@ -30,9 +30,10 @@ var _ AnthropicClientInterface = (*ClaudeClient)(nil)
 type ClaudeClient struct {
 	*AnthropicClient
 	// native is the claude_code_version rule flag resolved at construction:
-	// true selects the native-client profile (claude_version.go), false keeps
-	// the historical 2.1.86 emulation untouched.
-	native bool
+	// true selects the native-client profile (claude_version.go) for
+	// nativeVersion, false keeps the historical 2.1.86 emulation untouched.
+	native        bool
+	nativeVersion string
 }
 
 // NewClaudeClient creates a new Claude client wrapper.
@@ -61,9 +62,10 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 
 	// claude_code_version rule flag: overlay the native-client profile on the
 	// legacy headers above (claude_version.go).
-	native := claudeCodeNative(ctx)
+	nativeVersion := claudeCodeNativeVersion(ctx)
+	native := nativeVersion != ""
 	if native {
-		options = applyNativeClaudeCodeHeaders(options, model, isOAuthToken)
+		options = applyNativeClaudeCodeHeaders(options, nativeVersion, model, isOAuthToken)
 	}
 
 	// Add beta query parameter
@@ -85,7 +87,7 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		provider: provider,
 	}
 
-	return &ClaudeClient{AnthropicClient: base, native: native}, nil
+	return &ClaudeClient{AnthropicClient: base, native: native, nativeVersion: nativeVersion}, nil
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.

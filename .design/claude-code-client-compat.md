@@ -36,7 +36,8 @@
 | 值 | 行为 |
 |---|---|
 | `""`（默认，"Legacy"） | 与 flag 出现之前**逐字节相同**的 2.1.86 模拟：`claude_round_tripper.go` 的常量、静态 beta 串、随机 `cch`、旧 fingerprint 输入、`\u003c` 转义都原样保留 |
-| `2.1.258` | 本文描述的原生客户端 profile |
+| `2.1.258` | §3 描述的原生客户端 profile |
+| `2.1.280` | 在 2.1.258 之上加 §8 的增量（`cc_turn_origin`、hint 头、2026-09 的 beta）。Anthropic 于 2026-09-22 起要求 ≥ 2.1.280 |
 
 - flag 定义在 `typ.RuleFlags.ClaudeCodeVersion`（registry：`claude_code_version`，enum，`request_anthropic` 分类），
   也可在 scenario 级设置（`ScenarioFlags.ClaudeCodeVersion`，rule 值优先），方便对整个 `claude_code` scenario 一次切换。
@@ -497,11 +498,13 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
    - `account_uuid:`/`session_id:` 的对象字面量 → `MetadataUserID`；
    - `"You are Claude Code` 三句 → preamble 常量；
    - `"x-app":` 处的默认头 → 新增头是否需要透传。
-3. 用 §2.4 抓包（API key + OAuth token 各一次，`env -i`），把 `anthropic-beta` 原文和 `cc_version` 写进测试
+   - 强制直连抓包的 body 顶层 key 与 tools 名单（`diagnostics`、`ToolSearch`/`defer_loading`…）→ 身体派生的 beta 信号；
+   - 新增的 beta 只对新版本回放/派生（`claudeCodeReplayableBetasSince`、`versionAtLeast`），billing 字段用 `since` 门控——旧 profile 的 wire 形态不能因新版本而改变。
+3. 用 §2.4 抓包（API key + OAuth token × 代理 / 强制直连，`env -i`），把 `anthropic-beta` 原文和 `cc_version` 写进测试
    （`TestComposeClaudeCodeBetas_*Capture`、`TestComputeFingerprint_MatchesLiveCapture`；注意 `-p` 与交互式差一个 `redact-thinking`）。
 4. 在 `typ` 新增版本常量与 registry 枚举值，在 `claude_version.go` 新增 profile（不要改旧 profile），跑
    `go test ./internal/client/ ./internal/protocol/... ./internal/protocolserver/... ./internal/protocoltest/`；`task codegen` 刷新 openapi/前端类型。
-5. 更新本文 §0 表格与 §3 的抓包实例。
+5. 更新本文 §0.1 版本表，并像 §8 一样为新版本写一节"增量"（对比表 + 未做清单 + 代码落点）。
 
 ---
 
@@ -521,3 +524,46 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 - **`cch` 的服务端校验方式未知**：我们哈希自己发出的字节并已做 JS 形态归一化；若服务端在重算前还做 key 重排等归一化，Go SDK 的 key 顺序（与 JS 不同）会导致不匹配。上线后若 OAuth 流量出现异常（限流/拒绝），优先怀疑这里。
 - **`thinking.display`**：`Guard` 在 thinking 未指定时强制 `disabled` 的逻辑未动；2.1.258 交互式会显式给 `adaptive` + `display`，通常不会触发。
 - 抓包用的假服务与脚本没有入库（§2.4 已内联足以复现）；若需要常态化回归，可以放到 `tests/` 下做成可选的集成测试。
+
+## 8. 2.1.258 → 2.1.280 增量
+
+触发：`Claude Code 2.1.258 does not support this model; version 2.1.280 or newer is required`（2026-09-22，`latest` = 2.1.280，`stable` = 2.1.267）。
+按 §2 的流程重跑：下载 `claude-code-linux-x64-2.1.280`，切出 37.7 MB bundle，`-p` 抓包 4 组（OAuth / API key × 代理 / 强制直连）。
+
+### 8.1 逐项对比
+
+| 项目 | 2.1.258 | 2.1.280 | 处理 |
+|---|---|---|---|
+| `User-Agent` | `claude-cli/2.1.258 (…)` | `claude-cli/2.1.280 (…)` | 按 flag 版本生成（`nativeClaudeCLIUserAgent(version)`） |
+| SDK / runtime / OS-Arch / helper-method / `x-app` | — | **全部不变**（SDK `0.112.1`、Bun `v26.3.0`） | 无 |
+| beta 注册表 | 34 项 | 42 项：新增 `thinking-resumption-2026-07-17`、`timing-2026-09-09`、`inline-tools-2026-09-15`、`dangerous-tool-use-2026-09-03`、`thinking-binding-controls-2026-08-01`、`message-threads-2026-08-12`、`mid-conversation-system-clear-at-2026-08-21`、`advisor-tool`… | 新 flag 进入回放白名单，且只对 ≥2.1.280 生效（`claudeCodeReplayableBetasSince`） |
+| beta 基线（`Cw` 表） | 同 | **同**：haiku 无 `claude-code`、claude-3 无 thinking 类、`mid-conversation-system` 规则不变（新增 opus-4-8 例外） | 无 |
+| 代理模式抓包的 beta 串 | `claude-code,oauth,interleaved,thinking-token-count,context-management,prompt-caching-scope,effort,extended-cache-ttl` | **逐字符相同** | — |
+| 直连模式抓包的 beta 串 | （258 未抓） | `…prompt-caching-scope,advanced-tool-use,effort,thinking-binding-controls,extended-cache-ttl,cache-diagnosis` | 三项都是**身体派生**：tools 含 `ToolSearch`/`defer_loading` → `advanced-tool-use`；thinking adaptive/enabled → `thinking-binding-controls`（仅 ≥280）；body 含 `diagnostics` → `cache-diagnosis`（仅 ≥280）。顺序：tool-search 提前到 effort 之前（258 的顺序表一并修正） |
+| billing header | `…cc_prev_req; cc_prompt_id` | 末尾新增 **`cc_turn_origin=<[a-z][a-z_]{0,31}>`**（直连专属；值来自 `t3r`：`human` / `sdk` / `scheduled` / `task_notification` / `peer` / `auto_continuation` / `host_synthetic` / `system` / `unknown`，或 host 指定） | 透传入站、正则校验、按版本门控（`since: "2.1.280"`）；不合成（与 `cc_prompt_id` 同理） |
+| fingerprint | 同 | 同（`say hi` → `2.1.280.31f`） | 版本参数化 |
+| `cch` | xxHash64(seed `0x4D659218E32A3268`) | **同**：seed 唯一一处不变、Zig `PRIME64_4` 17 处、三组直连抓包逐字节复现 | 无 |
+| `metadata.user_id` | 同 | 同（`ti`/`tk` 仍是 remote 专属） | 无 |
+| 默认头 | — | 新增 **`x-claude-code-request-class`**（`Js(querySource)`：`main` / `subagent` / `auxiliary`，或 `compaction` / `workflow`）与 **`x-claude-code-agent-type`**（仅 `agent:*` 来源：内置 agent 名 / `custom` / `teammate`）。门控 `S5t()`：env `CLAUDE_CODE_GATEWAY_HINT_HEADERS`，否则**直连即发**（`Ba()`），代理走灰度 `tengu_splendid_sutton`（默认 false） | 直连 persona：默认 `x-claude-code-request-class: main`；入站带这两个头时校验后回放（`^[a-z][a-z0-9_-]{0,63}$`）；仅 ≥280 |
+| `x-app` | `cli` / `cli-bg` | 同 | 仍固定 `cli`（§7.1） |
+| preamble 三句 | 同 | 同 | 无 |
+| `-p` 请求体 | — | 新增顶层 `diagnostics:{previous_message_id:null}`（直连时） | 透传，作为 `cache-diagnosis` 的信号 |
+
+### 8.2 2.1.280 特有、明知未做
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| `cc_turn_origin` 合成 | 未做，只透传 | 与 `cc_prompt_id` 同一层：直连专属、需判定 turn 起源。交互式终端的值是 `human`，`-p` 是 `sdk`。若将来合成 `cc_prompt_id`，一并合成为 `human`。 |
+| `timing-2026-09-09` / `inline-tools-2026-09-15` / `mid-conversation-tool-changes` | 只回放 | 分别受 `CLAUDE_CODE_PER_TURN_TIMING` env、`tengu_brisk_meadow` 灰度、`dL()` 门控，代理侧看不到 |
+| `thinking-resumption` / `message-threads` / `dangerous-tool-use` / `mid-conversation-system-clear-at` | 只回放 | 灰度或服务端分类器驱动（`tengu_thinking_block_resumption`、server classifier、kept-reminders） |
+| `x-claude-code-agent-type` 默认值 | 只回放 | 主线程本就不发；子 agent 的 agent 名只有客户端知道 |
+
+### 8.3 代码落点
+
+- `typ.ClaudeCodeVersion2_1_280` + registry 选项；`ClaudeCodeVersionEnabled` 接受两个版本。
+- `client/claude_version.go`：UA 按版本；`nativeRequestOptions` 在 ≥280 时加 hint 头；`ClaudeClient.nativeVersion`。
+- `client/claude_betas.go`：`claudeBetaSignals.Version / ThinkingActive / Diagnostics`；新 flag 常量、emission order、`claudeCodeReplayableBetasSince`、`versionAtLeast`；`ToolSearch` 信号增加 `defer_loading` / `ToolSearch` 工具名。
+- `ops/claude_code_billing_header.go`：`BuildClaudeCodeBillingHeader(version, …)`，preserved field 带 `since`（`cc_turn_origin`），`compareDottedVersions`。
+- `typ.ClaudeCodeClientHints.RequestClass / AgentType`，`protocolserver.applyClaudeCodeClientHints` 采集。
+- 测试：`TestComposeClaudeCodeBetas_280DirectCapture`（直连抓包原文）、`_280FlagsGatedByVersion`、`TestBetaClaudeBetaSignals_280BodyFields`、`TestClaudeClient_WireHeaders280`、`TestBuildClaudeCodeBillingHeader_TurnOriginIsVersionGated`、harness `claude_code_version` case 的 `pv-flag-ccver-280`；`TINGLY_CC_CAPTURE_DIR=<c280 抓包>` 回放三组 `cch` 通过。
+

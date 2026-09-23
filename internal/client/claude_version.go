@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -21,22 +22,39 @@ import (
 // API (.design/claude-code-client-compat.md §2, §3.1).
 
 const (
-	// nativeClaudeCLIUserAgent is "claude-cli/<version> (external, cli)": the
-	// interactive terminal entrypoint, matching cc_entrypoint=cli.
-	nativeClaudeCLIUserAgent = "claude-cli/" + typ.ClaudeCodeVersion2_1_258 + " (external, cli)"
-
 	// Since 2.1.251 the CLI ships as a native Bun binary, so the "node"
 	// runtime reports Bun's Node-compat version; the bundled @anthropic-ai/sdk
-	// moved to 0.112.1.
-	nativeStainlessRuntimeVersion = "v26.3.0" // Bun 1.4.1 (2.1.258 binary)
+	// is 0.112.1 in both 2.1.258 and 2.1.280.
+	nativeStainlessRuntimeVersion = "v26.3.0" // Bun 1.4.1
 	nativeStainlessPackageVersion = "0.112.1"
+
+	// 2.1.280+ hint headers sent on direct first-party traffic: the request
+	// class ("main" for the interactive thread; "subagent" / "auxiliary" /
+	// "compaction" / "workflow") and, for subagent requests, the agent type.
+	claudeRequestClassHeader = "x-claude-code-request-class"
+	claudeAgentTypeHeader    = "x-claude-code-agent-type"
+	claudeRequestClassMain   = "main"
 )
 
-// claudeCodeNative reports whether the request's resolved rule flags select
-// the native profile.
-func claudeCodeNative(ctx context.Context) bool {
-	return typ.ClaudeCodeVersionEnabled(typ.GetRuleFlags(ctx).ClaudeCodeVersion)
+// nativeClaudeCLIUserAgent is "claude-cli/<version> (external, cli)": the
+// interactive terminal entrypoint, matching cc_entrypoint=cli.
+func nativeClaudeCLIUserAgent(version string) string {
+	return "claude-cli/" + version + " (external, cli)"
 }
+
+// claudeCodeNativeVersion returns the native profile version selected by the
+// request's resolved rule flags, or "" for the legacy chain.
+func claudeCodeNativeVersion(ctx context.Context) string {
+	v := typ.GetRuleFlags(ctx).ClaudeCodeVersion
+	if typ.ClaudeCodeVersionEnabled(v) {
+		return v
+	}
+	return ""
+}
+
+// claudeHintHeaderValueRe is the value space of the hint headers
+// (request class names and agent type slugs); anything else is dropped.
+var claudeHintHeaderValueRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 // stainlessOSName maps a GOOS to the X-Stainless-OS value the JS SDK derives
 // from process.platform ("MacOS", "Linux", "Windows", ...).
@@ -89,11 +107,11 @@ func stainlessArchName(goarch string) string {
 // directly, never the .stream() helper), and the model-dependent
 // anthropic-beta baseline. Request-scoped flags are added per call in
 // nativeRequestOptions.
-func applyNativeClaudeCodeHeaders(options []anthropicOption.RequestOption, model string, isOAuthToken bool) []anthropicOption.RequestOption {
-	baseBetas := joinBetas(composeClaudeCodeBetas(claudeBetaSignals{Model: model, OAuth: isOAuthToken}))
+func applyNativeClaudeCodeHeaders(options []anthropicOption.RequestOption, version, model string, isOAuthToken bool) []anthropicOption.RequestOption {
+	baseBetas := joinBetas(composeClaudeCodeBetas(claudeBetaSignals{Version: version, Model: model, OAuth: isOAuthToken}))
 	return append(options,
 		anthropicOption.WithHeader("anthropic-beta", baseBetas),
-		anthropicOption.WithHeader("user-agent", nativeClaudeCLIUserAgent),
+		anthropicOption.WithHeader("user-agent", nativeClaudeCLIUserAgent(version)),
 		anthropicOption.WithHeaderDel("x-stainless-helper-method"),
 		anthropicOption.WithHeader("x-stainless-runtime-version", nativeStainlessRuntimeVersion),
 		anthropicOption.WithHeader("x-stainless-package-version", nativeStainlessPackageVersion),
@@ -118,6 +136,19 @@ func (c *ClaudeClient) nativeRequestOptions(ctx context.Context, sig claudeBetaS
 	}
 	if hints.ParentAgentID != "" {
 		options = append(options, anthropicOption.WithHeader("x-claude-code-parent-agent-id", sanitizeClaudeHeaderValue(hints.ParentAgentID)))
+	}
+	if sig.versionAtLeast(typ.ClaudeCodeVersion2_1_280) {
+		// Direct-traffic hint headers: replay the client's request class
+		// when it sent one, otherwise the interactive main thread; the agent
+		// type only ever comes from a subagent client.
+		class := claudeRequestClassMain
+		if claudeHintHeaderValueRe.MatchString(hints.RequestClass) {
+			class = hints.RequestClass
+		}
+		options = append(options, anthropicOption.WithHeader(claudeRequestClassHeader, class))
+		if claudeHintHeaderValueRe.MatchString(hints.AgentType) {
+			options = append(options, anthropicOption.WithHeader(claudeAgentTypeHeader, hints.AgentType))
+		}
 	}
 	return options
 }
