@@ -18,7 +18,7 @@ import {
 import React, {useMemo, useState} from 'react';
 import {type UniqueProvider, useProviderCatalogs, useCloudProviders, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
-import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './OAuthDialog';
+import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
 
 // What the picker emits when a card is chosen. The parent routes each kind to
 // the matching existing dialog (API-key form, OAuth flow, or a blank custom
