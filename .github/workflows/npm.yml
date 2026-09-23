@@ -602,11 +602,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Wait for published npm packages
-        env:
-          NPM_VERSION: ${{ needs.setup.outputs.npx_version }}
-        run: bash build/npx/scripts/wait-for-docker-npm-packages.sh "$NPM_VERSION"
-
       # The docker moving tag mirrors the npm dist-tag: a `latest` npm publish
       # moves docker `latest`, an `rc` publish moves docker `rc` only.
       - name: Build and push Docker image

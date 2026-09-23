@@ -25,11 +25,6 @@ jobs:
         with:
           release_tag: ${{ github.event.inputs.release_tag }}
 
-      - name: Wait for published npm packages
-        env:
-          NPM_VERSION: ${{ steps.validate.outputs.npm_version }}
-        run: bash build/npx/scripts/wait-for-docker-npm-packages.sh "$NPM_VERSION"
-
       # Same mapping as npm.yml: stable → latest, pre-release (v1.2.3-rc1) → rc.
       - name: Build and push Docker image
         uses: ./.github/actions/docker-build-push

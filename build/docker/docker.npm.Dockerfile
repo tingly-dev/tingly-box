@@ -19,6 +19,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /app/.tingly-box \
     && chown -R tingly:tingly /app
 
+# Wait for the exact CLI and Linux binary versions to reach npm's read replicas
+# before installing either package. This mirrors the registry check in npm.yml.
+RUN attempt=1; \
+    while [ "$attempt" -le 30 ]; do \
+      if npm view "tingly-box@${TINGLY_VERSION}" version >/dev/null 2>&1 \
+        && npm view "@tingly-dev/tingly-box-linux-x64@${TINGLY_VERSION}" version >/dev/null 2>&1; then \
+        echo "npm packages for ${TINGLY_VERSION} are visible"; \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 30 ]; then \
+        echo "npm packages for ${TINGLY_VERSION} were not visible after 30 checks" >&2; \
+        exit 1; \
+      fi; \
+      echo "Waiting for npm packages for ${TINGLY_VERSION} (attempt ${attempt}/30)"; \
+      sleep 10; \
+      attempt=$((attempt + 1)); \
+    done
+
 # Install the requested release directly with npm. pm2-runtime becomes PID 1
 # later and forwards container signals to the foreground Tingly Box process.
 RUN npm install --global \

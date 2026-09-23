@@ -337,10 +337,10 @@ package, the way esbuild / swc / biome / sharp do it, and retire the bundle.
   needed, `create-release` and `build-docker-npx` just also accept
   `publish-cli-review` having succeeded wherever they previously only
   accepted `publish-cli`.
-- **Docker readiness.** The npm-based image jobs check that both the exact
-  `tingly-box` version and its Linux x64 platform package are visible through
-  `npm view` before entering the Docker build action. This uses the same
-  30 × 10-second registry polling pattern as the shim's platform-package gate.
+- **Docker readiness.** Before installing the CLI, the npm image Dockerfile
+  checks that both the exact `tingly-box` version and its Linux x64 platform
+  package are visible through `npm view`. This uses the same 30 × 10-second
+  registry polling pattern as the shim's platform-package gate.
 - **Retired:** `build/npx/tingly-box-bundle/`, its workflow leg, the
   `publish_bundle` input, the bundle entry in the web UI's update dialog,
   and every doc mention. The Go side keeps recognising the `npx-bundle` /
