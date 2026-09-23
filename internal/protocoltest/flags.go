@@ -640,7 +640,7 @@ func ruleFlagCases() []flagCase {
 		// native client (.design/claude-code-client-compat.md): UA and SDK
 		// triple, one composed anthropic-beta value with the inbound
 		// per-turn flag replayed and the foreign flag dropped, subagent
-		// headers forwarded, no helper-method header, billing header rebuilt
+		// headers and x-app: cli-bg forwarded, no helper-method header, billing header rebuilt
 		// in place with the prompt fingerprint and the client's
 		// cc_is_subagent kept, cch hashed, metadata parent session kept.
 		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
@@ -700,6 +700,7 @@ func ruleFlagCases() []flagCase {
 					"anthropic-beta":                "claude-code-20250219,oauth-2025-04-20,per-turn-control-2026-07-01,message-batches-2024-09-24",
 					"x-claude-code-agent-id":        "agent-7",
 					"x-claude-code-parent-agent-id": "agent-main",
+					"x-app":                         "cli-bg",
 				}
 				res, err := env.dispatch(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, s.Name,
 					"/tingly/claude_code/v1/messages", body, headers, false)
@@ -743,6 +744,9 @@ func ruleFlagCases() []flagCase {
 			if got := legacy.headers.Get("X-Claude-Code-Agent-Id"); got != "" {
 				t.Errorf("legacy chain must not forward agent headers, got %q", got)
 			}
+			if got := legacy.headers.Get("X-App"); got != "cli" {
+				t.Errorf("legacy chain must keep x-app: cli even for a cli-bg client, got %q", got)
+			}
 			if len(legacy.system) == 0 || !regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.86\.[0-9a-f]{3}; cc_entrypoint=cli; cch=[0-9a-f]{5};$`).MatchString(legacy.system[0]) {
 				t.Errorf("legacy billing header = %q", legacy.system)
 			}
@@ -778,6 +782,9 @@ func ruleFlagCases() []flagCase {
 			if got := native.headers.Get("X-Claude-Code-Parent-Agent-Id"); got != "agent-main" {
 				t.Errorf("x-claude-code-parent-agent-id = %q", got)
 			}
+			if got := native.headers.Get("X-App"); got != "cli-bg" {
+				t.Errorf("native chain must replay the client's x-app: cli-bg, got %q", got)
+			}
 			if len(native.system) != 2 {
 				t.Fatalf("system blocks = %d, want 2 (billing header rebuilt in place): %v", len(native.system), native.system)
 			}
@@ -810,6 +817,9 @@ func ruleFlagCases() []flagCase {
 			}
 			if got := v280.headers.Get("X-Claude-Code-Request-Class"); got != "main" {
 				t.Errorf("2.1.280 x-claude-code-request-class = %q, want main", got)
+			}
+			if got := v280.headers.Get("X-App"); got != "cli-bg" {
+				t.Errorf("2.1.280 chain must replay the client's x-app: cli-bg, got %q", got)
 			}
 			if len(v280.system) == 0 || !regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`).MatchString(v280.system[0]) {
 				t.Errorf("2.1.280 billing header = %q", v280.system)
