@@ -8,6 +8,7 @@ import {
     formatBytes,
     reorderReferences,
     resultSrc,
+    runGridLayout,
     runImage,
 } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
@@ -219,5 +220,23 @@ describe('formatBytes', () => {
 
     it('switches to MB at a megabyte', () => {
         expect(formatBytes(1024 * 1024 * 2.5)).toBe('2.5 MB');
+    });
+});
+
+describe('runGridLayout', () => {
+    it('keeps one or two images on a single row', () => {
+        expect(runGridLayout(1)).toMatchObject({ rows: 1, cols: 1 });
+        expect(runGridLayout(2)).toMatchObject({ rows: 1, cols: 2 });
+    });
+
+    it('never goes past two rows, growing wider instead', () => {
+        expect(runGridLayout(3)).toMatchObject({ rows: 2, cols: 2 });
+        expect(runGridLayout(4)).toMatchObject({ rows: 2, cols: 2 });
+        expect(runGridLayout(5)).toMatchObject({ rows: 2, cols: 3 });
+        expect(runGridLayout(10)).toMatchObject({ rows: 2, cols: 5 });
+    });
+
+    it('widens the card with each column', () => {
+        expect(runGridLayout(10).cardWidth).toBeGreaterThan(runGridLayout(4).cardWidth);
     });
 });

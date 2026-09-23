@@ -142,6 +142,34 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         maskedReference,
         hasMaskedReference,
     } = useImageGenRefs({ showNotification, size });
+    // A brought-in image is a first-class image on this panel, not just a
+    // request parameter: it opens in the same lightbox as a result, with the
+    // same download and slicing tools. Its header names the file and its real
+    // pixel size, since there is no prompt or model behind it.
+    const referenceSelection = useCallback((index: number): SelectedImage | null => {
+        const ref = referenceImages[index];
+        if (!ref) return null;
+        const dimensions = ref.width && ref.height ? `${ref.width}×${ref.height} px` : '';
+        const kilobytes = `${Math.max(1, Math.round(ref.file.size / 1024))} KB`;
+        return {
+            src: ref.previewUrl,
+            prompt: '',
+            model: '',
+            size: '',
+            quality: 'auto',
+            index,
+            kind: 'reference',
+            label: ref.source === 'sketch'
+                ? t('playground.sketch.title', { defaultValue: 'Sketch' })
+                : ref.file.name,
+            caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
+            ...(ref.mask ? { maskSrc: ref.mask.previewUrl } : {}),
+        };
+    }, [referenceImages, t]);
+    const lightboxReferences = useMemo(() => ({
+        srcs: referenceImages.map((ref) => ref.previewUrl),
+        select: referenceSelection,
+    }), [referenceImages, referenceSelection]);
     const {
         selectedImage,
         setSelectedImage,
@@ -149,7 +177,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         lightboxFilm,
         showLightboxFrame,
         handleLightboxKeyDown,
-    } = useImageGenLightbox(runs);
+    } = useImageGenLightbox(runs, lightboxReferences);
 
     // Reusing a run refills this panel; on a narrow layout it sits above the
     // results strip and off-screen, so the refilled form is scrolled back
@@ -289,29 +317,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [handleAddReferenceImages, showNotification, t]);
 
-    // A brought-in image is a first-class image on this panel, not just a
-    // request parameter: it opens in the same lightbox as a result, with the
-    // same download and slicing tools. Its header names the file and its real
-    // pixel size, since there is no prompt or model behind it.
     const handleOpenReference = useCallback((index: number) => {
-        const ref = referenceImages[index];
-        if (!ref) return;
-        const dimensions = ref.width && ref.height ? `${ref.width}×${ref.height} px` : '';
-        const kilobytes = `${Math.max(1, Math.round(ref.file.size / 1024))} KB`;
-        setSelectedImage({
-            src: ref.previewUrl,
-            prompt: '',
-            model: '',
-            size: '',
-            quality: 'auto',
-            index,
-            kind: 'reference',
-            label: ref.source === 'sketch'
-                ? t('playground.sketch.title', { defaultValue: 'Sketch' })
-                : ref.file.name,
-            caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
-        });
-    }, [referenceImages, setSelectedImage, t]);
+        const image = referenceSelection(index);
+        if (image) setSelectedImage(image);
+    }, [referenceSelection, setSelectedImage]);
 
     // Hands the finished pixels over, not a notification that they exist.
     const handleDownload = useCallback(async (image: SelectedImage) => {
@@ -777,6 +786,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 imported={imported}
                 onClose={() => setGalleryOpen(false)}
                 onOpenOutput={(run, imageIndex, src) => setSelectedImage(runImage(run, 'output', imageIndex, src))}
+                onOpenSource={handleOpenRunSource}
                 onOpenImport={handleOpenImport}
                 onUseAsReference={(src) => { void handleUseAsReference(src); }}
                 // Loading a request refills the panel behind the dialog, so the

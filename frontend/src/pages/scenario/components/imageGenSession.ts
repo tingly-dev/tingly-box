@@ -53,6 +53,8 @@ export const runImage = (
     index,
     kind,
     runId: run.id,
+    // The mask rides on the first reference, the only one the API applies it to.
+    ...(kind === 'source' && index === 0 && run.mask ? { maskSrc: run.mask.previewUrl } : {}),
 });
 
 /**
@@ -162,4 +164,20 @@ export const downloadStem = (image: SelectedImage, slug: (text: string) => strin
     return image.kind === 'source'
         ? `${stem}-original-${image.index + 1}`
         : `${stem}-${image.index + 1}`;
+};
+
+// How a run's slots are laid out. The results strip scrolls sideways and has a
+// fixed height, so width is the cheap axis: never more than two rows (tiles
+// stay at least half the panel tall, big enough to pick a favourite without
+// opening each one), and the card grows wider with n instead.
+const SLOT_WIDTH_ONE_ROW = 220;
+const SLOT_WIDTH_TWO_ROWS = 170;
+const SLOT_GAP = 8;
+const CARD_PADDING = 24;
+
+export const runGridLayout = (slots: number) => {
+    const rows = slots <= 2 ? 1 : 2;
+    const cols = Math.max(1, Math.ceil(slots / rows));
+    const slotWidth = rows === 1 ? SLOT_WIDTH_ONE_ROW : SLOT_WIDTH_TWO_ROWS;
+    return { rows, cols, cardWidth: cols * slotWidth + (cols - 1) * SLOT_GAP + CARD_PADDING };
 };

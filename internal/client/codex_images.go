@@ -42,8 +42,11 @@ import (
 // x-codex-image-turn-id request header). See .design/imageedit.md.
 //
 // Image generation continues to ride the Responses API image_generation tool
-// (codex_client.go); only editing needs this endpoint because the Responses
-// surface offers no way to attach reference images to that tool for Codex.
+// (codex_client.go); editing got its own endpoint because attaching reference
+// images to that tool was assumed impossible for Codex. That assumption is now
+// under test — codex itself sends input_image items to the same Responses
+// endpoint — and masked edits, which this protocol cannot express at all, are
+// routed to the tool instead (codex_images_responses.go).
 
 // codexMaxReferenceImages is the reference-image cap enforced by Codex's
 // built-in imagegen tool. The backend owns the hard limit; we only log when a
@@ -56,13 +59,13 @@ type codexImageInput struct {
 }
 
 // codexImageEditRequest mirrors codex-rs ImageEditRequest: images, prompt and
-// model are required; background/n/quality/size are omitted when unset.
+// model are required; background/quality/size are omitted when unset. The
+// wire `n` is never sent (see ImagesEdit).
 type codexImageEditRequest struct {
 	Images     []codexImageInput `json:"images"`
 	Prompt     string            `json:"prompt"`
 	Model      string            `json:"model"`
 	Background string            `json:"background,omitempty"`
-	N          *int64            `json:"n,omitempty"`
 	Quality    string            `json:"quality,omitempty"`
 	Size       string            `json:"size,omitempty"`
 }
@@ -71,6 +74,12 @@ type codexImageEditRequest struct {
 // images edit endpoint. The multipart-style file inputs are inlined as base64
 // data URLs per the Codex wire protocol.
 func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error) {
+	// A mask has no representation in this protocol, so it decides the surface
+	// (codex_images_responses.go). Everything else stays on the proven endpoint.
+	if resolveCodexImageEditRoute(req.Mask != nil) == codexImageEditRouteResponses {
+		return c.imagesEditViaResponses(ctx, req)
+	}
+
 	logrus.WithContext(ctx).Debugf("[Codex] Using native images/edits endpoint for image edit, model: %s", req.Model)
 
 	codexReq, err := buildCodexImageEditRequest(&req)
@@ -78,29 +87,33 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 		return nil, err
 	}
 
-	var resp openai.ImagesResponse
-	opts := []option.RequestOption{
-		// Turn correlation id the Codex CLI sends on image requests
-		// (codex-rs ext/image-generation/src/backend.rs); the gateway has no
-		// Codex turn concept, so a fresh id per call stands in.
-		option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
-	}
-	if err := c.Client().Post(ctx, "images/edits", codexReq, &resp, opts...); err != nil {
-		return nil, fmt.Errorf("codex image edit failed: %w", err)
-	}
-
-	if len(resp.Data) == 0 {
-		return nil, fmt.Errorf("codex image edit returned no image data")
-	}
-
-	logrus.WithContext(ctx).Infof("[Codex] Image edit succeeded, images: %d", len(resp.Data))
-	return &resp, nil
+	// One image per call, n calls in parallel (codex_images_fanout.go). The
+	// body is built once — the reference readers are single-use — and reused.
+	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
+		var resp openai.ImagesResponse
+		opts := []option.RequestOption{
+			// Turn correlation id the Codex CLI sends on image requests
+			// (codex-rs ext/image-generation/src/backend.rs); the gateway has no
+			// Codex turn concept, so a fresh id per call stands in.
+			option.WithHeader("x-codex-image-turn-id", uuid.NewString()),
+		}
+		if err := c.Client().Post(ctx, "images/edits", codexReq, &resp, opts...); err != nil {
+			return nil, fmt.Errorf("codex image edit failed: %w", err)
+		}
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("codex image edit returned no image data")
+		}
+		logrus.WithContext(ctx).Infof("[Codex] Image edit succeeded, images: %d", len(resp.Data))
+		return &resp, nil
+	})
 }
 
 // buildCodexImageEditRequest translates OpenAI ImageEditParams into the Codex
-// JSON edit request. Parameters the Codex wire schema does not carry (mask,
-// response_format, output_format, output_compression, input_fidelity) are
-// dropped, mirroring how ImagesGenerate treats n/style.
+// JSON edit request. Parameters the Codex wire schema does not carry
+// (response_format, output_format, output_compression, input_fidelity) are
+// dropped, mirroring how ImagesGenerate treats style. A mask is the one
+// exception: it changes what the result must be, so it errors rather than
+// being dropped.
 func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditRequest, error) {
 	readers := imageEditInputReaders(req)
 	if len(readers) == 0 {
@@ -129,13 +142,15 @@ func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditReq
 		Size:       defaultCodexImageOption(string(req.Size)),
 	}
 
-	if req.N.Valid() {
-		n := req.N.Value
-		out.N = &n
-	}
+	// N stays unset: the wire field exists, but the Codex CLI never sends it
+	// and one image per call is the only shape known to work, so ImagesEdit
+	// serves n > 1 by fanning out instead.
 
 	if req.Mask != nil {
-		logrus.Debugf("[Codex] Mask parameter not supported for image edit, ignoring")
+		// Reachable only when the Responses route is pinned off. Dropping the
+		// mask would hand back a full repaint the caller never asked for, so
+		// this fails instead of silently widening the edit.
+		return nil, fmt.Errorf("mask is not supported by the Codex native images/edits protocol (see .design/image-mask.md)")
 	}
 
 	return out, nil

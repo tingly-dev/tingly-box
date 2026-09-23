@@ -1,7 +1,7 @@
 import { Box, ButtonBase, IconButton, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Edit } from '@/components/icons';
-import { hoverRevealSx, overlayActionSx } from './ImageGenPlayground.chrome';
+import { Edit, ZoomIn } from '@/components/icons';
+import { hoverRevealSx, overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 
 interface RunSourceStripProps {
     sources: string[];
@@ -54,6 +54,9 @@ const RunSourceStrip: React.FC<RunSourceStripProps> = ({ sources, onOpen, onUseA
                             overflow: 'hidden',
                             border: '1px solid',
                             borderColor: 'divider',
+                            // The same cue every other openable image on the
+                            // panel gives: it zooms, so it says so on hover.
+                            '&:hover .source-zoom, &:focus-visible .source-zoom': { opacity: 1 },
                         }}
                     >
                         <Box
@@ -62,6 +65,9 @@ const RunSourceStrip: React.FC<RunSourceStripProps> = ({ sources, onOpen, onUseA
                             alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
                             sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         />
+                        <Box className="source-zoom" sx={zoomScrimSx}>
+                            <ZoomIn sx={{ fontSize: 16 }} />
+                        </Box>
                     </ButtonBase>
                     <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
                         <IconButton

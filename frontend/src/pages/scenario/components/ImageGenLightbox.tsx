@@ -9,8 +9,9 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
@@ -66,6 +67,104 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onUseAsReference,
 }) => {
     const { t } = useTranslation();
+    // On by default — a mask was painted to be seen — and remembered while
+    // the lightbox stays mounted, so walking the filmstrip does not reset it.
+    const [showMask, setShowMask] = useState(true);
+    const imageAlt = selectedImage
+        ? selectedImage.label ?? (selectedImage.kind === 'output' ? t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 }) : t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 }))
+        : '';
+    const maskLabel = showMask
+        ? t('playground.mask.hideOverlay', { defaultValue: 'Hide mask' })
+        : t('playground.mask.showOverlay', { defaultValue: 'Show mask' });
+    // One plate per kind of frame. The plate carries its group's word once;
+    // repeating it on every frame would be noise.
+    const renderFilm = (
+        kind: LightboxFrame['kind'],
+        corner: { top?: number; bottom?: number; left?: number; right?: number },
+        tooltipPlacement: 'left' | 'right',
+    ) => {
+        const frames = lightboxFilm.filter((frame) => frame.kind === kind);
+        if (frames.length === 0) return null;
+        const sharesHeight = lightboxFilm.some((frame) => frame.kind !== kind);
+        const label = kind === 'source'
+            ? t('playground.originalBadge', { defaultValue: 'Original' })
+            : kind === 'reference'
+                ? t('playground.referenceBadge', { defaultValue: 'Reference' })
+                : t('playground.generatedBadge', { defaultValue: 'Generated' });
+        return (
+            <Stack
+                data-testid={`imagegen-lightbox-film-${kind}`}
+                spacing={0.75}
+                sx={{
+                    ...overlayPlateSx,
+                    position: 'absolute',
+                    ...corner,
+                    // With both plates up they split the height, each
+                    // scrolling on its own rather than running into the other.
+                    maxHeight: sharesHeight ? 'calc(50% - 18px)' : 'calc(100% - 24px)',
+                    overflowY: 'auto',
+                    p: 0.75,
+                    scrollbarWidth: 'thin',
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    sx={{ display: 'block', color: 'grey.400', fontSize: 10, lineHeight: 1.4 }}
+                >
+                    {label}
+                </Typography>
+                {frames.map((frame) => {
+                    const active = selectedImage?.kind === frame.kind && selectedImage.index === frame.index;
+                    return (
+                        <Tooltip key={`${frame.kind}-${frame.index}`} title={label} placement={tooltipPlacement}>
+                            <ButtonBase
+                                onClick={() => onShowFrame(frame)}
+                                aria-label={frame.kind === 'source'
+                                    ? t('playground.viewSourceImage', {
+                                        defaultValue: 'View original image {{number}}',
+                                        number: frame.index + 1,
+                                    })
+                                    : frame.kind === 'reference'
+                                        ? t('playground.referenceThumbAlt', {
+                                            defaultValue: 'Reference image {{number}}',
+                                            number: frame.index + 1,
+                                        })
+                                        : t('playground.openResult', {
+                                        defaultValue: 'Open generated image {{number}}',
+                                        number: frame.index + 1,
+                                    })}
+                                aria-current={active}
+                                sx={{
+                                    display: 'block',
+                                    flexShrink: 0,
+                                    // Smaller on a phone, where the strip shares the
+                                    // width with the artwork it sits over.
+                                    width: { xs: 36, sm: 48 },
+                                    height: { xs: 36, sm: 48 },
+                                    borderRadius: 1,
+                                    overflow: 'hidden',
+                                    outline: active ? '2px solid' : '1px solid',
+                                    outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
+                                    outlineOffset: -1,
+                                    opacity: active ? 1 : 0.72,
+                                    transition: 'opacity 0.16s ease-out',
+                                    '&:hover, &:focus-visible': { opacity: 1 },
+                                }}
+                            >
+                                <Box
+                                    component="img"
+                                    src={frame.src}
+                                    alt=""
+                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                />
+                            </ButtonBase>
+                        </Tooltip>
+                    );
+                })}
+            </Stack>
+        );
+    };
+
     return (
         <Dialog
             open={selectedImage !== null}
@@ -138,6 +237,24 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                    {selectedImage?.maskSrc && (
+                        <Tooltip title={maskLabel}>
+                            <IconButton
+                                onClick={() => setShowMask((value) => !value)}
+                                aria-label={maskLabel}
+                                aria-pressed={showMask}
+                                data-testid="imagegen-lightbox-mask-toggle"
+                                sx={{
+                                    ...overlayIconSx,
+                                    // Pressed reads as pressed: the button takes
+                                    // the tint the overlay is drawn in.
+                                    ...(showMask ? { color: 'warning.light', bgcolor: 'rgba(255, 255, 255, 0.2)' } : {}),
+                                }}
+                            >
+                                <Brush fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {!selectedImage?.label && (
                         <Tooltip
                             title={promptCopied
@@ -240,93 +357,55 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     position: 'relative',
                 }}
             >
-                {/* Top-left, over the artwork: the run's originals first, then
-                    what it produced, the one on screen ringed. Clicking a frame
-                    swaps the lightbox to it, so comparing an output against the
-                    image it was made from is one click each way. */}
-                {lightboxFilm.length > 0 && (
-                    <Stack
-                        data-testid="imagegen-lightbox-film"
-                        spacing={0.75}
-                        sx={{
-                            ...overlayPlateSx,
-                            position: 'absolute',
-                            top: 12,
-                            left: 12,
-                            maxHeight: 'calc(100% - 24px)',
-                            overflowY: 'auto',
-                            p: 0.75,
-                            scrollbarWidth: 'thin',
-                        }}
-                    >
-                        {lightboxFilm.map((frame, position) => {
-                            const active = selectedImage?.kind === frame.kind && selectedImage.index === frame.index;
-                            const label = frame.kind === 'source'
-                                ? t('playground.originalBadge', { defaultValue: 'Original' })
-                                : t('playground.generatedBadge', { defaultValue: 'Generated' });
-                            // The first frame of each group carries the group's word;
-                            // repeating it down the column would be noise.
-                            const showLabel = position === 0 || lightboxFilm[position - 1].kind !== frame.kind;
-                            return (
-                                <Box key={`${frame.kind}-${frame.index}`}>
-                                    {showLabel && (
-                                        <Typography
-                                            variant="caption"
-                                            sx={{ display: 'block', mb: 0.25, color: 'grey.400', fontSize: 10, lineHeight: 1.4 }}
-                                        >
-                                            {label}
-                                        </Typography>
-                                    )}
-                                    <Tooltip title={label} placement="right">
-                                        <ButtonBase
-                                            onClick={() => onShowFrame(frame)}
-                                            aria-label={frame.kind === 'source'
-                                                ? t('playground.viewSourceImage', {
-                                                    defaultValue: 'View original image {{number}}',
-                                                    number: frame.index + 1,
-                                                })
-                                                : t('playground.openResult', {
-                                                    defaultValue: 'Open generated image {{number}}',
-                                                    number: frame.index + 1,
-                                                })}
-                                            aria-current={active}
-                                            sx={{
-                                                display: 'block',
-                                                // Smaller on a phone, where the strip shares the
-                                                // width with the artwork it sits over.
-                                                width: { xs: 36, sm: 48 },
-                                                height: { xs: 36, sm: 48 },
-                                                borderRadius: 1,
-                                                overflow: 'hidden',
-                                                outline: active ? '2px solid' : '1px solid',
-                                                outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
-                                                outlineOffset: -1,
-                                                opacity: active ? 1 : 0.72,
-                                                transition: 'opacity 0.16s ease-out',
-                                                '&:hover, &:focus-visible': { opacity: 1 },
-                                            }}
-                                        >
-                                            <Box
-                                                component="img"
-                                                src={frame.src}
-                                                alt=""
-                                                sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                            />
-                                        </ButtonBase>
-                                    </Tooltip>
-                                </Box>
-                            );
-                        })}
-                    </Stack>
-                )}
-                {selectedImage && (
+                {/* Over the artwork, the run's two halves at opposite corners:
+                    what went in top-left, what came out bottom-right — the
+                    order a request reads in. The one on screen is ringed, and
+                    clicking a frame swaps the lightbox to it, so comparing an
+                    output against the image it was made from is one click each
+                    way. */}
+                {renderFilm('source', { top: 12, left: 12 }, 'right')}
+                {/* Opened from the panel's reference row: the row itself, in
+                    the same corner the inputs of a run sit in. */}
+                {renderFilm('reference', { top: 12, left: 12 }, 'right')}
+                {renderFilm('output', { bottom: 12, right: 12 }, 'left')}
+                {selectedImage && (selectedImage.maskSrc ? (
+                    // The mask has the image's exact pixel size (the editor
+                    // paints at the reference's own resolution), so two
+                    // layers filling the same box with `scale-down` line up
+                    // pixel for pixel without measuring anything — and, like
+                    // the unmasked image, a small one is never blown up.
+                    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+                        <Box
+                            component="img"
+                            src={selectedImage.src}
+                            alt={imageAlt}
+                            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'scale-down', display: 'block' }}
+                        />
+                        {showMask && (
+                            <Box
+                                component="img"
+                                src={selectedImage.maskSrc}
+                                alt=""
+                                aria-hidden
+                                data-testid="imagegen-lightbox-mask"
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'scale-down',
+                                    display: 'block',
+                                    opacity: 0.55,
+                                    pointerEvents: 'none',
+                                }}
+                            />
+                        )}
+                    </Box>
+                ) : (
                     <Box
                         component="img"
                         src={selectedImage.src}
-                        alt={selectedImage.label
-                            ?? (selectedImage.kind === 'output'
-                                ? t('playground.resultAlt', { defaultValue: 'Generated image {{number}}', number: selectedImage.index + 1 })
-                                : t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: selectedImage.index + 1 }))}
+                        alt={imageAlt}
                         sx={{
                             display: 'block',
                             maxWidth: '100%',
@@ -334,7 +413,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             objectFit: 'contain',
                         }}
                     />
-                )}
+                ))}
             </DialogContent>
         </Dialog>
     );

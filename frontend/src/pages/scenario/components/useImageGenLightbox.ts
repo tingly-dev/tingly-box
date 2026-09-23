@@ -6,8 +6,16 @@ import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 // arrival order.
 export interface LightboxFrame {
     src: string;
-    kind: 'source' | 'output';
+    kind: 'source' | 'output' | 'reference';
     index: number;
+}
+
+// The panel's current reference images, for when the lightbox was opened from
+// the reference row rather than from a run: their thumbnails, and how to turn
+// one of them into what the lightbox shows (file name, pixel size, ...).
+export interface LightboxReferences {
+    srcs: string[];
+    select: (index: number) => SelectedImage | null;
 }
 
 // The lightbox's own slice of state: which image is open, the run behind it
@@ -15,7 +23,7 @@ export interface LightboxFrame {
 // Without this an output on screen says nothing about what it was made from —
 // the lightbox is exactly where "what did I reference here?" gets asked, and
 // closing it to go read the card is not an answer.
-export const useImageGenLightbox = (runs: GenerationRun[]) => {
+export const useImageGenLightbox = (runs: GenerationRun[], references?: LightboxReferences) => {
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
 
     // The run behind the image currently in the lightbox.
@@ -23,19 +31,33 @@ export const useImageGenLightbox = (runs: GenerationRun[]) => {
         () => (selectedImage?.runId ? runs.find((run) => run.id === selectedImage.runId) : undefined),
         [runs, selectedImage?.runId],
     );
+    const referenceSrcs = references?.srcs;
     const lightboxFilm = useMemo<LightboxFrame[]>(() => {
+        // Opened from the reference row: the film is that row, so several
+        // references are walked the same way a run's images are.
+        if (selectedImage?.kind === 'reference') {
+            const srcs = referenceSrcs ?? [];
+            return srcs.length > 1 ? srcs.map((src, index) => ({ src, kind: 'reference' as const, index })) : [];
+        }
         if (!lightboxRun) return [];
         const sources = (lightboxRun.sourceImages ?? []).map((src, index) => ({ src, kind: 'source' as const, index }));
         const outputs = lightboxRun.images
             .map((image, index) => ({ src: resultSrc(image), kind: 'output' as const, index }))
             .filter((item) => item.src);
-        // One image with nothing to compare it to is not a filmstrip.
-        return sources.length > 0 ? [...sources, ...outputs] : [];
-    }, [lightboxRun]);
+        // One image with nothing to compare it to is not a filmstrip; several
+        // outputs of one request are — picking between them is why n > 1.
+        return sources.length > 0 || outputs.length > 1 ? [...sources, ...outputs] : [];
+    }, [lightboxRun, referenceSrcs, selectedImage?.kind]);
 
+    const selectReference = references?.select;
     const showLightboxFrame = useCallback((frame: LightboxFrame) => {
+        if (frame.kind === 'reference') {
+            const image = selectReference?.(frame.index);
+            if (image) setSelectedImage(image);
+            return;
+        }
         if (lightboxRun) setSelectedImage(runImage(lightboxRun, frame.kind, frame.index, frame.src));
-    }, [lightboxRun]);
+    }, [lightboxRun, selectReference]);
 
     // ←/→ walk the filmstrip, the same gesture the reference row uses. Without
     // it, comparing an output against its original is a mouse-only move.

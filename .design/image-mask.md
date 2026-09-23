@@ -7,7 +7,8 @@
 > `sketch-canvas.md`(同一面板的画布输入)、`image-slice.md`(同一面板的后置切分)。
 >
 > **状态:前端已实现(方案 A);Codex 走 Responses 的那条(方案 D)按实验性实现,
-> 待真实订阅验证。见 §8。**
+> 待真实订阅验证(§8)。多张图(n)的扇出、各 vendor 的核对、Playground 的多图
+> 槽位与 lightbox 调整见 §9。**
 
 ---
 
@@ -45,7 +46,7 @@ POST /tingly/imagegen/v1/images/edits
     ↓ parseImageEditJSON                    ← ✗ 没有 mask(不对称,§6.2)
     ↓ ForwardOpenAIImageEdit → ImagesEdit
         ├─ OpenAIClient  → SDK 原样透传 ✓
-        ├─ CodexClient   → 丢弃 + debug log ⚠(codex_images.go:137)
+        ├─ CodexClient   → 有 mask 走 Responses 工具(实验,§8.2),原生端点报错
         └─ Kimi/vmodel/DashScope/MiniMax → 整个 edits 面就不支持
 ```
 
@@ -53,8 +54,7 @@ POST /tingly/imagegen/v1/images/edits
 "相对隔离"的物理基础——它是一个前端功能,后端那两处(§6.2)是顺手补齐的对称性,
 不是前置条件。
 
-> 未在本环境编译验证:`frontend/node_modules` 未安装。openai-js v6 的
-> `ImageEditParams.mask?: Uploadable` 需要在实现时确认一次字段名。
+> 字段名已在实现时确认:openai-js v6 的 `ImageEditParams.mask?: Uploadable`。
 
 ### 2.1 Codex 原生协议核对:确认不支持 mask
 
@@ -137,7 +137,7 @@ reference image",这正是当初要为 edit 另开 endpoint 的理由。但公�
 | **mask** | **`mask` 字段 ✓** | **✗ 协议无此字段** | **`input_image_mask{image_url\|file_id}` ✓** |
 | 相关旋钮 | `input_fidelity`、`background`、`size`、`quality` | `background`、`size`、`quality`、`n` | `action: generate\|edit\|auto`、`input_fidelity`、`background`、`moderation` |
 | Codex CLI 自己用不用 | — | **用**(`ImagesClient::edit`) | **不用**,且断言不挂(`responses_lite.rs`) |
-| 我们现在的代码 | `OpenAIClient.ImagesEdit` 原样透传 | `CodexClient.ImagesEdit` 丢弃 mask | `CodexClient.ImagesGenerate` 建了 tool,没填 mask、没挂参考图 |
+| 我们现在的代码 | `OpenAIClient.ImagesEdit` 原样透传 | 无 mask 时走这里;mask 到这里明确报错 | 有 mask 的 edit 走这里(参考图作 `input_image`,mask 挂工具,§8.2) |
 | mask 可行性 | 已通,零后端改动 | 不可能(除非上游加字段) | **未验证,值得实验** |
 
 ### 2.4 方案矩阵
@@ -266,8 +266,11 @@ run 上记一个 `maskUsed: boolean`,元信息行写 `images/edits · mask`,sour
 `CodexClient` 把 mask 丢掉、只打一行 debug log——用户涂了一块,拿回来的是整张
 重画,而且没有任何地方告诉他为什么。Codex 原生协议确认没有 mask 字段(§2.1),
 所以这里没有"接上去"的选项,只有"说清楚"。这与"不允许把 edit 静默降级成
-generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确报错**(§6.2),
-而不是退化成一次用户没要求的整图重画。
+generation"是同一条原则:**带 mask 的请求落到 Codex 原生端点上应当明确报错**
+(§6.2),而不是退化成一次用户没要求的整图重画。
+
+> 现状:带 mask 的 Codex 请求默认改走 Responses 工具(§8.2),原生端点的报错只在
+> 路由被钉到 `native` 时触发;§9.4 记录了原生端点可能直接收 `mask` 的线索。
 
 ---
 
@@ -363,7 +366,7 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 
 ## 8. 实现状态
 
-### 8.1 本分支(前端 + 网关直通)
+### 8.1 前端 + 网关直通(#1818)
 
 | 部分 | 位置 | 说明 |
 |------|------|------|
@@ -379,23 +382,181 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 上应当明确�
 `openai_image_edit_test.go`(JSON mask)。画布交互按惯例走真实浏览器验证:加图 →
 涂 → 反转 → Apply → 缩略图角标 → 重开笔画还在。
 
-### 8.2 Codex 那条:单独一个分支
+### 8.2 Codex 那条(实验性,未验证)
 
-`§2.2` 的 Responses 路线(方案 D)连同"原生端点遇到 mask 明确报错"一起,放在
-**`claude/jolly-rubin-j02e0e-codex-mask`**,不在本分支。理由就是 §2.5 那三个
-实验还没跑:在真实订阅上确认 hosted tool 认不认 `action: edit` 和
-`input_image_mask` 之前,不把一条猜出来的链路混进一个已经能用的功能里。
+§2.2 的 Responses 路线(方案 D)在这里,和它一起的还有"原生端点遇到 mask 明确
+报错"。§2.5 的实验还没在真实订阅上跑过,所以它只接管**带 mask** 的请求:无 mask
+的 edit 仍然走已验证的原生端点,不把一条未证实的链路压在已经能用的路径下面。
 
-那个分支带的东西:`internal/client/codex_images_responses.go`(路由 + 请求构造 +
-单测)、`codex_images.go` 的分流与报错、`TINGLY_CODEX_IMAGE_EDIT_ROUTE` 开关。
-实验步骤见 §2.5,跑法见该分支上的 §8.3。
+| 改动 | 位置 |
+|------|------|
+| Responses 请求构造(参考图作为 `input_image` 进消息,mask 作为工具的 `input_image_mask`,`action: edit`)+ 路由决策 + 单测 | `internal/client/codex_images_responses.go`(+ `_test.go`) |
+| `ImagesEdit` 按有没有 mask 分流;原生端点遇到 mask 明确报错(不再 debug 丢弃) | `internal/client/codex_images.go` |
 
-**本分支上 Codex 的行为因此没变**:带 mask 的请求到了 Codex 原生端点仍然是
-"丢掉 mask + 一行 debug log",也就是整图重画。这是已知的、留着的坑——它属于
-Codex 分支要回答的问题,合并顺序上应当在那条路定案时一起解决。
+响应解析复用 generation 那条(`parseImageGenerationStream`),因为 hosted tool 两
+种用法发的是同一串事件。
 
-### 8.3 仍未做
+### 8.3 路由开关与测试脚本
+
+```
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=            # 不设:有 mask 走 Responses,没 mask 走原生
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses   # E1/E3:无 mask 也走 Responses
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=native      # 钉死原生(带 mask 时明确报错)
+```
+
+不设即产品行为:只有 mask 这一个功能性理由会离开已验证的原生端点。实验结束后这个
+变量应该消失。
+
+E1(hosted tool 认不认参考图,先不带 mask):
+
+```bash
+TINGLY_CODEX_IMAGE_EDIT_ROUTE=responses tingly-box serve
+curl -s http://127.0.0.1:PORT/tingly/imagegen/v1/images/edits \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"image":"data:image/png;base64,...","prompt":"把沙发换成绿色天鹅绒","model":"<codex model>"}'
+```
+
+E2(带 mask,默认路由即可):Playground 里涂一块再 Generate,或 JSON 里多带一个
+`"mask":"data:image/png;base64,..."`。判据是**只有涂过的区域变**。
+
+三种结果对应三条路:两步都过 → 去掉实验标记、收敛默认、合并;E2 不过(mask 被
+忽略)→ 退回原生,只留下那条明确报错;E1 不过 → `imageedit.md` §1 的断言成立,
+写回 §2.2 结案,只剩原生端点的明确报错值得保留。
+
+链路在日志里:`[Codex] Using Responses image_generation tool for image edit
+(experimental), model: ..., mask: true`。
+
+### 8.4 仍未做
 
 - 前端不按 provider 隐藏 mask 入口(沿用 `imageedit.md` §6:能力是网关的事)。
 - 失败信息仍是通用的请求错误通知,没有"这个 provider 不支持 mask"的专门措辞。
+- ~~lightbox 里看不到 mask~~:已做,见 §9.2 最后一条。
 - §7 的羽化 / 自动分割 / outpainting 全部未动。
+
+---
+
+## 9. 各出图 vendor 的核对:mask 与多张图(n)
+
+mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
+`OpenAIClientInterface.ImagesEdit / ImagesGenerate`(`imageedit.md` §2)。下表按官方
+文档核对(2026-09-23),来源见 §9.5;标 ? 的是文档没写清、未证实。
+
+| vendor | `/images/edits` | mask | n | 对我们的含义 |
+|---|---|---|---|---|
+| OpenAI(gpt-image-*、dall-e-2) | multipart / JSON | ✓ 作用于**第一张**;gpt-image 上是**软约束**("entirely prompt-based … may not follow its exact shape") | 1–10(dall-e-3 仅 1) | 透传即正确 |
+| Azure OpenAI | multipart,同 OpenAI | ✓ 同 OpenAI | 1–10 | 透传即正确 |
+| DeepInfra | multipart,OpenAI 形状 | ✓ alpha=0 | 1–4 | 透传即正确 |
+| xAI | **只收 JSON**,SDK 的 multipart 明确不支持 | 未文档化 | ≤10 | 我们的 multipart 发过去会失败;要支持得转 JSON(另开) |
+| StepFun | multipart(step-image-edit-2) | 未文档化 | 仅 1 | 能透传;n 由 shortfall 槽位呈现 |
+| 百度千帆 v2 | **JSON** | ✓ `ernie-irag-edit`,但**白=改、黑=留**(与 OpenAI alpha 相反) | 1–4 | 需要转 JSON + 反转 mask(另开) |
+| DashScope | compat 模式**没有** edits(改图走 generations 的 `image` 字段) | 原生 `wanx2.1-imageedit` 的 `description_edit_with_mask`,**白=改**,收 data URL | compat ≤6 | 现状:适配器明确拒绝 edits,不会静默吃 mask |
+| 火山 Seedream、硅基、ModelScope、Gemini compat、Together、OpenRouter | **没有** `/images/edits`(改图走 generations + image 字段,或各自的接口) | 无 | 火山无 `n`(`sequential_image_generation` + `max_images`);其余各异 | 请求会被上游 404 / 拒绝,不会静默吃 mask |
+| 智谱、MiniMax | 无改图 | 无 | 智谱 ?;MiniMax 1–9 | 不变 |
+| Kimi / vmodel | 不支持 | — | — | 不变 |
+| **Codex** | 原生 JSON `images/edits` / Responses 工具 | 走 Responses(实验,§8.2);原生端点见 §9.4 | **一次一张** | **n 在网关扇出**(§9.1) |
+
+结论:
+
+- **mask**:透传就正确的只有 OpenAI / Azure / DeepInfra。其余大多数 compat 上游
+  **根本没有 `/images/edits`**,请求会被拒,而不是 mask 被静默吃掉——原先担心的
+  "静默忽略"风险比预想小。真正能接 mask 但协议不同的是千帆和 DashScope 万相
+  (JSON + 白=改的黑白图),需要各自的适配器,还没做。
+- **即便在 OpenAI 上,gpt-image 的 mask 也是软约束**。编辑器底部那句
+  "Painted areas are what the model may change" 措辞是对的(may,不是 will)。
+- **n**:Codex 之外,StepFun / qwen-image 等也是一次一张。现在由卡片上的空槽位
+  如实呈现(§9.2);要把扇出推广到这些 vendor,是同一个 `fanOutCodexImages` 的泛化,
+  等有需求再做。
+
+### 9.1 Codex:n 张图 = n 次单图调用,并行后合并
+
+Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工具没有 `n` 字段,
+一次只产出一个 `image_generation_call`;原生 `images/edits` 的 schema 里虽然有 `n`,
+但 Codex CLI 从来不传(`n: None`),"一次一张"是唯一被验证过的形状。原来的行为是
+`n` 打一行 debug log 然后只回一张。
+
+做法(`internal/client/codex_images_fanout.go`):
+
+- `ImagesGenerate`、原生 `ImagesEdit`、Responses 版 `ImagesEdit` 三条路径都经过同一个
+  `fanOutCodexImages(ctx, n, one)`。请求体**只构造一次**——参考图的 `io.Reader` 只能
+  读一次,读成 data URL 之后每次调用复用同一份 body。原生端点的 `n` 字段不再上线。
+- 并发窗口 `codexMaxParallelImageCalls = 4`:每一次都是订阅上的一整次出图,无上限
+  并发主要换来的是限流。
+- 结果按调用顺序合并 `data[]`,`usage` 逐项相加,`created/size/...` 取第一份。
+- **部分失败返回成功的那几张**:已经出好、已经计费的图不该因为另一次调用被限流而
+  一起丢掉;整次请求的超时在后面几波还没跑完时触发,同样保留已完成的。只有全部
+  失败才是错误。部分失败在网关打一行 warn,列出每一次的原因。
+
+为什么在网关而不是前端扇出:能力差异是网关的事(`imageedit.md` §6),Playground
+以外的调用方也拿到正确的 n 张;而前端拆成 n 个请求,在 OpenAI 这类上游会让参考图的
+输入 token 被计 n 次。代价是结果一次性回来——逐张出现留给 images 流式(§9.3)。
+
+### 9.2 前端:槽位网格
+
+`GenerationRunCard` 从 run 开始就按 n 画出槽位(`runGridLayout`,`imageGenSession.ts`):
+
+- **最多两行**,列数 = ⌈n / 行数⌉,卡片随列数变宽,但**不超过结果条本身的宽度**
+  ——一张要在内部横向滚动的卡,就是 n 张没法同时比较的图。
+- **pending 与完成共用同一个布局**:pending 时每个槽位是虚线框 + 转圈,落地后图片
+  填进对应槽位,卡片形状不跳。
+- 没有图的槽位在完成后保持虚线框,写 "No image returned"——缺在哪一格一眼可见,
+  不需要单独的提示行(provider 封顶 n、Codex 扇出部分失败、上游忽略 n,都走这里)。
+- 列数 > 2 时去掉角上的放大徽标(小格子放不下,点击和 hover 遮罩本来就能放大)。
+- 元信息行在 n > 1 时写 `· n=4`(原则 5)。
+- 大图预览的缩略图条:原来只在有参考图时出现,现在**同一次有多张输出**也出现,
+  挑图时可以在它们之间切换。条分成两块放在对角:参考图(Original)在左上,生成图
+  (Generated)在右下——请求就是这个读序,进去的在前、出来的在后;两块同时出现时
+  各占一半高度、各自滚动。←/→ 仍然按"参考图 → 生成图"一条线走。
+- **参考图在哪里出现,就能在哪里点开大图**,打开的是同一个 lightbox:面板的参考图行
+  (之前就能点,现在 lightbox 左上多一块 Reference 条,多张参考图之间可以 ←/→)、
+  run 卡片的来源缩略图(之前就能点,补上与其他图一致的 hover 放大提示)、Overview
+  里每张图左上的来源角标(之前是纯展示,现在每个小图都能点开,落到带 Original /
+  Generated 两块条的同一个 lightbox)。
+- **mask 在大图里叠加显示**:带 mask 的参考图(面板里的,或某次 run 的第一张来源图)
+  在 lightbox 里叠一层与缩略图同样的着色预览;右上角控制按钮里多一个画笔按钮切换
+  显示/隐藏,默认显示,在 filmstrip 里切换时保持。mask 与原图像素尺寸完全一致,两层
+  用同样的 `scale-down` 铺满同一个盒子就逐像素对齐,不需要测量。
+
+mock 后端的 prompt 带 `[partial]` 时只返回一半(向上取整),用来验证缺图槽位,
+与已有的 `[fail]` / `[slow]` 同一套约定。
+
+### 9.3 仍然开着的
+
+- **逐张出现**:OpenAI images API 有 `stream: true`(SDK 已有 `GenerateStreaming` /
+  `EditStreaming`,openai-js 也支持)。网关对 Codex 扇出可以每完成一次推一个
+  completed 事件,原生支持的上游透传;前端改成收到一张填一格。槽位网格已经是它
+  需要的形状,到时只改"填"的时机。
+- **千帆 / DashScope 万相 的 mask**:协议不同(JSON、白=改),各自需要 edit 适配器。
+- **xAI edits**:只收 JSON,我们的 multipart 发不过去,需要转换。
+- `parseImageGenerationStream` 原来把 `partial_image` 的 base64 **拼接**;官方文档确认
+  每个 partial 都是一张完整预览图。已改成:done 事件的 `result` 优先(不看 status——
+  第三方观察到上游会把已完成的 call 留在 `generating`),没有再退回最后一个 partial。
+
+### 9.4 值得跑的一个实验:Codex 原生端点会不会收 `mask`
+
+openai/codex 源码里 `ImageEditRequest` 没有 mask 字段(§2.1 不变)。但公开 Images API
+的 JSON 编码本身就有 `mask: {image_url | file_id}`,而第三方代理 CLIProxyAPI 对
+gpt-image-2 系列直接把 `mask` 映射成 `mask.image_url` 发到 `codex/images/edits`(同时
+透传 `n`)。这说明 ChatGPT backend 的 images 端点**可能**就是公开 API 的同一个实现,
+只是 Codex CLI 没用到这个字段。没有找到"确实生效"的证据。
+
+如果成立,它比 §8.2 的 Responses 路线简单得多(不换面、不换事件解析),n 也可能原生
+就能用。实验 E0:在原生 JSON body 里加 `"mask":{"image_url":"data:image/png;base64,..."}`,
+看是 400、被忽略还是局部重绘;同时试一次 `n: 2`。结果写回这里。
+
+### 9.5 来源
+
+- OpenAI 图像指南 / Images API 参考:developers.openai.com/api/docs/guides/image-generation、
+  developers.openai.com/api/reference/resources/images
+- Azure:learn.microsoft.com/en-us/azure/foundry/openai/how-to/dall-e
+- DeepInfra:docs.deepinfra.com/api-reference/image-generation/openai-images-edits
+- xAI:docs.x.ai/developers/model-capabilities/images/editing
+- Gemini compat:ai.google.dev/gemini-api/docs/openai;Together:docs.together.ai/reference/post-images-generations;
+  OpenRouter:openrouter.ai/docs/features/multimodal/image-generation
+- DashScope:help.aliyun.com/zh/model-studio/qwen-image-generation-and-editing-api-reference、
+  help.aliyun.com/zh/model-studio/wanx-image-edit-api-reference
+- 火山方舟:docs.volcengine.com/docs/82379/1541523;硅基:api-docs.siliconflow.cn/docs/api/images-generations-post
+- 智谱:docs.bigmodel.cn(图像生成 API);StepFun:platform.stepfun.com/docs/api-reference/images/image
+- MiniMax:platform.minimax.cn/docs/api-reference/image-generation-i2i
+- 千帆:cloud.baidu.com/doc/qianfan-api/s/8m7u6un8a、cloud.baidu.com/doc/qianfan-api/s/Rm9m76ekf
+- Codex:github.com/openai/codex(codex-rs/codex-api/src/images.rs、ext/image-generation/src/tool.rs);
+  CLIProxyAPI:github.com/router-for-me/CLIProxyAPI(internal/runtime/executor/codex_openai_images.go,issue #4273)
