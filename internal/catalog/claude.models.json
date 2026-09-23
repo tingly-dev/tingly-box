@@ -1,5 +1,35 @@
 [
   {
+    "id": "claude-opus-5-5",
+    "reasoning": {
+      "dialects": [
+        "adaptive"
+      ],
+      "supported_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  {
+    "id": "claude-fable-5-1",
+    "reasoning": {
+      "dialects": [
+        "adaptive"
+      ],
+      "supported_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  {
     "id": "claude-fable-5",
     "reasoning": {
       "dialects": [

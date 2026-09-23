@@ -179,6 +179,46 @@ func TestTemplateManagerGetTemplate(t *testing.T) {
 	}
 }
 
+func TestLatestOpenAIAndCodexModels(t *testing.T) {
+	tm := NewProviderCatalogManager(EmbeddedOnly())
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	tests := []struct {
+		providerID string
+		modelIDs   []string
+	}{
+		{providerID: "openai-com", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}},
+		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.providerID, func(t *testing.T) {
+			provider, err := tm.GetTemplate(tt.providerID)
+			if err != nil {
+				t.Fatalf("GetTemplate(%q): %v", tt.providerID, err)
+			}
+
+			models := make(map[string]ModelInfo, len(provider.Models))
+			for _, model := range provider.Models {
+				models[model.ID] = model
+			}
+			for _, modelID := range tt.modelIDs {
+				model, ok := models[modelID]
+				if !ok {
+					t.Errorf("provider %q is missing %q", tt.providerID, modelID)
+					continue
+				}
+				if model.Context != 1050000 || model.MaxOutput != 128000 {
+					t.Errorf("provider %q model %q limits = (%d, %d), want (1050000, 128000)",
+						tt.providerID, modelID, model.Context, model.MaxOutput)
+				}
+			}
+		})
+	}
+}
+
 // TestTemplateManagerFetchTemplates tests template fetching from various sources
 func TestTemplateManagerFetchTemplates(t *testing.T) {
 	tests := []struct {
