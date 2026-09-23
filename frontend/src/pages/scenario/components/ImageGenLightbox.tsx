@@ -78,7 +78,9 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
         const sharesHeight = lightboxFilm.some((frame) => frame.kind !== kind);
         const label = kind === 'source'
             ? t('playground.originalBadge', { defaultValue: 'Original' })
-            : t('playground.generatedBadge', { defaultValue: 'Generated' });
+            : kind === 'reference'
+                ? t('playground.referenceBadge', { defaultValue: 'Reference' })
+                : t('playground.generatedBadge', { defaultValue: 'Generated' });
         return (
             <Stack
                 data-testid={`imagegen-lightbox-film-${kind}`}
@@ -112,7 +114,12 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                         defaultValue: 'View original image {{number}}',
                                         number: frame.index + 1,
                                     })
-                                    : t('playground.openResult', {
+                                    : frame.kind === 'reference'
+                                        ? t('playground.referenceThumbAlt', {
+                                            defaultValue: 'Reference image {{number}}',
+                                            number: frame.index + 1,
+                                        })
+                                        : t('playground.openResult', {
                                         defaultValue: 'Open generated image {{number}}',
                                         number: frame.index + 1,
                                     })}
@@ -329,6 +336,9 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     output against the image it was made from is one click each
                     way. */}
                 {renderFilm('source', { top: 12, left: 12 }, 'right')}
+                {/* Opened from the panel's reference row: the row itself, in
+                    the same corner the inputs of a run sit in. */}
+                {renderFilm('reference', { top: 12, left: 12 }, 'right')}
                 {renderFilm('output', { bottom: 12, right: 12 }, 'left')}
                 {selectedImage && (
                     <Box

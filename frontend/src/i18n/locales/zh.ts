@@ -1777,6 +1777,7 @@ export default {
     "generateAnother": "再生成一批 · {{count}} 个进行中",
     "generatingNew": "正在生成新图像…",
     "originalBadge": "原图",
+    "referenceBadge": "参考图",
     "generatedBadge": "生成结果",
     "referenceImages": "参考图像",
     "referenceOptional": "可选 · 拖进来作为生成的参考",

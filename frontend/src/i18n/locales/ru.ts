@@ -1803,6 +1803,7 @@ export default {
     "generateAnother": "Сгенерировать ещё · выполняется: {{count}}",
     "generatingNew": "Генерируем новые изображения…",
     "originalBadge": "Исходное",
+    "referenceBadge": "Референс",
     "generatedBadge": "Результат",
     "referenceImages": "Исходные изображения",
     "referenceOptional": "необязательно · перетащите изображения сюда, чтобы генерировать по ним",

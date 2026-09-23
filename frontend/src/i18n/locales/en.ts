@@ -1781,6 +1781,7 @@ export default {
     "generateAnother": "Generate another · {{count}} running",
     "generatingNew": "Generating new images…",
     "originalBadge": "Original",
+    "referenceBadge": "Reference",
     "generatedBadge": "Generated",
     "referenceImages": "Reference images",
     "referenceOptional": "optional · drop images here to generate from them",

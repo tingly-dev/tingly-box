@@ -33,7 +33,7 @@ import {
 // an edit, let alone from what — and that is the question the overview gets
 // asked most after "where is it". Informational only: the frames are
 // click-through, and the lightbox behind the tile is where they are browsable.
-const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
+const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => void }> = ({ sources, onOpen }) => {
     const { t } = useTranslation();
     if (sources.length === 0) return null;
     const shown = sources.slice(0, 3);
@@ -54,20 +54,30 @@ const TileSourceBadge: React.FC<{ sources: string[] }> = ({ sources }) => {
                     left: 6,
                     p: 0.25,
                     borderRadius: 1,
-                    pointerEvents: 'none',
                     alignItems: 'center',
                 }}
             >
+                {/* Each one opens in the lightbox, like every other image
+                    here — a reference is never a picture you can only squint at. */}
                 {shown.map((src, i) => (
-                    <Box
+                    <ButtonBase
                         key={i}
-                        component="img"
-                        src={src}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        sx={{ width: 22, height: 22, borderRadius: 0.5, objectFit: 'cover', display: 'block' }}
-                    />
+                        onClick={(event) => { event.stopPropagation(); onOpen(i); }}
+                        aria-label={t('playground.viewSourceImage', {
+                            defaultValue: 'View original image {{number}}',
+                            number: i + 1,
+                        })}
+                        sx={{ display: 'block', borderRadius: 0.5, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
+                    >
+                        <Box
+                            component="img"
+                            src={src}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            sx={{ width: 22, height: 22, objectFit: 'cover', display: 'block' }}
+                        />
+                    </ButtonBase>
                 ))}
                 {sources.length > shown.length && (
                     <Typography variant="caption" sx={{ px: 0.25, color: 'common.white', fontSize: 10 }}>
@@ -85,6 +95,7 @@ interface ImageGenGalleryDialogProps {
     imported: ImportedImage[];
     onClose: () => void;
     onOpenOutput: (run: GenerationRun, imageIndex: number, src: string) => void;
+    onOpenSource: (run: GenerationRun, index: number) => void;
     onOpenImport: (item: ImportedImage) => void;
     onUseAsReference: (src: string) => void;
     onReuseRun: (run: GenerationRun) => void;
@@ -145,6 +156,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
     imported,
     onClose,
     onOpenOutput,
+    onOpenSource,
     onOpenImport,
     onUseAsReference,
     onReuseRun,
@@ -354,7 +366,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                     )}
 
                                     {tile.kind !== 'import' && (
-                                        <TileSourceBadge sources={tile.run.sourceImages ?? []} />
+                                        <TileSourceBadge sources={tile.run.sourceImages ?? []} onOpen={(index) => onOpenSource(tile.run, index)} />
                                     )}
 
                                     {/* The tile's actions are the card's actions: nothing
