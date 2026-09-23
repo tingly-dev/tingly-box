@@ -16,8 +16,8 @@
     "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。",
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。"
   },
-  "version": "2.2.0",
-  "last_updated": "2026-09-22T00:00:00Z",
+  "version": "2.4.0",
+  "last_updated": "2026-09-23T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -39,11 +39,19 @@
       "api_style": "anthropic",
       "icon": "aws",
       "models": [
+        { "id": "anthropic.claude-opus-5-5" },
+        { "id": "anthropic.claude-fable-5-1" },
         { "id": "anthropic.claude-opus-4-8" },
         { "id": "anthropic.claude-sonnet-5" },
         { "id": "anthropic.claude-opus-4-7" },
         { "id": "anthropic.claude-sonnet-4-6" },
         { "id": "anthropic.claude-haiku-4-5-20251001-v1:0" }
+      ],
+      "last_updated": "2026-09-23",
+      "sources": [
+        "https://platform.claude.com/docs/en/models/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "https://platform.claude.com/docs/en/models/opus-5-5/overview"
       ]
     },
     "gcp-vertex-claude": {
@@ -66,11 +74,19 @@
       "api_style": "anthropic",
       "icon": "vertexai",
       "models": [
+        { "id": "claude-opus-5-5" },
+        { "id": "claude-fable-5-1" },
         { "id": "claude-opus-4-8" },
         { "id": "claude-sonnet-5" },
         { "id": "claude-opus-4-7" },
         { "id": "claude-sonnet-4-6" },
         { "id": "claude-haiku-4-5@20251001" }
+      ],
+      "last_updated": "2026-09-23",
+      "sources": [
+        "https://platform.claude.com/docs/en/models/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "https://platform.claude.com/docs/en/models/opus-5-5/overview"
       ]
     },
     "gcp-vertex-gemini": {
@@ -145,6 +161,25 @@
       "base_url_openai": "https://api.openai.com/v1",
       "base_url_anthropic": null,
       "models": [
+        {
+          "id": "gpt-6-astra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-03",
+          "recommended": true
+        },
+        {
+          "id": "gpt-6-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22"
+        },
+        {
+          "id": "gpt-6-luna",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22"
+        },
         {
           "id": "gpt-5.6-sol",
           "context": 1050000,
@@ -286,12 +321,13 @@
       "supports_models_endpoint": true,
       "icon": "openai",
       "openai_endpoint_mode": "both",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-23",
       "sources": [
-        "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+        "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "https://developers.openai.com/api/docs/models/gpt-6-luna",
         "https://developers.openai.com/api/docs/models/all",
-        "https://developers.openai.com/api/docs/deprecations",
-        "https://techcrunch.com/2026/07/09/openai-launches-its-new-family-of-models-with-gpt-5-6/"
+        "https://developers.openai.com/api/docs/deprecations"
       ]
     },
     "anthropic-com": {
@@ -312,6 +348,16 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {
+          "id": "claude-opus-5-5",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "claude-fable-5-1",
+          "context": 1000000,
+          "max_output": 128000
+        },
         {
           "id": "claude-3-haiku-20240307",
           "context": 200000,
@@ -408,9 +454,11 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_anthropic",
       "icon": "anthropic",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-23",
       "sources": [
-        "https://platform.claude.com/docs/en/about-claude/models/overview"
+        "https://platform.claude.com/docs/en/models/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "https://platform.claude.com/docs/en/models/opus-5-5/overview"
       ]
     },
     "claude-code": {
@@ -431,6 +479,16 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {
+          "id": "claude-opus-5-5",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "claude-fable-5-1",
+          "context": 1000000,
+          "max_output": 128000
+        },
         {
           "id": "claude-sonnet-4-5",
           "context": 1000000,
@@ -486,7 +544,12 @@
       "supports_models_endpoint": true,
       "oauth_provider": "claude_code",
       "web_search_schema": "web_search_anthropic",
-      "icon": "claudecode"
+      "icon": "claudecode",
+      "last_updated": "2026-09-23",
+      "sources": [
+        "https://www.anthropic.com/claude-fable-and-mythos-5-1",
+        "https://www.anthropic.com/claude-opus-5-5"
+      ]
     },
     "codex": {
       "id": "codex",
@@ -506,6 +569,30 @@
       "base_url_openai": "https://chatgpt.com/backend-api",
       "base_url_anthropic": null,
       "models": [
+        {
+          "id": "gpt-6-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "note": "推荐用于复杂编码和长程 Agent 工作流；按账户套餐、灰度进度和工作区设置开放",
+          "openai_endpoints": ["responses"],
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://learn.chatgpt.com/docs/changelog?type=codex-cli"
+          ]
+        },
+        {
+          "id": "gpt-6-luna",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "note": "推荐用于专注、高吞吐量的编码任务；按账户套餐、灰度进度和工作区设置开放",
+          "openai_endpoints": ["responses"],
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://learn.chatgpt.com/docs/changelog?type=codex-cli"
+          ]
+        },
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -591,13 +678,11 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-09-18",
+      "last_updated": "2026-09-23",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
-        "https://openai.com/index/gpt-6-astra/",
-        "https://github.com/openai/codex/issues/43342",
-        "https://9to5mac.com/2026/09/03/openai-releasing-major-upgrade-to-chatgpt-and-codex-with-gpt-6-astra-details-here/"
+        "https://openai.com/index/gpt-6-astra/"
       ]
     },
     "googleapis-com": {

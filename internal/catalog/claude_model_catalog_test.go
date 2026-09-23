@@ -88,6 +88,17 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 		}
 	})
 
+	t.Run("newest models are adaptive-only with effort", func(t *testing.T) {
+		for _, model := range []string{"claude-fable-5-1", "claude-opus-5-5"} {
+			caps, ok := LookupClaudeThinkingCaps(model)
+			require.True(t, ok, model)
+			assert.False(t, caps.ThinkingEnabled, model)
+			assert.True(t, caps.ThinkingAdaptive, model)
+			assert.True(t, caps.EffortLevels["xhigh"], model)
+			assert.True(t, caps.EffortLevels["max"], model)
+		}
+	})
+
 	t.Run("unknown models miss", func(t *testing.T) {
 		_, ok := LookupClaudeThinkingCaps("gpt-5.2")
 		assert.False(t, ok)
