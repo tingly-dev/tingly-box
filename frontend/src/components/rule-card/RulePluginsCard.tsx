@@ -48,8 +48,8 @@ export interface RulePluginsCardProps {
     flags?: RuleFlags;
     registry?: FlagSpec[];
     active: boolean;
-    onOpenCatalog: () => void;
-    onToggleFlag?: (key: string) => void;
+    onOpenCatalog: (flagKey?: string) => void;
+    onRemoveFlag?: (key: string) => void;
 }
 
 const flagIntValue = (flags: RuleFlags | undefined, key: string): number =>
@@ -78,12 +78,12 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
     registry,
     active,
     onOpenCatalog,
-    onToggleFlag,
+    onRemoveFlag,
 }) => {
     const enabled = (registry || []).filter((spec) => isFlagActive(spec, flags ?? {}));
 
     return (
-        <StyledPluginsCard active={active} onClick={onOpenCatalog}>
+        <StyledPluginsCard active={active} onClick={() => onOpenCatalog()}>
             {/* Fixed-height header so the body has a stable scroll region */}
             <Stack
                 direction="row"
@@ -165,8 +165,10 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                             return (
                                 <Tooltip key={spec.key} title={spec.type === 'int' ? `${spec.label}: ${spec.description}\nValue: ${formatSeconds(flagIntValue(flags, spec.key))}` : `${spec.label}: ${tooltipTitle}`} placement="left">
                                     <Box
+                                        onClick={(e) => { e.stopPropagation(); onOpenCatalog(spec.key); }}
                                         sx={{
                                             width: '100%',
+                                            cursor: 'pointer',
                                             px: 0.75,
                                             py: 0.35,
                                             borderRadius: 0.75,
@@ -214,10 +216,11 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                                                 : {spec.type === 'int' ? formatSeconds(flagIntValue(flags, spec.key)) : displayVal}
                                             </Typography>
                                         )}
-                                        {spec.type === 'bool' && onToggleFlag && (
+                                        {onRemoveFlag && (
                                             <IconButton
                                                 size="small"
-                                                onClick={(e) => { e.stopPropagation(); onToggleFlag(spec.key); }}
+                                                aria-label={`Remove ${spec.label}`}
+                                                onClick={(e) => { e.stopPropagation(); onRemoveFlag(spec.key); }}
                                                 sx={{ p: 0, ml: 'auto', flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
                                             >
                                                 <CloseIcon sx={{ fontSize: '0.7rem' }} />
