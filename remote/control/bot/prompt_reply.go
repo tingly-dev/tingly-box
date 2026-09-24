@@ -230,8 +230,14 @@ func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 		return false
 	}
 
-	// Get the most recent pending request for this chat
-	// (usually there's only one at a time)
+	// GetPendingRequestsForChat orders results by a two-level tie-break —
+	// ask.SourceRemoteAgent before ask.SourceNotify, then most-recently-
+	// created within the same source — so index 0 is the most-preferred
+	// candidate, not an arbitrary Go map-iteration pick. Usually there's only
+	// one pending request at a time; when there are several, this is a
+	// heuristic, not a guarantee — see .design/imbot-output.md §8 for the
+	// known failure case and why there is currently no stronger signal
+	// (native reply-to, or session-scoped routing) to resolve it with.
 	latestReq := pendingReqs[0]
 
 	// For AskUserQuestion, try to parse as option selection first

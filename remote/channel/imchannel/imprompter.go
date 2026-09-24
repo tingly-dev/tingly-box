@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"sort"
 	"sync"
 	"time"
 
@@ -162,6 +163,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	opts := &imbot.SendMessageOptions{
 		Text:      promptText,
 		ParseMode: imbot.ParseModeMarkdown,
+		SessionID: req.SessionID,
 	}
 	if supportsKeyboard {
 		opts.Actions = keyboard.ToActionSet()
@@ -370,16 +372,45 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 	return nil, false
 }
 
-// GetPendingRequestsForChat returns all pending requests for a specific chat
+// GetPendingRequestsForChat returns the chat's pending requests ordered by a
+// two-level tie-break, most-preferred first:
+//
+//  1. ask.SourceRemoteAgent before ask.SourceNotify. A text reply arriving
+//     while the user has an active remote_agent conversation in this chat is
+//     almost always continuing that conversation, not answering a background
+//     notify ping the user may not even be consciously aware of — so it's a
+//     more defensible default than picking whichever request merely arrived
+//     later. It is a heuristic, not a guarantee: see .design/imbot-output.md
+//     §8 for the known failure case (the user actually meant to answer the
+//     notify ping) and why there is currently no better signal to resolve it
+//     with (no reply-to matching, no per-chat serialization).
+//  2. Within the same Source, most-recently-created first. p.pendingRequests
+//     is a map, so without an explicit sort here, a caller treating the
+//     first result as "the latest" (as bot.HandlePromptTextReply does) would
+//     get whatever order Go's unspecified map iteration happened to
+//     produce — an effectively random pick. Sorting by creation time makes
+//     it deterministic.
 func (p *IMPrompter) GetPendingRequestsForChat(chatID string) []ask.Request {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var requests []ask.Request
-	for _, pending := range p.pendingRequests {
-		if pending.chatID == chatID {
-			requests = append(requests, pending.request)
+	var pending []*pendingIMRequest
+	for _, pr := range p.pendingRequests {
+		if pr.chatID == chatID {
+			pending = append(pending, pr)
 		}
+	}
+	sort.Slice(pending, func(i, j int) bool {
+		si, sj := pending[i].request.Source == ask.SourceRemoteAgent, pending[j].request.Source == ask.SourceRemoteAgent
+		if si != sj {
+			return si
+		}
+		return pending[i].createdAt.After(pending[j].createdAt)
+	})
+
+	requests := make([]ask.Request, len(pending))
+	for i, pr := range pending {
+		requests[i] = pr.request
 	}
 	return requests
 }
@@ -479,6 +510,7 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 		_, _ = bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
 			Text:      resultText,
 			ParseMode: imbot.ParseModeMarkdown,
+			SessionID: req.SessionID,
 		})
 	}
 }
@@ -581,6 +613,7 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (
 		Platform:  req.Platform,
 		BotUUID:   req.BotUUID,
 		SessionID: req.SessionID,
+		Source:    ask.SourceRemoteAgent,
 		AgentType: req.AgentType,
 		ToolName:  req.ToolName,
 		Input:     req.Input,

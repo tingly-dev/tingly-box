@@ -275,6 +275,9 @@ func TestFromApprovalEvent_And_ToApprovalResponse(t *testing.T) {
 	// Chat context falls back to the _chat_id/_platform input fields.
 	assert.Equal(t, "chat-9", req.ChatID)
 	assert.Equal(t, "telegram", req.Platform)
+	// A running remote_agent execution's own approval events must tag
+	// SourceRemoteAgent — see GetPendingRequestsForChat's source tie-break.
+	assert.Equal(t, SourceRemoteAgent, req.Source)
 
 	res := Result{ID: "perm-1", Approved: true, Remember: true, Reason: "ok",
 		UpdatedInput: map[string]interface{}{"command": "ls"}}

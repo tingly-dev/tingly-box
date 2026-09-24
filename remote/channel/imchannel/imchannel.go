@@ -99,9 +99,11 @@ func (c *Channel) Send(ctx context.Context, target channel.Target, msg interacti
 			text = msg.Title + "\n" + msg.Body
 		}
 	}
+	sessionID, _ := msg.Meta["session_id"].(string)
 	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
+		SessionID: sessionID,
 		Metadata:  c.tokenMetadata(target.ChatID),
 	})
 	return err
@@ -151,6 +153,12 @@ func ToAskRequest(channelID, platform string, target channel.Target, ix interact
 		Title:    ix.Title,
 		Message:  ix.Body,
 		Timeout:  ix.Timeout,
+		// This translation only ever runs for a scenario plugin's
+		// interactive ask, delivered through the channel the notify
+		// consumer owns — see bot-arch.md's Flow A. Flow B's agentboot
+		// approval/ask events build ask.Request directly in
+		// imprompter.go (OnApproval/OnAsk) and never reach here.
+		Source:   ask.SourceNotify,
 		Metadata: map[string]interface{}{},
 	}
 	if req.Message == "" {

@@ -187,7 +187,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	e.deps.SendTextWithReply(req.HCtx, IconProcess+" "+MsgProcessing+BuildFooter(meta.AgentType, meta.ProjectPath), req.ReplyTo)
 
 	// 6. Create streaming handler (shared meta pointer)
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, req.SessionID)
 
 	// 7. Create completion callback
 	completionCallback := &SmartGuideCompletionCallback{

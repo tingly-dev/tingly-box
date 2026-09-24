@@ -3,6 +3,7 @@ package imchannel
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/remote/control/ask"
 )
@@ -127,5 +128,89 @@ func Test_NormalizeQuestionList_AcceptsHeterogeneousShapes(t *testing.T) {
 				t.Fatalf("normalizeQuestionList(%v) = len %d, want %d", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// Test_GetPendingRequestsForChat_OrdersByCreatedAtDescending guards the fix
+// for a real bug: pendingRequests is a map, so without an explicit sort the
+// order GetPendingRequestsForChat returns is whatever Go's unspecified map
+// iteration happens to produce. bot.HandlePromptTextReply treats index 0 as
+// "the latest pending request" — before this fix, that pick was effectively
+// random whenever a chat had more than one pending request; a text reply
+// could resolve against the wrong one. See .design/imbot-output.md §8.
+func Test_GetPendingRequestsForChat_OrdersByCreatedAtDescending(t *testing.T) {
+	p := NewIMPrompter(nil)
+
+	base := time.Now()
+	// Insertion order deliberately does not match chronological order, and a
+	// request from a different chat is mixed in to confirm it's filtered out.
+	p.pendingRequests = map[string]*pendingIMRequest{
+		"req-mid": {
+			request:   ask.Request{ID: "req-mid"},
+			chatID:    "chat-1",
+			createdAt: base.Add(1 * time.Second),
+		},
+		"req-other-chat": {
+			request:   ask.Request{ID: "req-other-chat"},
+			chatID:    "chat-2",
+			createdAt: base.Add(3 * time.Second),
+		},
+		"req-new": {
+			request:   ask.Request{ID: "req-new"},
+			chatID:    "chat-1",
+			createdAt: base.Add(2 * time.Second),
+		},
+		"req-old": {
+			request:   ask.Request{ID: "req-old"},
+			chatID:    "chat-1",
+			createdAt: base,
+		},
+	}
+
+	got := p.GetPendingRequestsForChat("chat-1")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 requests for chat-1, got %d: %+v", len(got), got)
+	}
+	wantOrder := []string{"req-new", "req-mid", "req-old"}
+	for i, id := range wantOrder {
+		if got[i].ID != id {
+			t.Errorf("position %d: got %q, want %q (most-recent-first)", i, got[i].ID, id)
+		}
+	}
+}
+
+// Test_GetPendingRequestsForChat_PrefersRemoteAgentOverNotify guards the
+// source tie-break: a remote_agent-sourced request must sort before a
+// notify-sourced one even when the notify one was created more recently —
+// the user typing in a chat with an active @cc/SmartGuide conversation is
+// almost always continuing it, not answering an older background notify
+// ping. See the Source type doc comment and .design/imbot-output.md §8 for
+// why this is a heuristic, not a guarantee.
+func Test_GetPendingRequestsForChat_PrefersRemoteAgentOverNotify(t *testing.T) {
+	p := NewIMPrompter(nil)
+
+	base := time.Now()
+	p.pendingRequests = map[string]*pendingIMRequest{
+		"req-notify-newer": {
+			request:   ask.Request{ID: "req-notify-newer", Source: ask.SourceNotify},
+			chatID:    "chat-1",
+			createdAt: base.Add(1 * time.Second), // created after the agent request
+		},
+		"req-agent-older": {
+			request:   ask.Request{ID: "req-agent-older", Source: ask.SourceRemoteAgent},
+			chatID:    "chat-1",
+			createdAt: base,
+		},
+	}
+
+	got := p.GetPendingRequestsForChat("chat-1")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 requests for chat-1, got %d: %+v", len(got), got)
+	}
+	if got[0].ID != "req-agent-older" {
+		t.Errorf("position 0: got %q, want %q — remote_agent must outrank a more recent notify request", got[0].ID, "req-agent-older")
+	}
+	if got[1].ID != "req-notify-newer" {
+		t.Errorf("position 1: got %q, want %q", got[1].ID, "req-notify-newer")
 	}
 }

@@ -22,6 +22,7 @@ type streamingMessageHandler struct {
 	bot       imbot.Bot
 	chatID    string
 	replyTo   string
+	sessionID string // the agent session this stream belongs to; stamped on every outbound send
 	mu        sync.Mutex
 	formatter *render.TextFormatter
 	verbose   bool // If false, only show final results (hide intermediate messages)
@@ -61,11 +62,12 @@ const (
 )
 
 // newStreamingMessageHandler creates a new streaming message handler
-func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool) *streamingMessageHandler {
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo, sessionID string, verbose bool) *streamingMessageHandler {
 	return &streamingMessageHandler{
 		bot:       bot,
 		chatID:    chatID,
 		replyTo:   replyTo,
+		sessionID: sessionID,
 		formatter: render.NewTextFormatter(),
 		verbose:   verbose,
 	}
@@ -464,6 +466,7 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
 		ReplyTo:   h.replyTo,
+		SessionID: h.sessionID,
 	})
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
