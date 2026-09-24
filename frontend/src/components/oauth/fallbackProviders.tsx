@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, Zai, Zhipu} from '../BrandIcons';
+import {Claude, Gemini, Google, Kimi, OpenAI, Qwen, XAI, Zai, Zhipu} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -82,6 +82,15 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         color: '#6366F1',
         enabled: true,
         deviceCodeFlow: true,
+    },
+    {
+        id: 'xai',
+        name: 'xAI Grok',
+        displayName: 'xAI Grok',
+        description: 'Access Grok via SuperGrok / X Premium+ OAuth login',
+        icon: <XAI size={32}/>,
+        color: '#000000',
+        enabled: true,
     },
     // ZCode / GLM Coding Plan. The sign-in is a login link: zcode.z.ai owns the
     // callback, so the URL can be opened on any device and the backend polls for

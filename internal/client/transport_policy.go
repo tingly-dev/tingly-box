@@ -28,6 +28,7 @@ var ProviderTransportPolicy = map[ai.Issuer]TransportReusePolicy{
 	ai.IssuerAntigravity: TransportPerSession,
 	ai.IssuerIFlow:       TransportPerSession,
 	ai.IssuerKimiCode:    TransportPerSession,
+	ai.IssuerXAI:         TransportPerSession,
 	ai.IssuerMock:        TransportReusable, // Mock for testing
 }
 

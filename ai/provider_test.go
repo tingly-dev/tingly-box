@@ -23,6 +23,7 @@ func TestIssuerConstants(t *testing.T) {
 		{"IssuerQwen", IssuerQwenCode, "qwen_code"},
 		{"IssuerAntigravity", IssuerAntigravity, "antigravity"},
 		{"IssuerIFlow", IssuerIFlow, "iflow"},
+		{"IssuerXAI", IssuerXAI, "xai"},
 		{"IssuerAnthropic", IssuerAnthropic, "anthropic"},
 		{"IssuerMock", IssuerMock, "mock"},
 	}

@@ -45,6 +45,7 @@ const (
 	IssuerQwenCode    Issuer = "qwen_code"   // Qwen Code OAuth issuer
 	IssuerAntigravity Issuer = "antigravity" // Antigravity OAuth issuer
 	IssuerIFlow       Issuer = "iflow"       // IFlow OAuth issuer
+	IssuerXAI         Issuer = "xai"         // xAI (Grok) OAuth issuer
 	// IssuerZCode / IssuerZCodeCN are the two ZCode (GLM Coding Plan) account
 	// platforms. They are separate issuers rather than one issuer with a
 	// platform switch: the two accounts live on different hosts, hold different

@@ -220,6 +220,28 @@ func DefaultRegistry() *Registry {
 		Hook:        &NoopHook{},
 	})
 
+	// xAI (Grok) OAuth — "Grok Build" / SuperGrok / X Premium+ login.
+	// Not officially documented by xAI; client ID and endpoints are the ones
+	// shared publicly by third-party CLI integrations (e.g. hermes-agent,
+	// opencode-grok-auth) that reverse-engineered the flow used by xAI's own
+	// Grok CLI. Standard OIDC PKCE authorization-code flow against auth.x.ai;
+	// the resulting token is redeemed against xAI's CLI proxy
+	// (cli-chat-proxy.grok.com), not the public api.x.ai — see xaiRoundTripper.
+	registry.Register(&ProviderConfig{
+		Type:               ai.IssuerXAI,
+		DisplayName:        "xAI Grok",
+		ClientID:           "b1a00492-073a-47ea-816f-4c329264a828", // Public client ID used by Grok CLI
+		ClientSecret:       "",                                     // Public client, no secret required
+		AuthURL:            "https://auth.x.ai/oauth2/authorize",
+		TokenURL:           "https://auth.x.ai/oauth2/token",
+		Scopes:             []string{"openid", "profile", "email", "offline_access", "grok-cli:access", "api:access"},
+		AuthStyle:          AuthStyleInNone,
+		OAuthMethod:        OAuthMethodPKCE,
+		TokenRequestFormat: TokenRequestFormatForm,
+		ConsoleURL:         "https://accounts.x.ai/",
+		Hook:               &XAIHook{},
+	})
+
 	// Kimi OAuth (Device Authorization Flow)
 	// Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 	// Public device flow, no client secret; no scope parameter on the wire.

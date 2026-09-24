@@ -8,7 +8,7 @@ recovers them when they break.
 
 - **Issuer** — the upstream OAuth identity (`claude_code`, `codex`, `openai`,
   `gemini`, `antigravity`, `qwen_code`, `kimi_code`, `zcode_cn`, `zcode`,
-  `github`, `google`, `mock`, …). Validated by `ParseProviderType`
+  `xai`, `github`, `google`, `mock`, …). Validated by `ParseProviderType`
   (`ai/oauth/config.go`). The ZCode issuers (GLM Coding Plan) use a
   server-mediated poll flow and resolve a static plan key — see `zcode-oauth.md`.
 - **Provider** — a stored credential + endpoint (`ai/provider.go`, `Provider` struct).

@@ -1232,6 +1232,11 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
 			apiBase = "https://api.kimi.com/coding/v1"
 			apiStyle = protocol.APIStyleOpenAI
+		case ai.IssuerXAI:
+			// xAI's OAuth token is only accepted by the Grok CLI proxy, not the
+			// public api.x.ai (which expects a plain API key).
+			apiBase = "https://cli-chat-proxy.grok.com/v1"
+			apiStyle = protocol.APIStyleOpenAI
 		case ai.IssuerZCode, ai.IssuerZCodeCN:
 			// The plan's Anthropic endpoint is primary (it is what the ZCode
 			// client and Claude Code use); the OpenAI endpoint is attached as

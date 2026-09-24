@@ -604,6 +604,63 @@ func (h *CodexHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
+// XAIHook implements xAI (Grok) OAuth specific behavior.
+// Reference (reverse-engineered, no official docs): auth.x.ai issues a
+// standard OIDC PKCE authorization-code flow (grok-cli:access + api:access
+// scopes); the resulting token is redeemed against xAI's CLI proxy
+// (cli-chat-proxy.grok.com), which requires "impersonation" headers
+// identifying the client as the Grok CLI. Those inference-time headers are
+// applied by internal/client's xaiRoundTripper, not here — this hook only
+// covers the OAuth handshake itself.
+type XAIHook struct{}
+
+func (h *XAIHook) BeforeAuth(params map[string]string) error {
+	return nil
+}
+
+func (h *XAIHook) BeforeToken(body map[string]string, header http.Header) error {
+	header.Set("Accept", "application/json")
+	return nil
+}
+
+func (h *XAIHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
+	type userInfo struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://auth.x.ai/oauth2/userinfo", nil)
+	if err != nil {
+		return nil, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, nil
+	}
+
+	var info userInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, nil
+	}
+
+	metadata := make(map[string]any)
+	if info.Email != "" {
+		metadata["email"] = info.Email
+	}
+	if info.Name != "" {
+		metadata["name"] = info.Name
+	}
+	return metadata, nil
+}
+
 // KimiDeviceName returns the hostname for Kimi headers (auth and inference).
 func KimiDeviceName() string {
 	if hostname, err := os.Hostname(); err == nil {
