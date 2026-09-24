@@ -71,6 +71,32 @@ func questionRequest() Request {
 	}
 }
 
+func multiQuestionRequest() Request {
+	return Request{
+		ID:       "req-multi",
+		Type:     TypeQuestion,
+		ToolName: "AskUserQuestion",
+		Input: map[string]interface{}{
+			"questions": []interface{}{
+				map[string]any{
+					"question": "Which color?",
+					"options": []interface{}{
+						map[string]any{"label": "Red"},
+						map[string]any{"label": "Blue"},
+					},
+				},
+				map[string]any{
+					"question": "Which size?",
+					"options": []interface{}{
+						map[string]any{"label": "Small"},
+						map[string]any{"label": "Large"},
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestAskUserQuestionHandler_BuildPrompt(t *testing.T) {
 	h := NewAskUserQuestionHandler()
 
@@ -110,12 +136,15 @@ func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
 	h := NewAskUserQuestionHandler()
 	req := questionRequest()
 
-	// 0-based index from a keyboard callback.
-	res, err := h.ParseResponse(req, Response{Type: "button", Data: "1"})
+	// 1-based number, matching the "Option 1"/"Option 2" labels BuildPrompt
+	// shows the user — the only shape this ever actually sees, since a
+	// button click resolves its index from the callback payload directly
+	// and never reaches ParseResponse.
+	res, err := h.ParseResponse(req, Response{Type: "text", Data: "1"})
 	require.NoError(t, err)
 	assert.True(t, res.Approved)
 	answers := res.UpdatedInput["answers"].(map[string]interface{})
-	assert.Equal(t, "Blue", answers["Which color?"])
+	assert.Equal(t, "Red", answers["Which color?"])
 
 	// Label match, case-insensitive.
 	res, err = h.ParseResponse(req, Response{Type: "text", Data: "red"})
@@ -128,6 +157,30 @@ func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
 	res, err = h.ParseResponse(req, Response{Type: "text", Data: "  "})
 	require.NoError(t, err)
 	assert.False(t, res.Approved)
+}
+
+// TestAskUserQuestionHandler_ParseResponse_MultiQuestion guards the exact
+// promise BuildPrompt makes for a multi-question fallback ("reply with
+// answers in order, e.g. `1 2 1`"): every question must get its answer from
+// the matching positional token, not just the first one.
+func TestAskUserQuestionHandler_ParseResponse_MultiQuestion(t *testing.T) {
+	h := NewAskUserQuestionHandler()
+	req := multiQuestionRequest()
+
+	res, err := h.ParseResponse(req, Response{Type: "text", Data: "2 1"})
+	require.NoError(t, err)
+	assert.True(t, res.Approved)
+	answers := res.UpdatedInput["answers"].(map[string]interface{})
+	assert.Equal(t, "Blue", answers["Which color?"])
+	assert.Equal(t, "Small", answers["Which size?"])
+
+	// Fewer tokens than questions: the answered ones still land, the rest
+	// are simply missing (not corrupted by misapplied tokens).
+	res, err = h.ParseResponse(req, Response{Type: "text", Data: "1"})
+	require.NoError(t, err)
+	answers = res.UpdatedInput["answers"].(map[string]interface{})
+	assert.Equal(t, "Red", answers["Which color?"])
+	assert.NotContains(t, answers, "Which size?")
 }
 
 // --- default permission handler ---
