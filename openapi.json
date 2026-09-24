@@ -2091,6 +2091,387 @@
         }
       }
     },
+    "/api/v1/desk/folders/recent": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "List folders web sessions have recently worked in",
+        "description": "List folders web sessions have recently worked in",
+        "operationId": "apiV1DeskFoldersRecentGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum folders to return (0 = no limit)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentFoldersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/permission-modes": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "List the selectable Claude Code permission modes",
+        "description": "List the selectable Claude Code permission modes",
+        "operationId": "apiV1DeskPermission-modesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "List this web front door's own sessions, most recently active first",
+        "description": "List this web front door's own sessions, most recently active first",
+        "operationId": "apiV1DeskSessionsGet",
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Only include sessions that are pending, running, completed, or failed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Open a session in a folder and start its first turn",
+        "description": "Open a session in a folder and start its first turn",
+        "operationId": "apiV1DeskSessionsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Get a session",
+        "description": "Get a session",
+        "operationId": "apiV1DeskSessionsSession_idGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/archive": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "End a session for good; the folder and transcript are untouched",
+        "description": "End a session for good; the folder and transcript are untouched",
+        "operationId": "apiV1DeskSessionsSession_idArchivePost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/interrupt": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Stop the current turn; the session stays resumable",
+        "description": "Stop the current turn; the session stays resumable",
+        "operationId": "apiV1DeskSessionsSession_idInterruptPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/messages": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Get a session's transcript",
+        "description": "Get a session's transcript",
+        "operationId": "apiV1DeskSessionsSession_idMessagesGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Send a message and start the next turn",
+        "description": "Send a message and start the next turn",
+        "operationId": "apiV1DeskSessionsSession_idMessagesPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/permission-mode": {
+      "put": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Change a session's permission mode for its next turn",
+        "description": "Change a session's permission mode for its next turn",
+        "operationId": "apiV1DeskSessionsSession_idPermission-modePut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/respond": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Answer a pending approval or ask request",
+        "description": "Answer a pending approval or ask request",
+        "operationId": "apiV1DeskSessionsSession_idRespondPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardrails/builtins": {
       "get": {
         "tags": [
@@ -9621,6 +10002,28 @@
           "smart_enabled"
         ]
       },
+      "CreateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Field prompt"
+          }
+        },
+        "required": [
+          "path",
+          "prompt",
+          "permission_mode"
+        ]
+      },
       "CurlData": {
         "type": "object",
         "properties": {
@@ -12088,6 +12491,54 @@
           "gc_forced"
         ]
       },
+      "MessageInfo": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "payload": {
+            "description": "Field payload"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field timestamp"
+          }
+        },
+        "required": [
+          "content",
+          "timestamp"
+        ]
+      },
+      "MessageListResponse": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Field messages",
+            "items": {
+              "$ref": "#/components/schemas/MessageInfo"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
       "MetaData": {
         "type": "object",
         "properties": {
@@ -13058,6 +13509,21 @@
           "updated_at"
         ]
       },
+      "PermissionModesResponse": {
+        "type": "object",
+        "properties": {
+          "modes": {
+            "type": "array",
+            "description": "Field modes",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "modes"
+        ]
+      },
       "PermissionUpdateRequest": {
         "type": "object",
         "properties": {
@@ -14011,6 +14477,44 @@
           "success"
         ]
       },
+      "RecentFolder": {
+        "type": "object",
+        "properties": {
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_used_at"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "last_used_at"
+        ]
+      },
+      "RecentFoldersResponse": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "description": "Field folders",
+            "items": {
+              "$ref": "#/components/schemas/RecentFolder"
+            }
+          }
+        },
+        "required": [
+          "folders"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -14071,6 +14575,28 @@
             }
           }
         }
+      },
+      "RespondRequest": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string",
+            "description": "Field answer"
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Field approved"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          }
+        },
+        "required": [
+          "request_id",
+          "approved",
+          "answer"
+        ]
       },
       "RestoreConfigResponse": {
         "type": "object",
@@ -14893,6 +15419,18 @@
           }
         }
       },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "ServerActionResponse": {
         "type": "object",
         "properties": {
@@ -14954,6 +15492,86 @@
           "weight",
           "active",
           "time_window"
+        ]
+      },
+      "SessionInfo": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "last_activity": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_activity"
+          },
+          "permission_mode": {
+            "type": "string",
+            "description": "Field permission_mode"
+          },
+          "project": {
+            "type": "string",
+            "description": "Field project"
+          },
+          "request": {
+            "type": "string",
+            "description": "Field request"
+          },
+          "response": {
+            "type": "string",
+            "description": "Field response"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "id",
+          "project",
+          "status",
+          "request",
+          "response",
+          "permission_mode",
+          "created_at",
+          "last_activity"
+        ]
+      },
+      "SessionListResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "description": "Field sessions",
+            "items": {
+              "$ref": "#/components/schemas/SessionInfo"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
+      "SetPermissionModeRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Field mode"
+          }
+        },
+        "required": [
+          "mode"
         ]
       },
       "Settings": {
@@ -17797,6 +18415,10 @@
     {
       "name": "debug",
       "description": "Operations related to debug"
+    },
+    {
+      "name": "desk",
+      "description": "Operations related to desk"
     },
     {
       "name": "feishu",

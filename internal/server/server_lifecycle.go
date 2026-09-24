@@ -291,6 +291,11 @@ func (s *Server) Stop(ctx context.Context) error {
 		log.Println("ImBot settings handler stopped")
 	}
 
+	if s.desk != nil {
+		s.desk.Shutdown(ctx)
+		log.Println("Desk sessions stopped")
+	}
+
 	// Stop token refresher
 	if s.oauthRefresher != nil {
 		s.oauthRefresher.Stop()

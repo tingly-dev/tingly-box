@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"log"
 	"net/http"
 	"strings"
@@ -147,6 +148,10 @@ type Server struct {
 
 	// stops the hourly quota-window request loop
 	quotaWindowStop context.CancelFunc
+
+	// desk is nil when the store is unavailable; Stop shuts it down
+	// so no resident Claude Code process outlives the server.
+	desk *desksvc.Service
 
 	// options
 	enableUI    bool
