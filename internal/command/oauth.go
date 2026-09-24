@@ -131,6 +131,15 @@ func runOAuthFlow(appConfig *appconfig.AppConfig, issuer string, customName stri
 		callbackPort = 1455
 	}
 
+	// Some other providers (e.g. xAI) also require a fixed callback port —
+	// their OAuth app's registered redirect_uri is pinned to it.
+	if providerConfig.CallbackPort != 0 {
+		if callbackPort != 0 && callbackPort != providerConfig.CallbackPort {
+			return fmt.Errorf("%s provider requires port %d, got %d", providerConfig.Type, providerConfig.CallbackPort, callbackPort)
+		}
+		callbackPort = providerConfig.CallbackPort
+	}
+
 	// Default port if not specified
 	if callbackPort == 0 {
 		callbackPort = 12580
@@ -145,7 +154,7 @@ func runAddFlow(appConfig *appconfig.AppConfig, config *ProviderOAuthConfig, cus
 
 	// Create OAuth manager
 	oauthConfigOpts := []oauth2.ConfigOption{
-		oauth2.WithConfigBaseURL(fmt.Sprintf("http://localhost:%d", callbackPort)),
+		oauth2.WithConfigBaseURL(fmt.Sprintf("http://%s:%d", config.LoopbackHost, callbackPort)),
 	}
 	if proxyURLStr != "" {
 		if _, err := url.Parse(proxyURLStr); err != nil {
@@ -304,7 +313,7 @@ func runAuthCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *ap
 
 	// Update manager base URL
 	actualPort := callbackServer.GetPort()
-	manager.SetBaseURL(fmt.Sprintf("http://localhost:%d", actualPort))
+	manager.SetBaseURL(fmt.Sprintf("http://%s:%d", config.LoopbackHost, actualPort))
 
 	// Generate auth URL
 	fmt.Println("\n🔗 Generating authorization URL...")
@@ -566,6 +575,11 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 	case ai.IssuerAntigravity:
 		apiBase = "https://api.antigravity.com/v1"
 		apiStyle = "openai"
+	case ai.IssuerXAI:
+		// xAI's OAuth token is only accepted by the Grok CLI proxy, not the
+		// public api.x.ai (which expects a plain API key).
+		apiBase = "https://cli-chat-proxy.grok.com/v1"
+		apiStyle = "openai"
 	case ai.IssuerGemini:
 		// Gemini CLI uses Google Code Assist API
 		apiBase = "https://cloudcode-pa.googleapis.com"
@@ -588,7 +602,18 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		APIStyle:      apiStyle,
 		OAuthMethod:   oauthMethod,
 		NeedsPort1455: len(providerCfg.CallbackPorts) > 0 && providerCfg.CallbackPorts[0] == 1455,
+		CallbackPort:  firstCallbackPort(providerCfg.CallbackPorts),
+		LoopbackHost:  providerCfg.LoopbackCallbackHost(),
 	}, nil
+}
+
+// firstCallbackPort returns the provider's required callback port, or 0 when
+// the provider has no fixed port (any local port is allowed).
+func firstCallbackPort(ports []int) int {
+	if len(ports) == 0 {
+		return 0
+	}
+	return ports[0]
 }
 
 // ProviderOAuthConfig holds OAuth configuration for a provider
@@ -599,6 +624,13 @@ type ProviderOAuthConfig struct {
 	APIStyle      string
 	OAuthMethod   string // "pkce", "device_code" or "server_poll"
 	NeedsPort1455 bool
+	// CallbackPort is the provider's required local callback port (0 = no
+	// fixed requirement), e.g. xAI's OAuth app needs 56121.
+	CallbackPort int
+	// LoopbackHost is the hostname to use for the local OAuth callback URL.
+	// Some OAuth apps (e.g. xAI) register their redirect URI against the
+	// literal loopback IP (127.0.0.1) and reject "localhost".
+	LoopbackHost string
 }
 
 // findUniqueProviderName finds a unique provider name by appending a number if needed

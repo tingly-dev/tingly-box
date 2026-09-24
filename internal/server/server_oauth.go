@@ -43,6 +43,17 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		}
 	}
 
+	// Must match the redirect_uri sent in the original authorize request
+	// (built in oauth/handler.go's AuthorizeOAuth) exactly, including host —
+	// some OAuth apps (e.g. xAI) register their redirect URI against the
+	// literal loopback IP and reject "localhost".
+	loopbackHost := "localhost"
+	if session, err := s.oauthManager.GetSession(sessionID); err == nil && session != nil {
+		if cfg, ok := s.oauthManager.GetRegistry().Get(session.Issuer); ok {
+			loopbackHost = cfg.LoopbackCallbackHost()
+		}
+	}
+
 	// Create an http.HandlerFunc that properly handles the OAuth callback
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		// Ignore favicon requests
@@ -54,7 +65,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		logrus.Debugf("[OAuth] Callback received: %s %s", r.Method, r.URL.Path)
 		logrus.Debugf("[OAuth] Query params: %v", r.URL.Query())
 
-		callbackOpts := oauthmodule.OAuthOptionsForSession(s.oauthManager, sessionID, fmt.Sprintf("http://localhost:%d", port))
+		callbackOpts := oauthmodule.OAuthOptionsForSession(s.oauthManager, sessionID, fmt.Sprintf("http://%s:%d", loopbackHost, port))
 
 		// Delegate to the OAuth callback handler
 		// We need to directly call the oauth manager since gin won't work here
