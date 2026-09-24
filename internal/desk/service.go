@@ -1,0 +1,443 @@
+// Package desk is a web front door onto the SAME machinery IM's
+// `@cc` already uses: `remote/session.Manager` for session identity and
+// transcript, `agentboot.AgentService.Run` for actually driving the Claude
+// Code CLI. A web page is just another caller of that shared core — it
+// gets its own chatID ("web") so its sessions are its own, but the store,
+// the process-execution path, the --resume bookkeeping and the profile /
+// gateway routing are the ones @cc already exercises in production. There
+// is no separate domain model, no new database table, no separate
+// checkout/workspace directory: the agent works directly in the folder the
+// user points it at, the same way a local `claude` does.
+//
+// This is deliberately a base to grow from (a folder picker, a session
+// list), not the fuller design in .design/desk.md §6 —
+// that shape (its own Source/Environment/Workspace model, cloned
+// checkouts, push/PR) is preserved on the branch
+// claude/managed-agent-heavy-v2-backup for when this path has proven
+// itself.
+package desk
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/remote/session"
+)
+
+// webChatID is the fixed ChatID that groups every session this package
+// creates, the same way an IM chat id groups @cc's sessions — it is what
+// lets ListSessions show only the web's own sessions from the store the
+// two front doors share.
+const webChatID = "web"
+
+// agentType is the `session.Session.Agent` value, matching what @cc's
+// ClaudeCodeExecutor uses so both surfaces list under the same identity.
+const agentType = "claude"
+
+// Routing resolves the env / settings a turn should launch the CLI with,
+// the same two mechanisms @cc's ClaudeCodeExecutor uses (see
+// .design/remote-cc-profile.md §2): process env for the main scenario, or
+// a materialized profile's --settings path. Implemented by tbclient.TBClient
+// in production; a nil Routing runs with the host's own environment.
+type Routing interface {
+	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
+}
+
+// Service is the single entry point every HTTP handler goes through.
+type Service struct {
+	sessions *session.Manager
+	agent    *agentboot.AgentService
+	routing  Routing
+	pool     *pool.Pool // optional: nil keeps every turn one-shot
+
+	mu   sync.Mutex
+	runs map[string]*run // sessionID -> live turn, while one is in flight
+	// launch records what each resident persistent process was started
+	// with (see launchSignature), so a changed permission mode or gateway
+	// env restarts it instead of being silently ignored.
+	launch map[string]string
+}
+
+// run is what Interrupt and Respond need for a session with a turn in
+// flight. It is removed once the turn ends, so Interrupt/Respond outside a
+// turn correctly find nothing to act on.
+type run struct {
+	cancel   context.CancelFunc
+	prompter *webPrompter
+}
+
+// Config wires a Service to its dependencies.
+type Config struct {
+	Sessions *session.Manager
+	Agent    *agentboot.AgentService
+	Routing  Routing // optional
+	// Pool, if set, drives turns through a long-lived Claude Code process
+	// per session instead of spawning one per message — the same
+	// agentboot/pool mechanism @cc's ClaudeCodeExecutor uses for its
+	// persistent_session setting (.design/claude-code.md §5.3). A setup
+	// failure always falls back to a one-shot turn, so this is safe to
+	// enable unconditionally; nil keeps every turn one-shot, unchanged
+	// from before this existed.
+	Pool *pool.Pool
+}
+
+// NewService builds a Service. Construct it once per process: it treats
+// every web session still marked running or pending as left over from a
+// previous process (see recoverInterrupted).
+func NewService(cfg Config) *Service {
+	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}}
+	s.recoverInterrupted()
+	return s
+}
+
+// recoverInterrupted marks web sessions that were mid-turn when the previous
+// process exited as interrupted-but-resumable. No turn can be in flight yet
+// in this process, so a stored running/pending status is necessarily stale —
+// and session.Manager's cleanup skips running sessions, so without this they
+// would read as running forever.
+func (s *Service) recoverInterrupted() {
+	for _, sess := range s.sessions.SnapshotsByChat(webChatID) {
+		if sess.Agent != agentType || (sess.Status != session.StatusRunning && sess.Status != session.StatusPending) {
+			continue
+		}
+		s.sessions.Update(sess.ID, func(sess *session.Session) {
+			sess.Status, sess.Error = session.StatusCompleted, ""
+		})
+		s.appendSystem(sess.ID, "interrupted by a tingly-box restart; send a message to resume")
+	}
+}
+
+// Shutdown stops every in-flight turn and closes every resident persistent
+// process, so none outlives the server holding its Claude session file open.
+func (s *Service) Shutdown(ctx context.Context) {
+	s.mu.Lock()
+	for _, r := range s.runs {
+		r.cancel()
+	}
+	s.mu.Unlock()
+	if s.pool != nil {
+		s.pool.Shutdown(ctx)
+	}
+}
+
+// launchSignature captures the launch-time settings a persistent process
+// cannot change once started. Env is sorted because Routing builds it from
+// a map.
+func launchSignature(opts agentboot.ExecutionOptions) string {
+	env := append([]string(nil), opts.Env...)
+	sort.Strings(env)
+	return opts.PermissionMode + "\x00" + strings.Join(env, "\x00")
+}
+
+// ---------- folders (a thin, un-persisted convenience) ----------
+
+// RecentFolder is a directory a web session has worked in before — derived
+// live from the session list, not a stored entity. There is nothing to add
+// or remove: starting a task in a folder is what makes it "recent", the
+// same way @cc's directory browser has no separate allowlist to manage.
+//
+// This never scans the filesystem: every path here is one the caller
+// already typed and successfully started a session in, so there is no new
+// read surface to reason about.
+type RecentFolder struct {
+	Path       string    `json:"path"`
+	Name       string    `json:"name"`
+	LastUsedAt time.Time `json:"last_used_at"`
+}
+
+// RecentFolders lists the distinct folders web sessions have run in, most
+// recently used first.
+func (s *Service) RecentFolders(limit int) []RecentFolder {
+	all := s.sessions.SnapshotsByChat(webChatID)
+	byPath := map[string]*RecentFolder{}
+	for _, sess := range all {
+		if sess.Agent != agentType || sess.Project == "" {
+			continue
+		}
+		f, ok := byPath[sess.Project]
+		if !ok {
+			f = &RecentFolder{Path: sess.Project, Name: filepath.Base(sess.Project)}
+			byPath[sess.Project] = f
+		}
+		if sess.LastActivity.After(f.LastUsedAt) {
+			f.LastUsedAt = sess.LastActivity
+		}
+	}
+	out := make([]RecentFolder, 0, len(byPath))
+	for _, f := range byPath {
+		out = append(out, *f)
+	}
+	sortRecentFolders(out)
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// cleanFolderPath validates a folder path the way every entry point needs
+// it: absolute, existing, a directory. There is no allowlist beyond that —
+// this surface already requires the same host authentication @cc's own
+// directory browser relies on.
+func cleanFolderPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", invalid("a folder path is required")
+	}
+	if !filepath.IsAbs(path) {
+		return "", invalid("folder path must be absolute, got %q", path)
+	}
+	clean := filepath.Clean(path)
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", invalid("%s: %v", clean, err)
+	}
+	if !info.IsDir() {
+		return "", invalid("%s is not a directory", clean)
+	}
+	return clean, nil
+}
+
+// ---------- sessions ----------
+
+// CreateSessionInput is the composer's request.
+type CreateSessionInput struct {
+	Path           string
+	Prompt         string
+	PermissionMode string
+}
+
+// CreateSession opens a conversation in a folder and starts its first turn.
+// A folder takes as many concurrent sessions as the user wants, the same
+// way several `claude` processes can run in one directory locally — each
+// is its own Claude Code session, keyed by its own id.
+func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*session.Session, error) {
+	in.Prompt = strings.TrimSpace(in.Prompt)
+	if in.Prompt == "" {
+		return nil, invalid("prompt is required")
+	}
+	path, err := cleanFolderPath(in.Path)
+	if err != nil {
+		return nil, err
+	}
+	if !ValidPermissionMode(in.PermissionMode) {
+		return nil, invalid("unknown permission mode %q", in.PermissionMode)
+	}
+
+	sess := s.sessions.CreateWith(webChatID, agentType, path)
+	id := sess.ID
+	s.sessions.SetRequest(id, in.Prompt)
+	s.sessions.Update(id, func(sess *session.Session) { sess.PermissionMode = in.PermissionMode })
+	s.appendUserMessage(id, in.Prompt)
+	s.startTurn(id, path, in.Prompt, in.PermissionMode, false)
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+func (s *Service) GetSession(id string) (*session.Session, error) {
+	snap, ok := s.sessions.SnapshotOrLoad(id)
+	if !ok {
+		return nil, notFound("session", id)
+	}
+	return &snap, nil
+}
+
+// ListSessions lists the web's own sessions, most recently active first.
+func (s *Service) ListSessions(active bool) []session.Session {
+	var out []session.Session
+	for _, sess := range s.sessions.SnapshotsByChat(webChatID) {
+		if sess.Agent != agentType {
+			continue
+		}
+		if active && !isActive(sess.Status) {
+			continue
+		}
+		out = append(out, sess)
+	}
+	sortSessionsByActivity(out)
+	return out
+}
+
+func (s *Service) Messages(id string) ([]session.Message, error) {
+	if _, ok := s.sessions.Get(id); !ok {
+		return nil, notFound("session", id)
+	}
+	msgs, _ := s.sessions.GetMessages(id)
+	return msgs, nil
+}
+
+// SendMessage appends a user turn and starts it. It is recorded first so
+// the transcript is complete even if starting the turn fails.
+func (s *Service) SendMessage(ctx context.Context, id, text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return invalid("text is required")
+	}
+	sess, ok := s.sessions.SnapshotOrLoad(id)
+	if !ok {
+		return notFound("session", id)
+	}
+	if !s.canSteer(sess) {
+		return conflict("session is %s", sess.Status)
+	}
+	s.appendUserMessage(id, text)
+	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
+	// the atomic one (see its doc comment). Two SendMessage calls racing for
+	// the same session can both pass canSteer, so the loser's startTurn
+	// returning false must still surface as a conflict here — otherwise its
+	// message sits in the transcript with no turn ever picking it up, while
+	// the caller is told it succeeded.
+	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, true) {
+		return conflict("session is %s", sess.Status)
+	}
+	return nil
+}
+
+func (s *Service) canSteer(sess session.Session) bool {
+	if sess.Status == session.StatusClosed || sess.Status == session.StatusExpired {
+		return false
+	}
+	s.mu.Lock()
+	_, busy := s.runs[sess.ID]
+	s.mu.Unlock()
+	return !busy
+}
+
+// SetPermissionMode changes a session's mode for its next turn.
+func (s *Service) SetPermissionMode(id, mode string) (*session.Session, error) {
+	if !ValidPermissionMode(mode) {
+		return nil, invalid("unknown permission mode %q", mode)
+	}
+	if _, ok := s.sessions.Get(id); !ok {
+		return nil, notFound("session", id)
+	}
+	s.sessions.Update(id, func(sess *session.Session) { sess.PermissionMode = mode })
+	s.appendSystem(id, "permission mode: "+modeLabel(mode))
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+// Respond answers a pending approval or ask request.
+func (s *Service) Respond(id, requestID string, approved bool, answer string) error {
+	if strings.TrimSpace(requestID) == "" {
+		return invalid("request_id is required")
+	}
+	s.mu.Lock()
+	r, ok := s.runs[id]
+	s.mu.Unlock()
+	if !ok {
+		return conflict("session has no pending request")
+	}
+	if !r.prompter.resolve(requestID, approved, answer) {
+		return notFound("request", requestID)
+	}
+	return nil
+}
+
+// Interrupt stops the current turn; the session stays resumable.
+func (s *Service) Interrupt(id string) error {
+	if !s.cancelRun(id) {
+		return conflict("session has no turn in progress")
+	}
+	return nil
+}
+
+// cancelRun cancels id's in-flight turn, if any. Returns false if there was
+// none to cancel.
+func (s *Service) cancelRun(id string) bool {
+	s.mu.Lock()
+	r, ok := s.runs[id]
+	s.mu.Unlock()
+	if !ok {
+		return false
+	}
+	r.cancel()
+	return true
+}
+
+// Archive ends a session for good. Nothing on disk is touched: the folder
+// and the transcript both stay.
+func (s *Service) Archive(id string) (*session.Session, error) {
+	snap, ok := s.sessions.SnapshotOrLoad(id)
+	if !ok {
+		return nil, notFound("session", id)
+	}
+	if snap.Status != session.StatusClosed {
+		s.cancelRun(id)
+		// A resident persistent process must not survive archiving: it
+		// would keep the on-disk Claude session file open, corrupting any
+		// later resume attempt (the exact bug .design/claude-code.md §5.4
+		// documents fixing for @cc's own bot-stop/setting-off paths).
+		s.evictPersistent(id)
+		// Close removes the session from the manager's live index (it stays
+		// only in the store), so re-reading it via Snapshot afterward would
+		// spuriously find nothing; the transition is known here, so just
+		// reflect it locally.
+		s.sessions.Close(id)
+		snap.Status = session.StatusClosed
+	}
+	return &snap, nil
+}
+
+// evictPersistent closes and forgets id's resident persistent session, if
+// any. A no-op when persistence isn't configured or the session was never
+// promoted to persistent (e.g. it only ever ran one-shot turns).
+func (s *Service) evictPersistent(id string) {
+	if s.pool == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	_ = s.pool.CloseAndRemove(ctx, id)
+	s.mu.Lock()
+	delete(s.launch, id)
+	s.mu.Unlock()
+}
+
+func isActive(st session.Status) bool {
+	switch st {
+	case session.StatusPending, session.StatusRunning, session.StatusCompleted, session.StatusFailed:
+		return true
+	}
+	return false
+}
+
+func modeLabel(mode string) string {
+	if mode == "" {
+		return "inherit"
+	}
+	return mode
+}
+
+func (s *Service) appendUserMessage(id, text string) {
+	s.sessions.AppendMessage(id, session.Message{Role: "user", Content: text, Timestamp: time.Now()})
+}
+
+func (s *Service) appendSystem(id, text string) {
+	s.sessions.AppendMessage(id, session.Message{Kind: "system", Content: text, Timestamp: time.Now()})
+}
+
+var (
+	// ErrNotFound is returned for a missing id.
+	ErrNotFound = errors.New("not found")
+	// ErrValidation is a rejected input.
+	ErrValidation = errors.New("validation")
+	// ErrConflict means the operation is not allowed in the current state.
+	ErrConflict = errors.New("conflict")
+)
+
+func notFound(entity, id string) error { return fmt.Errorf("%s %s: %w", entity, id, ErrNotFound) }
+func invalid(format string, args ...any) error {
+	return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), ErrValidation)
+}
+func conflict(format string, args ...any) error {
+	return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), ErrConflict)
+}
