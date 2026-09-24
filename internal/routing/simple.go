@@ -49,7 +49,7 @@ func (s *SimpleSelector) SelectService(
 				return nil, nil, fmt.Errorf("probe service provider disabled: %s", providerUUID)
 			}
 			svc := &loadbalance.Service{Provider: providerUUID, Model: model, Active: true}
-			logrus.Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, model)
+			logrus.WithContext(c.Request.Context()).Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, model)
 			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, SourceProbePin, -1, nil)
 			return provider, svc, nil
 		}

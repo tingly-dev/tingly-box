@@ -50,14 +50,14 @@ func (t *MCPToolStripGuardTransform) Apply(ctx *protocoltransform.TransformConte
 		return nil
 	}
 	if t.stripEnabled {
-		logrus.WithFields(logrus.Fields{
+		logrus.WithContext(ctx.Context).WithFields(logrus.Fields{
 			"hits":    hits,
 			"removed": removed,
 		}).Warn("mcp: stripped disabled MCP declarations/tool calls")
 		return nil
 	}
 
-	logrus.WithFields(logrus.Fields{
+	logrus.WithContext(ctx.Context).WithFields(logrus.Fields{
 		"hits": hits,
 	}).Warn("mcp: disabled MCP declarations/tool calls detected (strip is off)")
 	return nil

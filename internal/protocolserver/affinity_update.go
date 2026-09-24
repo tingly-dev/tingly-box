@@ -27,5 +27,5 @@ func (ph *ProtocolHandler) updateAffinityMessageID(c *gin.Context, rule *typ.Rul
 	}
 
 	ph.deps.AffinityStore.UpdateMessageID(rule.UUID, key.(string), messageID)
-	logrus.Debugf("[affinity] updated message ID %s for affinity key %s, rule %s", messageID, key.(string), rule.UUID)
+	logrus.WithContext(c.Request.Context()).Debugf("[affinity] updated message ID %s for affinity key %s, rule %s", messageID, key.(string), rule.UUID)
 }

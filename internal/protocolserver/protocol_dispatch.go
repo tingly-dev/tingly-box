@@ -141,7 +141,7 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 
 	switch reqCtx.SourceAPI {
 	case protocol.TypeAnthropicV1:
-		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
+		logrus.WithContext(c.Request.Context()).Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			ph.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
 		} else if provider.IsCodexProvider() {
@@ -150,7 +150,7 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 			ph.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
 		}
 	case protocol.TypeAnthropicBeta:
-		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
+		logrus.WithContext(c.Request.Context()).Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			ph.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
 		} else if provider.IsCodexProvider() {

@@ -172,7 +172,7 @@ func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, ou
 func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
 
-	logrus.WithFields(logrus.Fields{
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 		"has_rule":     rule != nil,
 		"has_provider": provider != nil,
 		"has_model":    model != "",
@@ -199,7 +199,7 @@ func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *proto
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 		"provider":         provider.Name,
 		"model":            model,
 		"scenario":         scenario,

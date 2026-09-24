@@ -1,6 +1,7 @@
 package smartrouting
 
 import (
+	"context"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -82,16 +83,16 @@ func (rc *RequestContext) CombineMessages(messages []string) string {
 // It funnels every supported wire protocol through the existing protocol/request
 // converters into the Anthropic Beta shape, then runs a single extractor against
 // it. Returns nil for unrecognised request types.
-func ExtractContext(req interface{}) *RequestContext {
+func ExtractContext(ctx context.Context, req interface{}) *RequestContext {
 	switch r := req.(type) {
 	case *anthropic.BetaMessageNewParams:
 		return ExtractContextFromBetaRequest(r)
 	case *anthropic.MessageNewParams:
-		return ExtractContextFromBetaRequest(request.ConvertAnthropicV1ToBetaRequest(r))
+		return ExtractContextFromBetaRequest(request.ConvertAnthropicV1ToBetaRequest(ctx, r))
 	case *openai.ChatCompletionNewParams:
 		return ExtractContextFromBetaRequest(request.ConvertOpenAIToAnthropicRequest(r, 0))
 	default:
-		logrus.Debugf("[smart_routing] unknown request type %T, cannot extract context", req)
+		logrus.WithContext(ctx).Debugf("[smart_routing] unknown request type %T, cannot extract context", req)
 		return nil
 	}
 }

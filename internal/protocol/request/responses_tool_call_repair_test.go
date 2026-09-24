@@ -69,7 +69,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call_output","call_id":"call_a","output":"a"},
 		 {"type":"function_call_output","call_id":"call_b","output":"b"},
 		 {"type":"message","role":"user","content":"next"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		assert.Equal(t, []string{"user", "reasoning", "fc:call_a", "fc:call_b", "fco:call_a", "fco:call_b", "user"}, repairKinds(t, out))
 	})
 
@@ -82,7 +82,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call","call_id":"call_b","name":"shell","arguments":"{}"},
 		 {"type":"function_call_output","call_id":"call_a","output":"a"},
 		 {"type":"message","role":"user","content":"stop"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user", "fc:call_a", "fc:call_b", "fco:call_a", "fco:call_b", "user"}, repairKinds(t, out))
 		assert.Equal(t, "a", repairOutputText(t, out[3]))
 		assert.Equal(t, missingToolOutputPlaceholder, repairOutputText(t, out[4]))
@@ -92,7 +92,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		items := parseCodexInput(t, `{"input":[
 		 {"type":"message","role":"user","content":"run"},
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user", "fc:call_a", "fco:call_a"}, repairKinds(t, out))
 		assert.Equal(t, missingToolOutputPlaceholder, repairOutputText(t, out[2]))
 	})
@@ -102,7 +102,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
 		 {"type":"message","role":"user","content":"interjection"},
 		 {"type":"function_call_output","call_id":"call_a","output":"late"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"fc:call_a", "fco:call_a", "user"}, repairKinds(t, out))
 		assert.Equal(t, "late", repairOutputText(t, out[1]))
 	})
@@ -111,7 +111,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		items := parseCodexInput(t, `{"input":[
 		 {"type":"function_call_output","id":"fco_01","name":"automation_update","output":"automation: nightly"},
 		 {"type":"message","role":"user","content":"do the task"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user", "user"}, repairKinds(t, out))
 		assert.Equal(t, "[tool output: automation_update]\nautomation: nightly", repairUserText(t, out[0]))
 	})
@@ -120,7 +120,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		items := parseCodexInput(t, `{"input":[
 		 {"type":"function_call_output","call_id":"call_old","output":"stale"},
 		 {"type":"message","role":"user","content":"next"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user", "user"}, repairKinds(t, out))
 		assert.Equal(t, "[tool output: call_old]\nstale", repairUserText(t, out[0]))
 	})
@@ -137,7 +137,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 				},
 			},
 		}}
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user"}, repairKinds(t, out))
 		list := out[0].OfMessage.Content.OfInputItemContentList
 		require.Len(t, list, 2)
@@ -151,7 +151,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
 		 {"type":"function_call_output","call_id":"call_a","output":"first"},
 		 {"type":"function_call_output","call_id":"call_a","output":"second"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"fc:call_a", "fco:call_a", "user"}, repairKinds(t, out))
 		assert.Equal(t, "first", repairOutputText(t, out[1]))
 		assert.Equal(t, "[tool output: call_a]\nsecond", repairUserText(t, out[2]))
@@ -167,7 +167,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
 		 {"type":"function_call_output","call_id":"call_a","output":"a"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"user", "fc:call_a", "fco:call_a"}, repairKinds(t, out))
 		assert.Equal(t, "a", repairOutputText(t, out[2]))
 	})
@@ -178,7 +178,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call_output","call_id":"call_a","output":"a"},
 		 {"type":"message","role":"user","content":"again"},
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"fc:call_a", "fco:call_a", "user"}, repairKinds(t, out))
 		assert.Equal(t, "a", repairOutputText(t, out[1]))
 	})
@@ -188,7 +188,7 @@ func TestRepairResponsesToolCalls(t *testing.T) {
 		 {"type":"function_call_output","call_id":"call_a","output":"early"},
 		 {"type":"function_call","call_id":"call_a","name":"shell","arguments":"{}"},
 		 {"type":"message","role":"user","content":"next"}]}`)
-		out := RepairResponsesToolCalls(items)
+		out := RepairResponsesToolCalls(t.Context(), items)
 		require.Equal(t, []string{"fc:call_a", "fco:call_a", "user"}, repairKinds(t, out))
 		assert.Equal(t, "early", repairOutputText(t, out[1]))
 	})

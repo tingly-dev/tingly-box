@@ -144,6 +144,7 @@ func handleOpenAIToAnthropicStreamResponse(
 	}()
 
 	conv := newOpenAIToAnthropicConverter(stream, responseModel, req, hooks, mapOpenAIFinishReasonToAnthropic)
+	conv.logCtx = c.Request.Context()
 	_, err := RunConverter(hc, conv, anthropicSSEWriter(c))
 
 	if hookErr := conv.HookErr(); hookErr != nil {

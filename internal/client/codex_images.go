@@ -82,7 +82,7 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 
 	logrus.WithContext(ctx).Debugf("[Codex] Using native images/edits endpoint for image edit, model: %s", req.Model)
 
-	codexReq, err := buildCodexImageEditRequest(&req)
+	codexReq, err := buildCodexImageEditRequest(ctx, &req)
 	if err != nil {
 		return nil, err
 	}
@@ -114,19 +114,19 @@ func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams
 // dropped, mirroring how ImagesGenerate treats style. A mask is the one
 // exception: it changes what the result must be, so it errors rather than
 // being dropped.
-func buildCodexImageEditRequest(req *openai.ImageEditParams) (*codexImageEditRequest, error) {
+func buildCodexImageEditRequest(ctx context.Context, req *openai.ImageEditParams) (*codexImageEditRequest, error) {
 	readers := imageEditInputReaders(req)
 	if len(readers) == 0 {
 		return nil, fmt.Errorf("image edit request has no input image")
 	}
 	if len(readers) > codexMaxReferenceImages {
-		logrus.Debugf("[Codex] %d input images exceeds the Codex reference cap of %d; the backend may reject the request",
+		logrus.WithContext(ctx).Debugf("[Codex] %d input images exceeds the Codex reference cap of %d; the backend may reject the request",
 			len(readers), codexMaxReferenceImages)
 	}
 
 	images := make([]codexImageInput, 0, len(readers))
 	for i, r := range readers {
-		dataURL, err := readerToDataURL(r)
+		dataURL, err := readerToDataURL(ctx, r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read input image %d: %w", i, err)
 		}
@@ -177,7 +177,7 @@ func imageEditInputReaders(req *openai.ImageEditParams) []io.Reader {
 // readerToDataURL drains an input image reader into a base64 data URL, the
 // reference-image form the Codex edit endpoint expects. The media type is
 // sniffed from the content so callers don't have to thread filenames through.
-func readerToDataURL(r io.Reader) (string, error) {
+func readerToDataURL(ctx context.Context, r io.Reader) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -189,7 +189,7 @@ func readerToDataURL(r io.Reader) (string, error) {
 	if !strings.HasPrefix(mediaType, "image/") {
 		// Keep going: the backend validates actual decodability, and PNG/JPEG/
 		// WebP all sniff correctly — this only fires for exotic inputs.
-		logrus.Debugf("[Codex] Input image sniffed as %q, sending anyway", mediaType)
+		logrus.WithContext(ctx).Debugf("[Codex] Input image sniffed as %q, sending anyway", mediaType)
 	}
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }

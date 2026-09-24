@@ -82,7 +82,7 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 				return nil
 			}
 		default:
-			logrus.Errorf("Unsupported oauth issuer: %s", issuer)
+			logrus.WithContext(ctx).Errorf("Unsupported oauth issuer: %s", issuer)
 			return nil
 		}
 	} else if provider.IsVirtual() {

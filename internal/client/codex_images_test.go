@@ -30,7 +30,7 @@ func TestBuildCodexImageEditRequest_SingleImage(t *testing.T) {
 	}
 	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
 
-	out, err := buildCodexImageEditRequest(req)
+	out, err := buildCodexImageEditRequest(t.Context(), req)
 	require.NoError(t, err)
 
 	require.Len(t, out.Images, 1)
@@ -63,7 +63,7 @@ func TestBuildCodexImageEditRequest_MultipleImagesAndOptions(t *testing.T) {
 		bytes.NewReader(testPNGBytes),
 	}
 
-	out, err := buildCodexImageEditRequest(req)
+	out, err := buildCodexImageEditRequest(t.Context(), req)
 	require.NoError(t, err)
 
 	assert.Len(t, out.Images, 2)
@@ -80,12 +80,12 @@ func TestBuildCodexImageEditRequest_MultipleImagesAndOptions(t *testing.T) {
 
 func TestBuildCodexImageEditRequest_NoImage(t *testing.T) {
 	req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2"}
-	_, err := buildCodexImageEditRequest(req)
+	_, err := buildCodexImageEditRequest(t.Context(), req)
 	assert.Error(t, err)
 }
 
 func TestReaderToDataURL_EmptyContent(t *testing.T) {
-	_, err := readerToDataURL(bytes.NewReader(nil))
+	_, err := readerToDataURL(t.Context(), bytes.NewReader(nil))
 	assert.Error(t, err)
 }
 

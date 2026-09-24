@@ -24,7 +24,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
-	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
+	logrus.WithContext(c.Request.Context()).Debugf("scenario: %s beta: %v", scenario, beta)
 
 	// Validate scenario
 	if !IsValidRuleScenario(scenarioType) {
@@ -221,7 +221,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(c.Request.Context(), provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return
@@ -347,7 +347,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(c.Request.Context(), provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

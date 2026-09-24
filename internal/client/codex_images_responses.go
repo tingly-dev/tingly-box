@@ -69,7 +69,7 @@ func (c *CodexClient) imagesEditViaResponses(ctx context.Context, req openai.Ima
 	logrus.WithContext(ctx).Debugf("[Codex] Using Responses image_generation tool for image edit (experimental), model: %s, mask: %t",
 		req.Model, req.Mask != nil)
 
-	responsesReq, err := buildImageEditResponsesRequest(&req)
+	responsesReq, err := buildImageEditResponsesRequest(ctx, &req)
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +89,13 @@ func (c *CodexClient) imagesEditViaResponses(ctx context.Context, req openai.Ima
 // It deliberately mirrors buildImageGenerationResponsesRequest (codex_client.go)
 // on the request envelope — same store/instructions/parallel_tool_calls/include
 // defaults — so the two image paths stay one shape, not two dialects.
-func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.ResponseNewParams, error) {
+func buildImageEditResponsesRequest(ctx context.Context, req *openai.ImageEditParams) (responses.ResponseNewParams, error) {
 	readers := imageEditInputReaders(req)
 	if len(readers) == 0 {
 		return responses.ResponseNewParams{}, fmt.Errorf("image edit request has no input image")
 	}
 	if len(readers) > codexMaxReferenceImages {
-		logrus.Debugf("[Codex] %d input images exceeds the Codex reference cap of %d; the backend may reject the request",
+		logrus.WithContext(ctx).Debugf("[Codex] %d input images exceeds the Codex reference cap of %d; the backend may reject the request",
 			len(readers), codexMaxReferenceImages)
 	}
 
@@ -103,7 +103,7 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 		responses.ResponseInputContentParamOfInputText(req.Prompt),
 	}
 	for i, r := range readers {
-		dataURL, err := readerToDataURL(r)
+		dataURL, err := readerToDataURL(ctx, r)
 		if err != nil {
 			return responses.ResponseNewParams{}, fmt.Errorf("failed to read input image %d: %w", i, err)
 		}
@@ -157,7 +157,7 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 	}
 
 	if req.Mask != nil {
-		maskURL, err := readerToDataURL(req.Mask)
+		maskURL, err := readerToDataURL(ctx, req.Mask)
 		if err != nil {
 			return responses.ResponseNewParams{}, fmt.Errorf("failed to read mask: %w", err)
 		}

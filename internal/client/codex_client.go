@@ -99,7 +99,7 @@ func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req opena
 // into a non-streaming Response, as required by the ChatGPT backend API.
 func (c *CodexClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
 	// Apply Codex-specific defaults to the request
-	applyCodexDefaultsToParams(&req)
+	applyCodexDefaultsToParams(ctx, &req)
 
 	// Call streaming API
 	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, req)
@@ -112,7 +112,7 @@ func (c *CodexClient) ResponsesNew(ctx context.Context, req responses.ResponseNe
 // ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults.
 func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
 	// Apply Codex-specific defaults to the request
-	applyCodexDefaultsToParams(&req)
+	applyCodexDefaultsToParams(ctx, &req)
 	// Call the base implementation
 	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
 }
@@ -126,7 +126,7 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 
 	// Build Responses API request; it carries no image count, so n > 1 is
 	// served by issuing it n times (codex_images_fanout.go).
-	responsesReq := c.buildImageGenerationResponsesRequest(req)
+	responsesReq := c.buildImageGenerationResponsesRequest(ctx, req)
 
 	return fanOutCodexImages(ctx, codexImageCount(req.N), func(ctx context.Context) (*openai.ImagesResponse, error) {
 		stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
@@ -140,7 +140,7 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 const fastModelSuffix = ":fast"
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
-func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
+func applyCodexDefaultsToParams(ctx context.Context, req *responses.ResponseNewParams) {
 	// Resolve the ":fast" virtual model suffix into the real model id + priority service tier.
 	if strings.HasSuffix(req.Model, fastModelSuffix) {
 		req.Model = strings.TrimSuffix(req.Model, fastModelSuffix)
@@ -198,7 +198,7 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 
 	// ChatGPT Codex rejects empty/invalid item ids in input[].
 	// These ids are optional for request items, so strip malformed values.
-	sanitizeResponseInputIDs(req)
+	sanitizeResponseInputIDs(ctx, req)
 
 	// Set the modified extra fields back
 	req.SetExtraFields(extraFields)
@@ -207,7 +207,7 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 // sanitizeResponseInputIDs sanitizes item IDs in ResponseNewParams.Input for Codex.
 // ChatGPT Codex rejects empty/invalid item ids, so we strip malformed values
 // and drop reasoning items whose required plain-string ID cannot be omitted.
-func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
+func sanitizeResponseInputIDs(ctx context.Context, req *responses.ResponseNewParams) {
 	if req.Input.OfInputItemList == nil {
 		return
 	}
@@ -216,7 +216,7 @@ func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 	sanitized := inputItems[:0]
 	for i := range inputItems {
 		item := inputItems[i]
-		if sanitizeInputItemID(&item) {
+		if sanitizeInputItemID(ctx, &item) {
 			sanitized = append(sanitized, item)
 		}
 	}
@@ -228,7 +228,7 @@ func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 // by clearing invalid IDs directly on the inner SDK struct fields.
 // Returns false if the item must be dropped entirely (because its required
 // id field is invalid and cannot be omitted).
-func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
+func sanitizeInputItemID(ctx context.Context, item *responses.ResponseInputItemUnionParam) bool {
 	// Optional Opt[string] ids: clear when invalid so the SDK omits the field.
 	if item.OfFunctionCall != nil {
 		sanitizeOptID(&item.OfFunctionCall.ID)
@@ -268,52 +268,52 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 	if item.OfReasoning != nil {
 		item.OfReasoning.ID = strings.TrimSpace(item.OfReasoning.ID)
 		if item.OfReasoning.ID == "" || !isValidCodexID(item.OfReasoning.ID) {
-			logrus.Debugf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
+			logrus.WithContext(ctx).Debugf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
 			return false
 		}
 	}
 	if item.OfFileSearchCall != nil && !isValidCodexIDStrict(item.OfFileSearchCall.ID) {
-		logrus.Debugf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
 		return false
 	}
 	if item.OfComputerCall != nil && !isValidCodexIDStrict(item.OfComputerCall.ID) {
-		logrus.Debugf("[Codex] Dropping computer_call input item with invalid id: %q", item.OfComputerCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping computer_call input item with invalid id: %q", item.OfComputerCall.ID)
 		return false
 	}
 	if item.OfWebSearchCall != nil && !isValidCodexIDStrict(item.OfWebSearchCall.ID) {
-		logrus.Debugf("[Codex] Dropping web_search_call input item with invalid id: %q", item.OfWebSearchCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping web_search_call input item with invalid id: %q", item.OfWebSearchCall.ID)
 		return false
 	}
 	if item.OfImageGenerationCall != nil && !isValidCodexIDStrict(item.OfImageGenerationCall.ID) {
-		logrus.Debugf("[Codex] Dropping image_generation_call input item with invalid id: %q", item.OfImageGenerationCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping image_generation_call input item with invalid id: %q", item.OfImageGenerationCall.ID)
 		return false
 	}
 	if item.OfCodeInterpreterCall != nil && !isValidCodexIDStrict(item.OfCodeInterpreterCall.ID) {
-		logrus.Debugf("[Codex] Dropping code_interpreter_call input item with invalid id: %q", item.OfCodeInterpreterCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping code_interpreter_call input item with invalid id: %q", item.OfCodeInterpreterCall.ID)
 		return false
 	}
 	if item.OfLocalShellCall != nil && !isValidCodexIDStrict(item.OfLocalShellCall.ID) {
-		logrus.Debugf("[Codex] Dropping local_shell_call input item with invalid id: %q", item.OfLocalShellCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping local_shell_call input item with invalid id: %q", item.OfLocalShellCall.ID)
 		return false
 	}
 	if item.OfLocalShellCallOutput != nil && !isValidCodexIDStrict(item.OfLocalShellCallOutput.ID) {
-		logrus.Debugf("[Codex] Dropping local_shell_call_output input item with invalid id: %q", item.OfLocalShellCallOutput.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping local_shell_call_output input item with invalid id: %q", item.OfLocalShellCallOutput.ID)
 		return false
 	}
 	if item.OfMcpListTools != nil && !isValidCodexIDStrict(item.OfMcpListTools.ID) {
-		logrus.Debugf("[Codex] Dropping mcp_list_tools input item with invalid id: %q", item.OfMcpListTools.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping mcp_list_tools input item with invalid id: %q", item.OfMcpListTools.ID)
 		return false
 	}
 	if item.OfMcpApprovalRequest != nil && !isValidCodexIDStrict(item.OfMcpApprovalRequest.ID) {
-		logrus.Debugf("[Codex] Dropping mcp_approval_request input item with invalid id: %q", item.OfMcpApprovalRequest.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping mcp_approval_request input item with invalid id: %q", item.OfMcpApprovalRequest.ID)
 		return false
 	}
 	if item.OfMcpCall != nil && !isValidCodexIDStrict(item.OfMcpCall.ID) {
-		logrus.Debugf("[Codex] Dropping mcp_call input item with invalid id: %q", item.OfMcpCall.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping mcp_call input item with invalid id: %q", item.OfMcpCall.ID)
 		return false
 	}
 	if item.OfItemReference != nil && !isValidCodexIDStrict(item.OfItemReference.ID) {
-		logrus.Debugf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
+		logrus.WithContext(ctx).Debugf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
 		return false
 	}
 
@@ -323,7 +323,7 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 		msg := item.OfMessage
 		if msg.Content.OfString.Valid() && msg.Content.OfString.Value == "" &&
 			len(msg.Content.OfInputItemContentList) == 0 {
-			logrus.Warnf("[Codex] Dropping message item (role=%s) with empty string content", msg.Role)
+			logrus.WithContext(ctx).Warnf("[Codex] Dropping message item (role=%s) with empty string content", msg.Role)
 			return false
 		}
 	}
@@ -381,7 +381,7 @@ func (c *CodexClient) ListModels(ctx context.Context) (*ModelListResult, error) 
 
 // buildImageGenerationResponsesRequest transforms ImageGenerateParams into
 // a Responses API request with the image_generation tool.
-func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
+func (c *CodexClient) buildImageGenerationResponsesRequest(ctx context.Context, req openai.ImageGenerateParams) responses.ResponseNewParams {
 	// Build the Responses API request with Codex-specific defaults
 	params := responses.ResponseNewParams{
 		Model: req.Model,
@@ -432,7 +432,7 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 
 	// Log warning for unsupported style parameter
 	if req.Style != "" {
-		logrus.Debugf("[Codex] Style parameter not supported for image generation")
+		logrus.WithContext(ctx).Debugf("[Codex] Style parameter not supported for image generation")
 	}
 
 	// Set stream=true via ExtraFields

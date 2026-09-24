@@ -87,7 +87,7 @@ func TestCacheControlProtocolFamilyPreservesMultiblockBoundaries(t *testing.T) {
 		require.NotNil(t, assistant.Content[0].OfOutputText)
 		require.Equal(t, "assistant text", assistant.Content[0].OfOutputText.Text)
 
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), *responsesReq, 4096)
 		requireAnthropicFamilyBoundaries(t, out, false)
 	})
 }
@@ -127,7 +127,7 @@ func TestCacheControlProtocolFamilyDoesNotSynthesizeBreakpoints(t *testing.T) {
 
 	// Responses→Chat collapses text content to the compact string form
 	// unconditionally, so its shape does not depend on breakpoints either.
-	chatAgain := ConvertOpenAIResponsesToChat(responsesReq, 4096)
+	chatAgain := ConvertOpenAIResponsesToChat(t.Context(), responsesReq, 4096)
 	require.Empty(t, chatAgain.PromptCacheOptions.Mode)
 	require.True(t, chatAgain.Messages[0].OfSystem.Content.OfString.Valid())
 	require.True(t, chatAgain.Messages[1].OfUser.Content.OfString.Valid())
@@ -268,7 +268,7 @@ func TestCacheControlProtocolFamilyChatResponsesKeepsMultipleBreakpoints(t *test
 	require.False(t, openaiparam.IsOmitted(content[0].OfInputText.PromptCacheBreakpoint))
 	require.False(t, openaiparam.IsOmitted(content[1].OfInputText.PromptCacheBreakpoint))
 
-	out := ConvertOpenAIResponsesToChat(responsesReq, 4096)
+	out := ConvertOpenAIResponsesToChat(t.Context(), responsesReq, 4096)
 	parts := out.Messages[0].OfUser.Content.OfArrayOfContentParts
 	require.Len(t, parts, 2)
 	require.False(t, openaiparam.IsOmitted(parts[0].OfText.PromptCacheBreakpoint))

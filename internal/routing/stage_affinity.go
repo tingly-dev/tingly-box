@@ -71,12 +71,12 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, candidates []*loadbalanc
 	// Once the lock expires, the session must re-enter the selection pipeline
 	// and postProcess will create a new lock with a fresh TTL.
 	if clock.Now().After(entry.ExpiresAt) {
-		logrus.Infof("[affinity] affinity entry for session %s expired at %s; dropping pin so strategy re-selects",
+		logrus.WithContext(selectionLogContext(ctx)).Infof("[affinity] affinity entry for session %s expired at %s; dropping pin so strategy re-selects",
 			ctx.SessionID.String(), entry.ExpiresAt)
 		return candidates, nil, nil
 	}
 
-	logrus.Infof("[affinity] using locked service for session %s: %s",
+	logrus.WithContext(selectionLogContext(ctx)).Infof("[affinity] using locked service for session %s: %s",
 		ctx.SessionID.String(), entry.Service.Model)
 
 	// The candidate set is the scope this request may select from — the
@@ -86,7 +86,7 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, candidates []*loadbalanc
 	// out-of-scope service (e.g. a partition-only service into a
 	// non-matching request whose base pool has no active services).
 	if !ContainsService(candidates, entry.Service) {
-		logrus.Debugf("[affinity] locked service %s not in candidate set, skipping",
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[affinity] locked service %s not in candidate set, skipping",
 			entry.Service.ServiceID())
 		return candidates, nil, nil
 	}
@@ -102,7 +102,7 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, candidates []*loadbalanc
 	// On decline the pipeline falls through to the strategy, which re-selects a
 	// currently-valid service, and postProcess re-pins the session there.
 	if !typ.IsAffinityEligible(rule.UUID, candidates, entry.Service) {
-		logrus.Infof("[affinity] locked service %s is not currently selectable for session %s; dropping pin so strategy re-selects",
+		logrus.WithContext(selectionLogContext(ctx)).Infof("[affinity] locked service %s is not currently selectable for session %s; dropping pin so strategy re-selects",
 			entry.Service.ServiceID(), ctx.SessionID.String())
 		return candidates, nil, nil
 	}

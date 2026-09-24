@@ -136,7 +136,7 @@ func (s *SmartRoutingStage) emitTrace(
 			WithFields(fields).
 			Info(formatTraceMessage(matched, matchedRuleIndex, ctx.Rule.RequestModel, outcome))
 	}
-	logrus.WithFields(fields).Debugf("[smart_routing] %s", outcome)
+	logrus.WithContext(selectionLogContext(ctx)).WithFields(fields).Debugf("[smart_routing] %s", outcome)
 }
 
 func formatTraceMessage(matched bool, idx int, model, outcome string) string {
@@ -177,19 +177,19 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// no-op there (a wasted map-build + scan on every plain, non-smart rule,
 	// the common case), so skip straight to returning candidates unchanged.
 	if len(rule.SmartRouting) == 0 {
-		logrus.Debugf("[smart_routing] skipped - SmartRoutingCount=0")
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] skipped - SmartRoutingCount=0")
 		return candidates, nil, nil
 	}
 	if !rule.SmartEnabled || ctx.Request == nil {
-		logrus.Debugf("[smart_routing] skipped - SmartEnabled=%v, SmartRoutingCount=%d, Request=%v",
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] skipped - SmartEnabled=%v, SmartRoutingCount=%d, Request=%v",
 			rule.SmartEnabled, len(rule.SmartRouting), ctx.Request != nil)
 		return basePool(), nil, nil
 	}
 
-	logrus.Debugf("[smart_routing] evaluating %d rules for model %s", len(rule.SmartRouting), rule.RequestModel)
+	logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] evaluating %d rules for model %s", len(rule.SmartRouting), rule.RequestModel)
 
 	// Extract request context (nil for request types smart routing can't inspect)
-	reqCtx := smartrouting.ExtractContext(ctx.Request)
+	reqCtx := smartrouting.ExtractContext(selectionLogContext(ctx), ctx.Request)
 	if reqCtx == nil {
 		s.emitTrace(ctx, nil, nil, -1, 0, 0, nil, "no_context", "request type not supported for smart routing")
 		return basePool(), nil, nil
@@ -213,14 +213,14 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// Create router and evaluate
 	router, err := smartrouting.NewRouter(rule.SmartRouting)
 	if err != nil {
-		logrus.Debugf("[smart_routing] failed to create router: %v", err)
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] failed to create router: %v", err)
 		s.emitTrace(ctx, reqCtx, nil, -1, 0, 0, nil, "router_invalid", err.Error())
 		return basePool(), nil, nil
 	}
 
 	matchedServices, matchedRuleIndex, matched, trace := router.Evaluate(reqCtx)
 	if !matched || len(matchedServices) == 0 {
-		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
 		s.emitTrace(ctx, reqCtx, trace, -1, 0, 0, nil, "no_match", "no rule matched the request")
 		return basePool(), nil, nil
 	}
@@ -249,10 +249,10 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	if len(candidates) > 0 {
 		beforeCount := len(matchedServices)
 		matchedServices = IntersectServices(matchedServices, candidates)
-		logrus.Debugf("[smart_routing] intersection: %d -> %d services", beforeCount, len(matchedServices))
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] intersection: %d -> %d services", beforeCount, len(matchedServices))
 	}
 	if len(matchedServices) == 0 {
-		logrus.Debugf("[smart_routing] matched rule has no services in current candidate set")
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] matched rule has no services in current candidate set")
 		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, 0, 0, nil, "no_candidates",
 			"matched rule has no services in current candidate set")
 		return basePool(), nil, nil
@@ -261,7 +261,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// Filter active services
 	activeServices := FilterActiveServices(matchedServices)
 	if len(activeServices) == 0 {
-		logrus.Debugf("[smart_routing] no active services in matched set")
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] no active services in matched set")
 		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil, "no_active_services",
 			"matched rule has no active services")
 		return basePool(), nil, nil
@@ -274,7 +274,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// first-request pin could defeat content routing for the whole session
 	// TTL and skip processor ops entirely for pinned sessions.
 	ctx.MatchedSmartRuleIndex = matchedRuleIndex
-	logrus.Debugf("[smart_routing] rule %d matched, narrowing candidates to %d services",
+	logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] rule %d matched, narrowing candidates to %d services",
 		matchedRuleIndex, len(activeServices))
 	s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
 		nil, "matched", "candidates narrowed to the matched subset")
@@ -320,7 +320,7 @@ func (s *SmartRoutingStage) runOpProcessors(
 	for _, cp := range procs {
 		pctx.OpUUID = cp.op.UUID
 		if err := cp.proc.Process(pctx); err != nil {
-			logrus.Debugf("[smart_routing] processor %s/%s error: %v",
+			logrus.WithContext(selectionLogContext(ctx)).Debugf("[smart_routing] processor %s/%s error: %v",
 				cp.op.Position, cp.op.Operation, err)
 		}
 	}

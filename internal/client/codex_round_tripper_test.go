@@ -29,7 +29,7 @@ func TestSanitizeCodexInputIDsJSON_DropsRequiredEmptyID(t *testing.T) {
 		]
 	}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 2, "reasoning item with empty id must be dropped")
@@ -47,7 +47,7 @@ func TestSanitizeCodexInputIDsJSON_ClearsOptionalEmptyID(t *testing.T) {
 		]
 	}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 3, "optional-id items must not be dropped")
@@ -64,7 +64,7 @@ func TestSanitizeCodexInputIDsJSON_DropsInvalidChars(t *testing.T) {
 		]
 	}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 1, "reasoning with invalid chars must be dropped")
@@ -75,7 +75,7 @@ func TestSanitizeCodexInputIDsJSON_DropsInvalidChars(t *testing.T) {
 func TestSanitizeCodexInputIDsJSON_NoOpWhenAllValid(t *testing.T) {
 	body := `{"input":[{"type":"reasoning","id":"rs_abc","summary":[]},{"type":"function_call","id":"fc_123","call_id":"c","name":"f","arguments":"{}"}]}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	assert.Equal(t, body, out, "valid ids must not be modified")
 }
@@ -83,7 +83,7 @@ func TestSanitizeCodexInputIDsJSON_NoOpWhenAllValid(t *testing.T) {
 func TestSanitizeCodexInputIDsJSON_NoInputArray(t *testing.T) {
 	body := `{"model":"gpt-5-codex","input":"hello"}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	assert.Equal(t, body, out, "non-array input must be passed through")
 }
@@ -91,7 +91,7 @@ func TestSanitizeCodexInputIDsJSON_NoInputArray(t *testing.T) {
 func TestSanitizeCodexInputIDsJSON_WhitespaceOnlyID(t *testing.T) {
 	body := `{"input":[{"type":"function_call_output","id":"   ","call_id":"c1","output":"ok"}]}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 1)
@@ -107,7 +107,7 @@ func TestSanitizeCodexInputIDsJSON_HighIndex(t *testing.T) {
 	items = append(items, `{"type":"shell_call","id":"","call_id":"c","action":{}}`)
 	body := `{"input":[` + strings.Join(items, ",") + `]}`
 
-	out := sanitizeCodexInputIDsJSON(body)
+	out := sanitizeCodexInputIDsJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 187)
@@ -124,7 +124,7 @@ func TestSanitizeCodexEmptyContentJSON_DropsEmptyStringContent(t *testing.T) {
 		]
 	}`
 
-	out := sanitizeCodexEmptyContentJSON(body)
+	out := sanitizeCodexEmptyContentJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 2, "message items with empty string content must be dropped")
@@ -135,7 +135,7 @@ func TestSanitizeCodexEmptyContentJSON_DropsEmptyStringContent(t *testing.T) {
 func TestSanitizeCodexEmptyContentJSON_KeepsNonEmptyContent(t *testing.T) {
 	body := `{"input":[{"type":"message","role":"user","content":"hi"},{"type":"message","role":"assistant","content":"hello"}]}`
 
-	out := sanitizeCodexEmptyContentJSON(body)
+	out := sanitizeCodexEmptyContentJSON(t.Context(), body)
 
 	assert.Equal(t, body, out, "non-empty content must not be modified")
 }
@@ -143,7 +143,7 @@ func TestSanitizeCodexEmptyContentJSON_KeepsNonEmptyContent(t *testing.T) {
 func TestSanitizeCodexEmptyContentJSON_NoInputArray(t *testing.T) {
 	body := `{"model":"gpt-5-codex","input":"hello"}`
 
-	out := sanitizeCodexEmptyContentJSON(body)
+	out := sanitizeCodexEmptyContentJSON(t.Context(), body)
 
 	assert.Equal(t, body, out)
 }
@@ -157,7 +157,7 @@ func TestSanitizeCodexEmptyContentJSON_HighIndex(t *testing.T) {
 	items = append(items, `{"type":"message","role":"assistant","content":""}`)
 	body := `{"input":[` + strings.Join(items, ",") + `]}`
 
-	out := sanitizeCodexEmptyContentJSON(body)
+	out := sanitizeCodexEmptyContentJSON(t.Context(), body)
 
 	input := gjson.Get(out, "input").Array()
 	assert.Len(t, input, 1012, "empty-content message at high index must be dropped")
@@ -219,7 +219,7 @@ func TestCodexFilterFieldLiftsSystemMessages(t *testing.T) {
 		]
 	}`)
 
-	out, err := (&codexRoundTripper{}).filterField(body)
+	out, err := (&codexRoundTripper{}).filterField(t.Context(), body)
 	require.NoError(t, err)
 	assert.Equal(t, "system prompt", gjson.GetBytes(out, "instructions").String())
 	assert.False(t, gjson.GetBytes(out, `input.#(role=="system")`).Exists())
@@ -460,7 +460,7 @@ func TestCodexBodyIsStableAcrossBreakpointRotation(t *testing.T) {
 		converted := request.ConvertAnthropicBetaToResponsesRequest(claudeCodeBetaRequest(breakpointAt))
 		raw, err := json.Marshal(converted)
 		require.NoError(t, err)
-		filtered, err := rt.filterField(raw)
+		filtered, err := rt.filterField(t.Context(), raw)
 		require.NoError(t, err)
 		return string(filtered)
 	}

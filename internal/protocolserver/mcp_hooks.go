@@ -60,7 +60,7 @@ func (ph *ProtocolHandler) buildOpenAIToAnthropicMCPHooks(
 				var err error
 				ctx, toolResult, err = ph.CallMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				if err != nil {
-					logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tc.Name, arguments)
+					logrus.WithContext(ctx).WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tc.Name, arguments)
 				}
 				virtualResults = append(virtualResults, mcp.ToolExecutionResult{
 					ToolUseID: tc.ID,

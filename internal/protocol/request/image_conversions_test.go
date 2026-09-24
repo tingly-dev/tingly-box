@@ -191,7 +191,7 @@ func TestConvertResponsesToAnthropic_Image(t *testing.T) {
 	}
 
 	t.Run("beta", func(t *testing.T) {
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(makeReq(), 1024)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), makeReq(), 1024)
 		require.Len(t, out.Messages, 1)
 		require.Len(t, out.Messages[0].Content, 2)
 
@@ -263,7 +263,7 @@ func TestConvertOpenAIResponsesToChat_Image(t *testing.T) {
 		},
 	}
 
-	out := ConvertOpenAIResponsesToChat(params, 1024)
+	out := ConvertOpenAIResponsesToChat(t.Context(), params, 1024)
 	require.NotNil(t, out)
 	require.Len(t, out.Messages, 1)
 

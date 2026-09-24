@@ -39,7 +39,7 @@ type ClaudeClient struct {
 // so per-request flags resolved here (the claude_org_id rule flag via
 // typ.GetRuleFlags) are correctly scoped to the request being served.
 func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
-	logrus.Debug("creating claude-client")
+	logrus.WithContext(ctx).Debug("creating claude-client")
 
 	apiBase := anthropicBaseURL(provider.APIBase)
 

@@ -21,7 +21,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_SimpleInput(t *testing.T) 
 		},
 	}
 
-	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), params, 4096)
 
 	// Verify model
 	if string(result.Model) != "gpt-4o" {
@@ -74,7 +74,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_InputItems(t *testing.T) {
 		},
 	}
 
-	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), params, 4096)
 
 	// Verify messages
 	if len(result.Messages) != 2 {
@@ -107,7 +107,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_FunctionCall(t *testing.T)
 		},
 	}
 
-	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), params, 4096)
 
 	// A lone function_call is answered by a placeholder tool_result so the
 	// tool_use does not dangle (Anthropic rejects unanswered tool_use).
@@ -188,7 +188,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ParallelToolCalls(t *testi
 		},
 	}
 
-	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), params, 4096)
 
 	// user, assistant[tool_use A, tool_use B], user[tool_result A, tool_result B]
 	if len(result.Messages) != 3 {
@@ -245,7 +245,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_SequentialToolCalls(t *tes
 		},
 	}
 
-	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), params, 4096)
 
 	// user, assistant[tool_use A], user[tool_result A], assistant[tool_use B], user[tool_result B]
 	if len(result.Messages) != 5 {
@@ -310,7 +310,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.
 		 {"type":"function_call","call_id":"call_b","name":"shell","arguments":"{}"},
 		 {"type":"function_call_output","call_id":"call_a","output":"a-out"},
 		 {"type":"message","role":"user","content":"stop"}]}`)
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(responses.ResponseNewParams{
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), responses.ResponseNewParams{
 			Input: responses.ResponseNewParamsInputUnion{OfInputItemList: items},
 		}, 4096)
 
@@ -334,7 +334,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.
 		 {"type":"function_call_output","id":"fco_01","name":"automation_update","output":"automation: nightly"},
 		 {"type":"function_call_output","call_id":"call_old","output":"stale"},
 		 {"type":"message","role":"user","content":"do the task"}]}`)
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(responses.ResponseNewParams{
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), responses.ResponseNewParams{
 			Input: responses.ResponseNewParamsInputUnion{OfInputItemList: items},
 		}, 4096)
 

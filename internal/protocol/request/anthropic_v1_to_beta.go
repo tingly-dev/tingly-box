@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -21,10 +22,10 @@ import (
 // This compatibility wrapper keeps the historical nil-on-failure behavior for
 // context-extraction callers. Protocol boundaries that need an actionable
 // error should use ConvertAnthropicV1ToBetaRequestWithError.
-func ConvertAnthropicV1ToBetaRequest(req *anthropic.MessageNewParams) *anthropic.BetaMessageNewParams {
+func ConvertAnthropicV1ToBetaRequest(ctx context.Context, req *anthropic.MessageNewParams) *anthropic.BetaMessageNewParams {
 	converted, err := ConvertAnthropicV1ToBetaRequestWithError(req)
 	if err != nil {
-		logrus.WithError(err).Warn("ConvertAnthropicV1ToBetaRequest: wire conversion failed")
+		logrus.WithContext(ctx).WithError(err).Warn("ConvertAnthropicV1ToBetaRequest: wire conversion failed")
 		return nil
 	}
 	return converted

@@ -1,11 +1,13 @@
 package routing
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // LoadBalancerStage performs standard load balancing across all rule services.
@@ -39,7 +41,7 @@ func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	tempRule.Services = candidates
 	logOpenBreakerSkips(ctx, &tempRule)
 
-	service, err := s.loadBalancer.SelectService(&tempRule)
+	service, err := selectWithRequestContext(s.loadBalancer, selectionLogContext(ctx), &tempRule)
 	if err != nil {
 		return candidates, nil, fmt.Errorf("selection failed: %w", err)
 	}
@@ -89,4 +91,18 @@ func logOpenBreakerSkips(ctx *SelectionContext, rule interface {
 			"breaker_state": state.String(),
 		}).Warnf("[routing] skipped %s because breaker is %s", svc.ServiceID(), state.String())
 	}
+}
+
+// contextLoadBalancer is implemented by balancers that can log against the
+// request being routed (protocolserver.LoadBalancer). It is optional so the
+// LoadBalancer interface and its test doubles stay context-free.
+type contextLoadBalancer interface {
+	SelectServiceCtx(ctx context.Context, rule *typ.Rule) (*loadbalance.Service, error)
+}
+
+func selectWithRequestContext(lb LoadBalancer, ctx context.Context, rule *typ.Rule) (*loadbalance.Service, error) {
+	if clb, ok := lb.(contextLoadBalancer); ok {
+		return clb.SelectServiceCtx(ctx, rule)
+	}
+	return lb.SelectService(rule)
 }

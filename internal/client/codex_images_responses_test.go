@@ -47,7 +47,7 @@ func TestBuildImageEditResponsesRequest_ImageAndMask(t *testing.T) {
 	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
 	req.Mask = openai.File(bytes.NewReader(maskBytes), "mask.png", "image/png")
 
-	params, err := buildImageEditResponsesRequest(req)
+	params, err := buildImageEditResponsesRequest(t.Context(), req)
 	require.NoError(t, err)
 
 	body, err := json.Marshal(params)
@@ -79,7 +79,7 @@ func TestBuildImageEditResponsesRequest_MultipleImagesNoMask(t *testing.T) {
 		bytes.NewReader(testPNGBytes),
 	}
 
-	params, err := buildImageEditResponsesRequest(req)
+	params, err := buildImageEditResponsesRequest(t.Context(), req)
 	require.NoError(t, err)
 
 	body, err := json.Marshal(params)
@@ -96,7 +96,7 @@ func TestBuildImageEditResponsesRequest_MultipleImagesNoMask(t *testing.T) {
 
 func TestBuildImageEditResponsesRequest_NoImage(t *testing.T) {
 	req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2"}
-	_, err := buildImageEditResponsesRequest(req)
+	_, err := buildImageEditResponsesRequest(t.Context(), req)
 	assert.Error(t, err)
 }
 
@@ -105,7 +105,7 @@ func TestBuildCodexImageEditRequest_MaskIsAnError(t *testing.T) {
 	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
 	req.Mask = openai.File(bytes.NewReader(testPNGBytes), "mask.png", "image/png")
 
-	_, err := buildCodexImageEditRequest(req)
+	_, err := buildCodexImageEditRequest(t.Context(), req)
 	require.Error(t, err, "the native protocol cannot express a mask, so dropping it would change the result silently")
 	assert.Contains(t, err.Error(), "mask")
 }
@@ -116,7 +116,7 @@ func TestBuildImageEditResponsesRequest_NIgnored(t *testing.T) {
 	req := &openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2", N: param.NewOpt(int64(3))}
 	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
 
-	params, err := buildImageEditResponsesRequest(req)
+	params, err := buildImageEditResponsesRequest(t.Context(), req)
 	require.NoError(t, err)
 	body, err := json.Marshal(params)
 	require.NoError(t, err)

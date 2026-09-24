@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
@@ -53,7 +54,7 @@ func RequiresMaxCompletionTokens(model string) bool {
 }
 
 // ConvertResponseInputToChatGPTFormat converts ResponseInputParam to ChatGPT backend API format.
-func ConvertResponseInputToChatGPTFormat(inputItems responses.ResponseInputParam) []interface{} {
+func ConvertResponseInputToChatGPTFormat(ctx context.Context, inputItems responses.ResponseInputParam) []interface{} {
 	var result []interface{}
 
 	for _, item := range inputItems {
@@ -103,7 +104,7 @@ func ConvertResponseInputToChatGPTFormat(inputItems responses.ResponseInputParam
 
 		// Handle function call items (tool invocations)
 		if !param.IsOmitted(item.OfFunctionCall) {
-			if chatGPTItem := ConvertFunctionCallToChatGPTFormat(item.OfFunctionCall); chatGPTItem != nil {
+			if chatGPTItem := ConvertFunctionCallToChatGPTFormat(ctx, item.OfFunctionCall); chatGPTItem != nil {
 				result = append(result, chatGPTItem)
 			}
 			continue
@@ -111,7 +112,7 @@ func ConvertResponseInputToChatGPTFormat(inputItems responses.ResponseInputParam
 
 		// Handle function call output items (tool results)
 		if !param.IsOmitted(item.OfFunctionCallOutput) {
-			if chatGPTItem := ConvertFunctionCallOutputToChatGPTFormat(item.OfFunctionCallOutput); chatGPTItem != nil {
+			if chatGPTItem := ConvertFunctionCallOutputToChatGPTFormat(ctx, item.OfFunctionCallOutput); chatGPTItem != nil {
 				result = append(result, chatGPTItem)
 			}
 		}
@@ -121,20 +122,20 @@ func ConvertResponseInputToChatGPTFormat(inputItems responses.ResponseInputParam
 }
 
 // ConvertFunctionCallOutputToChatGPTFormat converts function_call_output items to ChatGPT backend format.
-func ConvertFunctionCallOutputToChatGPTFormat(output *responses.ResponseInputItemFunctionCallOutputParam) map[string]interface{} {
+func ConvertFunctionCallOutputToChatGPTFormat(ctx context.Context, output *responses.ResponseInputItemFunctionCallOutputParam) map[string]interface{} {
 	if output == nil {
 		return nil
 	}
 
 	data, err := json.Marshal(output)
 	if err != nil {
-		logrus.Debugf("Failed to marshal function call output: %v", err)
+		logrus.WithContext(ctx).Debugf("Failed to marshal function call output: %v", err)
 		return nil
 	}
 
 	var chatGPTItem map[string]interface{}
 	if err := json.Unmarshal(data, &chatGPTItem); err != nil {
-		logrus.Debugf("Failed to unmarshal function call output: %v", err)
+		logrus.WithContext(ctx).Debugf("Failed to unmarshal function call output: %v", err)
 		return nil
 	}
 
@@ -142,20 +143,20 @@ func ConvertFunctionCallOutputToChatGPTFormat(output *responses.ResponseInputIte
 }
 
 // ConvertFunctionCallToChatGPTFormat converts function_call items to ChatGPT backend format.
-func ConvertFunctionCallToChatGPTFormat(call *responses.ResponseFunctionToolCallParam) map[string]interface{} {
+func ConvertFunctionCallToChatGPTFormat(ctx context.Context, call *responses.ResponseFunctionToolCallParam) map[string]interface{} {
 	if call == nil {
 		return nil
 	}
 
 	data, err := json.Marshal(call)
 	if err != nil {
-		logrus.Debugf("Failed to marshal function call: %v", err)
+		logrus.WithContext(ctx).Debugf("Failed to marshal function call: %v", err)
 		return nil
 	}
 
 	var chatGPTItem map[string]interface{}
 	if err := json.Unmarshal(data, &chatGPTItem); err != nil {
-		logrus.Debugf("Failed to unmarshal function call: %v", err)
+		logrus.WithContext(ctx).Debugf("Failed to unmarshal function call: %v", err)
 		return nil
 	}
 

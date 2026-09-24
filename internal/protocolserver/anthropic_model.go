@@ -196,7 +196,7 @@ func (ph *ProtocolHandler) anthropicListModelsWithScenario(c *gin.Context, scena
 			}
 		}
 
-		logrus.Warnf("We do not set capabilities, even set: %v", caps)
+		logrus.WithContext(c.Request.Context()).Warnf("We do not set capabilities, even set: %v", caps)
 
 		models = append(models, AnthropicModel{
 			ID:          rule.RequestModel,

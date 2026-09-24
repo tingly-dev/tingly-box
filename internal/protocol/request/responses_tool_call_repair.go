@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,7 @@ const missingToolOutputPlaceholder = "[tool call aborted: no output was recorded
 //
 // Every other item passes through unchanged, in its original relative order.
 // See .design/protocol-responses.md for the live provider probes.
-func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.ResponseInputParam {
+func RepairResponsesToolCalls(ctx context.Context, items responses.ResponseInputParam) responses.ResponseInputParam {
 	if len(items) == 0 {
 		return items
 	}
@@ -92,7 +93,7 @@ func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.Resp
 				emitted[output] = true
 				continue
 			}
-			logrus.Debugf("RepairResponsesToolCalls: function_call %q (%s) has no function_call_output; synthesizing placeholder", id, call.OfFunctionCall.Name)
+			logrus.WithContext(ctx).Debugf("RepairResponsesToolCalls: function_call %q (%s) has no function_call_output; synthesizing placeholder", id, call.OfFunctionCall.Name)
 			out = append(out, responses.ResponseInputItemUnionParam{
 				OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
 					CallID: param.NewOpt(id),
@@ -113,7 +114,7 @@ func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.Resp
 			// entries sharing one id. Warn (not Debug) so it surfaces if it
 			// ever does happen.
 			if id != "" && callIDSeen[id] {
-				logrus.Warnf("RepairResponsesToolCalls: duplicate function_call call_id %q; dropping repeat", id)
+				logrus.WithContext(ctx).Warnf("RepairResponsesToolCalls: duplicate function_call call_id %q; dropping repeat", id)
 				continue
 			}
 			callIDSeen[id] = true
@@ -137,7 +138,7 @@ func RepairResponsesToolCalls(items responses.ResponseInputParam) responses.Resp
 		if id != "" && callIDs[id] && outputByCall[id] == output {
 			continue // its call comes later in the input; emitted at that flush
 		}
-		logrus.Debugf("RepairResponsesToolCalls: function_call_output call_id=%q name=%q has no matching function_call; rewriting as user message", id, output.Name.Value)
+		logrus.WithContext(ctx).Debugf("RepairResponsesToolCalls: function_call_output call_id=%q name=%q has no matching function_call; rewriting as user message", id, output.Name.Value)
 		out = append(out, orphanOutputToUserMessage(output))
 	}
 	flush()

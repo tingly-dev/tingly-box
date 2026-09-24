@@ -116,7 +116,7 @@ func AttachGuardrailsHooks(c *gin.Context, runtime *guardrails.Guardrails, hc *p
 	guardrailsState.Enabled = true
 	guardrailsState.CredentialMask = baseInput.State.CredentialMask
 	streamState := hc.EnsureGuardrailsStream()
-	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
+	logrus.WithContext(c.Request.Context()).Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
 
 	onEvent, onError := guardrailspipeline.NewGuardrailsHooks(
 		c.Request.Context(),

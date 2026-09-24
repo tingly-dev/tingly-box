@@ -180,7 +180,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 		return
 	case protocol.APIStyleOpenAI:
 		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, actualModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(c.Request.Context(), provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
 		if routeErr != nil {
 			ph.FailAttemptSetup(c, routeErr)
 			return

@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -55,7 +56,7 @@ const (
 // Anthropic→Chat downgrades. The user accepts this by declaring the mode.
 //
 // Pure function: no Server state, no probe lookups, no I/O.
-func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, modelOverride ai.OpenAIEndpointMode) (protocol.APIType, error) {
+func ResolveOpenAIEndpoint(ctx context.Context, provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType, modelOverride ai.OpenAIEndpointMode) (protocol.APIType, error) {
 	if provider == nil {
 		return "", fmt.Errorf("provider is required for endpoint selection")
 	}
@@ -67,13 +68,13 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 	switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
 	case OverrideChat:
 		if mode == ai.EndpointModeResponses {
-			logrus.Warnf("Rule forces chat endpoint on responses-only provider %s", provider.UUID)
+			logrus.WithContext(ctx).Warnf("Rule forces chat endpoint on responses-only provider %s", provider.UUID)
 		}
 		return protocol.TypeOpenAIChat, nil
 
 	case OverrideResponses:
 		if mode == ai.EndpointModeChat {
-			logrus.Warnf("Rule forces responses endpoint on chat-only provider %s", provider.UUID)
+			logrus.WithContext(ctx).Warnf("Rule forces responses endpoint on chat-only provider %s", provider.UUID)
 		}
 		return protocol.TypeOpenAIResponses, nil
 	}

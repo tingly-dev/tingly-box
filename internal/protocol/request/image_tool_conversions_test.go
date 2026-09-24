@@ -131,7 +131,7 @@ func TestConvertOpenAIResponsesToChat_FunctionCallOutputImage(t *testing.T) {
 		},
 	}
 
-	out := ConvertOpenAIResponsesToChat(params, 1024)
+	out := ConvertOpenAIResponsesToChat(t.Context(), params, 1024)
 	require.NotNil(t, out)
 	assertOpenAIToolMessageHasImage(t, out, "Image loaded.")
 }

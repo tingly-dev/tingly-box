@@ -65,6 +65,7 @@ func handleOpenAIToAnthropicBetaStream(
 	}()
 
 	conv := newOpenAIToAnthropicConverter(stream, responseModel, req, hooks, mapOpenAIFinishReasonToAnthropicBeta)
+	conv.logCtx = c.Request.Context()
 	_, err := RunConverter(hc, conv, anthropicSSEWriter(c))
 
 	if hookErr := conv.HookErr(); hookErr != nil {

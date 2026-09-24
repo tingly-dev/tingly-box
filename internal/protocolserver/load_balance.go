@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -33,7 +34,16 @@ func NewLoadBalancer(cfg *config.Config, healthFilter *routing.HealthFilter) *Lo
 // tactic, claiming the picked service's breaker probe slot (the dispatch path
 // records the outcome, releasing it).
 func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
-	return lb.selectService(rule, true)
+	return lb.selectService(context.Background(), rule, true)
+}
+
+// SelectServiceCtx is SelectService for a live request: ctx is the request's
+// context, so the balancer's warnings (every service unhealthy, breaker
+// fallback, tier config ignored) land on that request's Logs timeline. The
+// routing stage prefers it when the balancer offers it; the context-free
+// SelectService stays for the interface and its callers.
+func (lb *LoadBalancer) SelectServiceCtx(ctx context.Context, rule *typ.Rule) (*loadbalance.Service, error) {
+	return lb.selectService(ctx, rule, true)
 }
 
 // PreviewService selects exactly like SelectService but never claims a
@@ -42,10 +52,10 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 // no recorded outcome and would block real traffic from probing the
 // recovering service until the stale-probe reclaim kicks in.
 func (lb *LoadBalancer) PreviewService(rule *typ.Rule) (*loadbalance.Service, error) {
-	return lb.selectService(rule, false)
+	return lb.selectService(context.Background(), rule, false)
 }
 
-func (lb *LoadBalancer) selectService(rule *typ.Rule, claim bool) (*loadbalance.Service, error) {
+func (lb *LoadBalancer) selectService(ctx context.Context, rule *typ.Rule, claim bool) (*loadbalance.Service, error) {
 	if rule == nil {
 		return nil, fmt.Errorf("rule is nil")
 	}
@@ -76,7 +86,7 @@ func (lb *LoadBalancer) selectService(rule *typ.Rule, claim bool) (*loadbalance.
 	// real upstream error (e.g. 429) rather than a confusing routing error.
 	healthyServices := lb.healthFilter.Filter(activeServices)
 	if len(healthyServices) == 0 {
-		logrus.Warnf("[load_balancer] all %d active services for rule %s are unhealthy; "+
+		logrus.WithContext(ctx).Warnf("[load_balancer] all %d active services for rule %s are unhealthy; "+
 			"falling back to active set", len(activeServices), rule.RequestModel)
 		healthyServices = activeServices
 	}
@@ -88,7 +98,7 @@ func (lb *LoadBalancer) selectService(rule *typ.Rule, claim bool) (*loadbalance.
 
 	// Always instantiate tactic from rule's params to ensure correct parameters
 	actualTactic := rule.LBTactic.Instantiate()
-	logTierConfigIgnored(rule, activeServices, actualTactic.GetType())
+	logTierConfigIgnored(ctx, rule, activeServices, actualTactic.GetType())
 
 	// Breaker-aware pick for horizontal tactics: filter to breaker-available
 	// services (rule-scoped, non-consuming), pick within that subset, and
@@ -107,7 +117,7 @@ func (lb *LoadBalancer) selectService(rule *typ.Rule, claim bool) (*loadbalance.
 		// Every healthy service is breaker-open (or its probe is in flight) —
 		// degrade to the unfiltered pick below so the request reaches an
 		// upstream and the client sees the real upstream error.
-		logrus.Warnf("[load_balancer] all %d healthy services for rule %s are breaker-unavailable; "+
+		logrus.WithContext(ctx).Warnf("[load_balancer] all %d healthy services for rule %s are breaker-unavailable; "+
 			"degrading to unfiltered selection", len(healthyServices), rule.RequestModel)
 	}
 
@@ -146,7 +156,7 @@ func ruleView(rule *typ.Rule, services []*loadbalance.Service) *typ.Rule {
 	}
 }
 
-func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacticType loadbalance.TacticType) {
+func logTierConfigIgnored(ctx context.Context, rule *typ.Rule, services []*loadbalance.Service, tacticType loadbalance.TacticType) {
 	if rule == nil || tacticType == loadbalance.TacticTier {
 		return
 	}
@@ -157,7 +167,7 @@ func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacti
 		}
 		tiers[svc.Tier] = struct{}{}
 		if len(tiers) > 1 {
-			logrus.WithFields(logrus.Fields{
+			logrus.WithContext(ctx).WithFields(logrus.Fields{
 				"stage":     "tier_config_ignored",
 				"rule_uuid": rule.UUID,
 				"tactic":    tacticType.String(),

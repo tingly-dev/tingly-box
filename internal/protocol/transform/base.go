@@ -100,7 +100,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses API request - convert to Chat format
-		chatReq := request.ConvertOpenAIResponsesToChat(req, ctx.Config.MaxTokens)
+		chatReq := request.ConvertOpenAIResponsesToChat(ctx.Context, req, ctx.Config.MaxTokens)
 		ctx.Request = chatReq
 		// Create a default config for consistency
 		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{
@@ -202,7 +202,7 @@ func (t *BaseTransform) convertToAnthropicBeta(ctx *TransformContext) error {
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses to Anthropic beta conversion
-		anthropicReq := request.ConvertOpenAIResponsesToAnthropicBetaRequest(*req, ctx.Config.MaxTokens)
+		anthropicReq := request.ConvertOpenAIResponsesToAnthropicBetaRequest(ctx.Context, *req, ctx.Config.MaxTokens)
 		ctx.Request = anthropicReq
 		return nil
 

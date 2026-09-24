@@ -82,7 +82,7 @@ func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario
 			svc := services[i]
 			// Skip nil services (defensive check after DB migration)
 			if svc == nil {
-				logrus.Debugf("Skipping nil service in rule %s during model list", rule.UUID)
+				logrus.WithContext(c.Request.Context()).Debugf("Skipping nil service in rule %s during model list", rule.UUID)
 				continue
 			}
 			if svc.Active {

@@ -197,14 +197,14 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 	candidates := initialCandidateServices(ctx.Rule)
 	evaluatedStages := make([]string, 0, len(s.pipeline))
 
-	logrus.Debugf("[selector] executing pipeline with %d stages for rule %s",
+	logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] executing pipeline with %d stages for rule %s",
 		len(s.pipeline), ctx.Rule.UUID)
 
 	// Execute pipeline stages in order
 	for _, stage := range s.pipeline {
 		stageName := stage.Name()
 		evaluatedStages = append(evaluatedStages, stageName)
-		logrus.Debugf("[selector] evaluating stage: %s", stageName)
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] evaluating stage: %s", stageName)
 
 		narrowed, result, err := stage.Evaluate(ctx, candidates)
 		if err != nil {
@@ -228,25 +228,25 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 			result.EvaluatedStages = append([]string(nil), evaluatedStages...)
 
 			if result.Service == nil {
-				logrus.Warnf("[selector] stage %s returned a final result with a nil service", stageName)
+				logrus.WithContext(selectionLogContext(ctx)).Warnf("[selector] stage %s returned a final result with a nil service", stageName)
 				continue
 			}
 
 			// Validate service is active
 			if !result.Service.Active {
-				logrus.Debugf("[selector] stage %s returned inactive service, trying next stage", stageName)
+				logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] stage %s returned inactive service, trying next stage", stageName)
 				continue
 			}
 
 			// Resolve provider
 			provider, err := s.config.GetProviderByUUID(result.Service.Provider)
 			if err != nil {
-				logrus.Debugf("[selector] provider not found for service: %v, trying next stage", err)
+				logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] provider not found for service: %v, trying next stage", err)
 				continue
 			}
 
 			if !provider.Enabled {
-				logrus.Debugf("[selector] provider %s is disabled, trying next stage", provider.Name)
+				logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] provider %s is disabled, trying next stage", provider.Name)
 				continue
 			}
 
@@ -255,13 +255,13 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 			// Post-process: lock affinity if needed
 			s.postProcess(ctx, result)
 
-			logrus.Debugf("[selector] selected service %s from provider %s via %s",
+			logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] selected service %s from provider %s via %s",
 				result.Service.Model, provider.Name, result.Source)
 
 			return result, nil
 		}
 
-		logrus.Debugf("[selector] stage %s passed to next stage", stageName)
+		logrus.WithContext(selectionLogContext(ctx)).Debugf("[selector] stage %s passed to next stage", stageName)
 	}
 
 	return nil, fmt.Errorf("no service available for rule %s (model: %s)",
@@ -289,6 +289,6 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 		LockedAt:  clock.Now(),
 		ExpiresAt: clock.Now().Add(ttl),
 	})
-	logrus.Infof("[affinity] locked service %s -> %s for session key %s",
+	logrus.WithContext(selectionLogContext(ctx)).Infof("[affinity] locked service %s -> %s for session key %s",
 		result.Provider.Name, result.Service.Model, affinityKey)
 }

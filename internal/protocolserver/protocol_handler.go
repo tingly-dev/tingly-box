@@ -270,7 +270,7 @@ func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario strin
 
 	rec, err := recording.NewProtocolRecorder(c, sink, scenario, mode, bs)
 	if err != nil {
-		logrus.Debugf("obs: failed to build ProtocolRecorder: %v", err)
+		logrus.WithContext(c.Request.Context()).Debugf("obs: failed to build ProtocolRecorder: %v", err)
 		return nil
 	}
 	rec.BindProvider(provider, model, mode)

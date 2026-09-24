@@ -10,7 +10,7 @@ import (
 func TestApplyCodexDefaultsToParams_FastSuffix(t *testing.T) {
 	req := responses.ResponseNewParams{Model: "gpt-5.6-sol:fast"}
 
-	applyCodexDefaultsToParams(&req)
+	applyCodexDefaultsToParams(t.Context(), &req)
 
 	if req.Model != "gpt-5.6-sol" {
 		t.Fatalf("expected model to be stripped to %q, got %q", "gpt-5.6-sol", req.Model)
@@ -23,7 +23,7 @@ func TestApplyCodexDefaultsToParams_FastSuffix(t *testing.T) {
 func TestApplyCodexDefaultsToParams_NoFastSuffix(t *testing.T) {
 	req := responses.ResponseNewParams{Model: "gpt-5.6-sol"}
 
-	applyCodexDefaultsToParams(&req)
+	applyCodexDefaultsToParams(t.Context(), &req)
 
 	if req.Model != "gpt-5.6-sol" {
 		t.Fatalf("expected model to remain %q, got %q", "gpt-5.6-sol", req.Model)
@@ -39,7 +39,7 @@ func TestApplyCodexDefaultsToParams_NoFastSuffix(t *testing.T) {
 // already-marshaled body, separate from the SDK struct marshaling).
 func TestApplyCodexDefaultsToParams_ServiceTierSurvivesWireBody(t *testing.T) {
 	req := responses.ResponseNewParams{Model: "gpt-5.6-sol:fast"}
-	applyCodexDefaultsToParams(&req)
+	applyCodexDefaultsToParams(t.Context(), &req)
 
 	raw, err := json.Marshal(req)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestApplyCodexDefaultsToParams_ServiceTierSurvivesWireBody(t *testing.T) {
 	}
 
 	rt := &codexRoundTripper{}
-	filtered, err := rt.filterField(raw)
+	filtered, err := rt.filterField(t.Context(), raw)
 	if err != nil {
 		t.Fatalf("filterField failed: %v", err)
 	}

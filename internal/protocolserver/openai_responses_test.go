@@ -294,7 +294,7 @@ func TestHandleResponsesCreate_VisionProxyAppliesBeforeChatConversion(t *testing
 
 	// The conversion step is what DeepSeek receives; assert no image_url
 	// or input_image survives on the wire-level shape.
-	chatParams := request.ConvertOpenAIResponsesToChat(req.ResponseNewParams, 4096)
+	chatParams := request.ConvertOpenAIResponsesToChat(t.Context(), req.ResponseNewParams, 4096)
 	chatJSON, err := json.Marshal(chatParams)
 	if err != nil {
 		t.Fatalf("marshal chat: %v", err)
@@ -349,7 +349,7 @@ func TestHandleResponsesCreate_VisionProxyBeforeReparseIsIneffective(t *testing.
 	req.Model = "downstream-text-only-model"
 	// (no second applyVisionProxy — this is what the bug looked like)
 
-	chatParams := request.ConvertOpenAIResponsesToChat(req.ResponseNewParams, 4096)
+	chatParams := request.ConvertOpenAIResponsesToChat(t.Context(), req.ResponseNewParams, 4096)
 	chatJSON, err := json.Marshal(chatParams)
 	if err != nil {
 		t.Fatalf("marshal chat: %v", err)

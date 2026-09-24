@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"encoding/json"
 	"maps"
 	"sort"
@@ -65,6 +66,9 @@ type OpenAIChatStream interface {
 // openAIToAnthropicConverter is a stateful iterator that reads OpenAI Chat Completion
 // chunks and emits Anthropic SSE events (map-based).
 type openAIToAnthropicConverter struct {
+	// logCtx correlates the converter's logs with the request; the
+	// transport-free constructors leave it Background.
+	logCtx          context.Context
 	stream          OpenAIChatStream
 	responseModel   string
 	req             *openai.ChatCompletionNewParams
@@ -93,6 +97,7 @@ func newOpenAIToAnthropicConverter(
 	mapFinishReason func(string) string,
 ) *openAIToAnthropicConverter {
 	c := &openAIToAnthropicConverter{
+		logCtx:          context.Background(),
 		stream:          stream,
 		responseModel:   responseModel,
 		req:             req,
@@ -141,7 +146,7 @@ func (c *openAIToAnthropicConverter) Next() (interface{}, bool, error) {
 				// clean close surfaces a scanner error; treating that as fatal
 				// would discard a fully delivered response. Salvage it.
 				if streamErr != nil {
-					logrus.WithError(streamErr).Warn("openai stream errored after finish_reason; salvaging completed response")
+					logrus.WithContext(c.logCtx).WithError(streamErr).Warn("openai stream errored after finish_reason; salvaging completed response")
 				}
 				c.emitTerminalEvents()
 			} else if streamErr != nil {
@@ -341,7 +346,7 @@ func (c *openAIToAnthropicConverter) emitTerminalEvents() {
 		c.usage = protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, cacheWriteTokens, reasoningTokens)
 	}
 	usage := c.Usage()
-	logrus.Debugf("OpenAI->Anthropic stream usage: model=%s in=%d out=%d cache=%d cache_write=%d reasoning=%d stop=%s",
+	logrus.WithContext(c.logCtx).Debugf("OpenAI->Anthropic stream usage: model=%s in=%d out=%d cache=%d cache_write=%d reasoning=%d stop=%s",
 		c.responseModel, usage.InputTokens, usage.OutputTokens,
 		usage.CacheReadTokens, usage.CacheWriteTokens, usage.ReasoningTokens, c.pendingFinishReason)
 	c.emitEnsureMessageStart()

@@ -22,7 +22,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		require.Len(t, result.Messages, 1)
 		assert.Equal(t, "user", getMessageRole(t, result.Messages[0]))
@@ -48,7 +48,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			MaxOutputTokens: param.NewOpt(int64(100)),
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Equal(t, openai.ChatModel("gpt-4"), result.Model)
 		assert.Equal(t, int64(100), result.MaxTokens.Value)
@@ -77,7 +77,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			MaxOutputTokens: param.NewOpt(int64(200)),
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Len(t, result.Messages, 2)
 		assert.Equal(t, "system", getMessageRole(t, result.Messages[0]))
@@ -104,7 +104,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Len(t, result.Messages, 1)
 		assert.Equal(t, "assistant", getMessageRole(t, result.Messages[0]))
@@ -132,7 +132,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.InDelta(t, 0.7, result.Temperature.Value, 0.01)
 		assert.InDelta(t, 0.9, result.TopP.Value, 0.01)
@@ -156,7 +156,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Equal(t, int64(4096), result.MaxTokens.Value)
 	})
@@ -201,7 +201,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Len(t, result.Messages, 4) // system + 3 messages
 		assert.Equal(t, "system", getMessageRole(t, result.Messages[0]))
@@ -247,7 +247,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Len(t, result.Messages, 3)
 
@@ -303,7 +303,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		require.Len(t, result.Tools, 1)
 		tool := result.Tools[0].GetFunction()
@@ -333,7 +333,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.Equal(t, "auto", result.ToolChoice.OfAuto.Value)
 	})
@@ -361,7 +361,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 			},
 		}
 
-		result := ConvertOpenAIResponsesToChat(params, 4096)
+		result := ConvertOpenAIResponsesToChat(t.Context(), params, 4096)
 
 		assert.NotNil(t, result.ToolChoice.OfFunctionToolChoice)
 		assert.Equal(t, "get_weather", result.ToolChoice.OfFunctionToolChoice.Function.Name)
@@ -370,7 +370,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 
 func TestConvertResponsesInputToMessages(t *testing.T) {
 	t.Run("empty input", func(t *testing.T) {
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{})
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{})
 		assert.Nil(t, messages)
 	})
 
@@ -400,7 +400,7 @@ func TestConvertResponsesInputToMessages(t *testing.T) {
 			},
 		}
 
-		messages := ConvertResponsesInputToMessages(input)
+		messages := ConvertResponsesInputToMessages(t.Context(), input)
 
 		require.Len(t, messages, 1)
 		assert.Equal(t, "user", getMessageRole(t, messages[0]))
@@ -427,7 +427,7 @@ func TestConvertResponsesInputToMessages(t *testing.T) {
 			},
 		}
 
-		messages := ConvertResponsesInputToMessages(input)
+		messages := ConvertResponsesInputToMessages(t.Context(), input)
 
 		require.Len(t, messages, 1)
 		require.NotNil(t, messages[0].OfDeveloper)
@@ -476,7 +476,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 	}
 
 	t.Run("interrupted call gets a placeholder tool message before the next user turn", func(t *testing.T) {
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("run it"),
 			fnCall("call_1", "shell"),
 			userMsg("stop, do something else"),
@@ -489,7 +489,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 	})
 
 	t.Run("trailing call without output is still answered", func(t *testing.T) {
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("run it"),
 			fnCall("call_1", "shell"),
 		})
@@ -499,7 +499,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 	})
 
 	t.Run("output separated from its call is re-attached", func(t *testing.T) {
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("run it"),
 			fnCall("call_1", "shell"),
 			userMsg("interjection"),
@@ -513,7 +513,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 	})
 
 	t.Run("parallel calls flush as one assistant message with all outputs in order", func(t *testing.T) {
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("run both"),
 			fnCall("call_a", "shell"),
 			fnCall("call_b", "shell"),
@@ -534,7 +534,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 		// user interrupted and sent a new prompt. Previously this produced
 		// assistant(a,b) followed by a single tool message, which DeepSeek
 		// rejects as "insufficient tool messages following tool_calls message".
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("run both"),
 			fnCall("call_a", "shell"),
 			fnCall("call_b", "shell"),
@@ -554,7 +554,7 @@ func TestConvertResponsesInputToMessages_ToolCallSequencing(t *testing.T) {
 		// A bare tool message is rejected by DeepSeek/OpenAI ("Messages with
 		// role 'tool' must be a response to a preceding message with
 		// 'tool_calls'"); plain user text carries no such constraint.
-		messages := ConvertResponsesInputToMessages(responses.ResponseInputParam{
+		messages := ConvertResponsesInputToMessages(t.Context(), responses.ResponseInputParam{
 			userMsg("hi"),
 			fnOutput("call_ghost", "stale"),
 			userMsg("again"),

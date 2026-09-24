@@ -1,6 +1,8 @@
 package transform
 
 import (
+	"context"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 
@@ -55,9 +57,9 @@ func (t *ThinkingCompactTransform) Name() string {
 func (t *ThinkingCompactTransform) Apply(ctx *protocoltransform.TransformContext) error {
 	switch req := ctx.Request.(type) {
 	case *anthropic.MessageNewParams:
-		return t.applyV1(req)
+		return t.applyV1(ctx.Context, req)
 	case *anthropic.BetaMessageNewParams:
-		return t.applyBeta(req)
+		return t.applyBeta(ctx.Context, req)
 	default:
 		// Unsupported request type, pass through
 		return nil
@@ -65,30 +67,30 @@ func (t *ThinkingCompactTransform) Apply(ctx *protocoltransform.TransformContext
 }
 
 // applyV1 applies compaction to v1 requests.
-func (t *ThinkingCompactTransform) applyV1(req *anthropic.MessageNewParams) error {
+func (t *ThinkingCompactTransform) applyV1(ctx context.Context, req *anthropic.MessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}
 
 	rounds := t.rounder.GroupV1(req.Messages)
-	logrus.Debugf("[compact_thinking] v1: found %d rounds", len(rounds))
-	compacted, removedCount := t.compactV1Rounds(rounds)
-	logrus.Debugf("[compact_thinking] v1: removed %d thinking blocks", removedCount)
+	logrus.WithContext(ctx).Debugf("[compact_thinking] v1: found %d rounds", len(rounds))
+	compacted, removedCount := t.compactV1Rounds(ctx, rounds)
+	logrus.WithContext(ctx).Debugf("[compact_thinking] v1: removed %d thinking blocks", removedCount)
 	req.Messages = compacted
 
 	return nil
 }
 
 // applyBeta applies compaction to beta requests.
-func (t *ThinkingCompactTransform) applyBeta(req *anthropic.BetaMessageNewParams) error {
+func (t *ThinkingCompactTransform) applyBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) error {
 	if len(req.Messages) == 0 {
 		return nil
 	}
 
 	rounds := t.rounder.GroupBeta(req.Messages)
-	logrus.Debugf("[compact_thinking] v1beta: found %d rounds", len(rounds))
-	compacted, removedCount := t.compactBetaRounds(rounds)
-	logrus.Debugf("[compact_thinking] v1beta: removed %d thinking blocks", removedCount)
+	logrus.WithContext(ctx).Debugf("[compact_thinking] v1beta: found %d rounds", len(rounds))
+	compacted, removedCount := t.compactBetaRounds(ctx, rounds)
+	logrus.WithContext(ctx).Debugf("[compact_thinking] v1beta: removed %d thinking blocks", removedCount)
 	req.Messages = compacted
 
 	return nil
@@ -99,7 +101,7 @@ func (t *ThinkingCompactTransform) applyBeta(req *anthropic.BetaMessageNewParams
 // contains the reasoning for the pending response. Rounds failing the
 // structural guard (shouldCompactRound) are skipped, not compacted, to avoid
 // corrupting malformed conversation structures.
-func (t *ThinkingCompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([]anthropic.MessageParam, int) {
+func (t *ThinkingCompactTransform) compactV1Rounds(ctx context.Context, rounds []protocol.V1Round) ([]anthropic.MessageParam, int) {
 	var result []anthropic.MessageParam
 	removedCount := 0
 	preserveStart := len(rounds) - t.keepLastNRounds
@@ -111,7 +113,7 @@ func (t *ThinkingCompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([
 		shouldPreserve := i >= preserveStart
 		guardPassed := t.shouldCompactRound(rnd.Stats)
 		if rnd.Stats != nil {
-			logrus.Debugf("[compact_thinking] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+			logrus.WithContext(ctx).Debugf("[compact_thinking] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
 		}
 
@@ -134,7 +136,7 @@ func (t *ThinkingCompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([
 
 // compactBetaRounds removes thinking blocks from rounds outside the
 // preservation window. See compactV1Rounds for the strategy rationale.
-func (t *ThinkingCompactTransform) compactBetaRounds(rounds []protocol.BetaRound) ([]anthropic.BetaMessageParam, int) {
+func (t *ThinkingCompactTransform) compactBetaRounds(ctx context.Context, rounds []protocol.BetaRound) ([]anthropic.BetaMessageParam, int) {
 	var result []anthropic.BetaMessageParam
 	removedCount := 0
 	preserveStart := len(rounds) - t.keepLastNRounds
@@ -146,7 +148,7 @@ func (t *ThinkingCompactTransform) compactBetaRounds(rounds []protocol.BetaRound
 		shouldPreserve := i >= preserveStart
 		guardPassed := t.shouldCompactRound(rnd.Stats)
 		if rnd.Stats != nil {
-			logrus.Debugf("[compact_thinking] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+			logrus.WithContext(ctx).Debugf("[compact_thinking] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
 				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
 		}
 

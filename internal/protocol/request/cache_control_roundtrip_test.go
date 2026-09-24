@@ -101,7 +101,7 @@ func TestAnthropicAutomaticCacheControlRoundTripsThroughOpenAIWire(t *testing.T)
 
 		var reparsed responses.ResponseNewParams
 		require.NoError(t, json.Unmarshal(wire, &reparsed))
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(reparsed, 4096)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), reparsed, 4096)
 		require.False(t, anthropicparam.IsOmitted(out.CacheControl))
 	})
 }
@@ -352,13 +352,13 @@ func TestAnthropicResponsesAnthropicPreservesCacheControl(t *testing.T) {
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[0], "system")
 	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[1], "user")
 
-	out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
+	out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), *responsesReq, 4096)
 	require.Len(t, out.System, 1)
 	require.False(t, anthropicparam.IsOmitted(out.System[0].CacheControl))
 	require.Len(t, out.Messages, 1)
 	require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfText.CacheControl))
 
-	betaIn := ConvertAnthropicV1ToBetaRequest(in)
+	betaIn := ConvertAnthropicV1ToBetaRequest(t.Context(), in)
 	require.NotNil(t, betaIn)
 	betaResponsesReq := ConvertAnthropicBetaToResponsesRequest(betaIn)
 	require.Equal(t, "explicit", betaResponsesReq.PromptCacheOptions.Mode)
@@ -418,7 +418,7 @@ func TestAnthropicResponsesPreservesToolCacheControls(t *testing.T) {
 		require.False(t, openaiparam.IsOmitted(
 			output.Output.OfResponseFunctionCallOutputItemArray[0].OfInputText.PromptCacheBreakpoint))
 
-		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(t.Context(), *responsesReq, 4096)
 		require.Len(t, out.Messages, 2)
 		require.NotNil(t, out.Messages[1].Content[0].OfToolResult)
 		require.False(t, anthropicparam.IsOmitted(out.Messages[1].Content[0].OfToolResult.CacheControl))
@@ -492,7 +492,7 @@ func TestChatResponsesChatPreservesCacheControlsAndOptions(t *testing.T) {
 	require.False(t, openaiparam.IsOmitted(
 		toolOutput.Output.OfResponseFunctionCallOutputItemArray[0].OfInputText.PromptCacheBreakpoint))
 
-	out := ConvertOpenAIResponsesToChat(responsesReq, 4096)
+	out := ConvertOpenAIResponsesToChat(t.Context(), responsesReq, 4096)
 	require.Equal(t, "stable-key", out.PromptCacheKey.Value)
 	require.Equal(t, "explicit", out.PromptCacheOptions.Mode)
 	require.Equal(t, "30m", out.PromptCacheOptions.Ttl)

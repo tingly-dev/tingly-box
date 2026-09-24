@@ -83,7 +83,7 @@ func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, cont
 		var err error
 		ctx, err = hook(ctx, req)
 		if err != nil {
-			logrus.Errorf("Request hook error: %s", err)
+			logrus.WithContext(ctx).Errorf("Request hook error: %s", err)
 		}
 	}
 

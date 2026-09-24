@@ -26,7 +26,7 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper client.OpenAIClientInterface,
 		req.Tools = nil
 	}
 
-	logrus.Infof("provider: %s, model: %s", fc.Provider.Name, req.Model)
+	logrus.WithContext(fc.BaseCtx).Infof("provider: %s, model: %s", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ChatCompletionsNew(ctx, *req)
 	fc.Complete(ctx, resp, err)
@@ -43,7 +43,7 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper client.OpenAIClientInte
 
 	ctx, cancel := fc.PrepareContext(req)
 
-	logrus.Infof("provider: %s, model: %s (embeddings)", fc.Provider.Name, req.Model)
+	logrus.WithContext(fc.BaseCtx).Infof("provider: %s, model: %s (embeddings)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.EmbeddingsNew(ctx, *req)
 	fc.Complete(ctx, resp, err)
@@ -100,7 +100,7 @@ func ForwardOpenAIChatStream(fc *ForwardContext, wrapper client.OpenAIClientInte
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
-	logrus.Debugf("provider: %s (streaming)", fc.Provider.Name)
+	logrus.WithContext(fc.BaseCtx).Debugf("provider: %s (streaming)", fc.Provider.Name)
 
 	ctx, cancel := fc.PrepareContext(req)
 

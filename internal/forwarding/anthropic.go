@@ -14,7 +14,7 @@ func logAnthropicForward(fc *ForwardContext, model string, mode string) {
 	if fc == nil || fc.Provider == nil {
 		return
 	}
-	logrus.Debugf(
+	logrus.WithContext(fc.BaseCtx).Debugf(
 		"[anthropic-forward] mode=%s provider=%s api_base=%s api_style=%s model=%s timeout=%s",
 		mode,
 		fc.Provider.Name,

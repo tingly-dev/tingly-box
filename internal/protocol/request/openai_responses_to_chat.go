@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
 // This is useful when translating between the two API formats.
-func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMaxTokens int64) *openai.ChatCompletionNewParams {
+func ConvertOpenAIResponsesToChat(ctx context.Context, params *responses.ResponseNewParams, defaultMaxTokens int64) *openai.ChatCompletionNewParams {
 	result := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(params.Model),
 	}
@@ -28,7 +29,7 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 	if !param.IsOmitted(params.Input.OfString) && params.Input.OfString.Value != "" {
 		result.Messages = append(result.Messages, openai.UserMessage(params.Input.OfString.Value))
 	} else if !param.IsOmitted(params.Input.OfInputItemList) {
-		messages := ConvertResponsesInputToMessages(params.Input.OfInputItemList)
+		messages := ConvertResponsesInputToMessages(ctx, params.Input.OfInputItemList)
 		result.Messages = append(result.Messages, messages...)
 	}
 
@@ -87,8 +88,8 @@ type pendingToolCall struct {
 // an assistant message carrying tool_calls must be followed by one tool
 // message per call, and a tool message must answer a preceding tool_calls
 // message. The conversion below therefore only has to preserve order.
-func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []openai.ChatCompletionMessageParamUnion {
-	items = RepairResponsesToolCalls(items)
+func ConvertResponsesInputToMessages(ctx context.Context, items responses.ResponseInputParam) []openai.ChatCompletionMessageParamUnion {
+	items = RepairResponsesToolCalls(ctx, items)
 
 	var messages []openai.ChatCompletionMessageParamUnion
 	var pendingCalls []pendingToolCall

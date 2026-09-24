@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -19,6 +20,7 @@ import (
 //   - TopLogprobs: Anthropic Message API doesn't support logprobs
 //   - Reasoning tokens: Special handling required for o1/o3 models
 func ConvertOpenAIResponsesToAnthropicBetaRequest(
+	ctx context.Context,
 	params responses.ResponseNewParams,
 	defaultMaxTokens int64,
 ) *anthropic.BetaMessageNewParams {
@@ -46,7 +48,7 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 	if !param.IsOmitted(params.Input.OfInputItemList) {
 		anthropicParams.System = append(anthropicParams.System,
 			convertResponsesSystemInputToAnthropicBeta(params.Input.OfInputItemList)...)
-		messages := convertResponsesInputToAnthropicBetaMessages(params.Input.OfInputItemList)
+		messages := convertResponsesInputToAnthropicBetaMessages(ctx, params.Input.OfInputItemList)
 		if len(messages) > 0 {
 			anthropicParams.Messages = messages
 		}
@@ -79,7 +81,7 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 
 	// Convert tools
 	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
-		anthropicParams.Tools = ConvertResponsesToolsToAnthropicBeta(params.Tools)
+		anthropicParams.Tools = ConvertResponsesToolsToAnthropicBeta(ctx, params.Tools)
 		// Convert tool choice
 		if !param.IsOmitted(params.ToolChoice) {
 			anthropicParams.ToolChoice = ConvertResponsesToolChoiceToAnthropicBeta(params.ToolChoice)
@@ -134,8 +136,8 @@ func convertResponsesSystemInputToAnthropicBeta(inputItems responses.ResponseInp
 // tool_use is answered in the next user message (a missing output becomes a
 // placeholder tool_result) and no tool_result references an unknown id (an
 // orphan output becomes plain user text).
-func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseInputParam) []anthropic.BetaMessageParam {
-	inputItems = RepairResponsesToolCalls(inputItems)
+func convertResponsesInputToAnthropicBetaMessages(ctx context.Context, inputItems responses.ResponseInputParam) []anthropic.BetaMessageParam {
+	inputItems = RepairResponsesToolCalls(ctx, inputItems)
 
 	var messages []anthropic.BetaMessageParam
 
@@ -145,9 +147,9 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 			msg := item.OfMessage
 			switch string(msg.Role) {
 			case "user":
-				messages = append(messages, convertResponsesUserMessageToAnthropicBeta(msg))
+				messages = append(messages, convertResponsesUserMessageToAnthropicBeta(ctx, msg))
 			case "assistant":
-				converted := convertResponsesAssistantMessageToAnthropicBeta(msg)
+				converted := convertResponsesAssistantMessageToAnthropicBeta(ctx, msg)
 				// Codex emits a blank message item for tool-only turns; drop it.
 				converted.Content = dropEmptyTextBlocks(converted.Content)
 				if len(converted.Content) > 0 {
@@ -157,13 +159,13 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 		case !param.IsOmitted(item.OfOutputMessage):
 			// The assistant-message counterpart to item.OfMessage — see
 			// ResponseInputItemParamOfOutputMessage in anthropic_v1_to_responses.go.
-			converted := convertResponsesOutputMessageToAnthropicBeta(item.OfOutputMessage)
+			converted := convertResponsesOutputMessageToAnthropicBeta(ctx, item.OfOutputMessage)
 			converted.Content = dropEmptyTextBlocks(converted.Content)
 			if len(converted.Content) > 0 {
 				messages = append(messages, converted)
 			}
 		case !param.IsOmitted(item.OfFunctionCall):
-			appendBetaMessage(&messages, convertResponsesFunctionCallToAnthropicBeta(item.OfFunctionCall))
+			appendBetaMessage(&messages, convertResponsesFunctionCallToAnthropicBeta(ctx, item.OfFunctionCall))
 		case !param.IsOmitted(item.OfFunctionCallOutput):
 			appendBetaMessage(&messages, convertResponsesFunctionCallOutputToAnthropicBeta(item.OfFunctionCallOutput))
 		}
@@ -195,7 +197,7 @@ func dropEmptyTextBlocks(blocks []anthropic.BetaContentBlockParamUnion) []anthro
 }
 
 // convertResponsesUserMessageToAnthropicBeta converts Responses API user message to Anthropic Beta format
-func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageParam) anthropic.BetaMessageParam {
+func convertResponsesUserMessageToAnthropicBeta(ctx context.Context, msg *responses.EasyInputMessageParam) anthropic.BetaMessageParam {
 	// Check for simple string content
 	if !param.IsOmitted(msg.Content.OfString) {
 		return anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(msg.Content.OfString.Value))
@@ -215,7 +217,7 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 			case !param.IsOmitted(contentItem.OfInputImage):
 				img := contentItem.OfInputImage
 				if !img.ImageURL.Valid() {
-					logrus.Warnf("Skipping Responses API input_image without image_url (e.g. file_id-only) in beta user message")
+					logrus.WithContext(ctx).Warnf("Skipping Responses API input_image without image_url (e.g. file_id-only) in beta user message")
 					continue
 				}
 				if block, ok := openAIImageURLToAnthropicBetaBlock(img.ImageURL.Value); ok {
@@ -225,7 +227,7 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 					blocks = append(blocks, block)
 				}
 			default:
-				logrus.Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
+				logrus.WithContext(ctx).Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
 			}
 		}
 		if len(blocks) > 0 {
@@ -238,7 +240,7 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 }
 
 // convertResponsesAssistantMessageToAnthropicBeta converts Responses API assistant message to Anthropic Beta format
-func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMessageParam) anthropic.BetaMessageParam {
+func convertResponsesAssistantMessageToAnthropicBeta(ctx context.Context, msg *responses.EasyInputMessageParam) anthropic.BetaMessageParam {
 	// Check for simple string content
 	if !param.IsOmitted(msg.Content.OfString) {
 		return anthropic.BetaMessageParam{
@@ -259,7 +261,7 @@ func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMes
 				blocks = append(blocks, block)
 			} else {
 				// Log unsupported content types
-				logrus.Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
+				logrus.WithContext(ctx).Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
 			}
 		}
 		if len(blocks) > 0 {
@@ -283,7 +285,7 @@ func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMes
 // other Responses-API clients replay conversation history in — to Anthropic
 // Beta format. Its content parts are output_text/refusal, never input_text,
 // so it needs its own reader distinct from convertResponsesAssistantMessageToAnthropicBeta.
-func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputMessageParam) anthropic.BetaMessageParam {
+func convertResponsesOutputMessageToAnthropicBeta(ctx context.Context, msg *responses.ResponseOutputMessageParam) anthropic.BetaMessageParam {
 	var blocks []anthropic.BetaContentBlockParamUnion
 	for _, contentItem := range msg.Content {
 		switch {
@@ -292,7 +294,7 @@ func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputM
 		case contentItem.OfRefusal != nil:
 			blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfRefusal.Refusal))
 		default:
-			logrus.Warnf("Unsupported content type in Responses API output_message, skipping. Content types available: %v", contentItem)
+			logrus.WithContext(ctx).Warnf("Unsupported content type in Responses API output_message, skipping. Content types available: %v", contentItem)
 		}
 	}
 	if len(blocks) == 0 {
@@ -305,12 +307,12 @@ func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputM
 }
 
 // convertResponsesFunctionCallToAnthropicBeta converts Responses API function_call to Anthropic Beta tool_use block
-func convertResponsesFunctionCallToAnthropicBeta(call *responses.ResponseFunctionToolCallParam) anthropic.BetaMessageParam {
+func convertResponsesFunctionCallToAnthropicBeta(ctx context.Context, call *responses.ResponseFunctionToolCallParam) anthropic.BetaMessageParam {
 	// Parse arguments JSON
 	var argsInput interface{}
 	if call.Arguments != "" {
 		if err := json.Unmarshal([]byte(call.Arguments), &argsInput); err != nil {
-			logrus.Warnf("Failed to parse function call arguments JSON for tool %s: %v", call.Name, err)
+			logrus.WithContext(ctx).Warnf("Failed to parse function call arguments JSON for tool %s: %v", call.Name, err)
 			// Set to empty map to avoid nil issues
 			argsInput = map[string]interface{}{}
 		}
@@ -349,7 +351,7 @@ func convertResponsesFunctionCallOutputToAnthropicBeta(output *responses.Respons
 }
 
 // ConvertResponsesToolsToAnthropicBeta converts Responses API tools to Anthropic Beta tools
-func ConvertResponsesToolsToAnthropicBeta(tools []responses.ToolUnionParam) []anthropic.BetaToolUnionParam {
+func ConvertResponsesToolsToAnthropicBeta(ctx context.Context, tools []responses.ToolUnionParam) []anthropic.BetaToolUnionParam {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -367,7 +369,7 @@ func ConvertResponsesToolsToAnthropicBeta(tools []responses.ToolUnionParam) []an
 		if fn.Parameters != nil {
 			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
 				if err := json.Unmarshal(schemaBytes, &inputSchema); err != nil {
-					logrus.Warnf("Failed to convert tool schema for %s: %v", fn.Name, err)
+					logrus.WithContext(ctx).Warnf("Failed to convert tool schema for %s: %v", fn.Name, err)
 					// Use default empty schema
 					inputSchema = anthropic.BetaToolInputSchemaParam{}
 				}

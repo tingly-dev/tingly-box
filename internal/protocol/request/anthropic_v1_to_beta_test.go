@@ -26,7 +26,7 @@ func TestConvertAnthropicV1ToBetaRequest_ToolResultContent(t *testing.T) {
 		},
 	}
 
-	result := ConvertAnthropicV1ToBetaRequest(req)
+	result := ConvertAnthropicV1ToBetaRequest(t.Context(), req)
 
 	require.Len(t, result.Messages, 1)
 	require.Len(t, result.Messages[0].Content, 1)
@@ -62,7 +62,7 @@ func TestConvertAnthropicV1ToBetaRequest_ToolResultMultipleBlocksPreserved(t *te
 		},
 	}
 
-	result := ConvertAnthropicV1ToBetaRequest(req)
+	result := ConvertAnthropicV1ToBetaRequest(t.Context(), req)
 
 	toolResult := result.Messages[0].Content[0].OfToolResult
 	require.NotNil(t, toolResult)
@@ -98,7 +98,7 @@ func TestConvertAnthropicV1ToBetaRequest_ImagePreserved(t *testing.T) {
 		},
 	}
 
-	result := ConvertAnthropicV1ToBetaRequest(req)
+	result := ConvertAnthropicV1ToBetaRequest(t.Context(), req)
 
 	image := result.Messages[0].Content[0].OfImage
 	require.NotNil(t, image)
@@ -119,7 +119,7 @@ func TestConvertAnthropicV1ToBetaRequest_ModelAndThinking(t *testing.T) {
 		System: []anthropic.TextBlockParam{{Text: "You are a helpful assistant."}},
 	}
 
-	result := ConvertAnthropicV1ToBetaRequest(req)
+	result := ConvertAnthropicV1ToBetaRequest(t.Context(), req)
 
 	assert.Equal(t, anthropic.Model("claude-3-5-sonnet-20241022"), result.Model)
 	assert.Equal(t, int64(1024), result.MaxTokens)
@@ -130,7 +130,7 @@ func TestConvertAnthropicV1ToBetaRequest_ModelAndThinking(t *testing.T) {
 }
 
 func TestConvertAnthropicV1ToBetaRequest_Nil(t *testing.T) {
-	assert.Nil(t, ConvertAnthropicV1ToBetaRequest(nil))
+	assert.Nil(t, ConvertAnthropicV1ToBetaRequest(t.Context(), nil))
 }
 
 func TestConvertAnthropicV1ToBetaRequestPreservesWireSubset(t *testing.T) {
@@ -173,7 +173,7 @@ func TestConvertAnthropicV1ToBetaRequestPreservesWireSubset(t *testing.T) {
 }
 
 func TestConvertAnthropicV1ToBetaRequestNil(t *testing.T) {
-	if got := ConvertAnthropicV1ToBetaRequest(nil); got != nil {
+	if got := ConvertAnthropicV1ToBetaRequest(t.Context(), nil); got != nil {
 		t.Fatalf("ConvertAnthropicV1ToBetaRequest(nil) = %#v, want nil", got)
 	}
 	got, err := ConvertAnthropicV1ToBetaRequestWithError(nil)

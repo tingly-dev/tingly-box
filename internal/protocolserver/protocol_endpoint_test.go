@@ -161,7 +161,7 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ResolveOpenAIEndpoint(tt.provider, tt.flags, tt.incoming, tt.modelOverride)
+			got, err := ResolveOpenAIEndpoint(t.Context(), tt.provider, tt.flags, tt.incoming, tt.modelOverride)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -173,7 +173,7 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 }
 
 func TestResolveOpenAIEndpointNilProviderErrors(t *testing.T) {
-	if _, err := ResolveOpenAIEndpoint(nil, typ.RuleFlags{}, IncomingAPIChat, ""); err == nil {
+	if _, err := ResolveOpenAIEndpoint(t.Context(), nil, typ.RuleFlags{}, IncomingAPIChat, ""); err == nil {
 		t.Error("expected error for nil provider")
 	}
 }
@@ -188,7 +188,7 @@ func TestResolveOpenAIEndpointCodexOAuthSnapshot(t *testing.T) {
 		OAuthDetail:        &typ.OAuthDetail{Issuer: ai.IssuerCodex},
 		OpenAIEndpointMode: ai.EndpointModeResponses,
 	}
-	got, err := ResolveOpenAIEndpoint(codex, typ.RuleFlags{}, IncomingAPIChat, "")
+	got, err := ResolveOpenAIEndpoint(t.Context(), codex, typ.RuleFlags{}, IncomingAPIChat, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

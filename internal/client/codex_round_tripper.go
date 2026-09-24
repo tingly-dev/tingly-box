@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -69,7 +70,7 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
-		filtered, err = t.filterField(body)
+		filtered, err = t.filterField(req.Context(), body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to filter field: %w", err)
 		}
@@ -253,7 +254,7 @@ func isClearlyNonSSEMediaType(mediaType string) bool {
 	return strings.HasSuffix(mediaType, "+json")
 }
 
-func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
+func (t *codexRoundTripper) filterField(ctx context.Context, body []byte) ([]byte, error) {
 	// Filter the request body to remove unsupported parameters using sjson
 	// This is more efficient than unmarshaling to map and marshaling back
 
@@ -279,11 +280,11 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 	// Final gate: ChatGPT backend rejects items with empty or non-conforming id.
 	// The SDK-level sanitizer only covers a subset of input item variants, so
 	// scrub the marshaled JSON to catch every variant the SDK may emit.
-	bodyStr = sanitizeCodexInputIDsJSON(bodyStr)
+	bodyStr = sanitizeCodexInputIDsJSON(ctx, bodyStr)
 
 	// Drop message items whose content serialized as "" — Codex treats empty
 	// string content as a missing required parameter.
-	bodyStr = sanitizeCodexEmptyContentJSON(bodyStr)
+	bodyStr = sanitizeCodexEmptyContentJSON(ctx, bodyStr)
 
 	// ChatGPT's Codex backend rejects role="system" input messages. Responses
 	// requests normally carry system text in `instructions`, but protocol
@@ -300,7 +301,7 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 // For types whose id is required, the entire item is dropped (the backend
 // would reject the request anyway). For types whose id is optional, only
 // the id field is removed.
-func sanitizeCodexInputIDsJSON(bodyStr string) string {
+func sanitizeCodexInputIDsJSON(ctx context.Context, bodyStr string) string {
 	input := gjson.Get(bodyStr, "input")
 	if !input.IsArray() {
 		return bodyStr
@@ -322,12 +323,12 @@ func sanitizeCodexInputIDsJSON(bodyStr string) string {
 		itemType := item.Get("type").String()
 		path := fmt.Sprintf("input.%d", i)
 		if codexInputItemIDRequired(itemType) {
-			logrus.Warnf("[Codex] Dropping input[%d] of type %q with invalid id %q", i, itemType, idStr)
+			logrus.WithContext(ctx).Warnf("[Codex] Dropping input[%d] of type %q with invalid id %q", i, itemType, idStr)
 			if updated, err := sjson.Delete(bodyStr, path); err == nil {
 				bodyStr = updated
 			}
 		} else {
-			logrus.Debugf("[Codex] Clearing invalid id on input[%d] type %q", i, itemType)
+			logrus.WithContext(ctx).Debugf("[Codex] Clearing invalid id on input[%d] type %q", i, itemType)
 			if updated, err := sjson.Delete(bodyStr, path+".id"); err == nil {
 				bodyStr = updated
 			}
@@ -339,7 +340,7 @@ func sanitizeCodexInputIDsJSON(bodyStr string) string {
 // sanitizeCodexEmptyContentJSON drops input items of type "message" whose content
 // field is an empty string. Codex treats "content": "" as a missing required
 // parameter, which results in an invalid_request_error.
-func sanitizeCodexEmptyContentJSON(bodyStr string) string {
+func sanitizeCodexEmptyContentJSON(ctx context.Context, bodyStr string) string {
 	input := gjson.Get(bodyStr, "input")
 	if !input.IsArray() {
 		return bodyStr
@@ -352,7 +353,7 @@ func sanitizeCodexEmptyContentJSON(bodyStr string) string {
 		if !content.Exists() || content.Type != gjson.String || content.String() != "" {
 			continue
 		}
-		logrus.Warnf("[Codex] Dropping input[%d] (type=%q) with empty string content", i, item.Get("type").String())
+		logrus.WithContext(ctx).Warnf("[Codex] Dropping input[%d] (type=%q) with empty string content", i, item.Get("type").String())
 		path := fmt.Sprintf("input.%d", i)
 		if updated, err := sjson.Delete(bodyStr, path); err == nil {
 			bodyStr = updated
