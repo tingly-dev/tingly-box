@@ -2,12 +2,12 @@ package whatsapp
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/core/coretest"
 )
 
 func newTestBot(t *testing.T) *Bot {
@@ -18,20 +18,6 @@ func newTestBot(t *testing.T) *Bot {
 	})
 	require.NoError(t, err)
 	return bot
-}
-
-// waitForMessage blocks until EmitMessage's handler goroutine (core/base.go
-// dispatches OnMessage handlers via `go func`, never synchronously) delivers
-// one message, or fails the test after a short timeout.
-func waitForMessage(t *testing.T, ch <-chan core.Message) core.Message {
-	t.Helper()
-	select {
-	case msg := <-ch:
-		return msg
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for OnMessage to fire")
-		return core.Message{}
-	}
 }
 
 // TestHandleWebhook_CapturesReplyToContext guards inbound reply-to matching
@@ -68,7 +54,7 @@ func TestHandleWebhook_CapturesReplyToContext(t *testing.T) {
 	}`)
 
 	require.NoError(t, bot.HandleWebhook(payload))
-	got := waitForMessage(t, ch)
+	got := coretest.WaitForMessage(t, ch)
 	require.NotNil(t, got.ThreadContext, "reply-to context must produce a ThreadContext")
 	assert.Equal(t, "wamid.original-prompt", got.ThreadContext.ParentMessageID)
 }
@@ -103,6 +89,6 @@ func TestHandleWebhook_NoContextMeansNotAReply(t *testing.T) {
 	}`)
 
 	require.NoError(t, bot.HandleWebhook(payload))
-	got := waitForMessage(t, ch)
+	got := coretest.WaitForMessage(t, ch)
 	assert.Nil(t, got.ThreadContext, "a plain message must not get a synthesized ThreadContext")
 }

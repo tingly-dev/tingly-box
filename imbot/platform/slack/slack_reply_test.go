@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/core/coretest"
 )
 
 // newTestBot builds a Bot whose client points at a local stub server
@@ -31,17 +31,6 @@ func newTestBot(t *testing.T) *Bot {
 	return &Bot{
 		BaseBot: core.NewBaseBot(&core.Config{Platform: core.PlatformSlack}),
 		client:  slack.New("test-token", slack.OptionAPIURL(server.URL+"/")),
-	}
-}
-
-func waitForMessage(t *testing.T, ch <-chan core.Message) core.Message {
-	t.Helper()
-	select {
-	case msg := <-ch:
-		return msg
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for OnMessage to fire")
-		return core.Message{}
 	}
 }
 
@@ -68,7 +57,7 @@ func TestHandleMessage_CapturesReplyToContext(t *testing.T) {
 		},
 	})
 
-	got := waitForMessage(t, ch)
+	got := coretest.WaitForMessage(t, ch)
 	require.NotNil(t, got.ThreadContext, "a threaded reply must produce a ThreadContext")
 	assert.Equal(t, "1700000000.000100", got.ThreadContext.ParentMessageID)
 }
@@ -91,6 +80,6 @@ func TestHandleMessage_NoThreadMeansNoThreadContext(t *testing.T) {
 		},
 	})
 
-	got := waitForMessage(t, ch)
+	got := coretest.WaitForMessage(t, ch)
 	assert.Nil(t, got.ThreadContext, "a plain message must not get a synthesized ThreadContext")
 }
