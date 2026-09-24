@@ -648,3 +648,60 @@ func TestResolveRuleFlagsWithScenario_ExtraHeaders(t *testing.T) {
 		t.Errorf("ctx headers = %v, want nil when the rule sets none", got)
 	}
 }
+
+// Provider-level probes run under a synthetic rule with no flags. For a
+// Claude OAuth provider that means the legacy emulation, which Anthropic no
+// longer accepts, so the probe defaults to the latest native profile — and
+// only there: matched rules keep the flag's off-by-default rollout, other
+// providers are untouched, and an explicit overlay still wins.
+func TestResolveRuleFlagsWithScenario_ProbeDefaultsClaudeCodeVersionForOAuth(t *testing.T) {
+	oauthProvider := &typ.Provider{
+		AuthType:    typ.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode},
+	}
+	apiKeyProvider := &typ.Provider{AuthType: typ.AuthTypeAPIKey}
+	synthetic := func() *typ.Rule { return &typ.Rule{UUID: ProbeSyntheticRuleUUID} }
+	resolve := func(c *gin.Context, rule *typ.Rule, p *typ.Provider) typ.RuleFlags {
+		return ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioAnthropic, &typ.ScenarioConfig{},
+			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, p)
+	}
+
+	if got := resolve(newGinContext(t), synthetic(), oauthProvider).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLatest {
+		t.Errorf("synthetic probe rule + Claude OAuth provider: ClaudeCodeVersion = %q, want %q", got, typ.ClaudeCodeVersionLatest)
+	}
+	if got := resolve(newGinContext(t), synthetic(), apiKeyProvider).ClaudeCodeVersion; got != "" {
+		t.Errorf("synthetic probe rule + API-key provider must not get a profile, got %q", got)
+	}
+	if got := resolve(newGinContext(t), &typ.Rule{UUID: "real-rule"}, oauthProvider).ClaudeCodeVersion; got != "" {
+		t.Errorf("a matched rule without the flag must stay legacy (rollout default), got %q", got)
+	}
+	if got := resolve(newGinContext(t), nil, oauthProvider).ClaudeCodeVersion; got != "" {
+		t.Errorf("nil rule must stay legacy, got %q", got)
+	}
+
+	// Scenario-level value still wins over the probe default.
+	c := newGinContext(t)
+	got := ResolveRuleFlagsWithScenario(c, synthetic(), typ.ScenarioClaudeCode,
+		&typ.ScenarioConfig{Flags: typ.ScenarioFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_258}},
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
+	if got.ClaudeCodeVersion != typ.ClaudeCodeVersion2_1_258 {
+		t.Errorf("scenario flag must win over the probe default, got %q", got.ClaudeCodeVersion)
+	}
+
+	// An explicit overlay "" forces the legacy emulation for a diagnostic run.
+	c = newGinContext(t)
+	encoded, err := typ.EncodeFlagOverlay(typ.FlagOverlay{"claude_code_version": []byte(`""`)})
+	if err != nil {
+		t.Fatalf("EncodeFlagOverlay: %v", err)
+	}
+	c.Request.Header.Set(typ.ProbeFlagsHeader, encoded)
+	if got := resolve(c, synthetic(), oauthProvider).ClaudeCodeVersion; got != "" {
+		t.Errorf("overlay \"\" must force legacy, got %q", got)
+	}
+	// The resolved value reaches the context (NewClaudeClient reads it there).
+	c = newGinContext(t)
+	resolve(c, synthetic(), oauthProvider)
+	if got := typ.GetRuleFlags(c.Request.Context()).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLatest {
+		t.Errorf("ClaudeCodeVersion in ctx = %q, want %q", got, typ.ClaudeCodeVersionLatest)
+	}
+}

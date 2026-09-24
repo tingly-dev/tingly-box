@@ -76,11 +76,43 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 		ctx = client.WithProbeHeaderOverrides(ctx, req.Headers)
 	}
 	params := req.probeParams(model)
+	params.ClaudeCodePreamble = e.targetIsClaudeCode(req)
 	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
 	if cacheable && err == nil && result != nil && result.Success {
 		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
 	}
 	return result, err
+}
+
+// targetIsClaudeCode reports whether the probe's real upstream is a Claude
+// Code OAuth provider: the pinned provider of a provider target, or any
+// service provider of a rule target. Through-TB probes hand the SDK a
+// loopback provider (an API-key provider pointing at TB), so the builders
+// cannot tell from that client alone that the request will end up on an
+// OAuth credential and needs the Claude Code preamble.
+func (e *E2EProber) targetIsClaudeCode(req *E2ERequest) bool {
+	if e.config == nil || req == nil {
+		return false
+	}
+	switch req.TargetType {
+	case E2ETargetProvider:
+		p, err := e.config.GetProviderByUUID(req.ProviderUUID)
+		return err == nil && p != nil && p.IsClaudeCodeProvider()
+	case E2ETargetRule:
+		rule := e.config.GetRuleByUUID(req.RuleUUID)
+		if rule == nil {
+			return false
+		}
+		for _, svc := range rule.Services {
+			if svc == nil {
+				continue
+			}
+			if p, err := e.config.GetProviderByUUID(svc.Provider); err == nil && p != nil && p.IsClaudeCodeProvider() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // probeParams resolves the request into the flat shape the SDK helpers read.

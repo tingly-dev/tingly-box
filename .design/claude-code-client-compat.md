@@ -97,6 +97,7 @@
 | 其他 | 隐写 normalizer | ✅ 保留 | ✅ 保留 | ✅ 保留 | 三版 bundle 均无该代码 |
 | 其他 | 中继 host 上的 Claude OAuth issuer 也做 identity 注入 | ✅（flag 无关的 bugfix） | ✅ | ✅ | 原来 panic |
 | 验证 | 网关级 harness（真实网关 → 虚拟上游，逐项断言 wire） | ✅ | ✅ | ✅ | `TestRuleFlags/claude_code_version`、`harness matrix --mode=flags` |
+| 验证 | 前端 probe（rule 级：走规则自身 flag；provider 级：合成规则默认最新 profile + preamble） | 规则 flag 为空即 Legacy | ✅ | ✅ | `ResolveRuleFlagsWithScenario` 的 probe 默认、`E2EProber.targetIsClaudeCode`；见 `.design/probe.md` |
 | 验证 | **真实上游**（OAuth token → api.anthropic.com） | ❌ 不再验证 | ❌ 不再验证 | ✅ 手动 / nightly | `harness replay claude --upstream real --config providers.yaml`，entry 带 `oauth_token`，固定签成 `ClaudeCodeVersionLatest`；见 §4 与 `cli/harness/README.md` |
 
 触发事件：用户在真实使用中先后收到

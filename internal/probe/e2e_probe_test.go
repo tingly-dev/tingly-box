@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -317,4 +319,59 @@ func TestProbe_CachedEndpointCheck_DoesNotCrossTestModes(t *testing.T) {
 		"a non-stream cache entry must not satisfy a streaming check")
 	assert.False(t, svc.endpointCache.hit("p-cache", "gpt-4o", "responses", "false-true"),
 		"a non-stream cache entry must not satisfy a tool check")
+}
+
+// Through-TB probes hand the SDK a loopback provider, so the Claude Code
+// preamble decision must come from the real target: the pinned provider of a
+// provider target, or any service provider of a rule target.
+func TestTargetIsClaudeCode(t *testing.T) {
+	cfg := newTestConfig(t)
+	oauth := &typ.Provider{
+		UUID: "p-cc", Name: "Claude Code", APIBase: "https://api.anthropic.com",
+		APIStyle: protocol.APIStyleAnthropic, Enabled: true, AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode, AccessToken: "tok"},
+		Models:      []string{"claude-sonnet-4-5"},
+	}
+	apiKey := &typ.Provider{
+		UUID: "p-key", Name: "Anthropic", APIBase: "https://api.anthropic.com",
+		APIStyle: protocol.APIStyleAnthropic, Enabled: true, Token: "sk-ant", Models: []string{"claude-sonnet-4-5"},
+	}
+	addProvider(t, cfg, oauth)
+	addProvider(t, cfg, apiKey)
+	require.NoError(t, cfg.AddRule(typ.Rule{
+		UUID: "r-cc", Scenario: typ.ScenarioClaudeCode, RequestModel: "probe-test/cc", Active: true,
+		Services: []*loadbalance.Service{{Provider: "p-key", Model: "claude-sonnet-4-5", Active: true}, {Provider: "p-cc", Model: "claude-sonnet-4-5", Active: true}},
+	}))
+	require.NoError(t, cfg.AddRule(typ.Rule{
+		UUID: "r-key", Scenario: typ.ScenarioAnthropic, RequestModel: "m", Active: true,
+		Services: []*loadbalance.Service{{Provider: "p-key", Model: "claude-sonnet-4-5", Active: true}},
+	}))
+	svc := &E2EProber{config: cfg}
+
+	assert.True(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetProvider, ProviderUUID: "p-cc"}))
+	assert.False(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetProvider, ProviderUUID: "p-key"}))
+	assert.True(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetRule, RuleUUID: "r-cc"}), "any Claude Code service on the rule")
+	assert.False(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetRule, RuleUUID: "r-key"}))
+	assert.False(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetRule, RuleUUID: "missing"}))
+	assert.False(t, svc.targetIsClaudeCode(&E2ERequest{TargetType: E2ETargetProviderConfig}))
+
+	// The flag reaches the Anthropic builder even when the SDK client's own
+	// provider (the loopback) is not Claude Code.
+	p := (&E2ERequest{TargetType: E2ETargetProvider, ProviderUUID: "p-cc", Model: "claude-sonnet-4-5"}).probeParams("claude-sonnet-4-5")
+	p.ClaudeCodePreamble = true
+	params := buildAnthropicMessageParams(p, false)
+	require.NotEmpty(t, params.System)
+	assert.Equal(t, client.ClaudeCodeSystemHeader, params.System[0].Text)
+	params = buildAnthropicMessageParams(p, true)
+	assert.Equal(t, 1, countPreambles(params.System), "provider and target flags must not double the preamble")
+}
+
+func countPreambles(system []anthropic.TextBlockParam) int {
+	n := 0
+	for _, b := range system {
+		if b.Text == client.ClaudeCodeSystemHeader {
+			n++
+		}
+	}
+	return n
 }

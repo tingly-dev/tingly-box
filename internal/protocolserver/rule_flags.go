@@ -193,6 +193,18 @@ func ResolveRuleFlagsWithScenario(
 		flags.Recording = ""
 	}
 
+	// Provider-level probes (X-Tingly-Probe-Service, synthetic rule) have no
+	// rule to inherit claude_code_version from, and a Claude OAuth credential
+	// is only accepted upstream as the newest native client — probing it as
+	// the legacy emulation could never pass, so the probe would report a
+	// credential failure that isn't one. Default the synthetic rule to the
+	// latest profile; the value shows up in X-Tingly-Applied-Flags, and the
+	// overlay below can still force any profile (an explicit "" = legacy).
+	// Real traffic (matched rules) keeps the flag's off-by-default rollout.
+	if rule != nil && rule.UUID == ProbeSyntheticRuleUUID && flags.ClaudeCodeVersion == "" && provider.IsClaudeCodeProvider() {
+		flags.ClaudeCodeVersion = typ.ClaudeCodeVersionLatest
+	}
+
 	// Probe overlay (X-Tingly-Probe-Flags, Bench page): a per-request flag set
 	// applied after scenario inheritance so it can override any configured
 	// value — including turning a scenario-default flag off — but before the

@@ -44,6 +44,12 @@ type probeParams struct {
 	// with the SDK type of its protocol; nil = build the fixture. The
 	// builders only fill what the target decides on top of it.
 	Raw any
+	// ClaudeCodePreamble: the probe's real target is a Claude Code OAuth
+	// provider even though the SDK client points elsewhere (the TB loopback
+	// of a through-TB probe), so the request must carry the Claude Code
+	// system preamble the credential is authorized for. Direct probes get
+	// the same from the provider itself.
+	ClaudeCodePreamble bool
 }
 
 // thinkingEnabled reports whether the probe should enable extended thinking.
@@ -404,6 +410,7 @@ func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, 
 // probe. Shared by the probe helper and the cURL builder. The SDK adds the
 // "stream": true member itself at request time (WithJSONSet).
 func buildAnthropicMessageParams(p probeParams, isClaudeCodeProvider bool) *anthropic.MessageNewParams {
+	isClaudeCodeProvider = isClaudeCodeProvider || p.ClaudeCodePreamble
 	if raw, ok := p.Raw.(*anthropic.MessageNewParams); ok {
 		params := *raw
 		params.Model = anthropic.Model(p.Model)
