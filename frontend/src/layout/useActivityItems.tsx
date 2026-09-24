@@ -26,7 +26,7 @@ import {
     Vector as IconVector,
     Photo as IconPhoto,
     Palette as IconPalette,
-    Api as IconApi,
+    Cable as IconPlug,
     Users as IconUsers,
     Science as IconFlask,
     Handyman as IconTools,
@@ -201,7 +201,7 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/image/playground',
                 children: [
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), icon: <IconPalette sx={{ fontSize: 20 }} /> },
-                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconApi sx={{ fontSize: 20 }} /> },
+                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             {
