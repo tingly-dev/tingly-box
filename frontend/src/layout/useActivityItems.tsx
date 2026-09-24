@@ -148,10 +148,6 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
-            // Image API lives under the Image rail item; this row is a shortcut
-            // to it. `match` never claims the Agent activity, so landing on
-            // /image/api selects the Image rail, not this one.
-            { id: 'imagegen', nav: { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPhoto sx={{ fontSize: 20 }} />, match: () => false } },
         ]);
 
         const scenarioChildren: NavItem[] = [];
@@ -172,11 +168,6 @@ export function useActivityItems(): ActivityItem[] {
             if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
             scenarioChildren.push(...group);
         };
-        // Team lives under its own rail item; like Image API, this row is a
-        // shortcut to it and never claims the Agent activity (`match`).
-        if (!hiddenScenarios.has('team')) {
-            pushGroup([{ path: '/agent/team', label: t('layout.nav.useTeam', { defaultValue: 'Team' }), icon: <IconUsers sx={{ fontSize: 20 }} />, match: () => false }]);
-        }
         pushGroup(codingTools);
         pushGroup(sdkTools);
 
