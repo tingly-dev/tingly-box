@@ -527,3 +527,23 @@ func TestZCodeProviderName(t *testing.T) {
 	assert.Equal(t, "custom", zcodeProviderName("ZCode CN", "custom"), "a user-supplied name wins")
 	assert.Equal(t, "ZCode CN", zcodeProviderName("ZCode CN", ""), "an unnamed login takes the issuer's display name")
 }
+
+// OAuthDetail.UserID is the login's account id when the token exchange (or
+// the AfterToken hook) reported one; a random uuid is only the fallback for
+// tokens with no account id. The value feeds metadata.user_id.account_uuid on
+// Claude Code requests, so a made-up id there is a fingerprint mismatch.
+func TestOAuthUserIDFromToken(t *testing.T) {
+	withAccount := &oauth.Token{Metadata: map[string]any{"account_id": " 0d6f2c1e-4b6a-4f8e-9a5d-2f7c1b3e8a90 "}}
+	assert.Equal(t, "0d6f2c1e-4b6a-4f8e-9a5d-2f7c1b3e8a90", oauthUserIDFromToken(withAccount))
+
+	for name, tok := range map[string]*oauth.Token{
+		"nil token":     nil,
+		"no metadata":   {},
+		"empty id":      {Metadata: map[string]any{"account_id": "  "}},
+		"non-string id": {Metadata: map[string]any{"account_id": 42}},
+	} {
+		got := oauthUserIDFromToken(tok)
+		_, err := uuid.Parse(got)
+		assert.NoError(t, err, "%s: fallback must be a random uuid, got %q", name, got)
+	}
+}

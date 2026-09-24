@@ -1094,6 +1094,19 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 // Provider Creation Helper
 // =============================================
 
+// oauthUserIDFromToken picks the OAuthDetail.UserID for a fresh login: the
+// issuer's account id when the token exchange (or the AfterToken hook)
+// reported one — for Claude this is the account uuid the native client puts
+// in metadata.user_id — and a random uuid only when no account id is known.
+func oauthUserIDFromToken(token *oauth.Token) string {
+	if token != nil {
+		if v, ok := token.Metadata["account_id"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return uuid.New().String()
+}
+
 // createProviderFromToken creates a provider from OAuth token
 func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID, deviceID string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
@@ -1125,7 +1138,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		AccessToken:  token.AccessToken,
 		ProviderType: string(issuer),
 		Issuer:       issuer,
-		UserID:       uuid.New().String(),
+		UserID:       oauthUserIDFromToken(token),
 		RefreshToken: token.RefreshToken,
 		ExpiresAt:    expiresAt,
 		DeviceID:     deviceID,
