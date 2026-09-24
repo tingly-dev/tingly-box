@@ -103,7 +103,7 @@ export default {
     },
     "easterEgg": "Hi，我是 Tingly-Box，为您掌控智能",
     "githubStarBanner": {
-      "text": "点个 GitHub Star 让更多人发现它吧～",
+      "text": "喜欢 Tingly-Box 吗？点个 GitHub Star 让更多人发现它吧～",
       "cta": "去 GitHub 点 Star"
     },
     "dashboard": "仪表盘",
