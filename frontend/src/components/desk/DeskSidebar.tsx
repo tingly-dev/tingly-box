@@ -21,6 +21,15 @@ const StatusMark = ({status}: {status: string}) => {
     return null;
 };
 
+// Rows use primary text (the theme's body text defaults to secondary grey,
+// which read as disabled here); selection keeps the theme's own highlight.
+const rowSx = {
+    borderRadius: 1.5,
+    gap: 1,
+    color: 'text.primary',
+    '&.Mui-selected': {fontWeight: 500},
+} as const;
+
 const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) => {
     const {t} = useTranslation();
     const [query, setQuery] = useState('');
@@ -36,9 +45,9 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) 
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
             <Box sx={{px: 1, pt: 1, pb: 0.5}}>
-                <ListItemButton onClick={() => onNew()} selected={selectedId === null} sx={{borderRadius: 1.5, gap: 1, py: 0.75}}>
+                <ListItemButton onClick={() => onNew()} selected={selectedId === null} sx={{...rowSx, py: 0.75}}>
                     <Add sx={{fontSize: 18}}/>
-                    <Typography variant="body2">{t('desk.newSession', {defaultValue: 'New session'})}</Typography>
+                    <Typography variant="body2" sx={{color: 'inherit'}}>{t('desk.newSession', {defaultValue: 'New session'})}</Typography>
                 </ListItemButton>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, mt: 0.5, borderRadius: 1.5, bgcolor: 'action.hover'}}>
                     <Search sx={{fontSize: 16, color: 'text.secondary'}}/>
@@ -64,7 +73,7 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) 
                     <Box key={g.path} sx={{mt: 1.5}}>
                         <Box sx={{display: 'flex', alignItems: 'center', px: 1.5, mb: 0.25, '&:hover .desk-folder-add': {opacity: 1}}}>
                             <Tooltip title={g.path} placement="right">
-                                <Typography variant="caption" color="text.secondary" noWrap sx={{flex: 1, fontWeight: 600}}>
+                                <Typography variant="body2" noWrap sx={{flex: 1, fontWeight: 600, fontSize: '0.75rem', color: 'text.secondary'}}>
                                     {folderName(g.path)}
                                 </Typography>
                             </Tooltip>
@@ -85,9 +94,9 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) 
                                     key={s.id}
                                     selected={s.id === selectedId}
                                     onClick={() => onSelect(s.id)}
-                                    sx={{borderRadius: 1.5, py: 0.5, gap: 1, opacity: s.status === 'closed' ? 0.55 : 1}}
+                                    sx={{...rowSx, py: 0.5, opacity: s.status === 'closed' ? 0.55 : 1}}
                                 >
-                                    <Typography variant="body2" noWrap sx={{flex: 1}}>{sessionTitle(s)}</Typography>
+                                    <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: '0.8125rem'}}>{sessionTitle(s)}</Typography>
                                     <StatusMark status={s.status}/>
                                 </ListItemButton>
                             ))}

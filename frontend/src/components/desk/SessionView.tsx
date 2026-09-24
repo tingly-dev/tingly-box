@@ -58,7 +58,7 @@ const SessionView = ({
                         <ArrowBack fontSize="small"/>
                     </IconButton>
                 )}
-                <Typography variant="subtitle1" noWrap sx={{fontWeight: 600, minWidth: 0}}>{sessionTitle(session)}</Typography>
+                <Typography variant="subtitle1" noWrap sx={{fontWeight: 600, minWidth: 0, color: 'text.primary'}}>{sessionTitle(session)}</Typography>
                 <FolderChip path={session.project}/>
                 {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})}/>}
                 {isClosed && <Chip size="small" variant="outlined" label={t('desk.statusArchived', {defaultValue: 'archived'})}/>}

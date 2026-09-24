@@ -73,7 +73,7 @@ const Composer = ({placeholder, onSubmit, context, canSubmit = true, disabled, o
                             void submit();
                         }
                     }}
-                    sx={{fontSize: '0.95rem', lineHeight: 1.6}}
+                    sx={{fontSize: '0.9375rem', lineHeight: 1.6, color: 'text.primary'}}
                 />
                 <Box sx={{flexShrink: 0, pb: 0.25}}>
                     {onStop ? (

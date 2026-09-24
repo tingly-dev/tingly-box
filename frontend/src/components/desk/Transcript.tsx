@@ -15,16 +15,24 @@ interface TranscriptProps {
 
 const mono = {fontFamily: 'monospace', fontSize: '0.8rem'};
 
+// The theme's body variants default to the secondary text color, which suits
+// metadata. The conversation itself is the subject of this page, so it uses
+// the primary color at reading size; labels, notes and tool detail stay
+// secondary so they recede.
+const conversationText = {
+    color: 'text.primary', fontSize: '0.9375rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+} as const;
+
 const UserBubble = ({message}: {message: MessageInfo}) => (
     <Box sx={{display: 'flex', justifyContent: 'flex-end'}}>
         <Box sx={{maxWidth: '80%', bgcolor: 'action.hover', px: 2, py: 1.25, borderRadius: 3}}>
-            <Typography variant="body1" sx={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{message.content}</Typography>
+            <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
         </Box>
     </Box>
 );
 
 const AssistantText = ({message}: {message: MessageInfo}) => (
-    <Typography variant="body1" sx={{whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.7}}>
+    <Typography variant="body1" sx={conversationText}>
         {message.content}
     </Typography>
 );
@@ -55,7 +63,7 @@ const StepDetail = ({step}: {step: ActivityStep}) => {
                         ...mono, m: 0, mt: 0.5, p: 1, borderRadius: 1, maxHeight: 220, overflow: 'auto',
                         whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                         bgcolor: 'action.hover',
-                        color: step.isError ? 'error.dark' : 'text.secondary',
+                        color: 'text.secondary',
                     }}
                 >
                     {step.result}
@@ -74,14 +82,9 @@ const ActivityRow = ({steps, live}: {steps: ActivityStep[]; live: boolean}) => {
     const tools = steps.filter((s) => s.type === 'tool');
     const failed = tools.filter((s) => s.type === 'tool' && s.isError).length;
 
-    let label: string;
-    if (tools.length === 0) {
-        label = t('desk.thought', {defaultValue: 'Thought'});
-    } else if (failed > 0) {
-        label = t('desk.usedToolsFailed', {defaultValue: 'Used {{count}} tools, {{failed}} failed', count: tools.length, failed});
-    } else {
-        label = t('desk.usedTools', {defaultValue: tools.length === 1 ? 'Used 1 tool' : 'Used {{count}} tools', count: tools.length});
-    }
+    const label = tools.length === 0
+        ? t('desk.thought', {defaultValue: 'Thought'})
+        : t('desk.usedTools', {defaultValue: tools.length === 1 ? 'Used 1 tool' : 'Used {{count}} tools', count: tools.length});
 
     return (
         <Box>
@@ -90,11 +93,18 @@ const ActivityRow = ({steps, live}: {steps: ActivityStep[]; live: boolean}) => {
                 onClick={() => setOpen((v) => !v)}
                 sx={{
                     display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', userSelect: 'none',
-                    color: failed > 0 ? 'error.main' : 'text.secondary', '&:hover': {color: 'text.primary'},
+                    color: 'text.secondary', '&:hover': {color: 'text.primary'},
                 }}
             >
                 {live && <CircularProgress size={12} sx={{mr: 0.5}}/>}
                 <Typography variant="body2" sx={{color: 'inherit'}}>{label}</Typography>
+                {/* A failing command is routine inside an agent's run (a red
+                    test it goes on to fix), so only the count is marked. */}
+                {failed > 0 && (
+                    <Typography variant="body2" sx={{color: 'error.main'}}>
+                        · {t('desk.failedCount', {defaultValue: '{{count}} failed', count: failed})}
+                    </Typography>
+                )}
                 {open ? <ExpandMore sx={{fontSize: 16}}/> : <ChevronRight sx={{fontSize: 16}}/>}
             </Box>
             <Collapse in={open} unmountOnExit>
@@ -142,8 +152,8 @@ const RequestCard = ({block, pending, onRespond}: {
     }
 
     return (
-        <Paper variant="outlined" sx={{p: 1.5, borderRadius: 2, borderColor: 'warning.main'}}>
-            <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
+        <Paper variant="outlined" sx={{p: 1.5, borderRadius: 2, borderColor: 'primary.main'}}>
+            <Typography variant="body2" sx={{fontWeight: 600, mb: 0.75, color: 'text.primary', fontSize: '0.875rem'}}>
                 {isAsk
                     ? message.content
                     : t('desk.approvalTitle', {defaultValue: 'Allow {{tool}}?', tool: message.content})}
@@ -211,7 +221,7 @@ const Transcript = ({blocks, pendingRequestId, working, onRespond}: TranscriptPr
                         );
                     case 'system':
                         return (
-                            <Typography key={i} variant="caption" color="text.secondary" sx={{textAlign: 'center', display: 'block'}}>
+                            <Typography key={i} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
                                 {b.message.content}
                             </Typography>
                         );
