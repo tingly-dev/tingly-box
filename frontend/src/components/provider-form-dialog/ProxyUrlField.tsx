@@ -1,4 +1,4 @@
-import {Box, Checkbox, FormControlLabel, TextField, Typography} from '@mui/material';
+import {Box, Button, Checkbox, FormControlLabel, TextField, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 
@@ -51,6 +51,21 @@ const ProxyUrlField: React.FC<ProxyUrlFieldProps> = ({
                         }
                         labelPlacement="start"
                     />
+                </Box>
+            )}
+            {mode === 'edit' && globalProxyUrl && (
+                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                    <Button
+                        size="small"
+                        variant="text"
+                        disabled={proxyUrl === globalProxyUrl}
+                        onClick={() => onProxyUrlChange(globalProxyUrl)}
+                        sx={{textTransform: 'none', minWidth: 0, p: 0}}
+                    >
+                        {proxyUrl === globalProxyUrl
+                            ? t('providerDialog.advanced.proxyUrl.applyGlobalApplied')
+                            : t('providerDialog.advanced.proxyUrl.applyGlobal', {url: globalProxyUrl})}
+                    </Button>
                 </Box>
             )}
         </Box>

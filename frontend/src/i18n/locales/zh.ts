@@ -344,7 +344,9 @@ export default {
         "placeholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:7890",
         "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。",
         "useGlobal": "使用常用代理（{{url}}）",
-        "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）"
+        "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）",
+        "applyGlobal": "应用常用代理（{{url}}）",
+        "applyGlobalApplied": "已应用常用代理"
       }
     },
     "verification": {
