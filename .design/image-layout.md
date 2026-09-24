@@ -61,8 +61,19 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 | `frontend/src/layout/useActivityItems.tsx` | Image rail 项与 Agent 侧的快捷行 |
 | `frontend/src/App.tsx` | 新路由与旧路径重定向 |
 
-## 6. 以后
+## 6. 整屏工作台(lg 及以上)
 
-Playground 目前仍是一张 `size="full"` 的卡片。它现在拥有整页,可以进一步改成
-占满视口高度的工作台布局(结果时间线不再受固定面板高度限制);那是单独一步,
-不和这次纯搬迁混在一起。
+Playground 独占一页之后,不再是"页面里的一张卡",而是占满内容区的工作台:
+
+- **页面给高度,面板分高度。** `ImagePlaygroundPage` 在 lg 上取内容区的 100% 高
+  度(最低 600px,再矮就让内容区滚动,而不是把 prompt 挤扁)。卡片、网格、两侧面
+  板依次 `height: 100%`。原来两侧共用的 `PLAYGROUND_PANEL_HEIGHT` 常量随之删除:两
+  侧都填满同一行,天然对齐。
+- **左窄右宽。** 控制列固定 360–420px;结果区拿走剩下的全部宽度——用户盯着看的是
+  结果。多出来的纵向空间在左边给 prompt(它本来就是"拿剩余高度"的那个元素)。
+- **结果卡随高度变大,且保持方形槽位。** 结果条是一个 size container
+  (`container-type: size`),卡片的 flex-basis 用 `cqh` 按条的高度算出让每个槽位
+  为方形的宽度(`imageGenSession.ts` 的 `stripCardBasis`):多出来的高度变成更大的
+  图,而不是图片两侧的留白。算出的宽度不小于原来调好的宽度(矮屏上与之前完全一
+  样),不大于结果条本身。
+- **lg 以下不变。** md 及以下仍是上下堆叠、整页滚动,结果区固定 320px 高。

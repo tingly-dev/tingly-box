@@ -49,12 +49,6 @@ import type {
     SelectedImage,
 } from './ImageGenPlayground.types';
 
-// Base panel height with the reference-image row in its compact (empty)
-// state. Once references are added the row grows into a thumbnail strip
-// (see desktopPanelHeight below) — both panels share one height value so
-// they stay visually aligned (see the comment on the grid below).
-const PLAYGROUND_PANEL_HEIGHT = 348;
-const REFERENCE_STRIP_EXTRA_HEIGHT = 48;
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
 // overview (searchable, grid, newest first), not here. Capping the strip to
@@ -452,15 +446,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const olderTimelineCount = timeline.length - visibleTimeline.length;
 
     const noModels = models.length === 0;
-    const desktopPanelHeight = noModels && !loadingRules
-        ? 'auto'
-        : PLAYGROUND_PANEL_HEIGHT + (referenceImages.length > 0 ? REFERENCE_STRIP_EXTRA_HEIGHT : 0);
+    // On lg the playground is a full-height workbench (the page gives it the
+    // viewport): both panels fill the grid row, so they stay aligned without a
+    // shared height constant, and extra screen height goes to the prompt on
+    // the left and to bigger result cards on the right.
+    const desktopPanelHeight = '100%';
 
     return (
         <>
             <UnifiedCard
                 size="full"
                 titleHeadingLevel={1}
+                sx={{ height: { lg: '100%' } }}
                 title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
                 subtitle={outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -484,10 +481,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     onPaste={handlePaste}
                     sx={{
                         display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', lg: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
+                        // Controls are a fixed-width tool column; the results get
+                        // every remaining pixel, since that is what the user looks at.
+                        gridTemplateColumns: { xs: '1fr', lg: 'minmax(360px, 420px) minmax(0, 1fr)' },
+                        gridTemplateRows: { lg: 'minmax(0, 1fr)' },
+                        height: { lg: '100%' },
                         gap: 3,
-                        // Both desktop panels consume the same height token below.
-                        // Do not introduce panel-specific desktop heights: generated
+                        // Both desktop panels fill the row (desktopPanelHeight). Do
+                        // not introduce panel-specific desktop heights: generated
                         // image content otherwise makes the two sides drift apart.
                         alignItems: 'stretch',
                     }}

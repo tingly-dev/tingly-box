@@ -205,6 +205,9 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             minHeight: 0,
                             overflowX: 'auto',
                             overflowY: 'hidden',
+                            // A size container, so cards can size themselves
+                            // from the strip's height (`cqh`, see stripCardBasis).
+                            containerType: 'size',
                             pb: 0.5,
                             scrollSnapType: 'x proximity',
                             overflowAnchor: 'none',

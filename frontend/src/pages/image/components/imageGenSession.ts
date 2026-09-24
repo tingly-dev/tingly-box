@@ -181,3 +181,22 @@ export const runGridLayout = (slots: number) => {
     const slotWidth = rows === 1 ? SLOT_WIDTH_ONE_ROW : SLOT_WIDTH_TWO_ROWS;
     return { rows, cols, cardWidth: cols * slotWidth + (cols - 1) * SLOT_GAP + CARD_PADDING };
 };
+
+// Vertical space a run card spends on things other than its image slots
+// (padding, the prompt/meta header, the strip's bottom scrollbar gutter).
+const CARD_VERTICAL_CHROME = 76;
+const SINGLE_CARD_BASE = 'clamp(280px, 46%, 360px)';
+
+// CSS flex-basis for a card in the results strip. The widths above were tuned
+// for a short strip; on the full-height workbench the strip is much taller, and
+// the card grows wider so its slots stay square — extra height becomes bigger
+// images, not letterboxing. `100cqh` is the strip's own height (the strip is a
+// size container). Never narrower than the tuned width, never wider than the
+// strip.
+export const stripCardBasis = (layout: { rows: number; cols: number; cardWidth: number } | null): string => {
+    const { rows, cols } = layout ?? { rows: 1, cols: 1 };
+    const base = layout === null || (cols === 1 && rows === 1) ? SINGLE_CARD_BASE : `${layout.cardWidth}px`;
+    const slot = `(100cqh - ${CARD_VERTICAL_CHROME + (rows - 1) * SLOT_GAP}px) / ${rows}`;
+    const square = `calc(${slot} * ${cols} + ${(cols - 1) * SLOT_GAP + CARD_PADDING}px)`;
+    return `0 0 min(100%, max(${base}, ${square}))`;
+};
