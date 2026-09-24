@@ -3,8 +3,11 @@ package visionproxy
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -24,51 +27,119 @@ type providerResolver interface {
 }
 
 // VisionProxyProcessor rewrites a typed request in place: every image
-// content block becomes a text block, either the vision upstream's
-// description (latest message) or a fixed omitted-marker (history). It is
+// content block becomes a text block — the vision upstream's description
+// (cached per session, newest images first, a bounded number per request)
+// or a fixed deferral marker for the rest. It is
 // the image-rewriting engine behind Service.Apply — see service.go for the
 // rule/scenario resolution that picks the upstream and invokes Process.
 type VisionProxyProcessor struct {
 	Client   VisionClient
 	Resolver providerResolver
+
+	// cache maps (session, vision service, image content) to the
+	// already-formatted replacement text — see describe_cache.go. Left nil
+	// by zero-value construction, describeCacheFor lazily builds a
+	// process-local one so a bare VisionProxyProcessor{} literal still
+	// caches for its own lifetime.
+	cache     *describeCache
+	cacheOnce sync.Once
+
+	// describeLimit caps cache-missing images described per request; zero
+	// means describeLimitFor's env/default resolution. Tests set it to pin
+	// the newest-first ordering with a small value.
+	describeLimit int
+
+	// describeTimeout bounds one upstream call; zero means
+	// describeTimeoutFor's env/default resolution.
+	describeTimeout time.Duration
 }
 
-const imageUnavailableText = "[image: (description unavailable)]"
-
-// imageHistoricalText replaces image blocks that appear in messages PRIOR to
-// the latest one. Enabling the proxy implies the fallback model is
-// text-only, so every image must be removed from the serialized request —
-// but describing every historical image via the vision upstream would be
-// prohibitively expensive (and is unnecessary: the model is rarely asked
-// about images that aren't in the latest turn). Historical images are
-// therefore stripped with a fixed marker, while only images in the latest
-// message are sent through the vision upstream for description.
-const imageHistoricalText = "[image: (omitted from history)]"
-
-// latestImageAnchor reports the index the "latest turn" test should compare
-// against: the last message that can carry an image from the caller, rather
-// than the last message outright.
-//
-// Clients append trailing messages the caller never sees as part of the turn.
-// Claude Code emits a `<system-reminder>` as its own system-role message after
-// every tool result, so a request answering a tool call arrives as
-//
-//	user / system / assistant(tool_use) / user(tool_result+image) / system
-//
-// Anchoring on len-1 makes the image of the turn *in flight* test as history,
-// and it is replaced with imageHistoricalText before any model sees it — the
-// caller then answers about an image that was never described and never sent.
-//
-// canCarry reports whether the message at an index is one the caller puts
-// images in; trailing messages that fail it do not move the anchor. When no
-// message qualifies the anchor stays at len-1, preserving prior behaviour.
-func latestImageAnchor(n int, canCarry func(i int) bool) int {
-	for i := n - 1; i >= 0; i-- {
-		if canCarry(i) {
-			return i
+// describeCacheFor returns the processor's cache, building a memory-only
+// one on first use if none was injected.
+func (p *VisionProxyProcessor) describeCacheFor() *describeCache {
+	p.cacheOnce.Do(func() {
+		if p.cache == nil {
+			p.cache = newDescribeCache(nil)
 		}
+	})
+	return p.cache
+}
+
+// imageUnavailableText replaces an image when the vision proxy itself fails
+// (no usable service, upstream error, empty description). The wording is a
+// deliberate error report, not a neutral placeholder: the downstream model
+// should understand the image was lost to a gateway-side failure and relay
+// that to the user, so the user attributes the problem to the proxy — not to
+// their own image or the client.
+const imageUnavailableText = "[image error: the vision proxy failed to describe this image, so the gateway removed it from the request. This is a proxy-side failure — tell the user the image could not be processed by the vision proxy.]"
+
+// imageOverLimitText replaces image blocks that missed the cache and fell
+// outside this request's describe limit (see describeLimitFor). Enabling the
+// proxy implies the downstream model is text-only, so every image must be
+// removed from the serialized request; describing an unbounded number of
+// them in one request would be neither affordable nor fast. The marker is
+// a deferral, not a verdict: the image stays eligible and is described on a
+// later turn once newer images have been cached — see Process.
+const imageOverLimitText = "[image: (not yet described: over this request's vision describe limit)]"
+
+// defaultDescribeLimit is the number of cache-missing images one request
+// may send to the vision upstream. Newest images win the slots. With
+// describeConcurrency at 4, the default costs at most two upstream
+// round-trips of latency per request, and a conversation whose history is
+// entirely uncached (proxy enabled mid-session, migrated from another
+// gateway, vision model switched) converges to fully described within a
+// few turns instead of paying for all of it at once.
+const defaultDescribeLimit = 8
+
+// describeLimitEnv overrides defaultDescribeLimit. Same knob style as
+// TINGLY_VISION_MAX_TOKENS: an operator on a fast, cheap vision model can
+// raise it to converge faster; one on a slow model can lower it.
+const describeLimitEnv = "TINGLY_VISION_DESCRIBE_LIMIT"
+
+// defaultDescribeTimeout bounds one vision upstream call. Without it a
+// describe runs on the caller's request context alone, so a vision model
+// that hangs holds the whole request until the client gives up. A timeout
+// is a failure like any other: fail-strip now, negative-cached for
+// describeFailureTTL, retried after. Vision models answer in seconds;
+// reasoning models can take tens of seconds on a large screenshot, so the
+// default leaves room for those.
+const defaultDescribeTimeout = 60 * time.Second
+
+// describeTimeoutEnv overrides defaultDescribeTimeout, as a Go duration
+// ("90s", "2m") or a bare number of seconds.
+const describeTimeoutEnv = "TINGLY_VISION_DESCRIBE_TIMEOUT"
+
+// describeTimeoutFor resolves the per-call timeout: the processor's explicit
+// value (tests), else the environment, else the default.
+func (p *VisionProxyProcessor) describeTimeoutFor() time.Duration {
+	if p.describeTimeout > 0 {
+		return p.describeTimeout
 	}
-	return n - 1
+	if raw := strings.TrimSpace(os.Getenv(describeTimeoutEnv)); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+		logrus.Warnf("vision proxy: ignoring invalid %s=%q", describeTimeoutEnv, raw)
+	}
+	return defaultDescribeTimeout
+}
+
+// describeLimitFor resolves the per-request describe limit: the processor's
+// explicit value (tests), else the environment, else the default.
+func (p *VisionProxyProcessor) describeLimitFor() int {
+	if p.describeLimit > 0 {
+		return p.describeLimit
+	}
+	if raw := strings.TrimSpace(os.Getenv(describeLimitEnv)); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return n
+		}
+		logrus.Warnf("vision proxy: ignoring invalid %s=%q", describeLimitEnv, raw)
+	}
+	return defaultDescribeLimit
 }
 
 // describeConcurrency bounds how many vision upstream calls run in parallel
@@ -78,16 +149,59 @@ func latestImageAnchor(n int, canCarry func(i int) bool) int {
 // keeps a pathological request from opening dozens of connections at once.
 const describeConcurrency = 4
 
-// imageRef is one image occurrence in the LATEST message, captured while
-// walking the request: the extracted source plus a splice callback that
-// writes the replacement text back into the exact block the image came
-// from. Every ref targets a distinct slice slot, so splice calls are safe
-// to run from concurrent goroutines without locking.
+// imageRef is one image occurrence, captured while walking the request: the
+// extracted source plus a splice callback that writes the replacement text
+// back into the exact block the image came from, plus the cache key
+// identifying this (session, vision service, image content) triple. Every
+// ref targets a distinct slice slot, so splice calls are safe to run from
+// concurrent goroutines without locking.
 type imageRef struct {
 	mediaType string
 	b64       string
 	remoteURL string
+	cacheKey  visionCacheKey
 	splice    func(text string)
+}
+
+// sessionScope is the session component of a cache key. It is the resolved
+// (source, value) pair and deliberately NOT typ.SessionID.String(): that
+// form also carries the client IP as a backup field, and a laptop that
+// changes networks mid-conversation must keep hitting the descriptions it
+// already paid for. Now that entries outlive the process (describe_store.go)
+// the key has to be stable across everything but the conversation itself.
+func sessionScope(id typ.SessionID) string {
+	return string(id.Source) + ":" + id.Value
+}
+
+// newVisionCacheKey builds the cache key for one image occurrence. provider
+// and model come from usable (nil when no vision service is configured —
+// still a valid, if useless, key: without a service nothing ever gets
+// written to the cache, so it can only ever miss).
+func newVisionCacheKey(session string, usable *loadbalance.Service, mediaType, b64, remoteURL string) visionCacheKey {
+	var provider, model string
+	if usable != nil {
+		provider, model = usable.Provider, usable.Model
+	}
+	content := hashURLImage(remoteURL)
+	if remoteURL == "" {
+		content = hashBase64Image(mediaType, b64)
+	}
+	return visionCacheKey{session: session, provider: provider, model: model, content: content}
+}
+
+// newImageRef bundles one image occurrence's extracted source, its cache
+// key, and the splice-back callback. Every collectXxx call site needs the
+// same four fields together, so centralizing the construction here keeps
+// them from drifting out of sync (e.g. a cache key built from a different
+// mediaType/b64/remoteURL triple than the one actually described).
+func newImageRef(session string, usable *loadbalance.Service, mediaType, b64, remoteURL string, splice func(text string)) imageRef {
+	return imageRef{
+		mediaType: mediaType,
+		b64:       b64,
+		remoteURL: remoteURL,
+		cacheKey:  newVisionCacheKey(session, usable, mediaType, b64, remoteURL),
+		splice:    splice,
+	}
 }
 
 // Process mutates req in place: every image block becomes a text block. On
@@ -95,8 +209,10 @@ type imageRef struct {
 // response) the image is still removed so a downstream text-only model does
 // not choke on an unsupported content block. services is the candidate
 // upstream pool — the first active, resolvable service is used; pass a
-// single already-resolved service for the common case.
-func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []*loadbalance.Service) error {
+// single already-resolved service for the common case. sessionID scopes the
+// describe cache — see describe_cache.go and .design/vision-proxy.md §10 for
+// why a session boundary, not just image content, decides cache reuse.
+func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []*loadbalance.Service, sessionID typ.SessionID) error {
 	if req == nil {
 		return nil
 	}
@@ -104,19 +220,25 @@ func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []
 		ctx = context.Background()
 	}
 
-	// Phase 1 — walk the request: historical images are replaced with the
-	// fixed marker immediately (no upstream cost); latest-message images
-	// are collected for the describe fan-out.
+	// Resolved once, up front: both the describe fan-out and every cache key
+	// built during the walk need the same (session, service) pair.
+	usable := p.pickUsableService(services)
+	cache := p.describeCacheFor()
+	session := sessionScope(sessionID)
+
+	// Phase 1 — walk the request in message order: images whose cache key
+	// already has a description get it spliced in immediately; misses are
+	// collected, in message order, for ranking and the describe fan-out.
 	var refs []imageRef
 	switch req := req.(type) {
 	case *anthropic.BetaMessageNewParams:
-		refs = collectBeta(req)
+		refs = collectBeta(req, session, usable, cache)
 	case *anthropic.MessageNewParams:
-		refs = collectV1(req)
+		refs = collectV1(req, session, usable, cache)
 	case *openai.ChatCompletionNewParams:
-		refs = collectOpenAI(req)
+		refs = collectOpenAI(req, session, usable, cache)
 	case *responses.ResponseNewParams:
-		refs = collectResponses(req)
+		refs = collectResponses(req, session, usable, cache)
 	default:
 		// Unknown request shape — leave it alone.
 		return nil
@@ -125,10 +247,87 @@ func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []
 		return nil
 	}
 
-	// Phase 2 — describe the collected images (concurrently when there is
-	// more than one) and splice the text back in.
-	p.describeAll(ctx, p.pickUsableService(services), refs)
+	// No usable vision service: nothing can be described and nothing is in
+	// the cache under an empty service key, so every miss is a fail-strip
+	// — the same state on every turn. Bounding here would split the images
+	// into "failed" and "not yet described" markers that mean the same
+	// thing and never resolve, so strip them all uniformly and skip the
+	// fan-out.
+	if usable == nil || p.Client == nil {
+		logrus.WithContext(ctx).WithField("component", "vision_proxy").
+			WithField("images", len(refs)).
+			Warn("vision proxy: no usable service or client; stripping images")
+		for _, r := range refs {
+			r.splice(imageUnavailableText)
+		}
+		return nil
+	}
+
+	// Phase 2 — bound the upstream work, newest first. The newest misses
+	// take the describe slots; everything older than the limit gets the
+	// deferral marker this turn. Once described, an image is cached for
+	// the rest of the session, so each later turn spends its slots on the
+	// next-oldest misses until the whole history is covered.
+	refs, deferred := boundNewestFirst(refs, p.describeLimitFor())
+	for _, r := range deferred {
+		r.splice(imageOverLimitText)
+	}
+	if len(deferred) > 0 {
+		logrus.WithContext(ctx).WithField("component", "vision_proxy").
+			WithFields(logrus.Fields{"deferred": len(deferred), "described": len(refs)}).
+			Info("vision proxy: describe limit reached; deferring older images")
+	}
+
+	// Phase 3 — describe the kept images (concurrently when there is more
+	// than one) and splice the text back in. refs is newest first, so the
+	// image of the turn in flight is dispatched first and is the last to
+	// be lost if the request context is cut short.
+	p.describeAll(ctx, usable, cache, refs)
 	return nil
+}
+
+// boundNewestFirst ranks the cache misses a walk collected (in message
+// order, oldest first) so the newest come first, folds repeated images
+// into one ref, then splits at limit: keep is the newest `limit` distinct
+// images in newest-first order, deferred is everything older. Position is
+// the only ranking signal — no message is inspected for role or content —
+// so the rule is the same for every protocol shape.
+//
+// Folding matters for more than cost. The same screenshot can sit in two
+// tool results of one request; described twice it would get two different
+// texts, only one of which the cache keeps, so the other position's text
+// would change on the next turn. One describe, spliced into every
+// position, keeps them identical now and later. A folded image ranks at
+// its newest occurrence and takes one slot.
+func boundNewestFirst(refs []imageRef, limit int) (keep, deferred []imageRef) {
+	for i, j := 0, len(refs)-1; i < j; i, j = i+1, j-1 {
+		refs[i], refs[j] = refs[j], refs[i]
+	}
+	refs = foldDuplicates(refs)
+	if limit < 0 {
+		limit = 0
+	}
+	if len(refs) <= limit {
+		return refs, nil
+	}
+	return refs[:limit], refs[limit:]
+}
+
+// foldDuplicates merges refs that share a cache key into the first one
+// seen, whose splice then writes the text into every merged position.
+func foldDuplicates(refs []imageRef) []imageRef {
+	first := make(map[visionCacheKey]int, len(refs))
+	out := refs[:0]
+	for _, r := range refs {
+		if i, seen := first[r.cacheKey]; seen {
+			prev, dup := out[i].splice, r.splice
+			out[i].splice = func(text string) { prev(text); dup(text) }
+			continue
+		}
+		first[r.cacheKey] = len(out)
+		out = append(out, r)
+	}
+	return out
 }
 
 func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service) *loadbalance.Service {
@@ -149,8 +348,13 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 // describeAll resolves every collected ref via the vision upstream and
 // splices the replacement text into the request. The semaphore is acquired
 // BEFORE each goroutine is spawned, so describeConcurrency bounds live
-// goroutines as well as in-flight upstream calls.
-func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbalance.Service, refs []imageRef) {
+// goroutines as well as in-flight upstream calls. A successful description
+// is written to cache before splicing so the next occurrence of the same
+// (session, service, image) key — retry, failover, repeated tool call — can
+// skip the upstream call entirely; fail-strip results go to the short-lived
+// negative cache instead (never the durable tier) so a transient failure
+// is retried soon and a permanent one stops taking a slot every turn.
+func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbalance.Service, cache *describeCache, refs []imageRef) {
 	sem := make(chan struct{}, describeConcurrency)
 	var wg sync.WaitGroup
 	for _, r := range refs {
@@ -159,17 +363,33 @@ func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbala
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r.splice(p.safeDescribe(ctx, usable, r))
+			text := p.safeDescribe(ctx, usable, r)
+			switch {
+			case text != imageUnavailableText:
+				cache.put(r.cacheKey, text)
+			case ctx.Err() == nil:
+				// Only a failure of the describe itself (upstream error,
+				// empty answer, per-call timeout) is remembered. If the
+				// caller's request context is gone — the user aborted, the
+				// client retried — the image was never given a fair try,
+				// and remembering it would tell the resend, for the next
+				// describeFailureTTL, that the proxy failed when it did not.
+				cache.markFailed(r.cacheKey)
+			}
+			r.splice(text)
 		}()
 	}
 	wg.Wait()
 }
 
-// safeDescribe is describe plus panic containment. It runs on goroutines
+// safeDescribe is describe plus the per-call timeout and panic containment.
+// It runs on goroutines
 // describeAll spawns, outside the HTTP handler's recovery middleware — a
 // panicking vision client (SDK edge case, malformed upstream stream) must
 // fail-strip one image, not crash the process.
 func (p *VisionProxyProcessor) safeDescribe(ctx context.Context, usable *loadbalance.Service, r imageRef) (text string) {
+	ctx, cancel := context.WithTimeout(ctx, p.describeTimeoutFor())
+	defer cancel()
 	defer func() {
 		if rec := recover(); rec != nil {
 			logrus.WithContext(ctx).WithField("component", "vision_proxy").
@@ -223,39 +443,38 @@ func truncateForLog(s string, max int) string {
 }
 
 // spliceOrCollect is the single decision point for what happens to an image
-// block. Images outside the latest message get the fixed historical marker
-// spliced in immediately — no upstream call, no ref. Latest-message images
-// are appended to refs for the describe fan-out.
-func spliceOrCollect(refs []imageRef, isLast bool, ref imageRef) []imageRef {
-	if !isLast {
-		ref.splice(imageHistoricalText)
+// block during the walk: a cache hit is spliced in immediately, no upstream
+// call; a recent failure is fail-stripped immediately, no retry; any other
+// miss is appended to refs for Process to bound and describe.
+func spliceOrCollect(cache *describeCache, refs []imageRef, ref imageRef) []imageRef {
+	if text, ok := cache.get(ref.cacheKey); ok {
+		ref.splice(text)
+		return refs
+	}
+	// A describe that failed within describeFailureTTL is stripped without
+	// a retry and without taking a describe slot; see describe_cache.go.
+	if cache.recentlyFailed(ref.cacheKey) {
+		ref.splice(imageUnavailableText)
 		return refs
 	}
 	return append(refs, ref)
 }
 
-// collectBeta walks every message of a Beta request. Image blocks occur both
-// at the top level and nested inside tool_result.Content (see
+// collectBeta walks every message of a Beta request in order. Image blocks
+// occur both at the top level and nested inside tool_result.Content (see
 // .design/vision-proxy.md §6.1) — both shapes are handled.
-func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
+func collectBeta(req *anthropic.BetaMessageNewParams, session string, usable *loadbalance.Service, cache *describeCache) []imageRef {
 	var refs []imageRef
-	lastIdx := latestImageAnchor(len(req.Messages), func(i int) bool {
-		return req.Messages[i].Role == anthropic.BetaMessageParamRoleUser
-	})
 	for mi := range req.Messages {
-		isLast := mi == lastIdx
 		blocks := req.Messages[mi].Content
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					splice: func(text string) {
-						blocks[bi] = anthropic.BetaContentBlockParamUnion{
-							OfText: &anthropic.BetaTextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.BetaContentBlockParamUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				}))
 				continue
 			}
 			tr := blocks[bi].OfToolResult
@@ -269,14 +488,11 @@ func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 					continue
 				}
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					splice: func(text string) {
-						inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
-							OfText: &anthropic.BetaTextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				}))
 			}
 		}
 	}
@@ -284,25 +500,18 @@ func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 }
 
 // collectV1 mirrors collectBeta for the v1 Messages API types.
-func collectV1(req *anthropic.MessageNewParams) []imageRef {
+func collectV1(req *anthropic.MessageNewParams, session string, usable *loadbalance.Service, cache *describeCache) []imageRef {
 	var refs []imageRef
-	lastIdx := latestImageAnchor(len(req.Messages), func(i int) bool {
-		return req.Messages[i].Role == anthropic.MessageParamRoleUser
-	})
 	for mi := range req.Messages {
-		isLast := mi == lastIdx
 		blocks := req.Messages[mi].Content
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					splice: func(text string) {
-						blocks[bi] = anthropic.ContentBlockParamUnion{
-							OfText: &anthropic.TextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.ContentBlockParamUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				}))
 				continue
 			}
 			tr := blocks[bi].OfToolResult
@@ -316,14 +525,11 @@ func collectV1(req *anthropic.MessageNewParams) []imageRef {
 					continue
 				}
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(refs, isLast, imageRef{
-					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-					splice: func(text string) {
-						inner[ii] = anthropic.ToolResultBlockParamContentUnion{
-							OfText: &anthropic.TextBlockParam{Text: text},
-						}
-					},
-				})
+				refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.ToolResultBlockParamContentUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				}))
 			}
 		}
 	}
@@ -335,11 +541,8 @@ func collectV1(req *anthropic.MessageNewParams) []imageRef {
 // the full part union (#1609) — in tool messages too. Missing the tool channel
 // leaves the image to be forwarded verbatim, which text-only providers reject
 // outright (z.ai code 1210) instead of describing.
-func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
+func collectOpenAI(req *openai.ChatCompletionNewParams, session string, usable *loadbalance.Service, cache *describeCache) []imageRef {
 	var refs []imageRef
-	lastIdx := latestImageAnchor(len(req.Messages), func(i int) bool {
-		return req.Messages[i].OfUser != nil || req.Messages[i].OfTool != nil
-	})
 	for mi := range req.Messages {
 		var parts []openai.ChatCompletionContentPartUnionParam
 		switch {
@@ -350,21 +553,17 @@ func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
 		default:
 			continue
 		}
-		isLast := mi == lastIdx
 		for pi := range parts {
 			ip := parts[pi].OfImageURL
 			if ip == nil {
 				continue
 			}
 			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-			refs = spliceOrCollect(refs, isLast, imageRef{
-				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-				splice: func(text string) {
-					parts[pi] = openai.ChatCompletionContentPartUnionParam{
-						OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
-					}
-				},
-			})
+			refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+				parts[pi] = openai.ChatCompletionContentPartUnionParam{
+					OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
+				}
+			}))
 		}
 	}
 	return refs
@@ -379,19 +578,9 @@ func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
 // ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
 // content list inline). Tool/function/output items don't carry
 // input_image parts in the current SDK union and are left alone.
-func collectResponses(req *responses.ResponseNewParams) []imageRef {
+func collectResponses(req *responses.ResponseNewParams, session string, usable *loadbalance.Service, cache *describeCache) []imageRef {
 	items := req.Input.OfInputItemList
 	var refs []imageRef
-	lastIdx := latestImageAnchor(len(items), func(i int) bool {
-		switch {
-		case items[i].OfMessage != nil:
-			return items[i].OfMessage.Role == responses.EasyInputMessageRoleUser
-		case items[i].OfInputMessage != nil:
-			return items[i].OfInputMessage.Role == "user"
-		default:
-			return false
-		}
-	})
 	for mi := range items {
 		var list responses.ResponseInputMessageContentListParam
 		switch {
@@ -402,21 +591,17 @@ func collectResponses(req *responses.ResponseNewParams) []imageRef {
 		default:
 			continue
 		}
-		isLast := mi == lastIdx
 		for ci := range list {
 			img := list[ci].OfInputImage
 			if img == nil {
 				continue
 			}
 			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(img.ImageURL.Or(""))
-			refs = spliceOrCollect(refs, isLast, imageRef{
-				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
-				splice: func(text string) {
-					list[ci] = responses.ResponseInputContentUnionParam{
-						OfInputText: &responses.ResponseInputTextParam{Text: text},
-					}
-				},
-			})
+			refs = spliceOrCollect(cache, refs, newImageRef(session, usable, mediaType, b64, remoteURL, func(text string) {
+				list[ci] = responses.ResponseInputContentUnionParam{
+					OfInputText: &responses.ResponseInputTextParam{Text: text},
+				}
+			}))
 		}
 	}
 	return refs
