@@ -189,6 +189,26 @@ func TestTransformChain_ContextPreservation(t *testing.T) {
 			},
 		},
 		{
+			name: "Provider option prefers the login's account id over a random UserID",
+			setupCtx: func() *TransformContext {
+				return NewTransformContext(
+					&openai.ChatCompletionNewParams{},
+					WithProvider(&typ.Provider{
+						APIBase:  "https://api.anthropic.com",
+						AuthType: typ.AuthTypeOAuth,
+						OAuthDetail: &typ.OAuthDetail{
+							Issuer:      ai.IssuerClaudeCode,
+							UserID:      "random-legacy-uuid",
+							ExtraFields: map[string]any{"account_id": "0d6f2c1e-4b6a-4f8e-9a5d-2f7c1b3e8a90"},
+						},
+					}),
+				)
+			},
+			verifyCtx: func(t *testing.T, result *TransformContext) {
+				assert.Equal(t, "0d6f2c1e-4b6a-4f8e-9a5d-2f7c1b3e8a90", result.Config.UserID)
+			},
+		},
+		{
 			name: "IsStreaming preserved",
 			setupCtx: func() *TransformContext {
 				return &TransformContext{

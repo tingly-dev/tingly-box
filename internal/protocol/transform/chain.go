@@ -52,7 +52,16 @@ func WithProvider(provider *typ.Provider) TransformOption {
 			return
 		}
 		if provider.IsOAuth() && provider.OAuthDetail != nil {
+			// Config.UserID becomes metadata.user_id.account_uuid on Claude
+			// Code requests. Prefer the account id the login captured
+			// (ExtraFields["account_id"]) over OAuthDetail.UserID: logins
+			// before 2026-09-23 stored a random uuid in UserID even when the
+			// account id was known, and resolving it here covers those
+			// providers without rewriting stored credentials.
 			ctx.Config.UserID = provider.OAuthDetail.UserID
+			if id := provider.OAuthDetail.GetExtraFieldString("account_id"); id != "" {
+				ctx.Config.UserID = id
+			}
 		}
 	}
 }
