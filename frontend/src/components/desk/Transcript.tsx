@@ -5,6 +5,7 @@ import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {ActivityStep, TranscriptBlock} from './deskUtils';
 import {toolSummary} from './deskUtils';
+import Markdown from './Markdown';
 
 interface TranscriptProps {
     blocks: TranscriptBlock[];
@@ -31,11 +32,7 @@ const UserBubble = ({message}: {message: MessageInfo}) => (
     </Box>
 );
 
-const AssistantText = ({message}: {message: MessageInfo}) => (
-    <Typography variant="body1" sx={conversationText}>
-        {message.content}
-    </Typography>
-);
+const AssistantText = ({message}: {message: MessageInfo}) => <Markdown content={message.content}/>;
 
 const StepDetail = ({step}: {step: ActivityStep}) => {
     if (step.type === 'thinking') {

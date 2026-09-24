@@ -160,9 +160,9 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                             }}
                         >
                             {tokens.map((line, lineIndex) => (
-                                <div {...getLineProps({ line, key: lineIndex })}>
+                                <div key={lineIndex} {...getLineProps({ line })}>
                                     {line.map((token, tokenIndex) => (
-                                        <span {...getTokenProps({ token, key: tokenIndex })} />
+                                        <span key={tokenIndex} {...getTokenProps({ token })} />
                                     ))}
                                 </div>
                             ))}

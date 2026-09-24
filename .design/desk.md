@@ -218,6 +218,9 @@ of tool:
   and attaches an approval's or question's answer to it, so the replies stay
   the visual anchor (ux-principles.md §9). Only the one request still waiting
   on a live turn is actionable (§11); an answered one collapses to a line.
+  Replies render as Markdown through `@ant-design/x-markdown` (already used
+  by the Skills page) with `escapeRawHtml` on, so HTML in a model's output is
+  shown as text, never rendered; fenced code goes through `CodeBlock`.
 - **Composer** (`Composer`): Enter sends, Shift+Enter adds a line, and an
   IME composition's Enter never sends. While a turn runs the send button
   becomes Stop.
