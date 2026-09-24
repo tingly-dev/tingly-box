@@ -127,7 +127,16 @@ var platformDescriptors = []PlatformDescriptor{
 		Capabilities: &PlatformCapabilities{
 			ChatTypes:      []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes:     []string{"image", "video", "audio", "document", "gif"},
-			Features:       []string{"reactions", "edit", "delete", "threads", "nativeCommands", "mentions", "components", "messageEditing"},
+			// "components" deliberately absent: the platform's SendMessage
+			// never renders core.ActionSet into Discord message components,
+			// and there is no inbound InteractionCreate handling either, so
+			// claiming interaction support here makes SupportsInteraction()
+			// lie — a permission/AskUserQuestion prompt would render as
+			// plain text with no buttons AND, because the (false) capability
+			// suppresses imprompter.go's text-fallback instructions, no way
+			// to answer it at all. Re-add "components" only alongside an
+			// actual button-rendering + click-callback implementation.
+			Features:       []string{"reactions", "edit", "delete", "threads", "nativeCommands", "mentions", "messageEditing"},
 			TextLimit:      2000,
 			RateLimit:      50,
 			ThinkingRender: ThinkingRenderDimmed,
@@ -144,7 +153,12 @@ var platformDescriptors = []PlatformDescriptor{
 		Capabilities: &PlatformCapabilities{
 			ChatTypes:      []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes:     []string{"image", "video", "audio", "document"},
-			Features:       []string{"reactions", "edit", "delete", "threads", "mentions", "blockKit", "messageEditing"},
+			// "blockKit" deliberately absent: SendMessage never renders
+			// core.ActionSet into Slack Block Kit buttons, and there is no
+			// inbound interactive-message callback handling either — see
+			// the matching comment on Discord's Features above for why a
+			// false capability here is worse than no capability at all.
+			Features:       []string{"reactions", "edit", "delete", "threads", "mentions", "messageEditing"},
 			TextLimit:      40000,
 			RateLimit:      60,
 			ThinkingRender: ThinkingRenderDimmed,

@@ -187,7 +187,7 @@ func TestPlatformCapabilities(t *testing.T) {
 			name:                  "Discord",
 			platform:              PlatformDiscord,
 			wantChatTypes:         4,
-			wantFeatures:          8, // reactions, edit, delete, threads, nativeCommands, mentions, components, messageEditing
+			wantFeatures:          7, // reactions, edit, delete, threads, nativeCommands, mentions, messageEditing ("components" removed: never rendered, see platforms.go)
 			wantTextLimit:         2000,
 			wantSupportsReactions: true,
 		},
@@ -195,7 +195,7 @@ func TestPlatformCapabilities(t *testing.T) {
 			name:                  "Slack",
 			platform:              PlatformSlack,
 			wantChatTypes:         4,
-			wantFeatures:          7, // reactions, edit, delete, threads, mentions, blockKit, messageEditing
+			wantFeatures:          6, // reactions, edit, delete, threads, mentions, messageEditing ("blockKit" removed: never rendered, see platforms.go)
 			wantTextLimit:         40000,
 			wantSupportsReactions: true,
 		},
@@ -221,6 +221,40 @@ func TestPlatformCapabilities(t *testing.T) {
 				t.Errorf("SupportsFeature(reactions) = %v, want %v", got, tt.wantSupportsReactions)
 			}
 		})
+	}
+}
+
+// TestSupportsInteractionMatchesRenderingPlatforms pins the set of platforms
+// whose SendMessage implementation actually renders core.ActionSet into
+// clickable controls, plus handles the resulting inbound callback. This
+// package cannot import platform code to check that directly (core imports
+// no platform package — see imbot/README.md), so this test is a manual
+// cross-check: verify it by hand against the platform code whenever this
+// list changes.
+//
+// Background: core/platforms.go used to declare "components"/"blockKit" for
+// Discord/Slack even though neither platform's SendMessage reads
+// opts.Actions and neither has inbound interaction-click handling. Because
+// SupportsInteraction() derives from these flags, imprompter.go believed the
+// platform could show a keyboard and skipped appending its text-fallback
+// instructions — so a permission/AskUserQuestion prompt on Discord or Slack
+// rendered as plain text with no way to answer it at all, worse than
+// platforms that correctly declare no interaction support. Do not re-add a
+// platform to the true side below without shipping button rendering AND
+// inbound callback handling for it in the same change.
+func TestSupportsInteractionMatchesRenderingPlatforms(t *testing.T) {
+	rendersButtons := []Platform{PlatformTelegram, PlatformFeishu, PlatformLark, PlatformTingly}
+	for _, p := range rendersButtons {
+		if !GetPlatformCapabilities(p).SupportsInteraction() {
+			t.Errorf("%s should declare interaction support", p)
+		}
+	}
+
+	textOnly := []Platform{PlatformDiscord, PlatformSlack, PlatformDingTalk, PlatformWeixin, PlatformWecom, PlatformWhatsApp}
+	for _, p := range textOnly {
+		if GetPlatformCapabilities(p).SupportsInteraction() {
+			t.Errorf("%s claims interaction support but never renders buttons or handles clicks; this makes prompts unanswerable, see test doc comment", p)
+		}
 	}
 }
 

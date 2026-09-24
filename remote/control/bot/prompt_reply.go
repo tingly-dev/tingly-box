@@ -119,8 +119,6 @@ func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 		return true
 	}
 
-	var resultText string
-
 	switch subAction {
 	case "noop":
 		// Label-only button (e.g., question header), do nothing
@@ -167,13 +165,6 @@ func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 			return true
 		}
 
-		if done {
-			resultText = "✅ All answered"
-		} else {
-			send(fmt.Sprintf("✅ Q: %s → %s", questionText, optionLabel))
-			return true
-		}
-
 		logrus.WithFields(logrus.Fields{
 			"request_id":   requestID,
 			"tool_name":    pendingReq.ToolName,
@@ -181,6 +172,17 @@ func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 			"option_label": optionLabel,
 			"user_id":      senderID,
 		}).Info("User selected option")
+
+		// Intermediate progress on a multi-question flow has no other
+		// feedback surface, so it still gets its own message. Once every
+		// question is answered, SubmitPartialAnswer resolves the request and
+		// IMPrompter.Prompt's own response handling (editPromptToResult)
+		// shows the final result — sending anything here too would
+		// duplicate it.
+		if !done {
+			send(fmt.Sprintf("✅ Q: %s → %s", questionText, optionLabel))
+		}
+		return true
 
 	default:
 		// Look up permission action from shared config
@@ -195,18 +197,19 @@ func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 			send(fmt.Sprintf("Failed to process permission response: %v", err))
 			return true
 		}
-		resultText = fmt.Sprintf("%s %s", permOpt.Icon, permOpt.Label)
 		logrus.WithFields(logrus.Fields{
 			"request_id": requestID,
 			"tool_name":  pendingReq.ToolName,
 			"action":     subAction,
 			"user_id":    senderID,
 		}).Info("User responded to permission request")
+		// IMPrompter.Prompt's own response handling (editPromptToResult)
+		// already shows the result — either by restating the original
+		// prompt message or, on platforms that cannot restate, sending a
+		// fallback message. Sending feedback here too would duplicate it on
+		// every platform.
+		return true
 	}
-
-	// Send feedback to user
-	send(fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
-	return true
 }
 
 // HandlePromptTextReply routes a plain-text reply to the prompter's most
@@ -238,13 +241,15 @@ func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 			Type: "text",
 			Data: input,
 		}); err == nil {
-			send(fmt.Sprintf("✅ Selected: %s", input))
 			logrus.WithFields(logrus.Fields{
 				"request_id": latestReq.ID,
 				"tool_name":  latestReq.ToolName,
 				"user_id":    senderID,
 				"selection":  input,
 			}).Info("User selected option via text")
+			// IMPrompter.Prompt's own response handling (editPromptToResult)
+			// already shows the result; sending feedback here too would
+			// duplicate it.
 			return true
 		}
 	}
@@ -263,18 +268,6 @@ func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 		return true
 	}
 
-	// Send feedback to user
-	var resultText string
-	if remember {
-		resultText = "🔄 Always allowed"
-	} else if approved {
-		resultText = "✅ Permission granted"
-	} else {
-		resultText = "❌ Permission denied"
-	}
-
-	send(fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
-
 	logrus.WithFields(logrus.Fields{
 		"request_id": latestReq.ID,
 		"tool_name":  latestReq.ToolName,
@@ -282,6 +275,11 @@ func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 		"approved":   approved,
 		"remember":   remember,
 	}).Info("User responded to permission request via text")
+
+	// IMPrompter.Prompt's own response handling (editPromptToResult) already
+	// shows the result — either by restating the original prompt message or,
+	// on platforms that cannot restate, sending a fallback message. Sending
+	// feedback here too would duplicate it on every platform.
 
 	return true
 }

@@ -131,8 +131,14 @@ func Test_AgentE2E_PermissionApprove(t *testing.T) {
 	require.NotEmpty(t, prompt.RequestID, "permission prompt should carry a request id")
 	prompt.Approve()
 
+	// The approval ack is an in-place edit of the prompt message (Restate),
+	// not a second, independent Send — see Test_AgentE2E_PermissionAckSentOnce
+	// for the regression guard against the old duplicate message.
+	editEvt := chat.WaitRestate(prompt.Event.MessageID, 3*time.Second)
+	editEvt.AssertContains(t, "Approved")
+	editEvt.AssertNoKeyboard(t)
+
 	chat.ExpectInOrderLoose(3*time.Second,
-		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Allow for tool", Name: "approve-ack"},
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "after approve", Name: "post-approve-assistant"},
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Task done", Name: "completion"},
 	)
@@ -155,16 +161,21 @@ func Test_AgentE2E_PermissionDeny(t *testing.T) {
 	prompt := chat.WaitApprovalPrompt(3 * time.Second)
 	prompt.Deny()
 
-	// Wait for both the immediate denial ack AND the failure message that
-	// the executor sends after handle.Wait() returns. The two sends come
-	// from independent goroutines (callback handler vs executor), so their
-	// relative order is not guaranteed — only that both arrive. The runner
-	// calls store.SetFailed inside Wait(), before SendTextWithReply, so by
-	// the time the failure message arrives the session status is set.
-	chat.ExpectUnordered(3*time.Second,
-		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Deny for tool", Name: "deny-ack"},
-		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Execution failed", Name: "failure-msg"},
-	)
+	// The denial ack is an in-place edit of the prompt message (Restate),
+	// not a separate Send — see Test_AgentE2E_PermissionAckSentOnce for the
+	// regression guard against the old duplicate message. The failure
+	// message the executor sends after handle.Wait() returns comes from an
+	// independent goroutine, so it is not ordered relative to the edit;
+	// WaitRestate/WaitText each scan their own event kind so arrival order
+	// between the two doesn't matter. The runner calls store.SetFailed
+	// inside Wait(), before SendTextWithReply, so by the time the failure
+	// message arrives the session status is set.
+	editEvt := chat.WaitRestate(prompt.Event.MessageID, 3*time.Second)
+	editEvt.AssertContains(t, "Denied")
+	editEvt.AssertNoKeyboard(t)
+
+	failEvt := chat.WaitText(3 * time.Second)
+	failEvt.AssertContains(t, "Execution failed")
 
 	require.Equal(t, session.StatusFailed, lastClaudeSession(t, harness, chat.ChatID),
 		"deny + Result(false) should mark session as failed")

@@ -199,6 +199,48 @@ func TestStreamingHandler_QuietSurfacesAPIRetry(t *testing.T) {
 	assert.Contains(t, sent[0], "Overloaded")
 }
 
+// TestStreamingHandler_QuietSuppressesResultStats asserts that the final
+// ResultMessage's Duration/Cost/Tokens stats dump does not reach the chat in
+// quiet mode — it is debug-oriented detail, not something a callback/answer
+// path already surfaces (unlike api_retry, which stays visible).
+//
+// Background: the quiet-mode filter used to special-case msgType=="result"
+// as always-visible, so this debug-styled block ("[RESULT] SUCCESS\nDuration:
+// ...\nCost: ...\nTokens: ...") reached every chat regardless of the
+// verbose/quiet setting. Nothing unique is lost by dropping it: on success
+// the "Task done" card follows; on failure ClaudeCodeExecutor.Execute sends
+// its own explicit error message once AgentService.Run returns an error.
+func TestStreamingHandler_QuietSuppressesResultStats(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false)
+
+	require.NoError(t, h.OnMessage(&claude.ResultMessage{
+		Type:       claude.SDKResultMessage,
+		IsError:    false,
+		DurationMS: 4231,
+	}))
+
+	assert.Empty(t, bot.snapshot(), "result stats should stay quiet in non-verbose mode")
+}
+
+// TestStreamingHandler_VerboseShowsResultStats guards the other half: the
+// stats dump must still reach the chat when the operator has verbose mode on.
+func TestStreamingHandler_VerboseShowsResultStats(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
+
+	require.NoError(t, h.OnMessage(&claude.ResultMessage{
+		Type:       claude.SDKResultMessage,
+		IsError:    false,
+		DurationMS: 4231,
+	}))
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 1)
+	assert.Contains(t, sent[0], "RESULT")
+	assert.Contains(t, sent[0], "4231ms")
+}
+
 func TestIsRetryNotice(t *testing.T) {
 	assert.True(t, isRetryNotice(&claude.SystemMessage{SubType: claude.SystemSubtypeAPIRetry}))
 	assert.True(t, isRetryNotice(&claude.SystemMessage{SubType: claude.SystemSubtypeRateLimit}))

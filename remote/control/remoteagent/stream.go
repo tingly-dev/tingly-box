@@ -249,15 +249,20 @@ func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) 
 	// itself going to be suppressed by the quiet filter below.
 	h.flushToolBufferLocked()
 
-	// In quiet mode, only assistant text and final agent results reach the
-	// chat; user echoes, system events, and stream-event noise are dropped.
-	// api_retry / rate_limit notices are the exception: they explain why the
-	// agent is stalling on a slow upstream, so the user should see them even in
-	// quiet mode rather than staring at a silent gap.
+	// In quiet mode, only assistant text reaches the chat; user echoes,
+	// system events, the final ResultMessage's Duration/Cost/Tokens stats
+	// dump, and other stream-event noise are dropped. The ResultMessage is
+	// safe to drop even on failure: the caller (ClaudeCodeExecutor.Execute)
+	// treats a claude.ResultMessage with IsError as a non-nil error from
+	// AgentService.Run/runPersistentTurn and sends its own explicit failure
+	// message, so nothing unique is lost. api_retry / rate_limit notices are
+	// the exception: they explain why the agent is stalling on a slow
+	// upstream, so the user should see them even in quiet mode rather than
+	// staring at a silent gap.
 	if !h.verbose {
 		msgType := claudeMsg.GetType()
-		if msgType != "result" && msgType != "assistant" && !isRetryNotice(claudeMsg) {
-			logrus.WithField("msgType", msgType).Debug("Quiet mode: suppressing non-result message")
+		if msgType != "assistant" && !isRetryNotice(claudeMsg) {
+			logrus.WithField("msgType", msgType).Debug("Quiet mode: suppressing non-assistant message")
 			return nil
 		}
 	}

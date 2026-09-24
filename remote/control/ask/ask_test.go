@@ -1,6 +1,7 @@
 package ask
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,28 +71,80 @@ func questionRequest() Request {
 	}
 }
 
+func multiQuestionRequest() Request {
+	return Request{
+		ID:       "req-multi",
+		Type:     TypeQuestion,
+		ToolName: "AskUserQuestion",
+		Input: map[string]interface{}{
+			"questions": []interface{}{
+				map[string]any{
+					"question": "Which color?",
+					"options": []interface{}{
+						map[string]any{"label": "Red"},
+						map[string]any{"label": "Blue"},
+					},
+				},
+				map[string]any{
+					"question": "Which size?",
+					"options": []interface{}{
+						map[string]any{"label": "Small"},
+						map[string]any{"label": "Large"},
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestAskUserQuestionHandler_BuildPrompt(t *testing.T) {
 	h := NewAskUserQuestionHandler()
 
-	prompt := h.BuildPrompt(questionRequest())
+	prompt := h.BuildPrompt(questionRequest(), true)
 	assert.Contains(t, prompt, "Which color?")
 	assert.Contains(t, prompt, "Red")
 	assert.Contains(t, prompt, "Option 2")
+	assert.Contains(t, prompt, "Click a button below to select")
 
-	empty := h.BuildPrompt(Request{Input: map[string]interface{}{}})
+	empty := h.BuildPrompt(Request{Input: map[string]interface{}{}}, true)
 	assert.Contains(t, empty, "No questions provided")
+}
+
+// TestAskUserQuestionHandler_BuildPrompt_NoKeyboard covers the text-only
+// fallback: the reply instruction must lead the message (so it survives a
+// chat client's notification-preview truncation), the question/options must
+// render exactly once (not duplicated by a separately-appended instructions
+// block), and the misleading "click a button" trailer must not appear since
+// there is no button to click.
+func TestAskUserQuestionHandler_BuildPrompt_NoKeyboard(t *testing.T) {
+	h := NewAskUserQuestionHandler()
+
+	prompt := h.BuildPrompt(questionRequest(), false)
+
+	instrIdx := strings.Index(prompt, "Reply with the option number")
+	require.GreaterOrEqual(t, instrIdx, 0, "reply instruction must be present")
+	questionIdx := strings.Index(prompt, "Which color?")
+	require.GreaterOrEqual(t, questionIdx, 0)
+	assert.Less(t, instrIdx, questionIdx, "reply instruction must come before the question, not after")
+
+	assert.NotContains(t, prompt, "Click a button below to select")
+	assert.Equal(t, 1, strings.Count(prompt, "Which color?"), "question must render exactly once, not duplicated")
+	assert.Equal(t, 1, strings.Count(prompt, "Red"), "options must render exactly once, not duplicated")
 }
 
 func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
 	h := NewAskUserQuestionHandler()
 	req := questionRequest()
 
-	// 0-based index from a keyboard callback.
-	res, err := h.ParseResponse(req, Response{Type: "button", Data: "1"})
+	// 1-based number, matching the "Option 1"/"Option 2" labels BuildPrompt
+	// shows the user — the only shape this ever actually sees, since a
+	// button click resolves its index from the callback payload directly
+	// and never reaches ParseResponse.
+	res, err := h.ParseResponse(req, Response{Type: "text", Data: "1"})
 	require.NoError(t, err)
 	assert.True(t, res.Approved)
 	answers := res.UpdatedInput["answers"].(map[string]interface{})
-	assert.Equal(t, "Blue", answers["Which color?"])
+	assert.Equal(t, "Red", answers["Which color?"])
 
 	// Label match, case-insensitive.
 	res, err = h.ParseResponse(req, Response{Type: "text", Data: "red"})
@@ -106,7 +159,49 @@ func TestAskUserQuestionHandler_ParseResponse(t *testing.T) {
 	assert.False(t, res.Approved)
 }
 
+// TestAskUserQuestionHandler_ParseResponse_MultiQuestion guards the exact
+// promise BuildPrompt makes for a multi-question fallback ("reply with
+// answers in order, e.g. `1 2 1`"): every question must get its answer from
+// the matching positional token, not just the first one.
+func TestAskUserQuestionHandler_ParseResponse_MultiQuestion(t *testing.T) {
+	h := NewAskUserQuestionHandler()
+	req := multiQuestionRequest()
+
+	res, err := h.ParseResponse(req, Response{Type: "text", Data: "2 1"})
+	require.NoError(t, err)
+	assert.True(t, res.Approved)
+	answers := res.UpdatedInput["answers"].(map[string]interface{})
+	assert.Equal(t, "Blue", answers["Which color?"])
+	assert.Equal(t, "Small", answers["Which size?"])
+
+	// Fewer tokens than questions: the answered ones still land, the rest
+	// are simply missing (not corrupted by misapplied tokens).
+	res, err = h.ParseResponse(req, Response{Type: "text", Data: "1"})
+	require.NoError(t, err)
+	answers = res.UpdatedInput["answers"].(map[string]interface{})
+	assert.Equal(t, "Red", answers["Which color?"])
+	assert.NotContains(t, answers, "Which size?")
+}
+
 // --- default permission handler ---
+
+// TestBuildDefaultPrompt_NoKeyboard asserts the reply instructions lead the
+// message (before the tool/args detail) when the platform has no keyboard,
+// so they survive a chat client's notification-preview truncation, and are
+// absent when the platform does have one (the keyboard is the instruction).
+func TestBuildDefaultPrompt_NoKeyboard(t *testing.T) {
+	req := Request{ID: "req-3", ToolName: "Bash", Input: map[string]interface{}{"command": "ls"}}
+
+	withKeyboard := BuildDefaultPrompt(req, true)
+	assert.NotContains(t, withKeyboard, "Reply to approve or deny")
+
+	noKeyboard := BuildDefaultPrompt(req, false)
+	instrIdx := strings.Index(noKeyboard, "Reply to approve or deny")
+	require.GreaterOrEqual(t, instrIdx, 0, "reply instructions must be present")
+	toolIdx := strings.Index(noKeyboard, "Tool: `Bash`")
+	require.GreaterOrEqual(t, toolIdx, 0)
+	assert.Less(t, instrIdx, toolIdx, "reply instructions must come before the tool detail, not after")
+}
 
 func TestParseDefaultResponse(t *testing.T) {
 	req := Request{ID: "req-2", Input: map[string]interface{}{"command": "ls"}}

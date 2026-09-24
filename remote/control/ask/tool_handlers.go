@@ -28,11 +28,21 @@ func (h *AskUserQuestionHandler) Description() string {
 	return "Handler for AskUserQuestion tool with multi-option selection"
 }
 
-// BuildPrompt creates a prompt showing all questions and options
-func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
+// BuildPrompt creates a prompt showing all questions and options. When
+// supportsKeyboard is false, a short reply-with-the-number instruction goes
+// first, right after the header — not appended after the question list — so
+// it survives a chat client's notification-preview truncation (which
+// typically shows only a message's opening line); the trailing
+// "click a button" hint (meaningless with no keyboard) is replaced with
+// usage guidance for a typed reply instead.
+func (h *AskUserQuestionHandler) BuildPrompt(req Request, supportsKeyboard bool) string {
 	var text strings.Builder
 
-	text.WriteString("❓ *Question*\n\n")
+	text.WriteString("❓ *Question*\n")
+	if !supportsKeyboard {
+		text.WriteString("_Reply with the option number._\n")
+	}
+	text.WriteString("\n")
 
 	questions := NormalizeQuestions(req.Input["questions"])
 	if len(questions) == 0 {
@@ -72,7 +82,14 @@ func (h *AskUserQuestionHandler) BuildPrompt(req Request) string {
 	}
 
 	text.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
-	text.WriteString("*Click a button below to select*")
+	switch {
+	case supportsKeyboard:
+		text.WriteString("*Click a button below to select*")
+	case len(questions) > 1:
+		text.WriteString("_Reply with answers in order, e.g. `1 2 1` for Q1=opt1, Q2=opt2, Q3=opt1_")
+	default:
+		text.WriteString("_Just type the number to reply_")
+	}
 
 	return text.String()
 }
@@ -101,21 +118,21 @@ func (h *AskUserQuestionHandler) ParseResponse(req Request, response Response) (
 		}, nil
 	}
 
-	// Try to match against first question (most common case for stdin single-line input)
-	question := questions[0]
-	questionText, _ := question["question"].(string)
-	options := NormalizeOptions(question["options"])
-	if len(options) > 0 {
-		selectedIndex, selectedLabel := h.parseSelection(selection, options)
-
-		if selectedIndex >= 0 && selectedIndex < len(options) {
-			if label, ok := options[selectedIndex]["label"].(string); ok {
-				answers[questionText] = label
+	if len(questions) > 1 {
+		// Multi-question fallback: BuildPrompt tells the user to reply with
+		// one answer per question in order (e.g. "1 2 1"), so tokens map
+		// positionally to questions.
+		tokens := strings.Fields(selection)
+		for i, question := range questions {
+			if i >= len(tokens) {
+				break
 			}
-		} else if selectedLabel != "" {
-			// User typed the label directly
-			answers[questionText] = selectedLabel
+			h.applySelection(question, tokens[i], answers)
 		}
+	} else {
+		// Single question: the whole input is the selection (also covers
+		// button-click callbacks, which pass a bare index/label).
+		h.applySelection(questions[0], selection, answers)
 	}
 
 	// Build updated input with answers
@@ -131,23 +148,44 @@ func (h *AskUserQuestionHandler) ParseResponse(req Request, response Response) (
 	}, nil
 }
 
+// applySelection parses a single token against one question's options and,
+// on a match, records the answer under that question's text.
+func (h *AskUserQuestionHandler) applySelection(question map[string]any, token string, answers map[string]interface{}) {
+	questionText, _ := question["question"].(string)
+	options := NormalizeOptions(question["options"])
+	if len(options) == 0 {
+		return
+	}
+
+	selectedIndex, selectedLabel := h.parseSelection(token, options)
+	if selectedIndex >= 0 && selectedIndex < len(options) {
+		if label, ok := options[selectedIndex]["label"].(string); ok {
+			answers[questionText] = label
+		}
+	} else if selectedLabel != "" {
+		// User typed the label directly
+		answers[questionText] = selectedLabel
+	}
+}
+
 // parseSelection attempts to parse the user's selection
 // Returns (index, label) - if index is -1, label contains the raw input
 // selection can be:
-//   - 1-based number (user types "1" for first option)
-//   - 0-based index from callback (e.g., "0", "1")
+//   - 1-based number (user types "1" for the option BuildPrompt labeled
+//     "Option 1") — the only case this function actually sees: a button
+//     click resolves its index straight from the callback payload
+//     (prompt_reply.go's "option" case) and never reaches ParseResponse.
+//   - 0-based index, kept as a fallback for any other caller that means it
+//     that way — tried second so it can't shadow the 1-based reading above
+//     (e.g. "1" with 2 options must mean Option 1, not index 1)
 //   - label text (exact or case-insensitive match)
 func (h *AskUserQuestionHandler) parseSelection(selection string, options []map[string]any) (int, string) {
 	// Try to parse as number
 	var index int
 	if _, err := fmt.Sscanf(selection, "%d", &index); err == nil {
-		// Check if it's a valid 0-based index first (from callback)
-		if index >= 0 && index < len(options) {
-			// Could be 0-based index from callback, verify by checking if it matches
-			return index, ""
+		if oneBased := index - 1; oneBased >= 0 && oneBased < len(options) {
+			return oneBased, ""
 		}
-		// Try as 1-based index (user input), convert to 0-based
-		index--
 		if index >= 0 && index < len(options) {
 			return index, ""
 		}
@@ -188,8 +226,8 @@ func (h *DefaultToolHandler) Description() string {
 }
 
 // BuildPrompt creates a simple permission prompt
-func (h *DefaultToolHandler) BuildPrompt(req Request) string {
-	return BuildDefaultPrompt(req)
+func (h *DefaultToolHandler) BuildPrompt(req Request, supportsKeyboard bool) string {
+	return BuildDefaultPrompt(req, supportsKeyboard)
 }
 
 // ParseResponse parses a simple approve/deny response
@@ -197,10 +235,16 @@ func (h *DefaultToolHandler) ParseResponse(req Request, response Response) (Resu
 	return ParseDefaultResponse(req, response)
 }
 
-// BuildDefaultPrompt creates the default permission prompt text
-func BuildDefaultPrompt(req Request) string {
-	text := "🔐 *Tool Permission Request*\n\n"
-	text += "Tool: `" + req.ToolName + "`\n"
+// BuildDefaultPrompt creates the default permission prompt text. When
+// supportsKeyboard is false, the reply instructions go first, right after
+// the header — not appended after the tool/args detail — so they survive a
+// chat client's notification-preview truncation.
+func BuildDefaultPrompt(req Request, supportsKeyboard bool) string {
+	text := "🔐 *Tool Permission Request*\n"
+	if !supportsKeyboard {
+		text += "\n" + FormatPermissionInstructions()
+	}
+	text += "\nTool: `" + req.ToolName + "`\n"
 
 	// Show relevant input details
 	text += "Args: \n"
