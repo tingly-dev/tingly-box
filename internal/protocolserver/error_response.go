@@ -5,8 +5,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/recording"
@@ -65,6 +67,7 @@ func (ph *ProtocolHandler) failForward(c *gin.Context, err error) {
 // status to propagate) with the message ordered as "desc: err".
 func (ph *ProtocolHandler) respondMCPError(c *gin.Context, err error, msg string) {
 	recorder := recording.FromGin(c)
+	stream.LogRequestError(c, err, msg)
 	ph.trackUsageFromContext(c, 0, 0, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
@@ -89,6 +92,7 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 	// c.Error keeps the full raw error for the server-side access log
 	// (internal/middleware/memory_log.go); the JSON body below shows the
 	// client a categorized, non-leaky message instead.
+	stream.LogRequestError(c, err, desc)
 	asErr := fmt.Errorf("%s: %s", err.Error(), desc)
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(failure.Status, ErrorResponse{
@@ -96,6 +100,52 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 			Message:   fmt.Sprintf("%s: %s", failure.Message, desc),
 			Type:      "protocol_error",
 			Code:      desc,
+			RequestID: c.GetString(constant.CtxKeyRequestID),
+		},
+	})
+}
+
+// rejectRequest ends a model request that failed before reaching an upstream
+// — unsupported scenario, unreadable body, missing fields, no rule or service
+// for the model — with a 400. See rejectRequestWithStatus.
+func rejectRequest(c *gin.Context, stage, requestModel string, err error) {
+	rejectRequestWithStatus(c, http.StatusBadRequest, stage, requestModel, "", err)
+}
+
+// rejectRequestWithStatus is rejectRequest with an explicit status and an
+// optional error code. A bare
+// c.JSON on these exits left the request invisible in the Logs page: routing
+// had not populated the tracking context yet, so the access log carried no
+// scenario and the Requests view dropped the row, and the body carried no
+// request_id to look it up by. This records it where the Logs page reads it —
+// a request-scoped event with the error, scenario/model for the access log,
+// the error on c.Errors — and echoes the request_id in the body.
+func rejectRequestWithStatus(c *gin.Context, status int, stage, requestModel, code string, err error) {
+	scenario := ExtractScenarioFromPath(c.Request.URL.Path)
+	if _, exists := c.Get(ContextKeyScenario); !exists {
+		c.Set(ContextKeyScenario, scenario)
+	}
+	if requestModel != "" {
+		c.Set(ContextKeyRequestModel, requestModel)
+	}
+
+	fields := logrus.Fields{"stage": stage, "scenario": scenario}
+	if requestModel != "" {
+		fields["request_model"] = requestModel
+	}
+	logrus.WithContext(c.Request.Context()).WithFields(fields).WithError(err).
+		Log(obs.LevelForStatus(status), "request rejected")
+
+	errType := "invalid_request_error"
+	if status >= http.StatusInternalServerError {
+		errType = "api_error"
+	}
+	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
+	c.AbortWithStatusJSON(status, ErrorResponse{
+		Error: ErrorDetail{
+			Message:   err.Error(),
+			Type:      errType,
+			Code:      code,
 			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})

@@ -2,6 +2,7 @@ package protocolserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -27,12 +28,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 
 	// Validate scenario
 	if !IsValidRuleScenario(scenarioType) {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("invalid scenario: %s", scenario))
 		return
 	}
 
@@ -49,11 +45,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-			},
-		})
+		rejectRequestWithStatus(c, http.StatusInternalServerError, "inbound", "", "", err)
 		return
 	}
 
@@ -70,13 +62,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	var messages = &protocol.AnthropicMessagesRequest{}
 	if beta {
 		if err := json.Unmarshal(bodyBytes, betaMessages); err != nil {
-			logrus.WithError(err).Errorf("Anthropic beta decode error")
-			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
-					Type:    "invalid_request_error",
-				},
-			})
+			rejectRequest(c, "inbound", "", fmt.Errorf("Message decode error: %w", err))
 			return
 		}
 		requestModel = string(betaMessages.Model)
@@ -84,13 +70,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 
 	} else {
 		if err := json.Unmarshal(bodyBytes, messages); err != nil {
-			logrus.WithError(err).Errorf("Anthropic decode error")
-			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
-					Type:    "invalid_request_error",
-				},
-			})
+			rejectRequest(c, "inbound", "", fmt.Errorf("Message decode error: %w", err))
 			return
 		}
 
@@ -101,21 +81,11 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	// Check if this is the request requestModel name first
 	rule, err = ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 	if rule == nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "no such rule",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, errors.New("no such rule"))
 		return
 	}
 
@@ -124,13 +94,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqParams)
 	if err != nil {
-		logrus.WithError(err).Errorf("Select service error")
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 

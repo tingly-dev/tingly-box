@@ -1,8 +1,10 @@
 package protocolserver
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -36,64 +38,34 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	scenarioType := typ.RuleScenario(scenario)
 
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("invalid scenario: %s", scenario))
 		return
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("scenario %s does not support image generation", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("scenario %s does not support image generation", scenario))
 		return
 	}
 
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to read request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Failed to read request body: %w", err))
 		return
 	}
 
 	var req openai.ImageGenerateParams
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Invalid request body: %w", err))
 		return
 	}
 
 	if string(req.Model) == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", errors.New("Model is required"))
 		return
 	}
 
 	if req.Prompt == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Prompt is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", string(req.Model), errors.New("Prompt is required"))
 		return
 	}
 
@@ -102,23 +74,13 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", string(requestModel), err)
 		return
 	}
 
 	provider, selectedService, err := ph.selectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", string(requestModel), err)
 		return
 	}
 
@@ -148,7 +110,6 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
-		logrus.Errorf("Failed to forward image generation request: %v", err)
 		stream.SendForwardingError(c, err)
 		return
 	}
@@ -157,7 +118,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Persist generated images under the config image directory (best-effort).
-	ph.persistImageGeneration(&req, resp)
+	ph.persistImageGeneration(c.Request.Context(), &req, resp)
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -169,7 +130,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 // This used to live inside the Codex client and wrote to .tingly-image/ in the
 // process working directory. It now belongs to the server layer so persistence
 // is uniform across providers and rooted at the application config directory.
-func (ph *ProtocolHandler) persistImageGeneration(req *openai.ImageGenerateParams, resp *openai.ImagesResponse) {
+func (ph *ProtocolHandler) persistImageGeneration(ctx context.Context, req *openai.ImageGenerateParams, resp *openai.ImagesResponse) {
 	var meta string
 	if req != nil {
 		meta = buildImagePersistMeta(imageMetaInfo{
@@ -181,12 +142,12 @@ func (ph *ProtocolHandler) persistImageGeneration(req *openai.ImageGenerateParam
 			Style:   string(req.Style),
 		})
 	}
-	ph.persistImages(resp, meta)
+	ph.persistImages(ctx, resp, meta)
 }
 
 // persistImageEdit is the edit-surface counterpart of persistImageGeneration:
 // same directory layout and best-effort semantics, with edit-shaped metadata.
-func (ph *ProtocolHandler) persistImageEdit(req *openai.ImageEditParams, resp *openai.ImagesResponse) {
+func (ph *ProtocolHandler) persistImageEdit(ctx context.Context, req *openai.ImageEditParams, resp *openai.ImagesResponse) {
 	var meta string
 	if req != nil {
 		meta = buildImagePersistMeta(imageMetaInfo{
@@ -197,7 +158,7 @@ func (ph *ProtocolHandler) persistImageEdit(req *openai.ImageEditParams, resp *o
 			Quality:   string(req.Quality),
 		})
 	}
-	ph.persistImages(resp, meta)
+	ph.persistImages(ctx, resp, meta)
 }
 
 // imageMetaInfo carries the fields persisted alongside a generated or edited
@@ -235,11 +196,12 @@ func buildImagePersistMeta(info imageMetaInfo) string {
 
 // persistImages writes each base64 image in resp (plus an optional metadata
 // sidecar) under configDir/image/YYYYMMDD/. Shared by the generation and edit
-// surfaces.
-func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta string) {
+// surfaces. Logs go through ctx so they land in the request's timeline.
+func (ph *ProtocolHandler) persistImages(ctx context.Context, resp *openai.ImagesResponse, promptMeta string) {
 	if resp == nil || len(resp.Data) == 0 {
 		return
 	}
+	log := logrus.WithContext(ctx)
 
 	baseDir := ""
 	if ph.deps.Config != nil {
@@ -259,7 +221,7 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 			return true
 		}
 		if err := os.MkdirAll(dateDir, 0700); err != nil {
-			logrus.Errorf("[ImageGen] Failed to create image directory: %v", err)
+			log.Errorf("[ImageGen] Failed to create image directory: %v", err)
 			return false
 		}
 		dirReady = true
@@ -286,16 +248,16 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 
 		imageData, err := base64.StdEncoding.DecodeString(img.B64JSON)
 		if err != nil {
-			logrus.Errorf("[ImageGen] Failed to decode base64 image data: %v", err)
+			log.Errorf("[ImageGen] Failed to decode base64 image data: %v", err)
 			continue
 		}
 
 		if err := os.WriteFile(imagePath, imageData, 0600); err != nil {
-			logrus.Errorf("[ImageGen] Failed to write image file: %v", err)
+			log.Errorf("[ImageGen] Failed to write image file: %v", err)
 			continue
 		}
 
-		logrus.Infof("[ImageGen] Saved image to: %s", imagePath)
+		log.Infof("[ImageGen] Saved image to: %s", imagePath)
 
 		if promptMeta == "" {
 			continue
@@ -303,7 +265,7 @@ func (ph *ProtocolHandler) persistImages(resp *openai.ImagesResponse, promptMeta
 
 		promptPath := filepath.Join(dateDir, strings.Replace(filename, ".png", ".txt", 1))
 		if err := os.WriteFile(promptPath, []byte(promptMeta), 0600); err != nil {
-			logrus.Errorf("[ImageGen] Failed to write prompt file: %v", err)
+			log.Errorf("[ImageGen] Failed to write prompt file: %v", err)
 			continue
 		}
 	}

@@ -32,7 +32,7 @@ func HandleResponsesToOpenAIChatStream(
 			logrus.WithContext(c.Request.Context()).Debug("Responses to Chat stream canceled by client")
 			return conv.Usage(), nil
 		}
-		logrus.WithContext(c.Request.Context()).Errorf("Responses to Chat stream error: %v", err)
+		LogRequestError(c, err, "Responses to Chat stream error")
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
 		} else {

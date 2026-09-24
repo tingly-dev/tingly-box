@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"context"
 	"bytes"
 	"encoding/base64"
 	"io"
@@ -235,7 +236,7 @@ func TestPersistImageEdit(t *testing.T) {
 	}
 	resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}}}
 
-	h.persistImageEdit(req, resp)
+	h.persistImageEdit(context.Background(), req, resp)
 
 	dirs, err := os.ReadDir(constant.GetImageDir(tmp))
 	require.NoError(t, err)

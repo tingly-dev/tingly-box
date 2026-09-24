@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
-	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -50,33 +49,18 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	scenarioType := typ.RuleScenario(scenario)
 
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("invalid scenario: %s", scenario))
 		return
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("scenario %s does not support image edit", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("scenario %s does not support image edit", scenario))
 		return
 	}
 
 	req, err := parseImageEditRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", err)
 		return
 	}
 
@@ -85,23 +69,13 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", string(requestModel), err)
 		return
 	}
 
 	provider, selectedService, err := ph.selectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", string(requestModel), err)
 		return
 	}
 
@@ -127,7 +101,6 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
-		logrus.Errorf("Failed to forward image edit request: %v", err)
 		stream.SendForwardingError(c, err)
 		return
 	}
@@ -136,7 +109,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Persist edited images under the config image directory (best-effort).
-	ph.persistImageEdit(req, resp)
+	ph.persistImageEdit(c.Request.Context(), req, resp)
 
 	c.JSON(http.StatusOK, resp)
 }
