@@ -131,6 +131,8 @@ import {
     IconLicense,
     IconLanguage,
     IconBrush,
+    IconPalette,
+    IconApi,
     IconMenu,
     IconYinYang,
     IconPencil,
@@ -333,6 +335,8 @@ export const StarBorder = tablerMui(IconStar);
 export const License = tablerMui(IconLicense);
 export const Translate = tablerMui(IconLanguage);
 export const Brush = tablerMui(IconBrush);
+export const Palette = tablerMui(IconPalette);
+export const Api = tablerMui(IconApi);
 export const Menu = tablerMui(IconMenu);
 export const YinYang = tablerMui(IconYinYang);
 export const Create = tablerMui(IconPencil);

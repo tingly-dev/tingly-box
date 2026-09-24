@@ -25,8 +25,8 @@ import {
     Lock as IconLock,
     Vector as IconVector,
     Photo as IconPhoto,
-    Brush as IconBrush,
-    Cable as IconPlug,
+    Palette as IconPalette,
+    Api as IconApi,
     Users as IconUsers,
     Science as IconFlask,
     Handyman as IconTools,
@@ -200,8 +200,8 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.image', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
                 children: [
-                    { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), icon: <IconBrush sx={{ fontSize: 20 }} /> },
-                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
+                    { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), icon: <IconPalette sx={{ fontSize: 20 }} /> },
+                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconApi sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             {
