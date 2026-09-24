@@ -41,6 +41,7 @@ type Session struct {
 	LastActivity   time.Time // Last activity timestamp
 	ExpiresAt      time.Time // Session expiration timestamp
 	PermissionMode string    // Claude CLI permission mode: "default", "plan", "auto", "acceptEdits", "dontAsk", "bypassPermissions"
+	Profile        string    // Claude Code profile id ("p1"); "" routes through the main claude_code scenario
 }
 
 // Note: a session's message history is deliberately NOT a field here. It lives

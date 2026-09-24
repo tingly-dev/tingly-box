@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -17,7 +18,7 @@ const turnTimeout = 2 * time.Hour
 // flight — the caller has already decided that should not happen, but the
 // claim is atomic here to close the race between two requests for the same
 // session arriving together.
-func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode string, resume bool) bool {
+func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode, profile string, resume bool) bool {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(sessionID, s.sessions)
 	done := make(chan struct{})
@@ -38,11 +39,11 @@ func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode strin
 	s.appendUserMessage(sessionID, prompt)
 	s.sessions.SetRunning(sessionID)
 
-	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, resume, prompter, cancel, done)
+	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, profile, resume, prompter, cancel, done)
 	return true
 }
 
-func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode, profile string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, sessionID)
@@ -51,12 +52,25 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		close(done)
 	}()
 
+	// A profile's settings file carries its own gateway routing, so it
+	// replaces the main scenario's env rather than adding to it (the same
+	// either/or @cc's ClaudeCodeExecutor uses).
 	var execEnv []string
+	var settingsPath string
 	if s.routing != nil {
-		if env, err := s.routing.GetClaudeCodeEnv(ctx); err == nil {
-			execEnv = env
-		} else {
-			s.appendSystem(sessionID, "gateway routing unavailable, running with host defaults: "+err.Error())
+		if profile != "" {
+			if p, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile); err == nil {
+				settingsPath = p
+			} else {
+				s.appendSystem(sessionID, fmt.Sprintf("profile %s unavailable, running with the default routing: %v", profile, err))
+			}
+		}
+		if settingsPath == "" {
+			if env, err := s.routing.GetClaudeCodeEnv(ctx); err == nil {
+				execEnv = env
+			} else {
+				s.appendSystem(sessionID, "gateway routing unavailable, running with host defaults: "+err.Error())
+			}
 		}
 	}
 
@@ -84,6 +98,7 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		PermissionPromptTool: "stdio",
 		PermissionMode:       permissionMode,
 		Env:                  execEnv,
+		SettingsPath:         settingsPath,
 	}
 
 	var werr error

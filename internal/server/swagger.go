@@ -134,5 +134,5 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
 
 	// Schema only: never build the live service here (see newDeskService).
-	registerDeskRoutes(apiV1, nil, s.deskEnabled)
+	registerDeskRoutes(apiV1, nil, nil, s.deskEnabled)
 }

@@ -19,6 +19,7 @@ package desk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -50,6 +52,9 @@ const agentType = "claude"
 // in production; a nil Routing runs with the host's own environment.
 type Routing interface {
 	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
+	// GetClaudeCodeSettingsPathForProfile materializes a Claude Code profile's
+	// settings file and returns its path, for --settings.
+	GetClaudeCodeSettingsPathForProfile(ctx context.Context, profileID string) (string, error)
 }
 
 // Service is the single entry point every HTTP handler goes through.
@@ -141,7 +146,7 @@ func (s *Service) Shutdown(ctx context.Context) {
 func launchSignature(opts agentboot.ExecutionOptions) string {
 	env := append([]string(nil), opts.Env...)
 	sort.Strings(env)
-	return opts.PermissionMode + "\x00" + strings.Join(env, "\x00")
+	return opts.PermissionMode + "\x00" + opts.SettingsPath + "\x00" + strings.Join(env, "\x00")
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -219,6 +224,9 @@ type CreateSessionInput struct {
 	Path           string
 	Prompt         string
 	PermissionMode string
+	// Profile is a Claude Code profile id; "" uses the main claude_code
+	// scenario's routing.
+	Profile string
 }
 
 // CreateSession opens a conversation in a folder and starts its first turn.
@@ -237,19 +245,24 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*se
 	if !ValidPermissionMode(in.PermissionMode) {
 		return nil, invalid("unknown permission mode %q", in.PermissionMode)
 	}
+	in.Profile = strings.TrimSpace(in.Profile)
+	if err := s.checkProfile(ctx, in.Profile); err != nil {
+		return nil, err
+	}
 
 	sess := s.sessions.CreateWith(webChatID, agentType, path)
 	id := sess.ID
 	s.sessions.SetRequest(id, in.Prompt)
 	s.sessions.Update(id, func(sess *session.Session) {
 		sess.PermissionMode = in.PermissionMode
+		sess.Profile = in.Profile
 		// CreateWith stamps now+Timeout, and the manager's expiry sweep
 		// deletes the session and its transcript from the store once that
 		// passes. A Desk session lives until it is archived, the same way
 		// @cc's sessions clear ExpiresAt.
 		sess.ExpiresAt = time.Time{}
 	})
-	s.startTurn(id, path, in.Prompt, in.PermissionMode, false)
+	s.startTurn(id, path, in.Prompt, in.PermissionMode, in.Profile, false)
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
 }
@@ -276,6 +289,32 @@ func (s *Service) ListSessions(active bool) []session.Session {
 	}
 	sortSessionsByActivity(out)
 	return out
+}
+
+// Scenario is the gateway scenario a session's turns are routed through:
+// the main claude_code scenario, or its profile's.
+func Scenario(profile string) string {
+	if profile == "" {
+		return string(typ.ScenarioClaudeCode)
+	}
+	return string(typ.ScenarioClaudeCode) + typ.ProfileSeparator + profile
+}
+
+// RequestedModel is the model id the session's latest completed turn asked
+// the gateway for (the id routing rules match on), or "" before any turn
+// has reached the model.
+func (s *Service) RequestedModel(id string) string {
+	msgs, _ := s.sessions.GetMessages(id)
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Kind != "usage" {
+			continue
+		}
+		var u turnUsage
+		if json.Unmarshal(msgs[i].Payload, &u) == nil && u.Model != "" {
+			return u.Model
+		}
+	}
+	return ""
 }
 
 func (s *Service) Messages(id string) ([]session.Message, error) {
@@ -305,7 +344,7 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
 	// the atomic one, and it records the message only once it has won, so a
 	// losing concurrent send leaves nothing in the transcript.
-	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, true) {
+	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, sess.Profile, true) {
 		return conflict("session is %s", sess.Status)
 	}
 	return nil
@@ -333,6 +372,42 @@ func (s *Service) SetPermissionMode(id, mode string) (*session.Session, error) {
 	s.appendSystem(id, "permission mode: "+modeLabel(mode))
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
+}
+
+// SetProfile changes which Claude Code profile the session's next turn runs
+// with ("" for the main claude_code routing). A resident process started with
+// another profile is restarted for that turn (see launchSignature).
+func (s *Service) SetProfile(ctx context.Context, id, profile string) (*session.Session, error) {
+	profile = strings.TrimSpace(profile)
+	if _, ok := s.sessions.Get(id); !ok {
+		return nil, notFound("session", id)
+	}
+	if err := s.checkProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+	s.sessions.Update(id, func(sess *session.Session) { sess.Profile = profile })
+	s.appendSystem(id, "profile: "+profileLabel(profile))
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+// checkProfile rejects a profile that can't be launched, so the mistake
+// surfaces on the request instead of as a silent fallback on the next turn.
+func (s *Service) checkProfile(ctx context.Context, profile string) error {
+	if profile == "" || s.routing == nil {
+		return nil
+	}
+	if _, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile); err != nil {
+		return invalid("profile %q: %v", profile, err)
+	}
+	return nil
+}
+
+func profileLabel(profile string) string {
+	if profile == "" {
+		return "default"
+	}
+	return profile
 }
 
 // Respond answers a pending approval or ask request.

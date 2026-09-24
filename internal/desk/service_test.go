@@ -971,11 +971,105 @@ func TestStartTurn_LosingClaimRecordsNothing(t *testing.T) {
 	svc.runs[sess.ID] = &run{cancel: func() {}, done: make(chan struct{})}
 	svc.mu.Unlock()
 
-	if svc.startTurn(sess.ID, sess.Project, "second", "", true) {
+	if svc.startTurn(sess.ID, sess.Project, "second", "", "", true) {
 		t.Fatal("startTurn succeeded while another turn held the claim")
 	}
 	after, _ := svc.Messages(sess.ID)
 	if len(after) != len(before) {
 		t.Fatalf("losing startTurn changed the transcript: %d -> %d messages", len(before), len(after))
+	}
+}
+
+// fakeRouting knows one profile, "p1".
+type fakeRouting struct{}
+
+func (fakeRouting) GetClaudeCodeEnv(context.Context) ([]string, error) {
+	return []string{"ANTHROPIC_BASE_URL=http://gateway"}, nil
+}
+
+func (fakeRouting) GetClaudeCodeSettingsPathForProfile(_ context.Context, id string) (string, error) {
+	if id != "p1" {
+		return "", fmt.Errorf("claude code profile %q not found", id)
+	}
+	return "/profiles/p1/settings.json", nil
+}
+
+func newRoutedTestService(t *testing.T, fa *fakeAgent, p *pool.Pool) *Service {
+	t.Helper()
+	mgr := session.NewManager(session.Config{Timeout: time.Hour, MessageRetention: time.Hour}, newMemStore())
+	t.Cleanup(mgr.Stop)
+	agentSvc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewAgentService: %v", err)
+	}
+	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: fakeRouting{}, Pool: p})
+}
+
+func TestProfile_TurnLaunchesWithTheProfileSettingsInsteadOfEnv(t *testing.T) {
+	got := make(chan agentboot.ExecutionOptions, 1)
+	fa := &fakeAgent{script: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle) {
+		got <- opts
+		completingScript(ctx, prompt, opts, h)
+	}}
+	svc := newRoutedTestService(t, fa, nil)
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "p1"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	opts := <-got
+	if opts.SettingsPath != "/profiles/p1/settings.json" || len(opts.Env) != 0 {
+		t.Fatalf("launch got SettingsPath=%q Env=%v; want the profile's settings and no main-scenario env", opts.SettingsPath, opts.Env)
+	}
+	if snap, _ := svc.sessions.Snapshot(sess.ID); snap.Profile != "p1" {
+		t.Fatalf("session profile = %q, want p1", snap.Profile)
+	}
+}
+
+func TestProfile_UnknownProfileIsRejectedUpFront(t *testing.T) {
+	svc := newRoutedTestService(t, &fakeAgent{script: completingScript}, nil)
+	_, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "nope"})
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("CreateSession with unknown profile: err = %v, want ErrValidation", err)
+	}
+}
+
+func TestProfile_SwitchingRestartsTheResidentProcess(t *testing.T) {
+	var mu sync.Mutex
+	var opened []agentboot.ExecutionOptions
+	fa := &fakeAgent{script: completingScript, openFn: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		mu.Lock()
+		opened = append(opened, opts)
+		mu.Unlock()
+		return newFakePersistentSession(ctx, prompt, completingPersistentScript), nil
+	}}
+	p := pool.New(pool.Config{MaxSessions: 10, IdleTimeout: time.Hour})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+	svc := newRoutedTestService(t, fa, p)
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if _, err := svc.SetProfile(context.Background(), sess.ID, "p1"); err != nil {
+		t.Fatalf("SetProfile: %v", err)
+	}
+	if err := svc.SendMessage(context.Background(), sess.ID, "again"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for fa.openCalls.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("Open called %d times, want 2: a process launched without the profile must not serve it", fa.openCalls.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if opened[1].SettingsPath != "/profiles/p1/settings.json" || !opened[1].Resume {
+		t.Fatalf("restarted with SettingsPath=%q Resume=%v; want the profile, resuming the same session", opened[1].SettingsPath, opened[1].Resume)
 	}
 }

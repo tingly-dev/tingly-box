@@ -4,6 +4,7 @@
 package desk
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,14 +13,22 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/desk"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 )
 
 type Handler struct {
-	svc *desk.Service
+	svc    *desk.Service
+	routes RouteResolver // optional: nil leaves the status's routing and quota empty
 }
 
-func NewHandler(svc *desk.Service) *Handler {
-	return &Handler{svc: svc}
+// RouteResolver resolves where a model request is routed and the quota it
+// draws on, the way the terminal status line does (statusline.Handler).
+type RouteResolver interface {
+	ResolveRoute(ctx context.Context, scenario, modelID string) *statusline.Route
+}
+
+func NewHandler(svc *desk.Service, routes RouteResolver) *Handler {
+	return &Handler{svc: svc, routes: routes}
 }
 
 // sendServiceError maps a desk.Service error to an HTTP response
@@ -66,7 +75,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 	sess, err := h.svc.CreateSession(c.Request.Context(), desk.CreateSessionInput{
-		Path: req.Path, Prompt: req.Prompt, PermissionMode: req.PermissionMode,
+		Path: req.Path, Prompt: req.Prompt, PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {
 		sendServiceError(c, err)
@@ -140,6 +149,42 @@ func (h *Handler) SetPermissionMode(c *gin.Context) {
 		return
 	}
 	sess, err := h.svc.SetPermissionMode(c.Param("session_id"), req.Mode)
+	if err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sessionToInfo(sess))
+}
+
+func (h *Handler) Status(c *gin.Context) {
+	sess, err := h.svc.GetSession(c.Param("session_id"))
+	if err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	resp := SessionStatusResponse{Scenario: desk.Scenario(sess.Profile), Quota: []QuotaSegmentInfo{}}
+	resp.RequestedModel = h.svc.RequestedModel(sess.ID)
+	if h.routes != nil && resp.RequestedModel != "" {
+		if route := h.routes.ResolveRoute(c.Request.Context(), resp.Scenario, resp.RequestedModel); route != nil {
+			resp.ProviderName, resp.ProviderModel = route.ProviderName, route.Model
+			for _, q := range route.Quota {
+				resp.Quota = append(resp.Quota, QuotaSegmentInfo{
+					Type: q.Type, Balance: q.Balance, Text: q.Text,
+					UsedPercent: q.UsedPercent, ResetsAt: q.ResetsAt, LimitReached: q.LimitReached,
+				})
+			}
+		}
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) SetProfile(c *gin.Context) {
+	var req SetProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	sess, err := h.svc.SetProfile(c.Request.Context(), c.Param("session_id"), req.Profile)
 	if err != nil {
 		sendServiceError(c, err)
 		return

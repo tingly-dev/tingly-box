@@ -161,7 +161,42 @@ which is already globally unique:
   recovery step, building a `Service` rewrites stored sessions. See §4 for
   why schema generation must not build one.
 
-### 3.3 A shared-mutable-state gotcha this surfaced
+### 3.3 Profiles
+
+A session can run with a Claude Code profile (`Session.Profile`, a
+`remote_sessions.profile` column). Its turns launch with the profile's
+materialized `--settings` file (`Routing.GetClaudeCodeSettingsPathForProfile`)
+instead of the main scenario's env, the same either/or @cc's
+`ClaudeCodeExecutor` uses, and fall back to the main routing with a system
+note if the profile can't be resolved. Create and `SetProfile` reject an
+unknown profile up front. The settings path is part of the launch signature
+(§3.1), so switching profile mid-session restarts the resident process with
+`--resume` on the next turn.
+
+### 3.4 Status line
+
+The composer carries the web version of the status line tingly-box
+installs for Claude Code in a terminal (`internal/server/module/statusline`):
+requested model → routed model @ provider, context use, session tokens, and
+the routed provider's quota and balance.
+
+- **Tokens** come from a `usage` transcript entry the converter writes per
+  turn (`turnUsage` in `convert.go`): calls deduplicated by message id and
+  summed, as the gateway returned them; context use from the last
+  main-thread call; model and window from the init message and the result's
+  `modelUsage`. Claude Code's own cost figure is left out: it prices every
+  call at Anthropic list prices, which is wrong once a profile routes
+  elsewhere. Being transcript entries, they persist without a schema change.
+- **Routing and quota** come from `GET /desk/sessions/:id/status`, which
+  resolves the latest turn's requested model in the session's scenario
+  (`claude_code` or `claude_code:<profile>`) through the statusline
+  handler's own `ResolveRoute`, and renders quota windows with the same
+  `QuotaSegments` the terminal line uses, so the two never disagree. It is
+  a prediction of the load balancer's pick, as the terminal line is.
+- A window at 80% is marked, one at 90% or exhausted is red, and an
+  exhausted one points at the profile picker beside it.
+
+### 3.5 A shared-mutable-state gotcha this surfaced
 
 `session.Manager.Get`/`GetOrLoad`/`ListByChat` return the **live**,
 mutably-shared `*Session` held in the manager's map — safe only if read

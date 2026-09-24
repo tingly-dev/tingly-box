@@ -2428,6 +2428,50 @@
         }
       }
     },
+    "/api/v1/desk/sessions/{session_id}/profile": {
+      "put": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Change which Claude Code profile a session's next turn runs with",
+        "description": "Change which Claude Code profile a session's next turn runs with",
+        "operationId": "apiV1DeskSessionsSession_idProfilePut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desk/sessions/{session_id}/respond": {
       "post": {
         "tags": [
@@ -2465,6 +2509,39 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/status": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Where a session's model requests are routed and the quota they draw on",
+        "description": "Where a session's model requests are routed and the quota they draw on",
+        "operationId": "apiV1DeskSessionsSession_idStatusGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStatusResponse"
                 }
               }
             }
@@ -10013,6 +10090,10 @@
             "type": "string",
             "description": "Field permission_mode"
           },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          },
           "prompt": {
             "type": "string",
             "description": "Field prompt"
@@ -10021,7 +10102,8 @@
         "required": [
           "path",
           "prompt",
-          "permission_mode"
+          "permission_mode",
+          "profile"
         ]
       },
       "CurlData": {
@@ -14477,6 +14559,44 @@
           "success"
         ]
       },
+      "QuotaSegmentInfo": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "boolean",
+            "description": "Field balance"
+          },
+          "limit_reached": {
+            "type": "boolean",
+            "description": "Field limit_reached"
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field resets_at"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          },
+          "used_percent": {
+            "type": "number",
+            "format": "double",
+            "description": "Field used_percent"
+          }
+        },
+        "required": [
+          "type",
+          "balance",
+          "text",
+          "used_percent",
+          "limit_reached"
+        ]
+      },
       "RecentFolder": {
         "type": "object",
         "properties": {
@@ -15519,6 +15639,10 @@
             "type": "string",
             "description": "Field permission_mode"
           },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          },
           "project": {
             "type": "string",
             "description": "Field project"
@@ -15543,6 +15667,7 @@
           "request",
           "response",
           "permission_mode",
+          "profile",
           "created_at",
           "last_activity"
         ]
@@ -15562,6 +15687,38 @@
           "sessions"
         ]
       },
+      "SessionStatusResponse": {
+        "type": "object",
+        "properties": {
+          "provider_model": {
+            "type": "string",
+            "description": "Field provider_model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "quota": {
+            "type": "array",
+            "description": "Field quota",
+            "items": {
+              "$ref": "#/components/schemas/QuotaSegmentInfo"
+            }
+          },
+          "requested_model": {
+            "type": "string",
+            "description": "Field requested_model"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          }
+        },
+        "required": [
+          "scenario",
+          "quota"
+        ]
+      },
       "SetPermissionModeRequest": {
         "type": "object",
         "properties": {
@@ -15572,6 +15729,18 @@
         },
         "required": [
           "mode"
+        ]
+      },
+      "SetProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          }
+        },
+        "required": [
+          "profile"
         ]
       },
       "Settings": {

@@ -244,7 +244,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
 
 	if s.desk = newDeskService(sm, s.config); s.desk != nil {
-		registerDeskRoutes(apiV1, s.desk, s.deskEnabled)
+		registerDeskRoutes(apiV1, s.desk, statusHandler, s.deskEnabled)
 	}
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
@@ -289,6 +289,6 @@ func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
 // registerDeskRoutes is shared by UseUIEndpoints (with the live
 // service) and registerAllAPIRoutes (schema generation, with nil) so the
 // route set and its enabled gate cannot drift between the two paths.
-func registerDeskRoutes(apiV1 *swagger.RouteGroup, svc *desksvc.Service, enabled func() bool) {
-	deskmodule.RegisterRoutes(apiV1, deskmodule.NewHandler(svc), enabled)
+func registerDeskRoutes(apiV1 *swagger.RouteGroup, svc *desksvc.Service, routes deskmodule.RouteResolver, enabled func() bool) {
+	deskmodule.RegisterRoutes(apiV1, deskmodule.NewHandler(svc, routes), enabled)
 }
