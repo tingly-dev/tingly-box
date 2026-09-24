@@ -170,15 +170,32 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 	}
 }
 
-// ImagesEdit forwards an OpenAI /images/edits request. Only OpenAI-compatible
-// providers speak this contract (the SDK serializes it as multipart form
-// upload); the bespoke DashScope / MiniMax adapters have no edit surface, so
-// those vendors are rejected here with a clear error instead of leaking a
+// ImagesEdit forwards an OpenAI /images/edits request. OpenAI-compatible
+// providers are served by the SDK's multipart upload. Vendors whose edit
+// surface is shaped differently — xAI (JSON only), Qianfan (JSON, inverted
+// mask), DashScope (Wanx image2image / qwen-image multimodal) — go through the
+// imagegen edit adapters, which translate to and from the OpenAI shape.
+// MiniMax has no edit surface and is rejected with a clear error instead of a
 // confusing upstream 404.
 func (c *OpenAIClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error) {
 	switch imagegen.DetectVendor(c.provider) {
-	case imagegen.VendorDashScope, imagegen.VendorMinimax:
+	case imagegen.VendorMinimax:
 		return nil, fmt.Errorf("provider %s does not support image editing (/images/edits)", c.provider.Name)
+	case imagegen.VendorXAI, imagegen.VendorQianfan, imagegen.VendorDashScope:
+		editReq, err := imagegen.EditRequestFromOpenAI(&req)
+		if err != nil {
+			return nil, err
+		}
+		editor, err := imagegen.NewEditor(c.provider)
+		if err != nil {
+			return nil, err
+		}
+		defer editor.Close()
+		resp, err := editor.Edit(ctx, editReq)
+		if err != nil {
+			return nil, err
+		}
+		return resp.ToOpenAI(), nil
 	default:
 		return c.client.Images.Edit(ctx, req)
 	}

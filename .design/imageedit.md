@@ -65,7 +65,8 @@ POST /tingly/{scenario}/v1/images/edits            ← routes.go(mixin group)
         ├─ CodexClient   → JSON POST images/edits(原生协议,见 §3);带 mask 走 Responses 工具(实验);n > 1 扇出成 n 次单图调用
         ├─ KimiClient    → ErrKimiNotSupported
         ├─ vmodel        → not supported
-        └─ DashScope/MiniMax → 明确报错(适配器无 edit surface)
+        ├─ xAI/千帆/DashScope → imagegen edit 适配器(`image-edit-adapters.md`)
+        └─ MiniMax → 明确报错(无 edit surface)
 ```
 
 scenario/transport 不需要新注册:`TransportImageGen` 覆盖整个

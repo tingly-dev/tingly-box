@@ -29,6 +29,13 @@
 //	Native sync custom schema:
 //	  minimaxi-com, minimax-io (MiniMax image-01, POST /v1/image_generation).
 //	  -> handled by minimaxClient.
+//
+//	Image editing with a bespoke surface (edit.go, NewEditor):
+//	  x-ai (JSON /images/edits, no mask), baidubce-com (Qianfan JSON
+//	  /images/edits, white-means-edit mask), dashscope-* (Wanx image2image with
+//	  mask, qwen-image multimodal-generation).
+//	  -> handled by xaiClient / qianfanClient / dashscopeClient.Edit; x-ai and
+//	  baidubce-com still generate through client.OpenAIClient.
 package imagegen
 
 import (

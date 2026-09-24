@@ -1,7 +1,6 @@
 package imagegen
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,6 +32,7 @@ type dashscopeClient struct {
 	provider     *typ.Provider
 	httpClient   *http.Client
 	submitURL    string
+	apiBase      string
 	taskBaseURL  string
 	pollInterval time.Duration
 	pollTimeout  time.Duration
@@ -54,6 +54,7 @@ func newDashScopeClient(provider *typ.Provider) (*dashscopeClient, error) {
 		provider:     provider,
 		httpClient:   &http.Client{Transport: http.DefaultTransport},
 		submitURL:    base + "/services/aigc/text2image/image-synthesis",
+		apiBase:      base,
 		taskBaseURL:  base + "/tasks/",
 		pollInterval: 2 * time.Second,
 		pollTimeout:  timeout,
@@ -131,33 +132,17 @@ func (c *dashscopeClient) submit(ctx context.Context, req *Request) (string, err
 		Input:      dashscopeInput{Prompt: req.Prompt},
 		Parameters: params,
 	}
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("imagegen: dashscope marshal request: %w", err)
-	}
+	return c.submitTask(ctx, c.submitURL, body)
+}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.submitURL, bytes.NewReader(payload))
-	if err != nil {
-		return "", err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.provider.GetAccessToken())
-	httpReq.Header.Set("X-DashScope-Async", "enable")
-
-	resp, err := c.httpClient.Do(httpReq)
+// submitTask posts an async task body to one of DashScope's task-based
+// services and returns the task_id to poll. Text-to-image and image editing
+// (image2image) share the submit/poll protocol, differing only in URL and body.
+func (c *dashscopeClient) submitTask(ctx context.Context, url string, body any) (string, error) {
+	var parsed dashscopeTaskResponse
+	err := postJSON(ctx, c.httpClient, url, c.provider.GetAccessToken(), map[string]string{"X-DashScope-Async": "enable"}, body, &parsed)
 	if err != nil {
 		return "", fmt.Errorf("imagegen: dashscope submit: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("imagegen: dashscope submit returned %d: %s", resp.StatusCode, string(raw))
-	}
-
-	var parsed dashscopeTaskResponse
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return "", fmt.Errorf("imagegen: dashscope parse submit response: %w", err)
 	}
 	if parsed.Code != "" {
 		return "", fmt.Errorf("imagegen: dashscope submit error %s: %s", parsed.Code, parsed.Message)
