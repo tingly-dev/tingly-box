@@ -47,7 +47,8 @@ POST /tingly/imagegen/v1/images/edits
     ↓ ForwardOpenAIImageEdit → ImagesEdit
         ├─ OpenAIClient  → SDK 原样透传 ✓
         ├─ CodexClient   → 有 mask 走 Responses 工具(实验,§8.2),原生端点报错
-        └─ Kimi/vmodel/DashScope/MiniMax → 整个 edits 面就不支持
+        ├─ xAI/千帆/DashScope → 各自的 edit 适配器(`image-edit-adapters.md`)
+        └─ Kimi/vmodel/MiniMax → 整个 edits 面就不支持
 ```
 
 结论:**对 OpenAI 兼容上游,后端零改动即可端到端跑通**。这正是这个功能能做到
@@ -446,10 +447,10 @@ mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
 | OpenAI(gpt-image-*、dall-e-2) | multipart / JSON | ✓ 作用于**第一张**;gpt-image 上是**软约束**("entirely prompt-based … may not follow its exact shape") | 1–10(dall-e-3 仅 1) | 透传即正确 |
 | Azure OpenAI | multipart,同 OpenAI | ✓ 同 OpenAI | 1–10 | 透传即正确 |
 | DeepInfra | multipart,OpenAI 形状 | ✓ alpha=0 | 1–4 | 透传即正确 |
-| xAI | **只收 JSON**,SDK 的 multipart 明确不支持 | 未文档化 | ≤10 | 我们的 multipart 发过去会失败;要支持得转 JSON(另开) |
+| xAI | **只收 JSON**,SDK 的 multipart 明确不支持 | 未文档化 | ≤10 | 走 JSON 适配器;带 mask 明确报错(`image-edit-adapters.md`) |
 | StepFun | multipart(step-image-edit-2) | 未文档化 | 仅 1 | 能透传;n 由 shortfall 槽位呈现 |
-| 百度千帆 v2 | **JSON** | ✓ `ernie-irag-edit`,但**白=改、黑=留**(与 OpenAI alpha 相反) | 1–4 | 需要转 JSON + 反转 mask(另开) |
-| DashScope | compat 模式**没有** edits(改图走 generations 的 `image` 字段) | 原生 `wanx2.1-imageedit` 的 `description_edit_with_mask`,**白=改**,收 data URL | compat ≤6 | 现状:适配器明确拒绝 edits,不会静默吃 mask |
+| 百度千帆 v2 | **JSON** | ✓ `ernie-irag-edit`,但**白=改、黑=留**(与 OpenAI alpha 相反) | 1–4 | 走 JSON 适配器,mask 翻转成白=改(`image-edit-adapters.md`) |
+| DashScope | compat 模式**没有** edits(改图走 generations 的 `image` 字段) | 原生 `wanx2.1-imageedit` 的 `description_edit_with_mask`,**白=改**,收 data URL | compat ≤6 | 万相走 image2image(mask 翻转),qwen-image 走 multimodal-generation(`image-edit-adapters.md`) |
 | 火山 Seedream、硅基、ModelScope、Gemini compat、Together、OpenRouter | **没有** `/images/edits`(改图走 generations + image 字段,或各自的接口) | 无 | 火山无 `n`(`sequential_image_generation` + `max_images`);其余各异 | 请求会被上游 404 / 拒绝,不会静默吃 mask |
 | 智谱、MiniMax | 无改图 | 无 | 智谱 ?;MiniMax 1–9 | 不变 |
 | Kimi / vmodel | 不支持 | — | — | 不变 |
@@ -460,7 +461,7 @@ mask 落地后逐个 vendor 过了一遍"要不要跟着改"。分发点是
 - **mask**:透传就正确的只有 OpenAI / Azure / DeepInfra。其余大多数 compat 上游
   **根本没有 `/images/edits`**,请求会被拒,而不是 mask 被静默吃掉——原先担心的
   "静默忽略"风险比预想小。真正能接 mask 但协议不同的是千帆和 DashScope 万相
-  (JSON + 白=改的黑白图),需要各自的适配器,还没做。
+  (JSON + 白=改的黑白图),已各自有 edit 适配器(`image-edit-adapters.md`)。
 - **即便在 OpenAI 上,gpt-image 的 mask 也是软约束**。编辑器底部那句
   "Painted areas are what the model may change" 措辞是对的(may,不是 will)。
 - **n**:Codex 之外,StepFun / qwen-image 等也是一次一张。现在由卡片上的空槽位
@@ -525,8 +526,7 @@ mock 后端的 prompt 带 `[partial]` 时只返回一半(向上取整),用来验
   `EditStreaming`,openai-js 也支持)。网关对 Codex 扇出可以每完成一次推一个
   completed 事件,原生支持的上游透传;前端改成收到一张填一格。槽位网格已经是它
   需要的形状,到时只改"填"的时机。
-- **千帆 / DashScope 万相 的 mask**:协议不同(JSON、白=改),各自需要 edit 适配器。
-- **xAI edits**:只收 JSON,我们的 multipart 发不过去,需要转换。
+- ~~千帆 / DashScope 万相 的 mask、xAI edits~~:已做,见 `image-edit-adapters.md`。
 - `parseImageGenerationStream` 原来把 `partial_image` 的 base64 **拼接**;官方文档确认
   每个 partial 都是一张完整预览图。已改成:done 事件的 `result` 优先(不看 status——
   第三方观察到上游会把已完成的 call 留在 `generating`),没有再退回最后一个 partial。

@@ -18,7 +18,7 @@ func TestDetectVendor(t *testing.T) {
 		want  Vendor
 	}{
 		{"openai", "https://api.openai.com/v1", protocol.APIStyleOpenAI, VendorOpenAICompat},
-		{"xai", "https://api.x.ai/v1/", protocol.APIStyleOpenAI, VendorOpenAICompat},
+		{"xai", "https://api.x.ai/v1/", protocol.APIStyleOpenAI, VendorXAI},
 		{"volcengine", "https://ark.cn-beijing.volces.com/api/v3", protocol.APIStyleOpenAI, VendorOpenAICompat},
 		{"zhipu", "https://open.bigmodel.cn/api/paas/v4", protocol.APIStyleOpenAI, VendorOpenAICompat},
 		{"dashscope-cn", "https://dashscope.aliyuncs.com/compatible-mode/v1", protocol.APIStyleOpenAI, VendorDashScope},

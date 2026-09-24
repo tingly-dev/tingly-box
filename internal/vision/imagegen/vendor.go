@@ -26,6 +26,12 @@ const (
 	VendorDashScope Vendor = "dashscope"
 	// VendorMinimax is MiniMax: native POST /v1/image_generation.
 	VendorMinimax Vendor = "minimax"
+	// VendorXAI is xAI: OpenAI-compatible generation, but a JSON-only
+	// /images/edits the SDK's multipart upload cannot reach.
+	VendorXAI Vendor = "xai"
+	// VendorQianfan is Baidu Qianfan v2: OpenAI-compatible generation, a JSON
+	// /images/edits with a white-means-edit mask.
+	VendorQianfan Vendor = "qianfan"
 	// VendorUnknown is a provider with no known image surface.
 	VendorUnknown Vendor = "unknown"
 )
@@ -55,12 +61,17 @@ func DetectVendor(provider *typ.Provider) Vendor {
 		return VendorDashScope
 	case strings.Contains(host, "api.minimax.io"), strings.Contains(host, "api.minimaxi.com"):
 		return VendorMinimax
+	case host == "api.x.ai":
+		return VendorXAI
+	case host == "qianfan.baidubce.com":
+		return VendorQianfan
 	}
 
 	// Anything else with an OpenAI-style base is assumed OpenAI-compatible:
-	// this is the documented contract for x-ai, volcengine ark, zhipu/z-ai,
-	// siliconflow, stepfun, together, modelscope, gemini's compat layer,
-	// baidu qianfan v2, and the various aggregators.
+	// this is the documented contract for volcengine ark, zhipu/z-ai,
+	// siliconflow, stepfun, together, modelscope, gemini's compat layer, and
+	// the various aggregators. (xAI and Qianfan are OpenAI-compatible for
+	// generation too; they are told apart above only for their edit surface.)
 	if provider.APIStyle == protocol.APIStyleOpenAI || provider.APIStyle == "" {
 		return VendorOpenAICompat
 	}
