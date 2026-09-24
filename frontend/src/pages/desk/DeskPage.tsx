@@ -1,13 +1,11 @@
-import {PageLayout} from '@/components/PageLayout';
-import EmptyState from '@/components/EmptyState';
-import UnifiedCard from '@/components/UnifiedCard';
-import SessionListPanel from '@/components/desk/SessionListPanel';
-import TranscriptPanel from '@/components/desk/TranscriptPanel';
+import DeskSidebar from '@/components/desk/DeskSidebar';
+import NewSessionView from '@/components/desk/NewSessionView';
+import SessionView from '@/components/desk/SessionView';
 import {isBusyStatus} from '@/components/desk/deskUtils';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
-import {Grid} from '@mui/material';
+import {Box, useMediaQuery, useTheme} from '@mui/material';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
@@ -26,20 +24,23 @@ const DeskPage = () => {
     const notify = useNotify();
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedId = searchParams.get('session');
+    const theme = useTheme();
+    const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
 
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [recentFolders, setRecentFolders] = useState<RecentFolder[]>([]);
     const [permissionModes, setPermissionModes] = useState<string[]>([]);
     const [messages, setMessages] = useState<MessageInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [creating, setCreating] = useState(false);
 
     const selectedSession = sessions.find((s) => s.id === selectedId) || null;
     const selectedBusy = selectedSession ? isBusyStatus(selectedSession.status) : false;
     // Lets a late messages response for a previously selected session be
     // dropped instead of overwriting the current one's transcript.
     const selectedIdRef = useRef(selectedId);
-    selectedIdRef.current = selectedId;
+    useEffect(() => {
+        selectedIdRef.current = selectedId;
+    }, [selectedId]);
 
     const loadSessions = useCallback(async () => {
         try {
@@ -117,29 +118,18 @@ const DeskPage = () => {
         return () => clearInterval(id);
     }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
 
-    const selectSession = (id: string) => {
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('session', id);
-            return next;
-        });
-    };
-
     // Resolves false on failure so the composer keeps what the user typed.
     const handleCreate = async (path: string, prompt: string, permissionMode: string): Promise<boolean> => {
-        setCreating(true);
         try {
             const session = await deskApi.createSession(path, prompt, permissionMode || undefined);
             // A brand-new session (and possibly a brand-new folder) needs the
             // full lists, unlike the single-session refreshes below.
             await Promise.all([loadSessions(), loadRecentFolders()]);
-            selectSession(session.id);
+            setSearchParams({session: session.id});
             return true;
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.startFailed', {defaultValue: 'Failed to start session'}));
             return false;
-        } finally {
-            setCreating(false);
         }
     };
 
@@ -195,27 +185,37 @@ const DeskPage = () => {
         }
     };
 
+    const openSession = (id: string) => setSearchParams({session: id});
+    const openNew = (folder?: string) => setSearchParams(folder ? {new: '1', folder} : {new: '1'});
+    const backToList = () => setSearchParams({});
+
+    // On narrow screens the list and the work area are separate views: the
+    // list shows until a session (or a new one) is opened.
+    const showList = !isNarrow || (!selectedId && !searchParams.has('new'));
+    const showMain = !isNarrow || !showList;
+
     return (
-        <PageLayout
-            loading={loading}
-            title={t('desk.title', {defaultValue: 'Desk'})}
-            subtitle={t('desk.subtitle', {defaultValue: 'Run Claude Code in a folder on this machine, from any browser.'})}
+        <Box
+            sx={{
+                height: '100%',
+                minHeight: 520,
+                display: 'flex',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 2,
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+            }}
         >
-            <Grid container spacing={2}>
-                <Grid size={{xs: 12, md: 4}}>
-                    <SessionListPanel
-                        sessions={sessions}
-                        recentFolders={recentFolders}
-                        permissionModes={permissionModes}
-                        selectedId={selectedId}
-                        onSelect={selectSession}
-                        onCreate={handleCreate}
-                        creating={creating}
-                    />
-                </Grid>
-                <Grid size={{xs: 12, md: 8}}>
-                    {selectedSession ? (
-                        <TranscriptPanel
+            {showList && (
+                <Box sx={{width: isNarrow ? '100%' : 280, flexShrink: 0, borderRight: isNarrow ? 0 : 1, borderColor: 'divider', bgcolor: 'background.default'}}>
+                    <DeskSidebar sessions={sessions} selectedId={selectedId} onSelect={openSession} onNew={openNew}/>
+                </Box>
+            )}
+            {showMain && (
+                <Box sx={{flex: 1, minWidth: 0}}>
+                    {loading ? null : selectedSession ? (
+                        <SessionView
                             session={selectedSession}
                             messages={messages}
                             permissionModes={permissionModes}
@@ -224,18 +224,21 @@ const DeskPage = () => {
                             onInterrupt={handleInterrupt}
                             onArchive={handleArchive}
                             onPermissionModeChange={handlePermissionModeChange}
+                            onBack={isNarrow ? backToList : undefined}
                         />
                     ) : (
-                        <UnifiedCard size="full">
-                            <EmptyState
-                                title={t('desk.noSelection', {defaultValue: 'No session selected'})}
-                                description={t('desk.noSelectionDescription', {defaultValue: 'Start a new one on the left, or pick one from the list.'})}
-                            />
-                        </UnifiedCard>
+                        <NewSessionView
+                            // Remount per folder so a folder group's "+" resets the form.
+                            key={searchParams.get('folder') ?? ''}
+                            initialFolder={searchParams.get('folder') ?? undefined}
+                            recentFolders={recentFolders}
+                            permissionModes={permissionModes}
+                            onCreate={handleCreate}
+                        />
                     )}
-                </Grid>
-            </Grid>
-        </PageLayout>
+                </Box>
+            )}
+        </Box>
     );
 };
 

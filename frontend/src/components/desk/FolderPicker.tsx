@@ -1,5 +1,6 @@
+import {FolderOpen} from '@/components/icons';
 import type {RecentFolder} from '@/services/deskApi';
-import {Autocomplete, Box, TextField, Typography} from '@mui/material';
+import {Autocomplete, Box, InputAdornment, TextField, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 
 interface FolderPickerProps {
@@ -10,28 +11,26 @@ interface FolderPickerProps {
 
 // FolderPicker is one field, not a wizard (ux-principles #2): type a path
 // directly, or pick a recently-used one. There is deliberately no
-// server-side directory browser here — that would mean an API that lists
-// arbitrary filesystem paths on request, which is more surface than this
-// first landing needs; typing a path or reusing one already used is enough
-// to get started.
+// server-side directory browser — that would mean an API that lists
+// arbitrary filesystem paths on request (see .design/desk.md §6).
 const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
     const {t} = useTranslation();
 
     return (
         <Autocomplete
             freeSolo
-            fullWidth
             size="small"
             options={recentFolders.map((f) => f.path)}
             inputValue={value}
             onInputChange={(_e, newValue) => onChange(newValue)}
+            sx={{flex: 1, minWidth: 240}}
             renderOption={(props, option) => {
                 const folder = recentFolders.find((f) => f.path === option);
                 return (
                     <Box component="li" {...props} key={option}>
                         <Box>
                             <Typography variant="body2">{folder ? folder.name : option}</Typography>
-                            <Typography variant="caption" color="text.secondary">{option}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{fontFamily: 'monospace'}}>{option}</Typography>
                         </Box>
                     </Box>
                 );
@@ -39,11 +38,20 @@ const FolderPicker = ({value, onChange, recentFolders}: FolderPickerProps) => {
             renderInput={(params) => (
                 <TextField
                     {...params}
-                    label={t('desk.folderPath', {defaultValue: 'Folder'})}
-                    placeholder="/path/to/project"
+                    variant="standard"
+                    placeholder={t('desk.folderPlaceholder', {defaultValue: '/path/to/project'})}
                     slotProps={{
                         ...params.slotProps,
-                        htmlInput: {...params.slotProps.htmlInput, style: {fontFamily: 'monospace'}},
+                        input: {
+                            ...params.slotProps.input,
+                            disableUnderline: true,
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <FolderOpen sx={{fontSize: 16}}/>
+                                </InputAdornment>
+                            ),
+                        },
+                        htmlInput: {...params.slotProps.htmlInput, style: {fontFamily: 'monospace', fontSize: '0.8rem'}},
                     }}
                 />
             )}

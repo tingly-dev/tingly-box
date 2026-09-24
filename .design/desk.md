@@ -196,16 +196,37 @@ restart recovery (§3.2) against a live server's sessions.
 
 ## 5. Frontend
 
-`frontend/src/pages/desk/DeskPage.tsx` (+
-`frontend/src/components/desk/*`): one work surface, no
-folder-then-session wizard (ux-principles.md §2) — a folder/prompt composer
-and the session list share the left column; the right column is the
-selected session's transcript and composer. `FolderPicker` is a plain
-Autocomplete over typed input + recently-used paths (`RecentFolder[]`) —
-no directory-browsing UI, matching the backend having no such endpoint. A
-session's one still-open approval/ask request is the only one that renders
-action buttons (`findPendingRequest` in `deskUtils.ts`), so the page
-always shows exactly what the user can act on next (ux-principles.md §11).
+`frontend/src/pages/desk/DeskPage.tsx` (+ `frontend/src/components/desk/*`)
+follows the layout of Claude Code on the web, so it reads as the same kind
+of tool:
+
+- **Sidebar** (`DeskSidebar`): "New session", a search box, and sessions
+  grouped by folder (most recent first), each group with a "+" that starts a
+  new session in that folder. A row is the session's first prompt plus a
+  mark only when it needs attention (spinner while running, red dot when
+  failed); archived sessions are dimmed.
+- **New session** (`NewSessionView`): opens straight onto the prompt, no
+  wizard (ux-principles.md §2). Folder and permission mode are context on
+  the composer, prefilled with the folder used last. `FolderPicker` is
+  typed input + recently-used paths only, matching the backend having no
+  directory-browsing endpoint (§6).
+- **Session** (`SessionView` + `Transcript`): a title bar (first prompt,
+  folder chip with the full path on hover, archive), one centered
+  conversation column, and the composer pinned below it. `buildTranscript`
+  (`deskUtils.ts`) collapses each run of thinking and tool calls into one
+  "Used N tools" row, pairing every call with its result by `request_id`,
+  and attaches an approval's or question's answer to it, so the replies stay
+  the visual anchor (ux-principles.md §9). Only the one request still waiting
+  on a live turn is actionable (§11); an answered one collapses to a line.
+- **Composer** (`Composer`): Enter sends, Shift+Enter adds a line, and an
+  IME composition's Enter never sends. While a turn runs the send button
+  becomes Stop.
+- **Narrow screens**: the list and the session are two views, with a back
+  button in the session's title bar.
+
+Mock mode (`src/mocks/deskHandlers.ts`) serves every state above (a turn
+waiting on approval, finished, failed, archived) and simulates turns, so the
+page can be previewed and screenshotted without a backend.
 
 Nav: one row ("Desk") alongside "Remote Control" and "IM Notify"
 under the existing "Remote" rail icon in `layout/useActivityItems.tsx` — a

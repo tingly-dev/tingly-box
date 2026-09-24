@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { deskHandlers } from './deskHandlers'
 
 // ============================================
 // Mock Model Requests (correlated per-request traces)
@@ -3692,4 +3693,5 @@ export const handlers = [
             message: 'Codex configuration applied',
         })
     }),
+    ...deskHandlers,
 ]
