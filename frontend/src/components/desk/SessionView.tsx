@@ -7,6 +7,8 @@ import Composer from './Composer';
 import {buildTranscript, isBusyStatus, pendingRequestId, sessionTitle} from './deskUtils';
 import FolderChip from './FolderChip';
 import PermissionModeSelect from './PermissionModeSelect';
+import ProfileSelect from './ProfileSelect';
+import StatusLine from './StatusLine';
 import Transcript from './Transcript';
 
 interface SessionViewProps {
@@ -18,6 +20,7 @@ interface SessionViewProps {
     onInterrupt: () => Promise<void>;
     onArchive: () => Promise<void>;
     onPermissionModeChange: (mode: string) => Promise<void>;
+    onProfileChange: (profile: string) => Promise<void>;
     // Set on narrow screens, where the session list is a separate view.
     onBack?: () => void;
 }
@@ -25,7 +28,7 @@ interface SessionViewProps {
 const COLUMN_MAX_WIDTH = 760;
 
 const SessionView = ({
-    session, messages, permissionModes, onSend, onRespond, onInterrupt, onArchive, onPermissionModeChange, onBack,
+    session, messages, permissionModes, onSend, onRespond, onInterrupt, onArchive, onPermissionModeChange, onProfileChange, onBack,
 }: SessionViewProps) => {
     const {t} = useTranslation();
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -102,14 +105,18 @@ const SessionView = ({
                             onSubmit={onSend}
                             minRows={1}
                             context={(
-                                <PermissionModeSelect
-                                    value={session.permission_mode}
-                                    permissionModes={permissionModes}
-                                    onChange={(m) => void onPermissionModeChange(m)}
-                                />
+                                <>
+                                    <ProfileSelect value={session.profile} onChange={(p) => void onProfileChange(p)}/>
+                                    <PermissionModeSelect
+                                        value={session.permission_mode}
+                                        permissionModes={permissionModes}
+                                        onChange={(m) => void onPermissionModeChange(m)}
+                                    />
+                                </>
                             )}
                         />
                     )}
+                    <StatusLine sessionId={session.id} messages={messages}/>
                 </Box>
             </Box>
         </Box>

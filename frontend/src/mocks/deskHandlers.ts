@@ -21,6 +21,7 @@ type Sess = {
     response: string
     error?: string
     permission_mode: string
+    profile: string
     created_at: string
     last_activity: string
 }
@@ -30,10 +31,10 @@ const SITE = '/Users/me/code/website'
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
 const sessions: Sess[] = [
-    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', created_at: ago(12), last_activity: ago(1) },
-    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', created_at: ago(90), last_activity: ago(40) },
-    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', created_at: ago(200), last_activity: ago(199) },
-    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', created_at: ago(3000), last_activity: ago(2900) },
+    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', created_at: ago(12), last_activity: ago(1) },
+    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', created_at: ago(90), last_activity: ago(40) },
+    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', created_at: ago(200), last_activity: ago(199) },
+    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', created_at: ago(3000), last_activity: ago(2900) },
 ]
 
 const messages: Record<string, Msg[]> = {
@@ -46,6 +47,7 @@ const messages: Record<string, Msg[]> = {
         { kind: 'tool_result', content: 'func TestPersistentTurn_CrashMidTurnDropsFromPoolAndFails(t *testing.T) {\n\t…', request_id: 't2', payload: { is_error: false }, timestamp: ago(10) },
         { kind: 'tool_use', content: 'Bash', request_id: 't3', payload: { command: 'go test ./internal/desk/ -run Crash -count=20' }, timestamp: ago(9) },
         { kind: 'tool_result', content: '--- FAIL: TestPersistentTurn_CrashMidTurnDropsFromPoolAndFails (0.01s)\n    service_test.go:727: Open called 1 times, want 2', request_id: 't3', payload: { is_error: true }, timestamp: ago(9) },
+        { kind: 'usage', content: '', payload: { model: 'tingly/cc', input_tokens: 3200, output_tokens: 1450, cache_read_tokens: 48200, cache_write_tokens: 6100, context_tokens: 57500, context_window: 200000 }, timestamp: ago(8) },
         { role: 'assistant', content: 'Reproduced it: `waitStatus` returns immediately because the session is **already Failed** from the first turn, so the assertion runs before the second turn even starts.\n\nI\'ll wait on the second `Open` call instead of the status:\n\n```go\nfor fa.openCalls.Load() < 2 {\n\tif time.Now().After(deadline) {\n\t\tt.Fatalf("Open called %d times, want 2", fa.openCalls.Load())\n\t}\n\ttime.Sleep(5 * time.Millisecond)\n}\n```', timestamp: ago(8) },
         { kind: 'tool_use', content: 'Edit', request_id: 't4', payload: { file_path: `${TB}/internal/desk/service_test.go` }, timestamp: ago(7) },
         { kind: 'tool_result', content: 'Applied 1 edit.', request_id: 't4', payload: { is_error: false }, timestamp: ago(7) },
@@ -57,6 +59,7 @@ const messages: Record<string, Msg[]> = {
         { kind: 'tool_result', content: 'frontend/src/pages/settings/SettingsPage.tsx', request_id: 'a1', payload: { is_error: false }, timestamp: ago(89) },
         { kind: 'tool_use', content: 'Edit', request_id: 'a2', payload: { file_path: `${TB}/frontend/src/pages/settings/SettingsPage.tsx` }, timestamp: ago(88) },
         { kind: 'tool_result', content: 'Applied 2 edits.', request_id: 'a2', payload: { is_error: false }, timestamp: ago(88) },
+        { kind: 'usage', content: '', payload: { model: 'tingly/cc', input_tokens: 2100, output_tokens: 900, cache_read_tokens: 20500, cache_write_tokens: 4000, context_tokens: 26600, context_window: 128000 }, timestamp: ago(87) },
         { role: 'assistant', content: 'Added a "Theme" row with Light / Dark / System to the settings page, backed by the existing ThemeContext.', timestamp: ago(87) },
         { role: 'user', content: 'Default it to System please', timestamp: ago(45) },
         { kind: 'tool_use', content: 'Edit', request_id: 'a3', payload: { file_path: `${TB}/frontend/src/contexts/ThemeContext.tsx` }, timestamp: ago(44) },
@@ -94,6 +97,7 @@ const messages: Record<string, Msg[]> = {
             '',
             'See [the MUI docs](https://mui.com/material-ui/customization/dark-mode/) for the approach.',
         ].join('\n'), timestamp: ago(40) },
+        { kind: 'usage', content: '', payload: { model: 'tingly/cc', input_tokens: 800, output_tokens: 1200, cache_read_tokens: 30100, cache_write_tokens: 1500, context_tokens: 32400, context_window: 128000 }, timestamp: ago(40) },
     ],
     'desk-3': [
         { role: 'user', content: 'Update the pricing page copy', timestamp: ago(200) },
@@ -120,9 +124,26 @@ const runTurn = (s: Sess, reply: string) => {
     push(s.id, { kind: 'tool_use', content: 'Read', request_id: tid, payload: { file_path: `${s.project}/README.md` } })
     setTimeout(() => {
         push(s.id, { kind: 'tool_result', content: '# README\n…', request_id: tid, payload: { is_error: false } })
+        push(s.id, { kind: 'usage', content: '', payload: { model: 'tingly/cc', input_tokens: 600, output_tokens: 240, cache_read_tokens: 12000, cache_write_tokens: 900, context_tokens: 13500, context_window: 200000 } })
         push(s.id, { role: 'assistant', content: reply })
         touch(s, 'completed')
     }, 2500)
+}
+// Where each profile routes, with the provider's quota: the default routing
+// is close to its 5-hour window to show the warning state.
+const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+const routes: Record<string, object> = {
+    '': {
+        provider_name: 'Anthropic (team)', provider_model: 'claude-sonnet-4-5',
+        quota: [
+            { type: 'session', balance: false, text: '14% left', used_percent: 86, resets_at: inHours(2.2), limit_reached: false },
+            { type: 'weekly', balance: false, text: '81% left', used_percent: 19, resets_at: inHours(80), limit_reached: false },
+        ],
+    },
+    p1: {
+        provider_name: 'DeepSeek', provider_model: 'deepseek-chat',
+        quota: [{ type: 'balance', balance: true, text: '$12.40', used_percent: 0, limit_reached: false }],
+    },
 }
 const sorted = () => [...sessions].sort((a, b) => b.last_activity.localeCompare(a.last_activity))
 
@@ -138,9 +159,9 @@ export const deskHandlers = [
         HttpResponse.json({ modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.get('/api/v1/desk/sessions', () => HttpResponse.json({ sessions: sorted() })),
     http.post('/api/v1/desk/sessions', async ({ request }) => {
-        const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string }
+        const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string; profile?: string }
         const now = new Date().toISOString()
-        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', created_at: now, last_activity: now }
+        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', created_at: now, last_activity: now }
         sessions.push(s)
         push(s.id, { role: 'user', content: body.prompt })
         runTurn(s, 'Looked around the project — here is what I found and what I would change next.')
@@ -170,6 +191,22 @@ export const deskHandlers = [
             touch(s, 'completed')
         }, 1500)
         return new HttpResponse(null, { status: 204 })
+    }),
+    http.get('/api/v1/desk/sessions/:id/status', ({ params }) => {
+        const s = find(params.id as string)
+        if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        const scenario = s.profile ? `claude_code:${s.profile}` : 'claude_code'
+        const usage = [...(messages[s.id] ?? [])].reverse().find((m) => m.kind === 'usage')
+        const requested = (usage?.payload as { model?: string } | undefined)?.model
+        if (!requested) return HttpResponse.json({ scenario, quota: [] })
+        return HttpResponse.json({ scenario, requested_model: requested, ...routes[s.profile] ?? routes[''] })
+    }),
+    http.put('/api/v1/desk/sessions/:id/profile', async ({ params, request }) => {
+        const s = find(params.id as string)
+        if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        s.profile = ((await request.json()) as { profile: string }).profile
+        push(s.id, { kind: 'system', content: `profile: ${s.profile || 'default'}` })
+        return HttpResponse.json(s)
     }),
     http.put('/api/v1/desk/sessions/:id/permission-mode', async ({ params, request }) => {
         const s = find(params.id as string)

@@ -119,9 +119,9 @@ const DeskPage = () => {
     }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
 
     // Resolves false on failure so the composer keeps what the user typed.
-    const handleCreate = async (path: string, prompt: string, permissionMode: string): Promise<boolean> => {
+    const handleCreate = async (path: string, prompt: string, permissionMode: string, profile: string): Promise<boolean> => {
         try {
-            const session = await deskApi.createSession(path, prompt, permissionMode || undefined);
+            const session = await deskApi.createSession(path, prompt, permissionMode || undefined, profile || undefined);
             // A brand-new session (and possibly a brand-new folder) needs the
             // full lists, unlike the single-session refreshes below.
             await Promise.all([loadSessions(), loadRecentFolders()]);
@@ -175,6 +175,17 @@ const DeskPage = () => {
         }
     };
 
+    const handleProfileChange = async (profile: string) => {
+        if (!selectedId) return;
+        try {
+            const updated = await deskApi.setProfile(selectedId, profile);
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            await loadMessages(selectedId);
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('desk.profileFailed', {defaultValue: 'Failed to change profile'}));
+        }
+    };
+
     const handlePermissionModeChange = async (mode: string) => {
         if (!selectedId) return;
         try {
@@ -224,6 +235,7 @@ const DeskPage = () => {
                             onInterrupt={handleInterrupt}
                             onArchive={handleArchive}
                             onPermissionModeChange={handlePermissionModeChange}
+                            onProfileChange={handleProfileChange}
                             onBack={isNarrow ? backToList : undefined}
                         />
                     ) : (

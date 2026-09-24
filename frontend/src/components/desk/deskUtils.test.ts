@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {buildTranscript, groupSessionsByFolder, pendingRequestId, toolSummary} from './deskUtils';
+import {buildTranscript, cacheHitPct, formatTokens, groupSessionsByFolder, pendingRequestId, sessionUsage, toolSummary} from './deskUtils';
 
 const msg = (m: Partial<MessageInfo>): MessageInfo => ({content: '', timestamp: '2026-01-01T00:00:00Z', ...m} as MessageInfo);
 
@@ -87,5 +87,40 @@ describe('toolSummary', () => {
         expect(toolSummary({foo: 1})).toBe('{"foo":1}');
         expect(toolSummary({})).toBe('');
         expect(toolSummary(undefined)).toBe('');
+    });
+});
+
+describe('sessionUsage', () => {
+    const usage = (payload: object) => msg({kind: 'usage', payload});
+
+    it('totals the turns and keeps the latest turn for model and context', () => {
+        const u = sessionUsage([
+            msg({role: 'user', content: 'hi'}),
+            usage({model: 'tingly/cc', input_tokens: 100, output_tokens: 20, cache_read_tokens: 900, cache_write_tokens: 0, context_tokens: 1000, context_window: 200000}),
+            usage({model: 'tingly/cc', input_tokens: 50, output_tokens: 10, cache_read_tokens: 1950, cache_write_tokens: 0, context_tokens: 2000, context_window: 200000}),
+        ]);
+        expect(u).toMatchObject({input: 150, output: 30, cacheRead: 2850, cacheWrite: 0, latest: {context_tokens: 2000}});
+        expect(cacheHitPct(u!)).toBe(95);
+    });
+
+    it('is undefined before any turn reached the model', () => {
+        expect(sessionUsage([msg({role: 'user', content: 'hi'})])).toBeUndefined();
+    });
+
+    it('does not appear in, or split, the rendered transcript', () => {
+        const blocks = buildTranscript([
+            msg({kind: 'tool_use', content: 'Read', request_id: 't1'}),
+            usage({input_tokens: 1, output_tokens: 1, cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 1}),
+            msg({kind: 'tool_use', content: 'Edit', request_id: 't2'}),
+        ]);
+        expect(blocks.map((b) => b.type)).toEqual(['activity']);
+    });
+});
+
+describe('formatTokens', () => {
+    it('keeps it short', () => {
+        expect(formatTokens(950)).toBe('950');
+        expect(formatTokens(12_345)).toBe('12.3k');
+        expect(formatTokens(1_234_567)).toBe('1.2M');
     });
 });

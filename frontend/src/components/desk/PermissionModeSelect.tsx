@@ -24,7 +24,7 @@ const PermissionModeSelect = ({value, permissionModes, onChange}: PermissionMode
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <Lock sx={{fontSize: 14}}/>
-                    <Typography variant="caption">{v || inherit}</Typography>
+                    <Typography variant="caption" sx={{color: 'inherit'}}>{v || inherit}</Typography>
                 </Stack>
             )}
             sx={{

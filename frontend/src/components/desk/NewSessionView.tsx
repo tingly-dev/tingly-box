@@ -5,12 +5,13 @@ import {useTranslation} from 'react-i18next';
 import Composer from './Composer';
 import FolderPicker from './FolderPicker';
 import PermissionModeSelect from './PermissionModeSelect';
+import ProfileSelect from './ProfileSelect';
 
 interface NewSessionViewProps {
     initialFolder?: string;
     recentFolders: RecentFolder[];
     permissionModes: string[];
-    onCreate: (path: string, prompt: string, permissionMode: string) => Promise<boolean>;
+    onCreate: (path: string, prompt: string, permissionMode: string, profile: string) => Promise<boolean>;
 }
 
 // NewSessionView opens straight onto the prompt (ux-principles #2): the
@@ -23,6 +24,7 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
     const [picked, setPicked] = useState<string | null>(null);
     const folder = picked ?? initialFolder ?? recentFolders[0]?.path ?? '';
     const [permissionMode, setPermissionMode] = useState('');
+    const [profile, setProfile] = useState('');
 
     return (
         <Box sx={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', px: 2}}>
@@ -35,10 +37,11 @@ const NewSessionView = ({initialFolder, recentFolders, permissionModes, onCreate
                     minRows={3}
                     placeholder={t('desk.promptPlaceholder', {defaultValue: 'Describe a task…'})}
                     canSubmit={folder.trim() !== ''}
-                    onSubmit={(prompt) => onCreate(folder.trim(), prompt, permissionMode)}
+                    onSubmit={(prompt) => onCreate(folder.trim(), prompt, permissionMode, profile)}
                     context={(
                         <>
                             <FolderPicker value={folder} onChange={setPicked} recentFolders={recentFolders}/>
+                            <ProfileSelect value={profile} onChange={setProfile}/>
                             <PermissionModeSelect value={permissionMode} permissionModes={permissionModes} onChange={setPermissionMode}/>
                         </>
                     )}
