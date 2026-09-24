@@ -254,6 +254,13 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
+	// RequestID is the gateway's own correlation id (constant.CtxKeyRequestID),
+	// not an upstream-provider id. It carries no host/route/internal detail on
+	// its own — callers use it to find this request's full server-side trace
+	// (raw error, upstream host, timing) in the Requests log page, without the
+	// gateway echoing that detail back into every error body (see
+	// .design/logging.md §3, §7).
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // IsContextCanceled checks if the error is due to context cancellation.

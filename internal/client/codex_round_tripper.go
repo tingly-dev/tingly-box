@@ -91,13 +91,35 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
-	// A non-200 goes back to the SDK as a response, not a RoundTrip error: the
-	// SDK turns it into an *openai.Error that keeps the upstream status and
-	// body (a moderation block's own message), and retries only statuses worth
-	// retrying. Returned as an error it became a *url.Error, which the SDK
-	// retries as a dropped connection — re-sending a policy-blocked prompt —
-	// and the gateway reports as network_error / 502.
+	// A non-200 used to come back as a bare fmt.Errorf: net/http's Client.Do
+	// wraps any RoundTrip error in *url.Error, which satisfies net.Error, so
+	// protocol.ClassifyUpstreamFailure's transport-failure fallback caught it
+	// and reported a generic 502 "network_error" — discarding the real status
+	// and a moderation block's own message.
+	//
+	// The response is now passed straight through instead: the SDK's own
+	// res.StatusCode >= 400 handling builds the *openai.Error itself (real
+	// status, real body), and — unlike returning an error from RoundTrip,
+	// which the SDK's shouldRetry treats as a dropped connection worth
+	// retrying regardless of status — a real *http.Response lets shouldRetry
+	// make that call from the status code, so a deterministic 400 isn't
+	// retried as if the connection had dropped (silently re-sending a
+	// policy-blocked prompt) even if a future caller's MaxRetries isn't 0.
+	// (tingly-box's own client construction already sets
+	// option.WithMaxRetries(0) in newOpenAIClientWithTransport, but the SDK
+	// can't be told "don't retry this" from outside its own module — the
+	// mechanism it checks for that, an unexported interface{ noRetry() }, is
+	// itself unexported, and Go scopes unexported interface methods to their
+	// declaring package: a type in this package can define a same-named
+	// method but it can't satisfy that check from outside requestconfig.)
+	//
+	// The SDK's own error path only extracts a nested "error" *object*
+	// (gjson.GetBytes(contents, "error").Raw) and doesn't fall back to the
+	// whole body otherwise, so normalizeCodexErrorBody reshapes the response
+	// first — Codex's ChatGPT backend doesn't always nest its error under
+	// "error" the way the public API does (see that function's doc).
 	if resp.StatusCode != http.StatusOK {
+		normalizeCodexErrorBody(resp)
 		return resp, nil
 	}
 
@@ -145,6 +167,61 @@ func applyCodexSessionAffinityHeader(req *http.Request, body []byte) {
 		return
 	}
 	req.Header.Set(codexSessionIDHeader, key)
+}
+
+// normalizeCodexErrorBody reshapes a non-200 Codex response body in place so
+// the openai-go SDK's own error handling (res.StatusCode >= 400 in
+// requestconfig.Execute) can build a useful *openai.Error from it. That SDK
+// code does:
+//
+//	unwrapped := gjson.GetBytes(contents, "error").Raw
+//	err = aerr.UnmarshalJSON([]byte(unwrapped))
+//
+// — it only extracts a nested "error" *object* and never falls back to the
+// whole body. Codex's ChatGPT backend doesn't reliably nest its error that
+// way: sometimes there's no "error" key at all, sometimes "error" itself is
+// a bare string (see TestCodexRoundTripper_ImagesErrorStatusSurfaced's "bad
+// image" fixture). Both leave the SDK either building an *openai.Error with
+// an empty message or, for the bare-string case, failing UnmarshalJSON
+// outright and returning a raw *json.UnmarshalTypeError that isn't even an
+// *openai.Error — losing the real status and message either way, just via a
+// different route than the network_error bug this whole function exists to
+// avoid reintroducing.
+//
+// The fix is narrow: if "error" is already an object, leave the body alone.
+// Otherwise nest the real content under "error", the one shape the SDK's
+// extraction always handles — three cases:
+//   - "error" present but not an object (e.g. a bare string): its value IS
+//     the message.
+//   - no "error" key at all, but otherwise valid JSON: nest the whole body
+//     as the "error" object, so a body that's already flat-shaped (message/
+//     code at the top level, no wrapper — see
+//     TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper) still surfaces
+//     those fields correctly once nested one level down.
+//   - not even valid JSON: the raw text becomes the message.
+func normalizeCodexErrorBody(resp *http.Response) {
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+
+	if !gjson.GetBytes(body, "error").IsObject() {
+		var wrapped []byte
+		var err error
+		switch errField := gjson.GetBytes(body, "error"); {
+		case errField.Exists():
+			wrapped, err = sjson.SetBytes([]byte(`{}`), "error.message", errField.String())
+		case gjson.ValidBytes(body):
+			wrapped, err = sjson.SetRawBytes([]byte(`{}`), "error", body)
+		default:
+			wrapped, err = sjson.SetBytes([]byte(`{}`), "error.message", string(body))
+		}
+		if err == nil {
+			body = wrapped
+		}
+	}
+
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Del("Content-Length")
 }
 
 func validateCodexStreamResponse(resp *http.Response) error {
