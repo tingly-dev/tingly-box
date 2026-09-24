@@ -56,7 +56,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
-      "useImageGen": "Image",
+      "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
       "apiKeys": "API Keys",
@@ -118,6 +118,8 @@ export default {
     "yesterday": "Yesterday",
     "days": "Days",
     "remote": "Remote",
+    "image": "Image",
+    "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
     "bots": "Bots",
@@ -1766,9 +1768,13 @@ export default {
     "requiresApplyHint": "Please apply the configuration below and restart {{client}} for changes to take effect.",
     "restartOnlyHint": "Please restart {{client}} and re-select the model for changes to take effect."
   },
+  "image": {
+    "openPlayground": "Try in Playground"
+  },
   "playground": {
     "imageTitle": "Image Playground",
-    "noImageModels": "Add an image generation model rule below to start generating images.",
+    "noImageModels": "Add an image model rule on the Image API page to start generating images.",
+    "addImageModel": "Add a model",
     "model": "Model",
     "prompt": "Prompt",
     "promptPlaceholder": "Describe the image you want to generate…",
@@ -2193,7 +2199,8 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation and editing through Tingly Box.",
-      "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default."
+      "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
+      "team": "Shared central model deployment for your whole team."
     }
   },
   "bots": {

@@ -321,7 +321,7 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 原生端点上�
 | 文件 | 改动 | 量级 |
 |------|------|------|
 | `frontend/src/utils/maskCanvas.ts` | **新增**:笔画 → alpha PNG 合成、反转、尺寸校验、预览着色。纯逻辑,带单测 | 新文件 |
-| `frontend/src/pages/scenario/components/MaskEditorDialog.tsx` | **新增**:单层 canvas + 工具栏 + undo + 导出 | 新文件 |
+| `frontend/src/pages/image/components/MaskEditorDialog.tsx` | **新增**:单层 canvas + 工具栏 + undo + 导出 | 新文件 |
 | `frontend/src/utils/sketchCanvas.ts` | 只读复用,**不改** | 0 |
 | `ImageGenPlaygroundCard.tsx` | `ReferenceImage.mask` 字段;首图缩略图一个按钮 + 角标;`runGeneration` 里 `mask: request.sources[0]?.mask?.file`;run 元信息一行;placeholder 分支 | ~60 行 |
 
@@ -372,7 +372,7 @@ generation"是同一条原则:**带 mask 的请求落到 Codex 原生端点上�
 | 部分 | 位置 | 说明 |
 |------|------|------|
 | mask 合成 / 反转 / 导出(纯逻辑 + 单测) | `frontend/packages/vision/src/maskCanvas.ts`(+ `.test.ts`) | 涂 = 改,导出时反转成 alpha 0;反转档由同一份笔画换个方向合成。放在 `@tingly/vision` 里,与 `sketchCanvas` 同一层:只碰 canvas/Blob,不碰 MUI/i18n |
-| 编辑器 | `frontend/src/pages/scenario/components/MaskEditorDialog.tsx` | 笔 / 橡皮 / 粗细 / Invert / Clear / Undo / Remove;画布取参考图原始像素;透明底,橡皮走 `destination-out` |
+| 编辑器 | `frontend/src/pages/image/components/MaskEditorDialog.tsx` | 笔 / 橡皮 / 粗细 / Invert / Clear / Undo / Remove;画布取参考图原始像素;透明底,橡皮走 `destination-out` |
 | 面板接线 | `ImageGenPlaygroundCard.tsx`、`ImageGenPlayground.types.ts` | 缩略图上的 Mask 按钮与色块(含被拖离队首后的失效态,§3.2)、prompt 提示语切换、`images.edit({ mask })`、历史卡片 `images/edits · mask`;`ReferenceMask` 整个存进 run,所以重试和"把这次请求放回面板"拿回的都是**可继续编辑**的 mask |
 | JSON 便捷编码收 `mask` | `internal/protocolserver/openai_image_edit.go` | 与 multipart 对齐,同样只收 data URL / 裸 base64 |
 

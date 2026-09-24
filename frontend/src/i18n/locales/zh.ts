@@ -57,7 +57,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
-      "useImageGen": "Image",
+      "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
       "apiKeys": "API 密钥",
@@ -119,6 +119,8 @@ export default {
     "yesterday": "昨天",
     "days": "天",
     "remote": "远程",
+    "image": "Image",
+    "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
     "bots": "机器人",
@@ -1762,9 +1764,13 @@ export default {
     "requiresApplyHint": "请应用下方的配置并重启 {{client}} 以使更改生效。",
     "restartOnlyHint": "请重启 {{client}} 并重新选择模型以使更改生效。"
   },
+  "image": {
+    "openPlayground": "在 Playground 中试用"
+  },
   "playground": {
     "imageTitle": "图像实验台",
-    "noImageModels": "先在下方添加一条图像生成模型规则，即可开始生成图像。",
+    "noImageModels": "先在 Image API 页面添加一条图像模型规则，即可开始生成图像。",
+    "addImageModel": "添加模型",
     "model": "模型",
     "prompt": "提示词",
     "promptPlaceholder": "描述你想生成的图像…",

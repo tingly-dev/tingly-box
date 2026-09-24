@@ -423,8 +423,8 @@ prompt 往往不是在这个框里写出来的:它是一个反复打磨的 `.md`
 | `frontend/src/utils/promptFile.ts` | 文本文件 → prompt:分拣、读取、上限 |
 | `frontend/src/utils/download.ts` | 存盘(anchor + 延迟 revoke)、文件名 slug;`downloadImage` 组合本地的存盘和 vision 的 `fetchBlob`/`extensionForMime` |
 | `frontend/packages/vision/src/imageSlice.ts` | 等分网格几何、图片加载(`fetchBlob`)、MIME→扩展名(`extensionForMime`)、切片渲染 |
-| `frontend/src/pages/scenario/components/ImageSliceDialog.tsx` | 切分工作面 |
-| `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口,以及参考图缩略图的打开入口(生成侧未改) |
+| `frontend/src/pages/image/components/ImageSliceDialog.tsx` | 切分工作面 |
+| `frontend/src/pages/image/components/ImageGenPlaygroundCard.tsx` | lightbox 的下载 / 切分入口,以及参考图缩略图的打开入口(生成侧未改) |
 | `frontend/src/mocks/handlers.ts` | mock 侧识别 prompt 里的 `NxM grid`,以及 `checkerboard` / `green screen`,返回相应的网格图 |
 
 `utils/download.ts` 是独立模块而不是 slicing 的一部分:存盘和 slicing 无关,

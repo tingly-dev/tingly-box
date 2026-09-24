@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Close, Edit, ErrorOutline, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import { resultSrc, runGridLayout, runImage } from './imageGenSession';
+import { resultSrc, runGridLayout, runImage, stripCardBasis } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 
@@ -107,11 +107,12 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
             data-generation-status={run.status ?? 'completed'}
             variant="outlined"
             sx={{
+                // Never wider than the strip itself: a card you have to scroll
+                // inside is n images you cannot compare at once. From md up the
+                // card also grows with the strip's height (stripCardBasis).
                 flex: layout.cols === 1
-                    ? { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' }
-                    // Never wider than the strip itself: a card you have to
-                    // scroll inside is n images you cannot compare at once.
-                    : { xs: `0 0 min(88vw, ${layout.cardWidth}px)`, md: `0 0 min(100%, ${layout.cardWidth}px)` },
+                    ? { xs: '0 0 min(82vw, 320px)', md: stripCardBasis(null) }
+                    : { xs: `0 0 min(88vw, ${layout.cardWidth}px)`, md: stripCardBasis(layout) },
                 height: '100%',
                 bgcolor: 'background.paper',
                 borderStyle: run.status === 'pending' ? 'dashed' : 'solid',
