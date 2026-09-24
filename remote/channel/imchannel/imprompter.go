@@ -386,8 +386,8 @@ func (p *IMPrompter) GetPendingRequest(requestID string) (*ask.Request, bool) {
 //     notify ping). This tie-break is a fallback: callers should prefer
 //     matching MessageID against a native reply-to (bot.ReplyToMessageID)
 //     when one is present, which is a real match, not a guess — not every
-//     platform captures one (DingTalk, WhatsApp today), which is when this
-//     ordering is actually load-bearing.
+//     platform captures one (DingTalk today), which is when this ordering
+//     is actually load-bearing.
 //  2. Within the same Source, most-recently-created first. p.pendingRequests
 //     is a map, so without an explicit sort here, a caller treating the
 //     first result as "the latest" (as bot.HandlePromptTextReply does) would

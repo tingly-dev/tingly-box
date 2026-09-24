@@ -49,6 +49,27 @@ type SendMessageResponse struct {
 	} `json:"messages"`
 }
 
+// whatsappInboundMessage is one entry of a webhook's messages[] array.
+// Named (rather than inlined a second time) because handleWhatsAppMessages
+// takes a slice of it directly — Go needs the two occurrences structurally
+// identical to type-check, and a shared name makes that a compiler-enforced
+// guarantee instead of a manual one.
+type whatsappInboundMessage struct {
+	From      string `json:"from"`
+	ID        string `json:"id"`
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Text      struct {
+		Body string `json:"body"`
+	} `json:"text,omitempty"`
+	// Context carries the replied-to message's ID when this message is a
+	// native WhatsApp quoted reply. Absent (nil) for a message that isn't a
+	// reply.
+	Context *struct {
+		ID string `json:"id"`
+	} `json:"context,omitempty"`
+}
+
 // MessageEvent represents an incoming webhook event from WhatsApp
 type MessageEvent struct {
 	Object string `json:"object"`
@@ -68,21 +89,7 @@ type MessageEvent struct {
 					} `json:"profile"`
 					WaID string `json:"wa_id"`
 				} `json:"contacts"`
-				Messages []struct {
-					From      string `json:"from"`
-					ID        string `json:"id"`
-					Timestamp string `json:"timestamp"`
-					Type      string `json:"type"`
-					Text      struct {
-						Body string `json:"body"`
-					} `json:"text,omitempty"`
-					// Context carries the replied-to message's ID when this
-					// message is a native WhatsApp quoted reply. Absent
-					// (nil) for a message that isn't a reply.
-					Context *struct {
-						ID string `json:"id"`
-					} `json:"context,omitempty"`
-				} `json:"messages"`
+				Messages []whatsappInboundMessage `json:"messages"`
 			} `json:"value"`
 		} `json:"changes"`
 	} `json:"entry"`
@@ -497,18 +504,7 @@ func (b *Bot) HandleWebhook(body []byte) error {
 }
 
 // handleWhatsAppMessages handles incoming WhatsApp messages
-func (b *Bot) handleWhatsAppMessages(messages []struct {
-	From      string `json:"from"`
-	ID        string `json:"id"`
-	Timestamp string `json:"timestamp"`
-	Type      string `json:"type"`
-	Text      struct {
-		Body string `json:"body"`
-	} `json:"text,omitempty"`
-	Context *struct {
-		ID string `json:"id"`
-	} `json:"context,omitempty"`
-}) {
+func (b *Bot) handleWhatsAppMessages(messages []whatsappInboundMessage) {
 	for _, msg := range messages {
 		// Only handle text messages for now
 		if msg.Type != "text" {

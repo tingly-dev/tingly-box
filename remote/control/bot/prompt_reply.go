@@ -87,12 +87,13 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 
 // ReplyToMessageID extracts the ID of the message an inbound message is a
 // native platform reply to, when the platform's adapter captured one:
-// Telegram (message.ReplyToMessage), Discord (Message.Reference()), Feishu/
-// Lark (event parent_id), Slack (thread_ts — the thread root, which is the
-// prompt's own message ID as long as nothing else replied in that thread
-// first), Weixin/WeCom (ReplyToID). Returns "" when the platform has no such
-// concept (DingTalk, WhatsApp today — see .design/imbot-output.md §8) or the
-// message isn't a reply.
+// Telegram (message.ReplyToMessage), Discord (Message.MessageReference —
+// not Message.Reference(), which always echoes the message's own ID),
+// Feishu/Lark (event parent_id), Slack (thread_ts — the thread root, which
+// is the prompt's own message ID as long as nothing else replied in that
+// thread first), Weixin/WeCom (ReplyToID), WhatsApp (messages[].context.id).
+// Returns "" when the platform has no such concept (DingTalk today — see
+// .design/imbot-output.md §8) or the message isn't a reply.
 func ReplyToMessageID(msg imbot.Message) string {
 	if msg.ThreadContext == nil {
 		return ""
