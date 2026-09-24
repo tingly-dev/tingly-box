@@ -2,6 +2,7 @@ import { ContentCopy as CopyIcon, Check as CheckIcon } from '@/components/icons'
 import { Box, IconButton, Typography } from '@mui/material';
 import React from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
+import './prismLanguages';
 import type { Language } from 'prism-react-renderer';
 import { EMPTY_STYLE } from '@/constants/defaults';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -37,12 +38,37 @@ const LANGUAGE_MAP: Record<string, Language> = {
     bash: 'bash',
     shell: 'bash',
     sh: 'bash',
+    zsh: 'bash',
+    console: 'bash',
+    diff: 'diff',
+    patch: 'diff',
+    dockerfile: 'docker',
+    docker: 'docker',
+    toml: 'toml',
+    ini: 'ini',
+    java: 'java',
+    powershell: 'powershell',
+    ps1: 'powershell',
+    c: 'c',
+    cpp: 'cpp',
+    kotlin: 'kotlin',
+    swift: 'swift',
+    graphql: 'graphql',
     css: 'css',
     html: 'html',
     xml: 'markup',
     markdown: 'markdown',
     md: 'markdown',
     sql: 'sql',
+};
+
+// oneDark strikes through deleted lines and underlines inserted ones on top of
+// coloring them red and green; in a diff the color alone reads better.
+const codeTheme = {
+    ...themes.oneDark,
+    styles: themes.oneDark.styles.filter(
+        (s) => !(s.types.length === 1 && (s.types[0] === 'deleted' || s.types[0] === 'inserted')),
+    ),
 };
 
 const CodeBlock: React.FC<CodeBlockProps> = ({
@@ -68,7 +94,9 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     };
 
     // Normalize language for Prism
-    const prismLanguage = LANGUAGE_MAP[language.toLowerCase()] || 'markup';
+    // Unknown languages render as plain text: falling back to markup colored
+    // anything unrecognized (a diff, a log) as if it were HTML.
+    const prismLanguage = LANGUAGE_MAP[language.toLowerCase()] || 'plain';
 
     return (
         <Box
@@ -138,7 +166,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                 }}
             >
                 <Highlight
-                    theme={themes.oneDark}
+                    theme={codeTheme}
                     code={code}
                     language={prismLanguage}
                 >
