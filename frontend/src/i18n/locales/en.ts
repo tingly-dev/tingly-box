@@ -343,7 +343,9 @@ export default {
         "placeholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:7890",
         "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use.",
         "useGlobal": "Use quick proxy ({{url}})",
-        "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)"
+        "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)",
+        "applyGlobal": "Apply quick proxy ({{url}})",
+        "applyGlobalApplied": "Quick proxy applied"
       }
     },
     "verification": {
