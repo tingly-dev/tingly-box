@@ -102,6 +102,8 @@ import {
     IconGauge,
     IconActivity,
     IconTool,
+    IconPlayerStop,
+    IconArchive,
     IconStopwatch,
     IconCoin,
     IconRouter,
@@ -290,6 +292,8 @@ export const FoldUp = tablerMui(IconFoldUp);
 export const Speed = tablerMui(IconGauge);
 export const Stream = tablerMui(IconActivity);
 export const Build = tablerMui(IconTool);
+export const PlayerStop = tablerMui(IconPlayerStop);
+export const Archive = tablerMui(IconArchive);
 export const Schedule = tablerMui(IconClock);
 export const Timer = tablerMui(IconStopwatch);
 export const Token = tablerMui(IconCoin);
