@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
@@ -79,9 +82,30 @@ func setupRealUpstream(env *protocoltest.AgentTestEnv, agentType protocoltest.Ag
 		if apiStyle != "anthropic" {
 			return fmt.Errorf("oauth_token requires api_style: anthropic (entry %q has %q)", entry.Name, apiStyle)
 		}
-		return env.SetupRealOAuthAgent(agentType, providerName, entry.Model, entry.BaseURL, strings.TrimSpace(entry.OAuthToken))
+		token := strings.TrimSpace(entry.OAuthToken)
+		return env.SetupRealOAuthAgent(agentType, providerName, entry.Model, entry.BaseURL, token, claudeOAuthAccountID(token))
 	}
 	return env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle)
+}
+
+// claudeOAuthAccountID resolves the account uuid behind a Claude Code OAuth
+// token the same way a tingly-box login does (oauth.AnthropicHook.AfterToken
+// → Anthropic's account endpoint), so the metadata account_uuid the harness
+// sends is the real one. Empty when the lookup fails; the env then falls back
+// to a random uuid, which is what a login without account info stores.
+func claudeOAuthAccountID(token string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	meta, err := (&oauth.AnthropicHook{}).AfterToken(ctx, token, &http.Client{Timeout: 10 * time.Second})
+	if err != nil || meta == nil {
+		fmt.Printf("⚠️  Claude OAuth account id unavailable; using a random uuid (as a login without account info would)\n")
+		return ""
+	}
+	id, _ := meta["account_id"].(string)
+	if strings.TrimSpace(id) == "" {
+		fmt.Printf("⚠️  Claude OAuth account id unavailable; using a random uuid (as a login without account info would)\n")
+	}
+	return strings.TrimSpace(id)
 }
 
 // loadProvidersConfig reads and parses a providers config file (YAML).

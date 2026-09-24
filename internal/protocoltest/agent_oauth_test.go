@@ -27,7 +27,8 @@ func TestSetupRealOAuthAgent_ClaudeCode(t *testing.T) {
 	defer env.Close(false)
 
 	const token = "sk-ant-oat01-harness-virtual"
-	if err := env.SetupRealOAuthAgent(AgentTypeClaudeCode, "virtual-as-oauth", "claude-sonnet-4-5", env.VirtualServerURL(), token); err != nil {
+	const accountUUID = "0d6f2c1e-4b6a-4f8e-9a5d-2f7c1b3e8a90"
+	if err := env.SetupRealOAuthAgent(AgentTypeClaudeCode, "virtual-as-oauth", "claude-sonnet-4-5", env.VirtualServerURL(), token, accountUUID); err != nil {
 		t.Fatalf("SetupRealOAuthAgent: %v", err)
 	}
 
@@ -83,6 +84,9 @@ func TestSetupRealOAuthAgent_ClaudeCode(t *testing.T) {
 		System []struct {
 			Text string `json:"text"`
 		} `json:"system"`
+		Metadata struct {
+			UserID string `json:"user_id"`
+		} `json:"metadata"`
 	}
 	if err := json.Unmarshal(up.Body, &parsed); err != nil {
 		t.Fatalf("unmarshal upstream body: %v", err)
@@ -99,6 +103,16 @@ func TestSetupRealOAuthAgent_ClaudeCode(t *testing.T) {
 	if !strings.HasPrefix(parsed.System[1].Text, "You are Claude Code") {
 		t.Errorf("preamble lost: %q", parsed.System[1].Text)
 	}
+	var meta map[string]string
+	if err := json.Unmarshal([]byte(parsed.Metadata.UserID), &meta); err != nil {
+		t.Fatalf("metadata.user_id is not the native JSON form: %q", parsed.Metadata.UserID)
+	}
+	if meta["account_uuid"] != accountUUID {
+		t.Errorf("metadata account_uuid = %q, want the provider's account uuid %q", meta["account_uuid"], accountUUID)
+	}
+	if meta["device_id"] == "" || meta["session_id"] == "" {
+		t.Errorf("metadata missing device/session: %v", meta)
+	}
 }
 
 // TestSetupRealOAuthAgent_ClaudeOnly pins that the OAuth path refuses agents
@@ -110,10 +124,10 @@ func TestSetupRealOAuthAgent_ClaudeOnly(t *testing.T) {
 		t.Fatalf("NewAgentTestEnv: %v", err)
 	}
 	defer env.Close(false)
-	if err := env.SetupRealOAuthAgent(AgentTypeCodex, "p", "m", env.VirtualServerURL(), "tok"); err == nil {
+	if err := env.SetupRealOAuthAgent(AgentTypeCodex, "p", "m", env.VirtualServerURL(), "tok", ""); err == nil {
 		t.Fatal("expected an error for a non-claude agent")
 	}
-	if err := env.SetupRealOAuthAgent(AgentTypeClaudeCode, "p", "m", env.VirtualServerURL(), ""); err == nil {
+	if err := env.SetupRealOAuthAgent(AgentTypeClaudeCode, "p", "m", env.VirtualServerURL(), "", ""); err == nil {
 		t.Fatal("expected an error for an empty token")
 	}
 }

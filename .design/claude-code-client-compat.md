@@ -528,9 +528,9 @@ go run ./cli/harness agent  claude --config providers.yaml                   # �
 provider"，断言 Bearer 认证、UA `claude-cli/<latest>`、`x-claude-code-request-class: main`、billing header 版本 / `cch`
 已打补丁、preamble 保留——所以 live 一旦跑绿，被接受的就是这一形态。
 
-顺带观察（未改代码）：tingly-box 的 OAuth 登录把 `OAuthDetail.UserID` 设为随机 uuid（`oauth/handler.go`），真实账号 uuid
-只存在 `ExtraFields["account_id"]`；而 2.1.280 在只有 token 时会请求 `/api/oauth/profile` 取账号信息填 `account_uuid`。
-harness 沿用生产行为（随机 uuid），生产至今未因此被拒。
+metadata 的 `account_uuid`（`OAuthDetail.UserID`）harness 也按生产的真实行为来：`claudeOAuthAccountID` 先用 token 请求
+Anthropic 账号信息（同 `AnthropicHook.AfterToken`），拿到真实账号 id 就用它，取不到才随机，和一次真实登录的结果一致。封闭测试
+（`TestSetupRealOAuthAgent_ClaudeCode`）断言给定的 account uuid 原样到达上游 metadata。
 
 ---
 

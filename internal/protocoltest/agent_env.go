@@ -294,14 +294,20 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 // bearer token) and the built-in rule is pinned to
 // claude_code_version=ClaudeCodeVersionLatest, so the request leaves the
 // gateway re-signed as the newest native Claude Code client — the only shape
-// Anthropic still accepts for OAuth traffic. Only the claude agent is
-// supported; other agents have no OAuth chain to exercise here.
-func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName string, modelName string, apiBase string, token string) error {
+// Anthropic still accepts for OAuth traffic. accountUUID becomes the
+// provider's OAuthDetail.UserID (the metadata account_uuid upstream); empty
+// falls back to a random uuid, exactly like a login whose account id could
+// not be fetched. Only the claude agent is supported; other agents have no
+// OAuth chain to exercise here.
+func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName string, modelName string, apiBase string, token string, accountUUID string) error {
 	if agentType != AgentTypeClaudeCode {
 		return fmt.Errorf("oauth_token is only supported for the claude agent (Claude Code OAuth), got %q", agentType)
 	}
 	if token == "" {
 		return fmt.Errorf("oauth_token is empty")
+	}
+	if accountUUID == "" {
+		accountUUID = uuid.New().String()
 	}
 	provider := &typ.Provider{
 		UUID:     providerName,
@@ -312,10 +318,7 @@ func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName s
 		OAuthDetail: &ai.OAuthDetail{
 			Issuer:      ai.IssuerClaudeCode,
 			AccessToken: token,
-			// Same as a tingly-box Claude Code login (oauth handler): the
-			// metadata account_uuid is a per-provider random uuid, not the
-			// Anthropic account id, so the harness sends what production sends.
-			UserID: uuid.New().String(),
+			UserID:      accountUUID,
 		},
 		Enabled: true,
 		Timeout: 60000,
