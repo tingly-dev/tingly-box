@@ -101,6 +101,10 @@ export default {
       "theme": "Theme:"
     },
     "easterEgg": "Hi, I'm Tingly-Box, Your Smart AI Orchestrator",
+    "githubStarBanner": {
+      "text": "Enjoying Tingly-Box? A star on GitHub helps others find it.",
+      "cta": "Star on GitHub"
+    },
     "dashboard": "Dashboard",
     // Rail-level label only — the sidebar rows and the Team page's own
     // title keep using nav.useTeam ("Team", untranslated everywhere).

@@ -14,6 +14,7 @@ import { useActivityItems } from './useActivityItems.tsx';
 import { SidebarCollapsedProvider, useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem, LayoutProps } from './types';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
+import { GitHubStarBanner } from './GitHubStarBanner';
 
 const IconCollapseSidebar = tablerMui(IconLayoutSidebarLeftCollapse);
 
@@ -193,6 +194,7 @@ const LayoutInner = ({ children }: LayoutProps) => {
                 component="main"
                 sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
             >
+                <GitHubStarBanner />
                 <Box sx={mobileContentSx}>
                     {children ?? <Outlet />}
                 </Box>
