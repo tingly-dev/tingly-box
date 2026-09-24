@@ -172,6 +172,11 @@ export function useActivityItems(): ActivityItem[] {
             if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
             scenarioChildren.push(...group);
         };
+        // Team lives under its own rail item; like Image API, this row is a
+        // shortcut to it and never claims the Agent activity (`match`).
+        if (!hiddenScenarios.has('team')) {
+            pushGroup([{ path: '/agent/team', label: t('layout.nav.useTeam', { defaultValue: 'Team' }), icon: <IconUsers sx={{ fontSize: 20 }} />, match: () => false }]);
+        }
         pushGroup(codingTools);
         pushGroup(sdkTools);
 
@@ -183,7 +188,9 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/agent',
                 children: scenarioChildren,
             },
-            teamActivityItem,
+            // Shown/hidden together with the team scenario card on /agent, the
+            // same single switch Image uses (see the Image item below).
+            ...(!hiddenScenarios.has('team') ? [teamActivityItem] : []),
             // Image — the playground outgrew a card on the scenario page
             // (.design/image-layout.md). Shown/hidden together with the
             // imagegen scenario, so there is one switch for "I use images".

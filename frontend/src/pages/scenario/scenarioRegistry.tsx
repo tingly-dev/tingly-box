@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Extension as IconExtension,
     Photo as IconPhoto,
+    Users as IconUsers,
     Vector as IconVector,
 } from '@/components/icons';
 import {
@@ -145,6 +146,15 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         // Lives under the Image rail item; hiding it here hides that rail item.
         path: '/image/api',
         icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'team',
+        labelKey: 'layout.nav.useTeam',
+        descKey: 'scenarioOverview.descriptions.team',
+        // Lives under the Team rail item; hiding it here hides that rail item.
+        path: '/agent/team',
+        icon: (size) => <IconUsers sx={{ fontSize: size }} />,
         hideable: true,
     },
 ];

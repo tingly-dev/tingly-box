@@ -2199,7 +2199,8 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation and editing through Tingly Box.",
-      "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default."
+      "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
+      "team": "Shared central model deployment for your whole team."
     }
   },
   "bots": {

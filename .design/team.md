@@ -145,9 +145,14 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
   `tN - name`，末尾是 `Add Team`。Team 与"接入某个 agent/SDK"是不同维度的授权边界（見 §1
   的三个不变量），提升为一级入口让这个边界在导航层面也保持独立，而不是被归到 Agent 的众多
   profile 分组之一。
-- Team 因此不再出现在 `/agent` scenario 总览网格和其"隐藏/显示某个 scenario"开关里
-  （`scenarioRegistry.tsx` 的 `SCENARIOS` 已移除 `team` 条目）；一级入口本身始终可见，与
-  Usage/Remote/Guardrails/Tools/Credentials/System 等其他一级入口的可见性规则一致。
+- Team 仍是 `/agent` scenario 总览网格里的一张卡（`scenarioRegistry.tsx` 的 `team`
+  条目），与 Image 同一个模式（`.design/image-layout.md` §3）：卡片与 Agent 侧栏里的
+  Team 行都指向 `/agent/team`，是通往 Team 一级入口的快捷方式（侧栏行带
+  `match: () => false`，落到 Team 页时选中的是 Team rail 而不是 Agent）；卡片上的
+  隐藏开关同时隐藏 Team 一级入口——"我不用 Team"只有一个开关，仍是全局的
+  `scenario.hiddenScenarios`。默认可见。
+  （#1745 曾把 `team` 从 `SCENARIOS` 移除、让一级入口始终可见；Image 拆出来之后为两者
+  一致而恢复。）
 - `Add Team` 位于 layout，用户只输入 name，slug 由系统生成。
 - Team 页面、Sharing Key 列表和 Key 创建弹窗必须持续说明权限边界。
 - 提示必须展示真实允许端点 `/tingly/team`、`/tingly/team/v1`，并明确排除其他 Team、
