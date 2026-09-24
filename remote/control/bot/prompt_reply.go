@@ -81,8 +81,24 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 		if text == "" {
 			return false
 		}
-		return HandlePromptTextReply(prompter, send, chatID, msg.Sender.ID, text)
+		return HandlePromptTextReply(prompter, send, chatID, msg.Sender.ID, text, ReplyToMessageID(msg))
 	}
+}
+
+// ReplyToMessageID extracts the ID of the message an inbound message is a
+// native platform reply to, when the platform's adapter captured one:
+// Telegram (message.ReplyToMessage), Discord (Message.MessageReference —
+// not Message.Reference(), which always echoes the message's own ID),
+// Feishu/Lark (event parent_id), Slack (thread_ts — the thread root, which
+// is the prompt's own message ID as long as nothing else replied in that
+// thread first), Weixin/WeCom (ReplyToID), WhatsApp (messages[].context.id).
+// Returns "" when the platform has no such concept (DingTalk today — see
+// .design/imbot-output.md §8) or the message isn't a reply.
+func ReplyToMessageID(msg imbot.Message) string {
+	if msg.ThreadContext == nil {
+		return ""
+	}
+	return msg.ThreadContext.ParentMessageID
 }
 
 // This file is the reply-routing mechanism for IMPrompter-backed prompts:
@@ -212,11 +228,35 @@ func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 	}
 }
 
+// SelectPendingRequest picks which of a chat's pending requests (already
+// ordered by GetPendingRequestsForChat's Source/recency tie-break) an
+// inbound text reply answers.
+//
+// A native platform reply-to that matches a pending request's MessageID is
+// authoritative — a real match, not a guess — so it's checked first and
+// wins outright when present. Otherwise falls back to pendingReqs[0], the
+// tie-break's best guess: see GetPendingRequestsForChat's doc comment and
+// .design/imbot-output.md §8 for why that's a heuristic, not a guarantee.
+// pendingReqs must be non-empty.
+func SelectPendingRequest(pendingReqs []ask.Request, replyToID string) ask.Request {
+	if replyToID != "" {
+		for _, req := range pendingReqs {
+			if req.MessageID == replyToID {
+				return req
+			}
+		}
+	}
+	return pendingReqs[0]
+}
+
 // HandlePromptTextReply routes a plain-text reply to the prompter's most
 // recent pending request for chatID. Returns false when nothing is pending in
 // that chat or the text is not a recognizable answer, so the caller can hand
 // the message to other handlers.
-func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), chatID, senderID, input string) bool {
+// replyToID is the message ID the inbound text is a native platform reply
+// to (from ReplyToMessageID), or "" when the platform has no such concept
+// or the message isn't a reply.
+func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), chatID, senderID, input, replyToID string) bool {
 	// Check if there are pending permission requests for this chat
 	pendingReqs := prompter.GetPendingRequestsForChat(chatID)
 	if len(pendingReqs) == 0 {
@@ -230,15 +270,7 @@ func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 		return false
 	}
 
-	// GetPendingRequestsForChat orders results by a two-level tie-break —
-	// ask.SourceRemoteAgent before ask.SourceNotify, then most-recently-
-	// created within the same source — so index 0 is the most-preferred
-	// candidate, not an arbitrary Go map-iteration pick. Usually there's only
-	// one pending request at a time; when there are several, this is a
-	// heuristic, not a guarantee — see .design/imbot-output.md §8 for the
-	// known failure case and why there is currently no stronger signal
-	// (native reply-to, or session-scoped routing) to resolve it with.
-	latestReq := pendingReqs[0]
+	latestReq := SelectPendingRequest(pendingReqs, replyToID)
 
 	// For AskUserQuestion, try to parse as option selection first
 	if latestReq.ToolName == "AskUserQuestion" {

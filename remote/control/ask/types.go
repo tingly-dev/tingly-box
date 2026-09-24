@@ -59,6 +59,16 @@ type Request struct {
 	// remote_agent). See the Source type doc comment.
 	Source Source `json:"source,omitempty"`
 
+	// MessageID is the ID of the sent prompt message this request
+	// represents. The original caller building a Request to hand to
+	// Prompter.Prompt does not know it yet (the message hasn't been sent),
+	// so it is empty at that point; IMPrompter.GetPendingRequestsForChat
+	// populates it on the copy it returns, once the send has happened and
+	// the ID is known. Lets a caller match an inbound native platform reply
+	// (see bot.ReplyToMessageID) to the exact request it targets, instead of
+	// guessing via the Source/recency tie-break.
+	MessageID string `json:"message_id,omitempty"`
+
 	// AgentType is the source agent type
 	AgentType agentboot.AgentType `json:"agent_type"`
 

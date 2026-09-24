@@ -53,9 +53,12 @@ func (a *Adapter) AdaptMessage(ctx context.Context, m *discordgo.MessageCreate) 
 		WithContent(a.extractContent(msg)).
 		WithMetadata("raw_message", msg) // Store raw for platform-specific access
 
-	// Add thread context if reply
-	ref := msg.Reference()
-	if ref != nil && ref.MessageID != "" {
+	// Add thread context if reply. msg.MessageReference (not the
+	// Reference() method, which builds a reference TO this message for
+	// others to reply with) is what the gateway populates when THIS
+	// message is itself a reply — its MessageID is the replied-to
+	// message's ID.
+	if ref := msg.MessageReference; ref != nil && ref.MessageID != "" {
 		messageBuilder.WithReplyTo(ref.MessageID, ref.MessageID)
 	}
 

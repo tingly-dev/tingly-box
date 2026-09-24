@@ -59,8 +59,13 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 		WithMetadata("message_state", messageState).
 		WithMetadata("context_token", msg.ContextToken)
 
-	// Add thread context if available
-	if sessionID != "" {
+	// Add thread context if available. sessionID (WeChat's CS session) and
+	// ReplyToID (the actual reply target) are independent signals — a
+	// message can carry a real ReplyToID with an empty sessionID (the
+	// upstream SDK itself treats msg.SessionID as sometimes-empty; see
+	// message/monitor.go), so gating on sessionID alone silently dropped
+	// the reply-to signal bot.ReplyToMessageID depends on.
+	if sessionID != "" || msg.ReplyToID != "" {
 		threadCtx := &core.ThreadContext{
 			ID: sessionID,
 		}
