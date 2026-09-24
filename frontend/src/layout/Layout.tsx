@@ -79,6 +79,9 @@ const LayoutInner = ({ children }: LayoutProps) => {
         return activity?.label || '';
     }, [activityItems, activeActivity]);
 
+    // Navigation itself now happens via ActivityBar's own <RouterLink> (so
+    // right-click "copy link"/"open in new tab" work on level-1 items), so
+    // this only handles the side effects the click triggers alongside it.
     const handleActivityClick = (item: ActivityItem) => {
         const hasSidebarItems = item.children?.some(child => child.type !== 'divider') ?? false;
         if (!hasSidebarItems) {
@@ -86,19 +89,6 @@ const LayoutInner = ({ children }: LayoutProps) => {
         }
 
         sessionStorage.setItem('layout.activeActivity', item.key);
-
-        // Every activity opens at its defaultPath when clicked. The scenario
-        // activity points at /agent (the overview) so users always land there
-        // before drilling into a specific scenario.
-        const firstNavChild = item.children?.find(c => c.type !== 'divider');
-        let targetPath = item.defaultPath || item.path || firstNavChild?.path;
-
-        // Ultimate fallback to prevent navigation to invalid paths
-        if (!targetPath && firstNavChild) {
-            targetPath = firstNavChild.path;
-        }
-
-        if (targetPath) navigate(targetPath);
     };
 
     // Sidebar header actions: the collapse toggle always sits in the header

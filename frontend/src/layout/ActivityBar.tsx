@@ -126,12 +126,17 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                 {activityItems.map((item) => {
                     const isActiveItem = activeActivity === item.key;
                     const shortLabel = item.label.length > 12 ? item.label.slice(0, 7) + '…' : item.label;
+                    // Mirrors Layout.handleActivityClick's own targetPath logic, so the
+                    // rendered href always matches where a click would actually navigate —
+                    // even for activities that own a level-2 sidebar (item.children).
+                    const firstNavChild = item.children?.find((c) => c.type !== 'divider');
+                    const targetPath = item.defaultPath || item.path || firstNavChild?.path;
 
                     return (
                         <ListItemButton
                             key={item.key}
-                            component={item.path && !item.children ? RouterLink : 'div'}
-                            to={item.path && !item.children ? item.path : undefined}
+                            component={targetPath ? RouterLink : 'div'}
+                            to={targetPath}
                             onClick={() => onActivityClick(item)}
                             sx={activityItemSx({
                                 '&:hover': {
