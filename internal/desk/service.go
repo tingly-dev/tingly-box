@@ -73,7 +73,13 @@ type Service struct {
 type run struct {
 	cancel   context.CancelFunc
 	prompter *webPrompter
+	done     chan struct{} // closed once the turn goroutine has fully exited
 }
+
+// archiveWaitTimeout bounds how long Archive waits for a cancelled turn to
+// exit. Cancellation closes the process, so this only covers its graceful
+// shutdown; past it, archiving proceeds anyway.
+const archiveWaitTimeout = 15 * time.Second
 
 // Config wires a Service to its dependencies.
 type Config struct {
@@ -235,8 +241,14 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*se
 	sess := s.sessions.CreateWith(webChatID, agentType, path)
 	id := sess.ID
 	s.sessions.SetRequest(id, in.Prompt)
-	s.sessions.Update(id, func(sess *session.Session) { sess.PermissionMode = in.PermissionMode })
-	s.appendUserMessage(id, in.Prompt)
+	s.sessions.Update(id, func(sess *session.Session) {
+		sess.PermissionMode = in.PermissionMode
+		// CreateWith stamps now+Timeout, and the manager's expiry sweep
+		// deletes the session and its transcript from the store once that
+		// passes. A Desk session lives until it is archived, the same way
+		// @cc's sessions clear ExpiresAt.
+		sess.ExpiresAt = time.Time{}
+	})
 	s.startTurn(id, path, in.Prompt, in.PermissionMode, false)
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
@@ -267,15 +279,17 @@ func (s *Service) ListSessions(active bool) []session.Session {
 }
 
 func (s *Service) Messages(id string) ([]session.Message, error) {
-	if _, ok := s.sessions.Get(id); !ok {
+	// SnapshotOrLoad, not Get: an archived session is no longer in the
+	// manager's live index (and is not reloaded at startup), but its
+	// transcript is meant to stay readable.
+	if _, ok := s.sessions.SnapshotOrLoad(id); !ok {
 		return nil, notFound("session", id)
 	}
 	msgs, _ := s.sessions.GetMessages(id)
 	return msgs, nil
 }
 
-// SendMessage appends a user turn and starts it. It is recorded first so
-// the transcript is complete even if starting the turn fails.
+// SendMessage records a user turn and starts it.
 func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -288,13 +302,9 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	if !s.canSteer(sess) {
 		return conflict("session is %s", sess.Status)
 	}
-	s.appendUserMessage(id, text)
 	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
-	// the atomic one (see its doc comment). Two SendMessage calls racing for
-	// the same session can both pass canSteer, so the loser's startTurn
-	// returning false must still surface as a conflict here — otherwise its
-	// message sits in the transcript with no turn ever picking it up, while
-	// the caller is told it succeeded.
+	// the atomic one, and it records the message only once it has won, so a
+	// losing concurrent send leaves nothing in the transcript.
 	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, true) {
 		return conflict("session is %s", sess.Status)
 	}
@@ -344,7 +354,7 @@ func (s *Service) Respond(id, requestID string, approved bool, answer string) er
 
 // Interrupt stops the current turn; the session stays resumable.
 func (s *Service) Interrupt(id string) error {
-	if !s.cancelRun(id) {
+	if _, ok := s.cancelRun(id); !ok {
 		return conflict("session has no turn in progress")
 	}
 	return nil
@@ -352,15 +362,15 @@ func (s *Service) Interrupt(id string) error {
 
 // cancelRun cancels id's in-flight turn, if any. Returns false if there was
 // none to cancel.
-func (s *Service) cancelRun(id string) bool {
+func (s *Service) cancelRun(id string) (<-chan struct{}, bool) {
 	s.mu.Lock()
 	r, ok := s.runs[id]
 	s.mu.Unlock()
 	if !ok {
-		return false
+		return nil, false
 	}
 	r.cancel()
-	return true
+	return r.done, true
 }
 
 // Archive ends a session for good. Nothing on disk is touched: the folder
@@ -371,7 +381,15 @@ func (s *Service) Archive(id string) (*session.Session, error) {
 		return nil, notFound("session", id)
 	}
 	if snap.Status != session.StatusClosed {
-		s.cancelRun(id)
+		// Wait for a cancelled turn to exit first: otherwise its late status
+		// write can revive the session after Close, and a persistent Open
+		// still in flight can register a new process after the eviction.
+		if done, ok := s.cancelRun(id); ok {
+			select {
+			case <-done:
+			case <-time.After(archiveWaitTimeout):
+			}
+		}
 		// A resident persistent process must not survive archiving: it
 		// would keep the on-disk Claude session file open, corrupting any
 		// later resume attempt (the exact bug .design/claude-code.md §5.4

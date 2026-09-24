@@ -8,7 +8,7 @@ import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
 import {Grid} from '@mui/material';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 
@@ -35,6 +35,11 @@ const DeskPage = () => {
     const [creating, setCreating] = useState(false);
 
     const selectedSession = sessions.find((s) => s.id === selectedId) || null;
+    const selectedBusy = selectedSession ? isBusyStatus(selectedSession.status) : false;
+    // Lets a late messages response for a previously selected session be
+    // dropped instead of overwriting the current one's transcript.
+    const selectedIdRef = useRef(selectedId);
+    selectedIdRef.current = selectedId;
 
     const loadSessions = useCallback(async () => {
         try {
@@ -74,19 +79,12 @@ const DeskPage = () => {
 
     const loadMessages = useCallback(async (sessionId: string) => {
         try {
-            setMessages(await deskApi.getMessages(sessionId));
+            const msgs = await deskApi.getMessages(sessionId);
+            if (selectedIdRef.current === sessionId) setMessages(msgs);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.loadFailed', {defaultValue: 'Failed to load messages'}));
         }
     }, [notify, t]);
-
-    useEffect(() => {
-        if (!selectedId) {
-            setMessages([]);
-            return;
-        }
-        void loadMessages(selectedId);
-    }, [selectedId, loadMessages]);
 
     // Refreshes only the selected session's own row (a GET by id) rather than
     // the whole list — the fast poll below runs every 1.5s while a turn is
@@ -101,17 +99,23 @@ const DeskPage = () => {
         }
     }, [notify, t]);
 
-    // Fast polling only while there's actually something moving — a turn
-    // running or an approval waiting — so an idle, completed session
-    // doesn't keep polling forever.
+    // Load the transcript on selection and once more when a turn ends (the
+    // last poll tick's messages can predate the status that stops polling),
+    // and poll fast only while a turn is running or an approval waits, so an
+    // idle session doesn't keep polling forever.
     useEffect(() => {
-        if (!selectedId || !selectedSession || !isBusyStatus(selectedSession.status)) return;
+        if (!selectedId) {
+            setMessages([]);
+            return;
+        }
+        void loadMessages(selectedId);
+        if (!selectedBusy) return;
         const id = setInterval(() => {
             void loadMessages(selectedId);
             void refreshSelectedSession(selectedId);
         }, MESSAGES_POLL_MS);
         return () => clearInterval(id);
-    }, [selectedId, selectedSession, loadMessages, refreshSelectedSession]);
+    }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
 
     const selectSession = (id: string) => {
         setSearchParams((prev) => {
@@ -121,7 +125,8 @@ const DeskPage = () => {
         });
     };
 
-    const handleCreate = async (path: string, prompt: string, permissionMode: string) => {
+    // Resolves false on failure so the composer keeps what the user typed.
+    const handleCreate = async (path: string, prompt: string, permissionMode: string): Promise<boolean> => {
         setCreating(true);
         try {
             const session = await deskApi.createSession(path, prompt, permissionMode || undefined);
@@ -129,21 +134,25 @@ const DeskPage = () => {
             // full lists, unlike the single-session refreshes below.
             await Promise.all([loadSessions(), loadRecentFolders()]);
             selectSession(session.id);
+            return true;
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.startFailed', {defaultValue: 'Failed to start session'}));
+            return false;
         } finally {
             setCreating(false);
         }
     };
 
-    const handleSend = async (text: string) => {
-        if (!selectedId) return;
+    const handleSend = async (text: string): Promise<boolean> => {
+        if (!selectedId) return false;
         try {
             await deskApi.sendMessage(selectedId, text);
-            await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.sendFailed', {defaultValue: 'Failed to send message'}));
+            return false;
         }
+        await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
+        return true;
     };
 
     const handleRespond = async (requestId: string, approved: boolean, answer: string) => {

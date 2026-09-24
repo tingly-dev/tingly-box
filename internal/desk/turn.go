@@ -20,6 +20,7 @@ const turnTimeout = 2 * time.Hour
 func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode string, resume bool) bool {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(sessionID, s.sessions)
+	done := make(chan struct{})
 
 	s.mu.Lock()
 	if _, busy := s.runs[sessionID]; busy {
@@ -27,19 +28,27 @@ func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode strin
 		cancel()
 		return false
 	}
-	s.runs[sessionID] = &run{cancel: cancel, prompter: prompter}
+	s.runs[sessionID] = &run{cancel: cancel, prompter: prompter, done: done}
 	s.mu.Unlock()
 
-	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, resume, prompter, cancel)
+	// Only the winner of the claim records the message, and the session
+	// reads as running before this returns: the caller re-reads it right
+	// away, and a status still showing the previous turn's outcome would
+	// tell the page there is nothing to poll for.
+	s.appendUserMessage(sessionID, prompt)
+	s.sessions.SetRunning(sessionID)
+
+	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, resume, prompter, cancel, done)
 	return true
 }
 
-func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc) {
+func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, sessionID)
 		s.mu.Unlock()
 		cancel()
+		close(done)
 	}()
 
 	var execEnv []string
@@ -159,18 +168,31 @@ func (s *Service) runPersistentTurn(ctx context.Context, sessionID, projectPath,
 	return werr, true
 }
 
-// finishTurn applies the one correction both the one-shot and persistent
-// paths need: a turn ended by our own Interrupt is not a failure. The CLI
+// finishTurn applies the two corrections both the one-shot and persistent
+// paths need. First, a turn ended by our own Interrupt is not a failure. The CLI
 // process (or, for a persistent session, the whole session —
 // RunTurnWithPrompter closes it on ctx cancellation) was stopped from
 // outside its own logic, and the session stays resumable. Whichever path
 // just ran already called SetFailed with the "context canceled" text, so it
-// is corrected here rather than left to read as a real error.
+// is corrected here rather than left to read as a real error. Second, a
+// turn that failed before its process started is recorded as failed.
 func (s *Service) finishTurn(ctx context.Context, sessionID string, werr error) {
-	if werr != nil && ctx.Err() == context.Canceled {
+	if werr == nil {
+		return
+	}
+	if ctx.Err() == context.Canceled {
 		s.sessions.Update(sessionID, func(sess *session.Session) {
 			sess.Status, sess.Error = session.StatusCompleted, ""
 		})
 		s.appendSystem(sessionID, "interrupted; send a message to resume")
+		return
+	}
+	// Both paths record the outcome of any turn whose process started (the
+	// runner inside Wait, the persistent path itself). Still running here
+	// means it failed before that (CLI not found, launch spec, transport),
+	// which nothing has recorded or shown yet.
+	if snap, ok := s.sessions.Snapshot(sessionID); ok && snap.Status == session.StatusRunning {
+		s.sessions.SetFailed(sessionID, werr.Error())
+		s.sessions.AppendMessage(sessionID, session.Message{Kind: "error", Content: werr.Error(), Timestamp: time.Now()})
 	}
 }

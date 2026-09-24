@@ -118,6 +118,9 @@ type fakeAgent struct {
 	script    func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle)
 	openFn    func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error)
 	openCalls atomic.Int32
+	// executeErr, if set, fails Execute before any process "starts", the
+	// way a missing CLI or a bad launch spec does.
+	executeErr error
 }
 
 func (a *fakeAgent) Type() agentboot.AgentType { return agentboot.AgentTypeClaude }
@@ -132,6 +135,9 @@ func (a *fakeAgent) Open(ctx context.Context, prompt string, opts agentboot.Exec
 }
 
 func (a *fakeAgent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+	if a.executeErr != nil {
+		return nil, a.executeErr
+	}
 	h := &fakeHandle{
 		events: make(chan agentboot.StreamEvent, 16),
 		resp:   make(chan respMsg, 1),
@@ -861,5 +867,115 @@ func TestShutdown_ClosesResidentPersistentSessions(t *testing.T) {
 
 	if st := resident.Status(); st != agentboot.SessionStateTerminated {
 		t.Fatalf("resident process state after Shutdown = %v, want terminated", st)
+	}
+}
+
+func TestCreateSession_DoesNotExpire(t *testing.T) {
+	svc, _ := newTestService(t, completingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	snap, _ := svc.sessions.Snapshot(sess.ID)
+	if !snap.ExpiresAt.IsZero() {
+		t.Fatalf("ExpiresAt = %v, want zero: the manager's expiry sweep would delete the session and its transcript", snap.ExpiresAt)
+	}
+}
+
+func TestTurn_FailureBeforeProcessStartIsRecorded(t *testing.T) {
+	// No openFn: the persistent Open fails, the turn falls back to one-shot,
+	// and Execute then fails before any process starts.
+	svc, fa := newPersistentTestService(t, completingScript, nil)
+	fa.executeErr = errors.New("agent CLI not available")
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	got := waitStatus(t, svc, sess.ID, session.StatusFailed, time.Second)
+	if !strings.Contains(got.Error, "not available") {
+		t.Errorf("session error = %q, want the launch failure", got.Error)
+	}
+	msgs, _ := svc.Messages(sess.ID)
+	var shown bool
+	for _, m := range msgs {
+		if m.Kind == "error" && strings.Contains(m.Content, "not available") {
+			shown = true
+		}
+	}
+	if !shown {
+		t.Errorf("transcript does not show the launch failure: %+v", msgs)
+	}
+}
+
+// lingeringBlockingScript is blockingScript whose process takes a moment to
+// exit after cancellation, like a CLI shutting down gracefully.
+func lingeringBlockingScript(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle) {
+	<-ctx.Done()
+	time.Sleep(50 * time.Millisecond)
+	h.err = ctx.Err()
+}
+
+func TestArchive_DuringTurnStaysClosed(t *testing.T) {
+	svc, _ := newTestService(t, lingeringBlockingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusRunning, time.Second)
+
+	if _, err := svc.Archive(sess.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	// The page re-reads the session right after archiving, which reloads it
+	// into the manager; a turn still exiting must not be able to revive it.
+	if got, _ := svc.GetSession(sess.ID); got.Status != session.StatusClosed {
+		t.Fatalf("status right after Archive = %s, want closed", got.Status)
+	}
+	time.Sleep(150 * time.Millisecond)
+	if got, _ := svc.GetSession(sess.ID); got.Status != session.StatusClosed {
+		t.Fatalf("status after the cancelled turn exited = %s, want closed", got.Status)
+	}
+}
+
+func TestMessages_ReadableAfterArchive(t *testing.T) {
+	svc, _ := newTestService(t, completingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if _, err := svc.Archive(sess.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	msgs, err := svc.Messages(sess.ID)
+	if err != nil {
+		t.Fatalf("Messages after Archive: %v (the transcript is meant to stay readable)", err)
+	}
+	if len(msgs) == 0 {
+		t.Fatal("Messages after Archive returned an empty transcript")
+	}
+}
+
+func TestStartTurn_LosingClaimRecordsNothing(t *testing.T) {
+	svc, _ := newTestService(t, completingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	before, _ := svc.Messages(sess.ID)
+
+	// Simulate a concurrent send that already won the claim.
+	svc.mu.Lock()
+	svc.runs[sess.ID] = &run{cancel: func() {}, done: make(chan struct{})}
+	svc.mu.Unlock()
+
+	if svc.startTurn(sess.ID, sess.Project, "second", "", true) {
+		t.Fatal("startTurn succeeded while another turn held the claim")
+	}
+	after, _ := svc.Messages(sess.ID)
+	if len(after) != len(before) {
+		t.Fatalf("losing startTurn changed the transcript: %d -> %d messages", len(before), len(after))
 	}
 }

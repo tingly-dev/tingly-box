@@ -25,7 +25,7 @@ interface SessionListPanelProps {
     permissionModes: string[];
     selectedId: string | null;
     onSelect: (id: string) => void;
-    onCreate: (path: string, prompt: string, permissionMode: string) => Promise<void>;
+    onCreate: (path: string, prompt: string, permissionMode: string) => Promise<boolean>;
     creating: boolean;
 }
 
@@ -43,8 +43,7 @@ const SessionListPanel = ({sessions, recentFolders, permissionModes, selectedId,
 
     const handleCreate = async () => {
         if (!canCreate) return;
-        await onCreate(path.trim(), prompt.trim(), permissionMode);
-        setPrompt('');
+        if (await onCreate(path.trim(), prompt.trim(), permissionMode)) setPrompt('');
     };
 
     return (

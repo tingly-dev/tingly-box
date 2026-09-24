@@ -23,7 +23,7 @@ interface TranscriptPanelProps {
     session: SessionInfo;
     messages: MessageInfo[];
     permissionModes: string[];
-    onSend: (text: string) => Promise<void>;
+    onSend: (text: string) => Promise<boolean>;
     onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
     onInterrupt: () => Promise<void>;
     onArchive: () => Promise<void>;
@@ -47,17 +47,21 @@ const TranscriptPanel = ({
         bottomRef.current?.scrollIntoView({block: 'end'});
     }, [messages.length]);
 
-    const pendingRequest = useMemo(() => findPendingRequest(messages), [messages]);
     const isClosed = session.status === 'closed';
     const turnInFlight = isBusyStatus(session.status);
+    // A request is only answerable while its turn is live: after an
+    // interrupt, a restart or an archive nothing is waiting for the answer.
+    const pendingRequest = useMemo(
+        () => (turnInFlight ? findPendingRequest(messages) : undefined),
+        [messages, turnInFlight],
+    );
     const canSend = !isClosed && !turnInFlight && text.trim() !== '' && !sending;
 
     const handleSend = async () => {
         if (!canSend) return;
         setSending(true);
         try {
-            await onSend(text.trim());
-            setText('');
+            if (await onSend(text.trim())) setText('');
         } finally {
             setSending(false);
         }
