@@ -56,7 +56,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Эмбеддинги",
-      "useImageGen": "Изображения",
+      "useImageGen": "Image API",
       "useTeam": "Команда",
       "useCustom": "Свой сценарий",
       "apiKeys": "API-ключи",
@@ -116,6 +116,8 @@ export default {
     "yesterday": "Вчера",
     "days": "Дней",
     "remote": "Удалённо",
+    "image": "Изображения",
+    "imagePlayground": "Песочница",
     "remoteControl": "Удалённый доступ",
     "notify": "Уведомления IM",
     "bots": "Боты",
@@ -1788,9 +1790,13 @@ export default {
     "requiresApplyHint": "Примените конфигурацию ниже и перезапустите {{client}}, чтобы изменения вступили в силу.",
     "restartOnlyHint": "Перезапустите {{client}} и выберите модель заново, чтобы изменения вступили в силу."
   },
+  "image": {
+    "openPlayground": "Попробовать в песочнице"
+  },
   "playground": {
     "imageTitle": "Песочница изображений",
-    "noImageModels": "Добавьте ниже правило для модели генерации изображений, чтобы начать.",
+    "noImageModels": "Добавьте правило для модели изображений на странице Image API, чтобы начать.",
+    "addImageModel": "Добавить модель",
     "model": "Модель",
     "prompt": "Промпт",
     "promptPlaceholder": "Опишите изображение, которое хотите получить…",

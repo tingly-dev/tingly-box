@@ -50,7 +50,8 @@ const UseXcodePage = lazy(() => import('./pages/scenario/UseXcodePage'));
 const UseVSCodePage = lazy(() => import('./pages/scenario/UseVSCodePage'));
 const UseCursorPage = lazy(() => import('./pages/scenario/UseCursorPage'));
 const UseEmbedPage = lazy(() => import('./pages/scenario/UseEmbedPage'));
-const UseImageGenPage = lazy(() => import('./pages/scenario/UseImageGenPage'));
+const ImageApiPage = lazy(() => import('./pages/image/ImageApiPage'));
+const ImagePlaygroundPage = lazy(() => import('./pages/image/ImagePlaygroundPage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/system/System'));
 const AccessControl = lazy(() => import('./pages/system/AccessControl'));
@@ -257,9 +258,14 @@ function AppContent() {
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
                     <Route path="/agent/cursor" element={<UseCursorPage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
-                    <Route path="/agent/image" element={<UseImageGenPage />} />
-                    <Route path="/agent/playground" element={<Navigate to="/agent/image" replace />} />
-                    <Route path="/agent/imagegen" element={<Navigate to="/agent/image" replace />} />
+                    {/* Image is its own rail item: Playground (work surface) + Image API
+                        (the imagegen scenario). Old /agent/* paths keep working. */}
+                    <Route path="/image" element={<Navigate to="/image/playground" replace />} />
+                    <Route path="/image/playground" element={<ImagePlaygroundPage />} />
+                    <Route path="/image/api" element={<ImageApiPage />} />
+                    <Route path="/agent/image" element={<Navigate to="/image/api" replace />} />
+                    <Route path="/agent/playground" element={<Navigate to="/image/playground" replace />} />
+                    <Route path="/agent/imagegen" element={<Navigate to="/image/api" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     {/* Virtual Models page - peer of Model Key and Sharing */}

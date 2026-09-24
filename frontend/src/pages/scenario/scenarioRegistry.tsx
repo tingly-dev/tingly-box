@@ -142,7 +142,8 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         id: 'imagegen',
         labelKey: 'layout.nav.useImageGen',
         descKey: 'scenarioOverview.descriptions.imagegen',
-        path: '/agent/image',
+        // Lives under the Image rail item; hiding it here hides that rail item.
+        path: '/image/api',
         icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
         hideable: true,
     },

@@ -2248,7 +2248,7 @@ export const handlers = [
     }),
 
     // Read-only imagegen scenario info — shown, never opened, by the Image
-    // Playground header (see UseImageGenPage/ImageGenPlaygroundCard).
+    // Playground header (see pages/image/ImagePlaygroundPage + ImageGenPlaygroundCard).
     http.get('/api/v1/imagegen/info', () => {
         return HttpResponse.json({ success: true, output_dir: '/home/demo/.tingly-box/image' })
     }),

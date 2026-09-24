@@ -354,10 +354,10 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 | `mannequin/render3d.ts` | 把实体清单交给 three.js:与相机一致的投影、共享 WebGL 上下文、无 WebGL 回退 |
 | `mannequin/figure.ts` / `transform.ts` / `interact.ts` | 造人偶、变换与边界、拖拽/命中/手柄/落点 |
 | `mannequin/landmarks.ts` | MediaPipe 关键点 ⇄ 人偶 |
-| `frontend/src/pages/scenario/components/SketchCanvasDialog.tsx` | 画布工作面:两层 canvas、工具、指针交互、undo、提交合成 |
-| `frontend/src/pages/scenario/components/PoseLibraryPopover.tsx` | 姿势库网格(缩略图走同一个渲染器,按当前机位画) |
-| `frontend/src/pages/scenario/components/ViewAnglePopover.tsx` | 机位网格(每格是这个人偶在该角度下的样子)+ 角度读数 |
-| `frontend/src/pages/scenario/components/ImageGenPlaygroundCard.tsx` | 参考图列表、草图入口与 `layers` 的保管 |
+| `frontend/src/pages/image/components/SketchCanvasDialog.tsx` | 画布工作面:两层 canvas、工具、指针交互、undo、提交合成 |
+| `frontend/src/pages/image/components/PoseLibraryPopover.tsx` | 姿势库网格(缩略图走同一个渲染器,按当前机位画) |
+| `frontend/src/pages/image/components/ViewAnglePopover.tsx` | 机位网格(每格是这个人偶在该角度下的样子)+ 角度读数 |
+| `frontend/src/pages/image/components/ImageGenPlaygroundCard.tsx` | 参考图列表、草图入口与 `layers` 的保管 |
 
 纯逻辑全部在 `@tingly/vision`(`sketchCanvas.ts`)和 `@tingly/mannequin` 两个
 workspace 包里,有单测;组件是这些 helper 加 2D context 调用的薄壳。canvas 渲染不进 jsdom 单测,靠 `.claude/skills/ui-preview` 的真实浏览器链路

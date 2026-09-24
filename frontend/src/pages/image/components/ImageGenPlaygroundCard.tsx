@@ -20,6 +20,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -73,6 +74,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     showNotification,
 }) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const models = useMemo(() => {
         const names = rules
             .filter((rule) => rule.active !== false && rule.request_model?.trim())
@@ -458,6 +460,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         <>
             <UnifiedCard
                 size="full"
+                titleHeadingLevel={1}
                 title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
                 subtitle={outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -499,9 +502,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         }}
                     >
                         {noModels && !loadingRules && (
-                            <Alert severity="info" variant="outlined">
+                            <Alert
+                                severity="info"
+                                variant="outlined"
+                                action={(
+                                    <Button color="inherit" size="small" onClick={() => navigate('/image/api')}>
+                                        {t('playground.addImageModel', { defaultValue: 'Add a model' })}
+                                    </Button>
+                                )}
+                            >
                                 {t('playground.noImageModels', {
-                                    defaultValue: 'Add an image generation model rule below to start generating images.',
+                                    defaultValue: 'Add an image model rule on the Image API page to start generating images.',
                                 })}
                             </Alert>
                         )}
