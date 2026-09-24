@@ -97,13 +97,13 @@ func TestMinimaxAspectRatio(t *testing.T) {
 		{"", ""},
 	}
 	for _, tc := range cases {
-		got := minimaxAspectRatio(&Request{Size: tc.size})
+		got := minimaxAspectRatio(t.Context(), &Request{Size: tc.size})
 		if got != tc.want {
 			t.Fatalf("minimaxAspectRatio(%q) = %q, want %q", tc.size, got, tc.want)
 		}
 	}
 	// Explicit override wins.
-	got := minimaxAspectRatio(&Request{Size: "1024x1024", Extra: map[string]any{"aspect_ratio": "21:9"}})
+	got := minimaxAspectRatio(t.Context(), &Request{Size: "1024x1024", Extra: map[string]any{"aspect_ratio": "21:9"}})
 	if got != "21:9" {
 		t.Fatalf("explicit aspect_ratio override = %q, want 21:9", got)
 	}
@@ -123,7 +123,7 @@ func TestNewOpenAICompatReturnsUnsupported(t *testing.T) {
 	// client.OpenAIClient / client.CodexClient handle them natively.
 	for _, base := range []string{"https://api.openai.com/v1", protocol.CodexAPIBase} {
 		p := &typ.Provider{Name: "compat", APIBase: base, APIStyle: protocol.APIStyleOpenAI}
-		if _, err := New(p, "dall-e-3"); !errors.Is(err, ErrUnsupported) {
+		if _, err := New(t.Context(), p, "dall-e-3"); !errors.Is(err, ErrUnsupported) {
 			t.Fatalf("New(%s) err = %v, want ErrUnsupported", base, err)
 		}
 	}

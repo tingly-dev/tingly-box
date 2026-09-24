@@ -224,6 +224,25 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                             >
                                 {runMeta}
                             </Typography>
+                            {/* A completed run that still carries an error came
+                                back short (some images blocked or failed); the
+                                empty slots below need their reason next to them. */}
+                            {run.status !== 'pending' && run.error && (
+                                <Typography
+                                    variant="caption"
+                                    title={run.error}
+                                    sx={{
+                                        display: '-webkit-box',
+                                        color: 'warning.main',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
+                                    {run.error}
+                                </Typography>
+                            )}
                             <RunSourceStrip
                                 sources={run.sourceImages ?? []}
                                 onOpen={(index) => onOpenSource(run, index)}

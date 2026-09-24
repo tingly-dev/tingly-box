@@ -117,17 +117,18 @@ func EditRequestFromOpenAI(p *openai.ImageEditParams) (*EditRequest, error) {
 }
 
 // NewEditor builds the edit adapter for a provider, or ErrEditUnsupported.
-func NewEditor(provider *typ.Provider) (Editor, error) {
+func NewEditor(provider *typ.Provider, opts ...Option) (Editor, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("imagegen: nil provider")
 	}
+	o := newOptions(opts)
 	switch DetectVendor(provider) {
 	case VendorXAI:
-		return newXAIClient(provider)
+		return newXAIClient(provider, o.transport)
 	case VendorQianfan:
-		return newQianfanClient(provider)
+		return newQianfanClient(provider, o.transport)
 	case VendorDashScope:
-		return newDashScopeClient(provider)
+		return newDashScopeClient(provider, o.transport)
 	default:
 		return nil, fmt.Errorf("%w: provider %s (api_base=%s)", ErrEditUnsupported, provider.Name, provider.APIBase)
 	}

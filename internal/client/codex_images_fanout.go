@@ -44,7 +44,8 @@ func codexImageCount(n param.Opt[int64]) int {
 // images than it asked for, and throwing away finished generations that were
 // already paid for would be the worse outcome. That includes the request
 // deadline firing while a later wave is still running — the finished waves
-// are kept. Only when every call fails is the request an error.
+// are kept. Only when every call fails is the request an error. The dropped
+// calls are reported through ctx's ImageFailures so the response can say so.
 func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context) (*openai.ImagesResponse, error)) (*openai.ImagesResponse, error) {
 	if n <= 1 {
 		return one(ctx)
@@ -72,9 +73,11 @@ func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context)
 
 	merged := &openai.ImagesResponse{}
 	var failures []error
+	var dropped []ImageFailure
 	for i := 0; i < n; i++ {
 		if errs[i] != nil {
 			failures = append(failures, fmt.Errorf("image %d/%d: %w", i+1, n, errs[i]))
+			dropped = append(dropped, ImageFailure{Index: i + 1, Requested: n, Err: errs[i]})
 			continue
 		}
 		mergeCodexImagesResponse(merged, results[i])
@@ -92,6 +95,9 @@ func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context)
 	if len(failures) > 0 {
 		logrus.WithContext(ctx).Warnf("[Codex] %d of %d parallel image calls failed, returning %d images: %v",
 			len(failures), n, len(merged.Data), errors.Join(failures...))
+		// The caller still gets a 200; hand the failures up so it can tell
+		// the user why images are missing (image_failures.go).
+		reportImageFailures(ctx, dropped)
 	} else {
 		logrus.WithContext(ctx).Infof("[Codex] Merged %d parallel image calls, images: %d", n, len(merged.Data))
 	}

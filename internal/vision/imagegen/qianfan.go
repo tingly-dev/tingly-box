@@ -29,14 +29,14 @@ type qianfanClient struct {
 	editURL    string
 }
 
-func newQianfanClient(provider *typ.Provider) (*qianfanClient, error) {
+func newQianfanClient(provider *typ.Provider, transport http.RoundTripper) (*qianfanClient, error) {
 	base := strings.TrimRight(strings.TrimSpace(provider.APIBase), "/")
 	if base == "" {
 		return nil, fmt.Errorf("imagegen: qianfan provider %q has no API base", provider.Name)
 	}
 	return &qianfanClient{
 		provider:   provider,
-		httpClient: &http.Client{Transport: http.DefaultTransport},
+		httpClient: &http.Client{Transport: transport},
 		editURL:    base + "/images/edits",
 	}, nil
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -91,7 +92,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 
 	SetTrackingContext(c, rule, provider, actualModel, string(responseModel), false)
 
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	failCtx, imageFailures := client.WithImageFailures(c.Request.Context())
+	fc := forwarding.NewForwardContext(failCtx, provider)
 
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	resp, cancel, err := forwarding.ForwardOpenAIImageEdit(fc, wrapper, req)
@@ -111,7 +113,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	// Persist edited images under the config image directory (best-effort).
 	ph.persistImageEdit(c.Request.Context(), req, resp)
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, withImageFailures(resp, imageFailures))
 }
 
 // parseImageEditRequest decodes the inbound request into ImageEditParams,

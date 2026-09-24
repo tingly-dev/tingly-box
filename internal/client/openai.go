@@ -155,7 +155,11 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
 	switch imagegen.DetectVendor(c.provider) {
 	case imagegen.VendorDashScope, imagegen.VendorMinimax:
-		adapter, err := imagegen.New(c.provider, string(req.Model))
+		// The adapters build their own HTTP client, so hand them the logging
+		// transport: without it their upstream calls never reach the
+		// request's timeline in the Logs page.
+		adapter, err := imagegen.New(ctx, c.provider, string(req.Model),
+			imagegen.WithTransport(wrapWithLogging(http.DefaultTransport, c.provider)))
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +190,8 @@ func (c *OpenAIClient) ImagesEdit(ctx context.Context, req openai.ImageEditParam
 		if err != nil {
 			return nil, err
 		}
-		editor, err := imagegen.NewEditor(c.provider)
+		editor, err := imagegen.NewEditor(c.provider,
+			imagegen.WithTransport(wrapWithLogging(http.DefaultTransport, c.provider)))
 		if err != nil {
 			return nil, err
 		}

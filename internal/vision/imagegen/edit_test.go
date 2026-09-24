@@ -134,7 +134,7 @@ func TestXAIEdit_EndToEnd(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := newXAIClient(&typ.Provider{APIBase: srv.URL + "/v1", Token: "key"})
+	c, err := newXAIClient(&typ.Provider{APIBase: srv.URL + "/v1", Token: "key"}, http.DefaultTransport)
 	require.NoError(t, err)
 	resp, err := c.Edit(context.Background(), &EditRequest{Prompt: "p", Images: [][]byte{testImage}, N: 2})
 	require.NoError(t, err)
@@ -187,7 +187,7 @@ func TestQianfanEdit_InlinesResultURLs(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := newQianfanClient(&typ.Provider{APIBase: srv.URL + "/v2", Token: "key"})
+	c, err := newQianfanClient(&typ.Provider{APIBase: srv.URL + "/v2", Token: "key"}, http.DefaultTransport)
 	require.NoError(t, err)
 	resp, err := c.Edit(context.Background(), &EditRequest{Model: "qwen-image-edit", Prompt: "p", Images: [][]byte{testImage}})
 	require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestDashScopeEdit_WanxPollsTheTask(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := newDashScopeClient(&typ.Provider{APIBase: srv.URL + "/compatible-mode/v1", Token: "key"})
+	c, err := newDashScopeClient(&typ.Provider{APIBase: srv.URL + "/compatible-mode/v1", Token: "key"}, http.DefaultTransport)
 	require.NoError(t, err)
 	c.pollInterval = 1
 	resp, err := c.Edit(context.Background(), &EditRequest{Model: "wanx2.1-imageedit", Prompt: "p", Images: [][]byte{testImage}, Mask: openaiMask(t)})
@@ -279,7 +279,7 @@ func TestDashScopeEdit_QwenImageIsSync(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := newDashScopeClient(&typ.Provider{APIBase: srv.URL + "/compatible-mode/v1", Token: "key"})
+	c, err := newDashScopeClient(&typ.Provider{APIBase: srv.URL + "/compatible-mode/v1", Token: "key"}, http.DefaultTransport)
 	require.NoError(t, err)
 	resp, err := c.Edit(context.Background(), &EditRequest{Model: "qwen-image-edit", Prompt: "p", Images: [][]byte{testImage}})
 	require.NoError(t, err)

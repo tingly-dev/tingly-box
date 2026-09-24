@@ -1823,6 +1823,7 @@ export default {
     "retry": "Retry",
     "cancelRun": "Cancel",
     "cancelled": "Cancelled",
+    "partialFailure": "{{failed}} of {{total}} images failed: {{reason}}",
     "removeRun": "Remove this generation",
     "removeRunTitle": "Remove this generation?",
     "removeRunBody": "Removes it from the playground. Images already written to the output folder stay on disk.",

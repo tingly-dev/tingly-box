@@ -1819,6 +1819,7 @@ export default {
     "retry": "重试",
     "cancelRun": "取消",
     "cancelled": "已取消",
+    "partialFailure": "{{total}} 张图片中有 {{failed}} 张生成失败：{{reason}}",
     "removeRun": "移除这次生成",
     "removeRunTitle": "移除这次生成？",
     "removeRunBody": "会从 Playground 里移除这次生成。已经写入输出目录的文件不受影响。",

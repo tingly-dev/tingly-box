@@ -30,14 +30,14 @@ type xaiClient struct {
 	editURL    string
 }
 
-func newXAIClient(provider *typ.Provider) (*xaiClient, error) {
+func newXAIClient(provider *typ.Provider, transport http.RoundTripper) (*xaiClient, error) {
 	base := strings.TrimRight(strings.TrimSpace(provider.APIBase), "/")
 	if base == "" {
 		return nil, fmt.Errorf("imagegen: xai provider %q has no API base", provider.Name)
 	}
 	return &xaiClient{
 		provider:   provider,
-		httpClient: &http.Client{Transport: http.DefaultTransport},
+		httpClient: &http.Client{Transport: transport},
 		editURL:    base + "/images/edits",
 	}, nil
 }

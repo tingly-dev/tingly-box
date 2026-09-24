@@ -27,14 +27,14 @@ type minimaxClient struct {
 	endpointURL string
 }
 
-func newMinimaxClient(provider *typ.Provider) (*minimaxClient, error) {
+func newMinimaxClient(provider *typ.Provider, transport http.RoundTripper) (*minimaxClient, error) {
 	base := strings.TrimRight(provider.APIBase, "/")
 	if base == "" {
 		return nil, fmt.Errorf("imagegen: minimax provider %q has no API base", provider.Name)
 	}
 	return &minimaxClient{
 		provider:    provider,
-		httpClient:  &http.Client{Transport: http.DefaultTransport},
+		httpClient:  &http.Client{Transport: transport},
 		endpointURL: base + "/image_generation",
 	}, nil
 }
@@ -79,7 +79,7 @@ func (c *minimaxClient) Generate(ctx context.Context, req *Request) (*Response, 
 		Prompt:         req.Prompt,
 		N:              req.N,
 		ResponseFormat: minimaxResponseFormat(req.ResponseFormat),
-		AspectRatio:    minimaxAspectRatio(req),
+		AspectRatio:    minimaxAspectRatio(ctx, req),
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -157,7 +157,7 @@ var minimaxStandardSizes = map[string]string{
 // Extra["aspect_ratio"] wins; otherwise it is derived from the normalized
 // "WIDTHxHEIGHT" size — first via the standard-size table, then via a reduced
 // ratio — falling back to the upstream default for anything unsupported.
-func minimaxAspectRatio(req *Request) string {
+func minimaxAspectRatio(ctx context.Context, req *Request) string {
 	if req.Extra != nil {
 		if ar, ok := req.Extra["aspect_ratio"].(string); ok && ar != "" {
 			return ar
@@ -176,7 +176,7 @@ func minimaxAspectRatio(req *Request) string {
 	if minimaxSupportedRatios[ar] {
 		return ar
 	}
-	logrus.Warnf("[MiniMax] size %q maps to unsupported aspect ratio %q, using upstream default", req.Size, ar)
+	logrus.WithContext(ctx).Warnf("[MiniMax] size %q maps to unsupported aspect ratio %q, using upstream default", req.Size, ar)
 	return ""
 }
 

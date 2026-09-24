@@ -38,7 +38,7 @@ type dashscopeClient struct {
 	pollTimeout  time.Duration
 }
 
-func newDashScopeClient(provider *typ.Provider) (*dashscopeClient, error) {
+func newDashScopeClient(provider *typ.Provider, transport http.RoundTripper) (*dashscopeClient, error) {
 	host := apiHost(provider.APIBase)
 	if host == "" {
 		return nil, fmt.Errorf("imagegen: dashscope provider %q has no API base host", provider.Name)
@@ -52,7 +52,7 @@ func newDashScopeClient(provider *typ.Provider) (*dashscopeClient, error) {
 	}
 	return &dashscopeClient{
 		provider:     provider,
-		httpClient:   &http.Client{Transport: http.DefaultTransport},
+		httpClient:   &http.Client{Transport: transport},
 		submitURL:    base + "/services/aigc/text2image/image-synthesis",
 		apiBase:      base,
 		taskBaseURL:  base + "/tasks/",
@@ -111,7 +111,7 @@ func (c *dashscopeClient) Generate(ctx context.Context, req *Request) (*Response
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debugf("[DashScope] image task submitted: %s", taskID)
+	logrus.WithContext(ctx).Debugf("[DashScope] image task submitted: %s", taskID)
 	return c.poll(ctx, req.Model, taskID)
 }
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
@@ -96,7 +97,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	failCtx, imageFailures := client.WithImageFailures(c.Request.Context())
+	fc := forwarding.NewForwardContext(failCtx, provider)
 
 	// The OpenAI client wrapper handles vendor fragmentation internally:
 	// OpenAI-compatible providers go straight through the SDK, DashScope and
@@ -120,7 +122,27 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	// Persist generated images under the config image directory (best-effort).
 	ph.persistImageGeneration(c.Request.Context(), &req, resp)
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, withImageFailures(resp, imageFailures))
+}
+
+// imagesResponse is the OpenAI images response plus the images that were
+// asked for but not produced. A multi-image request that loses some of its
+// images (e.g. one blocked by the upstream's moderation) still answers 200
+// with the rest; ImageFailures names the missing ones and why, so a caller —
+// the Image Playground in particular — can tell the user instead of silently
+// showing fewer images. Standard OpenAI clients ignore the extra field.
+type imagesResponse struct {
+	*openai.ImagesResponse
+	ImageFailures []string `json:"tingly_image_failures,omitempty"`
+}
+
+func withImageFailures(resp *openai.ImagesResponse, failures *client.ImageFailures) imagesResponse {
+	out := imagesResponse{ImagesResponse: resp}
+	for _, f := range failures.All() {
+		out.ImageFailures = append(out.ImageFailures,
+			fmt.Sprintf("image %d/%d: %s", f.Index, f.Requested, protocol.UpstreamMessage(f.Err)))
+	}
+	return out
 }
 
 // persistImageGeneration saves generated images and their prompts under the

@@ -159,9 +159,23 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                     quality: request.quality,
                 }, { signal: controller.signal });
             const images = response.data ?? [];
+            // A multi-image run can come back with fewer images than asked
+            // for (one blocked by moderation, one rate limited): the gateway
+            // keeps what succeeded and lists the rest here. Say so, instead of
+            // leaving the user to find out in the Logs page.
+            const failures: string[] = (response as any).tingly_image_failures ?? [];
+            const partialError = failures.length > 0
+                ? t('playground.partialFailure', {
+                    defaultValue: '{{failed}} of {{total}} images failed: {{reason}}',
+                    failed: failures.length,
+                    total: images.length + failures.length,
+                    reason: failures.join('; '),
+                })
+                : undefined;
             updateRuns((currentRuns) => currentRuns.map((run) => (
-                run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
+                run.id === runId ? { ...run, images, status: 'completed', error: partialError } : run
             )));
+            if (partialError) showNotification(partialError, 'warning');
         } catch (error: any) {
             if (controller.signal.aborted) {
                 // The user asked for this; the card records it so the request

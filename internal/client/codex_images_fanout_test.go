@@ -83,3 +83,21 @@ func TestFanOutCodexImages_CancelledContext(t *testing.T) {
 	})
 	assert.ErrorIs(t, err, context.Canceled)
 }
+
+func TestFanOutCodexImages_PartialFailureReportedOnContext(t *testing.T) {
+	ctx, failures := WithImageFailures(context.Background())
+	blocked := errors.New("moderation_blocked")
+	var n atomic.Int64
+	resp, err := fanOutCodexImages(ctx, 3, func(ctx context.Context) (*openai.ImagesResponse, error) {
+		if n.Add(1) == 2 {
+			return nil, blocked
+		}
+		return oneImage("ok", 1), nil
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Data, 2)
+	got := failures.All()
+	require.Len(t, got, 1)
+	assert.Equal(t, 3, got[0].Requested)
+	assert.ErrorIs(t, got[0].Err, blocked)
+}
