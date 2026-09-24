@@ -240,6 +240,15 @@ func DefaultRegistry() *Registry {
 		TokenRequestFormat: TokenRequestFormatForm,
 		ConsoleURL:         "https://accounts.x.ai/",
 		Hook:               &XAIHook{},
+		// xAI's OAuth client registers its redirect URI against the literal
+		// loopback IP (127.0.0.1), not "localhost" — using the wrong host
+		// string here fails with "redirect_uri does not match any registered
+		// URI". Port 56121 matches the default used by third-party Grok CLI
+		// OAuth clients (opencode-grok-auth, hermes-agent); xAI treats the
+		// loopback redirect as port-agnostic per RFC 8252, but tingly-box's
+		// callback mechanism needs a concrete port to bind its own listener.
+		CallbackPorts: []int{56121},
+		LoopbackHost:  "127.0.0.1",
 	})
 
 	// Kimi OAuth (Device Authorization Flow)

@@ -227,6 +227,22 @@ type ProviderConfig struct {
 	// Empty = no constraint (any port is allowed)
 	// Some providers require specific ports, e.g., codex allows [1455]
 	CallbackPorts []int
+
+	// LoopbackHost overrides the loopback hostname used to build the
+	// redirect_uri when CallbackPorts is set. Defaults to "localhost" when
+	// empty. Some OAuth apps register their redirect URI against the literal
+	// loopback IP (127.0.0.1, per RFC 8252) and reject "localhost" — a
+	// different string even though it resolves to the same address.
+	LoopbackHost string
+}
+
+// LoopbackCallbackHost returns the hostname to use when building a loopback
+// OAuth callback URL for this provider, defaulting to "localhost".
+func (c *ProviderConfig) LoopbackCallbackHost() string {
+	if c.LoopbackHost != "" {
+		return c.LoopbackHost
+	}
+	return "localhost"
 }
 
 // TokenRequestFormat represents the format of token request body

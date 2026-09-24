@@ -369,7 +369,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	callbackBaseURL := ""
 	if len(config.CallbackPorts) > 0 && h.callbackServerManager != nil {
 		callbackPort := config.CallbackPorts[0]
-		callbackBaseURL = fmt.Sprintf("http://localhost:%d", callbackPort)
+		callbackBaseURL = fmt.Sprintf("http://%s:%d", config.LoopbackCallbackHost(), callbackPort)
 		if err := h.callbackServerManager.StartDynamicCallbackServer(sessionID, callbackPort); err != nil {
 			c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
 				Success: false,
