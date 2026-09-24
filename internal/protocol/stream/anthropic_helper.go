@@ -44,6 +44,7 @@ func BuildErrorEvent(err error, code string) map[string]interface{} {
 
 // MarshalAndSendErrorEvent marshals and sends an error event
 func MarshalAndSendErrorEvent(c *gin.Context, err error, code string) {
+	LogRequestError(c, err, "upstream stream failed")
 	errorEvent := BuildErrorEvent(err, code)
 	errorJSON, marshalErr := json.Marshal(errorEvent)
 	if marshalErr != nil {
@@ -74,6 +75,7 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 // we propagate the upstream provider's status (401/429/4xx) instead of
 // flattening every pre-stream failure into a 500.
 func SendStreamingError(c *gin.Context, err error) {
+	LogRequestError(c, err, "failed to create streaming request")
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{
@@ -88,6 +90,7 @@ func SendStreamingError(c *gin.Context, err error) {
 // SendForwardingError sends an error response for request forwarding failures,
 // propagating the upstream provider's HTTP status when the error carries one.
 func SendForwardingError(c *gin.Context, err error) {
+	LogRequestError(c, err, "failed to forward request")
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{

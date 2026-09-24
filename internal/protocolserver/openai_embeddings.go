@@ -2,13 +2,13 @@ package protocolserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
-	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -27,65 +27,35 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 	scenarioType := typ.RuleScenario(scenario)
 
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("invalid scenario: %s", scenario))
 		return
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) &&
 		!typ.ScenarioSupportsTransport(scenarioType, typ.TransportEmbed) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("scenario %s does not support embeddings", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("scenario %s does not support embeddings", scenario))
 		return
 	}
 
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to read request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Failed to read request body: %w", err))
 		return
 	}
 
 	var req openai.EmbeddingNewParams
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Invalid request body: %w", err))
 		return
 	}
 
 	if string(req.Model) == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", errors.New("Model is required"))
 		return
 	}
 
 	if isEmbeddingInputEmpty(req.Input) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Input is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", string(req.Model), errors.New("Input is required"))
 		return
 	}
 
@@ -94,23 +64,13 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 
 	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 
@@ -120,12 +80,7 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 
 	if provider.APIStyle != protocol.APIStyleOpenAI {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("unsupported provider api style for embeddings: %s", provider.APIStyle),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, fmt.Errorf("unsupported provider api style for embeddings: %s", provider.APIStyle))
 		return
 	}
 
@@ -147,7 +102,6 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
-		logrus.Errorf("Failed to forward embeddings request: %v", err)
 		stream.SendForwardingError(c, err)
 		return
 	}

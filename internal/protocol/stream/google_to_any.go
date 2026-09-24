@@ -71,7 +71,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return nil
 			}
-			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
+			LogRequestError(c, err, "Google stream error")
 			return nil
 		}
 
@@ -264,7 +264,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return usage, nil
 			}
-			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
+			LogRequestError(c, err, "Google stream error")
 			errorEvent := BuildErrorEvent(err, "stream_failed")
 			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return usage, err
@@ -428,7 +428,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return usage, nil
 			}
-			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
+			LogRequestError(c, err, "Google stream error")
 			errorEvent := BuildErrorEvent(err, "stream_failed")
 			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
 			return usage, err
