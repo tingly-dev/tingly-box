@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -75,6 +76,7 @@ type testEnvConfig struct {
 	recordDir         string
 	mcpEnabled        bool
 	guardrailsRuntime *guardrails.Guardrails
+	servertools       []servertool.ToolProvider
 	client            Client
 }
 
@@ -98,6 +100,16 @@ func NewTestEnvOptionWithMCP() TestEnvOption {
 func NewTestEnvOptionWithGuardrails(runtime *guardrails.Guardrails) TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.guardrailsRuntime = runtime
+	}
+}
+
+// NewTestEnvOptionWithServertoolProviders registers in-process server tools
+// (see EchoServertoolProvider) and enables the MCP extension so the gateway
+// injects and executes them.
+func NewTestEnvOptionWithServertoolProviders(providers ...servertool.ToolProvider) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.servertools = append(cfg.servertools, providers...)
+		cfg.mcpEnabled = true
 	}
 }
 
@@ -272,6 +284,9 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	}
 	if cfg.guardrailsRuntime != nil {
 		serverOpts = append(serverOpts, server.WithGuardrails(cfg.guardrailsRuntime))
+	}
+	if len(cfg.servertools) > 0 {
+		serverOpts = append(serverOpts, server.WithServertoolProviders(cfg.servertools...))
 	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *appconfig.AppConfig) {
