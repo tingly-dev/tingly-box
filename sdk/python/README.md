@@ -33,10 +33,15 @@ Register it once in tb: **Connect AI → Self-hosted → Custom endpoint**,
 OpenAI, `http://localhost:8765/v1`, no key. For images, point an `imagegen`
 rule at that provider and your model name. For text, tb translates
 Anthropic- and Responses-speaking clients into Chat for this provider, so
-Chat is all you write. Not yet supported: streaming — a client that asks tb
-to stream gets an *empty* reply with no error, so use non-streaming calls —
-and serialising calls to a single-GPU pipeline (add a lock yourself if you
-need one).
+Chat is all you write.
+
+Streaming clients work too (Claude Code always streams): when a request asks
+for `stream: true`, your function is still called once, and its complete
+reply goes back as that protocol's SSE stream with all the content in one
+chunk — so the caller sees the answer arrive at once rather than token by
+token. Not yet supported: incremental (token-by-token) streaming, and
+serialising calls to a single-GPU pipeline (add a lock yourself if you need
+one).
 
 [`examples/image.py`](examples/image.py) is a complete image provider with a
 fake model (a stdlib-rendered PNG), so it runs anywhere.
@@ -70,6 +75,9 @@ exact protocol to your handler. Use it when you need the wire shape itself.
   dict — text fields as strings, `image`/`image[]` as `list[bytes]`, `mask`
   as `bytes`). Return an `ImagesResponse` dict, or image(s) to be wrapped as
   `b64_json`.
+- Streaming: the three text endpoints honour `stream: true` by replaying
+  whatever the handler returned — a wrapped `str` or your own dict — as that
+  protocol's SSE events, all content in one chunk. Handlers don't change.
 - `tingly.Client` — call tb from Python. Point it at a running tb and a
   gateway token, ask it to run any scenario/model.
 
@@ -181,4 +189,14 @@ file's only dependency.
 cd sdk/python
 task gen:py:quota   # from repo root, once — the quota tests need it
 python -m unittest discover tests
+```
+
+The end-to-end test puts a real tb between a client and the plugins —
+registered through tb's admin API as a user would — and checks model
+discovery, image generation (and that tb saved the PNG), multipart image
+edits, chat, an Anthropic client reaching a Chat-only plugin, and streaming.
+It is skipped unless `TINGLY_TB_BIN` points at a tb binary:
+
+```bash
+task test:py:e2e    # from repo root: builds tb, then runs tests/test_e2e_tb.py
 ```

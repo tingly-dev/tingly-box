@@ -89,7 +89,7 @@ wrapper and no normalization across protocols. A prototype hands a handler
 the real wire shape and stops there; inventing a shape of our own to sit in
 front of it — even a "small" one — is exactly the kind of forward-looking
 design this v1 doesn't need yet. Everything else (codegen, discovery,
-streaming, helpers) stays a deliberate non-goal until someone has a
+incremental streaming, helpers) stays a deliberate non-goal until someone has a
 concrete need for it.
 
 ## Shape

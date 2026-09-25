@@ -116,6 +116,19 @@ tasks:
         rm -f /tmp/tingly_quota_openapi.json
         echo "Generated sdk/python/tingly/_generated_quota.py"
 
+  test:py:e2e:
+    desc: Run the Python SDK's end-to-end test against a freshly built tb
+    cmds:
+      - |
+        # Builds tb (plain `go build`, no web UI needed) into a temp dir and
+        # runs sdk/python/tests/test_e2e_tb.py against it: a real tb between
+        # a client and in-process plugins (see .design/python-sdk.md).
+        # Stdlib only — no pip install needed.
+        BIN_DIR="$(mktemp -d)"
+        trap 'rm -rf "$BIN_DIR"' EXIT
+        go build -o "$BIN_DIR/tb" ./cli/tingly-box
+        cd sdk/python && TINGLY_TB_BIN="$BIN_DIR/tb" python3 -m unittest discover tests -p test_e2e_tb.py -v
+
   go:build:
     env:
       ARCH:

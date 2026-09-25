@@ -217,11 +217,14 @@ def _make_request_handler(srv: Server):
                 return
 
             if path == "/chat/completions":
-                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered", _wrap_text_openai_chat)
+                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered",
+                               _wrap_text_openai_chat, _stream_openai_chat)
             elif path == "/responses":
-                self._dispatch(srv._responses_handler, body, "no @srv.responses handler registered", _wrap_text_openai_responses)
+                self._dispatch(srv._responses_handler, body, "no @srv.responses handler registered",
+                               _wrap_text_openai_responses, _stream_openai_responses)
             elif path == "/messages":
-                self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered", _wrap_text_anthropic)
+                self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered",
+                               _wrap_text_anthropic, _stream_anthropic)
             elif path == "/images/generations":
                 self._dispatch(srv._images_handler, body, "no @srv.images handler registered", _wrap_images)
             elif path == "/images/edits":
@@ -229,17 +232,35 @@ def _make_request_handler(srv: Server):
             else:
                 self._json(404, {"error": "not found"})
 
-        def _dispatch(self, handler, body: dict, missing_msg: str, wrap_text):
+        def _dispatch(self, handler, body: dict, missing_msg: str, wrap_text, stream=None):
             if handler is None:
                 self._json(404, {"error": missing_msg})
                 return
             try:
                 result = handler(body)
                 payload = result if isinstance(result, dict) else wrap_text(body.get("model", ""), result)
+                # Built in full before the first byte goes out, so a handler
+                # error is always a plain 500, never a half-written stream.
+                events = stream(payload) if stream is not None and body.get("stream") is True else None
             except Exception as exc:  # surfaced to the caller, not a 500 traceback
                 self._json(500, {"error": str(exc)})
                 return
-            self._json(200, payload)
+            if events is None:
+                self._json(200, payload)
+            else:
+                self._sse(events)
+
+        def _sse(self, events: "SSEEvents"):
+            """Write (event name or None, data) pairs as text/event-stream.
+            The handler speaks HTTP/1.0, so closing the connection ends it."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            for event, data in events:
+                line = data if isinstance(data, str) else json.dumps(data)
+                self.wfile.write((f"event: {event}\n" if event else "").encode() + f"data: {line}\n\n".encode())
+            self.wfile.flush()
 
         def _json(self, status: int, payload: dict):
             data = json.dumps(payload).encode("utf-8")
@@ -354,3 +375,82 @@ def _parse_multipart(content_type: str, data: bytes) -> dict:
         else:
             form[name] = payload
     return form
+
+
+# --- Streaming: the complete reply, replayed as one chunk -------------------
+#
+# Each function takes a complete, non-streamed reply in its protocol and
+# returns the SSE events that stream the same reply with all of its content in
+# a single chunk. Same protocol in and out — only "whole" becomes "streamed".
+
+SSEEvents = list[tuple[str | None, Any]]  # (event name or None, data: a dict, or "[DONE]")
+
+
+def _stream_openai_chat(payload: dict) -> SSEEvents:
+    base = {"id": payload.get("id", f"chatcmpl-{uuid.uuid4().hex[:24]}"), "object": "chat.completion.chunk",
+            "created": payload.get("created", int(time.time())), "model": payload.get("model", "")}
+    choices = []
+    for i, choice in enumerate(payload.get("choices", [])):
+        delta = dict(choice.get("message") or {})
+        if delta.get("tool_calls"):
+            delta["tool_calls"] = [{"index": n, **call} for n, call in enumerate(delta["tool_calls"])]
+        choices.append({"index": choice.get("index", i), "delta": delta,
+                        "finish_reason": choice.get("finish_reason", "stop")})
+    events: SSEEvents = [(None, {**base, "choices": choices})]
+    if payload.get("usage"):
+        events.append((None, {**base, "choices": [], "usage": payload["usage"]}))
+    events.append((None, "[DONE]"))
+    return events
+
+
+def _stream_anthropic(payload: dict) -> SSEEvents:
+    usage = payload.get("usage") or {}
+    start = {**payload, "content": [], "stop_reason": None, "stop_sequence": None,
+             "usage": {**usage, "output_tokens": 0}}
+    events: SSEEvents = [("message_start", {"type": "message_start", "message": start})]
+    for i, block in enumerate(payload.get("content", [])):
+        kind = block.get("type")
+        if kind == "text":
+            opening, delta = {**block, "text": ""}, {"type": "text_delta", "text": block.get("text", "")}
+        elif kind == "tool_use":
+            opening, delta = {**block, "input": {}}, {"type": "input_json_delta",
+                                                     "partial_json": json.dumps(block.get("input", {}))}
+        else:  # any other block type goes out whole in its start event
+            opening, delta = block, None
+        events.append(("content_block_start", {"type": "content_block_start", "index": i, "content_block": opening}))
+        if delta is not None:
+            events.append(("content_block_delta", {"type": "content_block_delta", "index": i, "delta": delta}))
+        events.append(("content_block_stop", {"type": "content_block_stop", "index": i}))
+    events.append(("message_delta", {
+        "type": "message_delta",
+        "delta": {"stop_reason": payload.get("stop_reason", "end_turn"), "stop_sequence": payload.get("stop_sequence")},
+        "usage": {"output_tokens": usage.get("output_tokens", 0)},
+    }))
+    events.append(("message_stop", {"type": "message_stop"}))
+    return events
+
+
+def _stream_openai_responses(payload: dict) -> SSEEvents:
+    events: SSEEvents = []
+
+    def emit(kind: str, **fields):
+        events.append((kind, {"type": kind, "sequence_number": len(events), **fields}))
+
+    emit("response.created", response={**payload, "status": "in_progress", "output": []})
+    for oi, item in enumerate(payload.get("output", [])):
+        is_message = item.get("type") == "message"
+        emit("response.output_item.added", output_index=oi,
+             item={**item, "status": "in_progress", "content": []} if is_message else item)
+        if is_message:
+            for ci, part in enumerate(item.get("content", [])):
+                ids = {"item_id": item.get("id", ""), "output_index": oi, "content_index": ci}
+                if part.get("type") == "output_text":
+                    emit("response.content_part.added", **ids, part={**part, "text": ""})
+                    emit("response.output_text.delta", **ids, delta=part.get("text", ""), logprobs=[])
+                    emit("response.output_text.done", **ids, text=part.get("text", ""), logprobs=[])
+                else:
+                    emit("response.content_part.added", **ids, part=part)
+                emit("response.content_part.done", **ids, part=part)
+        emit("response.output_item.done", output_index=oi, item=item)
+    emit("response.completed", response={**payload, "status": payload.get("status") or "completed"})
+    return events

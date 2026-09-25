@@ -6,7 +6,6 @@ import importlib.util
 import os
 import struct
 import sys
-import threading
 import unittest
 import urllib.error
 
@@ -14,18 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import tingly  # noqa: E402
 from tingly import sugar  # noqa: E402
-from helpers import get_json, post_json, post_multipart, wait_until_serving  # noqa: E402
-
-
-def start_serving() -> str:
-    threading.Thread(target=tingly.serve, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
-    wait_until_serving(sugar._server)
-    return f"http://127.0.0.1:{sugar._server._httpd.server_address[1]}"
-
-
-def stop_serving():
-    sugar._server._httpd.shutdown()
-    sugar._reset()
+from helpers import get_json, post_json, post_multipart, serve_sugar_in_background, stop_sugar  # noqa: E402
 
 
 class SugarTest(unittest.TestCase):
@@ -59,11 +47,11 @@ class SugarTest(unittest.TestCase):
             cls.seen["edit"] = (prompt, images, mask)
             return images[-1]
 
-        cls.base = start_serving()
+        cls.base = serve_sugar_in_background()
 
     @classmethod
     def tearDownClass(cls):
-        stop_serving()
+        stop_sugar()
 
     def test_text_gets_the_messages_list_unchanged_and_a_str_reply_is_wrapped(self):
         messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
@@ -127,11 +115,11 @@ class ImageExampleTest(unittest.TestCase):
         path = os.path.join(os.path.dirname(__file__), "..", "examples", "image.py")
         spec = importlib.util.spec_from_file_location("image_example", path)
         spec.loader.exec_module(importlib.util.module_from_spec(spec))
-        cls.base = start_serving()
+        cls.base = serve_sugar_in_background()
 
     @classmethod
     def tearDownClass(cls):
-        stop_serving()
+        stop_sugar()
 
     def test_the_fake_model_returns_a_png_of_the_requested_size(self):
         body = post_json(f"{self.base}/v1/images/generations",

@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tingly import Client, Server, TinglyError, text_of  # noqa: E402
-from helpers import get_json, post_json, post_multipart, wait_until_serving  # noqa: E402
+from helpers import get_json, post_json, post_multipart, post_sse, wait_until_serving  # noqa: E402
 
 
 def _wait_until_serving(srv: Server, timeout: float = 2.0):
@@ -293,6 +293,124 @@ class ImagesTest(unittest.TestCase):
         finally:
             self.srv.models.remove("img-test-2")
         self.assertEqual(ids, ["img-test", "img-test-2"])
+
+
+class StreamingTest(unittest.TestCase):
+    """`"stream": true` on the three text endpoints: the handler's complete
+    reply comes back as that protocol's SSE, all content in one chunk."""
+
+    TOOL_CALL = {"id": "call_1", "type": "function", "function": {"name": "f", "arguments": '{"x": 1}'}}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = Server("stream-test")
+
+        @cls.srv.chat
+        def handle_chat(body):
+            if body["messages"][-1]["content"] == "tools":
+                return {"id": "chatcmpl-x", "object": "chat.completion", "created": 1, "model": "m",
+                        "choices": [{"index": 0, "finish_reason": "tool_calls",
+                                     "message": {"role": "assistant", "content": None, "tool_calls": [cls.TOOL_CALL]}}],
+                        "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}}
+            if body["messages"][-1]["content"] == "boom":
+                raise RuntimeError("model fell over")
+            return "hello there"
+
+        @cls.srv.messages
+        def handle_messages(body):
+            if body["messages"][-1]["content"] == "tools":
+                return {"id": "msg_x", "type": "message", "role": "assistant", "model": "m",
+                        "content": [{"type": "text", "text": "calling"},
+                                    {"type": "tool_use", "id": "tu_1", "name": "f", "input": {"x": 1}}],
+                        "stop_reason": "tool_use", "stop_sequence": None,
+                        "usage": {"input_tokens": 3, "output_tokens": 7}}
+            return "hello there"
+
+        @cls.srv.responses
+        def handle_responses(body):
+            return "hello there"
+
+        threading.Thread(target=cls.srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
+        wait_until_serving(cls.srv)
+        cls.base = f"http://127.0.0.1:{cls.srv._httpd.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv._httpd.shutdown()
+
+    def chat(self, content):
+        return post_sse(f"{self.base}/v1/chat/completions",
+                        {"model": "stream-test", "stream": True, "messages": [{"role": "user", "content": content}]})
+
+    def test_chat_str_reply_streams_as_one_chunk_then_done(self):
+        content_type, events = self.chat("hi")
+        self.assertEqual(content_type, "text/event-stream")
+        self.assertEqual(len(events), 2)
+        chunk = events[0][1]
+        self.assertEqual(chunk["object"], "chat.completion.chunk")
+        self.assertEqual(chunk["choices"][0]["delta"], {"role": "assistant", "content": "hello there"})
+        self.assertEqual(chunk["choices"][0]["finish_reason"], "stop")
+        self.assertEqual(events[1], (None, "[DONE]"))
+
+    def test_chat_dict_reply_streams_tool_calls_with_an_index_and_a_usage_chunk(self):
+        _, events = self.chat("tools")
+        delta = events[0][1]["choices"][0]["delta"]
+        self.assertEqual(delta["tool_calls"], [{"index": 0, **self.TOOL_CALL}])
+        self.assertEqual(events[0][1]["choices"][0]["finish_reason"], "tool_calls")
+        self.assertEqual(events[1][1]["choices"], [])
+        self.assertEqual(events[1][1]["usage"]["total_tokens"], 5)
+        self.assertEqual(events[2], (None, "[DONE]"))
+
+    def test_a_handler_error_is_still_a_plain_500_when_streaming(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.chat("boom")
+        self.assertEqual(ctx.exception.code, 500)
+        self.assertIn("model fell over", ctx.exception.read().decode())
+
+    def test_stream_false_is_still_plain_json(self):
+        body = post_json(f"{self.base}/v1/chat/completions",
+                         {"model": "stream-test", "stream": False, "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(body["choices"][0]["message"]["content"], "hello there")
+
+    def messages(self, content):
+        return post_sse(f"{self.base}/v1/messages", {"model": "stream-test", "stream": True, "max_tokens": 10,
+                                                     "messages": [{"role": "user", "content": content}]})
+
+    def test_messages_str_reply_streams_the_anthropic_event_sequence(self):
+        _, events = self.messages("hi")
+        self.assertEqual([e for e, _ in events], [
+            "message_start", "content_block_start", "content_block_delta", "content_block_stop",
+            "message_delta", "message_stop",
+        ])
+        self.assertTrue(all(data["type"] == event for event, data in events))
+        self.assertEqual(events[0][1]["message"]["content"], [])
+        self.assertEqual(events[1][1]["content_block"], {"type": "text", "text": ""})
+        self.assertEqual(events[2][1]["delta"], {"type": "text_delta", "text": "hello there"})
+        self.assertEqual(events[4][1]["delta"]["stop_reason"], "end_turn")
+
+    def test_messages_tool_use_input_streams_as_one_json_delta(self):
+        _, events = self.messages("tools")
+        deltas = [data["delta"] for event, data in events if event == "content_block_delta"]
+        self.assertEqual(deltas[0], {"type": "text_delta", "text": "calling"})
+        self.assertEqual(deltas[1]["type"], "input_json_delta")
+        self.assertEqual(json.loads(deltas[1]["partial_json"]), {"x": 1})
+        message_delta = next(data for event, data in events if event == "message_delta")
+        self.assertEqual(message_delta["delta"]["stop_reason"], "tool_use")
+        self.assertEqual(message_delta["usage"]["output_tokens"], 7)
+
+    def test_responses_str_reply_streams_the_responses_event_sequence(self):
+        _, events = post_sse(f"{self.base}/v1/responses", {"model": "stream-test", "stream": True, "input": "hi"})
+        self.assertEqual([e for e, _ in events], [
+            "response.created", "response.output_item.added", "response.content_part.added",
+            "response.output_text.delta", "response.output_text.done", "response.content_part.done",
+            "response.output_item.done", "response.completed",
+        ])
+        self.assertEqual([data["sequence_number"] for _, data in events], list(range(len(events))))
+        self.assertEqual(events[0][1]["response"]["status"], "in_progress")
+        self.assertEqual(events[3][1]["delta"], "hello there")
+        completed = events[-1][1]["response"]
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["output"][0]["content"][0]["text"], "hello there")
 
 
 class StubAdmin(BaseHTTPRequestHandler):
