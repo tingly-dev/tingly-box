@@ -114,6 +114,7 @@ sdk/python/
   tests/
     test_framework.py     # Server + Client against a stub HTTP server
     test_sugar.py         # the sugar layer end to end
+    test_e2e_tb.py        # against a real tb binary (skipped without TINGLY_TB_BIN)
     helpers.py            # shared HTTP / multipart helpers (not a test module)
 ```
 
@@ -274,8 +275,37 @@ regardless of protocol: every route also answers without the `/v1` prefix,
 since which shape a caller's configured base URL expects isn't worth
 troubleshooting by hand.
 
-No streaming — still a deliberate cut, since SSE framing and partial-JSON
-handler contracts don't matter until a handler exists that needs them.
+### Streaming: the whole reply, replayed as one chunk
+
+Streaming used to be a deliberate cut, until an end-to-end run through a
+real tb showed what that costs: a client calling tb with `stream: true`
+(Claude Code always does) reached the plugin, got a plain JSON reply back,
+and tb turned that into an **empty stream with no error anywhere** (tb
+logs `upstream 200`). Silent failure on the most common client is not an
+acceptable prototype gap.
+
+The fix keeps the handler contract untouched. When a request to
+`/chat/completions`, `/responses` or `/messages` carries `stream: true`,
+`Server` calls the handler once exactly as before, builds the complete
+reply exactly as before (a `str` wrapped, a `dict` passed through), and
+then **replays that complete reply as an SSE stream in the same protocol,
+with all of its content in a single chunk**:
+
+| endpoint | stream |
+|---|---|
+| `/chat/completions` | one `chat.completion.chunk` carrying each choice's whole message as its `delta` (tool calls get their `index`) and `finish_reason`; a usage-only chunk if the reply has `usage`; `data: [DONE]` |
+| `/messages` | `message_start` → per content block `content_block_start` / one delta (`text_delta`, or `input_json_delta` for `tool_use`) / `content_block_stop` → `message_delta` (stop reason, output usage) → `message_stop` |
+| `/responses` | `response.created` → per output item `output_item.added`, and for message text `content_part.added` / one `output_text.delta` / `output_text.done` / `content_part.done` → `output_item.done` → `response.completed` with the full response |
+
+This is not protocol conversion — the reply never changes protocol, it
+changes from "whole" to "streamed" within one. It also means a relay
+handler that returns `srv.tb.chat(...)`'s dict streams correctly with no
+change. What it doesn't give is incremental output: the first byte arrives
+when the handler has finished. Handlers that want to stream token by token
+(a generator contract) remain future work. Images are never streamed.
+
+Because the reply is built before the first byte is written, a handler
+error still comes back as a normal HTTP 500, never a half-written stream.
 
 ### The no-key + Anthropic-style footgun (and why it isn't a backend fix)
 
@@ -435,11 +465,9 @@ everything registered through the decorators.
 
 Known limitations, not addressed yet:
 
-- **No streaming** (inherited from the raw layer) — and it fails silently.
-  Observed end to end: a client calling tb with `stream=True` reaches the
-  plugin, which replies with a normal JSON completion; tb logs `upstream
-  200` and the client receives an empty stream — no error anywhere. Text
-  sugar is for non-streaming callers until that changes.
+- **Streaming is single-chunk** (inherited from the raw layer, see
+  "Streaming" above): streaming clients work, but the whole reply arrives
+  at once when the function returns.
 - **No serialisation of GPU work.** Requests are handled on threads; two
   concurrent image requests call the same pipeline concurrently. A
   single-GPU pipeline usually needs a lock — the author's to add for now.
@@ -450,6 +478,24 @@ Known limitations, not addressed yet:
 The example (`examples/image.py`) fakes the model: it renders a solid-colour
 PNG with the stdlib instead of loading a real pipeline, so it runs anywhere
 and still returns a real image tb can persist.
+
+## End-to-end test against a real tb
+
+Unit tests stub tb out. `tests/test_e2e_tb.py` doesn't: it starts a real
+tb binary with a throwaway `--config-dir` on a free port, starts the
+plugins in-process, registers them through tb's own admin API exactly as a
+user would (Custom endpoint, no key; `imagegen` and text rules), and sends
+requests to tb's `/tingly/<scenario>/v1/...` — so every hop is real: tb's
+routing, its openai-go/anthropic-go upstream clients, its multipart
+encoding, its stream re-emission, its image persistence.
+
+- The image provider is `examples/image.py` itself, loaded unchanged.
+- Covered: model discovery (`/v1/models`), image generation (and that tb
+  saved the PNG), image edit (multipart, `image[]` + mask), chat,
+  an Anthropic client reaching a Chat-only plugin, and streaming for
+  chat and for Anthropic.
+- Stdlib only, like the rest of the tests. Skipped unless `TINGLY_TB_BIN`
+  points at a tb binary; `task test:py:e2e` builds one and runs it.
 
 ## Auto-registration (parked — recorded for later, not being built now)
 
@@ -649,8 +695,8 @@ means something concrete — everything before this only ever touched
 
 Deliberately deferred, not forgotten:
 
-- Streaming (`Server` responses, `Client.chat` as a stream) — for text sugar
-  this means clients that stream through tb aren't served yet.
+- Incremental streaming (a generator handler contract yielding tokens) —
+  `Server` streams, but always as one chunk; and `Client.chat` as a stream.
 - Serialising work per model in the sugar layer (a lock around a
   single-GPU pipeline) — left to the function author for now.
 - Text sugar for the Anthropic or Responses wire shape — tb translates
