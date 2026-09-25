@@ -122,7 +122,7 @@ const SessionView = ({
                 {!isClosed && (
                     <Tooltip title={turnInFlight
                         ? t('desk.handoffBusy', {defaultValue: 'Stop or wait for the current turn to continue in a terminal'})
-                        : t('desk.handoffHint', {defaultValue: 'Continue in terminal — copies a command that resumes this session with claude'})}
+                        : t('desk.handoffHint', {defaultValue: 'Continue in terminal — copies a command that resumes this session through tingly-box'})}
                     >
                         {/* span: a disabled button fires no events for the tooltip */}
                         <span>
@@ -241,7 +241,7 @@ const SessionView = ({
                             )}
                         />
                     )}
-                    <StatusLine sessionId={session.id} messages={messages}/>
+                    <StatusLine sessionId={session.id} profile={session.profile} messages={messages}/>
                 </Box>
             </Box>
         </Box>

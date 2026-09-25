@@ -17,9 +17,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// LoadBalancer interface defines the load balancer operations we need
+// LoadBalancer interface defines the load balancer operations we need. The
+// status line only displays the pick, never dispatches to it, so it uses the
+// side-effect-free PreviewService: SelectService would claim a half-open
+// breaker's probe slot on every status poll.
 type LoadBalancer interface {
-	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
+	PreviewService(rule *typ.Rule) (*loadbalance.Service, error)
 }
 
 // Handler handles Claude Code status HTTP requests
@@ -286,7 +289,7 @@ func (h *Handler) getTBModelMapping(modelID string, scenario typ.RuleScenario) *
 	}
 
 	// Get the service that would be selected
-	service, err := h.loadBalancer.SelectService(rule)
+	service, err := h.loadBalancer.PreviewService(rule)
 	if err != nil || service == nil {
 		return nil
 	}

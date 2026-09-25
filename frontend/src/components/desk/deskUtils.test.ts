@@ -35,6 +35,17 @@ describe('buildTranscript', () => {
         expect(blocks[0]).toMatchObject({type: 'request', response: {content: 'approved'}});
     });
 
+    it('pairs a result with its call across the approval that came between them', () => {
+        const blocks = buildTranscript([
+            msg({kind: 'tool_use', content: 'Bash', request_id: 't1', payload: {command: 'go test'}}),
+            msg({kind: 'approval_request', content: 'Bash', request_id: 'r1'}),
+            msg({kind: 'approval_response', content: 'approved', request_id: 'r1'}),
+            msg({kind: 'tool_result', content: 'ok', request_id: 't1', payload: {is_error: false}}),
+        ]);
+        expect(blocks.map((b) => b.type)).toEqual(['activity', 'request']);
+        expect(blocks[0]).toMatchObject({steps: [{type: 'tool', name: 'Bash', result: 'ok'}]});
+    });
+
     it('starts a new activity block after anything that is not activity', () => {
         const blocks = buildTranscript([
             msg({kind: 'tool_use', content: 'Read', request_id: 't1'}),

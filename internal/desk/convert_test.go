@@ -68,6 +68,19 @@ func TestConverter_TurnUsageWithoutInitFallsBackToModelUsage(t *testing.T) {
 	}
 }
 
+func TestConverter_ModelUsageTieIsStable(t *testing.T) {
+	for range 20 {
+		c := newConverter()
+		c.messages(assistantCall("m1", nil, 10, 0, 5))
+		u := usageOf(t, c.messages(&claude.ResultMessage{ModelUsage: map[string]claude.ModelUsage{
+			"tingly/cc-haiku": {}, "tingly/cc": {}, "tingly/cc-opus": {},
+		}}))
+		if u.Model != "tingly/cc" {
+			t.Fatalf("tied pick = %q, want the smallest id every time", u.Model)
+		}
+	}
+}
+
 func TestConverter_NoUsageForATurnWithoutCalls(t *testing.T) {
 	c := newConverter()
 	for _, m := range c.messages(&claude.ResultMessage{IsError: true, Result: "boom"}) {

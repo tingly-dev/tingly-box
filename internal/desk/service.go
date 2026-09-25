@@ -19,6 +19,8 @@ package desk
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -70,6 +72,9 @@ type Service struct {
 	// with (see launchSignature), so a changed permission mode or gateway
 	// env restarts it instead of being silently ignored.
 	launch map[string]string
+	// model is each session's latest requested model (from its usage
+	// entries), so Status needn't reload the transcript to find it.
+	model map[string]string
 }
 
 // run is what Interrupt and Respond need for a session with a turn in
@@ -105,7 +110,7 @@ type Config struct {
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}}
+	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}}
 	s.recoverInterrupted()
 	return s
 }
@@ -142,11 +147,19 @@ func (s *Service) Shutdown(ctx context.Context) {
 
 // launchSignature captures the launch-time settings a persistent process
 // cannot change once started. Env is sorted because Routing builds it from
-// a map.
+// a map. A profile's settings file keeps its path when the profile is
+// edited, so its content is part of the signature, not just the path.
 func launchSignature(opts agentboot.ExecutionOptions) string {
 	env := append([]string(nil), opts.Env...)
 	sort.Strings(env)
-	return opts.PermissionMode + "\x00" + opts.SettingsPath + "\x00" + strings.Join(env, "\x00")
+	settings := opts.SettingsPath
+	if settings != "" {
+		if b, err := os.ReadFile(settings); err == nil {
+			sum := sha256.Sum256(b)
+			settings += "@" + hex.EncodeToString(sum[:])
+		}
+	}
+	return opts.PermissionMode + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -297,24 +310,58 @@ func Scenario(profile string) string {
 	if profile == "" {
 		return string(typ.ScenarioClaudeCode)
 	}
-	return string(typ.ScenarioClaudeCode) + typ.ProfileSeparator + profile
+	return string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile))
 }
 
 // RequestedModel is the model id the session's latest completed turn asked
 // the gateway for (the id routing rules match on), or "" before any turn
 // has reached the model.
 func (s *Service) RequestedModel(id string) string {
+	s.mu.Lock()
+	model, ok := s.model[id]
+	s.mu.Unlock()
+	if ok {
+		return model
+	}
+	// Not seen since this server started: find it once in the transcript.
 	msgs, _ := s.sessions.GetMessages(id)
 	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Kind != "usage" {
-			continue
-		}
-		var u turnUsage
-		if json.Unmarshal(msgs[i].Payload, &u) == nil && u.Model != "" {
-			return u.Model
+		if m := usageModel(msgs[i]); m != "" {
+			model = m
+			break
 		}
 	}
-	return ""
+	// Only a found model is kept: with none yet, the next turn's usage
+	// arrives through noteUsage, and the scan stays cheap until then.
+	if model != "" {
+		s.mu.Lock()
+		if _, raced := s.model[id]; !raced {
+			s.model[id] = model
+		}
+		model = s.model[id]
+		s.mu.Unlock()
+	}
+	return model
+}
+
+// noteUsage keeps RequestedModel current as a turn records its usage.
+func (s *Service) noteUsage(id string, m session.Message) {
+	if model := usageModel(m); model != "" {
+		s.mu.Lock()
+		s.model[id] = model
+		s.mu.Unlock()
+	}
+}
+
+func usageModel(m session.Message) string {
+	if m.Kind != "usage" {
+		return ""
+	}
+	var u turnUsage
+	if json.Unmarshal(m.Payload, &u) != nil {
+		return ""
+	}
+	return u.Model
 }
 
 func (s *Service) Messages(id string) ([]session.Message, error) {
@@ -422,27 +469,40 @@ func (s *Service) AwaitingInput(id string) bool {
 // Handoff releases a session so it can be continued in a terminal, and
 // returns the command that does it. The resident process is closed first:
 // two processes writing one Claude session file corrupts it (see
-// evictPersistent). A turn in flight is refused rather than killed.
-func (s *Service) Handoff(ctx context.Context, id string) (string, error) {
+// evictPersistent). A turn in flight is refused rather than killed, and the
+// session is claimed while the process closes, so a turn can't start in
+// between and have its process closed under it.
+//
+// The command goes through tingly-box (`cc`, or `profile <id>` for a
+// profile) rather than bare `claude`, so the terminal routes through the
+// same gateway and settings the web turns used, with no token in the
+// command itself.
+func (s *Service) Handoff(id string) (string, error) {
 	sess, ok := s.sessions.SnapshotOrLoad(id)
 	if !ok {
 		return "", notFound("session", id)
 	}
+	done := make(chan struct{})
 	s.mu.Lock()
-	_, busy := s.runs[id]
-	s.mu.Unlock()
-	if busy {
+	if _, busy := s.runs[id]; busy {
+		s.mu.Unlock()
 		return "", conflict("stop the current turn before continuing in a terminal")
 	}
+	s.runs[id] = &run{cancel: func() {}, prompter: newWebPrompter(id, s.sessions), done: done}
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.runs, id)
+		s.mu.Unlock()
+		close(done)
+	}()
 	s.evictPersistent(id)
 
-	cmd := "cd " + shellQuote(sess.Project) + " && claude --resume " + shellQuote(id)
-	if sess.Profile != "" && s.routing != nil {
-		if path, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, sess.Profile); err == nil {
-			cmd += " --settings " + shellQuote(path)
-		}
+	launch := "tingly-box cc"
+	if sess.Profile != "" {
+		launch = "tingly-box profile " + shellQuote(sess.Profile)
 	}
-	return cmd, nil
+	return "cd " + shellQuote(sess.Project) + " && " + launch + " --resume " + shellQuote(id), nil
 }
 
 // shellQuote single-quotes s for a POSIX shell.

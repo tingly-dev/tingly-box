@@ -1104,7 +1104,7 @@ func TestHandoff_RefusesDuringATurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
-	if _, err := svc.Handoff(context.Background(), sess.ID); !errors.Is(err, ErrConflict) {
+	if _, err := svc.Handoff(sess.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("Handoff during a turn: err = %v, want ErrConflict", err)
 	}
 	_ = svc.Interrupt(sess.ID)
@@ -1130,15 +1130,32 @@ func TestHandoff_ReleasesTheResidentProcessAndBuildsTheCommand(t *testing.T) {
 	}
 	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
 
-	cmd, err := svc.Handoff(context.Background(), sess.ID)
+	cmd, err := svc.Handoff(sess.ID)
 	if err != nil {
 		t.Fatalf("Handoff: %v", err)
 	}
 	if st := resident.Status(); st != agentboot.SessionStateTerminated {
 		t.Fatalf("resident process state after Handoff = %v, want terminated: it would share the session file with the terminal", st)
 	}
-	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && claude --resume '` + sess.ID + `' --settings '/profiles/p1/settings.json'`
+	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && tingly-box profile 'p1' --resume '` + sess.ID + `'`
 	if cmd != want {
 		t.Fatalf("command:\n got %s\nwant %s", cmd, want)
+	}
+}
+
+// An edited profile keeps its settings path, so the path alone would let a
+// resident process keep running on the settings it was launched with.
+func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"model":"a"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := agentboot.ExecutionOptions{SettingsPath: path}
+	before := launchSignature(opts)
+	if err := os.WriteFile(path, []byte(`{"model":"b"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if launchSignature(opts) == before {
+		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
 	}
 }

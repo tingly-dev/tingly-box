@@ -165,7 +165,7 @@ func (h *Handler) info(sess *session.Session) SessionInfo {
 }
 
 func (h *Handler) Handoff(c *gin.Context) {
-	cmd, err := h.svc.Handoff(c.Request.Context(), c.Param("session_id"))
+	cmd, err := h.svc.Handoff(c.Param("session_id"))
 	if err != nil {
 		sendServiceError(c, err)
 		return

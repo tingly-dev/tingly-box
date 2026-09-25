@@ -427,3 +427,23 @@ func isHelpErr(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "help") || strings.Contains(msg, "usage")
 }
+
+// TestCCPassesResumeThrough pins the command Desk's "Continue in terminal"
+// hands out: `cc --resume <id>` and `profile <id> --resume <id>` must reach
+// Claude Code as passthrough args, not be rejected as unknown flags.
+func TestCCPassesResumeThrough(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"cc", "--resume", "abc"}); err != nil {
+		t.Fatalf("cc --resume: %v", err)
+	}
+	if got := cli.CC.Args; len(got) != 2 || got[0] != "--resume" || got[1] != "abc" {
+		t.Fatalf("cc args = %v, want [--resume abc]", got)
+	}
+	cli, parser = newTestParser(t)
+	if _, err := parser.Parse([]string{"profile", "p1", "--resume", "abc"}); err != nil {
+		t.Fatalf("profile --resume: %v", err)
+	}
+	if cli.Profile.ProfileID != "p1" || len(cli.Profile.Args) != 2 || cli.Profile.Args[0] != "--resume" {
+		t.Fatalf("profile = %q args = %v", cli.Profile.ProfileID, cli.Profile.Args)
+	}
+}

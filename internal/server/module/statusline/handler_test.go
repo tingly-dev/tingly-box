@@ -20,7 +20,7 @@ type mockLoadBalancer struct {
 	selectServiceErr error
 }
 
-func (m *mockLoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
+func (m *mockLoadBalancer) PreviewService(rule *typ.Rule) (*loadbalance.Service, error) {
 	if m.selectServiceErr != nil {
 		return nil, m.selectServiceErr
 	}

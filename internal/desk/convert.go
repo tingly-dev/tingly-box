@@ -112,11 +112,12 @@ func (c *converter) usage(res *claude.ResultMessage) (turnUsage, bool) {
 		u.CacheWriteTokens += call.CacheCreationInputTokens
 	}
 	// A resident process sends its init once, so later turns name the main
-	// model only through modelUsage: take the one that did the most work.
+	// model only through modelUsage: take the one that did the most work,
+	// ties broken by id so the pick doesn't follow map order.
 	if u.Model == "" {
-		var most int
+		most := -1
 		for id, mu := range res.ModelUsage {
-			if mu.OutputTokens >= most {
+			if mu.OutputTokens > most || (mu.OutputTokens == most && id < u.Model) {
 				u.Model, most = id, mu.OutputTokens
 			}
 		}

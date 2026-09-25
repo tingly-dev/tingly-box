@@ -192,18 +192,23 @@ the routed provider's quota and balance.
   (`claude_code` or `claude_code:<profile>`) through the statusline
   handler's own `ResolveRoute`, and renders quota windows with the same
   `QuotaSegments` the terminal line uses, so the two never disagree. It is
-  a prediction of the load balancer's pick, as the terminal line is.
+  a prediction of the load balancer's pick, as the terminal line is, made
+  with `PreviewService` so a status read never claims a recovering
+  provider's half-open probe slot.
 - A window at 80% is marked, one at 90% or exhausted is red, and an
   exhausted one points at the profile picker beside it.
 
 ### 3.5 Handoff to a terminal
 
-`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && claude --resume
-'<id>'` (plus `--settings '<path>'` for a profile), all shell-quoted. It
-refuses during a turn and releases the session's resident process first, so
-two processes never write one Claude session file. A later message from the
-web starts a new resident process with `--resume`, so the page tells the
-user to use one place at a time rather than trying to lock either side.
+`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && tingly-box cc
+--resume '<id>'` (`tingly-box profile '<profile>' …` for a profile), all
+shell-quoted. Going through tingly-box rather than bare `claude` keeps the
+terminal on the same gateway routing the web turns used, with no token in
+the command. It refuses during a turn, and claims the session while it
+releases the resident process, so a turn can't start in between and two
+processes never write one Claude session file. A later message from the web
+starts a new resident process with `--resume`, so the page tells the user to
+use one place at a time rather than trying to lock either side.
 
 `SessionInfo.awaiting_input` is true while an approval or question is open
 (`webPrompter.hasPending`), so the list can say "waiting" without loading

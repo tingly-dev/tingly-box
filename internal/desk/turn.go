@@ -89,6 +89,7 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		}
 		for _, m := range conv.messages(raw) {
 			s.sessions.AppendMessage(sessionID, m)
+			s.noteUsage(sessionID, m)
 		}
 	}
 

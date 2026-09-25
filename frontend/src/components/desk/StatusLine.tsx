@@ -39,6 +39,9 @@ const Segment = ({children, tip, color}: {children: ReactNode; tip?: ReactNode; 
 
 interface StatusLineProps {
     sessionId: string;
+    // The session's profile decides the scenario, so a switch re-resolves
+    // the route and quota before the next turn.
+    profile: string;
     messages: MessageInfo[];
 }
 
@@ -48,7 +51,7 @@ interface StatusLineProps {
 // context is, the session's tokens, and the routed provider's quota. Token
 // figures come from the transcript's per-turn usage entries; routing and
 // quota come from the session status endpoint, refreshed as each turn ends.
-const StatusLine = ({sessionId, messages}: StatusLineProps) => {
+const StatusLine = ({sessionId, profile, messages}: StatusLineProps) => {
     const {t} = useTranslation();
     const usage = useMemo(() => sessionUsage(messages), [messages]);
     const turns = useMemo(() => messages.filter((m) => m.kind === 'usage').length, [messages]);
@@ -60,7 +63,7 @@ const StatusLine = ({sessionId, messages}: StatusLineProps) => {
         return () => {
             live = false;
         };
-    }, [sessionId, turns]);
+    }, [sessionId, profile, turns]);
 
     const segments: ReactNode[] = [];
     const model = status?.requested_model || usage?.latest.model;

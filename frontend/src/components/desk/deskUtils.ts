@@ -85,6 +85,9 @@ export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
     const blocks: TranscriptBlock[] = [];
     const requests = new Map<string, Extract<TranscriptBlock, {type: 'request'}>>();
     let activity: Extract<TranscriptBlock, {type: 'activity'}> | null = null;
+    // Across blocks: an approval between a call and its result starts a new
+    // activity row, and the result still belongs to the call before it.
+    const tools = new Map<string, ToolStep>();
 
     const currentActivity = () => {
         if (!activity) {
@@ -99,20 +102,20 @@ export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
             case 'thinking':
                 currentActivity().steps.push({type: 'thinking', text: m.content});
                 continue;
-            case 'tool_use':
-                currentActivity().steps.push({
-                    type: 'tool', id: m.request_id ?? '', name: m.content, input: m.payload, isError: false,
-                });
+            case 'tool_use': {
+                const tool: ToolStep = {type: 'tool', id: m.request_id ?? '', name: m.content, input: m.payload, isError: false};
+                currentActivity().steps.push(tool);
+                if (tool.id) tools.set(tool.id, tool);
                 continue;
+            }
             case 'tool_result': {
-                const act = currentActivity();
-                const tool = act.steps.find((s): s is ToolStep => s.type === 'tool' && s.id !== '' && s.id === m.request_id);
+                const tool = m.request_id ? tools.get(m.request_id) : undefined;
                 const isError = Boolean((m.payload as {is_error?: boolean} | undefined)?.is_error);
                 if (tool) {
                     tool.result = m.content;
                     tool.isError = isError;
                 } else {
-                    act.steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError});
+                    currentActivity().steps.push({type: 'tool', id: m.request_id ?? '', name: '', input: undefined, result: m.content, isError});
                 }
                 continue;
             }
