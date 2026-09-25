@@ -5,6 +5,7 @@ import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
+import { STRIP_CARD_HEIGHT } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
 
 // One timeline for the results panel: images brought in to work on and
@@ -40,9 +41,9 @@ interface ImageGenResultsPanelProps {
 }
 
 // The results half of the playground: an empty-state invitation when the
-// session is empty, otherwise the header (counts + ways in) over a
-// horizontally scrolling strip of imported images and generation runs,
-// oldest to newest, with an "overview" tile collapsing everything older
+// session is empty, otherwise the header (counts + ways in) over a strip of
+// imported images and generation runs, oldest to newest — scrolling sideways
+// when the panel is short, wrapping into rows on the full-height workbench — with an "overview" tile collapsing everything older
 // than the visible tail.
 const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     timeline,
@@ -203,13 +204,20 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             gap: 1.5,
                             flex: 1,
                             minHeight: 0,
-                            overflowX: 'auto',
-                            overflowY: 'hidden',
+                            // A short strip (stacked layout) scrolls sideways.
+                            // The full-height workbench wraps into rows instead:
+                            // cards stop growing at a set height, and the height
+                            // left over shows more of the session rather than
+                            // one screen-sized picture (see stripCardBasis).
+                            flexWrap: { xs: 'nowrap', lg: 'wrap' },
+                            alignContent: 'flex-start',
+                            overflowX: { xs: 'auto', lg: 'hidden' },
+                            overflowY: { xs: 'hidden', lg: 'auto' },
                             // A size container, so cards can size themselves
                             // from the strip's height (`cqh`, see stripCardBasis).
                             containerType: 'size',
                             pb: 0.5,
-                            scrollSnapType: 'x proximity',
+                            scrollSnapType: { xs: 'x proximity', lg: 'y proximity' },
                             overflowAnchor: 'none',
                             scrollbarWidth: 'thin',
                             '&::-webkit-scrollbar': { height: 6 },
@@ -226,7 +234,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 })}
                                 sx={{
                                     flex: '0 0 84px',
-                                    height: '100%',
+                                    height: STRIP_CARD_HEIGHT,
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',

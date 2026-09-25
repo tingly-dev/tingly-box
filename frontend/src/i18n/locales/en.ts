@@ -1853,6 +1853,7 @@ export default {
     "gallery": {
       "action": "Overview",
       "viewOlderHint": "View all {{count}} images in the overview",
+      "pageRange": "{{from}}–{{to}} of {{total}}",
       "clearAll": "Clear session",
       "clearAllTitle": "Clear this session?",
       "clearAllBody_one": "Removes the image from the playground. Images already written to the output folder stay on disk.",

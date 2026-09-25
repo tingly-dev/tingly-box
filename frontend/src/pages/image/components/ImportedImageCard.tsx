@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Close, Edit, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import { formatBytes, stripCardBasis } from './imageGenSession';
+import { formatBytes, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
 import type { ImportedImage } from './ImageGenPlayground.types';
 
 interface ImportedImageCardProps {
@@ -33,7 +33,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
             variant="outlined"
             sx={{
                 flex: { xs: '0 0 min(82vw, 320px)', md: stripCardBasis(null) },
-                height: '100%',
+                height: STRIP_CARD_HEIGHT,
                 bgcolor: 'background.paper',
                 scrollSnapAlign: 'start',
             }}

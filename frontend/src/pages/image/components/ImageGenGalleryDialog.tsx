@@ -1,14 +1,16 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
     Box,
     Button,
     ButtonBase,
     CircularProgress,
     Dialog,
+    DialogActions,
     DialogContent,
     DialogTitle,
     IconButton,
     InputAdornment,
+    Pagination,
     Stack,
     Tooltip,
     Typography,
@@ -20,6 +22,8 @@ import EmptyState from '@/components/EmptyState';
 import SearchField from '@/components/SearchField';
 import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
+import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from './imageThumbnails';
+import ThumbImage from './ThumbImage';
 import {
     fullBleedDialogPaperSx,
     hoverRevealSx,
@@ -69,14 +73,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                         })}
                         sx={{ display: 'block', borderRadius: 0.5, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
                     >
-                        <Box
-                            component="img"
-                            src={src}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            sx={{ width: 22, height: 22, objectFit: 'cover', display: 'block' }}
-                        />
+                        <ThumbImage src={src} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 22, height: 22 }} />
                     </ButtonBase>
                 ))}
                 {sources.length > shown.length && (
@@ -88,6 +85,11 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
         </Tooltip>
     );
 };
+
+// Tiles per page of the overview, and the most the grid ever mounts at once.
+// 24 divides into 2, 3, 4, 6 or 8 columns, so on most widths the last row of
+// a full page is full too.
+const GALLERY_PAGE_SIZE = 24;
 
 interface ImageGenGalleryDialogProps {
     open: boolean;
@@ -174,6 +176,24 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
     const tiles = useMemo(() => buildGalleryTiles(runs, imported), [imported, runs]);
     const filtered = useMemo(() => filterGalleryTiles(tiles, query), [query, tiles]);
 
+    // One page of tiles at a time: however long the session, the grid mounts
+    // at most a page of them, and the user moves between pages from a footer
+    // that stays in view. A new search, or opening the overview again, starts
+    // from the first page; a page emptied by removals falls back to the last
+    // one that still has tiles.
+    const pageKey = `${open ? 'open' : 'closed'}:${query}`;
+    const [paging, setPaging] = useState({ key: pageKey, page: 1 });
+    const pageCount = Math.max(1, Math.ceil(filtered.length / GALLERY_PAGE_SIZE));
+    const page = Math.min(paging.key === pageKey ? paging.page : 1, pageCount);
+    const pageStart = (page - 1) * GALLERY_PAGE_SIZE;
+    const shown = filtered.slice(pageStart, pageStart + GALLERY_PAGE_SIZE);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const goToPage = (next: number) => {
+        setPaging({ key: pageKey, page: next });
+        // A new page starts at its top, not wherever the last one was left.
+        contentRef.current?.scrollTo({ top: 0 });
+    };
+
     return (
         <Dialog
             open={open}
@@ -250,7 +270,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     <Close />
                 </IconButton>
             </DialogTitle>
-            <DialogContent dividers sx={{ bgcolor: 'action.hover' }}>
+            <DialogContent ref={contentRef} dividers sx={{ bgcolor: 'action.hover' }}>
                 {filtered.length === 0 ? (
                     <Stack sx={{ height: '100%', justifyContent: 'center' }}>
                         <EmptyState
@@ -273,7 +293,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                             alignContent: 'start',
                         }}
                     >
-                        {filtered.map((tile) => (
+                        {shown.map((tile) => (
                             <Box
                                 key={tile.key}
                                 data-testid="imagegen-gallery-tile"
@@ -337,27 +357,14 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                                 '&:hover .tile-zoom, &:focus-visible .tile-zoom': { opacity: 1 },
                                             }}
                                         >
-                                            <Box
-                                                component="img"
+                                            {/* A downscaled copy, made as the tile nears the
+                                                viewport: a grid of originals decodes tens of MB
+                                                per tile and is what made a long session crawl. */}
+                                            <ThumbImage
                                                 src={tile.kind === 'import' ? tile.item.src : tile.src}
                                                 alt={tile.kind === 'import' ? tile.item.name : tile.run.prompt}
-                                                loading="lazy"
-                                                decoding="async"
-                                                // Lazy-loading is what keeps a grid of hundreds of
-                                                // data: URLs from decoding all at once — the trade-off
-                                                // is that each tile's decode lands on its own frame as
-                                                // it scrolls into view, which without this reads as the
-                                                // grid flickering. Fading each tile in on its own
-                                                // `load` masks that stagger instead of fighting it.
-                                                onLoad={(event) => { event.currentTarget.style.opacity = '1'; }}
-                                                sx={{
-                                                    width: '100%',
-                                                    height: '100%',
-                                                    objectFit: 'contain',
-                                                    display: 'block',
-                                                    opacity: 0,
-                                                    transition: 'opacity 0.15s ease-out',
-                                                }}
+                                                edge={THUMB_EDGE_TILE}
+                                                fit="contain"
                                             />
                                             <Box className="tile-zoom" sx={zoomScrimSx}>
                                                 <ZoomIn sx={{ fontSize: 28 }} />
@@ -462,6 +469,27 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                     </Box>
                 )}
             </DialogContent>
+            {pageCount > 1 && (
+                <DialogActions sx={{ justifyContent: 'center', gap: 1.5, py: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {t('playground.gallery.pageRange', {
+                            defaultValue: '{{from}}–{{to}} of {{total}}',
+                            from: pageStart + 1,
+                            to: pageStart + shown.length,
+                            total: filtered.length,
+                        })}
+                    </Typography>
+                    <Pagination
+                        count={pageCount}
+                        page={page}
+                        onChange={(_, next) => goToPage(next)}
+                        size="small"
+                        shape="rounded"
+                        siblingCount={1}
+                        data-testid="imagegen-gallery-pagination"
+                    />
+                </DialogActions>
+            )}
             <ConfirmDialog
                 open={confirmClear}
                 title={t('playground.gallery.clearAllTitle', { defaultValue: 'Clear this session?' })}

@@ -186,17 +186,28 @@ export const runGridLayout = (slots: number) => {
 // (padding, the prompt/meta header, the strip's bottom scrollbar gutter).
 const CARD_VERTICAL_CHROME = 76;
 const SINGLE_CARD_BASE = 'clamp(280px, 46%, 360px)';
+// The tallest a card's image area gets. On the full-height workbench the strip
+// can be 800px+ tall; a card that fills it is one picture the size of the
+// screen, with the rest of the session a scroll away. Past this height the
+// strip wraps into rows of cards instead (ImageGenResultsPanel), so a tall
+// panel shows more of the session rather than bigger cards.
+const CARD_MAX_IMAGE_HEIGHT = 320;
+const CARD_MAX_HEIGHT = CARD_MAX_IMAGE_HEIGHT + CARD_VERTICAL_CHROME;
+// The strip's height as a card sees it: the real height (`100cqh`, the strip
+// is a size container) up to the cap.
+const STRIP_HEIGHT = `min(100cqh, ${CARD_MAX_HEIGHT}px)`;
+
+/** CSS height of a card (and the overview tile) in the results strip. */
+export const STRIP_CARD_HEIGHT = `min(100%, ${CARD_MAX_HEIGHT}px)`;
 
 // CSS flex-basis for a card in the results strip. The widths above were tuned
-// for a short strip; on the full-height workbench the strip is much taller, and
-// the card grows wider so its slots stay square — extra height becomes bigger
-// images, not letterboxing. `100cqh` is the strip's own height (the strip is a
-// size container). Never narrower than the tuned width, never wider than the
-// strip.
+// for a short strip; a taller strip (up to the cap) makes the card wider so its
+// slots stay square — extra height becomes bigger images, not letterboxing.
+// Never narrower than the tuned width, never wider than the strip.
 export const stripCardBasis = (layout: { rows: number; cols: number; cardWidth: number } | null): string => {
     const { rows, cols } = layout ?? { rows: 1, cols: 1 };
     const base = layout === null || (cols === 1 && rows === 1) ? SINGLE_CARD_BASE : `${layout.cardWidth}px`;
-    const slot = `(100cqh - ${CARD_VERTICAL_CHROME + (rows - 1) * SLOT_GAP}px) / ${rows}`;
+    const slot = `(${STRIP_HEIGHT} - ${CARD_VERTICAL_CHROME + (rows - 1) * SLOT_GAP}px) / ${rows}`;
     const square = `calc(${slot} * ${cols} + ${(cols - 1) * SLOT_GAP + CARD_PADDING}px)`;
     return `0 0 min(100%, max(${base}, ${square}))`;
 };

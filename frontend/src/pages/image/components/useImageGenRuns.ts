@@ -102,7 +102,8 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
             const track = historyTrackRef.current;
-            if (track) track.scrollTo({ left: track.scrollWidth, behavior: 'smooth' });
+            // Sideways on the stacked strip, down on the wrapping workbench.
+            if (track) track.scrollTo({ left: track.scrollWidth, top: track.scrollHeight, behavior: 'smooth' });
         });
         return () => cancelAnimationFrame(frame);
     }, [imported.length, pendingCount, runs.length]);
