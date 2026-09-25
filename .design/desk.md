@@ -330,6 +330,53 @@ conversation reads as the main agent's. A foreground run still "running"
 after its turn ended was cut off with the turn and reads as stopped. A
 backgrounded command's step carries a `background · <state>` tag.
 
+### 3.9 Background tasks
+
+What a session runs in the background (a `Bash` or subagent started with
+`run_in_background`) outlives the turn that started it, so it gets its own
+place rather than living only in the transcript:
+
+- **Live set** (`tasks.go`). `background_tasks_changed` carries the full set
+  of running tasks; the Service keeps the latest per session and reports it
+  as `SessionInfo.background_tasks`. The set dies with its process: the
+  resident's `OnTerminated` clears it, and so does the end of a one-shot
+  turn. The page trusts it over the transcript, so a task whose process went
+  away without a final event (a restart, an archive) reads as ended, not
+  running forever.
+- **Kept alive.** A process with background tasks is idle between turns, and
+  a long command can go minutes without an event, so the pool's idle sweep
+  would reclaim it and end its tasks. While a session has live tasks it is
+  touched every minute.
+- **Stop one task**: `POST /desk/sessions/:id/tasks/:task_id/stop` sends
+  `stop_task`; the task's "stopped" notification settles it.
+- **Read output**: `GET /desk/sessions/:id/tasks/:task_id/output` returns the
+  tail of its output file (a command's stdout and exit code). The path is
+  the one Claude Code reported for that task in the call's result ("Output
+  is being written to: …"), recorded as an `output_file` task event; only a
+  file shaped `…/tasks/<task_id>.output` is read.
+
+- **Finished tasks stay.** A command's output file is temporary (Claude
+  Code's temp dir), so when a command finishes the Service copies the last
+  8 KiB into the transcript (an `output_snapshot` task event), and the page
+  reads a finished command from that copy. Subagents need no copy: their
+  work is already in the transcript entry by entry.
+
+On the page: a header entry, always present so it can be found before it
+is needed (an icon, whose empty state says what will appear there), turns
+into a labeled "N running" pill while work runs, and opens the list in two groups — Running, and Finished (newest first, kept
+for looking back) — each row with its state and elapsed time. A row opens into what the task is: a
+command shows its command line and its output (loaded on open, refreshed
+every 2 s while it runs, exit code included once done); a subagent shows its
+type, usage, what it was asked, what it is doing now, its latest steps and
+its latest reply or report. Every row can Stop (while running) and "Show in
+conversation", which scrolls to the call that started it and flashes it. The
+sidebar marks a session with running background work (quieter than a
+running turn: nothing waits on the user). Archive and Continue in terminal
+end the process, so with tasks running they ask first; a profile, model or
+permission change says that the next message's restart will stop them. A
+session with live tasks is polled like one mid-turn, since that is when
+their progress, and the turn Claude starts when one finishes, arrive.
+
 ## 4. HTTP surface
 
 `internal/server/module/desk` is a thin adapter: request/response

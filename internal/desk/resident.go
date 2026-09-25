@@ -44,6 +44,8 @@ func (s *Service) newResident(sessionID string, ps agentboot.PersistentSession) 
 			s.mu.Lock()
 			if s.residents[sessionID] == r {
 				delete(s.residents, sessionID)
+				// Its background tasks ended with it.
+				delete(s.live, sessionID)
 			}
 			s.mu.Unlock()
 		},
@@ -65,6 +67,7 @@ func (s *Service) record(sessionID string, conv *converter, raw any) {
 	for _, m := range conv.messages(raw) {
 		s.sessions.AppendMessage(sessionID, m)
 		s.noteUsage(sessionID, m)
+		s.noteTask(sessionID, m)
 	}
 }
 

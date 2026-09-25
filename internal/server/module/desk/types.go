@@ -24,9 +24,13 @@ type SessionInfo struct {
 	Model string `json:"model"`
 	// AwaitingInput is true while the session's turn waits on an approval
 	// or a question from the user.
-	AwaitingInput bool      `json:"awaiting_input"`
-	CreatedAt     time.Time `json:"created_at"`
-	LastActivity  time.Time `json:"last_activity"`
+	AwaitingInput bool `json:"awaiting_input"`
+	// BackgroundTasks are the background tasks (shell commands, subagents)
+	// the session's process is running now; empty once it has none or the
+	// process is gone.
+	BackgroundTasks []BackgroundTaskInfo `json:"background_tasks"`
+	CreatedAt       time.Time            `json:"created_at"`
+	LastActivity    time.Time            `json:"last_activity"`
 }
 
 func sessionToInfo(s *session.Session) SessionInfo {
@@ -99,6 +103,22 @@ type SetPermissionModeRequest struct {
 
 // HandoffResponse is the shell command that continues a session in a
 // terminal, run from anywhere on the tingly-box host.
+// BackgroundTaskInfo is one running background task.
+type BackgroundTaskInfo struct {
+	TaskID string `json:"task_id"`
+	// TaskType is "local_bash" (a shell command) or "local_agent" (a subagent).
+	TaskType    string `json:"task_type"`
+	Description string `json:"description"`
+}
+
+// TaskOutputResponse is the end of a background task's output file.
+type TaskOutputResponse struct {
+	Content string `json:"content"`
+	// Truncated means the file is longer than Content; Size is its length.
+	Truncated bool  `json:"truncated"`
+	Size      int64 `json:"size"`
+}
+
 type HandoffResponse struct {
 	Command string `json:"command"`
 }

@@ -161,7 +161,29 @@ func (h *Handler) SetPermissionMode(c *gin.Context) {
 func (h *Handler) info(sess *session.Session) SessionInfo {
 	out := sessionToInfo(sess)
 	out.AwaitingInput = h.svc.AwaitingInput(sess.ID)
+	out.BackgroundTasks = []BackgroundTaskInfo{}
+	for _, t := range h.svc.BackgroundTasks(sess.ID) {
+		out.BackgroundTasks = append(out.BackgroundTasks, BackgroundTaskInfo{TaskID: t.TaskID, TaskType: t.TaskType, Description: t.Description})
+	}
 	return out
+}
+
+func (h *Handler) StopTask(c *gin.Context) {
+	if err := h.svc.StopTask(c.Request.Context(), c.Param("session_id"), c.Param("task_id")); err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	c.Status(http.StatusAccepted)
+}
+
+func (h *Handler) TaskOutput(c *gin.Context) {
+	tail, _ := strconv.Atoi(c.Query("tail_bytes"))
+	out, err := h.svc.TaskOutput(c.Param("session_id"), c.Param("task_id"), tail)
+	if err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, TaskOutputResponse{Content: out.Content, Truncated: out.Truncated, Size: out.Size})
 }
 
 func (h *Handler) Handoff(c *gin.Context) {

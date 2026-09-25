@@ -40,6 +40,10 @@ const DeskPage = () => {
 
     const selectedSession = sessions.find((s) => s.id === selectedId) || null;
     const selectedBusy = selectedSession ? isBusyStatus(selectedSession.status) : false;
+    // Background tasks report between turns (progress, and a turn Claude
+    // starts itself when one finishes), so a session running any is watched
+    // as closely as one running a turn.
+    const selectedActive = selectedBusy || (selectedSession?.background_tasks?.length ?? 0) > 0;
     // Lets a late messages response for a previously selected session be
     // dropped instead of overwriting the current one's transcript.
     const selectedIdRef = useRef(selectedId);
@@ -115,13 +119,13 @@ const DeskPage = () => {
             return;
         }
         void loadMessages(selectedId);
-        if (!selectedBusy) return;
+        if (!selectedActive) return;
         const id = setInterval(() => {
             void loadMessages(selectedId);
             void refreshSelectedSession(selectedId);
         }, MESSAGES_POLL_MS);
         return () => clearInterval(id);
-    }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
+    }, [selectedId, selectedActive, loadMessages, refreshSelectedSession]);
 
     // Resolves false on failure so the composer keeps what the user typed.
     const handleCreate = async (path: string, prompt: string, permissionMode: string, profile: string, model: string): Promise<boolean> => {
@@ -255,11 +259,24 @@ const DeskPage = () => {
         }
     };
 
+    // Launch settings apply from the next message, which restarts Claude's
+    // process — and ends the background tasks it runs. Say so when it will.
+    const warnRestart = () => {
+        const n = selectedSession?.background_tasks?.length ?? 0;
+        if (n > 0) {
+            notify.info(t('desk.restartStopsTasks', {
+                defaultValue: 'Applies from your next message, which restarts Claude and stops its {{count}} background task(s).',
+                count: n,
+            }));
+        }
+    };
+
     const handleProfileChange = async (profile: string) => {
         if (!selectedId) return;
         try {
             const updated = await deskApi.setProfile(selectedId, profile);
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            warnRestart();
             await loadMessages(selectedId);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.profileFailed', {defaultValue: 'Failed to change profile'}));
@@ -271,6 +288,7 @@ const DeskPage = () => {
         try {
             const updated = await deskApi.setModel(selectedId, model);
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            warnRestart();
             await loadMessages(selectedId);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.modelFailed', {defaultValue: 'Failed to change model'}));
@@ -282,6 +300,7 @@ const DeskPage = () => {
         try {
             const updated = await deskApi.setPermissionMode(selectedId, mode);
             setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            warnRestart();
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.updateFailed', {defaultValue: 'Failed to update permission mode'}));
         }
@@ -335,6 +354,7 @@ const DeskPage = () => {
                             draft={drafts[selectedSession.id] ?? ''}
                             onDraftChange={(text) => setDrafts((d) => ({...d, [selectedSession.id]: text}))}
                             onHandoff={handleHandoff}
+                            onRefresh={() => void Promise.all([loadMessages(selectedSession.id), refreshSelectedSession(selectedSession.id)])}
                             onBack={isNarrow ? backToList : undefined}
                         />
                     ) : (

@@ -132,3 +132,19 @@ export const handoff = (sessionId: string): Promise<string> =>
         headers,
         params: {path: {session_id: sessionId}},
     })).then((r) => r.command);
+
+export type TaskOutput = components['schemas']['TaskOutputResponse'];
+
+// stopTask stops one background task; its "stopped" state arrives through
+// the transcript.
+export const stopTask = (sessionId: string, taskId: string): Promise<void> =>
+    call((client, headers) => client.POST('/api/v1/desk/sessions/{session_id}/tasks/{task_id}/stop', {
+        headers,
+        params: {path: {session_id: sessionId, task_id: taskId}},
+    })).then(() => undefined);
+
+export const getTaskOutput = (sessionId: string, taskId: string, tailBytes?: number): Promise<TaskOutput> =>
+    call((client, headers) => client.GET('/api/v1/desk/sessions/{session_id}/tasks/{task_id}/output', {
+        headers,
+        params: {path: {session_id: sessionId, task_id: taskId}, query: tailBytes ? {tail_bytes: tailBytes} : {}},
+    }));

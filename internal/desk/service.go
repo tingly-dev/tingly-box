@@ -77,6 +77,10 @@ type Service struct {
 	launch map[string]string
 	// residents holds the Conductor of each pooled process (resident.go).
 	residents map[string]*resident
+	// live is each session's running background tasks (tasks.go).
+	live          map[string][]TaskBrief
+	stopKeepAlive chan struct{}
+	shutdownOnce  sync.Once
 	// model is each session's latest requested model (from its usage
 	// entries), so Status needn't reload the transcript to find it.
 	model map[string]string
@@ -126,10 +130,13 @@ type Config struct {
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}, residents: map[string]*resident{}}
+	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}, residents: map[string]*resident{}, live: map[string][]TaskBrief{}, stopKeepAlive: make(chan struct{})}
 	s.launcher = cfg.Launcher
 	if s.launcher == "" {
 		s.launcher = selfExecutable()
+	}
+	if s.pool != nil {
+		go s.keepAlive(s.stopKeepAlive)
 	}
 	s.recoverInterrupted()
 	return s
@@ -168,6 +175,7 @@ func (s *Service) recoverInterrupted() {
 // Shutdown stops every in-flight turn and closes every resident persistent
 // process, so none outlives the server holding its Claude session file open.
 func (s *Service) Shutdown(ctx context.Context) {
+	s.shutdownOnce.Do(func() { close(s.stopKeepAlive) })
 	s.mu.Lock()
 	for _, r := range s.runs {
 		r.cancel()

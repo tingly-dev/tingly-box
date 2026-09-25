@@ -1,4 +1,4 @@
-import {Add, Search} from '@/components/icons';
+import {Add, Search, Stream} from '@/components/icons';
 import type {SessionInfo} from '@/services/deskApi';
 import {Box, CircularProgress, IconButton, InputBase, List, ListItemButton, Tooltip, Typography} from '@mui/material';
 import {useMemo, useState} from 'react';
@@ -28,6 +28,18 @@ const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) 
         );
     }
     if (isBusyStatus(session.status)) return <CircularProgress size={10} thickness={6}/>;
+    // The reply is done but work it started goes on: a quieter mark than a
+    // running turn, since nothing waits on the user.
+    const bg = session.background_tasks?.length ?? 0;
+    if (bg > 0) {
+        return (
+            <Tooltip title={t('desk.backgroundRunning', {defaultValue: '{{count}} background task(s) running', count: bg})}>
+                <Box component="span" sx={{display: 'inline-flex', alignItems: 'center', gap: 0.25, color: 'text.secondary', fontSize: '0.7rem'}}>
+                    <Stream sx={{fontSize: 13}}/>{bg}
+                </Box>
+            </Tooltip>
+        );
+    }
     if (session.status === 'failed') return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'error.main'}}/>;
     if (unseen) return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'primary.main'}}/>;
     return null;
