@@ -2,6 +2,8 @@ import { Box, ButtonBase, IconButton, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Edit, ZoomIn } from '@/components/icons';
 import { hoverRevealSx, overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
+import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import ThumbImage from './ThumbImage';
 
 interface RunSourceStripProps {
     sources: string[];
@@ -59,11 +61,10 @@ const RunSourceStrip: React.FC<RunSourceStripProps> = ({ sources, onOpen, onUseA
                             '&:hover .source-zoom, &:focus-visible .source-zoom': { opacity: 1 },
                         }}
                     >
-                        <Box
-                            component="img"
+                        <ThumbImage
                             src={src}
                             alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: i + 1 })}
-                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            edge={THUMB_EDGE_BADGE}
                         />
                         <Box className="source-zoom" sx={zoomScrimSx}>
                             <ZoomIn sx={{ fontSize: 16 }} />

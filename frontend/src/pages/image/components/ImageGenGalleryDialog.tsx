@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     Box,
     Button,
@@ -20,6 +20,8 @@ import EmptyState from '@/components/EmptyState';
 import SearchField from '@/components/SearchField';
 import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
+import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from './imageThumbnails';
+import ThumbImage from './ThumbImage';
 import {
     fullBleedDialogPaperSx,
     hoverRevealSx,
@@ -69,14 +71,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                         })}
                         sx={{ display: 'block', borderRadius: 0.5, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
                     >
-                        <Box
-                            component="img"
-                            src={src}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            sx={{ width: 22, height: 22, objectFit: 'cover', display: 'block' }}
-                        />
+                        <ThumbImage src={src} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 22, height: 22 }} />
                     </ButtonBase>
                 ))}
                 {sources.length > shown.length && (
@@ -88,6 +83,10 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
         </Tooltip>
     );
 };
+
+// Tiles mounted per step of the overview's progressive grid: a few screens
+// worth on a wide window, so the first paint of a long session stays cheap.
+const GALLERY_PAGE_SIZE = 48;
 
 interface ImageGenGalleryDialogProps {
     open: boolean;
@@ -173,6 +172,34 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
 
     const tiles = useMemo(() => buildGalleryTiles(runs, imported), [imported, runs]);
     const filtered = useMemo(() => filterGalleryTiles(tiles, query), [query, tiles]);
+
+    // The grid grows a page at a time as the user scrolls toward its end,
+    // rather than mounting every tile of a long session the moment it opens.
+    // A new search, or opening the overview again, starts from the top page.
+    const pageKey = `${open ? 'open' : 'closed'}:${query}`;
+    const [paging, setPaging] = useState({ key: pageKey, limit: GALLERY_PAGE_SIZE });
+    const limit = paging.key === pageKey ? paging.limit : GALLERY_PAGE_SIZE;
+    const showMore = useCallback(() => {
+        setPaging((current) => ({
+            key: pageKey,
+            limit: (current.key === pageKey ? current.limit : GALLERY_PAGE_SIZE) + GALLERY_PAGE_SIZE,
+        }));
+    }, [pageKey]);
+    const shown = filtered.length > limit ? filtered.slice(0, limit) : filtered;
+    const remaining = filtered.length - shown.length;
+    // Re-observed whenever a page lands (`remaining` changes), so a sentinel
+    // still in view after one page asks for the next straight away. A callback
+    // ref rather than useRef: the dialog's portal mounts its content a render
+    // after `open` flips, and the effect has to see the element when it does.
+    const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (remaining <= 0 || !sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) showMore();
+        }, { rootMargin: '800px 0px' });
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [remaining, sentinel, showMore]);
 
     return (
         <Dialog
@@ -264,202 +291,210 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                         />
                     </Stack>
                 ) : (
-                    <Box
-                        data-testid="imagegen-gallery-grid"
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
-                            gap: 1.5,
-                            alignContent: 'start',
-                        }}
-                    >
-                        {filtered.map((tile) => (
-                            <Box
-                                key={tile.key}
-                                data-testid="imagegen-gallery-tile"
-                                data-gallery-kind={tile.kind}
-                                sx={{ minWidth: 0 }}
-                            >
+                    <>
+                        <Box
+                            data-testid="imagegen-gallery-grid"
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+                                gap: 1.5,
+                                alignContent: 'start',
+                            }}
+                        >
+                            {shown.map((tile) => (
                                 <Box
-                                    sx={{
-                                        position: 'relative',
-                                        aspectRatio: '1 / 1',
-                                        borderRadius: 1.5,
-                                        overflow: 'hidden',
-                                        border: '1px solid',
-                                        borderColor: tile.kind === 'failed' ? 'error.main' : 'divider',
-                                        bgcolor: 'background.paper',
-                                        '&:hover .tile-actions, &:focus-within .tile-actions': { opacity: 1 },
-                                    }}
+                                    key={tile.key}
+                                    data-testid="imagegen-gallery-tile"
+                                    data-gallery-kind={tile.kind}
+                                    sx={{ minWidth: 0 }}
                                 >
-                                    {tile.kind === 'pending' ? (
-                                        <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center' }} spacing={1}>
-                                            <CircularProgress size={22} />
-                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
-                                            </Typography>
-                                        </Stack>
-                                    ) : tile.kind === 'failed' ? (
-                                        <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center', p: 1.5, textAlign: 'center' }} spacing={0.75}>
-                                            <ErrorOutline color="error" fontSize="small" />
-                                            <Typography variant="caption" sx={{ fontWeight: 500 }}>
-                                                {t('playground.runFailed', { defaultValue: 'Generation failed' })}
-                                            </Typography>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: 'error.main',
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 3,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden',
-                                                    wordBreak: 'break-word',
-                                                }}
-                                            >
-                                                {tile.run.error}
-                                            </Typography>
-                                        </Stack>
-                                    ) : (
-                                        <ButtonBase
-                                            onClick={() => (tile.kind === 'import'
-                                                ? onOpenImport(tile.item)
-                                                : onOpenOutput(tile.run, tile.imageIndex, tile.src))}
-                                            aria-label={tile.kind === 'import'
-                                                ? t('playground.openImported', { defaultValue: 'Open {{name}}', name: tile.item.name })
-                                                : t('playground.openResult', {
-                                                    defaultValue: 'Open generated image {{number}}',
-                                                    number: tile.imageIndex + 1,
-                                                })}
-                                            sx={{
-                                                width: '100%',
-                                                height: '100%',
-                                                display: 'block',
-                                                '&:hover .tile-zoom, &:focus-visible .tile-zoom': { opacity: 1 },
-                                            }}
-                                        >
-                                            <Box
-                                                component="img"
-                                                src={tile.kind === 'import' ? tile.item.src : tile.src}
-                                                alt={tile.kind === 'import' ? tile.item.name : tile.run.prompt}
-                                                loading="lazy"
-                                                decoding="async"
-                                                // Lazy-loading is what keeps a grid of hundreds of
-                                                // data: URLs from decoding all at once — the trade-off
-                                                // is that each tile's decode lands on its own frame as
-                                                // it scrolls into view, which without this reads as the
-                                                // grid flickering. Fading each tile in on its own
-                                                // `load` masks that stagger instead of fighting it.
-                                                onLoad={(event) => { event.currentTarget.style.opacity = '1'; }}
+                                    <Box
+                                        sx={{
+                                            position: 'relative',
+                                            aspectRatio: '1 / 1',
+                                            borderRadius: 1.5,
+                                            overflow: 'hidden',
+                                            border: '1px solid',
+                                            borderColor: tile.kind === 'failed' ? 'error.main' : 'divider',
+                                            bgcolor: 'background.paper',
+                                            '&:hover .tile-actions, &:focus-within .tile-actions': { opacity: 1 },
+                                        }}
+                                    >
+                                        {tile.kind === 'pending' ? (
+                                            <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center' }} spacing={1}>
+                                                <CircularProgress size={22} />
+                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                    {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                </Typography>
+                                            </Stack>
+                                        ) : tile.kind === 'failed' ? (
+                                            <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center', p: 1.5, textAlign: 'center' }} spacing={0.75}>
+                                                <ErrorOutline color="error" fontSize="small" />
+                                                <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                                                    {t('playground.runFailed', { defaultValue: 'Generation failed' })}
+                                                </Typography>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: 'error.main',
+                                                        display: '-webkit-box',
+                                                        WebkitLineClamp: 3,
+                                                        WebkitBoxOrient: 'vertical',
+                                                        overflow: 'hidden',
+                                                        wordBreak: 'break-word',
+                                                    }}
+                                                >
+                                                    {tile.run.error}
+                                                </Typography>
+                                            </Stack>
+                                        ) : (
+                                            <ButtonBase
+                                                onClick={() => (tile.kind === 'import'
+                                                    ? onOpenImport(tile.item)
+                                                    : onOpenOutput(tile.run, tile.imageIndex, tile.src))}
+                                                aria-label={tile.kind === 'import'
+                                                    ? t('playground.openImported', { defaultValue: 'Open {{name}}', name: tile.item.name })
+                                                    : t('playground.openResult', {
+                                                        defaultValue: 'Open generated image {{number}}',
+                                                        number: tile.imageIndex + 1,
+                                                    })}
                                                 sx={{
                                                     width: '100%',
                                                     height: '100%',
-                                                    objectFit: 'contain',
                                                     display: 'block',
-                                                    opacity: 0,
-                                                    transition: 'opacity 0.15s ease-out',
+                                                    '&:hover .tile-zoom, &:focus-visible .tile-zoom': { opacity: 1 },
                                                 }}
-                                            />
-                                            <Box className="tile-zoom" sx={zoomScrimSx}>
-                                                <ZoomIn sx={{ fontSize: 28 }} />
-                                            </Box>
-                                        </ButtonBase>
-                                    )}
+                                            >
+                                                {/* A downscaled copy, made as the tile nears the
+                                                    viewport: a grid of originals decodes tens of MB
+                                                    per tile and is what made a long session crawl. */}
+                                                <ThumbImage
+                                                    src={tile.kind === 'import' ? tile.item.src : tile.src}
+                                                    alt={tile.kind === 'import' ? tile.item.name : tile.run.prompt}
+                                                    edge={THUMB_EDGE_TILE}
+                                                    fit="contain"
+                                                />
+                                                <Box className="tile-zoom" sx={zoomScrimSx}>
+                                                    <ZoomIn sx={{ fontSize: 28 }} />
+                                                </Box>
+                                            </ButtonBase>
+                                        )}
 
-                                    {tile.kind !== 'import' && (
-                                        <TileSourceBadge sources={tile.run.sourceImages ?? []} onOpen={(index) => onOpenSource(tile.run, index)} />
-                                    )}
-
-                                    {/* The tile's actions are the card's actions: nothing
-                                        here sends the user back to the strip to do a thing
-                                        the overview could have done. */}
-                                    <Stack
-                                        className="tile-actions"
-                                        direction="row"
-                                        spacing={0.5}
-                                        sx={{ position: 'absolute', bottom: 8, right: 8, ...hoverRevealSx }}
-                                    >
-                                        {tile.kind === 'pending' && (
-                                            <TileAction
-                                                label={t('playground.cancelRun', { defaultValue: 'Cancel' })}
-                                                icon={<Close fontSize="small" />}
-                                                onClick={() => onCancelRun(tile.run.id)}
-                                                testId="imagegen-gallery-cancel-run"
-                                            />
-                                        )}
-                                        {tile.kind === 'failed' && (
-                                            <TileAction
-                                                label={t('playground.retry', { defaultValue: 'Retry' })}
-                                                icon={<Refresh fontSize="small" />}
-                                                onClick={() => onRetryRun(tile.run)}
-                                            />
-                                        )}
-                                        {(tile.kind === 'output' || tile.kind === 'import') && (
-                                            <TileAction
-                                                label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
-                                                icon={<Edit fontSize="small" />}
-                                                onClick={() => onUseAsReference(tile.kind === 'import' ? tile.item.src : tile.src)}
-                                                testId="imagegen-gallery-use-as-reference"
-                                            />
-                                        )}
                                         {tile.kind !== 'import' && (
+                                            <TileSourceBadge sources={tile.run.sourceImages ?? []} onOpen={(index) => onOpenSource(tile.run, index)} />
+                                        )}
+
+                                        {/* The tile's actions are the card's actions: nothing
+                                            here sends the user back to the strip to do a thing
+                                            the overview could have done. */}
+                                        <Stack
+                                            className="tile-actions"
+                                            direction="row"
+                                            spacing={0.5}
+                                            sx={{ position: 'absolute', bottom: 8, right: 8, ...hoverRevealSx }}
+                                        >
+                                            {tile.kind === 'pending' && (
+                                                <TileAction
+                                                    label={t('playground.cancelRun', { defaultValue: 'Cancel' })}
+                                                    icon={<Close fontSize="small" />}
+                                                    onClick={() => onCancelRun(tile.run.id)}
+                                                    testId="imagegen-gallery-cancel-run"
+                                                />
+                                            )}
+                                            {tile.kind === 'failed' && (
+                                                <TileAction
+                                                    label={t('playground.retry', { defaultValue: 'Retry' })}
+                                                    icon={<Refresh fontSize="small" />}
+                                                    onClick={() => onRetryRun(tile.run)}
+                                                />
+                                            )}
+                                            {(tile.kind === 'output' || tile.kind === 'import') && (
+                                                <TileAction
+                                                    label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
+                                                    icon={<Edit fontSize="small" />}
+                                                    onClick={() => onUseAsReference(tile.kind === 'import' ? tile.item.src : tile.src)}
+                                                    testId="imagegen-gallery-use-as-reference"
+                                                />
+                                            )}
+                                            {tile.kind !== 'import' && (
+                                                <TileAction
+                                                    label={t('playground.reuse.action', { defaultValue: 'Edit this request' })}
+                                                    icon={<RestartAlt fontSize="small" />}
+                                                    onClick={() => onReuseRun(tile.run)}
+                                                    testId="imagegen-gallery-reuse-run"
+                                                />
+                                            )}
+                                        </Stack>
+                                        {tile.kind !== 'pending' && (
                                             <TileAction
-                                                label={t('playground.reuse.action', { defaultValue: 'Edit this request' })}
-                                                icon={<RestartAlt fontSize="small" />}
-                                                onClick={() => onReuseRun(tile.run)}
-                                                testId="imagegen-gallery-reuse-run"
+                                                corner="top"
+                                                label={tile.kind === 'import'
+                                                    ? t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: tile.item.name })
+                                                    : t('playground.removeRun', { defaultValue: 'Remove this generation' })}
+                                                icon={<Close fontSize="small" />}
+                                                onClick={() => (tile.kind === 'import'
+                                                    ? onRemoveImport(tile.item.id)
+                                                    : onRemoveRun(tile.run.id))}
                                             />
                                         )}
-                                    </Stack>
-                                    {tile.kind !== 'pending' && (
-                                        <TileAction
-                                            corner="top"
-                                            label={tile.kind === 'import'
-                                                ? t('playground.removeImported', { defaultValue: 'Remove {{name}}', name: tile.item.name })
-                                                : t('playground.removeRun', { defaultValue: 'Remove this generation' })}
-                                            icon={<Close fontSize="small" />}
-                                            onClick={() => (tile.kind === 'import'
-                                                ? onRemoveImport(tile.item.id)
-                                                : onRemoveRun(tile.run.id))}
-                                        />
-                                    )}
+                                    </Box>
+                                    {/* Two lines under every tile, always the same two: what it
+                                        is, then what made it. A grid of pictures with no captions
+                                        is a puzzle. */}
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            mt: 0.75,
+                                            wordBreak: 'break-word',
+                                        }}
+                                    >
+                                        {tile.kind === 'import' ? tile.item.name : tile.run.prompt}
+                                    </Typography>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            display: 'block',
+                                            color: 'text.disabled',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {tile.kind === 'import'
+                                            ? [
+                                                t('playground.importedBadge', { defaultValue: 'Imported' }),
+                                                tile.item.width && tile.item.height ? `${tile.item.width}×${tile.item.height} px` : '',
+                                                formatBytes(tile.item.bytes),
+                                            ].filter(Boolean).join(' · ')
+                                            : `${tile.run.model} · ${tile.run.size} · ${tile.run.quality}`}
+                                    </Typography>
                                 </Box>
-                                {/* Two lines under every tile, always the same two: what it
-                                    is, then what made it. A grid of pictures with no captions
-                                    is a puzzle. */}
-                                <Typography
-                                    variant="caption"
-                                    sx={{
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden',
-                                        mt: 0.75,
-                                        wordBreak: 'break-word',
-                                    }}
+                            ))}
+                        </Box>
+                        {remaining > 0 && (
+                            // Scrolling near it loads the next page; the button is
+                            // the same thing for a keyboard, or a browser without
+                            // IntersectionObserver.
+                            <Stack ref={setSentinel} sx={{ alignItems: 'center', pt: 2, pb: 1 }}>
+                                <Button
+                                    size="small"
+                                    color="inherit"
+                                    onClick={showMore}
+                                    data-testid="imagegen-gallery-more"
+                                    sx={{ color: 'text.secondary' }}
                                 >
-                                    {tile.kind === 'import' ? tile.item.name : tile.run.prompt}
-                                </Typography>
-                                <Typography
-                                    variant="caption"
-                                    sx={{
-                                        display: 'block',
-                                        color: 'text.disabled',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                    }}
-                                >
-                                    {tile.kind === 'import'
-                                        ? [
-                                            t('playground.importedBadge', { defaultValue: 'Imported' }),
-                                            tile.item.width && tile.item.height ? `${tile.item.width}×${tile.item.height} px` : '',
-                                            formatBytes(tile.item.bytes),
-                                        ].filter(Boolean).join(' · ')
-                                        : `${tile.run.model} · ${tile.run.size} · ${tile.run.quality}`}
-                                </Typography>
-                            </Box>
-                        ))}
-                    </Box>
+                                    {t('playground.gallery.showMore', {
+                                        defaultValue: 'Show more ({{count}} left)',
+                                        count: remaining,
+                                    })}
+                                </Button>
+                            </Stack>
+                        )}
+                    </>
                 )}
             </DialogContent>
             <ConfirmDialog

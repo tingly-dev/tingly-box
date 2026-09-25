@@ -10,6 +10,7 @@ import {
     resultSrc,
     runGridLayout,
     stripCardBasis,
+    STRIP_CARD_HEIGHT,
     runImage,
 } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
@@ -244,14 +245,18 @@ describe('runGridLayout', () => {
 
 describe('stripCardBasis', () => {
     it('keeps a single image card at least its tuned width, else as wide as a square slot', () => {
-        expect(stripCardBasis(null)).toBe('0 0 min(100%, max(clamp(280px, 46%, 360px), calc((100cqh - 76px) / 1 * 1 + 24px)))');
+        expect(stripCardBasis(null)).toBe('0 0 min(100%, max(clamp(280px, 46%, 360px), calc((min(100cqh, 396px) - 76px) / 1 * 1 + 24px)))');
         expect(stripCardBasis(runGridLayout(1))).toBe(stripCardBasis(null));
     });
 
     it('sizes multi-image cards for square slots across their columns and rows', () => {
         const four = runGridLayout(4);
-        expect(stripCardBasis(four)).toBe(`0 0 min(100%, max(${four.cardWidth}px, calc((100cqh - 84px) / 2 * 2 + 32px)))`);
+        expect(stripCardBasis(four)).toBe(`0 0 min(100%, max(${four.cardWidth}px, calc((min(100cqh, 396px) - 84px) / 2 * 2 + 32px)))`);
         const five = runGridLayout(5);
-        expect(stripCardBasis(five)).toBe(`0 0 min(100%, max(${five.cardWidth}px, calc((100cqh - 84px) / 2 * 3 + 40px)))`);
+        expect(stripCardBasis(five)).toBe(`0 0 min(100%, max(${five.cardWidth}px, calc((min(100cqh, 396px) - 84px) / 2 * 3 + 40px)))`);
+    });
+
+    it('stops growing past the height cap, the same one the card height uses', () => {
+        expect(STRIP_CARD_HEIGHT).toBe('min(100%, 396px)');
     });
 });
