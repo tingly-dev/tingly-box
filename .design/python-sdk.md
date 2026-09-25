@@ -437,11 +437,20 @@ decorator is named for its protocol in full — `tingly.openai_chat`,
 each, so those are named for the capability — `tingly.image`,
 `tingly.image_edit` (vs `srv.images` / `srv.image_edits`).
 
+The text decorators also have short aliases — `tingly.chat`,
+`tingly.responses`, `tingly.message` — for the one-liner that doesn't want
+to spell the protocol out. They are the same functions under a second name
+(`tingly.chat is tingly.openai_chat`), not a separate contract. The short
+names do overlap the raw `srv.chat` / `srv.responses`, but the two never
+meet: one is a module-level decorator taking a model name, the other a
+method on a `Server` you built yourself, and both serve the same endpoint.
+The full names stay canonical in docs and error messages.
+
 | sugar | endpoint it serves | function receives | may return |
 |---|---|---|---|
-| `@tingly.openai_chat(model)` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
-| `@tingly.openai_responses(model)` | `/v1/responses` | `input` (a string or the item list, as-is), `**rest` (incl. `instructions`) | `str` or a Response `dict` |
-| `@tingly.anthropic_message(model)` | `/v1/messages` | `messages` (the body's list, as-is), `**rest` (incl. `system`) | `str` or a Message `dict` |
+| `@tingly.openai_chat(model)`, alias `chat` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
+| `@tingly.openai_responses(model)`, alias `responses` | `/v1/responses` | `input` (a string or the item list, as-is), `**rest` (incl. `instructions`) | `str` or a Response `dict` |
+| `@tingly.anthropic_message(model)`, alias `message` | `/v1/messages` | `messages` (the body's list, as-is), `**rest` (incl. `system`) | `str` or a Message `dict` |
 | `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image (`bytes` / `.save()`-able / list), or an `ImagesResponse` `dict` |
 | `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` (incl. `mask`) | same as `image` |
 
