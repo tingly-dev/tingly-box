@@ -109,10 +109,33 @@ export const activityBottomClusterSx: SxProps<Theme> = {
     flexShrink: 0,
 };
 
-export const activityIconsScrollSx: SxProps<Theme> = {
-    flex: 1,
-    py: activityContainerPaddingY,
-    overflowY: 'auto',
+/** Scrollable activity list. The native scrollbar is hidden on purpose: on
+ *  platforms with non-overlay scrollbars it eats ~15px of the 88px rail, which
+ *  shifts the centered icons left and misaligns them with the fixed bottom
+ *  cluster. Overflow is hinted instead by scroll shadows (Lea Verou's
+ *  `background-attachment: local` trick) that only appear at an edge when
+ *  there is more content beyond it. */
+export const activityIconsScrollSx: SxProps<Theme> = (theme) => {
+    const paper = theme.palette.background.paper;
+    const shadow = theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.12)';
+    return {
+        flex: 1,
+        minHeight: 0,
+        py: activityContainerPaddingY,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
+        background: `
+            linear-gradient(${paper} 30%, transparent) center top,
+            linear-gradient(transparent, ${paper} 70%) center bottom,
+            radial-gradient(farthest-side at 50% 0, ${shadow}, transparent) center top,
+            radial-gradient(farthest-side at 50% 100%, ${shadow}, transparent) center bottom
+        `,
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: '100% 24px, 100% 24px, 100% 10px, 100% 10px',
+        backgroundAttachment: 'local, local, scroll, scroll',
+    };
 };
 
 export const activityRailSx: SxProps<Theme> = {
