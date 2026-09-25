@@ -10,22 +10,24 @@
 
 Everything here is built on the raw layer (`server.py`) and follows one
 rule: **unpack, don't convert.** A function receives the one field that is
-the point of the call — `messages` for text, `prompt` (and `images` for
-edits) for images — plus the rest of the same request body as keyword
+the point of the call — `messages` for Chat and Anthropic, `input` for
+Responses, `prompt` (and `images` for edits) for images — plus the rest of the same request body as keyword
 arguments, never a translated or normalized version of it. Its return value
 goes through the raw layer's existing wrappers (`str` for text; `bytes` /
 `.save()`-able images for images; a `dict` always passes through).
 
-Sugar names are capabilities (`text`, `image`, `image_edit`); raw names are
-endpoints (`srv.chat`, `srv.images`, `srv.image_edits`) — so one word never
-means two contracts.
+Text decorators are named for their wire protocol (`openai_chat`,
+`openai_responses`, `anthropic_message`), image ones for the capability
+(`image`, `image_edit`); raw names are endpoints (`srv.chat`,
+`srv.responses`, `srv.messages`, `srv.images`, `srv.image_edits`) — so one
+word never means two contracts.
 
 - Only the keyword arguments a function accepts are passed: `def f(prompt)`
   gets just `prompt`, `def f(prompt, size=None)` also gets `size`, and
   `def f(prompt, **kw)` gets the whole rest of the body.
-- `text` serves `/v1/chat/completions` only. Registered as a Chat-mode
-  provider, tb translates Anthropic and Responses clients into Chat for it;
-  use the raw decorators when the native shape is really needed.
+- Each text decorator serves its own protocol only; nothing bridges them.
+  Registered as a Chat-mode provider, tb translates Anthropic and Responses
+  clients into Chat, so `openai_chat` alone covers most plugins.
 - Several models can share one process: each is listed on `/v1/models`, and
   a request is routed by its `model` field. With exactly one function on an
   endpoint, that function answers whatever the name.
@@ -53,6 +55,8 @@ def _rest(body: dict, *unpacked: str) -> dict:
 # arguments out of that endpoint's raw body.
 _UNPACK: dict[str, Callable[[dict], tuple[tuple, dict]]] = {
     "chat": lambda body: ((body.get("messages", []),), _rest(body, "messages")),
+    "responses": lambda body: ((body.get("input", ""),), _rest(body, "input")),
+    "messages": lambda body: ((body.get("messages", []),), _rest(body, "messages")),
     "images": lambda body: ((body.get("prompt", ""),), _rest(body, "prompt")),
     "image_edits": lambda body: ((body.get("prompt", ""), body.get("image", [])), _rest(body, "prompt", "image")),
 }
@@ -93,10 +97,23 @@ def _register(endpoint: str, model: str, fn: Callable[..., Any]) -> Callable[...
     return fn
 
 
-def text(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def openai_chat(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Serve `model` on `/v1/chat/completions`: `fn(messages, **rest)` →
     `str` (wrapped as a ChatCompletion) or a ChatCompletion `dict`."""
     return lambda fn: _register("chat", model, fn)
+
+
+def openai_responses(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Serve `model` on `/v1/responses`: `fn(input, **rest)` with `input` as
+    sent (a string or the item list) → `str` (wrapped as a Response) or a
+    Response `dict`."""
+    return lambda fn: _register("responses", model, fn)
+
+
+def anthropic_message(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Serve `model` on `/v1/messages`: `fn(messages, **rest)` (`system`, if
+    sent, is in `rest`) → `str` (wrapped as a Message) or a Message `dict`."""
+    return lambda fn: _register("messages", model, fn)
 
 
 def image(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -112,9 +129,12 @@ def image_edit(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]
 
 
 def serve(host: str = "0.0.0.0", port: int = 8765) -> None:
-    """Run everything registered with `text` / `image` / `image_edit`."""
+    """Run everything registered with the decorators above."""
     if _server is None:
-        raise RuntimeError("nothing to serve — decorate a function with @tingly.text, @tingly.image or @tingly.image_edit first")
+        raise RuntimeError(
+            "nothing to serve — decorate a function with @tingly.openai_chat, @tingly.openai_responses, "
+            "@tingly.anthropic_message, @tingly.image or @tingly.image_edit first"
+        )
     _server.run(host=host, port=port)
 
 

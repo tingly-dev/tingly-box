@@ -1,5 +1,6 @@
 """The sugar layer end to end: plain functions registered with
-@tingly.text / @tingly.image / @tingly.image_edit, served by tingly.serve()."""
+@tingly.openai_chat / openai_responses / anthropic_message / image /
+image_edit, served by tingly.serve()."""
 
 import base64
 import importlib.util
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import tingly  # noqa: E402
 from tingly import sugar  # noqa: E402
-from helpers import get_json, post_json, post_multipart, serve_sugar_in_background, stop_sugar  # noqa: E402
+from helpers import get_json, post_json, post_multipart, post_sse, serve_sugar_in_background, stop_sugar  # noqa: E402
 
 
 class SugarTest(unittest.TestCase):
@@ -22,10 +23,20 @@ class SugarTest(unittest.TestCase):
         sugar._reset()
         cls.seen = {}
 
-        @tingly.text("echo")
+        @tingly.openai_chat("echo")
         def reply(messages):
             cls.seen["text"] = messages
             return f"you said: {messages[-1]['content'][0]['text']}"
+
+        @tingly.openai_responses("resp")
+        def respond(input, instructions=None):
+            cls.seen["responses"] = (input, instructions)
+            return "responded"
+
+        @tingly.anthropic_message("claude-ish")
+        def answer(messages, system=None):
+            cls.seen["anthropic"] = (messages, system)
+            return "answered"
 
         @tingly.image("bare")
         def bare(prompt):  # accepts only prompt: size/n must not be passed
@@ -59,6 +70,26 @@ class SugarTest(unittest.TestCase):
         self.assertEqual(self.seen["text"], messages)  # content parts stay parts: unpacked, not converted
         self.assertEqual(body["choices"][0]["message"]["content"], "you said: hi")
 
+    def test_openai_responses_gets_input_as_sent_and_declared_keywords(self):
+        items = [{"role": "user", "content": [{"type": "input_text", "text": "hi"}]}]
+        body = post_json(f"{self.base}/v1/responses", {"model": "resp", "input": items, "instructions": "be brief"})
+        self.assertEqual(self.seen["responses"], (items, "be brief"))
+        self.assertEqual(body["output"][0]["content"][0]["text"], "responded")
+
+    def test_anthropic_message_gets_messages_and_system_unchanged(self):
+        messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        system = [{"type": "text", "text": "be brief"}]
+        body = post_json(f"{self.base}/v1/messages",
+                         {"model": "claude-ish", "max_tokens": 10, "messages": messages, "system": system})
+        self.assertEqual(self.seen["anthropic"], (messages, system))
+        self.assertEqual(body["content"], [{"type": "text", "text": "answered"}])
+
+    def test_sugar_replies_stream_like_raw_ones(self):
+        _, events = post_sse(f"{self.base}/v1/messages", {"model": "claude-ish", "max_tokens": 10, "stream": True,
+                                                           "messages": [{"role": "user", "content": "hi"}]})
+        deltas = [data["delta"] for event, data in events if event == "content_block_delta"]
+        self.assertEqual(deltas, [{"type": "text_delta", "text": "answered"}])
+
     def test_image_function_only_gets_the_arguments_it_declares(self):
         body = post_json(f"{self.base}/v1/images/generations",
                          {"model": "bare", "prompt": "a cat", "size": "512x512", "n": 1})
@@ -85,7 +116,7 @@ class SugarTest(unittest.TestCase):
 
     def test_models_lists_every_registered_model(self):
         ids = [m["id"] for m in get_json(f"{self.base}/v1/models")["data"]]
-        self.assertEqual(ids, ["echo", "bare", "sized", "everything", "editor"])
+        self.assertEqual(ids, ["echo", "resp", "claude-ish", "bare", "sized", "everything", "editor"])
 
     def test_an_unknown_model_is_an_error_when_the_endpoint_has_several(self):
         with self.assertRaises(urllib.error.HTTPError) as ctx:

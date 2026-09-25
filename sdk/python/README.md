@@ -19,7 +19,9 @@ tingly.serve()                          # http://0.0.0.0:8765/v1
 
 | decorator | serves | your function gets | and returns |
 |---|---|---|---|
-| `@tingly.text(model)` | `/v1/chat/completions` | `messages`, `**rest` | `str` (or a ChatCompletion dict) |
+| `@tingly.openai_chat(model)` | `/v1/chat/completions` | `messages`, `**rest` | `str` (or a ChatCompletion dict) |
+| `@tingly.openai_responses(model)` | `/v1/responses` | `input` (string or item list, as sent), `**rest` | `str` (or a Response dict) |
+| `@tingly.anthropic_message(model)` | `/v1/messages` | `messages`, `**rest` (incl. `system`) | `str` (or a Message dict) |
 | `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image(s): `bytes`, a PIL image, or a list |
 | `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` | same as `image` |
 
@@ -33,7 +35,10 @@ Register it once in tb: **Connect AI → Self-hosted → Custom endpoint**,
 OpenAI, `http://localhost:8765/v1`, no key. For images, point an `imagegen`
 rule at that provider and your model name. For text, tb translates
 Anthropic- and Responses-speaking clients into Chat for this provider, so
-Chat is all you write.
+`openai_chat` is usually all you write. The text decorators never convert
+between protocols: `anthropic_message` is for a provider registered
+Anthropic-style (or Dual), which tb then calls with the Anthropic body
+itself, and `openai_responses` for one in Responses mode.
 
 Streaming clients work too (Claude Code always streams): when a request asks
 for `stream: true`, your function is still called once, and its complete

@@ -5,8 +5,9 @@ stream re-emission, its image persistence.
 Skipped unless TINGLY_TB_BIN points at a tb binary (`task test:py:e2e`
 builds one and runs this). The plugins run in-process; tb runs with a
 throwaway --config-dir on a free port and is set up through its admin API
-exactly as a user would: one Custom endpoint provider (OpenAI, no key),
-then rules pointing tb model names at the plugin's models.
+exactly as a user would: Custom endpoint providers for the same plugin
+process — one OpenAI-style (no key), one Anthropic-style (a placeholder key)
+— then rules pointing tb model names at the plugin's models.
 """
 
 import base64
@@ -84,10 +85,15 @@ class EndToEndThroughTB(unittest.TestCase):
             cls.seen["edit"] = (prompt, images, mask)
             return images[-1]
 
-        @tingly.text("fake-chat")
+        @tingly.openai_chat("fake-chat")
         def reply(messages):
             cls.seen["text"] = messages
             return "echo: " + text_in(messages[-1]["content"])
+
+        @tingly.anthropic_message("fake-claude")
+        def answer(messages, system=None):
+            cls.seen["anthropic"] = (messages, system)
+            return "native: " + text_in(messages[-1]["content"])
 
         return serve_sugar_in_background()
 
@@ -128,19 +134,26 @@ class EndToEndThroughTB(unittest.TestCase):
         }, cls.admin)
         cls.provider_uuid = provider["data"]["uuid"]
         cls.discovered = post_json(f"{cls.tb_base}/api/v2/provider-models/{cls.provider_uuid}", {}, cls.admin)
-        for scenario, tb_model, plugin_model in [
-            ("imagegen", "my-image", "fake-image"),
-            ("openai", "my-chat", "fake-chat"),
-            ("anthropic", "my-chat", "fake-chat"),
+        # The same process again, as an Anthropic-style provider: tb's
+        # anthropic client needs a non-empty key even when none is checked.
+        anthropic_provider = post_json(f"{cls.tb_base}/api/v2/providers", {
+            "name": "tingly-e2e-plugin-anthropic", "api_base": cls.plugin_base,
+            "api_style": "anthropic", "no_key_required": True, "token": "not-required",
+        }, cls.admin)
+        for scenario, tb_model, provider_uuid, plugin_model in [
+            ("imagegen", "my-image", cls.provider_uuid, "fake-image"),
+            ("openai", "my-chat", cls.provider_uuid, "fake-chat"),
+            ("anthropic", "my-chat", cls.provider_uuid, "fake-chat"),
+            ("anthropic", "my-claude", anthropic_provider["data"]["uuid"], "fake-claude"),
         ]:
             post_json(f"{cls.tb_base}/api/v1/rule", {
                 "scenario": scenario, "request_model": tb_model, "response_model": tb_model, "active": True,
-                "services": [{"provider": cls.provider_uuid, "model": plugin_model, "weight": 1, "active": True}],
+                "services": [{"provider": provider_uuid, "model": plugin_model, "weight": 1, "active": True}],
             }, cls.admin)
 
     def test_tb_discovers_every_plugin_model(self):
-        self.assertIn("fake-image", json.dumps(self.discovered))
-        self.assertIn("fake-chat", json.dumps(self.discovered))
+        for model in ("fake-image", "fake-chat", "fake-claude"):
+            self.assertIn(model, json.dumps(self.discovered))
 
     def test_image_generation_through_tb_and_tb_keeps_the_png(self):
         body = post_json(f"{self.tb_base}/tingly/imagegen/v1/images/generations",
@@ -179,8 +192,8 @@ class EndToEndThroughTB(unittest.TestCase):
         self.assertEqual(text, "echo: stream me")
         self.assertEqual(events[-1], (None, "[DONE]"))
 
-    def anthropic_request(self, text, **extra):
-        return {"model": "my-chat", "max_tokens": 64, "messages": [{"role": "user", "content": text}], **extra}
+    def anthropic_request(self, text, model="my-chat", **extra):
+        return {"model": model, "max_tokens": 64, "messages": [{"role": "user", "content": text}], **extra}
 
     def test_an_anthropic_client_reaches_a_chat_only_plugin(self):
         body = post_json(f"{self.tb_base}/tingly/anthropic/v1/messages",
@@ -193,6 +206,22 @@ class EndToEndThroughTB(unittest.TestCase):
         text = "".join(data["delta"].get("text", "") for event, data in events if event == "content_block_delta")
         self.assertEqual(text, "echo: stream from claude")
         self.assertEqual(events[-1][0], "message_stop")
+
+
+    def test_an_anthropic_provider_gets_the_anthropic_body_natively(self):
+        body = post_json(f"{self.tb_base}/tingly/anthropic/v1/messages",
+                         {**self.anthropic_request("hi natively", model="my-claude"), "system": "be brief"},
+                         self.gateway)
+        self.assertEqual(body["content"][0]["text"], "native: hi natively")
+        messages, system = self.seen["anthropic"]
+        self.assertEqual(text_in(messages[-1]["content"]), "hi natively")
+        self.assertEqual(text_in(system), "be brief")
+
+    def test_an_anthropic_provider_streams_natively(self):
+        _, events = post_sse(f"{self.tb_base}/tingly/anthropic/v1/messages",
+                             self.anthropic_request("stream natively", model="my-claude", stream=True), self.gateway)
+        text = "".join(data["delta"].get("text", "") for event, data in events if event == "content_block_delta")
+        self.assertEqual(text, "native: stream natively")
 
 
 if __name__ == "__main__":
