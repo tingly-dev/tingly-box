@@ -206,3 +206,22 @@ func TestBuildClaudeCodeBillingHeader_TurnOrigin(t *testing.T) {
 		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;",
 		BuildClaudeCodeBillingHeader("2.1.280.31f", "x-anthropic-billing-header: cc_turn_origin=Human; cc_turn_origin=1x;"))
 }
+
+// The CLI indexes the prompt as a JavaScript string (UTF-16 code units).
+// Expected values come from the CLI's own fingerprint function run in Node;
+// two cases land on half of a surrogate pair, which Node hashes as U+FFFD.
+func TestComputeFingerprintJS_MatchesCLI(t *testing.T) {
+	cases := map[string]string{
+		"say hi": "31f",
+		"请帮我修复这个bug，谢谢你的帮助哦":                 "df8",
+		"héllo wörld, ça va très bien merci": "f84",
+		"ab😀cd😀efghijklmnopqrstuvwxyz":       "362",
+		"abc😀":                               "fc4",
+	}
+	for text, want := range cases {
+		assert.Equal(t, want, computeFingerprintJS(text, "2.1.280"), text)
+	}
+	// ASCII is unchanged from the legacy byte-indexed version.
+	assert.Equal(t, computeFingerprint("hello world, this is ascii", "2.1.280"), computeFingerprintJS("hello world, this is ascii", "2.1.280"))
+	assert.Equal(t, "2.1.280.df8", computeCCVersionFor("请帮我修复这个bug，谢谢你的帮助哦", "2.1.280"))
+}

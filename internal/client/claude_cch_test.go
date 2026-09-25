@@ -201,3 +201,23 @@ func TestClaudeClient_CCHOnTheWire(t *testing.T) {
 	placeholder := strings.Replace(body, m[0], claudeCodeCCHPlaceholder, 1)
 	assert.Equal(t, m[1], formatClaudeCodeCCH(xxhash64Zig(claudeCodeCCHPreimage([]byte(placeholder)), claudeCodeCCHSeed)))
 }
+
+// The SDK serializes messages before system, so a "cch=00000;" in the
+// conversation comes first on the wire; only the billing header's
+// placeholder may be patched.
+func TestRewriteClaudeCodeCCH_IgnoresPlaceholderInContent(t *testing.T) {
+	body := `{"max_tokens":1,"messages":[{"content":[{"text":"please read cch=00000; here","type":"text"}],"role":"user"}],"model":"m","system":[{"text":"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;","type":"text"}]}`
+	out, cch, ok := rewriteClaudeCodeCCH([]byte(body))
+	require.True(t, ok)
+	assert.Contains(t, string(out), "please read cch=00000; here", "conversation content untouched")
+	assert.Contains(t, string(out), "cc_entrypoint=cli; cch="+cch+";", "billing header patched")
+	assert.NotEqual(t, "00000", cch)
+	// Same hash as the documented rule over the unpatched body.
+	assert.Equal(t, cch, formatClaudeCodeCCH(xxhash64Zig(claudeCodeCCHPreimage([]byte(body)), claudeCodeCCHSeed)))
+
+	// No billing header in system: nothing is patched, even with the text in content.
+	noHeader := `{"messages":[{"content":"cch=00000;","role":"user"}],"system":[{"text":"You are Claude Code","type":"text"}]}`
+	out, _, ok = rewriteClaudeCodeCCH([]byte(noHeader))
+	assert.False(t, ok)
+	assert.Equal(t, noHeader, string(out))
+}

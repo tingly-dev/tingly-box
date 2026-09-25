@@ -802,6 +802,53 @@ func ruleFlagCases() []flagCase {
 			if native.meta["parent_session_id"] != "99999999-8888-7777-6666-555555555555" {
 				t.Errorf("parent_session_id not preserved: %v", native.meta)
 			}
+
+			// count_tokens follows the same profile. The virtual upstream has
+			// no count_tokens endpoint, so a local server captures it.
+			var ctHeaders http.Header
+			ctSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ctHeaders = r.Header.Clone()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"input_tokens":3}`))
+			}))
+			defer ctSrv.Close()
+			const ctProvider = "flag-ccver-claude-ct"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID: ctProvider, Name: ctProvider, APIBase: ctSrv.URL,
+				APIStyle: protocol.APIStyleAnthropic, AuthType: ai.AuthTypeOAuth,
+				OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode, AccessToken: "sk-ant-oat01-virtual"},
+				Enabled:     true, Timeout: int64(constant.DefaultRequestTimeout),
+			})
+			countTokens := func(reqModel, version string) http.Header {
+				rule := newHarnessRule(reqModel, typ.ScenarioClaudeCode, reqModel, "claude-sonnet-4-6",
+					harnessService(ctProvider, "claude-sonnet-4-6"))
+				rule.Flags = typ.RuleFlags{ClaudeCodeVersion: version}
+				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+				ctHeaders = nil
+				body := mustMarshal(map[string]any{
+					"model":    reqModel,
+					"messages": []map[string]any{{"role": "user", "content": "say hi"}},
+				})
+				res, err := env.dispatch(protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, s.Name,
+					"/tingly/claude_code/v1/messages/count_tokens", body, nil, false)
+				if err != nil {
+					t.Fatalf("count_tokens dispatch: %v", err)
+				}
+				if res.HTTPStatus != 200 || ctHeaders == nil {
+					t.Fatalf("count_tokens did not reach upstream: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+				}
+				return ctHeaders
+			}
+			if got := countTokens("pv-flag-ccver-ct-legacy", "").Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
+				t.Errorf("legacy count_tokens User-Agent = %q", got)
+			}
+			ct := countTokens("pv-flag-ccver-ct-280", typ.ClaudeCodeVersion2_1_280)
+			if got := ct.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+				t.Errorf("native count_tokens User-Agent = %q", got)
+			}
+			if got := ct.Values("Anthropic-Beta"); len(got) != 1 || got[0] != "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27" {
+				t.Errorf("native count_tokens anthropic-beta = %v, want the CLI's four-flag subset", got)
+			}
 		}},
 
 		// ── context_1m ───────────────────────────────────────────────────────

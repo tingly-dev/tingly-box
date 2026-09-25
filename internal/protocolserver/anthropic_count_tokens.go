@@ -89,6 +89,14 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
+	// Resolve flags so a native claude_code_version profile covers
+	// count_tokens too (anthropicCountTokens picks the context).
+	var scenarioConfig *typ.ScenarioConfig
+	if ph.deps.Config != nil {
+		scenarioConfig = ph.deps.Config.GetScenarioConfig(scenarioType)
+	}
+	ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, provider)
+
 	useModel := selectedService.Model
 	params.Model = useModel
 	ph.anthropicCountTokens(c, provider, useModel, params)
@@ -103,8 +111,14 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 	c.Set(ContextKeyModel, model)
 
 	apiStyle := provider.APIStyle
+	// The legacy path keeps its historical flagless context; a native Claude
+	// Code profile needs the resolved flags on the client context.
+	base := context.Background()
+	if c.Request != nil && typ.ClaudeCodeVersionEnabled(typ.GetRuleFlags(c.Request.Context()).ClaudeCodeVersion) {
+		base = c.Request.Context()
+	}
 	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(base, timeout)
 	defer cancel()
 
 	switch apiStyle {
@@ -123,7 +137,7 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 			ph.anthropicCountTokensViaTiktoken(c, req)
 			return
 		}
-		wrapper := ph.deps.ClientPool.GetAnthropicClient(context.Background(), provider, model)
+		wrapper := ph.deps.ClientPool.GetAnthropicClient(base, provider, model)
 		if wrapper == nil {
 			// Client construction failed (e.g. a malformed stored credential);
 			// fall back to local estimation rather than panicking.

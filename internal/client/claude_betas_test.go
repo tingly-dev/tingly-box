@@ -440,3 +440,22 @@ func TestClaudeClient_XAppBackgroundSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "cli", captured.Get("X-App"))
 }
+
+// The v1 Messages path derives the tool-search beta like the beta path.
+func TestV1ClaudeBetaSignals_ToolSearch(t *testing.T) {
+	cases := map[string]string{
+		"defer_loading":   `[{"name":"Read","input_schema":{"type":"object"},"defer_loading":true}]`,
+		"ToolSearch tool": `[{"name":"ToolSearch","input_schema":{"type":"object"}}]`,
+		"regex search":    `[{"type":"tool_search_tool_regex_20251119","name":"tool_search_tool_regex"}]`,
+	}
+	for name, tools := range cases {
+		t.Run(name, func(t *testing.T) {
+			var req anthropic.MessageNewParams
+			require.NoError(t, json.Unmarshal([]byte(`{"model":"claude-sonnet-4-6","max_tokens":1,"messages":[],"tools":`+tools+`}`), &req))
+			assert.True(t, v1ClaudeBetaSignals(context.Background(), &req, true).ToolSearch)
+		})
+	}
+	var plain anthropic.MessageNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"claude-sonnet-4-6","max_tokens":1,"messages":[],"tools":[{"name":"Read","input_schema":{"type":"object"}}]}`), &plain))
+	assert.False(t, v1ClaudeBetaSignals(context.Background(), &plain, true).ToolSearch)
+}

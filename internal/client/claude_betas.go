@@ -316,7 +316,14 @@ func v1ClaudeBetaSignals(ctx context.Context, req *anthropic.MessageNewParams, o
 		}
 	}
 	for i := range req.Tools {
-		if cc := req.Tools[i].GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
+		t := &req.Tools[i]
+		if t.OfToolSearchToolRegex20251119 != nil || t.OfToolSearchToolBm25_20251119 != nil {
+			sig.ToolSearch = true
+		}
+		if tool := t.OfTool; tool != nil && (tool.DeferLoading.Valid() && tool.DeferLoading.Value || tool.Name == "ToolSearch") {
+			sig.ToolSearch = true
+		}
+		if cc := t.GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
 			sig.CacheTTL1h = true
 		}
 	}

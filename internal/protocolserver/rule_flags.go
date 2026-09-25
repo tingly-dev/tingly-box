@@ -217,6 +217,13 @@ func ResolveRuleFlagsWithScenario(
 		flags.CleanHeader = false
 	}
 
+	// The native Claude Code identity needs the Claude OAuth client (it
+	// patches cch on the wire); on any other provider it would send an
+	// unpatched placeholder, so the profile only applies to Claude OAuth.
+	if flags.ClaudeCodeVersion != "" && provider != nil && !provider.IsClaudeCodeProvider() {
+		flags.ClaudeCodeVersion = ""
+	}
+
 	// Attach the whole resolved flag set once, at the single merge point, so
 	// every downstream consumer — ruleFlagTransport (custom_user_agent,
 	// extra_headers), the Anthropic client's Beta/Messages methods

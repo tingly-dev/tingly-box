@@ -1,10 +1,13 @@
 package ops
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
@@ -113,9 +116,31 @@ func BuildClaudeCodeBillingHeader(ccVersion, existing string) string {
 	return b.String()
 }
 
-// computeCCVersionFor is computeCCVersion for an explicit version.
+// computeCCVersionFor renders "<version>.<fp>" for the native profile.
 func computeCCVersionFor(messageText, version string) string {
-	return fmt.Sprintf("%s.%s", version, computeFingerprint(messageText, version))
+	return fmt.Sprintf("%s.%s", version, computeFingerprintJS(messageText, version))
+}
+
+// computeFingerprintJS is computeFingerprint with the CLI's JavaScript string
+// semantics: text[i] indexes UTF-16 code units, and the hash input is UTF-8
+// with a lone surrogate encoded as U+FFFD (Node's behavior). Identical to
+// computeFingerprint for ASCII; the legacy path keeps the byte version.
+func computeFingerprintJS(messageText, version string) string {
+	units := utf16.Encode([]rune(messageText))
+	var chars strings.Builder
+	for _, i := range []int{4, 7, 20} {
+		if i >= len(units) {
+			chars.WriteByte('0')
+			continue
+		}
+		r := rune(units[i])
+		if utf16.IsSurrogate(r) {
+			r = utf8.RuneError
+		}
+		chars.WriteRune(r)
+	}
+	sum := sha256.Sum256([]byte(FingerprintSalt + chars.String() + version))
+	return fmt.Sprintf("%x", sum[:2])[:3]
 }
 
 // systemReminderPrefix opens the meta blocks the CLI folds into a user turn.

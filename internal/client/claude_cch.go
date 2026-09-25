@@ -22,8 +22,9 @@ import (
 // first normalized to JSON.stringify escaping.
 
 const (
-	claudeCodeCCHPlaceholder        = "cch=00000;"
-	claudeCodeCCHSeed        uint64 = 0x4D659218E32A3268 // unchanged since 2.1.138
+	claudeCodeCCHPlaceholder             = "cch=00000;"
+	claudeCodeBillingHeaderPrefix        = "x-anthropic-billing-header:"
+	claudeCodeCCHSeed             uint64 = 0x4D659218E32A3268 // unchanged since 2.1.138
 
 	xxh64Prime1    uint64 = 0x9E3779B185EBCA87
 	xxh64Prime2    uint64 = 0xC2B2AE3D27D4EB4F
@@ -299,11 +300,37 @@ func claudeCodeCCHPreimage(body []byte) []byte {
 	return out
 }
 
-// rewriteClaudeCodeCCH canonicalizes body and patches the cch placeholder.
-// ok is false when there was no placeholder.
+// claudeCodeCCHIndex locates the placeholder inside the billing header of the
+// top-level "system" member, so the same text in conversation content (which
+// the SDK serializes first) is never touched. -1 when absent.
+func claudeCodeCCHIndex(body []byte) int {
+	for _, m := range scanTopLevelMembers(body) {
+		if m.key != "system" {
+			continue
+		}
+		sys := body[m.valueStart:m.end]
+		h := bytes.Index(sys, []byte(claudeCodeBillingHeaderPrefix))
+		if h < 0 {
+			return -1
+		}
+		block := sys[h:]
+		if end := bytes.IndexByte(block, '"'); end >= 0 {
+			block = block[:end] // the header is one JSON string without quotes
+		}
+		i := bytes.Index(block, []byte(claudeCodeCCHPlaceholder))
+		if i < 0 {
+			return -1
+		}
+		return m.valueStart + h + i
+	}
+	return -1
+}
+
+// rewriteClaudeCodeCCH canonicalizes body and patches the cch placeholder of
+// the billing header. ok is false when there was no placeholder.
 func rewriteClaudeCodeCCH(body []byte) (out []byte, cch string, ok bool) {
 	out = canonicalizeJSONEscapes(body)
-	idx := bytes.Index(out, []byte(claudeCodeCCHPlaceholder))
+	idx := claudeCodeCCHIndex(out)
 	if idx < 0 {
 		return out, "", false
 	}
