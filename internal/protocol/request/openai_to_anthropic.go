@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
@@ -89,12 +91,9 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 				if fn == nil {
 					continue
 				}
-				var argsInput interface{}
-				if fn.Function.Arguments != "" {
-					_ = json.Unmarshal([]byte(fn.Function.Arguments), &argsInput)
-				}
+				input, _ := protocol.ToolUseInput(fn.Function.Arguments)
 				blocks = append(blocks,
-					anthropic.NewBetaToolUseBlock(fn.ID, argsInput, fn.Function.Name),
+					anthropic.NewBetaToolUseBlock(fn.ID, input, fn.Function.Name),
 				)
 			}
 
