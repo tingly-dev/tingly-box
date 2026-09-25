@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -74,6 +75,8 @@ type Service struct {
 	// with (see launchSignature), so a changed permission mode or gateway
 	// env restarts it instead of being silently ignored.
 	launch map[string]string
+	// residents holds the Conductor of each pooled process (resident.go).
+	residents map[string]*resident
 	// model is each session's latest requested model (from its usage
 	// entries), so Status needn't reload the transcript to find it.
 	model map[string]string
@@ -88,6 +91,11 @@ type run struct {
 	cancel   context.CancelFunc
 	prompter *webPrompter
 	done     chan struct{} // closed once the turn goroutine has fully exited
+	// unsolicited marks a turn Claude Code started by itself (resident.go):
+	// no goroutine of Desk's waits on it, so stopping it means interrupting
+	// the process directly.
+	unsolicited bool
+	stopped     atomic.Bool // the user stopped it, so its error result is expected
 }
 
 // archiveWaitTimeout bounds how long Archive waits for a cancelled turn to
@@ -118,7 +126,7 @@ type Config struct {
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}}
+	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}, residents: map[string]*resident{}}
 	s.launcher = cfg.Launcher
 	if s.launcher == "" {
 		s.launcher = selfExecutable()
@@ -679,7 +687,15 @@ func (s *Service) cancelRun(id string) (<-chan struct{}, bool) {
 	if !ok {
 		return nil, false
 	}
+	r.stopped.Store(true)
 	r.cancel()
+	if r.unsolicited {
+		if res, ok := s.residentFor(id); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+			defer cancel()
+			_ = res.c.Interrupt(ctx)
+		}
+	}
 	return r.done, true
 }
 

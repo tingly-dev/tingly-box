@@ -97,6 +97,7 @@ const (
 
 // Control message types
 const (
+	ControlMsgTypeRequest  = "control_request"
 	ControlMsgTypeResponse = "control_response"
 )
 
@@ -104,6 +105,10 @@ const (
 const (
 	ControlRequestSubtypeCanUseTool = "can_use_tool"
 	ControlRequestSubtypeInterrupt  = "interrupt"
+	// ControlRequestSubtypeStopTask stops one background task (a
+	// backgrounded Bash command or subagent) by its task_id. Not in the
+	// public docs; verified against the CLI (see transport_control_test.go).
+	ControlRequestSubtypeStopTask = "stop_task"
 )
 
 // Control-response subtypes

@@ -439,6 +439,12 @@ belongs to rather than patched at the call site that noticed it:
   there is no way to interrupt just the in-flight turn without ending the
   process, so this is the same effect `ctx` cancellation already has on a
   one-shot `Execute`, just applied consistently to the persistent path.
+  *Superseded (2026-09-25):* the CLI does accept an `interrupt`
+  control_request that ends only the turn (verified against 2.1.282);
+  `PersistentSession.Interrupt` sends it, and `agentboot.Conductor` uses it
+  on cancellation, closing the session only if the agent can't or doesn't
+  comply. `RunTurnWithPrompter` keeps the close-on-cancel behavior for its
+  existing callers. See `.design/desk.md` §3.7.
 - **No execution timeout on a persistent turn**, unlike one-shot execution's
   30-minute default (`Runner.Execute` applies `defaultTimeout`/`opts.Timeout`
   to the whole process). `runPersistentTurn` now applies the same

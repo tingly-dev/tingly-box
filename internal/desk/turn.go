@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -91,20 +92,6 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt st
 		prompter = autoApprovePrompter{inner: webPrompt}
 	}
 
-	conv := newConverter()
-	sink := func(raw any) {
-		if ev, ok := raw.(agentboot.ErrorEvent); ok {
-			if ev.Err != nil {
-				s.sessions.AppendMessage(sessionID, session.Message{Kind: "error", Content: ev.Err.Error(), Timestamp: time.Now()})
-			}
-			return
-		}
-		for _, m := range conv.messages(raw) {
-			s.sessions.AppendMessage(sessionID, m)
-			s.noteUsage(sessionID, m)
-		}
-	}
-
 	opts := agentboot.ExecutionOptions{
 		SessionID:            sessionID,
 		Resume:               resume,
@@ -118,13 +105,15 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt st
 	var werr error
 	if s.pool != nil {
 		var handled bool
-		if werr, handled = s.runPersistentTurn(ctx, sessionID, projectPath, prompt, opts, prompter, sink); handled {
+		if werr, handled = s.runPersistentTurn(ctx, sessionID, projectPath, prompt, opts, prompter); handled {
 			s.finishTurn(ctx, sessionID, werr)
 			return
 		}
 	}
 
 	opts.Store = s.sessions
+	conv := newConverter()
+	sink := func(raw any) { s.record(sessionID, conv, raw) }
 	_, werr = s.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
 	s.finishTurn(ctx, sessionID, werr)
 }
@@ -144,21 +133,30 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt st
 // Unlike the one-shot path, ExecutionOptions.Store isn't consulted here (the
 // persistent path has no Runner-owned lifecycle hook to attach it to), so
 // session status transitions are driven directly.
-func (s *Service) runPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, prompter agentboot.Prompter, sink agentboot.MessageSink) (werr error, handled bool) {
+func (s *Service) runPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, prompter agentboot.Prompter) (werr error, handled bool) {
 	sig := launchSignature(opts)
 	persistentSession, found := s.pool.Acquire(sessionID)
+	res, conducted := s.residentFor(sessionID)
+	if found && (!conducted || res.c.Session() != persistentSession) {
+		// A pooled process nothing reads from can't be driven safely.
+		s.evictPersistent(sessionID)
+		found = false
+	}
 	if found {
 		s.mu.Lock()
 		stale := s.launch[sessionID] != sig
 		s.mu.Unlock()
 		if stale {
-			// Permission mode or gateway env changed since this process
-			// started; neither can be changed on a live process, so restart
-			// it (Open resumes the same Claude session via opts.Resume).
+			// Permission mode, model or gateway settings changed since this
+			// process started; none can be changed on a live process, so
+			// restart it (Open resumes the same Claude session via
+			// opts.Resume).
 			s.evictPersistent(sessionID)
 			found = false
 		}
 	}
+
+	s.sessions.SetRunning(sessionID)
 	if !found {
 		opened, operr := s.agent.Open(ctx, "", projectPath, prompt, opts)
 		if operr != nil {
@@ -173,18 +171,30 @@ func (s *Service) runPersistentTurn(ctx context.Context, sessionID, projectPath,
 		s.mu.Lock()
 		s.launch[sessionID] = sig
 		s.mu.Unlock()
-		persistentSession = opened
-	} else if serr := persistentSession.Send(ctx, prompt); serr != nil {
-		s.pool.Remove(sessionID)
-		return nil, false
+		res = s.newResident(sessionID, opened)
+		_, werr = res.c.Await(ctx, prompter)
+	} else {
+		_, werr = res.c.RunTurn(ctx, prompt, prompter)
+		switch {
+		case errors.Is(werr, agentboot.ErrTurnInFlight):
+			// Claude started a turn of its own (a background task just
+			// finished) a moment before this message; that turn owns the
+			// session now.
+			// Not a failure of this session: the note says what happened,
+			// and the status stays with the turn that is running.
+			s.appendSystem(sessionID, "not sent: Claude is following up on a finished background task; send it again when that's done")
+			return nil, true
+		case errors.Is(werr, agentboot.ErrSessionClosed):
+			// The process ended before the message reached it: nothing was
+			// sent, so a one-shot turn can still take it.
+			s.pool.Remove(sessionID)
+			return nil, false
+		}
 	}
 
-	s.sessions.SetRunning(sessionID)
-	_, werr = agentboot.RunTurnWithPrompter(ctx, persistentSession, prompter, sink)
-	if werr != nil && persistentSession.Status() == agentboot.SessionStateTerminated {
-		// A crash mid-turn: the process is gone, drop the pool's stale
-		// bookkeeping now rather than waiting for the next Acquire to
-		// self-heal it.
+	if werr != nil && res.c.Session().Status() == agentboot.SessionStateTerminated {
+		// A crash mid-turn: drop the pool's stale bookkeeping now rather
+		// than waiting for the next Acquire to self-heal it.
 		s.pool.Remove(sessionID)
 	} else {
 		s.pool.Touch(sessionID)
