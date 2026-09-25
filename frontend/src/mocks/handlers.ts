@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { mockClaudeCodeModels } from './claudeCodeModels'
 import { deskHandlers } from './deskHandlers'
 
 // ============================================
@@ -1534,7 +1535,7 @@ const mockClaudeCodeProfiles = [
         id: 'p1',
         name: 'ds',
         description: 'DeepSeek profile for cost-effective development',
-        unified: true,
+        unified: false,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
     },
@@ -3515,6 +3516,15 @@ export const handlers = [
             success: true,
             data: [],
         })
+    }),
+
+    http.get('/api/v1/scenario/:scenario/models', ({ params, request }) => {
+        if (params.scenario !== 'claude_code') {
+            return HttpResponse.json({ success: false, error: 'model tiers are only available for claude_code' }, { status: 400 })
+        }
+        const profile = new URL(request.url).searchParams.get('profile') ?? ''
+        const data = mockClaudeCodeModels[profile] ?? mockClaudeCodeModels['']
+        return HttpResponse.json({ success: true, data })
     }),
 
     http.post('/api/v1/scenario/:scenario/profiles', async ({ params, request }) => {

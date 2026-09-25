@@ -1,6 +1,6 @@
 import {Psychology} from '@/components/icons';
-import * as deskApi from '@/services/deskApi';
-import type {ModelChoice, ModelTier} from '@/services/deskApi';
+import {profileApi} from '@/services/profileApi';
+import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} from '@/services/profileApi';
 import {Box, MenuItem, Select, Stack, Tooltip, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -36,8 +36,8 @@ const ModelSelect = ({profile, value, onChange}: ModelSelectProps) => {
 
     useEffect(() => {
         let live = true;
-        deskApi.listModels(profile)
-            .then((data) => live && setChoice({profile, data}))
+        profileApi.getClaudeCodeModels(profile)
+            .then((data) => live && setChoice(data ? {profile, data} : null))
             .catch(() => live && setChoice(null));
         return () => {
             live = false;

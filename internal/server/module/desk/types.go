@@ -74,8 +74,8 @@ type CreateSessionRequest struct {
 	PermissionMode string `json:"permission_mode"`
 	// Profile is a Claude Code profile id; empty uses the main claude_code routing.
 	Profile string `json:"profile"`
-	// Model is a model tier alias from GET /desk/models; empty is the
-	// profile's default.
+	// Model is a model tier alias from GET /scenario/claude_code/models;
+	// empty is the profile's default.
 	Model string `json:"model"`
 }
 
@@ -100,8 +100,8 @@ type HandoffResponse struct {
 }
 
 type SetModelRequest struct {
-	// Model is a model tier alias from GET /desk/models; empty is the
-	// profile's default.
+	// Model is a model tier alias from GET /scenario/claude_code/models;
+	// empty is the profile's default.
 	Model string `json:"model"`
 }
 
@@ -147,23 +147,6 @@ type SessionListResponse struct {
 
 type MessageListResponse struct {
 	Messages []MessageInfo `json:"messages"`
-}
-
-// ModelsResponse is what a profile offers to pick from. Unified means every
-// tier maps to one model: Tiers then holds just the default, and the model
-// can only be changed by editing the profile's rules.
-type ModelsResponse struct {
-	Unified bool            `json:"unified"`
-	Tiers   []ModelTierInfo `json:"tiers"`
-}
-
-// ModelTierInfo is one pickable model: the alias passed as --model ("" for
-// the default), the gateway model it requests, and where that is routed.
-type ModelTierInfo struct {
-	Alias         string `json:"alias"`
-	Model         string `json:"model"`
-	ProviderName  string `json:"provider_name,omitempty"`
-	ProviderModel string `json:"provider_model,omitempty"`
 }
 
 type PermissionModesResponse struct {

@@ -24,6 +24,7 @@ type RemoteControlController interface {
 type Handler struct {
 	config    *config.Config
 	rcControl RemoteControlController
+	routes    RoutePreviewer // optional, see WithRoutePreview
 }
 
 // NewHandler creates a new scenario handler

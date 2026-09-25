@@ -26,8 +26,6 @@ type Handler struct {
 // draws on, the way the terminal status line does (statusline.Handler).
 type RouteResolver interface {
 	ResolveRoute(ctx context.Context, scenario, modelID string) *statusline.Route
-	// PreviewRoute is ResolveRoute without the quota lookup.
-	PreviewRoute(scenario, modelID string) *statusline.Route
 }
 
 func NewHandler(svc *desk.Service, routes RouteResolver) *Handler {
@@ -196,27 +194,6 @@ func (h *Handler) Status(c *gin.Context) {
 				})
 			}
 		}
-	}
-	c.JSON(http.StatusOK, resp)
-}
-
-// Models lists the model tiers a profile offers, each with its route.
-func (h *Handler) Models(c *gin.Context) {
-	profile := c.Query("profile")
-	choice, err := h.svc.Models(c.Request.Context(), profile)
-	if err != nil {
-		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
-		return
-	}
-	resp := ModelsResponse{Unified: choice.Unified, Tiers: make([]ModelTierInfo, 0, len(choice.Tiers))}
-	for _, t := range choice.Tiers {
-		info := ModelTierInfo{Alias: t.Alias, Model: t.Model}
-		if h.routes != nil && t.Model != "" {
-			if route := h.routes.PreviewRoute(desk.Scenario(profile), t.Model); route != nil {
-				info.ProviderName, info.ProviderModel = route.ProviderName, route.Model
-			}
-		}
-		resp.Tiers = append(resp.Tiers, info)
 	}
 	c.JSON(http.StatusOK, resp)
 }

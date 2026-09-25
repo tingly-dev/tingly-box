@@ -2124,39 +2124,6 @@
         }
       }
     },
-    "/api/v1/desk/models": {
-      "get": {
-        "tags": [
-          "desk"
-        ],
-        "summary": "List the model tiers a Claude Code profile offers, each with its route",
-        "description": "List the model tiers a Claude Code profile offers, each with its route",
-        "operationId": "apiV1DeskModelsGet",
-        "parameters": [
-          {
-            "name": "profile",
-            "in": "query",
-            "description": "Claude Code profile id; empty is the main claude_code routing",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/desk/permission-modes": {
       "get": {
         "tags": [
@@ -5827,6 +5794,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioFlagResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/models": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route",
+        "description": "List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route",
+        "operationId": "apiV1ScenarioScenarioModelsGet",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "description": "Claude Code profile id; empty is the main claude_code routing",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeModelsResponse"
                 }
               }
             }
@@ -9585,6 +9594,67 @@
           "success"
         ]
       },
+      "ClaudeCodeModelTier": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "provider_model": {
+            "type": "string",
+            "description": "Field provider_model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          }
+        },
+        "required": [
+          "alias",
+          "model"
+        ]
+      },
+      "ClaudeCodeModelsData": {
+        "type": "object",
+        "properties": {
+          "tiers": {
+            "type": "array",
+            "description": "Field tiers",
+            "items": {
+              "$ref": "#/components/schemas/ClaudeCodeModelTier"
+            }
+          },
+          "unified": {
+            "type": "boolean",
+            "description": "Field unified"
+          }
+        },
+        "required": [
+          "unified",
+          "tiers"
+        ]
+      },
+      "ClaudeCodeModelsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClaudeCodeModelsData"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
@@ -13024,51 +13094,6 @@
         "required": [
           "total",
           "requests"
-        ]
-      },
-      "ModelTierInfo": {
-        "type": "object",
-        "properties": {
-          "alias": {
-            "type": "string",
-            "description": "Field alias"
-          },
-          "model": {
-            "type": "string",
-            "description": "Field model"
-          },
-          "provider_model": {
-            "type": "string",
-            "description": "Field provider_model"
-          },
-          "provider_name": {
-            "type": "string",
-            "description": "Field provider_name"
-          }
-        },
-        "required": [
-          "alias",
-          "model"
-        ]
-      },
-      "ModelsResponse": {
-        "type": "object",
-        "properties": {
-          "tiers": {
-            "type": "array",
-            "description": "Field tiers",
-            "items": {
-              "$ref": "#/components/schemas/ModelTierInfo"
-            }
-          },
-          "unified": {
-            "type": "boolean",
-            "description": "Field unified"
-          }
-        },
-        "required": [
-          "unified",
-          "tiers"
         ]
       },
       "OAuthAuthorizeRequest": {

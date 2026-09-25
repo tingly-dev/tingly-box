@@ -34,6 +34,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -517,7 +518,7 @@ func (s *Service) checkModel(ctx context.Context, profile, model string) error {
 	if model == "" {
 		return nil
 	}
-	if !slices.Contains(modelTiers, model) {
+	if !slices.Contains(agent.ClaudeCodeTierAliases, model) {
 		return invalid("unknown model tier %q", model)
 	}
 	if choice, err := s.Models(ctx, profile); err == nil && choice.Unified {
@@ -526,62 +527,16 @@ func (s *Service) checkModel(ctx context.Context, profile, model string) error {
 	return nil
 }
 
-// modelTiers are the aliases Claude Code's --model takes that map to a
-// tier env var; "" (no --model) is ANTHROPIC_MODEL.
-var modelTiers = []string{"opus", "sonnet", "haiku"}
-
-var tierEnvKeys = map[string]string{
-	"":       "ANTHROPIC_MODEL",
-	"opus":   "ANTHROPIC_DEFAULT_OPUS_MODEL",
-	"sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-	"haiku":  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-}
-
-// ModelTier is one model a session can ask for: the alias passed as
-// --model and the gateway model id it maps to.
-type ModelTier struct {
-	Alias string
-	Model string
-}
-
-// ModelChoice is what a profile offers. Unified means every tier maps to one
-// model, and Tiers then holds just the default.
-type ModelChoice struct {
-	Unified bool
-	Tiers   []ModelTier
-}
-
 // Models reads a profile's tiers from the env Claude Code itself is given —
-// the main scenario's env, or the profile's settings file — so what is shown
-// is exactly what the process will request.
-func (s *Service) Models(ctx context.Context, profile string) (ModelChoice, error) {
+// the main scenario's env, or the profile's settings file — so they are
+// exactly what the process will request. It backs validation here; the
+// public listing is the scenario module's GET /scenario/claude_code/models.
+func (s *Service) Models(ctx context.Context, profile string) (agent.ClaudeCodeTiers, error) {
 	env, err := s.claudeEnv(ctx, profile)
 	if err != nil {
-		return ModelChoice{}, err
+		return agent.ClaudeCodeTiers{}, err
 	}
-	def := tierModel(env, "")
-	choice := ModelChoice{Unified: true, Tiers: []ModelTier{{Alias: "", Model: def}}}
-	for _, alias := range modelTiers {
-		m := tierModel(env, alias)
-		if m == "" {
-			continue
-		}
-		if m != def {
-			choice.Unified = false
-		}
-		choice.Tiers = append(choice.Tiers, ModelTier{Alias: alias, Model: m})
-	}
-	if choice.Unified {
-		choice.Tiers = choice.Tiers[:1]
-	}
-	return choice, nil
-}
-
-// tierModel is the model a tier's env var names, without the "[1m]" marker
-// Claude Code strips before requesting (serverconfig.Context1MSuffix), so it
-// is the id the gateway sees.
-func tierModel(env map[string]string, alias string) string {
-	return strings.TrimSuffix(env[tierEnvKeys[alias]], "[1m]")
+	return agent.ClaudeCodeTiersFromEnv(env), nil
 }
 
 // TierModel is the gateway model a session's chosen tier requests, or "".
@@ -619,17 +574,7 @@ func (s *Service) claudeEnv(ctx context.Context, profile string) (map[string]str
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var settings struct {
-		Env map[string]string `json:"env"`
-	}
-	if err := json.Unmarshal(b, &settings); err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	return settings.Env, nil
+	return agent.ReadClaudeCodeSettingsEnv(path)
 }
 
 func modelLabel(model string) string {

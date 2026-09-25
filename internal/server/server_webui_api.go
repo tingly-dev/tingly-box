@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
 	shortcutmodule "github.com/tingly-dev/tingly-box/internal/server/module/shortcut"
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
+	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -248,7 +249,10 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	rulemodule.RegisterRoutes(apiV1, ruleHandler)
 
 	// Scenario Management - register from scenario module
-	scenarioHandler := scenario.NewHandler(s.config, s)
+	// Route previews for the model-tier listing; PreviewRoute needs only the
+	// config and the load balancer, never the status line's cache or quota.
+	scenarioHandler := scenario.NewHandler(s.config, s).
+		WithRoutePreview(statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), nil))
 	scenario.RegisterRoutes(apiV1, scenarioHandler)
 
 	// Image generation output directory (authenticated) - lets the frontend

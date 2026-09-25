@@ -175,10 +175,16 @@ a profile restarts the resident process with `--resume` on the next turn.
 
 **Model.** Beside the profile, the composer always names the model the
 session runs on (ux-principles.md §5), and profile and model are shown the
-same way for every profile. `GET /desk/models?profile=` reads the tiers from
-the env Claude Code is actually given (`ANTHROPIC_MODEL` and
-`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`, from the main env or the
-profile's settings file), each with its predicted route:
+same way for every profile. The tiers come from the standard scenario API,
+`GET /scenario/claude_code/models?profile=` (scenario module, not Desk: what
+a profile offers is profile knowledge, reusable by the profile pages and the
+CLI). It reads them from the env Claude Code is actually given
+(`ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`, from the
+main env or the profile's resolved settings — resolved, not materialized, so
+the GET writes nothing) through `agent.ClaudeCodeTiersFromEnv`, each with its
+predicted route (`statusline.PreviewRoute`). Desk only owns the session's
+choice (`PUT /desk/sessions/:id/model`) and validates it with the same
+helper:
 
 - A **separate** profile (tiers differ) lets the session pick a tier
   (`Session.Model`, a `remote_sessions.model` column), passed to Claude Code

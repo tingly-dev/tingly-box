@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { mockClaudeCodeModels } from './claudeCodeModels'
 
 // Mock-mode data for the Desk page (/api/v1/desk). Covers every state the
 // page renders: a turn waiting on an approval, a finished multi-turn session,
@@ -147,20 +148,7 @@ const routes: Record<string, object> = {
         quota: [{ type: 'balance', balance: true, text: '$12.40', used_percent: 0, limit_reached: false }],
     },
 }
-// The tiers each profile offers: the main routing is unified (one model for
-// every tier), p1 routes tiers separately.
-const tiers: Record<string, { unified: boolean; tiers: { alias: string; model: string; provider_name: string; provider_model: string }[] }> = {
-    '': { unified: true, tiers: [{ alias: '', model: 'tingly/cc', provider_name: 'Anthropic (team)', provider_model: 'claude-sonnet-4-5' }] },
-    p1: {
-        unified: false,
-        tiers: [
-            { alias: '', model: 'tingly/cc-default', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
-            { alias: 'opus', model: 'tingly/cc-opus', provider_name: 'Zhipu', provider_model: 'glm-4.6' },
-            { alias: 'sonnet', model: 'tingly/cc-sonnet', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
-            { alias: 'haiku', model: 'tingly/cc-haiku', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
-        ],
-    },
-}
+const tiers = mockClaudeCodeModels
 const tierOf = (s: Sess) => {
     const t = tiers[s.profile] ?? tiers['']
     return t.tiers.find((x) => x.alias === s.model) ?? t.tiers[0]
@@ -221,10 +209,6 @@ export const deskHandlers = [
         const tier = tierOf(s)
         const quota = (routes[s.profile] ?? routes['']) as { quota: unknown[] }
         return HttpResponse.json({ scenario, requested_model: tier.model, provider_name: tier.provider_name, provider_model: tier.provider_model, quota: quota.quota })
-    }),
-    http.get('/api/v1/desk/models', ({ request }) => {
-        const profile = new URL(request.url).searchParams.get('profile') ?? ''
-        return HttpResponse.json(tiers[profile] ?? tiers[''])
     }),
     http.put('/api/v1/desk/sessions/:id/model', async ({ params, request }) => {
         const s = find(params.id as string)

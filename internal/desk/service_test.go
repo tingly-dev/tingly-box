@@ -15,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -1219,7 +1220,7 @@ func TestModels_ReadsTiersFromTheEnvClaudeCodeGets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Models(sep): %v", err)
 	}
-	want := []ModelTier{{"", "sep/default"}, {"opus", "sep/opus"}, {"sonnet", "sep/sonnet"}, {"haiku", "sep/haiku"}}
+	want := []agent.ClaudeCodeTier{{Alias: "", Model: "sep/default"}, {Alias: "opus", Model: "sep/opus"}, {Alias: "sonnet", Model: "sep/sonnet"}, {Alias: "haiku", Model: "sep/haiku"}}
 	if sep.Unified || !slices.Equal(sep.Tiers, want) {
 		t.Fatalf("sep = %+v, want separate tiers %v (the [1m] marker stripped)", sep, want)
 	}

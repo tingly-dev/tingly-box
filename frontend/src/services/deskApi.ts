@@ -16,8 +16,6 @@ export type MessageInfo = components['schemas']['MessageInfo'];
 export type RecentFolder = components['schemas']['RecentFolder'];
 export type SessionStatus = components['schemas']['SessionStatusResponse'];
 export type QuotaSegment = components['schemas']['QuotaSegmentInfo'];
-export type ModelChoice = components['schemas']['ModelsResponse'];
-export type ModelTier = components['schemas']['ModelTierInfo'];
 
 type ClientCall<T> = (client: ApiClient, headers: Record<string, string>) => Promise<{
     data?: T;
@@ -72,13 +70,6 @@ export const createSession = (path: string, prompt: string, permissionMode?: str
     call((client, headers) => client.POST('/api/v1/desk/sessions', {
         headers,
         body: {path, prompt, permission_mode: permissionMode || '', profile: profile || '', model: model || ''},
-    }));
-
-// listModels lists the model tiers a profile offers ('' is the main routing).
-export const listModels = (profile: string): Promise<ModelChoice> =>
-    call((client, headers) => client.GET('/api/v1/desk/models', {
-        headers,
-        params: {query: {profile}},
     }));
 
 export const setModel = (sessionId: string, model: string): Promise<SessionInfo> =>
