@@ -1,0 +1,663 @@
+=== error stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error"
+}
+--- client response (status 429)
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 429 Too Many Requests {\"error\":{\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error",
+  "stream": true
+}
+--- client response (status 429)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 429 Too Many Requests {\"error\":{\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error-500 stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-500"
+}
+--- client response (status 500)
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 500 Internal Server Error {\"error\":{\"message\":\"simulated upstream error\",\"type\":\"api_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error-500 stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-500",
+  "stream": true
+}
+--- client response (status 500)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 500 Internal Server Error {\"error\":{\"message\":\"simulated upstream error\",\"type\":\"api_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error-auth-401 stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-auth-401"
+}
+--- client response (status 401)
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 401 Unauthorized {\"error\":{\"message\":\"authentication failed\",\"type\":\"authentication_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error-auth-401 stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-auth-401",
+  "stream": true
+}
+--- client response (status 401)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 401 Unauthorized {\"error\":{\"message\":\"authentication failed\",\"type\":\"authentication_error\"},\"type\":\"error\"}","type":"api_error"}}
+
+=== error-midstream-close stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-midstream-close"
+}
+--- client response (status 200)
+{"content":[{"text":"hello world this stream will be truncated","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-error-midstream-close","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
+
+=== error-midstream-close stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-error-midstream-close",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-error-midstream-close","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"delta":{"text":"hello world this stream will be truncated","type":"text_delta"},"index":0,"type":"content_block_delta"}
+
+event:error
+data:{"error":{"code":"incomplete_stream","message":"upstream stream ended before completion","type":"stream_error"},"type":"error"}
+
+=== incomplete stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-incomplete"
+}
+--- client response (status 200)
+{"content":[{"text":"This response was truncated due to output limit.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-incomplete","role":"assistant","stop_reason":"max_tokens","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":50}}
+
+=== incomplete stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-incomplete",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-incomplete","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"This response was truncated due to output limit."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"max_tokens","stop_sequence":null},"usage":{"output_tokens":50}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== multi_turn stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-multi_turn"
+}
+--- client response (status 200)
+{"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-multi_turn","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
+
+=== multi_turn stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-multi_turn",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-multi_turn","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The capital of France is Paris."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":8}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== streaming_text stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_text"
+}
+--- client response (status 200)
+{"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-streaming_text","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
+
+=== streaming_text stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_text",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-streaming_text","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The capital of France is Paris."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":8}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== streaming_tool_use stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_tool_use"
+}
+--- client response (status 200)
+{"content":[{"id":"<ID1>","input":{"location":"Paris","unit":"celsius"},"name":"get_weather","type":"tool_use"}],"id":"<ID2>","model":"pv-anthropic_beta-to-anthropic_beta-streaming_tool_use","role":"assistant","stop_reason":"tool_use","type":"message","usage":{"input_tokens":15,"output_tokens":20}}
+
+=== streaming_tool_use stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-streaming_tool_use",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-streaming_tool_use","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":15,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"<ID2>","name":"get_weather","input":{}}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":20}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== text stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-text"
+}
+--- client response (status 200)
+{"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-text","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
+
+=== text stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-text",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-text","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The capital of France is Paris."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":8}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== thinking stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-thinking"
+}
+--- client response (status 200)
+{"content":[{"signature":"thinking_sig_validate","thinking":"Let me reason about this step by step...","type":"thinking"},{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-thinking","role":"assistant","stop_reason":"end_turn","type":"message","usage":{"input_tokens":10,"output_tokens":30}}
+
+=== thinking stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-thinking",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-thinking","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me reason about this step by step..."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:content_block_start
+data:{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"The capital of France is Paris."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":1}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":30}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== tool_result stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-tool_result"
+}
+--- client response (status 200)
+{"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-tool_result","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
+
+=== tool_result stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-tool_result",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-tool_result","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The capital of France is Paris."}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":8}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+=== tool_use stream=false
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-tool_use"
+}
+--- client response (status 200)
+{"content":[{"id":"<ID1>","input":{"location":"Paris","unit":"celsius"},"name":"get_weather","type":"tool_use"}],"id":"<ID2>","model":"pv-anthropic_beta-to-anthropic_beta-tool_use","role":"assistant","stop_reason":"tool_use","type":"message","usage":{"input_tokens":15,"output_tokens":20}}
+
+=== tool_use stream=true
+--- upstream request
+POST /v1/messages
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "What is the capital of France?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "virtual-model-tool_use",
+  "stream": true
+}
+--- client response (status 200)
+event:message_start
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-anthropic_beta-tool_use","role":"assistant","stop_reason":null,"type":"message","usage":{"input_tokens":15,"output_tokens":0}},"type":"message_start"}
+
+event:content_block_start
+data:{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"<ID2>","name":"get_weather","input":{}}}
+
+event:content_block_delta
+data:{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}}
+
+event:content_block_stop
+data:{"type":"content_block_stop","index":0}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":20}}
+
+event:message_stop
+data:{"type":"message_stop"}
+

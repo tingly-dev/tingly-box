@@ -1,0 +1,476 @@
+=== error stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error",
+  "tool_choice": "auto"
+}
+--- client response (status 429)
+{"error":{"message":"POST \"REDACTED\": 429 Too Many Requests {\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"}: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+
+=== error stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 429)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 429 Too Many Requests {\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"}","type":"api_error"}}
+
+=== error-500 stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-500",
+  "tool_choice": "auto"
+}
+--- client response (status 500)
+{"error":{"message":"POST \"REDACTED\": 500 Internal Server Error {\"message\":\"simulated upstream error\",\"type\":\"api_error\"}: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+
+=== error-500 stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-500",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 500)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 500 Internal Server Error {\"message\":\"simulated upstream error\",\"type\":\"api_error\"}","type":"api_error"}}
+
+=== error-auth-401 stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-auth-401",
+  "tool_choice": "auto"
+}
+--- client response (status 401)
+{"error":{"message":"POST \"REDACTED\": 401 Unauthorized {\"message\":\"authentication failed\",\"type\":\"authentication_error\"}: Failed to forward request","type":"protocol_error","code":"Failed to forward request"}}
+
+=== error-auth-401 stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-auth-401",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 401)
+{"error":{"message":"Failed to create streaming request: POST \"REDACTED\": 401 Unauthorized {\"message\":\"authentication failed\",\"type\":\"authentication_error\"}","type":"api_error"}}
+
+=== error-midstream-close stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-midstream-close",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"hello world this stream will be truncated","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-error-midstream-close","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== error-midstream-close stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-error-midstream-close",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-error-midstream-close","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-error-midstream-close","choices":[{"index":0,"delta":{"content":"hello world this stream will be truncated"},"finish_reason":null}]}
+
+data: {"error":{"message":"responses stream ended without a terminal event","type":"stream_error"}}
+
+=== incomplete stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-incomplete",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"length","index":0,"message":{"content":"This response was truncated due to output limit.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-incomplete","object":"chat.completion","usage":{"completion_tokens":50,"prompt_tokens":10,"total_tokens":60}}
+
+=== incomplete stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-incomplete",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-incomplete","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-incomplete","choices":[{"index":0,"delta":{"content":"This response was truncated due to output limit."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-incomplete","choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60}}
+
+data: [DONE]
+
+=== multi_turn stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-multi_turn",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"The capital of France is Paris.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-multi_turn","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== multi_turn stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-multi_turn",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-multi_turn","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-multi_turn","choices":[{"index":0,"delta":{"content":"The capital of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-multi_turn","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+
+data: [DONE]
+
+=== streaming_text stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_text",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"The capital of France is Paris.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-streaming_text","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== streaming_text stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_text",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_text","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_text","choices":[{"index":0,"delta":{"content":"The capital of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_text","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+
+data: [DONE]
+
+=== streaming_tool_use stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_tool_use",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"tool_calls","index":0,"message":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}","name":"get_weather"},"id":"<ID1>","type":"function"}]}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_responses-streaming_tool_use","object":"chat.completion","usage":{"completion_tokens":20,"prompt_tokens":15,"total_tokens":35}}
+
+=== streaming_tool_use stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-streaming_tool_use",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_tool_use","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"<ID2>","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-streaming_tool_use","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":15,"completion_tokens":20,"total_tokens":35}}
+
+data: [DONE]
+
+=== text stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-text",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"The capital of France is Paris.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-text","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== text stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-text",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-text","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-text","choices":[{"index":0,"delta":{"content":"The capital of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-text","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+
+data: [DONE]
+
+=== thinking stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-thinking",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"The capital of France is Paris.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-thinking","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== thinking stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-thinking",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-thinking","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-thinking","choices":[{"index":0,"delta":{"content":"The capital of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-thinking","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+
+data: [DONE]
+
+=== tool_result stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-tool_result",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"The capital of France is Paris.","role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-openai_responses-tool_result","object":"chat.completion","usage":{"completion_tokens":8,"prompt_tokens":10,"total_tokens":18}}
+
+=== tool_result stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-tool_result",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_result","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_result","choices":[{"index":0,"delta":{"content":"The capital of France is Paris."},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_result","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+
+data: [DONE]
+
+=== tool_use stream=false
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-tool_use",
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+{"choices":[{"finish_reason":"tool_calls","index":0,"message":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}","name":"get_weather"},"id":"<ID1>","type":"function"}]}}],"created":<TS>,"id":"<ID2>","model":"pv-openai_chat-to-openai_responses-tool_use","object":"chat.completion","usage":{"completion_tokens":20,"prompt_tokens":15,"total_tokens":35}}
+
+=== tool_use stream=true
+--- upstream request
+POST /v1/responses
+{
+  "input": [
+    {
+      "content": "What is the capital of France?",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "virtual-model-tool_use",
+  "stream": true,
+  "tool_choice": "auto"
+}
+--- client response (status 200)
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_use","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"<ID2>","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_use","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-openai_responses-tool_use","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":15,"completion_tokens":20,"total_tokens":35}}
+
+data: [DONE]
+
