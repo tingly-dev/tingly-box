@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -81,6 +82,16 @@ func WithRecordingCAS(enabled bool) ServerOption {
 func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 	return func(s *Server) {
 		s.setGuardrailsRuntimeRef(runtime)
+	}
+}
+
+// WithServertoolProviders registers additional in-process server tools. They
+// join the servertool pipeline alongside the configured advisor and survive
+// config hot reload. Used by the protocol harness to exercise server-owned
+// tool loops without an external MCP source.
+func WithServertoolProviders(providers ...servertool.ToolProvider) ServerOption {
+	return func(s *Server) {
+		s.servertoolProviders = append(s.servertoolProviders, providers...)
 	}
 }
 

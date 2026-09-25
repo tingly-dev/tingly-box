@@ -57,7 +57,7 @@ func (sr *scenarioResponder) handle(format scenario.ResponseFormat) http.Handler
 			http.Error(w, "no "+string(format)+" mock response for scenario "+sc.Name, http.StatusInternalServerError)
 			return
 		}
-		writeBuilderResponse(w, builder, streaming)
+		writeBuilderResponse(w, builder, streaming, body)
 	}
 }
 
@@ -76,7 +76,7 @@ func (sr *scenarioResponder) handleResponses(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	writeBuilderResponse(w, builder, streaming)
+	writeBuilderResponse(w, builder, streaming, body)
 }
 
 // handleGoogle serves the Google format. Google encodes the model in the URL
@@ -91,23 +91,37 @@ func (sr *scenarioResponder) handleGoogle(w http.ResponseWriter, r *http.Request
 		http.Error(w, "no google mock response for scenario "+sc.Name, http.StatusInternalServerError)
 		return
 	}
-	writeBuilderResponse(w, builder, streaming)
+	writeBuilderResponse(w, builder, streaming, body)
 }
 
 // writeBuilderResponse serves a MockResponseBuilder. For streaming requests it
 // writes a 200 SSE stream, except when the builder declares a pre-content HTTP
 // error (StreamHTTPError >= 400) — those fail at the status line, as a real
 // provider rejects an auth/rate-limit/5xx error before any SSE frame.
-func writeBuilderResponse(w http.ResponseWriter, builder scenario.MockResponseBuilder, streaming bool) {
-	if streaming && builder.StreamHTTPError < 400 && builder.Stream != nil {
-		sse.WriteSSEResponse(w, builder.Stream())
-		return
+func writeBuilderResponse(w http.ResponseWriter, builder scenario.MockResponseBuilder, streaming bool, request []byte) {
+	if streaming && builder.StreamHTTPError < 400 {
+		switch {
+		case builder.StreamFor != nil:
+			sse.WriteSSEResponse(w, builder.StreamFor(request))
+			return
+		case builder.Stream != nil:
+			sse.WriteSSEResponse(w, builder.Stream())
+			return
+		}
 	}
-	if builder.NonStream == nil {
+	var (
+		status int
+		body   []byte
+	)
+	switch {
+	case builder.NonStreamFor != nil:
+		status, body = builder.NonStreamFor(request)
+	case builder.NonStream != nil:
+		status, body = builder.NonStream()
+	default:
 		http.Error(w, "scenario builder has no non-stream response", http.StatusInternalServerError)
 		return
 	}
-	status, body := builder.NonStream()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)

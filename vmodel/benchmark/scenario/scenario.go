@@ -40,6 +40,14 @@ type MockResponseBuilder struct {
 	NonStream func() (statusCode int, body []byte)
 	Stream    func() []string
 
+	// NonStreamFor / StreamFor, when set, take precedence over NonStream /
+	// Stream and receive the upstream request body. Multi-round fixtures use
+	// them to branch on the conversation so far — e.g. reply with a tool_use
+	// first and with the final text once the request carries its tool_result —
+	// without per-instance call counters.
+	NonStreamFor func(request []byte) (statusCode int, body []byte)
+	StreamFor    func(request []byte) []string
+
 	// StreamHTTPError, when >= 400, makes the streaming endpoint reply with this
 	// HTTP status and the NonStream JSON body instead of a 200 SSE stream. It
 	// models pre-content failures (auth / rate-limit / 5xx) that real providers
