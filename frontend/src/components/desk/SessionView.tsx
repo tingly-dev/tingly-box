@@ -2,7 +2,7 @@ import {Archive, ArrowBack, Check, Close, ContentCopy, FoldUp, Stream, Terminal,
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {useCopyFeedback} from '@/hooks/useCopyFeedback';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {Alert, Badge, Box, Button, Chip, IconButton, Popover, Stack, Tooltip, Typography} from '@mui/material';
+import {Alert, Box, Button, Chip, IconButton, Popover, Stack, Tooltip, Typography} from '@mui/material';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import BackgroundTasksPanel from './BackgroundTasksPanel';
@@ -124,12 +124,24 @@ const SessionView = ({
                 {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})}/>}
                 {isClosed && <Chip size="small" variant="outlined" label={t('desk.statusArchived', {defaultValue: 'archived'})}/>}
                 <Box sx={{flex: 1}}/>
-                {tasks.length > 0 && (
+                {/* Always there, so it can be found before it is needed; while
+                    work runs it names itself instead of hiding in a badge. */}
+                {liveTasks.length > 0 ? (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color="inherit"
+                        startIcon={<Stream sx={{fontSize: '16px !important'}}/>}
+                        onClick={(e) => setTasksAnchor(e.currentTarget)}
+                        aria-label={t('desk.backgroundTasks', {defaultValue: 'Background tasks'})}
+                        sx={{borderRadius: 4, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, textTransform: 'none', whiteSpace: 'nowrap', flexShrink: 0}}
+                    >
+                        {t('desk.backgroundRunningShort', {defaultValue: '{{count}} running', count: liveTasks.length})}
+                    </Button>
+                ) : (
                     <Tooltip title={t('desk.backgroundTasks', {defaultValue: 'Background tasks'})}>
                         <IconButton size="small" onClick={(e) => setTasksAnchor(e.currentTarget)} aria-label={t('desk.backgroundTasks', {defaultValue: 'Background tasks'})}>
-                            <Badge badgeContent={liveTasks.length} color="primary" sx={{'& .MuiBadge-badge': {fontSize: '0.65rem', height: 16, minWidth: 16}}}>
-                                <Stream fontSize="small"/>
-                            </Badge>
+                            <Stream fontSize="small"/>
                         </IconButton>
                     </Tooltip>
                 )}

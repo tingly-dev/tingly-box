@@ -355,8 +355,9 @@ place rather than living only in the transcript:
   is being written to: …"), recorded as an `output_file` task event; only a
   file shaped `…/tasks/<task_id>.output` is read.
 
-On the page: a header entry (shown once the session has had any background
-work, badged with the running count) opens the list — running first, each
+On the page: a header entry, always present so it can be found before it
+is needed (an icon, whose empty state says what will appear there), turns
+into a labeled "N running" pill while work runs, and opens the list — running first, each
 with its state, what it is doing, usage, Stop, and Output for commands. The
 sidebar marks a session with running background work (quieter than a
 running turn: nothing waits on the user). Archive and Continue in terminal
