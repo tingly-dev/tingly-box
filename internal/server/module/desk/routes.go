@@ -83,6 +83,12 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) 
 		swagger.WithRequestModel(RespondRequest{}),
 		mw,
 	)
+	apiV1.POST("/desk/sessions/:session_id/handoff", h.Handoff,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Release a session so it can be continued in a terminal, returning the command"),
+		swagger.WithResponseModel(HandoffResponse{}),
+		mw,
+	)
 	apiV1.GET("/desk/sessions/:session_id/status", h.Status,
 		swagger.WithTags("desk"),
 		swagger.WithDescription("Where a session's model requests are routed and the quota they draw on"),

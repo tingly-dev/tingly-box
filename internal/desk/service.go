@@ -410,6 +410,46 @@ func profileLabel(profile string) string {
 	return profile
 }
 
+// AwaitingInput reports whether the session's live turn is blocked on the
+// user: an approval or a question nobody has answered yet.
+func (s *Service) AwaitingInput(id string) bool {
+	s.mu.Lock()
+	r, ok := s.runs[id]
+	s.mu.Unlock()
+	return ok && r.prompter.hasPending()
+}
+
+// Handoff releases a session so it can be continued in a terminal, and
+// returns the command that does it. The resident process is closed first:
+// two processes writing one Claude session file corrupts it (see
+// evictPersistent). A turn in flight is refused rather than killed.
+func (s *Service) Handoff(ctx context.Context, id string) (string, error) {
+	sess, ok := s.sessions.SnapshotOrLoad(id)
+	if !ok {
+		return "", notFound("session", id)
+	}
+	s.mu.Lock()
+	_, busy := s.runs[id]
+	s.mu.Unlock()
+	if busy {
+		return "", conflict("stop the current turn before continuing in a terminal")
+	}
+	s.evictPersistent(id)
+
+	cmd := "cd " + shellQuote(sess.Project) + " && claude --resume " + shellQuote(id)
+	if sess.Profile != "" && s.routing != nil {
+		if path, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, sess.Profile); err == nil {
+			cmd += " --settings " + shellQuote(path)
+		}
+	}
+	return cmd, nil
+}
+
+// shellQuote single-quotes s for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // Respond answers a pending approval or ask request.
 func (s *Service) Respond(id, requestID string, approved bool, answer string) error {
 	if strings.TrimSpace(requestID) == "" {

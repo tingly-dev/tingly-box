@@ -11,16 +11,19 @@ import (
 // SessionInfo is the wire shape of a session.Session: the same fields,
 // snake_case, with no internal-only detail added.
 type SessionInfo struct {
-	ID             string    `json:"id"`
-	Project        string    `json:"project"`
-	Status         string    `json:"status"`
-	Request        string    `json:"request"`
-	Response       string    `json:"response"`
-	Error          string    `json:"error,omitempty"`
-	PermissionMode string    `json:"permission_mode"`
-	Profile        string    `json:"profile"`
-	CreatedAt      time.Time `json:"created_at"`
-	LastActivity   time.Time `json:"last_activity"`
+	ID             string `json:"id"`
+	Project        string `json:"project"`
+	Status         string `json:"status"`
+	Request        string `json:"request"`
+	Response       string `json:"response"`
+	Error          string `json:"error,omitempty"`
+	PermissionMode string `json:"permission_mode"`
+	Profile        string `json:"profile"`
+	// AwaitingInput is true while the session's turn waits on an approval
+	// or a question from the user.
+	AwaitingInput bool      `json:"awaiting_input"`
+	CreatedAt     time.Time `json:"created_at"`
+	LastActivity  time.Time `json:"last_activity"`
 }
 
 func sessionToInfo(s *session.Session) SessionInfo {
@@ -81,6 +84,12 @@ type RespondRequest struct {
 
 type SetPermissionModeRequest struct {
 	Mode string `json:"mode"`
+}
+
+// HandoffResponse is the shell command that continues a session in a
+// terminal, run from anywhere on the tingly-box host.
+type HandoffResponse struct {
+	Command string `json:"command"`
 }
 
 type SetProfileRequest struct {

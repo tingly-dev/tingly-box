@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1071,5 +1073,72 @@ func TestProfile_SwitchingRestartsTheResidentProcess(t *testing.T) {
 	defer mu.Unlock()
 	if opened[1].SettingsPath != "/profiles/p1/settings.json" || !opened[1].Resume {
 		t.Fatalf("restarted with SettingsPath=%q Resume=%v; want the profile, resuming the same session", opened[1].SettingsPath, opened[1].Resume)
+	}
+}
+
+func TestAwaitingInput_TracksAnOpenApproval(t *testing.T) {
+	svc, _ := newTestService(t, approvalScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for !svc.AwaitingInput(sess.ID) {
+		if time.Now().After(deadline) {
+			t.Fatal("AwaitingInput never became true while the approval was open")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := svc.Respond(sess.ID, "req-1", true, ""); err != nil {
+		t.Fatalf("Respond: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if svc.AwaitingInput(sess.ID) {
+		t.Fatal("AwaitingInput still true after the approval was answered and the turn ended")
+	}
+}
+
+func TestHandoff_RefusesDuringATurn(t *testing.T) {
+	svc, _ := newTestService(t, blockingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if _, err := svc.Handoff(context.Background(), sess.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("Handoff during a turn: err = %v, want ErrConflict", err)
+	}
+	_ = svc.Interrupt(sess.ID)
+}
+
+func TestHandoff_ReleasesTheResidentProcessAndBuildsTheCommand(t *testing.T) {
+	var resident *fakePersistentSession
+	fa := &fakeAgent{script: completingScript, openFn: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, completingPersistentScript)
+		return resident, nil
+	}}
+	p := pool.New(pool.Config{MaxSessions: 10, IdleTimeout: time.Hour})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+	svc := newRoutedTestService(t, fa, p)
+	dir := filepath.Join(t.TempDir(), "it's here")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi", Profile: "p1"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	cmd, err := svc.Handoff(context.Background(), sess.ID)
+	if err != nil {
+		t.Fatalf("Handoff: %v", err)
+	}
+	if st := resident.Status(); st != agentboot.SessionStateTerminated {
+		t.Fatalf("resident process state after Handoff = %v, want terminated: it would share the session file with the terminal", st)
+	}
+	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && claude --resume '` + sess.ID + `' --settings '/profiles/p1/settings.json'`
+	if cmd != want {
+		t.Fatalf("command:\n got %s\nwant %s", cmd, want)
 	}
 }

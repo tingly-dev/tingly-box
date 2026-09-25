@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/desk"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 type Handler struct {
@@ -81,7 +82,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		sendServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, sessionToInfo(sess))
+	c.JSON(http.StatusCreated, h.info(sess))
 }
 
 func (h *Handler) ListSessions(c *gin.Context) {
@@ -89,7 +90,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 	sessions := h.svc.ListSessions(active)
 	out := make([]SessionInfo, len(sessions))
 	for i := range sessions {
-		out[i] = sessionToInfo(&sessions[i])
+		out[i] = h.info(&sessions[i])
 	}
 	c.JSON(http.StatusOK, SessionListResponse{Sessions: out})
 }
@@ -100,7 +101,7 @@ func (h *Handler) GetSession(c *gin.Context) {
 		sendServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, sessionToInfo(sess))
+	c.JSON(http.StatusOK, h.info(sess))
 }
 
 func (h *Handler) Messages(c *gin.Context) {
@@ -153,7 +154,23 @@ func (h *Handler) SetPermissionMode(c *gin.Context) {
 		sendServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, sessionToInfo(sess))
+	c.JSON(http.StatusOK, h.info(sess))
+}
+
+// info is sessionToInfo plus what only the live service knows.
+func (h *Handler) info(sess *session.Session) SessionInfo {
+	out := sessionToInfo(sess)
+	out.AwaitingInput = h.svc.AwaitingInput(sess.ID)
+	return out
+}
+
+func (h *Handler) Handoff(c *gin.Context) {
+	cmd, err := h.svc.Handoff(c.Request.Context(), c.Param("session_id"))
+	if err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, HandoffResponse{Command: cmd})
 }
 
 func (h *Handler) Status(c *gin.Context) {
@@ -189,7 +206,7 @@ func (h *Handler) SetProfile(c *gin.Context) {
 		sendServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, sessionToInfo(sess))
+	c.JSON(http.StatusOK, h.info(sess))
 }
 
 func (h *Handler) Interrupt(c *gin.Context) {
@@ -206,5 +223,5 @@ func (h *Handler) Archive(c *gin.Context) {
 		sendServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, sessionToInfo(sess))
+	c.JSON(http.StatusOK, h.info(sess))
 }

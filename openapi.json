@@ -2276,6 +2276,39 @@
         }
       }
     },
+    "/api/v1/desk/sessions/{session_id}/handoff": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Release a session so it can be continued in a terminal, returning the command",
+        "description": "Release a session so it can be continued in a terminal, returning the command",
+        "operationId": "apiV1DeskSessionsSession_idHandoffPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desk/sessions/{session_id}/interrupt": {
       "post": {
         "tags": [
@@ -11366,6 +11399,18 @@
         "type": "object",
         "additionalProperties": {}
       },
+      "HandoffResponse": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
       "HealthInfoResponse": {
         "type": "object",
         "properties": {
@@ -15617,6 +15662,10 @@
       "SessionInfo": {
         "type": "object",
         "properties": {
+          "awaiting_input": {
+            "type": "boolean",
+            "description": "Field awaiting_input"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -15668,6 +15717,7 @@
           "response",
           "permission_mode",
           "profile",
+          "awaiting_input",
           "created_at",
           "last_activity"
         ]
