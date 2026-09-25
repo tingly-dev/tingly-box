@@ -142,7 +142,7 @@ traffic. Only `api_style: anthropic` with the `claude` agent is supported;
 other OAuth-only templates are still skipped by `init-config`. The hermetic
 twin of this path is `TestSetupRealOAuthAgent_ClaudeCode`
 (`internal/protocoltest/agent_oauth_test.go`). Rationale and wire details:
-`.design/claude-code-client-compat.md` §4.
+`.design/claude-code.md` §B4.2.
 
 ---
 
