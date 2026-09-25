@@ -1,7 +1,48 @@
 # tingly (Python SDK) — v1 framework
 
-Two classes, zero dependencies. See [`.design/python-sdk.md`](../../.design/python-sdk.md)
+Zero dependencies. See [`.design/python-sdk.md`](../../.design/python-sdk.md)
 for the design rationale and scope cuts.
+
+## The few-lines path
+
+Turn a Python function into a tb provider:
+
+```python
+import tingly
+
+@tingly.image("qwen-image-2.1")
+def generate(prompt):
+    return pipe(prompt).images[0]      # bytes, or a PIL image — returned as-is
+
+tingly.serve()                          # http://0.0.0.0:8765/v1
+```
+
+| decorator | serves | your function gets | and returns |
+|---|---|---|---|
+| `@tingly.text(model)` | `/v1/chat/completions` | `messages`, `**rest` | `str` (or a ChatCompletion dict) |
+| `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image(s): `bytes`, a PIL image, or a list |
+| `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` | same as `image` |
+
+`**rest` is the rest of the request body, but only the names your function
+declares are passed: `def generate(prompt)` gets just the prompt,
+`def generate(prompt, size=None)` also gets `size`, and `**kw` gets
+everything. Several decorated models can share one process; they are all
+listed on `/v1/models` and routed by the request's `model`.
+
+Register it once in tb: **Connect AI → Self-hosted → Custom endpoint**,
+OpenAI, `http://localhost:8765/v1`, no key. For images, point an `imagegen`
+rule at that provider and your model name. For text, tb translates
+Anthropic- and Responses-speaking clients into Chat for this provider, so
+Chat is all you write. Not yet supported: streaming, and serialising calls
+to a single-GPU pipeline (add a lock yourself if you need one).
+
+[`examples/image.py`](examples/image.py) is a complete image provider with a
+fake model (a stdlib-rendered PNG), so it runs anywhere.
+
+## The raw layer
+
+The sugar above is built on `tingly.Server`, which hands each endpoint's
+exact protocol to your handler. Use it when you need the wire shape itself.
 
 - `tingly.Server` — be a tb provider. Register a handler per protocol you
   want to serve — `@srv.chat` for OpenAI Chat Completions
@@ -22,6 +63,11 @@ for the design rationale and scope cuts.
   `dict` at runtime, and the imports are `TYPE_CHECKING`-only, so `openai`/
   `anthropic` are never required), just real, officially-maintained types
   instead of nothing.
+- Images: `@srv.images` (`/v1/images/generations`, raw JSON body) and
+  `@srv.image_edits` (`/v1/images/edits`; the multipart form decoded into a
+  dict — text fields as strings, `image`/`image[]` as `list[bytes]`, `mask`
+  as `bytes`). Return an `ImagesResponse` dict, or image(s) to be wrapped as
+  `b64_json`.
 - `tingly.Client` — call tb from Python. Point it at a running tb and a
   gateway token, ask it to run any scenario/model.
 
@@ -89,6 +135,7 @@ Run the bundled examples directly:
 cd sdk/python
 TINGLY_BASE_URL=http://localhost:12580 TINGLY_TOKEN=<gateway token> python examples/relay.py
 TINGLY_BASE_URL=http://localhost:12580 TINGLY_TOKEN=<gateway token> python examples/fanout.py
+python examples/image.py   # no tb connection needed: a fake image model
 ```
 
 ## Using `Client` standalone

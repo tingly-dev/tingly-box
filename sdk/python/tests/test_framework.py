@@ -8,18 +8,21 @@ response). A passing run proves the loop the design doc describes actually
 closes, without needing a real tingly-box instance.
 """
 
+import base64
 import json
 import os
 import sys
 import threading
 import time
 import unittest
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tingly import Client, Server, TinglyError, text_of  # noqa: E402
+from helpers import get_json, post_json, post_multipart, wait_until_serving  # noqa: E402
 
 
 def _wait_until_serving(srv: Server, timeout: float = 2.0):
@@ -206,6 +209,90 @@ class FrameworkTest(unittest.TestCase):
             self.assertEqual(ctx.exception.status, 400)
         finally:
             server.shutdown()
+
+
+class FakePILImage:
+    """Stands in for a PIL image: all the raw layer relies on is .save()."""
+
+    def save(self, fp, format):
+        fp.write(b"saved-as-" + format.encode())
+
+
+class ImagesTest(unittest.TestCase):
+    """@srv.images / @srv.image_edits: the two image endpoints tb forwards to
+    a provider, and the image-to-b64_json wrapping."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = Server("img-test")
+        cls.seen = {}
+
+        @cls.srv.images
+        def handle_images(body):
+            cls.seen["images"] = body
+            if body["prompt"] == "two":
+                return [b"first", FakePILImage()]
+            if body["prompt"] == "dict":
+                return {"created": 1, "data": [{"url": "http://example/x.png"}]}
+            return b"png-bytes"
+
+        @cls.srv.image_edits
+        def handle_image_edits(body):
+            cls.seen["image_edits"] = body
+            return body["image"][0]
+
+        threading.Thread(target=cls.srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
+        wait_until_serving(cls.srv)
+        cls.base = f"http://127.0.0.1:{cls.srv._httpd.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv._httpd.shutdown()
+
+    def test_generation_gets_the_raw_json_body_and_wraps_bytes_as_b64_json(self):
+        body = post_json(f"{self.base}/v1/images/generations", {"model": "img-test", "prompt": "a cat", "size": "512x512"})
+        self.assertEqual(self.seen["images"], {"model": "img-test", "prompt": "a cat", "size": "512x512"})
+        self.assertEqual(base64.b64decode(body["data"][0]["b64_json"]), b"png-bytes")
+        self.assertIn("created", body)
+
+    def test_generation_wraps_a_list_and_saves_pil_like_images_as_png(self):
+        body = post_json(f"{self.base}/images/generations", {"model": "img-test", "prompt": "two"})
+        decoded = [base64.b64decode(item["b64_json"]) for item in body["data"]]
+        self.assertEqual(decoded, [b"first", b"saved-as-PNG"])
+
+    def test_generation_passes_a_dict_reply_through(self):
+        body = post_json(f"{self.base}/v1/images/generations", {"model": "img-test", "prompt": "dict"})
+        self.assertEqual(body, {"created": 1, "data": [{"url": "http://example/x.png"}]})
+
+    def test_edit_decodes_the_multipart_form_and_collects_image_brackets(self):
+        """openai-go sends several images as image[] — they, and a single
+        image, all land in body["image"]; text fields stay strings."""
+        body = post_multipart(f"{self.base}/v1/images/edits", [
+            ("model", "img-test"), ("prompt", "make it blue"), ("n", "1"),
+            ("image[]", b"img-one"), ("image[]", b"img-two"), ("mask", b"the-mask"),
+        ])
+        seen = self.seen["image_edits"]
+        self.assertEqual(seen["image"], [b"img-one", b"img-two"])
+        self.assertEqual(seen["mask"], b"the-mask")
+        self.assertEqual((seen["prompt"], seen["n"]), ("make it blue", "1"))
+        self.assertEqual(base64.b64decode(body["data"][0]["b64_json"]), b"img-one")
+
+    def test_edit_with_a_single_image_field(self):
+        post_multipart(f"{self.base}/images/edits", [("model", "img-test"), ("prompt", "p"), ("image", b"only")])
+        self.assertEqual(self.seen["image_edits"]["image"], [b"only"])
+
+    def test_edit_rejects_a_non_multipart_body(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            post_json(f"{self.base}/v1/images/edits", {"prompt": "p"})
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_models_lists_the_advertised_models(self):
+        self.srv.models.append("img-test-2")
+        try:
+            ids = [m["id"] for m in get_json(f"{self.base}/v1/models")["data"]]
+        finally:
+            self.srv.models.remove("img-test-2")
+        self.assertEqual(ids, ["img-test", "img-test-2"])
 
 
 class StubAdmin(BaseHTTPRequestHandler):

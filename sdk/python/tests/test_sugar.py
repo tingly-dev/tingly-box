@@ -1,0 +1,145 @@
+"""The sugar layer end to end: plain functions registered with
+@tingly.text / @tingly.image / @tingly.image_edit, served by tingly.serve()."""
+
+import base64
+import importlib.util
+import os
+import struct
+import sys
+import threading
+import unittest
+import urllib.error
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import tingly  # noqa: E402
+from tingly import sugar  # noqa: E402
+from helpers import get_json, post_json, post_multipart, wait_until_serving  # noqa: E402
+
+
+def start_serving() -> str:
+    threading.Thread(target=tingly.serve, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
+    wait_until_serving(sugar._server)
+    return f"http://127.0.0.1:{sugar._server._httpd.server_address[1]}"
+
+
+def stop_serving():
+    sugar._server._httpd.shutdown()
+    sugar._reset()
+
+
+class SugarTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        sugar._reset()
+        cls.seen = {}
+
+        @tingly.text("echo")
+        def reply(messages):
+            cls.seen["text"] = messages
+            return f"you said: {messages[-1]['content'][0]['text']}"
+
+        @tingly.image("bare")
+        def bare(prompt):  # accepts only prompt: size/n must not be passed
+            cls.seen["bare"] = prompt
+            return b"bare-png"
+
+        @tingly.image("sized")
+        def sized(prompt, size=None):
+            cls.seen["sized"] = (prompt, size)
+            return b"sized-png"
+
+        @tingly.image("everything")
+        def everything(prompt, **rest):
+            cls.seen["everything"] = rest
+            return [b"a", b"b"]
+
+        @tingly.image_edit("editor")
+        def edit(prompt, images, mask=None):
+            cls.seen["edit"] = (prompt, images, mask)
+            return images[-1]
+
+        cls.base = start_serving()
+
+    @classmethod
+    def tearDownClass(cls):
+        stop_serving()
+
+    def test_text_gets_the_messages_list_unchanged_and_a_str_reply_is_wrapped(self):
+        messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        body = post_json(f"{self.base}/v1/chat/completions", {"model": "echo", "messages": messages})
+        self.assertEqual(self.seen["text"], messages)  # content parts stay parts: unpacked, not converted
+        self.assertEqual(body["choices"][0]["message"]["content"], "you said: hi")
+
+    def test_image_function_only_gets_the_arguments_it_declares(self):
+        body = post_json(f"{self.base}/v1/images/generations",
+                         {"model": "bare", "prompt": "a cat", "size": "512x512", "n": 1})
+        self.assertEqual(self.seen["bare"], "a cat")
+        self.assertEqual(base64.b64decode(body["data"][0]["b64_json"]), b"bare-png")
+
+    def test_a_declared_keyword_is_filled_from_the_body(self):
+        post_json(f"{self.base}/v1/images/generations", {"model": "sized", "prompt": "p", "size": "64x64"})
+        self.assertEqual(self.seen["sized"], ("p", "64x64"))
+
+    def test_var_keyword_gets_the_whole_rest_of_the_body(self):
+        body = post_json(f"{self.base}/v1/images/generations",
+                         {"model": "everything", "prompt": "p", "n": 2, "quality": "high"})
+        self.assertEqual(self.seen["everything"], {"n": 2, "quality": "high"})
+        self.assertEqual(len(body["data"]), 2)
+
+    def test_image_edit_gets_prompt_images_and_mask(self):
+        body = post_multipart(f"{self.base}/v1/images/edits", [
+            ("model", "editor"), ("prompt", "fix it"),
+            ("image[]", b"one"), ("image[]", b"two"), ("mask", b"m"),
+        ])
+        self.assertEqual(self.seen["edit"], ("fix it", [b"one", b"two"], b"m"))
+        self.assertEqual(base64.b64decode(body["data"][0]["b64_json"]), b"two")
+
+    def test_models_lists_every_registered_model(self):
+        ids = [m["id"] for m in get_json(f"{self.base}/v1/models")["data"]]
+        self.assertEqual(ids, ["echo", "bare", "sized", "everything", "editor"])
+
+    def test_an_unknown_model_is_an_error_when_the_endpoint_has_several(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            post_json(f"{self.base}/v1/images/generations", {"model": "nope", "prompt": "p"})
+        self.assertEqual(ctx.exception.code, 500)
+        self.assertIn("nope", ctx.exception.read().decode())
+
+    def test_a_single_function_on_an_endpoint_answers_any_model_name(self):
+        body = post_json(f"{self.base}/v1/chat/completions",
+                         {"model": "typo", "messages": [{"role": "user", "content": [{"type": "text", "text": "yo"}]}]})
+        self.assertEqual(body["choices"][0]["message"]["content"], "you said: yo")
+
+
+class ServeWithoutRegistrationTest(unittest.TestCase):
+    def test_serve_refuses_to_start_empty(self):
+        sugar._reset()
+        with self.assertRaises(RuntimeError):
+            tingly.serve()
+
+
+class ImageExampleTest(unittest.TestCase):
+    """examples/image.py actually runs and returns a real PNG."""
+
+    @classmethod
+    def setUpClass(cls):
+        sugar._reset()
+        path = os.path.join(os.path.dirname(__file__), "..", "examples", "image.py")
+        spec = importlib.util.spec_from_file_location("image_example", path)
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+        cls.base = start_serving()
+
+    @classmethod
+    def tearDownClass(cls):
+        stop_serving()
+
+    def test_the_fake_model_returns_a_png_of_the_requested_size(self):
+        body = post_json(f"{self.base}/v1/images/generations",
+                         {"model": "fake-image", "prompt": "a red fox", "size": "32x16"})
+        png = base64.b64decode(body["data"][0]["b64_json"])
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", png[16:24]), (32, 16))
+
+
+if __name__ == "__main__":
+    unittest.main()

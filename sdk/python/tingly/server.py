@@ -13,6 +13,15 @@ endpoint also answers without the `/v1` prefix (`/chat/completions`,
 bothers with, since which shape a caller's configured base URL expects is
 exactly the kind of detail not worth troubleshooting by hand.
 
+Images ride the same contract on two more endpoints: `@srv.images`
+(`POST /v1/images/generations`, JSON) and `@srv.image_edits`
+(`POST /v1/images/edits`, multipart — decoded into a dict, the multipart
+counterpart of `json.loads` and the only decoding done). They return an
+`ImagesResponse` dict, or image(s) — `bytes` or anything with
+`.save(fp, format)` — which are wrapped into `b64_json` entries.
+
+This is the raw layer. The few-lines layer on top of it is `sugar.py`.
+
 This is a prototype, not a protocol-translation layer: the three decorators
 are independent, and there is **no bridging between them**, and **no typed
 wrapper around the request either** — a handler gets exactly the raw
@@ -48,31 +57,41 @@ complete response in that same protocol's shape (e.g. straight from
 
 from __future__ import annotations
 
+import base64
+import email.policy
+import io
 import json
 import os
 import time
 import uuid
+from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .client import Client, DEFAULT_SCENARIO
 
 if TYPE_CHECKING:
     from anthropic.types.message_create_params import MessageCreateParamsBase
     from openai.types.chat.completion_create_params import CompletionCreateParamsBase
+    from openai.types.image_generate_params import ImageGenerateParamsBase
     from openai.types.responses.response_create_params import ResponseCreateParamsBase
 
 ChatHandler = Callable[["CompletionCreateParamsBase"], "str | dict"]
 ResponsesHandler = Callable[["ResponseCreateParamsBase"], "str | dict"]
 MessagesHandler = Callable[["MessageCreateParamsBase"], "str | dict"]
+ImagesHandler = Callable[["ImageGenerateParamsBase"], Any]
+# Not ImageEditParamsBase: the body is a decoded multipart form, so numeric
+# fields arrive as strings ("n": "1") where that TypedDict says int.
+ImageEditsHandler = Callable[[dict], Any]
 
 
 class Server:
-    """A single-model HTTP server, speaking any mix of OpenAI Chat,
-    OpenAI Responses, and Anthropic protocol.
+    """An HTTP server speaking any mix of OpenAI Chat, OpenAI Responses,
+    Anthropic, and OpenAI images protocol.
 
     Args:
-        name: the model id this server advertises via `GET /v1/models`.
+        name: the model id this server advertises via `GET /v1/models`
+            (`models` holds the full advertised list; it starts as `[name]`).
         tb_base_url: address of the tb instance to call back into, via
             `.tb`. Falls back to the `TINGLY_BASE_URL` env var. Optional —
             a pure standalone provider never needs `.tb`.
@@ -88,9 +107,12 @@ class Server:
         tb_scenario: str = DEFAULT_SCENARIO,
     ):
         self.name = name
+        self.models: list[str] = [name]
         self._chat_handler: ChatHandler | None = None
         self._responses_handler: ResponsesHandler | None = None
         self._messages_handler: MessagesHandler | None = None
+        self._images_handler: ImagesHandler | None = None
+        self._image_edits_handler: ImageEditsHandler | None = None
         self._httpd: ThreadingHTTPServer | None = None
 
         base_url = tb_base_url or os.environ.get("TINGLY_BASE_URL")
@@ -120,10 +142,31 @@ class Server:
         self._messages_handler = fn
         return fn
 
+    def images(self, fn: ImagesHandler) -> ImagesHandler:
+        """Decorator registering the OpenAI image generation handler
+        (`POST /v1/images/generations`). `fn` receives the raw parsed JSON
+        body and returns either an `ImagesResponse`-shaped dict, or image(s)
+        to wrap: `bytes`, anything with `.save(fp, format)` (a PIL image), or
+        a list of those."""
+        self._images_handler = fn
+        return fn
+
+    def image_edits(self, fn: ImageEditsHandler) -> ImageEditsHandler:
+        """Decorator registering the OpenAI image edit handler
+        (`POST /v1/images/edits`). The request is multipart, so `fn` receives
+        the form decoded into a dict: text fields as strings under their own
+        names, `image` (sent as `image` or `image[]`) as `list[bytes]`,
+        `mask` as `bytes`. Returns the same as `images`."""
+        self._image_edits_handler = fn
+        return fn
+
     def run(self, host: str = "0.0.0.0", port: int = 8765):
-        if self._chat_handler is None and self._responses_handler is None and self._messages_handler is None:
+        handlers = (self._chat_handler, self._responses_handler, self._messages_handler,
+                    self._images_handler, self._image_edits_handler)
+        if all(h is None for h in handlers):
             raise RuntimeError(
-                "no handler registered — use @srv.chat, @srv.responses, and/or @srv.messages before srv.run()"
+                "no handler registered — use @srv.chat, @srv.responses, @srv.messages, "
+                "@srv.images and/or @srv.image_edits before srv.run()"
             )
 
         self._httpd = ThreadingHTTPServer((host, port), _make_request_handler(self))
@@ -155,7 +198,7 @@ def _make_request_handler(srv: Server):
             if _strip_v1(self.path) == "/models":
                 self._json(200, {
                     "object": "list",
-                    "data": [{"id": srv.name, "object": "model", "owned_by": "tingly-sdk"}],
+                    "data": [{"id": m, "object": "model", "owned_by": "tingly-sdk"} for m in srv.models],
                 })
             else:
                 self._json(404, {"error": "not found"})
@@ -163,7 +206,15 @@ def _make_request_handler(srv: Server):
         def do_POST(self):
             path = _strip_v1(self.path)
             length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length) or b"{}")
+            data = self.rfile.read(length)
+            try:
+                if path == "/images/edits":
+                    body = _parse_multipart(self.headers.get("Content-Type", ""), data)
+                else:
+                    body = json.loads(data or b"{}")
+            except ValueError as exc:
+                self._json(400, {"error": f"invalid request body: {exc}"})
+                return
 
             if path == "/chat/completions":
                 self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered", _wrap_text_openai_chat)
@@ -171,6 +222,10 @@ def _make_request_handler(srv: Server):
                 self._dispatch(srv._responses_handler, body, "no @srv.responses handler registered", _wrap_text_openai_responses)
             elif path == "/messages":
                 self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered", _wrap_text_anthropic)
+            elif path == "/images/generations":
+                self._dispatch(srv._images_handler, body, "no @srv.images handler registered", _wrap_images)
+            elif path == "/images/edits":
+                self._dispatch(srv._image_edits_handler, body, "no @srv.image_edits handler registered", _wrap_images)
             else:
                 self._json(404, {"error": "not found"})
 
@@ -180,10 +235,11 @@ def _make_request_handler(srv: Server):
                 return
             try:
                 result = handler(body)
+                payload = result if isinstance(result, dict) else wrap_text(body.get("model", ""), result)
             except Exception as exc:  # surfaced to the caller, not a 500 traceback
                 self._json(500, {"error": str(exc)})
                 return
-            self._json(200, result if isinstance(result, dict) else wrap_text(body.get("model", ""), result))
+            self._json(200, payload)
 
         def _json(self, status: int, payload: dict):
             data = json.dumps(payload).encode("utf-8")
@@ -247,3 +303,54 @@ def _wrap_text_anthropic(model: str, text: str) -> dict:
         "stop_sequence": None,
         "usage": {"input_tokens": 0, "output_tokens": len(text.split())},
     }
+
+
+def _wrap_images(model: str, result: Any) -> dict:
+    """Wrap handler-returned image(s) into a minimal OpenAI `ImagesResponse`:
+    always `b64_json` (the only kind tb persists), never `url`."""
+    items = result if isinstance(result, (list, tuple)) else [result]
+    return {
+        "created": int(time.time()),
+        "data": [{"b64_json": base64.b64encode(_image_bytes(item)).decode("ascii")} for item in items],
+    }
+
+
+def _image_bytes(image: Any) -> bytes:
+    if isinstance(image, (bytes, bytearray, memoryview)):
+        return bytes(image)
+    if hasattr(image, "save"):  # PIL.Image and look-alikes, without importing PIL
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        return buf.getvalue()
+    raise TypeError(
+        f"can't turn {type(image).__name__} into an image — return bytes, "
+        "an object with .save(fp, format), a list of those, or a dict"
+    )
+
+
+def _parse_multipart(content_type: str, data: bytes) -> dict:
+    """Decode a multipart/form-data body into a dict — the multipart
+    counterpart of `json.loads`, nothing more. Text fields stay strings;
+    file fields become bytes; `image` and `image[]` (one field on the wire,
+    sent in two encodings depending on count) both collect into
+    `body["image"]` as a list."""
+    if not content_type.startswith("multipart/form-data"):
+        raise ValueError("expected multipart/form-data")
+    message = BytesParser(policy=email.policy.HTTP).parsebytes(
+        b"Content-Type: " + content_type.encode("latin-1") + b"\r\n\r\n" + data
+    )
+    form: dict = {}
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if not name:
+            continue
+        payload = part.get_payload(decode=True)  # bytes for any non-multipart part
+        if not isinstance(payload, bytes):
+            payload = b""
+        if name in ("image", "image[]"):
+            form.setdefault("image", []).append(payload)
+        elif part.get_filename() is None:
+            form[name] = payload.decode(part.get_content_charset() or "utf-8")
+        else:
+            form[name] = payload
+    return form

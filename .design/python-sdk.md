@@ -114,6 +114,7 @@ sdk/python/
   tests/
     test_framework.py     # Server + Client against a stub HTTP server
     test_sugar.py         # the sugar layer end to end
+    helpers.py            # shared HTTP / multipart helpers (not a test module)
 ```
 
 No CLI, no transports/helpers packages, and — after an earlier draft added
