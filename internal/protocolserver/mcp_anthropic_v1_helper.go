@@ -282,6 +282,9 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 
 	// Update affinity
 	ph.updateAffinityMessageID(c, rule, string(response.ID))
+	if reqCtx.ResponseModel != "" {
+		response.Model = reqCtx.ResponseModel
+	}
 
 	// Return response (OpenAI format)
 	c.JSON(http.StatusOK, response)
@@ -335,7 +338,7 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		mcp.InterceptorConfig{MaxRounds: 3},
+		mcp.InterceptorConfig{MaxRounds: 3, ResponseModel: responseModel},
 	)
 
 	if err := interceptor.Run(req); err != nil {
@@ -367,6 +370,9 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaNonStream(
 
 	// Update affinity and get typed message
 	ph.updateAffinityMessageID(c, rule, string(response.ID))
+	if reqCtx.ResponseModel != "" {
+		response.Model = anthropic.Model(reqCtx.ResponseModel)
+	}
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
@@ -418,7 +424,7 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaStream(
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
 	guardrailsEnabled := ph.guardrailsEnabledForScenario(scenario)
-	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
+	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled, ResponseModel: responseModel}
 	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
 		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)

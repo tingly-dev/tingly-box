@@ -195,14 +195,14 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 				}
 				areq.ResponseNewParams = clonedParams
 			}
-			ph.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
+			ph.runOpenAIResponsesAttempt(c, areq, p, retryModel, responseModel, rule, isStreaming, scenarioType, scenarioConfig)
 		})
 }
 
 // runOpenAIResponsesAttempt executes the provider-dependent half of an OpenAI
 // Responses request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel, responseModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
@@ -251,6 +251,7 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	reqCtx.RequestModel = actualModel
+	reqCtx.ResponseModel = responseModel
 	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
 }
 
