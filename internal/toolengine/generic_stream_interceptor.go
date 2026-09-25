@@ -692,32 +692,6 @@ func (i *GenericStreamInterceptor) extractModel(req any) string {
 	return extractModelFromRequest(req, i.provider)
 }
 
-// sendEvent writes one client-bound event, reporting config.ResponseModel
-// (the model the client asked for) instead of the provider's model id.
-func (i *GenericStreamInterceptor) sendEvent(eventType string, payload []byte) error {
-	return i.adapter.SendEvent(i.c, eventType, i.withResponseModel(payload))
-}
-
-func (i *GenericStreamInterceptor) withResponseModel(payload []byte) []byte {
-	model := i.config.ResponseModel
-	if model == "" || len(payload) == 0 {
-		return payload
-	}
-	path := "model" // OpenAI Chat chunk
-	if gjson.GetBytes(payload, "type").String() == "message_start" {
-		path = "message.model"
-	}
-	current := gjson.GetBytes(payload, path)
-	if !current.Exists() || current.String() == model {
-		return payload
-	}
-	patched, err := sjson.SetBytes(payload, path, model)
-	if err != nil {
-		return payload
-	}
-	return patched
-}
-
 func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error) {
 	// Extract raw JSON payload from streaming events
 	// Different SDK types have different methods to access raw data
@@ -940,4 +914,30 @@ func (i *GenericStreamInterceptor) applyStoredContinuation() {
 		return
 	}
 	i.currentReq = updated
+}
+
+// sendEvent writes one client-bound event, reporting config.ResponseModel
+// (the model the client asked for) instead of the provider's model id.
+func (i *GenericStreamInterceptor) sendEvent(eventType string, payload []byte) error {
+	return i.adapter.SendEvent(i.c, eventType, i.withResponseModel(payload))
+}
+
+func (i *GenericStreamInterceptor) withResponseModel(payload []byte) []byte {
+	model := i.config.ResponseModel
+	if model == "" || len(payload) == 0 {
+		return payload
+	}
+	path := "model" // OpenAI Chat chunk
+	if gjson.GetBytes(payload, "type").String() == "message_start" {
+		path = "message.model"
+	}
+	current := gjson.GetBytes(payload, path)
+	if !current.Exists() || current.String() == model {
+		return payload
+	}
+	patched, err := sjson.SetBytes(payload, path, model)
+	if err != nil {
+		return payload
+	}
+	return patched
 }
