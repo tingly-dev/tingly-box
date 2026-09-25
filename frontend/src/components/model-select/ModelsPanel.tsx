@@ -18,6 +18,7 @@ import type { Provider } from '@/types/provider';
 import type { ProviderQuota, ProviderUsage } from '@/types/quota';
 import { QuotaBarItem } from '@/components/credential/QuotaBarItem';
 import { useQuotaBars } from '@/components/credential/useQuotaBars';
+import { QuotaRawResponseButton } from '@/components/credential/QuotaRawResponseButton';
 import SearchField from '@/components/SearchField';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
@@ -105,7 +106,15 @@ export function ModelsPanel({
         );
     }, [providerModels, provider.uuid, provider.name, provider.api_style]);
 
-    const { windows: quotaWindows, resourceItems } = useQuotaBars(providerQuota);
+    const { windows: quotaWindows, resourceItems, hasAny: hasQuotaBars } = useQuotaBars(providerQuota);
+    // Same rule as the Credentials quota row: a provider whose quota could not
+    // be read still gets the section, so refresh and the raw response stay
+    // reachable — the payload is often the only explanation for no figures.
+    const hasRawQuotaResponse = providerQuota?.raw_response !== undefined && providerQuota.raw_response !== null;
+    const showQuotaSection = hasQuotaBars || hasRawQuotaResponse || !!providerQuota?.last_error;
+    // The bar row: the bars, or the "No quota limits reported" note when the
+    // upstream answered cleanly with nothing to show.
+    const showQuotaRow = hasQuotaBars || (hasRawQuotaResponse && !providerQuota?.last_error);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -426,14 +435,14 @@ export function ModelsPanel({
             </Stack>
             </Box>
             {/* Provider Quota Bars - fixed at the bottom */}
-            {quotaWindows.length > 0 && (
+            {showQuotaSection && (
                 <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction="row"
                         sx={{
                             justifyContent: "space-between",
                             alignItems: "center",
-                            mb: 1.5
+                            mb: showQuotaRow ? 1.5 : 0
                         }}>
                         <Typography
                             variant="caption"
@@ -443,41 +452,51 @@ export function ModelsPanel({
                             }}>
                             Provider Quota
                         </Typography>
-                        <IconButton
-                            size="small"
-                            onClick={() => refreshQuota(provider.uuid)}
-                            disabled={isRefreshingQuota}
-                            sx={{
-                                p: 0.5,
-                                color: 'text.primary',
-                                '&:hover': {
-                                    bgcolor: 'action.hover',
-                                },
-                            }}
-                            title="Refresh quota"
-                        >
-                            <RefreshIcon
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+                            <QuotaRawResponseButton providerName={provider.name} response={providerQuota?.raw_response} />
+                            <IconButton
+                                size="small"
+                                onClick={() => refreshQuota(provider.uuid)}
+                                disabled={isRefreshingQuota}
                                 sx={{
-                                    fontSize: 16,
-                                    ...(isRefreshingQuota && {
-                                        '@keyframes spin': {
-                                            '0%': { transform: 'rotate(0deg)' },
-                                            '100%': { transform: 'rotate(360deg)' },
-                                        },
-                                        animation: 'spin 1s linear infinite',
-                                    }),
+                                    p: 0.5,
+                                    color: 'text.primary',
+                                    '&:hover': {
+                                        bgcolor: 'action.hover',
+                                    },
                                 }}
-                            />
-                        </IconButton>
+                                title="Refresh quota"
+                            >
+                                <RefreshIcon
+                                    sx={{
+                                        fontSize: 16,
+                                        ...(isRefreshingQuota && {
+                                            '@keyframes spin': {
+                                                '0%': { transform: 'rotate(0deg)' },
+                                                '100%': { transform: 'rotate(360deg)' },
+                                            },
+                                            animation: 'spin 1s linear infinite',
+                                        }),
+                                    }}
+                                />
+                            </IconButton>
+                        </Stack>
                     </Stack>
-                    <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-                        {quotaWindows.map(({ key, window }) => (
-                            <QuotaBarItem key={key} window={window} />
-                        ))}
-                        {resourceItems.map(item => (
-                            <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
-                        ))}
-                    </Stack>
+                    {showQuotaRow && (
+                        <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+                            {quotaWindows.map(({ key, window }) => (
+                                <QuotaBarItem key={key} window={window} />
+                            ))}
+                            {resourceItems.map(item => (
+                                <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
+                            ))}
+                            {!hasQuotaBars && (
+                                <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>
+                                    No quota limits reported
+                                </Typography>
+                            )}
+                        </Stack>
+                    )}
                 </Box>
             )}
         </Box>

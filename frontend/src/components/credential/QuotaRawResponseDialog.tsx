@@ -51,8 +51,8 @@ export function QuotaRawResponseDialog({
             <Typography variant="h6">Raw quota response</Typography>
             <Typography variant="body2" color="text.secondary">
               {providerName
-                ? `Complete successful response returned for ${providerName}.`
-                : 'Complete successful response returned by the quota endpoint.'}
+                ? `Complete response returned for ${providerName}.`
+                : 'Complete response returned by the quota endpoint.'}
             </Typography>
           </Stack>
           <IconButton aria-label="Close raw quota response" onClick={onClose} edge="end">
