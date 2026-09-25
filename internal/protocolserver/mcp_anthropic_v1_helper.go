@@ -430,6 +430,7 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaStream(
 			ReattachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
 			return nil
 		}
+		interceptorCfg.RewriteClientEvent = GuardrailsClientEventRewriter(hc)
 	}
 
 	// Create and run generic interceptor

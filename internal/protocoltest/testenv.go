@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -71,9 +72,10 @@ func (env *TestEnv) FlushRecordSinks(ctx context.Context, scenarios ...typ.RuleS
 type TestEnvOption func(*testEnvConfig)
 
 type testEnvConfig struct {
-	recordDir  string
-	mcpEnabled bool
-	client     Client
+	recordDir         string
+	mcpEnabled        bool
+	guardrailsRuntime *guardrails.Guardrails
+	client            Client
 }
 
 // NewTestEnvOptionWithRecordDir creates an option to set the record directory.
@@ -88,6 +90,14 @@ func NewTestEnvOptionWithRecordDir(dir string) TestEnvOption {
 func NewTestEnvOptionWithMCP() TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.mcpEnabled = true
+	}
+}
+
+// NewTestEnvOptionWithGuardrails enables the Guardrails extension for the
+// global scenario and injects runtime into the real gateway server.
+func NewTestEnvOptionWithGuardrails(runtime *guardrails.Guardrails) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.guardrailsRuntime = runtime
 	}
 }
 
@@ -260,10 +270,16 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}
+	if cfg.guardrailsRuntime != nil {
+		serverOpts = append(serverOpts, server.WithGuardrails(cfg.guardrailsRuntime))
+	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *appconfig.AppConfig) {
 		if cfg.mcpEnabled {
 			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionMCP, true)
+		}
+		if cfg.guardrailsRuntime != nil {
+			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionGuardrails, true)
 		}
 	}, serverOpts...)
 	if err != nil {
