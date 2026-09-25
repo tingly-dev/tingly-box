@@ -27,6 +27,18 @@ func (s *Server) mcpEnabled() bool {
 	return protocolserver.MCPEnabled(s.config)
 }
 
+// deskEnabled reports whether the experimental Desk surface
+// (a web front door onto local Claude Code, see .design/desk.md)
+// is turned on. Off by default: it runs an arbitrary local coding agent on
+// the host, so it opts in the same way guardrails/MCP do rather than being
+// always-on.
+func (s *Server) deskEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionDesk)
+}
+
 func (s *Server) initGuardrailsRuntime() {
 	runtime := s.currentGuardrailsRuntime()
 	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {

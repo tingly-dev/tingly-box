@@ -9,10 +9,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
+	deskmodule "github.com/tingly-dev/tingly-box/internal/server/module/desk"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -21,8 +26,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
+	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/control"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
@@ -236,6 +243,52 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
 	providerQuotaModule.RegisterRoutes(apiV1, quotaHandler)
 
+	if s.desk = newDeskService(sm, s.config); s.desk != nil {
+		registerDeskRoutes(apiV1, s.desk, s.deskEnabled)
+	}
+
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)
+}
+
+// deskSessionPoolConfig mirrors imbot's sessionPoolConfig
+// (internal/server/module/imbot/manager.go) — same capacity/idle-timeout
+// reasoning applies to a browser-driven Claude Code session as to a bot one.
+var deskSessionPoolConfig = pool.Config{
+	MaxSessions: 10,
+	IdleTimeout: 10 * time.Minute,
+}
+
+// newDeskService builds the Desk service — a web front
+// door onto the same remote/session + agentboot machinery @cc already
+// drives, not a separate domain model (.design/desk.md). It builds
+// its own control.Core, an independent in-memory session.Manager cache over
+// the SAME session store @cc uses (sm.RemoteSessions()) — the sanctioned
+// pattern every remote-host entry point follows (see remote/control.Core).
+//
+// Only the running server may call this: the service reconciles stored
+// sessions on construction, so building one from schema generation would
+// rewrite a live server's sessions. Returns nil if it cannot be built.
+func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
+	if sm == nil {
+		return nil
+	}
+	maCore, err := control.NewCore(sm.RemoteSessions())
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create desk control core, desk APIs will not be available")
+		return nil
+	}
+	return desksvc.NewService(desksvc.Config{
+		Sessions: maCore.Session,
+		Agent:    maCore.Agent,
+		Routing:  tbclient.NewTBClient(cfg),
+		Pool:     pool.New(deskSessionPoolConfig),
+	})
+}
+
+// registerDeskRoutes is shared by UseUIEndpoints (with the live
+// service) and registerAllAPIRoutes (schema generation, with nil) so the
+// route set and its enabled gate cannot drift between the two paths.
+func registerDeskRoutes(apiV1 *swagger.RouteGroup, svc *desksvc.Service, enabled func() bool) {
+	deskmodule.RegisterRoutes(apiV1, deskmodule.NewHandler(svc), enabled)
 }

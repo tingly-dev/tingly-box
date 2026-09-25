@@ -83,6 +83,7 @@ const BotOverviewPage = lazy(() => import('./pages/bots/BotOverviewPage'));
 const RemoteAgentPage = lazy(() => import('./pages/remote-agent/RemoteAgentPage'));
 const RemoteAgentEntryRedirect = lazy(() => import('./pages/remote-agent/RemoteAgentPage').then(m => ({ default: m.RemoteAgentEntryRedirect })));
 const NotifyPage = lazy(() => import('./pages/notify/NotifyPage'));
+const DeskPage = lazy(() => import('./pages/desk/DeskPage'));
 const MCPLocalMode = lazy(() => import('./pages/mcp/MCPLocalMode'));
 const MCPRegisteredServers = lazy(() => import('./pages/mcp/MCPRegisteredServers'));
 const ServerToolPage = lazy(() => import('./pages/servertool/ServerToolPage'));
@@ -311,6 +312,9 @@ function AppContent() {
                     <Route path="/bots/slack" element={<SlackPage />} />
                     {/* IM Notify — the other purpose mounted on a bot's channel. */}
                     <Route path="/notify" element={<NotifyPage />} />
+                    {/* Desk — a web-side twin of local `claude`, no IM bot
+                        involved. See useActivityItems for the nav row. */}
+                    <Route path="/desk" element={<ExperimentalFeatureGate feature="desk"><DeskPage /></ExperimentalFeatureGate>} />
                     {/* Remote Control — the purpose pages. One nav row (see useActivityItems);
                         platform selection is an in-page picker (RemoteAgentPage) instead
                         of a route per platform in the sidebar. The routes themselves are
