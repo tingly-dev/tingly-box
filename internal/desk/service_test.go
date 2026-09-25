@@ -1005,7 +1005,7 @@ func newRoutedTestService(t *testing.T, fa *fakeAgent, p *pool.Pool) *Service {
 		t.Fatalf("NewAgentService: %v", err)
 	}
 	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
-	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: fakeRouting{}, Pool: p})
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: fakeRouting{}, Pool: p, Launcher: "/opt/tingly box/tingly-box"})
 }
 
 func TestProfile_TurnLaunchesWithTheProfileSettingsInsteadOfEnv(t *testing.T) {
@@ -1137,7 +1137,7 @@ func TestHandoff_ReleasesTheResidentProcessAndBuildsTheCommand(t *testing.T) {
 	if st := resident.Status(); st != agentboot.SessionStateTerminated {
 		t.Fatalf("resident process state after Handoff = %v, want terminated: it would share the session file with the terminal", st)
 	}
-	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && tingly-box profile 'p1' --resume '` + sess.ID + `'`
+	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && '/opt/tingly box/tingly-box' profile 'p1' --resume '` + sess.ID + `'`
 	if cmd != want {
 		t.Fatalf("command:\n got %s\nwant %s", cmd, want)
 	}
@@ -1157,5 +1157,12 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 	if launchSignature(opts) == before {
 		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
+	}
+}
+
+func TestNewService_DefaultsTheLauncherToItsOwnExecutable(t *testing.T) {
+	svc, _ := newTestService(t, completingScript)
+	if !filepath.IsAbs(svc.launcher) {
+		t.Fatalf("launcher = %q, want an absolute path so the command works off PATH (npx, a build dir)", svc.launcher)
 	}
 }

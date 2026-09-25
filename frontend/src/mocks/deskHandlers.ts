@@ -229,7 +229,8 @@ export const deskHandlers = [
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
         if (s.status === 'running' || s.status === 'pending') return HttpResponse.json({ error: { message: 'a turn is in progress; stop it or wait for it to finish' } }, { status: 409 })
-        const launch = s.profile ? `tingly-box profile '${s.profile}'` : 'tingly-box cc'
+        const tb = "'/usr/local/bin/tingly-box'"
+        const launch = s.profile ? `${tb} profile '${s.profile}'` : `${tb} cc`
         return HttpResponse.json({ command: `cd '${s.project}' && ${launch} --resume '${s.id}'` })
     }),
     http.post('/api/v1/desk/sessions/:id/archive', ({ params }) => {

@@ -75,6 +75,8 @@ type Service struct {
 	// model is each session's latest requested model (from its usage
 	// entries), so Status needn't reload the transcript to find it.
 	model map[string]string
+	// launcher is the tingly-box binary Handoff's command runs.
+	launcher string
 }
 
 // run is what Interrupt and Respond need for a session with a turn in
@@ -104,6 +106,10 @@ type Config struct {
 	// enable unconditionally; nil keeps every turn one-shot, unchanged
 	// from before this existed.
 	Pool *pool.Pool
+	// Launcher is the tingly-box binary Handoff's command runs. Empty means
+	// this process's own executable, by absolute path: it works whether
+	// tingly-box is on PATH, run through npx, or started from a build dir.
+	Launcher string
 }
 
 // NewService builds a Service. Construct it once per process: it treats
@@ -111,8 +117,25 @@ type Config struct {
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
 	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}}
+	s.launcher = cfg.Launcher
+	if s.launcher == "" {
+		s.launcher = selfExecutable()
+	}
 	s.recoverInterrupted()
 	return s
+}
+
+// selfExecutable is this process's binary by absolute, symlink-resolved
+// path, or the bare command name if that can't be determined.
+func selfExecutable() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "tingly-box"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe
 }
 
 // recoverInterrupted marks web sessions that were mid-turn when the previous
@@ -474,7 +497,8 @@ func (s *Service) AwaitingInput(id string) bool {
 // between and have its process closed under it.
 //
 // The command goes through tingly-box (`cc`, or `profile <id>` for a
-// profile) rather than bare `claude`, so the terminal routes through the
+// profile; the binary by absolute path, see Config.Launcher) rather than
+// bare `claude`, so the terminal routes through the
 // same gateway and settings the web turns used, with no token in the
 // command itself.
 func (s *Service) Handoff(id string) (string, error) {
@@ -498,9 +522,9 @@ func (s *Service) Handoff(id string) (string, error) {
 	}()
 	s.evictPersistent(id)
 
-	launch := "tingly-box cc"
+	launch := shellQuote(s.launcher) + " cc"
 	if sess.Profile != "" {
-		launch = "tingly-box profile " + shellQuote(sess.Profile)
+		launch = shellQuote(s.launcher) + " profile " + shellQuote(sess.Profile)
 	}
 	return "cd " + shellQuote(sess.Project) + " && " + launch + " --resume " + shellQuote(id), nil
 }

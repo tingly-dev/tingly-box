@@ -200,9 +200,11 @@ the routed provider's quota and balance.
 
 ### 3.5 Handoff to a terminal
 
-`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && tingly-box cc
---resume '<id>'` (`tingly-box profile '<profile>' …` for a profile), all
-shell-quoted. Going through tingly-box rather than bare `claude` keeps the
+`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && '<tingly-box>'
+cc --resume '<id>'` (`… profile '<profile>' …` for a profile), all
+shell-quoted. `<tingly-box>` is the server's own executable by absolute path
+(`os.Executable`, symlinks resolved), so the command works when tingly-box
+isn't on PATH, e.g. under npx. Going through tingly-box rather than bare `claude` keeps the
 terminal on the same gateway routing the web turns used, with no token in
 the command. It refuses during a turn, and claims the session while it
 releases the resident process, so a turn can't start in between and two
