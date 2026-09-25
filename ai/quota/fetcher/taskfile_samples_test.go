@@ -89,6 +89,24 @@ func TestTaskfileSamples(t *testing.T) {
 	// does not contribute — and does not report 0%.
 	check(t, "anthropic", u, want{pct: 7, ok: true, tightest: "five_hour", windows: 3})
 
+	// ── anthropic, current shape (build/Taskfile.quota.yml) ──
+	s = serve(t, `{"limits":[
+	{"kind":"session","group":"session","percent":24,"severity":"normal","resets_at":"2026-09-25T16:10:00.911173+00:00","scope":null,"is_active":false},
+	{"kind":"weekly_all","group":"weekly","percent":26,"severity":"normal","resets_at":"2026-09-30T13:00:00.911202+00:00","scope":null,"is_active":true},
+	{"kind":"weekly_scoped","group":"weekly","percent":12,"severity":"normal","resets_at":"2026-09-30T12:59:59.911437+00:00",
+	 "scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}],
+	"spend":{"used":{"amount_minor":0,"currency":"USD","exponent":2},"limit":null,"percent":0,"severity":"normal","enabled":false},
+	"seven_day_breakdown":{"rows":[{"key":"claude_code","display_name":"Claude Code","percent":83}]}}`)
+	u, err = (&AnthropicFetcher{baseURL: s.URL}).Fetch(context.Background(), oauthProvider("Claude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The Fable limit gates one model, so it sits in breakdowns; spend is off.
+	check(t, "anthropic-limits", u, want{pct: 26, ok: true, tightest: "seven_day", windows: 2})
+	if len(u.Breakdowns) != 1 || u.Breakdowns[0].Key != "fable" || u.Breakdowns[0].Group != "model" {
+		t.Errorf("anthropic-limits: breakdowns = %+v; want one model breakdown keyed fable", u.Breakdowns)
+	}
+
 	// ── gemini ──
 	s = serve(t, `{"buckets":[{"modelId":"gemini-2.5-pro","remainingFraction":0.75,"resetTime":"2026-04-03T00:00:00Z"},
 	{"modelId":"gemini-2.5-flash","remainingFraction":0.90,"resetTime":"2026-04-03T00:00:00Z"}]}`)

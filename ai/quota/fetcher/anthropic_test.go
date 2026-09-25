@@ -125,3 +125,42 @@ func TestAnthropicFetcher_KnownExtraUsageStillCounts(t *testing.T) {
 		t.Errorf("Tightest() = %q, want extra_usage", got)
 	}
 }
+
+func TestAnthropicFetcher_LimitsList(t *testing.T) {
+	usage := anthropicUsage(t, `{
+		"limits": [
+			{"kind": "session", "group": "session", "percent": 24, "resets_at": "2026-09-25T16:10:00.911173+00:00", "scope": null},
+			{"kind": "weekly_all", "group": "weekly", "percent": 26, "resets_at": "2026-09-30T13:00:00.911202+00:00", "scope": null},
+			{"kind": "weekly_scoped", "group": "weekly", "percent": 97, "resets_at": "2026-09-30T12:59:59.911437+00:00",
+			 "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}}
+		],
+		"spend": {"used": {"amount_minor": 1250, "currency": "USD", "exponent": 2},
+		          "limit": {"amount_minor": 5000, "currency": "USD", "exponent": 2},
+		          "percent": 25, "enabled": true}
+	}`)
+
+	checkInvariants(t, usage)
+
+	if got := findWindow(t, usage, "five_hour"); got.UsedPercent != 24 || got.WindowMinutes != 300 || got.ResetsAt == nil {
+		t.Errorf("five_hour = %+v; want 24%%, 300 min, reset set", got)
+	}
+	if got := findWindow(t, usage, "seven_day"); got.UsedPercent != 26 || got.WindowMinutes != 7*24*60 {
+		t.Errorf("seven_day = %+v; want 26%%, one week", got)
+	}
+
+	// A nearly spent model-scoped limit must not make the account look spent.
+	if len(usage.Breakdowns) != 1 || usage.Breakdowns[0].Key != "fable" {
+		t.Fatalf("Breakdowns = %+v; want one keyed fable", usage.Breakdowns)
+	}
+	if got := usage.Breakdowns[0].Windows[0].UsedPercent; got != 97 {
+		t.Errorf("fable UsedPercent = %v; want 97", got)
+	}
+
+	extra := findWindow(t, usage, "extra_usage")
+	if extra.UsedPercent != 25 {
+		t.Errorf("extra_usage UsedPercent = %v; want 25", extra.UsedPercent)
+	}
+	if usage.Cost == nil || usage.Cost.Used != 12.5 || usage.Cost.Limit != 50 {
+		t.Errorf("Cost = %+v; want 12.5 / 50 USD", usage.Cost)
+	}
+}
