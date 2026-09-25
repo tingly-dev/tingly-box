@@ -26,8 +26,8 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import tingly  # noqa: E402
-from tingly import sugar  # noqa: E402
-from helpers import post_json, post_multipart, post_sse, serve_sugar_in_background, stop_sugar  # noqa: E402
+from tingly import default  # noqa: E402
+from helpers import post_json, post_multipart, post_sse, serve_default_in_background, stop_default  # noqa: E402
 
 TB_BIN = os.environ.get("TINGLY_TB_BIN")
 EXAMPLE = os.path.join(os.path.dirname(__file__), "..", "examples", "image.py")
@@ -72,11 +72,11 @@ class EndToEndThroughTB(unittest.TestCase):
                 tb.kill()
             cls.tb_log.close()
         shutil.rmtree(cls.confdir, ignore_errors=True)
-        stop_sugar()
+        stop_default()
 
     @classmethod
     def start_plugins(cls) -> str:
-        sugar._reset()
+        default._reset()
         spec = importlib.util.spec_from_file_location("image_example", EXAMPLE)
         spec.loader.exec_module(importlib.util.module_from_spec(spec))  # registers "fake-image", unchanged
 
@@ -95,7 +95,7 @@ class EndToEndThroughTB(unittest.TestCase):
             cls.seen["anthropic"] = (messages, system)
             return "native: " + text_in(messages[-1]["content"])
 
-        return serve_sugar_in_background()
+        return serve_default_in_background()
 
     @classmethod
     def start_tb(cls):

@@ -1,6 +1,6 @@
 from .client import Client, TinglyError, text_of
 from .server import Server
-from .sugar import (
+from .default import (
     anthropic_message, chat, image, image_edit, message, openai_chat, openai_responses, responses, serve,
 )
 

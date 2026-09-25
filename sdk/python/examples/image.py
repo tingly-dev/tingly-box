@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""An image provider in a few lines, via the sugar layer.
+"""An image provider in a few lines, via `tingly.image`.
 
 The "model" here is fake — it renders a solid-colour PNG (colour picked from
 the prompt) with nothing but the stdlib, so this runs anywhere. To serve a

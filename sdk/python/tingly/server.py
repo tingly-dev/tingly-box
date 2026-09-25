@@ -1,64 +1,43 @@
-"""Be a provider tb can call.
+"""Be a provider tb can call — the one provider contract.
 
-`Server` speaks just enough of tb's supported protocols to be registered as
-a self-hosted provider — OpenAI Chat Completions (`GET /v1/models`,
-`POST /v1/chat/completions`) via `@srv.chat`, OpenAI Responses
-(`POST /v1/responses`) via `@srv.responses`, and/or Anthropic
-(`POST /v1/messages`) via `@srv.messages`. tb itself dispatches to an
-outbound provider over any of these three shapes (see
-`.design/openai-endpoint-routing.md`), so a `Server` that wants to stand in
-for any kind of provider needs all three available. No streaming. Every
-endpoint also answers without the `/v1` prefix (`/chat/completions`,
-`/responses`, `/messages`) — the one bit of path leniency this prototype
-bothers with, since which shape a caller's configured base URL expects is
-exactly the kind of detail not worth troubleshooting by hand.
+`Server` registers plain Python functions under a model name, one method
+per endpoint, and serves them over HTTP so tb can call it like any other
+self-hosted provider:
 
-Images ride the same contract on two more endpoints: `@srv.images`
-(`POST /v1/images/generations`, JSON) and `@srv.image_edits`
-(`POST /v1/images/edits`, multipart — decoded into a dict, the multipart
-counterpart of `json.loads` and the only decoding done). They return an
-`ImagesResponse` dict, or image(s) — `bytes` or anything with
-`.save(fp, format)` — which are wrapped into `b64_json` entries.
+    srv = Server()
 
-This is the raw layer. The few-lines layer on top of it is `sugar.py`.
+    @srv.openai_chat("my-model")          # POST /v1/chat/completions
+    def reply(messages):
+        return "..."
 
-This is a prototype, not a protocol-translation layer: the three decorators
-are independent, and there is **no bridging between them**, and **no typed
-wrapper around the request either** — a handler gets exactly the raw
-parsed JSON body the caller sent, on every endpoint. `@srv.chat` sees the
-real OpenAI chat-completion request; `@srv.responses` sees the real OpenAI
-Responses request; `@srv.messages` sees the real Anthropic messages
-request — content blocks, `system`, tool defs and all. A handler that wants
-to serve more than one protocol registers more than one decorator and
-writes native code for each against the real shape; the framework does not
-invent an in-between shape to hide any of them behind. Every `/v1/messages`
-(or `/messages`) request is handled as if beta unconditionally — no
-`?beta=true` / `anthropic-version` branching — the same simplification
-tb's own vmodel virtual server already makes at its HTTP boundary.
+    srv.run(port=8765)
 
-The request's *type hint* (not its runtime shape — that's still a plain
-dict) points at the real upstream SDK types: `openai`'s
-`CompletionCreateParamsBase` / `ResponseCreateParamsBase` and
-`anthropic`'s `MessageCreateParamsBase`. All three are `TypedDict`s in
-their respective SDKs — a pure static-typing construct with zero runtime
-behavior, so referencing them costs nothing at runtime and doesn't
-reintroduce the shape this module otherwise refuses to invent: nothing is
-wrapped, validated, or converted, only annotated. The imports are guarded
-by `TYPE_CHECKING` so `openai`/`anthropic` are never required at runtime —
-only a type checker or an editor with those packages installed benefits
-from them.
+| method (alias)                  | endpoint                     | positional        |
+|---------------------------------|------------------------------|-------------------|
+| `openai_chat` (`chat`)          | `/v1/chat/completions`       | `messages`        |
+| `openai_responses` (`responses`)| `/v1/responses`              | `input`           |
+| `anthropic_message` (`message`) | `/v1/messages`               | `messages`        |
+| `image`                         | `/v1/images/generations`     | `prompt`          |
+| `image_edit`                    | `/v1/images/edits`           | `prompt`, `images`|
 
-Each handler answers by returning either a plain string (wrapped into a
-minimal one-choice envelope in that handler's own protocol — a local
-convenience, not a cross-protocol conversion) or a dict that is already a
-complete response in that same protocol's shape (e.g. straight from
-`srv.tb.chat(...)` for `@srv.chat`, since `.tb` always speaks OpenAI).
+**Unpack, don't convert.** A function receives its endpoint's positional
+field(s) exactly as the caller sent them, plus the rest of the same body as
+keyword arguments — only the ones it declares (`model` included), or all of
+them with `**kw`. Nothing is translated, normalized or wrapped in a type of
+ours, and nothing bridges the three text protocols. A `str` reply is
+wrapped into a minimal envelope of the endpoint's own protocol, image(s)
+into `b64_json`, and a `dict` passes through as-is. With `"stream": true`,
+the complete reply is replayed as that protocol's SSE in one chunk.
+
+`tingly.openai_chat(...)` & co. and `tingly.serve()` (`default.py`) are
+these same methods on a default `Server`. See `.design/python-sdk.md`.
 """
 
 from __future__ import annotations
 
 import base64
 import email.policy
+import inspect
 import io
 import json
 import os
@@ -66,32 +45,29 @@ import time
 import uuid
 from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable, TypeVar
 
 from .client import Client, DEFAULT_SCENARIO
 
-if TYPE_CHECKING:
-    from anthropic.types.message_create_params import MessageCreateParamsBase
-    from openai.types.chat.completion_create_params import CompletionCreateParamsBase
-    from openai.types.image_generate_params import ImageGenerateParamsBase
-    from openai.types.responses.response_create_params import ResponseCreateParamsBase
+F = TypeVar("F", bound=Callable[..., Any])
 
-ChatHandler = Callable[["CompletionCreateParamsBase"], "str | dict"]
-ResponsesHandler = Callable[["ResponseCreateParamsBase"], "str | dict"]
-MessagesHandler = Callable[["MessageCreateParamsBase"], "str | dict"]
-ImagesHandler = Callable[["ImageGenerateParamsBase"], Any]
-# Not ImageEditParamsBase: the body is a decoded multipart form, so numeric
-# fields arrive as strings ("n": "1") where that TypedDict says int.
-ImageEditsHandler = Callable[[dict], Any]
+# endpoint path -> the body fields handed to a function positionally, each
+# with the value used when the caller left it out. Everything else in the
+# body is offered as keyword arguments.
+_POSITIONAL: dict[str, tuple[tuple[str, Any], ...]] = {
+    "/chat/completions": (("messages", []),),
+    "/responses": (("input", ""),),
+    "/messages": (("messages", []),),
+    "/images/generations": (("prompt", ""),),
+    "/images/edits": (("prompt", ""), ("image", [])),
+}
 
 
 class Server:
-    """An HTTP server speaking any mix of OpenAI Chat, OpenAI Responses,
-    Anthropic, and OpenAI images protocol.
+    """A self-hosted provider: functions registered per endpoint and model,
+    served over HTTP.
 
     Args:
-        name: the model id this server advertises via `GET /v1/models`
-            (`models` holds the full advertised list; it starts as `[name]`).
         tb_base_url: address of the tb instance to call back into, via
             `.tb`. Falls back to the `TINGLY_BASE_URL` env var. Optional —
             a pure standalone provider never needs `.tb`.
@@ -101,87 +77,111 @@ class Server:
 
     def __init__(
         self,
-        name: str,
         tb_base_url: str | None = None,
         tb_token: str | None = None,
         tb_scenario: str = DEFAULT_SCENARIO,
     ):
-        self.name = name
-        self.models: list[str] = [name]
-        self._chat_handler: ChatHandler | None = None
-        self._responses_handler: ResponsesHandler | None = None
-        self._messages_handler: MessagesHandler | None = None
-        self._images_handler: ImagesHandler | None = None
-        self._image_edits_handler: ImageEditsHandler | None = None
+        self._functions: dict[str, dict[str, Callable[..., Any]]] = {}
         self._httpd: ThreadingHTTPServer | None = None
 
         base_url = tb_base_url or os.environ.get("TINGLY_BASE_URL")
         token = tb_token or os.environ.get("TINGLY_TOKEN")
         self.tb = Client(base_url, token, scenario=tb_scenario) if base_url else None
 
-    def chat(self, fn: ChatHandler) -> ChatHandler:
-        """Decorator registering the OpenAI Chat Completions handler
-        (`POST /v1/chat/completions`). `fn` receives the raw parsed request
-        body — the real OpenAI chat-completion request, unmodified."""
-        self._chat_handler = fn
-        return fn
+    @property
+    def models(self) -> list[str]:
+        """Every registered model name, in registration order — exactly what
+        `GET /v1/models` lists."""
+        return list(dict.fromkeys(model for functions in self._functions.values() for model in functions))
 
-    def responses(self, fn: ResponsesHandler) -> ResponsesHandler:
-        """Decorator registering the OpenAI Responses handler
-        (`POST /v1/responses`). `fn` receives the raw parsed request body —
-        the real OpenAI Responses request, unmodified."""
-        self._responses_handler = fn
-        return fn
+    def _register(self, path: str, model: str) -> Callable[[F], F]:
+        def decorator(fn: F) -> F:
+            self._functions.setdefault(path, {})[model] = fn
+            return fn
+        return decorator
 
-    def messages(self, fn: MessagesHandler) -> MessagesHandler:
-        """Decorator registering the Anthropic-protocol handler
-        (`POST /v1/messages`). `fn` receives the raw parsed request body —
-        the real Anthropic messages request, unmodified — and returns
-        either a dict already in Anthropic Messages shape, or a plain
-        string to wrap minimally."""
-        self._messages_handler = fn
-        return fn
+    def openai_chat(self, model: str) -> Callable[[F], F]:
+        """Serve `model` on `/v1/chat/completions`: `fn(messages, **rest)` →
+        `str` (wrapped as a ChatCompletion) or a ChatCompletion `dict`."""
+        return self._register("/chat/completions", model)
 
-    def images(self, fn: ImagesHandler) -> ImagesHandler:
-        """Decorator registering the OpenAI image generation handler
-        (`POST /v1/images/generations`). `fn` receives the raw parsed JSON
-        body and returns either an `ImagesResponse`-shaped dict, or image(s)
-        to wrap: `bytes`, anything with `.save(fp, format)` (a PIL image), or
-        a list of those."""
-        self._images_handler = fn
-        return fn
+    def openai_responses(self, model: str) -> Callable[[F], F]:
+        """Serve `model` on `/v1/responses`: `fn(input, **rest)` with `input`
+        as sent (a string or the item list) → `str` (wrapped as a Response)
+        or a Response `dict`."""
+        return self._register("/responses", model)
 
-    def image_edits(self, fn: ImageEditsHandler) -> ImageEditsHandler:
-        """Decorator registering the OpenAI image edit handler
-        (`POST /v1/images/edits`). The request is multipart, so `fn` receives
-        the form decoded into a dict: text fields as strings under their own
-        names, `image` (sent as `image` or `image[]`) as `list[bytes]`,
-        `mask` as `bytes`. Returns the same as `images`."""
-        self._image_edits_handler = fn
-        return fn
+    def anthropic_message(self, model: str) -> Callable[[F], F]:
+        """Serve `model` on `/v1/messages`: `fn(messages, **rest)` (`system`,
+        if sent, is in `rest`) → `str` (wrapped as a Message) or a Message
+        `dict`. Always treated as beta-shaped."""
+        return self._register("/messages", model)
+
+    def image(self, model: str) -> Callable[[F], F]:
+        """Serve `model` on `/v1/images/generations`: `fn(prompt, **rest)` →
+        image(s) (`bytes`, `.save()`-able, or a list) or an `ImagesResponse`
+        `dict`."""
+        return self._register("/images/generations", model)
+
+    def image_edit(self, model: str) -> Callable[[F], F]:
+        """Serve `model` on `/v1/images/edits`: `fn(prompt, images, **rest)`
+        with `images` a `list[bytes]` (sent as `image` or `image[]`) and
+        `mask`, if sent, as `bytes` in `rest`; other form fields arrive as
+        strings. Returns the same as `image`."""
+        return self._register("/images/edits", model)
+
+    # Short aliases: the same methods, for when the protocol needn't be spelled out.
+    chat = openai_chat
+    responses = openai_responses
+    message = anthropic_message
+
+    def _call(self, path: str, body: dict) -> Any:
+        """Pick the function for this request's model and call it with the
+        body unpacked."""
+        functions = self._functions[path]
+        model = body.get("model", "")
+        if model in functions:
+            fn = functions[model]
+        elif len(functions) == 1:
+            fn = next(iter(functions.values()))
+        else:
+            raise LookupError(f"no function registered for model {model!r} (registered: {', '.join(functions)})")
+        positional = _POSITIONAL[path]
+        args = tuple(body.get(name, default) for name, default in positional)
+        unpacked = {name for name, _ in positional}
+        rest = {k: v for k, v in body.items() if k not in unpacked}
+        return _call_with_declared(fn, args, rest)
 
     def run(self, host: str = "0.0.0.0", port: int = 8765):
-        handlers = (self._chat_handler, self._responses_handler, self._messages_handler,
-                    self._images_handler, self._image_edits_handler)
-        if all(h is None for h in handlers):
+        if not self._functions:
             raise RuntimeError(
-                "no handler registered — use @srv.chat, @srv.responses, @srv.messages, "
-                "@srv.images and/or @srv.image_edits before srv.run()"
+                "nothing registered — decorate a function with openai_chat(model), openai_responses(model), "
+                "anthropic_message(model), image(model) or image_edit(model) first"
             )
 
         self._httpd = ThreadingHTTPServer((host, port), _make_request_handler(self))
         bound_port = self._httpd.server_address[1]
-        print(f"tingly.Server '{self.name}' listening on http://{host}:{bound_port}")
+        print(f"tingly.Server listening on http://{host}:{bound_port} — models: {', '.join(self.models)}")
         try:
             self._httpd.serve_forever()
         except KeyboardInterrupt:
             self._httpd.shutdown()
 
 
+def _call_with_declared(fn: Callable[..., Any], args: tuple, rest: dict) -> Any:
+    """Call `fn(*args, ...)` passing only the keyword arguments it declares,
+    or all of `rest` if it takes `**kw`."""
+    params = inspect.signature(fn).parameters.values()
+    if any(p.kind is p.VAR_KEYWORD for p in params):
+        return fn(*args, **rest)
+    accepted = {p.name for p in params if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)}
+    return fn(*args, **{k: v for k, v in rest.items() if k in accepted})
+
+
 def _strip_v1(path: str) -> str:
     """Accept a request whether or not the caller's base URL already
     included `/v1` — some clients configure it either way."""
-    path = path.rstrip("/") or "/"
+    path = path.split("?", 1)[0].rstrip("/") or "/"  # e.g. /v1/messages?beta=true
     if path == "/v1":
         return "/"
     if path.startswith("/v1/"):
@@ -207,6 +207,9 @@ def _make_request_handler(srv: Server):
             path = _strip_v1(self.path)
             length = int(self.headers.get("Content-Length", 0))
             data = self.rfile.read(length)
+            if path not in _ENDPOINTS:
+                self._json(404, {"error": "not found"})
+                return
             try:
                 if path == "/images/edits":
                     body = _parse_multipart(self.headers.get("Content-Type", ""), data)
@@ -215,31 +218,15 @@ def _make_request_handler(srv: Server):
             except ValueError as exc:
                 self._json(400, {"error": f"invalid request body: {exc}"})
                 return
-
-            if path == "/chat/completions":
-                self._dispatch(srv._chat_handler, body, "no @srv.chat handler registered",
-                               _wrap_text_openai_chat, _stream_openai_chat)
-            elif path == "/responses":
-                self._dispatch(srv._responses_handler, body, "no @srv.responses handler registered",
-                               _wrap_text_openai_responses, _stream_openai_responses)
-            elif path == "/messages":
-                self._dispatch(srv._messages_handler, body, "no @srv.messages handler registered",
-                               _wrap_text_anthropic, _stream_anthropic)
-            elif path == "/images/generations":
-                self._dispatch(srv._images_handler, body, "no @srv.images handler registered", _wrap_images)
-            elif path == "/images/edits":
-                self._dispatch(srv._image_edits_handler, body, "no @srv.image_edits handler registered", _wrap_images)
-            else:
-                self._json(404, {"error": "not found"})
-
-        def _dispatch(self, handler, body: dict, missing_msg: str, wrap_text, stream=None):
-            if handler is None:
-                self._json(404, {"error": missing_msg})
+            if path not in srv._functions:
+                self._json(404, {"error": f"no function registered for {path}"})
                 return
+
+            wrap, stream = _ENDPOINTS[path]
             try:
-                result = handler(body)
-                payload = result if isinstance(result, dict) else wrap_text(body.get("model", ""), result)
-                # Built in full before the first byte goes out, so a handler
+                result = srv._call(path, body)
+                payload = result if isinstance(result, dict) else wrap(body.get("model", ""), result)
+                # Built in full before the first byte goes out, so a function
                 # error is always a plain 500, never a half-written stream.
                 events = stream(payload) if stream is not None and body.get("stream") is True else None
             except Exception as exc:  # surfaced to the caller, not a 500 traceback
@@ -274,7 +261,7 @@ def _make_request_handler(srv: Server):
 
 
 def _wrap_text_openai_chat(model: str, text: str) -> dict:
-    """Wrap a plain string handler reply into a minimal one-choice
+    """Wrap a plain string reply into a minimal one-choice
     OpenAI ChatCompletion envelope."""
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
@@ -290,7 +277,7 @@ def _wrap_text_openai_chat(model: str, text: str) -> dict:
 
 
 def _wrap_text_openai_responses(model: str, text: str) -> dict:
-    """Wrap a plain string handler reply into a minimal OpenAI Responses
+    """Wrap a plain string reply into a minimal OpenAI Responses
     envelope — one completed message output item, no tool calls."""
     return {
         "id": f"resp_{uuid.uuid4().hex[:24]}",
@@ -312,8 +299,8 @@ def _wrap_text_openai_responses(model: str, text: str) -> dict:
 
 
 def _wrap_text_anthropic(model: str, text: str) -> dict:
-    """Wrap a plain string handler reply into a minimal Anthropic Messages
-    envelope. Treated as beta-shaped unconditionally (see module docstring)."""
+    """Wrap a plain string reply into a minimal Anthropic Messages
+    envelope. Treated as beta-shaped unconditionally."""
     return {
         "id": f"msg_{uuid.uuid4().hex[:24]}",
         "type": "message",
@@ -327,7 +314,7 @@ def _wrap_text_anthropic(model: str, text: str) -> dict:
 
 
 def _wrap_images(model: str, result: Any) -> dict:
-    """Wrap handler-returned image(s) into a minimal OpenAI `ImagesResponse`:
+    """Wrap returned image(s) into a minimal OpenAI `ImagesResponse`:
     always `b64_json` (the only kind tb persists), never `url`."""
     items = result if isinstance(result, (list, tuple)) else [result]
     return {
@@ -454,3 +441,13 @@ def _stream_openai_responses(payload: dict) -> SSEEvents:
         emit("response.output_item.done", output_index=oi, item=item)
     emit("response.completed", response={**payload, "status": payload.get("status") or "completed"})
     return events
+
+
+# endpoint path -> (how a non-dict reply is wrapped, how a reply is streamed or None)
+_ENDPOINTS: dict[str, tuple[Callable[[str, Any], dict], Callable[[dict], SSEEvents] | None]] = {
+    "/chat/completions": (_wrap_text_openai_chat, _stream_openai_chat),
+    "/responses": (_wrap_text_openai_responses, _stream_openai_responses),
+    "/messages": (_wrap_text_anthropic, _stream_anthropic),
+    "/images/generations": (_wrap_images, None),
+    "/images/edits": (_wrap_images, None),
+}

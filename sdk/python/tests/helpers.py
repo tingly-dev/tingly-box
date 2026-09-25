@@ -15,21 +15,26 @@ def wait_until_serving(srv, timeout: float = 2.0):
         time.sleep(0.01)
 
 
-def serve_sugar_in_background() -> str:
-    """Run tingly.serve() for whatever is registered; return its base URL."""
-    import tingly
-    from tingly import sugar
-
-    threading.Thread(target=tingly.serve, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
-    wait_until_serving(sugar._server)
-    return f"http://127.0.0.1:{sugar._server._httpd.server_address[1]}"
+def serve_in_background(srv) -> str:
+    """Run `srv.run()` on a free port in a daemon thread; return its base URL."""
+    threading.Thread(target=srv.run, kwargs={"host": "127.0.0.1", "port": 0}, daemon=True).start()
+    wait_until_serving(srv)
+    return f"http://127.0.0.1:{srv._httpd.server_address[1]}"
 
 
-def stop_sugar():
-    from tingly import sugar
+def serve_default_in_background() -> str:
+    """Run tingly.serve() for whatever is registered on the default server;
+    return its base URL."""
+    from tingly import default
 
-    sugar._server._httpd.shutdown()
-    sugar._reset()
+    return serve_in_background(default._default())
+
+
+def stop_default():
+    from tingly import default
+
+    default._default()._httpd.shutdown()
+    default._reset()
 
 
 def get_json(url: str, headers: dict | None = None) -> dict:

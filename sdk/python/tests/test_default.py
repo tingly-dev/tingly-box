@@ -1,6 +1,6 @@
-"""The sugar layer end to end: plain functions registered with
+"""The module-level functions end to end: plain functions registered with
 @tingly.openai_chat / openai_responses / anthropic_message / image /
-image_edit, served by tingly.serve()."""
+image_edit on the default Server, served by tingly.serve()."""
 
 import base64
 import importlib.util
@@ -13,14 +13,14 @@ import urllib.error
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import tingly  # noqa: E402
-from tingly import sugar  # noqa: E402
-from helpers import get_json, post_json, post_multipart, post_sse, serve_sugar_in_background, stop_sugar  # noqa: E402
+from tingly import default  # noqa: E402
+from helpers import get_json, post_json, post_multipart, post_sse, serve_default_in_background, stop_default  # noqa: E402
 
 
-class SugarTest(unittest.TestCase):
+class ModuleFunctionsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        sugar._reset()
+        default._reset()
         cls.seen = {}
 
         @tingly.openai_chat("echo")
@@ -58,11 +58,11 @@ class SugarTest(unittest.TestCase):
             cls.seen["edit"] = (prompt, images, mask)
             return images[-1]
 
-        cls.base = serve_sugar_in_background()
+        cls.base = serve_default_in_background()
 
     @classmethod
     def tearDownClass(cls):
-        stop_sugar()
+        stop_default()
 
     def test_text_gets_the_messages_list_unchanged_and_a_str_reply_is_wrapped(self):
         messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
@@ -84,7 +84,7 @@ class SugarTest(unittest.TestCase):
         self.assertEqual(self.seen["anthropic"], (messages, system))
         self.assertEqual(body["content"], [{"type": "text", "text": "answered"}])
 
-    def test_sugar_replies_stream_like_raw_ones(self):
+    def test_replies_stream(self):
         _, events = post_sse(f"{self.base}/v1/messages", {"model": "claude-ish", "max_tokens": 10, "stream": True,
                                                            "messages": [{"role": "user", "content": "hi"}]})
         deltas = [data["delta"] for event, data in events if event == "content_block_delta"]
@@ -103,7 +103,7 @@ class SugarTest(unittest.TestCase):
     def test_var_keyword_gets_the_whole_rest_of_the_body(self):
         body = post_json(f"{self.base}/v1/images/generations",
                          {"model": "everything", "prompt": "p", "n": 2, "quality": "high"})
-        self.assertEqual(self.seen["everything"], {"n": 2, "quality": "high"})
+        self.assertEqual(self.seen["everything"], {"model": "everything", "n": 2, "quality": "high"})
         self.assertEqual(len(body["data"]), 2)
 
     def test_image_edit_gets_prompt_images_and_mask(self):
@@ -131,7 +131,7 @@ class SugarTest(unittest.TestCase):
 
 
 class AliasTest(unittest.TestCase):
-    def test_short_names_are_the_same_decorators(self):
+    def test_short_names_are_the_same_functions(self):
         self.assertIs(tingly.chat, tingly.openai_chat)
         self.assertIs(tingly.responses, tingly.openai_responses)
         self.assertIs(tingly.message, tingly.anthropic_message)
@@ -139,7 +139,7 @@ class AliasTest(unittest.TestCase):
 
 class ServeWithoutRegistrationTest(unittest.TestCase):
     def test_serve_refuses_to_start_empty(self):
-        sugar._reset()
+        default._reset()
         with self.assertRaises(RuntimeError):
             tingly.serve()
 
@@ -149,15 +149,15 @@ class ImageExampleTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        sugar._reset()
+        default._reset()
         path = os.path.join(os.path.dirname(__file__), "..", "examples", "image.py")
         spec = importlib.util.spec_from_file_location("image_example", path)
         spec.loader.exec_module(importlib.util.module_from_spec(spec))
-        cls.base = serve_sugar_in_background()
+        cls.base = serve_default_in_background()
 
     @classmethod
     def tearDownClass(cls):
-        stop_sugar()
+        stop_default()
 
     def test_the_fake_model_returns_a_png_of_the_requested_size(self):
         body = post_json(f"{self.base}/v1/images/generations",

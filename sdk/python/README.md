@@ -25,11 +25,13 @@ tingly.serve()                          # http://0.0.0.0:8765/v1
 | `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image(s): `bytes`, a PIL image, or a list |
 | `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` | same as `image` |
 
-`**rest` is the rest of the request body, but only the names your function
-declares are passed: `def generate(prompt)` gets just the prompt,
-`def generate(prompt, size=None)` also gets `size`, and `**kw` gets
-everything. Several decorated models can share one process; they are all
-listed on `/v1/models` and routed by the request's `model`.
+Every value is exactly what the caller sent — unpacked from the body, never
+converted. `**rest` is the rest of the request body, but only the names your
+function declares are passed: `def generate(prompt)` gets just the prompt,
+`def generate(prompt, size=None)` also gets `size`, `model` is there if you
+declare it, and `**kw` gets everything. Several decorated models can share
+one process; they are all listed on `/v1/models` and routed by the
+request's `model`.
 
 Register it once in tb: **Connect AI → Self-hosted → Custom endpoint**,
 OpenAI, `http://localhost:8765/v1`, no key. For images, point an `imagegen`
@@ -51,90 +53,49 @@ one).
 [`examples/image.py`](examples/image.py) is a complete image provider with a
 fake model (a stdlib-rendered PNG), so it runs anywhere.
 
-## The raw layer
+## Your own `Server`
 
-The sugar above is built on `tingly.Server`, which hands each endpoint's
-exact protocol to your handler. Use it when you need the wire shape itself.
-
-- `tingly.Server` — be a tb provider. Register a handler per protocol you
-  want to serve — `@srv.chat` for OpenAI Chat Completions
-  (`/v1/chat/completions`), `@srv.responses` for OpenAI Responses
-  (`/v1/responses`), `@srv.messages` for Anthropic (`/v1/messages`) — and
-  plug it into tb like Ollama. tb itself dispatches to an outbound provider
-  over any of these three (`.design/openai-endpoint-routing.md`), so a
-  `Server` standing in for an arbitrary provider needs all three available.
-  **The three are independent; nothing bridges them, and none gets a typed
-  *wrapper*.** Every handler gets exactly the raw parsed request body the
-  caller sent — content blocks, `system`, tool defs and all. This is a
-  prototype: it hands you each protocol as it actually is on the wire, full
-  stop — no in-between shape, no fields picked out on your behalf. The
-  *type hints* on those bodies do point at something real, though: `openai`'s
-  and `anthropic`'s own `TypedDict` request types
-  (`CompletionCreateParamsBase`, `ResponseCreateParamsBase`,
-  `MessageCreateParamsBase`) — zero runtime cost (`TypedDict` is a plain
-  `dict` at runtime, and the imports are `TYPE_CHECKING`-only, so `openai`/
-  `anthropic` are never required), just real, officially-maintained types
-  instead of nothing.
-- Images: `@srv.images` (`/v1/images/generations`, raw JSON body) and
-  `@srv.image_edits` (`/v1/images/edits`; the multipart form decoded into a
-  dict — text fields as strings, `image`/`image[]` as `list[bytes]`, `mask`
-  as `bytes`). Return an `ImagesResponse` dict, or image(s) to be wrapped as
-  `b64_json`.
-- Streaming: the three text endpoints honour `stream: true` by replaying
-  whatever the handler returned — a wrapped `str` or your own dict — as that
-  protocol's SSE events, all content in one chunk. Handlers don't change.
-- `tingly.Client` — call tb from Python. Point it at a running tb and a
-  gateway token, ask it to run any scenario/model.
-
-## Quick start
+`tingly.openai_chat(...)` & co. and `tingly.serve()` are the same methods on a
+default `tingly.Server` — one contract, two ways to reach it. Build your own
+`Server` when you need what the default one doesn't have: `.tb` (a `Client`
+back into tb), several servers in one process, or isolation in tests.
 
 ```python
 from tingly import Server, text_of
 
-srv = Server("relay", tb_base_url="http://localhost:12580", tb_token="...")
+srv = Server(tb_base_url="http://localhost:12580", tb_token="...")  # or TINGLY_BASE_URL / TINGLY_TOKEN
 
-@srv.chat
-def handle_chat(body):
-    # body is the raw OpenAI chat-completion request; here we just relay
-    # everything to a different tb model and hand the answer straight back.
-    return srv.tb.chat(model="claude-opus-4-8", messages=body["messages"])
+@srv.openai_chat("relay")
+def relay(messages):
+    # relay to a different tb model; the ChatCompletion dict goes back as-is
+    return srv.tb.chat(model="claude-opus-4-8", messages=messages)
 
-@srv.responses
-def handle_responses(body):
-    # body["input"] is the raw OpenAI Responses request field — a plain
-    # string here for a simple text turn (a caller sending structured input
-    # items would need its own handling, same caveat as @srv.messages).
-    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=[{"role": "user", "content": body["input"]}]))
+@srv.anthropic_message("relay")
+def relay_anthropic(messages, system=None):
+    # messages and system exactly as the Anthropic caller sent them; .tb only
+    # speaks OpenAI, so content blocks or tool defs would need handling here
+    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=messages))
 
-@srv.messages
-def handle_messages(body):
-    # body is the raw Anthropic request, untouched. .tb still only speaks
-    # OpenAI, so this handler is responsible for whatever translation it
-    # needs — plain-string content forwards fine as-is; content blocks or
-    # tool defs would need explicit handling here.
-    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=body["messages"]))
+@srv.openai_responses("relay")
+def relay_responses(input):
+    # input is a string for a simple turn, or the list of input items as sent
+    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=[{"role": "user", "content": input}]))
 
 srv.run(port=8765)
 ```
 
-Register it with tb as a **dual** provider (same as a service that natively
-speaks both protocols, e.g. Vertex): **Connect AI -> Self-hosted -> Dual
+To have tb call `anthropic_message` with the Anthropic body natively,
+register it as a **dual** provider: **Connect AI → Self-hosted → Dual
 endpoint**, OpenAI URL `http://localhost:8765/v1`, Anthropic URL
-`http://localhost:8765`, no key required — either URL works with or without
-a trailing `/v1`, since `Server` answers both (see below). `@srv.responses`
-needs no extra registration step: `/responses` lives under the same OpenAI
-URL as `/chat/completions`, just a different path — tb picks between them
-per-request based on the provider's declared endpoint mode, not a separate
-base URL. From then on tb calls it like any other provider. Register just
-the decorator(s) you want to serve — an endpoint with no handler answers 404.
+`http://localhost:8765` — either URL works with or without a trailing `/v1`,
+since `Server` answers both. `openai_responses` needs no extra step:
+`/responses` lives under the same OpenAI URL, and tb picks between it and
+`/chat/completions` per the provider's declared endpoint mode. An endpoint
+with no function answers 404.
 
-`/v1/messages` requests are always handled as if beta — there is no
-`?beta=true` / `anthropic-version` branching, matching the simplification
-tb's own vmodel virtual server already makes at its HTTP boundary. The one
-deliberate bit of path leniency: every endpoint also answers without the
-`/v1` prefix (`/chat/completions`, `/responses`, `/messages`), since which
-shape a caller's configured base URL expects isn't worth troubleshooting by
-hand.
+`/v1/messages` is always handled as beta — `?beta=true` and
+`anthropic-version` are accepted and not branched on, matching the
+simplification tb's own vmodel virtual server makes at its HTTP boundary.
 
 > **No-key + Anthropic-style provider:** the vendored `anthropic-sdk-go`
 > treats a genuinely empty API key as "go discover ambient credentials" and

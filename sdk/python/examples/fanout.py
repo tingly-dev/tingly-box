@@ -16,13 +16,13 @@ from tingly import Server, text_of  # noqa: E402
 
 MODELS = os.environ.get("TINGLY_FANOUT_MODELS", "claude-opus-4-8,gpt-5").split(",")
 
-srv = Server("fanout")
+srv = Server()  # .tb from TINGLY_BASE_URL / TINGLY_TOKEN
 
 
-@srv.chat
-def handle(body):
+@srv.openai_chat("fanout")
+def fanout(messages):
     replies = [
-        text_of(srv.tb.chat(model=model, messages=body["messages"]))
+        text_of(srv.tb.chat(model=model, messages=messages))
         for model in MODELS
     ]
     merged = "\n\n".join(f"[{model}]\n{reply}" for model, reply in zip(MODELS, replies))
