@@ -30,6 +30,22 @@ const BackgroundTasksPanel = ({sessionId, tasks, onChanged, onReveal}: Backgroun
     const {t} = useTranslation();
     // A lone task opens by itself: the panel was opened to look at it.
     const [openId, setOpenId] = useState<string | null>(tasks.length === 1 ? tasks[0].taskId : null);
+    // Finished work stays listed, in its own group, newest first: its
+    // command, output and report are what the user comes back to read.
+    const running = tasks.filter((task) => task.status === 'running' && !task.ended);
+    const finished = tasks.filter((task) => !(task.status === 'running' && !task.ended));
+    const rows = (list: BackgroundTask[]) => list.map((task) => (
+        <Box key={task.taskId} sx={{borderTop: 1, borderColor: 'divider'}}>
+            <TaskRow
+                sessionId={sessionId}
+                task={task}
+                open={openId === task.taskId}
+                onToggle={() => setOpenId(openId === task.taskId ? null : task.taskId)}
+                onChanged={onChanged}
+                onReveal={onReveal}
+            />
+        </Box>
+    ));
     if (tasks.length === 0) {
         return (
             <Box sx={{p: 2, maxWidth: 360}}>
@@ -43,21 +59,32 @@ const BackgroundTasksPanel = ({sessionId, tasks, onChanged, onReveal}: Backgroun
         );
     }
     return (
-        <Stack sx={{width: 520, maxWidth: '92vw', maxHeight: '75vh', overflowY: 'auto', py: 0.5}} divider={<Box sx={{borderTop: 1, borderColor: 'divider'}}/>}>
-            {tasks.map((task) => (
-                <TaskRow
-                    key={task.taskId}
-                    sessionId={sessionId}
-                    task={task}
-                    open={openId === task.taskId}
-                    onToggle={() => setOpenId(openId === task.taskId ? null : task.taskId)}
-                    onChanged={onChanged}
-                    onReveal={onReveal}
-                />
-            ))}
-        </Stack>
+        <Box sx={{width: 520, maxWidth: '92vw', maxHeight: '75vh', overflowY: 'auto', pb: 0.5}}>
+            <GroupHeader label={t('desk.tasksRunning', {defaultValue: 'Running'})} count={running.length}/>
+            {running.length === 0 ? (
+                <Typography variant="body2" sx={{px: 1.5, py: 1, color: 'text.secondary'}}>
+                    {t('desk.nothingRunning', {defaultValue: 'Nothing running now.'})}
+                </Typography>
+            ) : rows(running)}
+            {finished.length > 0 && (
+                <>
+                    <GroupHeader label={t('desk.tasksFinished', {defaultValue: 'Finished'})} count={finished.length}/>
+                    {rows(finished)}
+                </>
+            )}
+        </Box>
     );
 };
+
+const GroupHeader = ({label, count}: {label: string; count: number}) => (
+    <Typography
+        variant="caption"
+        component="div"
+        sx={{px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: '0.68rem'}}
+    >
+        {label} · {count}
+    </Typography>
+);
 
 const formatDuration = (ms: number): string => {
     const sec = Math.max(0, Math.round(ms / 1000));
@@ -191,8 +218,11 @@ const CommandDetail = ({sessionId, task, running}: {sessionId: string; task: Bac
     const [output, setOutput] = useState<TaskOutput | null>(null);
     const [missing, setMissing] = useState(false);
 
+    // A finished command reads from the copy kept in the transcript: the
+    // file it wrote to is temporary. A running one reads the file, live.
+    const snapshot = !running ? task.outputSnapshot : undefined;
     useEffect(() => {
-        if (!task.outputFile) return;
+        if (!task.outputFile || snapshot) return;
         let live = true;
         const load = () => deskApi.getTaskOutput(sessionId, task.taskId, OUTPUT_TAIL)
             .then((o) => {
@@ -208,7 +238,11 @@ const CommandDetail = ({sessionId, task, running}: {sessionId: string; task: Bac
             live = false;
             if (id) clearInterval(id);
         };
-    }, [sessionId, task.taskId, task.outputFile, running]);
+    }, [sessionId, task.taskId, task.outputFile, running, snapshot]);
+    const shown: TaskOutput | null = snapshot
+        ? {content: snapshot.content, truncated: snapshot.truncated, size: snapshot.content.length}
+        : output;
+    const unavailable = !snapshot && (!task.outputFile || missing);
 
     return (
         <>
@@ -220,21 +254,23 @@ const CommandDetail = ({sessionId, task, running}: {sessionId: string; task: Bac
                     </Box>
                 </Box>
             )}
-            {task.summary && !running && (
+            {task.summary && !running && task.summary !== task.description && (
                 <Typography variant="body2" sx={{color: 'text.primary'}}>{task.summary}</Typography>
             )}
             <Box>
                 <Label>
-                    {output?.truncated
-                        ? t('desk.outputTail', {defaultValue: 'Output — last {{size}} of {{total}}', size: formatBytes(output.content.length), total: formatBytes(output.size)})
+                    {shown?.truncated
+                        ? (snapshot
+                            ? t('desk.outputSnapshotTail', {defaultValue: 'Output — last {{size}}', size: formatBytes(shown.content.length)})
+                            : t('desk.outputTail', {defaultValue: 'Output — last {{size}} of {{total}}', size: formatBytes(shown.content.length), total: formatBytes(shown.size)}))
                         : t('desk.output', {defaultValue: 'Output'})}
                 </Label>
                 <Box component="pre" sx={{...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
-                    {!task.outputFile || missing
+                    {unavailable
                         ? t('desk.outputUnavailable', {defaultValue: '(output not available)'})
-                        : output === null
+                        : shown === null
                             ? t('common.loading', {defaultValue: 'Loading…'})
-                            : output.content || t('desk.noOutputYet', {defaultValue: '(no output yet)'})}
+                            : shown.content || t('desk.noOutputYet', {defaultValue: '(no output yet)'})}
                 </Box>
             </Box>
         </>

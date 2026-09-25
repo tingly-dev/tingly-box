@@ -3,6 +3,7 @@ package desk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,7 +36,14 @@ func (s *Service) noteTask(sessionID string, m session.Message) {
 		return
 	}
 	var ev taskEvent
-	if json.Unmarshal(m.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
+	if json.Unmarshal(m.Payload, &ev) != nil {
+		return
+	}
+	if ev.Event == "task_notification" || ev.Event == "task_completed" {
+		s.snapshotOutput(sessionID, m.RequestID, ev)
+		return
+	}
+	if ev.Event != "background_tasks_changed" {
 		return
 	}
 	live := make([]TaskBrief, 0, len(ev.Tasks))
@@ -49,6 +57,33 @@ func (s *Service) noteTask(sessionID string, m session.Message) {
 		s.live[sessionID] = live
 	}
 	s.mu.Unlock()
+}
+
+// outputSnapshotSize is how much of a finished command's output is kept.
+const outputSnapshotSize = 8 * 1024
+
+// snapshotOutput keeps the end of a finished command's output in the
+// transcript: Claude Code writes it to a temporary file that can be gone by
+// the time someone looks back (a reboot, its own cleanup), and a finished
+// task should stay readable. Subagent output files are their transcripts,
+// already recorded entry by entry, so only commands are kept.
+func (s *Service) snapshotOutput(sessionID, callID string, ev taskEvent) {
+	if ev.TaskType != "local_bash" || !validOutputPath(ev.OutputFile, ev.TaskID) {
+		return
+	}
+	out, err := readTail(ev.OutputFile, outputSnapshotSize)
+	if err != nil {
+		return
+	}
+	payload, _ := json.Marshal(taskEvent{Event: "output_snapshot", TaskID: ev.TaskID, Output: out.Content, Truncated: out.Truncated})
+	s.sessions.AppendMessage(sessionID, session.Message{Kind: "task", RequestID: callID, Payload: payload, Timestamp: time.Now()})
+}
+
+// validOutputPath accepts only the shape Claude Code uses for a task's
+// output file: an absolute …/tasks/<task_id>.output.
+func validOutputPath(path, taskID string) bool {
+	return path != "" && validTaskID.MatchString(taskID) && filepath.IsAbs(path) &&
+		filepath.Base(path) == taskID+".output" && filepath.Base(filepath.Dir(path)) == "tasks"
 }
 
 // clearTasks forgets id's live tasks once the process that ran them is gone.
@@ -109,15 +144,24 @@ func (s *Service) TaskOutput(id, taskID string, tail int) (TaskOutput, error) {
 		return TaskOutput{}, notFound("session", id)
 	}
 	path := s.taskOutputPath(id, taskID)
-	if path == "" || !filepath.IsAbs(path) || filepath.Base(path) != taskID+".output" || filepath.Base(filepath.Dir(path)) != "tasks" {
+	if !validOutputPath(path, taskID) {
 		return TaskOutput{}, notFound("output of task", taskID)
 	}
 	if tail <= 0 || tail > maxTaskOutputTail {
 		tail = maxTaskOutputTail
 	}
+	out, err := readTail(path, tail)
+	if errors.Is(err, os.ErrNotExist) {
+		return TaskOutput{}, notFound("output of task", taskID)
+	}
+	return out, err
+}
+
+// readTail reads the last n bytes of path.
+func readTail(path string, n int) (TaskOutput, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return TaskOutput{}, notFound("output of task", taskID)
+		return TaskOutput{}, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
@@ -125,14 +169,13 @@ func (s *Service) TaskOutput(id, taskID string, tail int) (TaskOutput, error) {
 		return TaskOutput{}, err
 	}
 	out := TaskOutput{Size: info.Size()}
-	start := info.Size() - int64(tail)
-	if start > 0 {
+	if start := info.Size() - int64(n); start > 0 {
 		out.Truncated = true
 		if _, err := f.Seek(start, io.SeekStart); err != nil {
 			return TaskOutput{}, err
 		}
 	}
-	b, err := io.ReadAll(io.LimitReader(f, int64(tail)))
+	b, err := io.ReadAll(io.LimitReader(f, int64(n)))
 	if err != nil {
 		return TaskOutput{}, err
 	}

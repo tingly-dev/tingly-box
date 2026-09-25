@@ -355,10 +355,16 @@ place rather than living only in the transcript:
   is being written to: …"), recorded as an `output_file` task event; only a
   file shaped `…/tasks/<task_id>.output` is read.
 
+- **Finished tasks stay.** A command's output file is temporary (Claude
+  Code's temp dir), so when a command finishes the Service copies the last
+  8 KiB into the transcript (an `output_snapshot` task event), and the page
+  reads a finished command from that copy. Subagents need no copy: their
+  work is already in the transcript entry by entry.
+
 On the page: a header entry, always present so it can be found before it
 is needed (an icon, whose empty state says what will appear there), turns
-into a labeled "N running" pill while work runs, and opens the list — running first, each
-with its state and elapsed time. A row opens into what the task is: a
+into a labeled "N running" pill while work runs, and opens the list in two groups — Running, and Finished (newest first, kept
+for looking back) — each row with its state and elapsed time. A row opens into what the task is: a
 command shows its command line and its output (loaded on open, refreshed
 every 2 s while it runs, exit code included once done); a subagent shows its
 type, usage, what it was asked, what it is doing now, its latest steps and

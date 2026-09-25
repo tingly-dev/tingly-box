@@ -140,6 +140,7 @@ const messages: Record<string, Msg[]> = {
         { kind: 'task', content: '', request_id: 'a-review', payload: { event: 'task_progress', description: 'Tracing concurrent refresh calls', last_tool: 'Grep', usage: { total_tokens: 41300, tool_uses: 6, duration_ms: 312000 } }, timestamp: ago(3) },
         { role: 'assistant', content: 'The middleware map is above. A reviewer is checking the refresh path for races and the middleware tests are running; I\'ll pick up both when they report back.', timestamp: ago(25) },
         { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'task_notification', status: 'completed', summary: 'Background command "Run middleware tests" completed (exit code 0)' }, timestamp: ago(2) },
+        { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'output_snapshot', task_id: 'bt1', output: '=== RUN   TestAuth_Check\n--- PASS: TestAuth_Check (0.01s)\n=== RUN   TestAuth_RefreshConcurrent\n--- PASS: TestAuth_RefreshConcurrent (0.23s)\nPASS\nok  \tgithub.com/tingly-dev/tingly-box/internal/server/middleware\t1.412s\n\n[exited with code 0]\n' }, timestamp: ago(2) },
     ],
     'desk-4': [
         { role: 'user', content: 'Draft release notes for v1.2', timestamp: ago(3000) },
@@ -295,6 +296,10 @@ export const deskHandlers = [
         s.background_tasks = s.background_tasks.filter((t) => t !== task)
         const call = (messages[s.id] ?? []).find((m) => m.kind === 'task' && (m.payload as { task_id?: string }).task_id === task.task_id)
         push(s.id, { kind: 'task', content: task.description, request_id: call?.request_id, payload: { event: 'task_notification', task_id: task.task_id, status: 'stopped', summary: task.description } })
+        if (task.task_type === 'local_bash') {
+            // As the backend does: keep the end of the output, the file is temporary.
+            push(s.id, { kind: 'task', content: '', request_id: call?.request_id, payload: { event: 'output_snapshot', task_id: task.task_id, output: '> vite --port 5173\n\n  VITE v6.3.5  ready in 412 ms\n\n  ➜  Local:   http://localhost:5173/\n^C\n[stopped]\n' } })
+        }
         return new HttpResponse(null, { status: 202 })
     }),
     http.get('/api/v1/desk/sessions/:id/tasks/:taskId/output', ({ params }) => {

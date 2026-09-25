@@ -29,6 +29,8 @@ type converter struct {
 	// taskTool maps a background task to the tool call that started it, for
 	// the events (task_updated) that name only the task.
 	taskTool map[string]string
+	// taskType remembers each task's type for its later events.
+	taskType map[string]string
 
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
@@ -36,7 +38,7 @@ type converter struct {
 }
 
 func newConverter() *converter {
-	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, calls: map[string]anthropic.Usage{}}
+	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, taskType: map[string]string{}, calls: map[string]anthropic.Usage{}}
 }
 
 // turnUsage is the payload of a "usage" transcript entry: one per turn.
@@ -223,6 +225,10 @@ type taskEvent struct {
 	OutputFile   string      `json:"output_file,omitempty"`
 	Usage        *taskUsage  `json:"usage,omitempty"`
 	Tasks        []taskBrief `json:"tasks,omitempty"` // background_tasks_changed: the full live set
+	// output_snapshot: the end of a finished command's output, kept in the
+	// transcript because the file it came from is temporary.
+	Output    string `json:"output,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 type taskUsage struct {
@@ -250,6 +256,9 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 		if m.ToolUseID != "" {
 			c.taskTool[m.TaskID] = m.ToolUseID
 		}
+		if m.TaskType != "" {
+			c.taskType[m.TaskID] = m.TaskType
+		}
 	case claude.SystemSubtypeTaskProgress:
 		ev.LastTool, _ = raw["last_tool_name"].(string)
 		ev.Usage = taskUsageOf(raw["usage"])
@@ -262,6 +271,9 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 		ev.Summary, _ = raw["summary"].(string)
 		ev.OutputFile, _ = raw["output_file"].(string)
 		ev.Usage = taskUsageOf(raw["usage"])
+		if ev.TaskType == "" {
+			ev.TaskType = c.taskType[m.TaskID]
+		}
 	case claude.SystemSubtypeBackgroundTasksChanged:
 		ev.Tasks = []taskBrief{}
 		if list, ok := raw["tasks"].([]any); ok {

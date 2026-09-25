@@ -76,7 +76,9 @@ describe('buildTranscript', () => {
             msg({kind: 'task', request_id: 'b1', payload: {event: 'task_started', task_id: 'bash1', background: true, task_type: 'local_bash'}}),
             msg({kind: 'tool_result', content: 'Command running in background with ID: bash1', request_id: 'b1'}),
             msg({kind: 'task', request_id: 'b1', payload: {event: 'task_updated', status: 'stopped'}}),
+            msg({kind: 'task', request_id: 'b1', payload: {event: 'output_snapshot', task_id: 'bash1', output: 'PASS\n', truncated: false}}),
         ]);
+        expect(blocks[0]).toMatchObject({steps: [{task: {outputSnapshot: {content: 'PASS\n', truncated: false}}}]});
         expect(blocks[0]).toMatchObject({type: 'activity', steps: [{name: 'Bash', task: {taskId: 'bash1', status: 'stopped', background: true}}]});
     });
 

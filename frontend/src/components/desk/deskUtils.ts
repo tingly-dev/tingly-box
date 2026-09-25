@@ -75,6 +75,8 @@ export interface TaskEvent {
     output_file?: string;
     usage?: {total_tokens: number; tool_uses: number; duration_ms: number};
     tasks?: {task_id: string; task_type?: string; description?: string}[];
+    output?: string;
+    truncated?: boolean;
 }
 
 // TaskState is a task's latest known state, folded from its events.
@@ -90,6 +92,9 @@ export interface TaskState {
     lastTool?: string;
     summary?: string;
     outputFile?: string;
+    // The end of a finished command's output, kept in the transcript
+    // because the file it was written to is temporary.
+    outputSnapshot?: {content: string; truncated: boolean};
     usage?: {total_tokens: number; tool_uses: number; duration_ms: number};
 }
 
@@ -151,6 +156,9 @@ export const foldTasks = (messages: MessageInfo[]): Map<string, TaskState> => {
                 break;
             case 'output_file':
                 t.outputFile = ev.output_file;
+                break;
+            case 'output_snapshot':
+                t.outputSnapshot = {content: ev.output ?? '', truncated: ev.truncated ?? false};
                 break;
             case 'task_progress':
                 t.activity = ev.description;

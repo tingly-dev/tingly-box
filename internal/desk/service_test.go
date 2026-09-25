@@ -1507,3 +1507,43 @@ func TestTaskOutput_ReadsOnlyTheReportedFile(t *testing.T) {
 		t.Fatalf("foreign path: err = %v, want ErrNotFound", err)
 	}
 }
+
+// A finished command's output file is temporary; the end of it is kept in
+// the transcript so the task stays readable after the file is gone.
+func TestFinishedCommandOutputIsKept(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "b1.output")
+	if err := os.WriteFile(path, []byte("building…\nok\n[exited with code 0]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, _ := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		return newFakePersistentSession(ctx, prompt, func(ctx context.Context, prompt string, s *fakePersistentSession) {
+			s.emit(agentboot.MessageEvent{Raw: &claude.SystemMessage{Type: "system", SubType: claude.SystemSubtypeTaskStarted, TaskID: "b1", TaskType: "local_bash", ToolUseID: "toolu_b", Raw: map[string]any{"is_backgrounded": true}}})
+			s.emit(agentboot.MessageEvent{Raw: &claude.SystemMessage{Type: "system", SubType: claude.SystemSubtypeTaskNotification, TaskID: "b1", ToolUseID: "toolu_b", Raw: map[string]any{"status": "completed", "output_file": path}}})
+			completingPersistentScript(ctx, prompt, s)
+		}), nil
+	})
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, _ := svc.Messages(sess.ID)
+	for _, m := range msgs {
+		var ev taskEvent
+		if m.Kind == "task" && json.Unmarshal(m.Payload, &ev) == nil && ev.Event == "output_snapshot" {
+			if m.RequestID != "toolu_b" || ev.Output != "building…\nok\n[exited with code 0]\n" {
+				t.Fatalf("snapshot = %s %+v", m.RequestID, ev)
+			}
+			return
+		}
+	}
+	t.Fatalf("no output snapshot in %+v", msgs)
+}
