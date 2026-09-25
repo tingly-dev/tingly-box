@@ -253,6 +253,98 @@ func TestGuardBeta_PreservesExistingThinking(t *testing.T) {
 	assert.NotNil(t, base)
 }
 
+// ===================================================================
+// Guard / GuardBeta — models that reject thinking.type.disabled
+// ===================================================================
+
+func TestGuard_UsesAdaptiveThinkingForModelsRejectingDisabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	for _, model := range []string{"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"} {
+		for name, thinking := range map[string]anthropic.ThinkingConfigParamUnion{
+			"unset":    {},
+			"disabled": {OfDisabled: &anthropic.ThinkingConfigDisabledParam{}},
+		} {
+			req := &anthropic.MessageNewParams{
+				Model:     anthropic.Model(model),
+				MaxTokens: 512,
+				Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+				Thinking:  thinking,
+			}
+			req.Metadata.UserID = param.NewOpt(userID)
+
+			c.Guard(context.Background(), req)
+			assert.NotNil(t, req.Thinking.OfAdaptive, "%s/%s: Guard should send adaptive thinking", model, name)
+			assert.Nil(t, req.Thinking.OfDisabled, "%s/%s: Guard must not send disabled thinking", model, name)
+		}
+	}
+}
+
+func TestGuard_KeepsClientAdaptiveConfigForModelsRejectingDisabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-opus-5-5"),
+		MaxTokens: 512,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+		Thinking: anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{Display: anthropic.ThinkingConfigAdaptiveDisplayOmitted},
+		},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+
+	c.Guard(context.Background(), req)
+	require.NotNil(t, req.Thinking.OfAdaptive)
+	assert.Equal(t, anthropic.ThinkingConfigAdaptiveDisplayOmitted, req.Thinking.OfAdaptive.Display)
+}
+
+func TestGuardBeta_UsesAdaptiveThinkingForModelsRejectingDisabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	for _, model := range []string{"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1"} {
+		req := &anthropic.BetaMessageNewParams{
+			Model:     anthropic.Model(model),
+			MaxTokens: 512,
+			Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+		}
+		req.Metadata.UserID = param.NewOpt(userID)
+
+		c.GuardBeta(context.Background(), req)
+		assert.NotNil(t, req.Thinking.OfAdaptive, "%s: GuardBeta should send adaptive thinking", model)
+		assert.Nil(t, req.Thinking.OfDisabled, "%s: GuardBeta must not send disabled thinking", model)
+	}
+}
+
+func TestGuardBeta_KeepsClientAdaptiveConfigForModelsRejectingDisabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-fable-5"),
+		MaxTokens: 512,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+		Thinking: anthropic.BetaThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{Display: anthropic.BetaThinkingConfigAdaptiveDisplayOmitted},
+		},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+
+	c.GuardBeta(context.Background(), req)
+	require.NotNil(t, req.Thinking.OfAdaptive)
+	assert.Equal(t, anthropic.BetaThinkingConfigAdaptiveDisplayOmitted, req.Thinking.OfAdaptive.Display)
+}
+
 func TestGuardBeta_StripsClearThinkingEditWhenThinkingDisabled(t *testing.T) {
 	provider := newOAuthProvider()
 	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
