@@ -74,7 +74,9 @@ Deliberate carve-outs:
   make retention-slope thresholds flaky. `TestDuoMemoryRegression` guards the
   slope in the Go suite instead (same `DuoDefaultMaxSlopeKB`).
 - `--upstream real` stays **manual / nightly** — it needs `providers.yaml`
-  with live credentials and is non-deterministic.
+  with live credentials and is non-deterministic. This includes the Claude
+  Code OAuth entry (below), the only live check that Anthropic accepts the
+  gateway's re-signed OAuth requests.
 
 New matrix sections must add a leg here too — nothing enforces the mapping,
 so it silently drifts (see `cache_controls` / `cache_prefix` / `vendor`,
@@ -117,7 +119,30 @@ go build -o harness ./cli/harness
 
 # Generate a providers config template for Tier B/C real mode
 ./harness init-config --output providers.yaml
+
+# Claude Code OAuth (real mode): the template's claude-code entry reads
+# ${CLAUDE_CODE_OAUTH_TOKEN}; such an entry goes through the gateway's Claude
+# OAuth chain signed as the newest native client (claude_code_version latest).
+export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)
+./harness replay claude --upstream real --config providers.yaml
+./harness agent  claude --config providers.yaml
 ```
+
+### OAuth providers (Claude Code)
+
+`providers.yaml` entries normally carry an `apikey`. A Claude Code entry may
+carry `oauth_token` instead (env-expanded the same way): the Bearer token of a
+Claude Code login — `claude setup-token` prints a long-lived one, or copy
+`access_token` from a tingly-box Claude Code OAuth provider. The harness then
+binds the built-in rule to an anthropic-style OAuth provider (issuer
+`claude_code`) with `claude_code_version` pinned to
+`typ.ClaudeCodeVersionLatest`, so the request leaves the gateway as the newest
+native Claude Code client — the only shape Anthropic still accepts for OAuth
+traffic. Only `api_style: anthropic` with the `claude` agent is supported;
+other OAuth-only templates are still skipped by `init-config`. The hermetic
+twin of this path is `TestSetupRealOAuthAgent_ClaudeCode`
+(`internal/protocoltest/agent_oauth_test.go`). Rationale and wire details:
+`.design/claude-code.md` §B4.2.
 
 ---
 
@@ -598,6 +623,7 @@ cli/harness/
                      .design/tier-routing.md)
   testdata/lb/       sample LB scenario YAML files
   config.go          init-config: generates providers.yaml from provider templates
+                     (Claude Code emitted as an oauth_token entry)
   provider.go        Tier D placeholder (live provider API tests — not impl.)
   summary.go         CSV summary persistence / resume bookkeeping
   output.go          full prompt+output markdown file writer

@@ -268,3 +268,47 @@ providers:
 		}
 	}
 }
+
+// oauth_token is the Claude Code OAuth credential: env-expanded like apikey,
+// carried onto every expanded entry, and it alone flips IsOAuth.
+func TestLoadProvidersConfigOAuthToken(t *testing.T) {
+	t.Setenv("TB_CC_OAUTH", "sk-ant-oat01-test")
+
+	p := writeProvidersYAML(t, `
+providers:
+  - name: "claude-code"
+    baseurl: "https://api.anthropic.com"
+    oauth_token: "${TB_CC_OAUTH}"
+    api_style: "anthropic"
+    models: ["claude-sonnet-4-5", "claude-haiku-4-5"]
+  - name: "anthropic"
+    baseurl: "https://api.anthropic.com"
+    apikey: "sk-ant-api"
+    api_style: "anthropic"
+    models: ["claude-sonnet-4-5"]
+`)
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("entries = %d, want 3", len(entries))
+	}
+	for _, e := range entries {
+		switch e.Provider {
+		case "claude-code":
+			if e.OAuthToken != "sk-ant-oat01-test" {
+				t.Errorf("%s: oauth_token = %q, want expanded token", e.Name, e.OAuthToken)
+			}
+			if !e.IsOAuth() {
+				t.Errorf("%s: IsOAuth() = false", e.Name)
+			}
+		case "anthropic":
+			if e.OAuthToken != "" || e.IsOAuth() {
+				t.Errorf("%s: api-key entry must not be OAuth: %+v", e.Name, e)
+			}
+		default:
+			t.Errorf("unexpected provider %q", e.Provider)
+		}
+	}
+}

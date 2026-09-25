@@ -192,6 +192,44 @@ func GetClientUserAgent(ctx context.Context) string {
 	return ""
 }
 
+// ClaudeCodeClientHints are inbound Claude Code request facts the Claude
+// OAuth chain may replay upstream on a native profile.
+type ClaudeCodeClientHints struct {
+	Betas             []string // inbound anthropic-beta; only an allowlist is replayed
+	AgentID           string   // x-claude-code-agent-id
+	ParentAgentID     string   // x-claude-code-parent-agent-id
+	RequestClass      string   // x-claude-code-request-class
+	AgentType         string   // x-claude-code-agent-type
+	BackgroundSession bool     // x-app: cli-bg
+}
+
+// IsZero reports whether no hint was captured.
+func (h ClaudeCodeClientHints) IsZero() bool {
+	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == "" && !h.BackgroundSession
+}
+
+// ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.
+const ClaudeCodeClientHintsKey contextKey = "claude_code_client_hints"
+
+// WithClaudeCodeClientHints attaches hints; a zero value is not attached.
+func WithClaudeCodeClientHints(ctx context.Context, hints ClaudeCodeClientHints) context.Context {
+	if hints.IsZero() {
+		return ctx
+	}
+	return context.WithValue(ctx, ClaudeCodeClientHintsKey, hints)
+}
+
+// GetClaudeCodeClientHints returns the attached hints, or the zero value.
+func GetClaudeCodeClientHints(ctx context.Context) ClaudeCodeClientHints {
+	if ctx == nil {
+		return ClaudeCodeClientHints{}
+	}
+	if h, ok := ctx.Value(ClaudeCodeClientHintsKey).(ClaudeCodeClientHints); ok {
+		return h
+	}
+	return ClaudeCodeClientHints{}
+}
+
 // ClaudeOrgIDAuto is the sentinel claude_org_id value that attaches the
 // organization captured at OAuth login
 // (OAuthDetail.ExtraFields["organization_id"]) as anthropic-organization-id.

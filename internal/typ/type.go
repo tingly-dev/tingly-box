@@ -178,6 +178,10 @@ type ScenarioFlags struct {
 	// list (a non-standard extension); this flag normalizes them so third-party
 	// providers that reject that role do not error out.
 	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty" yaml:"claude_code_compat,omitempty"`
+
+	// ClaudeCodeVersion is the scenario-wide default for
+	// RuleFlags.ClaudeCodeVersion (the rule value wins when non-empty).
+	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
 }
 
 // RuleFlags represents per-rule feature flags.
@@ -283,6 +287,25 @@ type RuleFlags struct {
 	// recording_v2 default; a non-empty rule value overrides it (see
 	// EffectiveRecording).
 	Recording string `json:"recording,omitempty" yaml:"recording,omitempty"`
+
+	// ClaudeCodeVersion selects the Claude Code release the Claude OAuth chain
+	// impersonates. Empty keeps the legacy 2.1.86 emulation unchanged. See
+	// .design/claude-code.md Part B.
+	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
+}
+
+// Values of the claude_code_version flag.
+const (
+	ClaudeCodeVersionLegacy  = ""        // 2.1.86 emulation (default)
+	ClaudeCodeVersion2_1_280 = "2.1.280" // native client profile
+	// ClaudeCodeVersionLatest is the profile Anthropic currently accepts.
+	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_280
+)
+
+// ClaudeCodeVersionEnabled reports whether v selects a native profile.
+// Unknown values fall back to legacy.
+func ClaudeCodeVersionEnabled(v string) bool {
+	return v == ClaudeCodeVersion2_1_280
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
@@ -34,8 +37,14 @@ func missingFields(entry protocoltest.RealModelEntry) []string {
 	if strings.TrimSpace(entry.BaseURL) == "" {
 		miss = append(miss, "baseurl")
 	}
+	// An oauth_token stands in for apikey.
 	apiKey := strings.TrimSpace(entry.APIKey)
-	if apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey) {
+	token := strings.TrimSpace(entry.OAuthToken)
+	switch {
+	case token != "" && looksLikeUnexpandedEnvRef(token):
+		miss = append(miss, "oauth_token")
+	case token != "": // OAuth entry; no apikey needed
+	case apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey):
 		miss = append(miss, "apikey")
 	}
 	model := strings.TrimSpace(entry.Model)
@@ -60,6 +69,36 @@ var (
 
 func looksLikeUnexpandedEnvRef(s string) bool {
 	return unexpandedBraced.MatchString(s) || unexpandedBare.MatchString(s)
+}
+
+// setupRealUpstream binds the built-in rule to the entry's live provider,
+// via Claude Code OAuth when the entry has an oauth_token.
+func setupRealUpstream(env *protocoltest.AgentTestEnv, agentType protocoltest.AgentType, providerName string, entry protocoltest.RealModelEntry, apiStyle string) error {
+	if entry.IsOAuth() {
+		if apiStyle != "anthropic" {
+			return fmt.Errorf("oauth_token requires api_style: anthropic (entry %q has %q)", entry.Name, apiStyle)
+		}
+		token := strings.TrimSpace(entry.OAuthToken)
+		return env.SetupRealOAuthAgent(agentType, providerName, entry.Model, entry.BaseURL, token, claudeOAuthAccountID(token))
+	}
+	return env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle)
+}
+
+// claudeOAuthAccountID resolves the token's account uuid like a login does;
+// "" when the lookup fails (the env then uses a random uuid).
+func claudeOAuthAccountID(token string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	meta, err := (&oauth.AnthropicHook{}).AfterToken(ctx, token, &http.Client{Timeout: 10 * time.Second})
+	if err != nil || meta == nil {
+		fmt.Printf("⚠️  Claude OAuth account id unavailable; using a random uuid (as a login without account info would)\n")
+		return ""
+	}
+	id, _ := meta["account_id"].(string)
+	if strings.TrimSpace(id) == "" {
+		fmt.Printf("⚠️  Claude OAuth account id unavailable; using a random uuid (as a login without account info would)\n")
+	}
+	return strings.TrimSpace(id)
 }
 
 // loadProvidersConfig reads and parses a providers config file (YAML).
@@ -246,7 +285,7 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 	result.APIStyle = apiStyle
 	providerName := fmt.Sprintf("%s", entry.Name)
 
-	if err := env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle); err != nil {
+	if err := setupRealUpstream(env, agentType, providerName, entry, apiStyle); err != nil {
 		result.Error = fmt.Sprintf("setup real Agent: %v", err)
 		result.Duration = time.Since(start)
 		return result

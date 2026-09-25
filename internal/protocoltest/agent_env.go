@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 
+	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -285,6 +287,42 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 	}
 
 	return env.repointBuiltinRule(AgentType, providerName, modelName)
+}
+
+// SetupRealOAuthAgent is SetupRealAgent for a Claude Code OAuth token: the
+// built-in rule is pinned to ClaudeCodeVersionLatest. accountUUID becomes the
+// metadata account_uuid (random when empty). Claude agent only.
+func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName string, modelName string, apiBase string, token string, accountUUID string) error {
+	if agentType != AgentTypeClaudeCode {
+		return fmt.Errorf("oauth_token is only supported for the claude agent (Claude Code OAuth), got %q", agentType)
+	}
+	if token == "" {
+		return fmt.Errorf("oauth_token is empty")
+	}
+	if accountUUID == "" {
+		accountUUID = uuid.New().String()
+	}
+	provider := &typ.Provider{
+		UUID:     providerName,
+		Name:     providerName,
+		APIBase:  apiBase,
+		APIStyle: protocol.APIStyleAnthropic,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
+			Issuer:      ai.IssuerClaudeCode,
+			AccessToken: token,
+			UserID:      accountUUID,
+		},
+		Enabled: true,
+		Timeout: 60000,
+	}
+
+	if err := env.appConfig.AddProvider(provider); err != nil {
+		return fmt.Errorf("add provider: %w", err)
+	}
+
+	return env.repointBuiltinRuleWithFlags(agentType, providerName, modelName,
+		typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersionLatest})
 }
 
 // SetupVModelAgent configures the environment so the agent's built-in rule

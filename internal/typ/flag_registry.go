@@ -291,6 +291,19 @@ func RuleFlagRegistry() []FlagSpec {
 			},
 		},
 		{
+			Key:             "claude_code_version",
+			Label:           "Claude Code version",
+			Description:     "Which Claude Code release the Claude OAuth chain impersonates upstream (headers, anthropic-beta, billing header, metadata). \"Legacy\" keeps the 2.1.86 emulation; \"2.1.280\" reproduces the native client Anthropic currently requires. Claude OAuth providers only.",
+			Type:            FlagTypeEnum,
+			Category:        FlagCategoryRequestAnthropic,
+			Shared:          true,
+			InheritanceMode: "override",
+			Options: []FlagOption{
+				{Value: ClaudeCodeVersionLegacy, Label: "Legacy (2.1.86 emulation)"},
+				{Value: ClaudeCodeVersion2_1_280, Label: "2.1.280 (native client)"},
+			},
+		},
+		{
 			Key:         "context_1m",
 			Label:       "1M Context Window",
 			Description: "When enabled, always request Anthropic's 1M token context window for supported models by adding the context-1m-2025-08-07 beta flag upstream. When unset, leave requests unchanged; clients that request 1M themselves are still honored. The model name sent to the provider is unchanged.",

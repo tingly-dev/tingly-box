@@ -82,6 +82,11 @@ func StreamShapeForAgent(at AgentType) Assertion {
 // DefaultRules entry, so their builtin rule UUID won't exist yet on a fresh
 // AgentTestEnv and must be inserted here rather than found.
 func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, upstreamModel string) error {
+	return env.repointBuiltinRuleWithFlags(agentType, providerUUID, upstreamModel, typ.RuleFlags{})
+}
+
+// repointBuiltinRuleWithFlags is repointBuiltinRule with rule flags set.
+func (env *AgentTestEnv) repointBuiltinRuleWithFlags(agentType AgentType, providerUUID, upstreamModel string, flags typ.RuleFlags) error {
 	builtinUUID, requestModel, err := BuiltinRuleRef(agentType)
 	if err != nil {
 		return err
@@ -89,6 +94,7 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 
 	rule := newHarnessRule(builtinUUID, agentType.Scenario(), requestModel, upstreamModel,
 		harnessService(providerUUID, upstreamModel))
+	rule.Flags = flags
 
 	if err := env.appConfig.GetGlobalConfig().AddOrUpdateRequestConfigByRequestModel(rule); err != nil {
 		return fmt.Errorf("update rule: %w", err)

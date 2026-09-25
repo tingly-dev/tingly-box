@@ -74,6 +74,9 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
 	}
+	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
+		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))
+	}
 	return preVendor
 }
 
@@ -165,6 +168,11 @@ func ResolveRuleFlagsWithScenario(
 			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
 		}
 
+		// Scenario-level ClaudeCodeVersion unless the rule sets one.
+		if flags.ClaudeCodeVersion == "" && scenarioConfig.Flags.ClaudeCodeVersion != "" {
+			flags.ClaudeCodeVersion = scenarioConfig.Flags.ClaudeCodeVersion
+		}
+
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
 		// migrate20260610), so there is nothing to inject here.
@@ -180,6 +188,14 @@ func ResolveRuleFlagsWithScenario(
 		flags.Recording = string(typ.ParseRecordingMode(string(scenarioConfig.Flags.RecordingV2)))
 	} else {
 		flags.Recording = ""
+	}
+
+	// Provider-level probes run under a flagless synthetic rule; a Claude
+	// OAuth credential only passes as the latest native client, so default
+	// it there. Matched rules keep the off-by-default rollout; the overlay
+	// below can still force legacy with "".
+	if rule != nil && rule.UUID == ProbeSyntheticRuleUUID && flags.ClaudeCodeVersion == "" && provider.IsClaudeCodeProvider() {
+		flags.ClaudeCodeVersion = typ.ClaudeCodeVersionLatest
 	}
 
 	// Probe overlay (X-Tingly-Probe-Flags, Bench page): a per-request flag set
@@ -201,6 +217,13 @@ func ResolveRuleFlagsWithScenario(
 		flags.CleanHeader = false
 	}
 
+	// The native Claude Code identity needs the Claude OAuth client (it
+	// patches cch on the wire); on any other provider it would send an
+	// unpatched placeholder, so the profile only applies to Claude OAuth.
+	if flags.ClaudeCodeVersion != "" && provider != nil && !provider.IsClaudeCodeProvider() {
+		flags.ClaudeCodeVersion = ""
+	}
+
 	// Attach the whole resolved flag set once, at the single merge point, so
 	// every downstream consumer — ruleFlagTransport (custom_user_agent,
 	// extra_headers), the Anthropic client's Beta/Messages methods
@@ -214,7 +237,38 @@ func ResolveRuleFlagsWithScenario(
 	// SDK default), so no precedence judgment is duplicated here.
 	applyClientUserAgent(c)
 
+	// Inbound Claude Code facts; only the Claude OAuth chain reads them.
+	applyClaudeCodeClientHints(c)
+
 	return flags
+}
+
+const claudeXAppBackground = "cli-bg" // x-app of a background session
+
+// applyClaudeCodeClientHints attaches the inbound Claude Code headers to the
+// request context (typ.GetClaudeCodeClientHints).
+func applyClaudeCodeClientHints(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	hints := typ.ClaudeCodeClientHints{
+		AgentID:           strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID:     strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+		RequestClass:      strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
+		AgentType:         strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
+		BackgroundSession: strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
+	}
+	for _, v := range c.Request.Header.Values("anthropic-beta") {
+		for _, flag := range strings.Split(v, ",") {
+			if flag = strings.TrimSpace(flag); flag != "" {
+				hints.Betas = append(hints.Betas, flag)
+			}
+		}
+	}
+	if hints.IsZero() {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithClaudeCodeClientHints(c.Request.Context(), hints))
 }
 
 // applyRuleFlags attaches the resolved RuleFlags to the request context for

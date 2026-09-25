@@ -270,6 +270,9 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 	if f.ClaudeOrgID != "" {
 		parts = append(parts, "claude_org_id="+f.ClaudeOrgID)
 	}
+	if f.ClaudeCodeVersion != "" {
+		parts = append(parts, "claude_code_version="+f.ClaudeCodeVersion)
+	}
 	// Count only — header values may carry user secrets and this string is
 	// echoed back to clients (X-Tingly-Applied-Flags) and logged.
 	if len(f.ExtraHeaders) > 0 {

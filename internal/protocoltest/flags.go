@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -630,6 +631,223 @@ func ruleFlagCases() []flagCase {
 			}
 			if got := send("pv-flag-orgid").Headers.Get("anthropic-organization-id"); got != orgID {
 				t.Errorf("custom value did not reach anthropic-organization-id upstream; got %q, want %q", got, orgID)
+			}
+		}},
+
+		// ── claude_code_version ──────────────────────────────────────────────
+		// On the real Claude OAuth path: unset keeps the legacy emulation;
+		// "2.1.280" re-signs the request as the native client
+		// (.design/claude-code.md Part B).
+		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-ccver-claude"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL(),
+				APIStyle: protocol.APIStyleAnthropic,
+				AuthType: ai.AuthTypeOAuth,
+				OAuthDetail: &ai.OAuthDetail{
+					Issuer:      ai.IssuerClaudeCode,
+					AccessToken: "sk-ant-oat01-virtual",
+				},
+				Enabled: true,
+				Timeout: int64(constant.DefaultRequestTimeout),
+			})
+			providerModel := "virtual-model-" + s.Name
+			addRule := func(reqModel, version string) {
+				rule := newHarnessRule(reqModel, typ.ScenarioClaudeCode, reqModel, providerModel,
+					harnessService(providerName, providerModel))
+				rule.Flags = typ.RuleFlags{ClaudeCodeVersion: version}
+				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+			}
+			addRule("pv-flag-ccver-legacy", "")
+			addRule("pv-flag-ccver-280", typ.ClaudeCodeVersion2_1_280)
+
+			type upstream struct {
+				headers http.Header
+				system  []string
+				meta    map[string]string
+			}
+			send := func(reqModel string) upstream {
+				body := mustMarshal(map[string]any{
+					"model":      reqModel,
+					"max_tokens": 64,
+					"stream":     false,
+					"system": []map[string]any{
+						{"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.86.d9e; cc_entrypoint=sdk-cli; cch=00000; cc_is_subagent=true;"},
+						{"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
+					},
+					"messages": []map[string]any{
+						{"role": "user", "content": []map[string]any{
+							{"type": "text", "text": "<system-reminder>\nToday's date is 2026-09-02.\n</system-reminder>"},
+							{"type": "text", "text": "say hi"},
+						}},
+					},
+					"metadata": map[string]any{
+						"user_id": `{"device_id":"client-device","account_uuid":"client-account","session_id":"11111111-2222-3333-4444-555555555555","parent_session_id":"99999999-8888-7777-6666-555555555555"}`,
+					},
+				})
+				headers := map[string]string{
+					"User-Agent":                    "claude-cli/2.1.86 (external, cli)",
+					"anthropic-beta":                "claude-code-20250219,oauth-2025-04-20,per-turn-control-2026-07-01,message-batches-2024-09-24",
+					"x-claude-code-agent-id":        "agent-7",
+					"x-claude-code-parent-agent-id": "agent-main",
+					"x-app":                         "cli-bg",
+				}
+				res, err := env.dispatch(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, s.Name,
+					"/tingly/claude_code/v1/messages", body, headers, false)
+				if err != nil {
+					t.Fatalf("dispatch: %v", err)
+				}
+				if res.HTTPStatus != 200 {
+					t.Fatalf("request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+				}
+				up := env.virtual.LastRequest(EndpointAnthropic)
+				if up == nil {
+					t.Fatal("no upstream request captured")
+				}
+				var parsed struct {
+					System []struct {
+						Text string `json:"text"`
+					} `json:"system"`
+					Metadata struct {
+						UserID string `json:"user_id"`
+					} `json:"metadata"`
+				}
+				if err := json.Unmarshal(up.Body, &parsed); err != nil {
+					t.Fatalf("unmarshal upstream body: %v", err)
+				}
+				out := upstream{headers: up.Headers, meta: map[string]string{}}
+				for _, blk := range parsed.System {
+					out.system = append(out.system, blk.Text)
+				}
+				_ = json.Unmarshal([]byte(parsed.Metadata.UserID), &out.meta)
+				return out
+			}
+
+			// Unset: legacy chain, exactly as before the flag existed.
+			legacy := send("pv-flag-ccver-legacy")
+			if got := legacy.headers.Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
+				t.Errorf("legacy User-Agent = %q", got)
+			}
+			if got := legacy.headers.Get("X-Stainless-Helper-Method"); got != "stream" {
+				t.Errorf("legacy chain must keep x-stainless-helper-method, got %q", got)
+			}
+			if got := legacy.headers.Get("X-Claude-Code-Agent-Id"); got != "" {
+				t.Errorf("legacy chain must not forward agent headers, got %q", got)
+			}
+			if got := legacy.headers.Get("X-App"); got != "cli" {
+				t.Errorf("legacy chain must keep x-app: cli even for a cli-bg client, got %q", got)
+			}
+			if len(legacy.system) == 0 || !regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.86\.[0-9a-f]{3}; cc_entrypoint=cli; cch=[0-9a-f]{5};$`).MatchString(legacy.system[0]) {
+				t.Errorf("legacy billing header = %q", legacy.system)
+			}
+			if _, ok := legacy.meta["parent_session_id"]; ok {
+				t.Errorf("legacy metadata must not carry parent_session_id: %v", legacy.meta)
+			}
+
+			// 2.1.280: native client identity.
+			native := send("pv-flag-ccver-280")
+			if got := native.headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+				t.Errorf("native User-Agent = %q", got)
+			}
+			// Inbound per-turn flag replayed, foreign message-batches dropped.
+			if got := native.headers.Values("Anthropic-Beta"); len(got) != 1 {
+				t.Errorf("anthropic-beta must be one header value, got %v", got)
+			} else if want := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01"; got[0] != want {
+				t.Errorf("anthropic-beta =\n  %s\nwant\n  %s", got[0], want)
+			}
+			if got := native.headers.Get("X-Stainless-Package-Version"); got != "0.112.1" {
+				t.Errorf("X-Stainless-Package-Version = %q", got)
+			}
+			if got := native.headers.Get("X-Stainless-Runtime-Version"); got != "v26.3.0" {
+				t.Errorf("X-Stainless-Runtime-Version = %q", got)
+			}
+			if got := native.headers.Get("X-Stainless-Helper-Method"); got != "" {
+				t.Errorf("x-stainless-helper-method must not be sent, got %q", got)
+			}
+			if got := native.headers.Get("X-Claude-Code-Session-Id"); got != "11111111-2222-3333-4444-555555555555" {
+				t.Errorf("X-Claude-Code-Session-Id = %q", got)
+			}
+			if got := native.headers.Get("X-Claude-Code-Agent-Id"); got != "agent-7" {
+				t.Errorf("x-claude-code-agent-id = %q", got)
+			}
+			if got := native.headers.Get("X-Claude-Code-Parent-Agent-Id"); got != "agent-main" {
+				t.Errorf("x-claude-code-parent-agent-id = %q", got)
+			}
+			if got := native.headers.Get("X-App"); got != "cli-bg" {
+				t.Errorf("native chain must replay the client's x-app: cli-bg, got %q", got)
+			}
+			if got := native.headers.Get("X-Claude-Code-Request-Class"); got != "main" {
+				t.Errorf("x-claude-code-request-class = %q, want main", got)
+			}
+			if len(native.system) != 2 {
+				t.Fatalf("system blocks = %d, want 2 (billing header rebuilt in place): %v", len(native.system), native.system)
+			}
+			// cch algorithm is pinned in internal/client/claude_cch_test.go.
+			if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(native.system[0]) {
+				t.Errorf("native billing header = %q", native.system[0])
+			}
+			if strings.Contains(native.system[0], "cch=00000;") {
+				t.Errorf("cch placeholder reached the wire unpatched: %s", native.system[0])
+			}
+			if !strings.HasPrefix(native.system[1], "You are Claude Code") {
+				t.Errorf("system[1] preamble lost: %q", native.system[1])
+			}
+			if native.meta["device_id"] == "client-device" || native.meta["device_id"] == "" {
+				t.Errorf("device_id must be rewritten to the gateway's device, got %q", native.meta["device_id"])
+			}
+			if native.meta["parent_session_id"] != "99999999-8888-7777-6666-555555555555" {
+				t.Errorf("parent_session_id not preserved: %v", native.meta)
+			}
+
+			// count_tokens follows the same profile. The virtual upstream has
+			// no count_tokens endpoint, so a local server captures it.
+			var ctHeaders http.Header
+			ctSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ctHeaders = r.Header.Clone()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"input_tokens":3}`))
+			}))
+			defer ctSrv.Close()
+			const ctProvider = "flag-ccver-claude-ct"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID: ctProvider, Name: ctProvider, APIBase: ctSrv.URL,
+				APIStyle: protocol.APIStyleAnthropic, AuthType: ai.AuthTypeOAuth,
+				OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode, AccessToken: "sk-ant-oat01-virtual"},
+				Enabled:     true, Timeout: int64(constant.DefaultRequestTimeout),
+			})
+			countTokens := func(reqModel, version string) http.Header {
+				rule := newHarnessRule(reqModel, typ.ScenarioClaudeCode, reqModel, "claude-sonnet-4-6",
+					harnessService(ctProvider, "claude-sonnet-4-6"))
+				rule.Flags = typ.RuleFlags{ClaudeCodeVersion: version}
+				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+				ctHeaders = nil
+				body := mustMarshal(map[string]any{
+					"model":    reqModel,
+					"messages": []map[string]any{{"role": "user", "content": "say hi"}},
+				})
+				res, err := env.dispatch(protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, s.Name,
+					"/tingly/claude_code/v1/messages/count_tokens", body, nil, false)
+				if err != nil {
+					t.Fatalf("count_tokens dispatch: %v", err)
+				}
+				if res.HTTPStatus != 200 || ctHeaders == nil {
+					t.Fatalf("count_tokens did not reach upstream: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+				}
+				return ctHeaders
+			}
+			if got := countTokens("pv-flag-ccver-ct-legacy", "").Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
+				t.Errorf("legacy count_tokens User-Agent = %q", got)
+			}
+			ct := countTokens("pv-flag-ccver-ct-280", typ.ClaudeCodeVersion2_1_280)
+			if got := ct.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+				t.Errorf("native count_tokens User-Agent = %q", got)
+			}
+			if got := ct.Values("Anthropic-Beta"); len(got) != 1 || got[0] != "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27" {
+				t.Errorf("native count_tokens anthropic-beta = %v, want the CLI's four-flag subset", got)
 			}
 		}},
 

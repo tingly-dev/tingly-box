@@ -5,20 +5,23 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"github.com/tingly-dev/tingly-box/pkg/envsubst"
+	"gopkg.in/yaml.v3"
 )
 
 // ProviderConfig is one provider entry in the config YAML file.
 // A provider can have multiple models under it.
 type ProviderConfig struct {
-	Name     string   `yaml:"name"`
-	BaseURL  string   `yaml:"baseurl"`
-	APIKey   string   `yaml:"apikey"`
-	APIStyle string   `yaml:"api_style"` // required: "openai" | "anthropic" | "google"
-	APIType  string   `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
-	Models   []string `yaml:"models"`    // list of model names to test
-	Prompt   string   `yaml:"prompt"`    // optional per-provider prompt override; empty -> agent default
+	Name    string `yaml:"name"`
+	BaseURL string `yaml:"baseurl"`
+	APIKey  string `yaml:"apikey"`
+	// OAuthToken makes the entry a Claude Code OAuth provider (claude agent,
+	// anthropic style). Env-expanded like apikey.
+	OAuthToken string   `yaml:"oauth_token"`
+	APIStyle   string   `yaml:"api_style"` // required: "openai" | "anthropic" | "google"
+	APIType    string   `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
+	Models     []string `yaml:"models"`    // list of model names to test
+	Prompt     string   `yaml:"prompt"`    // optional per-provider prompt override; empty -> agent default
 	// Disabled, when explicitly false, skips this provider entirely. Nil (unset)
 	// or true means enabled — so omitting the field stays backward-compatible.
 	Disabled *bool `yaml:"enable"`
@@ -47,11 +50,16 @@ type RealModelEntry struct {
 	Provider string // original provider name
 	BaseURL  string
 	APIKey   string
-	Model    string
-	APIStyle string
-	APIType  string
-	Prompt   string // per-provider prompt override (already env-expanded); empty -> agent default
+	// OAuthToken selects the Claude Code OAuth path over APIKey.
+	OAuthToken string
+	Model      string
+	APIStyle   string
+	APIType    string
+	Prompt     string // per-provider prompt override (already env-expanded); empty -> agent default
 }
+
+// IsOAuth reports whether the entry uses an OAuth token.
+func (e RealModelEntry) IsOAuth() bool { return strings.TrimSpace(e.OAuthToken) != "" }
 
 // ExpandProvidersConfig expands a ProvidersConfig into individual test entries.
 // Each provider's models array is expanded into separate entries.
@@ -78,13 +86,14 @@ func ExpandProvidersConfig(cfg *ProvidersConfig) []RealModelEntry {
 				entryPrompt = cfg.Prompt
 			}
 			entry := RealModelEntry{
-				Provider: provider.Name,
-				BaseURL:  provider.BaseURL,
-				APIKey:   provider.APIKey,
-				Model:    model,
-				APIStyle: provider.APIStyle,
-				APIType:  provider.APIType,
-				Prompt:   entryPrompt,
+				Provider:   provider.Name,
+				BaseURL:    provider.BaseURL,
+				APIKey:     provider.APIKey,
+				OAuthToken: provider.OAuthToken,
+				Model:      model,
+				APIStyle:   provider.APIStyle,
+				APIType:    provider.APIType,
+				Prompt:     entryPrompt,
 			}
 
 			// Generate entry name
@@ -239,6 +248,7 @@ func expandProvidersConfigEnv(cfg *ProvidersConfig) {
 
 	for i := range cfg.Providers {
 		cfg.Providers[i].APIKey = expandProviderField(cfg.Providers[i].APIKey, lookup)
+		cfg.Providers[i].OAuthToken = expandProviderField(cfg.Providers[i].OAuthToken, lookup)
 		cfg.Providers[i].BaseURL = expandProviderField(cfg.Providers[i].BaseURL, lookup)
 		cfg.Providers[i].Prompt = expandProviderField(cfg.Providers[i].Prompt, lookup)
 	}

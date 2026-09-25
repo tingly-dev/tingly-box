@@ -48,6 +48,7 @@ func (e *E2EProber) BuildCurl(ctx context.Context, req *E2ERequest) (*CurlData, 
 
 	stream, _ := req.ResolveAxes()
 	params := req.probeParams(model)
+	params.ClaudeCodePreamble = e.targetIsClaudeCode(req)
 
 	// resolveTargetToProviderModel has already applied the protocol override
 	// to the provider (loopback synthetic carries the client style; direct
