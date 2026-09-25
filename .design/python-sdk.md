@@ -428,14 +428,20 @@ arguments — never a translated or normalized version of it — and its return
 value is wrapped by the same convenience wrappers the raw layer already
 has. Nothing is bridged between protocols.
 
-Sugar names are **capabilities**, raw names are **endpoints** — kept
-distinct on purpose so one word never means two contracts
-(`.design/ux-principles.md`): `tingly.text` vs `srv.chat`, `tingly.image`
-vs `srv.images`.
+Sugar names say which contract a function signs up for, and are kept
+distinct from the raw names so one word never means two contracts
+(`.design/ux-principles.md`). Text has three wire protocols, so each text
+decorator is named for its protocol in full — `tingly.openai_chat`,
+`tingly.openai_responses`, `tingly.anthropic_message` (vs the raw
+`srv.chat` / `srv.responses` / `srv.messages`). Images have one protocol
+each, so those are named for the capability — `tingly.image`,
+`tingly.image_edit` (vs `srv.images` / `srv.image_edits`).
 
 | sugar | endpoint it serves | function receives | may return |
 |---|---|---|---|
-| `@tingly.text(model)` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
+| `@tingly.openai_chat(model)` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
+| `@tingly.openai_responses(model)` | `/v1/responses` | `input` (a string or the item list, as-is), `**rest` (incl. `instructions`) | `str` or a Response `dict` |
+| `@tingly.anthropic_message(model)` | `/v1/messages` | `messages` (the body's list, as-is), `**rest` (incl. `system`) | `str` or a Message `dict` |
 | `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image (`bytes` / `.save()`-able / list), or an `ImagesResponse` `dict` |
 | `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` (incl. `mask`) | same as `image` |
 
@@ -447,12 +453,15 @@ everything registered through the decorators.
   `size=None` also gets `size` when the request carries it; one with
   `**kw` gets everything. This is what lets the one-liner stay one line
   without the author learning the request body first.
-- **Text sugar serves Chat only.** Registered as a plain OpenAI (Chat-mode)
-  provider, tb already translates Anthropic- and Responses-speaking clients
-  into Chat for it — that translation is tb's job, and doing it again in
-  the SDK would be exactly the bridging this design refuses. Anyone who
-  needs the Anthropic or Responses wire shape natively uses the raw
-  decorators.
+- **One decorator per text protocol, never bridged.** Each unpacks only
+  its own protocol's body; a function registered with `openai_chat` never
+  sees an Anthropic request, and nothing converts between them. Which one
+  tb calls is decided by how the provider is registered: a plain OpenAI
+  (Chat-mode) provider gets Chat — and tb already translates Anthropic- and
+  Responses-speaking clients into Chat for it, so `openai_chat` alone is
+  enough for most plugins; `openai_responses` is for a provider in
+  Responses mode; `anthropic_message` for an Anthropic-style or Dual
+  provider that should get the Anthropic body natively.
 - **Several models, one process.** Each decorator names its model; they
   are all listed on `/v1/models`, and a request is routed by its `model`
   field. If exactly one function is registered for an endpoint it
@@ -490,10 +499,13 @@ routing, its openai-go/anthropic-go upstream clients, its multipart
 encoding, its stream re-emission, its image persistence.
 
 - The image provider is `examples/image.py` itself, loaded unchanged.
+- The same plugin process is registered twice — OpenAI-style (no key) and
+  Anthropic-style (a placeholder key, which tb's Anthropic client needs).
 - Covered: model discovery (`/v1/models`), image generation (and that tb
   saved the PNG), image edit (multipart, `image[]` + mask), chat,
-  an Anthropic client reaching a Chat-only plugin, and streaming for
-  chat and for Anthropic.
+  an Anthropic client reaching a Chat-only plugin, an Anthropic-style
+  provider getting the Anthropic body natively (`anthropic_message`), and
+  streaming for each text path.
 - Stdlib only, like the rest of the tests. Skipped unless `TINGLY_TB_BIN`
   points at a tb binary; `task test:py:e2e` builds one and runs it.
 
@@ -699,9 +711,6 @@ Deliberately deferred, not forgotten:
   `Server` streams, but always as one chunk; and `Client.chat` as a stream.
 - Serialising work per model in the sugar layer (a lock around a
   single-GPU pipeline) — left to the function author for now.
-- Text sugar for the Anthropic or Responses wire shape — tb translates
-  those clients into Chat for a Chat-mode provider; use the raw decorators
-  when the native shape is actually needed.
 - Image `response_format: "url"` — replies are always `b64_json`.
 - Any bridging between `@srv.chat`, `@srv.responses`, and `@srv.messages` —
   a shared request shape, content-block flattening, `system`-folding, or
@@ -746,7 +755,7 @@ Deliberately deferred, not forgotten:
 | `sdk/python/tingly/_generated_quota.py` | Generated (`task gen:py:quota`), not committed |
 | `sdk/python/scripts/extract_quota_schema.py` | `openapi.json` → provider-quota schema closure, for the generator |
 | `Taskfile.yml` (`gen:py:quota`) | The generation task itself |
-| `sdk/python/tingly/sugar.py` | `tingly.text` / `image` / `image_edit` / `serve` — unpack-don't-convert layer over one module-level `Server` |
+| `sdk/python/tingly/sugar.py` | `tingly.openai_chat` / `openai_responses` / `anthropic_message` / `image` / `image_edit` / `serve` — unpack-don't-convert layer over one module-level `Server` |
 | `sdk/python/examples/relay.py` | Pure forwarder, all three text protocols, independently |
 | `sdk/python/examples/image.py` | Image provider via sugar, fake stdlib-PNG model |
 | `internal/protocolserver/openai_image.go`, `openai_image_edit.go` | What tb sends a provider for `/images/generations` (JSON) and `/images/edits` (multipart) |
