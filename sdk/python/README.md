@@ -19,9 +19,9 @@ tingly.serve()                          # http://0.0.0.0:8765/v1
 
 | decorator | serves | your function gets | and returns |
 |---|---|---|---|
-| `@tingly.openai_chat(model)` | `/v1/chat/completions` | `messages`, `**rest` | `str` (or a ChatCompletion dict) |
-| `@tingly.openai_responses(model)` | `/v1/responses` | `input` (string or item list, as sent), `**rest` | `str` (or a Response dict) |
-| `@tingly.anthropic_message(model)` | `/v1/messages` | `messages`, `**rest` (incl. `system`) | `str` (or a Message dict) |
+| `@tingly.openai_chat(model)` / `@tingly.chat` | `/v1/chat/completions` | `messages`, `**rest` | `str` (or a ChatCompletion dict) |
+| `@tingly.openai_responses(model)` / `@tingly.responses` | `/v1/responses` | `input` (string or item list, as sent), `**rest` | `str` (or a Response dict) |
+| `@tingly.anthropic_message(model)` / `@tingly.message` | `/v1/messages` | `messages`, `**rest` (incl. `system`) | `str` (or a Message dict) |
 | `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image(s): `bytes`, a PIL image, or a list |
 | `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` | same as `image` |
 

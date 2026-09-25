@@ -18,7 +18,8 @@ goes through the raw layer's existing wrappers (`str` for text; `bytes` /
 
 Text decorators are named for their wire protocol (`openai_chat`,
 `openai_responses`, `anthropic_message`), image ones for the capability
-(`image`, `image_edit`); raw names are endpoints (`srv.chat`,
+(`image`, `image_edit`), with short aliases `chat` / `responses` /
+`message` for the text ones; raw names are endpoints (`srv.chat`,
 `srv.responses`, `srv.messages`, `srv.images`, `srv.image_edits`) — so one
 word never means two contracts.
 
@@ -114,6 +115,12 @@ def anthropic_message(model: str) -> Callable[[Callable[..., Any]], Callable[...
     """Serve `model` on `/v1/messages`: `fn(messages, **rest)` (`system`, if
     sent, is in `rest`) → `str` (wrapped as a Message) or a Message `dict`."""
     return lambda fn: _register("messages", model, fn)
+
+
+# Short aliases: the same functions, for when the protocol needn't be spelled out.
+chat = openai_chat
+responses = openai_responses
+message = anthropic_message
 
 
 def image(model: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:

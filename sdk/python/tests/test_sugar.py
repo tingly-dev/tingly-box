@@ -130,6 +130,13 @@ class SugarTest(unittest.TestCase):
         self.assertEqual(body["choices"][0]["message"]["content"], "you said: yo")
 
 
+class AliasTest(unittest.TestCase):
+    def test_short_names_are_the_same_decorators(self):
+        self.assertIs(tingly.chat, tingly.openai_chat)
+        self.assertIs(tingly.responses, tingly.openai_responses)
+        self.assertIs(tingly.message, tingly.anthropic_message)
+
+
 class ServeWithoutRegistrationTest(unittest.TestCase):
     def test_serve_refuses_to_start_empty(self):
         sugar._reset()
