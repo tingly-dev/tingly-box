@@ -86,9 +86,10 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
     );
 };
 
-// Tiles per page of the overview: a few screens' worth on a wide window, and
-// the most the grid ever mounts at once.
-const GALLERY_PAGE_SIZE = 48;
+// Tiles per page of the overview, and the most the grid ever mounts at once.
+// 24 divides into 2, 3, 4, 6 or 8 columns, so on most widths the last row of
+// a full page is full too.
+const GALLERY_PAGE_SIZE = 24;
 
 interface ImageGenGalleryDialogProps {
     open: boolean;
