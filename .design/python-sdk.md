@@ -102,15 +102,18 @@ sdk/python/
   scripts/
     extract_quota_schema.py  # openapi.json -> just the provider-quota schema closure
   tingly/
-    __init__.py               # exports Server, Client
+    __init__.py               # exports Server, Client, and the sugar functions
     client.py                 # Client — call tb from Python; quota methods
-    server.py                 # Server — be a provider from Python
+    server.py                 # Server — raw layer: be a provider from Python
+    sugar.py                  # text / image / image_edit / serve — the few-lines layer
     _generated_quota.py       # pydantic v2, from `task gen:py:quota` — NOT committed
   examples/
-    relay.py              # pure forwarder, all three protocols, independently
+    relay.py              # pure forwarder, all three text protocols, independently
     fanout.py             # ask N tb models, merge the replies
+    image.py              # image provider via sugar, with a fake (stdlib PNG) model
   tests/
     test_framework.py     # Server + Client against a stub HTTP server
+    test_sugar.py         # the sugar layer end to end
 ```
 
 No CLI, no transports/helpers packages, and — after an earlier draft added
@@ -307,6 +310,143 @@ Responses-vs-Chat is a *path* choice under the same OpenAI base URL
 a second `api_base` field — dual-provider only has `APIBaseOpenAI` and
 `APIBaseAnthropic`), so the same OpenAI URL registered above already
 carries it.
+
+## Images — `@srv.images` / `@srv.image_edits`
+
+The motivating case: a self-deployable image model (say Qwen-Image 2.1)
+that people already drive from a Python script. Before this section,
+`Server` had no way to receive an image request at all — tb serves images
+on two endpoints of its own, and forwards both to the upstream provider's
+endpoint of the same name:
+
+| tb route | forwarded upstream as | body tb sends |
+|---|---|---|
+| `POST /tingly/imagegen/v1/images/generations` | `POST {api_base}/images/generations` | JSON (`openai.ImageGenerateParams`) |
+| `POST /tingly/imagegen/v1/images/edits` | `POST {api_base}/images/edits` | `multipart/form-data` (`openai.ImageEditParams`) |
+
+(`internal/protocolserver/routes.go`, `openai_image.go`,
+`openai_image_edit.go`; `internal/client/openai.go` `ImagesGenerate` /
+`ImagesEdit`.) tb only swaps in a vendor-specific adapter for hosts it
+recognises (`internal/vision/imagegen/vendor.go` `DetectVendor`: DashScope,
+MiniMax, xAI, Qianfan, Codex); a localhost `Server` matches none of them, so
+it always gets the plain OpenAI SDK call — exactly the two shapes above.
+tb reads the reply as `openai.ImagesResponse`
+(`{"created", "data": [{"b64_json" | "url"}], "usage"?}`), and only
+`b64_json` entries are persisted to tb's image directory.
+
+So `Server` gains two more raw handlers, same contract as the other three —
+raw request in, dict passed through or a convenience value wrapped:
+
+- `@srv.images` → `POST /v1/images/generations` (and `/images/generations`).
+  Body is the parsed JSON, unmodified. Type hint:
+  `openai.types.image_generate_params.ImageGenerateParamsBase` (a `TypedDict`,
+  `TYPE_CHECKING`-only, like the others).
+- `@srv.image_edits` → `POST /v1/images/edits` (and `/images/edits`). The
+  body is multipart, not JSON, so "raw" here means the form decoded into a
+  dict — the only decoding done, the multipart counterpart of `json.loads`:
+  text fields stay strings under their own names (`"prompt"`, `"model"`,
+  `"n": "1"` — no coercion to int), file fields become `bytes`. The SDK
+  sends one image as `image` and several as `image[]`; both land in
+  `body["image"]` as a `list[bytes]`, since that's one field on the wire in
+  two encodings, not two fields. `mask`, when present, is `bytes`. Typed as
+  a plain `dict`, not `ImageEditParamsBase`: that `TypedDict` says `n: int`,
+  and a multipart body says `"1"` — claiming the upstream type would be a lie
+  about the runtime value.
+
+Convenience return for both: `bytes` (one image), a `list` of them, or any
+object with a `.save(fp, format)` method (a PIL image — what a diffusers
+pipeline returns) — wrapped into `{"created", "data": [{"b64_json"}]}`.
+A `dict` is passed through as-is. `response_format: "url"` is not honoured:
+the reply is always `b64_json`, which is also the only kind tb persists.
+
+Multipart is parsed with the stdlib (`email` package), so `Server` keeps
+zero runtime dependencies.
+
+### Register it with tb
+
+Unlike text, images need no dual URL: a plain **Custom endpoint** (OpenAI,
+`http://localhost:8765/v1`, no key) is enough, and the no-key Anthropic
+footgun above doesn't apply. Then point a rule in the `imagegen` scenario at
+that provider and the model name the `Server` advertises on `/v1/models`.
+
+## Sugar — the few-lines path
+
+Everything above is the raw layer: exact protocol in, exact protocol out.
+It's the right floor, and it stays — but it is not a few-lines experience.
+Wrapping a Python image pipeline still means knowing the OpenAI images body,
+picking a decorator per endpoint, and registering by hand. The target is:
+
+```python
+import tingly
+
+@tingly.image("qwen-image-2.1")
+def generate(prompt):
+    return pipe(prompt).images[0]
+
+tingly.serve()
+```
+
+### What sugar is, and what it deliberately isn't
+
+The earlier rollbacks (see `Server` above) were about the *raw* layer
+inventing a shape in front of the wire body. Sugar is a separate, opt-in
+layer on top, and it stays on the right side of that line by following one
+rule: **unpack, don't convert.** A sugar function receives the one field
+that is the point of the call, plus the rest of the same body as keyword
+arguments — never a translated or normalized version of it — and its return
+value is wrapped by the same convenience wrappers the raw layer already
+has. Nothing is bridged between protocols.
+
+Sugar names are **capabilities**, raw names are **endpoints** — kept
+distinct on purpose so one word never means two contracts
+(`.design/ux-principles.md`): `tingly.text` vs `srv.chat`, `tingly.image`
+vs `srv.images`.
+
+| sugar | endpoint it serves | function receives | may return |
+|---|---|---|---|
+| `@tingly.text(model)` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
+| `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image (`bytes` / `.save()`-able / list), or an `ImagesResponse` `dict` |
+| `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` (incl. `mask`) | same as `image` |
+
+`tingly.serve(host=..., port=8765)` runs one module-level `Server` holding
+everything registered through the decorators.
+
+- **Only the keyword arguments the function accepts are passed.** A
+  function declared `def generate(prompt)` gets just `prompt`; one with
+  `size=None` also gets `size` when the request carries it; one with
+  `**kw` gets everything. This is what lets the one-liner stay one line
+  without the author learning the request body first.
+- **Text sugar serves Chat only.** Registered as a plain OpenAI (Chat-mode)
+  provider, tb already translates Anthropic- and Responses-speaking clients
+  into Chat for it — that translation is tb's job, and doing it again in
+  the SDK would be exactly the bridging this design refuses. Anyone who
+  needs the Anthropic or Responses wire shape natively uses the raw
+  decorators.
+- **Several models, one process.** Each decorator names its model; they
+  are all listed on `/v1/models`, and a request is routed by its `model`
+  field. If exactly one function is registered for an endpoint it
+  answers regardless of the name — the same kind of leniency as the
+  optional `/v1` prefix, so a mistyped model name in a curl test doesn't
+  404.
+- To support the model list, `Server` gains `models: list[str]` (initially
+  `[name]`), which `/v1/models` lists. That is the only change sugar makes
+  to the raw layer.
+
+Known limitations, not addressed yet:
+
+- **No streaming** (inherited from the raw layer). A client that streams
+  chat through tb will make tb ask this provider for a stream it doesn't
+  produce; text sugar is for non-streaming callers until that changes.
+- **No serialisation of GPU work.** Requests are handled on threads; two
+  concurrent image requests call the same pipeline concurrently. A
+  single-GPU pipeline usually needs a lock — the author's to add for now.
+- **Registration is still by hand** (auto-registration stays parked, below).
+  So "one line" is one line of code plus one Connect AI entry and one
+  `imagegen` rule, not zero setup.
+
+The example (`examples/image.py`) fakes the model: it renders a solid-colour
+PNG with the stdlib instead of loading a real pipeline, so it runs anywhere
+and still returns a real image tb can persist.
 
 ## Auto-registration (parked — recorded for later, not being built now)
 
@@ -506,7 +646,14 @@ means something concrete — everything before this only ever touched
 
 Deliberately deferred, not forgotten:
 
-- Streaming (`Server` responses, `Client.chat` as a stream).
+- Streaming (`Server` responses, `Client.chat` as a stream) — for text sugar
+  this means clients that stream through tb aren't served yet.
+- Serialising work per model in the sugar layer (a lock around a
+  single-GPU pipeline) — left to the function author for now.
+- Text sugar for the Anthropic or Responses wire shape — tb translates
+  those clients into Chat for a Chat-mode provider; use the raw decorators
+  when the native shape is actually needed.
+- Image `response_format: "url"` — replies are always `b64_json`.
 - Any bridging between `@srv.chat`, `@srv.responses`, and `@srv.messages` —
   a shared request shape, content-block flattening, `system`-folding, or
   converting one protocol's reply into another's. Tried, rolled back (see
@@ -545,12 +692,16 @@ Deliberately deferred, not forgotten:
 | File | Role |
 |---|---|
 | `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model; quota methods |
-| `sdk/python/tingly/server.py` | `Server` — `@srv.chat` / `@srv.responses` / `@srv.messages`, `.tb`, `.run()`, path leniency, all raw-body, `TYPE_CHECKING`-only request typing |
+| `sdk/python/tingly/server.py` | `Server` — `@srv.chat` / `@srv.responses` / `@srv.messages` / `@srv.images` / `@srv.image_edits`, `models`, `.tb`, `.run()`, path leniency, all raw-body, `TYPE_CHECKING`-only request typing |
 | `.design/openai-endpoint-routing.md` | Why `@srv.responses` exists and needs no second URL — tb's Chat/Responses/Both provider dispatch model |
 | `sdk/python/tingly/_generated_quota.py` | Generated (`task gen:py:quota`), not committed |
 | `sdk/python/scripts/extract_quota_schema.py` | `openapi.json` → provider-quota schema closure, for the generator |
 | `Taskfile.yml` (`gen:py:quota`) | The generation task itself |
-| `sdk/python/examples/relay.py` | Pure forwarder, all three protocols, independently |
+| `sdk/python/tingly/sugar.py` | `tingly.text` / `image` / `image_edit` / `serve` — unpack-don't-convert layer over one module-level `Server` |
+| `sdk/python/examples/relay.py` | Pure forwarder, all three text protocols, independently |
+| `sdk/python/examples/image.py` | Image provider via sugar, fake stdlib-PNG model |
+| `internal/protocolserver/openai_image.go`, `openai_image_edit.go` | What tb sends a provider for `/images/generations` (JSON) and `/images/edits` (multipart) |
+| `internal/vision/imagegen/vendor.go` | `DetectVendor` — why a localhost `Server` always gets the plain OpenAI images call |
 | `sdk/python/examples/fanout.py` | Multi-model ask + merge (OpenAI only) |
 | `internal/data/providers.json` | Self-hosted provider templates (Ollama et al.) — the mechanism this SDK plugs into, unchanged |
 | `.design/dual-provider.md` | The tb-side mechanism `Server`'s dual registration plugs into |
