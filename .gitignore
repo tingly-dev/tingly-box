@@ -127,3 +127,7 @@ go.work.sum
 /harness
 /harness-summary.csv
 /harness-output/
+
+# Python SDK: generated from openapi.json, pure function of the spec (see
+# Taskfile.yml's gen:py:quota)
+/sdk/python/tingly/_generated_quota.py

@@ -1,0 +1,9 @@
+# GENERATED FILE - DO NOT EDIT.
+#
+# Produced from tingly-box's openapi.json (provider-quota paths + their
+# schema closure only — see scripts/extract_quota_schema.py) by
+# `task gen:py:quota` (datamodel-code-generator, pydantic v2).
+#
+# This file is deliberately not committed. Regenerate it after any change to
+# the provider-quota API. To change a model, change the Go type it comes
+# from and re-run `task swagger && task gen:py:quota`.
