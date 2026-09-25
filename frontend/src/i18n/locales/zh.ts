@@ -606,7 +606,15 @@ export default {
       "selectModel": "选择模型",
       "testService": "测试服务",
       "editProvider": "编辑服务商凭证",
-      "deleteService": "删除服务"
+      "deleteService": "删除服务",
+      "quota": {
+        "left": "剩余 {{value}}",
+        "resetsIn": "{{duration}} 后重置",
+        "updated": "{{duration}} 前更新",
+        "clickToRefresh": "点击刷新",
+        "refreshing": "刷新中…",
+        "refreshFailed": "刷新失败，显示的是上次读数"
+      }
     },
     "tier": {
       "invalidInput": "请输入有效的数字。",

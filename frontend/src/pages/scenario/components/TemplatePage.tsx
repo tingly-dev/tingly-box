@@ -21,6 +21,7 @@ import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
 import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
+import {ProviderQuotaProvider} from '@/contexts/ProviderQuotaContext';
 
 // First-run education: the Direct routing guide auto-opens once per user (new
 // and existing), then never again — the toolbar "?" stays as the manual
@@ -73,6 +74,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const rules = props.rules ?? internalData.rules;
     const showNotification = props.showNotification ?? internalData.showNotification;
     const providers = props.providers ?? internalData.providers;
+    const providerUuids = providers.map(p => p.uuid);
     const onRulesChange = props.onRulesChange ?? internalData.handleRulesChange;
     const onProvidersLoad = props.onProvidersLoad ?? internalData.loadProviders;
     const loadRules = props.loadRules ?? internalData.loadRules;
@@ -366,6 +368,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                 sx={{ scrollMarginTop: 16 }}
             >
                 {/*<Box ref={scrollContainerRef} sx={SCROLLBOX_SX(headerHeight)}>*/}
+                <ProviderQuotaProvider providerUuids={providerUuids}>
                 <Box ref={scrollContainerRef}>
                     {rules?.length === 0 ? (
                         <Box sx={{
@@ -414,6 +417,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         })
                     )}
                 </Box>
+                </ProviderQuotaProvider>
             </UnifiedCard>
 
             <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {

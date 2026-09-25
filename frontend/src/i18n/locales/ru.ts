@@ -617,7 +617,15 @@ export default {
       "selectModel": "Выберите модель",
       "testService": "Проверить сервис",
       "editProvider": "Изменить провайдера",
-      "deleteService": "Удалить сервис"
+      "deleteService": "Удалить сервис",
+      "quota": {
+        "left": "осталось {{value}}",
+        "resetsIn": "сброс через {{duration}}",
+        "updated": "обновлено {{duration}} назад",
+        "clickToRefresh": "нажмите, чтобы обновить",
+        "refreshing": "Обновление…",
+        "refreshFailed": "Не удалось обновить — показаны последние данные"
+      }
     },
     "tier": {
       "invalidInput": "Введите корректное число.",

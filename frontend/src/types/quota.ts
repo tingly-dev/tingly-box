@@ -46,6 +46,41 @@ function windowSortKey(window: QuotaWindow): [number, number] {
     return [rank, minutes];
 }
 
+/** Used share of a countable window — mirrors ai/quota's UsageWindow.Percent. */
+function usedPercent(window: QuotaWindow): number {
+    if (window.used_percent) return window.used_percent;
+    return window.used >= window.limit ? 100 : window.used / window.limit * 100;
+}
+
+/** A window with no known duration sorts last, as in ai/quota's periodRank. */
+function periodRank(window: QuotaWindow): number {
+    return window.window_minutes && window.window_minutes > 0
+        ? window.window_minutes
+        : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * The window that binds the next request — the most used countable one, ties
+ * going to the shorter period. Mirrors ai/quota's Tightest() with no kind
+ * filter (the display question); see .design/quota-semantics.md §3.3.
+ */
+export function tightestWindow(quota?: ProviderQuota): QuotaWindow | undefined {
+    let best: QuotaWindow | undefined;
+    for (const window of quota?.windows ?? []) {
+        if (!isCountable(window)) continue;
+        if (!best) {
+            best = window;
+            continue;
+        }
+        const pw = usedPercent(window);
+        const pb = usedPercent(best);
+        if (pw > pb || (pw === pb && periodRank(window) < periodRank(best))) {
+            best = window;
+        }
+    }
+    return best;
+}
+
 // Type aliases for convenience and backward compatibility.
 // Omit + re-add `windows` rather than a plain intersection: ProviderUsage
 // already declares `windows?: UsageWindow[]`, and TS does not merge two

@@ -31,7 +31,77 @@ tasks:
   anthropic:
     cmds:
       - |
-        echo "example"
+        echo "example (current: limits list + spend)"
+        cat << EOF
+        {
+          "limits": [
+            {
+              "kind": "session",
+              "group": "session",
+              "percent": 24,
+              "severity": "normal",
+              "resets_at": "2026-09-25T16:10:00.911173+00:00",
+              "scope": null,
+              "is_active": false
+            },
+            {
+              "kind": "weekly_all",
+              "group": "weekly",
+              "percent": 26,
+              "severity": "normal",
+              "resets_at": "2026-09-30T13:00:00.911202+00:00",
+              "scope": null,
+              "is_active": true
+            },
+            {
+              "kind": "weekly_scoped",
+              "group": "weekly",
+              "percent": 12,
+              "severity": "normal",
+              "resets_at": "2026-09-30T12:59:59.911437+00:00",
+              "scope": {
+                "model": {
+                  "id": null,
+                  "display_name": "Fable"
+                },
+                "surface": null
+              },
+              "is_active": false
+            }
+          ],
+          "spend": {
+            "used": {
+              "amount_minor": 0,
+              "currency": "USD",
+              "exponent": 2
+            },
+            "limit": null,
+            "percent": 0,
+            "severity": "normal",
+            "enabled": false,
+            "disabled_reason": null,
+            "cap": null,
+            "balance": null,
+            "auto_reload": null,
+            "disclaimer": "Usage credits cover you when you hit your plan limits. [Learn more](https://support.claude.com/articles/12429409)",
+            "can_purchase_credits": false,
+            "can_toggle": false
+          },
+          "member_dashboard_available": false,
+          "seven_day_breakdown": {
+            "as_of": "2026-09-25T14:12:00.950181+00:00",
+            "window_started_at": "2026-09-23T13:00:00.911202+00:00",
+            "rows": [
+              { "key": "claude_code", "display_name": "Claude Code", "percent": 83 },
+              { "key": "chat", "display_name": "Chats", "percent": 0 },
+              { "key": "cowork", "display_name": "Cowork", "percent": 17 },
+              { "key": "other", "display_name": "Other", "percent": 0 }
+            ]
+          }
+        }
+        EOF
+      - |
+        echo "example (legacy: fixed per-window fields)"
         cat << EOF
         {
             "five_hour": {

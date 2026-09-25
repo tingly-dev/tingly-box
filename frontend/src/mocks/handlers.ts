@@ -2121,7 +2121,7 @@ export const handlers = [
         if (!getMockProviders().some((provider) => provider.uuid === uuid)) {
             return HttpResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
         }
-        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid) } })
+        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid), quota: mockQuotas[uuid] } })
     }),
 
     http.post('/api/v2/provider-models/:uuid', ({ params }) => {
@@ -2129,7 +2129,7 @@ export const handlers = [
         if (!getMockProviders().some((provider) => provider.uuid === uuid)) {
             return HttpResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
         }
-        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid) } })
+        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid), quota: mockQuotas[uuid] } })
     }),
 
     // ============================================

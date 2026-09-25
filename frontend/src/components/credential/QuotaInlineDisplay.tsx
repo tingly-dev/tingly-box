@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
 import { Box, Button, Stack, IconButton, Typography, CircularProgress, Tooltip } from '@mui/material';
-import { Code as CodeIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
 import { useQuotaBars } from './useQuotaBars';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
+import { QuotaRawResponseButton } from './QuotaRawResponseButton';
 import type { ProviderQuota } from '@/types/quota';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable } from '@/types/quota';
 
@@ -45,7 +43,6 @@ export function QuotaInlineDisplay({
   onRefresh,
   maxInlineItems = 3,
 }: QuotaInlineDisplayProps) {
-  const [rawResponseOpen, setRawResponseOpen] = useState(false);
   const { windows, resourceItems, hasAny } = useQuotaBars(quota);
   const hasRawResponse = quota?.raw_response !== undefined && quota.raw_response !== null;
 
@@ -159,33 +156,7 @@ export function QuotaInlineDisplay({
           </span>
         </Tooltip>
 
-        {hasRawResponse && (
-          <Tooltip title="View raw quota response" arrow>
-            <Button
-              aria-label="View raw quota response"
-              size="small"
-              variant="text"
-              startIcon={<CodeIcon sx={{ fontSize: 16 }} />}
-              onClick={() => setRawResponseOpen(true)}
-              sx={{
-                flexShrink: 0,
-                px: 0.75,
-                color: 'text.secondary',
-                fontSize: '0.7rem',
-                fontWeight: 400,
-                textTransform: 'none',
-                whiteSpace: 'nowrap',
-                '& .MuiButton-startIcon': { mr: 0.5 },
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                  color: 'text.primary',
-                },
-              }}
-            >
-              Details
-            </Button>
-          </Tooltip>
-        )}
+        <QuotaRawResponseButton providerName={quota?.provider_name} response={quota?.raw_response} />
 
         {/* Quota metrics remain the visual anchor. */}
         <Stack
@@ -232,15 +203,6 @@ export function QuotaInlineDisplay({
           </Tooltip>
         )}
       </Box>
-
-      {hasRawResponse && (
-        <QuotaRawResponseDialog
-          open={rawResponseOpen}
-          onClose={() => setRawResponseOpen(false)}
-          providerName={quota?.provider_name}
-          response={quota?.raw_response}
-        />
-      )}
     </>
   );
 }
