@@ -289,16 +289,9 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 	return env.repointBuiltinRule(AgentType, providerName, modelName)
 }
 
-// SetupRealOAuthAgent is SetupRealAgent for a Claude Code OAuth credential:
-// the provider is an anthropic-style OAuth provider (issuer claude_code,
-// bearer token) and the built-in rule is pinned to
-// claude_code_version=ClaudeCodeVersionLatest, so the request leaves the
-// gateway re-signed as the newest native Claude Code client — the only shape
-// Anthropic still accepts for OAuth traffic. accountUUID becomes the
-// provider's OAuthDetail.UserID (the metadata account_uuid upstream); empty
-// falls back to a random uuid, exactly like a login whose account id could
-// not be fetched. Only the claude agent is supported; other agents have no
-// OAuth chain to exercise here.
+// SetupRealOAuthAgent is SetupRealAgent for a Claude Code OAuth token: the
+// built-in rule is pinned to ClaudeCodeVersionLatest. accountUUID becomes the
+// metadata account_uuid (random when empty). Claude agent only.
 func (env *AgentTestEnv) SetupRealOAuthAgent(agentType AgentType, providerName string, modelName string, apiBase string, token string, accountUUID string) error {
 	if agentType != AgentTypeClaudeCode {
 		return fmt.Errorf("oauth_token is only supported for the claude agent (Claude Code OAuth), got %q", agentType)

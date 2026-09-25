@@ -75,8 +75,6 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
 	}
 	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
-		// Hands the selected profile to the vendor transform's Claude Code
-		// identity rewrite (ops.ClaudeCodeVersionFromExtra).
 		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))
 	}
 	return preVendor
@@ -170,8 +168,7 @@ func ResolveRuleFlagsWithScenario(
 			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
 		}
 
-		// Inject scenario-level ClaudeCodeVersion if rule hasn't set one
-		// explicitly (same override semantics as CustomUserAgent).
+		// Scenario-level ClaudeCodeVersion unless the rule sets one.
 		if flags.ClaudeCodeVersion == "" && scenarioConfig.Flags.ClaudeCodeVersion != "" {
 			flags.ClaudeCodeVersion = scenarioConfig.Flags.ClaudeCodeVersion
 		}
@@ -193,14 +190,10 @@ func ResolveRuleFlagsWithScenario(
 		flags.Recording = ""
 	}
 
-	// Provider-level probes (X-Tingly-Probe-Service, synthetic rule) have no
-	// rule to inherit claude_code_version from, and a Claude OAuth credential
-	// is only accepted upstream as the newest native client — probing it as
-	// the legacy emulation could never pass, so the probe would report a
-	// credential failure that isn't one. Default the synthetic rule to the
-	// latest profile; the value shows up in X-Tingly-Applied-Flags, and the
-	// overlay below can still force any profile (an explicit "" = legacy).
-	// Real traffic (matched rules) keeps the flag's off-by-default rollout.
+	// Provider-level probes run under a flagless synthetic rule; a Claude
+	// OAuth credential only passes as the latest native client, so default
+	// it there. Matched rules keep the off-by-default rollout; the overlay
+	// below can still force legacy with "".
 	if rule != nil && rule.UUID == ProbeSyntheticRuleUUID && flags.ClaudeCodeVersion == "" && provider.IsClaudeCodeProvider() {
 		flags.ClaudeCodeVersion = typ.ClaudeCodeVersionLatest
 	}
@@ -237,31 +230,25 @@ func ResolveRuleFlagsWithScenario(
 	// SDK default), so no precedence judgment is duplicated here.
 	applyClientUserAgent(c)
 
-	// Likewise the inbound Claude Code facts (beta flags, subagent ids) are
-	// attached unconditionally; only the Claude OAuth chain reads them, and
-	// it decides what is replayed (see client.composeClaudeCodeBetas).
+	// Inbound Claude Code facts; only the Claude OAuth chain reads them.
 	applyClaudeCodeClientHints(c)
 
 	return flags
 }
 
-// claudeXAppBackground is the x-app value Claude Code sends for background
-// sessions (CLAUDE_CODE_SESSION_KIND=bg); the interactive value is "cli".
-const claudeXAppBackground = "cli-bg"
+const claudeXAppBackground = "cli-bg" // x-app of a background session
 
-// applyClaudeCodeClientHints attaches the inbound anthropic-beta flags and
-// the Claude Code subagent headers to the request context for the Claude
-// OAuth chain (typ.GetClaudeCodeClientHints). No-op when the client sent none.
+// applyClaudeCodeClientHints attaches the inbound Claude Code headers to the
+// request context (typ.GetClaudeCodeClientHints).
 func applyClaudeCodeClientHints(c *gin.Context) {
 	if c == nil || c.Request == nil {
 		return
 	}
 	hints := typ.ClaudeCodeClientHints{
-		AgentID:       strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
-		ParentAgentID: strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
-		RequestClass:  strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
-		AgentType:     strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
-		// x-app is "cli" or "cli-bg"; only the background kind is a hint.
+		AgentID:           strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID:     strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+		RequestClass:      strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
+		AgentType:         strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
 		BackgroundSession: strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
 	}
 	for _, v := range c.Request.Header.Values("anthropic-beta") {

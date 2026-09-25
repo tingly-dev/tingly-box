@@ -679,13 +679,13 @@ func TestResolveRuleFlagsWithScenario_ProbeDefaultsClaudeCodeVersionForOAuth(t *
 		t.Errorf("nil rule must stay legacy, got %q", got)
 	}
 
-	// Scenario-level value still wins over the probe default.
+	// A matched rule without the flag inherits the scenario value.
 	c := newGinContext(t)
-	got := ResolveRuleFlagsWithScenario(c, synthetic(), typ.ScenarioClaudeCode,
-		&typ.ScenarioConfig{Flags: typ.ScenarioFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_258}},
+	got := ResolveRuleFlagsWithScenario(c, &typ.Rule{UUID: "real-rule"}, typ.ScenarioClaudeCode,
+		&typ.ScenarioConfig{Flags: typ.ScenarioFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280}},
 		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
-	if got.ClaudeCodeVersion != typ.ClaudeCodeVersion2_1_258 {
-		t.Errorf("scenario flag must win over the probe default, got %q", got.ClaudeCodeVersion)
+	if got.ClaudeCodeVersion != typ.ClaudeCodeVersion2_1_280 {
+		t.Errorf("scenario flag must be inherited, got %q", got.ClaudeCodeVersion)
 	}
 
 	// An explicit overlay "" forces the legacy emulation for a diagnostic run.

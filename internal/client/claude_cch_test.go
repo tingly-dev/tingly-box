@@ -18,10 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Reference vectors computed with an independent Python implementation of
-// xxHash64 (Bun/Zig PRIME64_4) whose output matched three live cch values
-// captured from the official 2.1.258 binary; its standard-prime mode
-// reproduces the canonical xxh64("") = ef46db3751d8e999.
+// Reference vectors from an independent Python xxHash64 (Bun/Zig PRIME64_4)
+// that reproduces live cch captures; its standard-prime mode gives the
+// canonical xxh64("") = ef46db3751d8e999.
 func TestXXHash64Zig_Vectors(t *testing.T) {
 	tests := []struct {
 		in   string
@@ -111,7 +110,7 @@ func TestCanonicalizeJSONEscapes(t *testing.T) {
 }
 
 func TestRewriteClaudeCodeCCH_SyntheticBodies(t *testing.T) {
-	// Expected values from the Python reference implementation.
+	// Expected values from the Python reference; the body text is opaque input.
 	t.Run("already-edited body hashes as-is", func(t *testing.T) {
 		body := `{"model":"","messages":[{"role":"user","content":"say hi"}],"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000;"}],"stream":true}`
 		out, cch, ok := rewriteClaudeCodeCCH([]byte(body))
@@ -184,7 +183,7 @@ func TestClaudeClient_CCHOnTheWire(t *testing.T) {
 	c := newTestClaudeClient(t, ctx, srv.URL)
 	req := betaRequestWithMetadata()
 	req.System = []anthropic.BetaTextBlockParam{
-		{Text: "x-anthropic-billing-header: cc_version=2.1.258.8ee; cc_entrypoint=cli; cch=00000;"},
+		{Text: "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;"},
 		{Text: "<system-reminder>You are Claude Code & friends</system-reminder>"},
 	}
 	_, err := c.BetaMessagesNew(ctx, req)

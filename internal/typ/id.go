@@ -192,32 +192,15 @@ func GetClientUserAgent(ctx context.Context) string {
 	return ""
 }
 
-// ClaudeCodeClientHints carries the inbound request facts the Claude OAuth
-// chain replays upstream when it re-signs a request as Claude Code. They are
-// request facts, not rule flags (same reasoning as ClientUserAgentKey):
-//
-//   - Betas: the inbound anthropic-beta flags. The chain composes its own
-//     version-correct baseline and only lets an allowlisted subset of these
-//     through (per-turn-control, fast-mode, ...), so a real Claude Code
-//     client keeps the request-scoped flags it negotiated while a foreign
-//     client cannot push an off-profile header shape upstream.
-//   - AgentID / ParentAgentID: the x-claude-code-agent-id and
-//     x-claude-code-parent-agent-id headers a Claude Code subagent sends;
-//     forwarded so subagent traffic keeps its lineage.
-//   - BackgroundSession: the client sent x-app: cli-bg (a background
-//     session, CLAUDE_CODE_SESSION_KIND=bg); replayed so the upstream sees the
-//     same session kind instead of the interactive default.
-//   - RequestClass / AgentType: the x-claude-code-request-class and
-//     x-claude-code-agent-type hint headers 2.1.280+ sends on direct
-//     traffic (request class main / subagent / auxiliary / compaction /
-//     workflow; agent type for subagent requests); replayed when present.
+// ClaudeCodeClientHints are inbound Claude Code request facts the Claude
+// OAuth chain may replay upstream on a native profile.
 type ClaudeCodeClientHints struct {
-	Betas             []string
-	AgentID           string
-	ParentAgentID     string
-	RequestClass      string
-	AgentType         string
-	BackgroundSession bool
+	Betas             []string // inbound anthropic-beta; only an allowlist is replayed
+	AgentID           string   // x-claude-code-agent-id
+	ParentAgentID     string   // x-claude-code-parent-agent-id
+	RequestClass      string   // x-claude-code-request-class
+	AgentType         string   // x-claude-code-agent-type
+	BackgroundSession bool     // x-app: cli-bg
 }
 
 // IsZero reports whether no hint was captured.
@@ -228,8 +211,7 @@ func (h ClaudeCodeClientHints) IsZero() bool {
 // ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.
 const ClaudeCodeClientHintsKey contextKey = "claude_code_client_hints"
 
-// WithClaudeCodeClientHints attaches the inbound Claude Code hints. A zero
-// value is not attached.
+// WithClaudeCodeClientHints attaches hints; a zero value is not attached.
 func WithClaudeCodeClientHints(ctx context.Context, hints ClaudeCodeClientHints) context.Context {
 	if hints.IsZero() {
 		return ctx
@@ -237,8 +219,7 @@ func WithClaudeCodeClientHints(ctx context.Context, hints ClaudeCodeClientHints)
 	return context.WithValue(ctx, ClaudeCodeClientHintsKey, hints)
 }
 
-// GetClaudeCodeClientHints returns the inbound Claude Code hints, or the zero
-// value when none were attached.
+// GetClaudeCodeClientHints returns the attached hints, or the zero value.
 func GetClaudeCodeClientHints(ctx context.Context) ClaudeCodeClientHints {
 	if ctx == nil {
 		return ClaudeCodeClientHints{}

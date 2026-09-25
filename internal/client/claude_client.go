@@ -29,11 +29,7 @@ var _ AnthropicClientInterface = (*ClaudeClient)(nil)
 // - Requires tool prefix stripping (applied via middleware)
 type ClaudeClient struct {
 	*AnthropicClient
-	// native is the claude_code_version rule flag resolved at construction:
-	// true selects the native-client profile (claude_version.go) for
-	// nativeVersion, false keeps the historical 2.1.86 emulation untouched.
-	native        bool
-	nativeVersion string
+	native bool // claude_code_version selects the native profile (claude_version.go)
 }
 
 // NewClaudeClient creates a new Claude client wrapper.
@@ -60,8 +56,6 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	// Apply Claude Code specific headers
 	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID)
 
-	// claude_code_version rule flag: overlay the native-client profile on the
-	// legacy headers above (claude_version.go).
 	nativeVersion := claudeCodeNativeVersion(ctx)
 	native := nativeVersion != ""
 	if native {
@@ -87,7 +81,7 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		provider: provider,
 	}
 
-	return &ClaudeClient{AnthropicClient: base, native: native, nativeVersion: nativeVersion}, nil
+	return &ClaudeClient{AnthropicClient: base, native: native}, nil
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
@@ -259,9 +253,7 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
 	if c.native {
 		options = append(options, c.nativeRequestOptions(ctx, betaClaudeBetaSignals(ctx, req, c.isOAuth()))...)
-		// The composed header is the whole anthropic-beta story: clear the
-		// SDK's per-param Betas so nothing is appended as a second value.
-		req.Betas = nil
+		req.Betas = nil // the composed header is complete; avoid a second value
 	}
 	// Streaming responses bypass restoreBetaToolNamesInMessage, so undo the
 	// rename on the wire instead. No-op for non-streaming responses.
@@ -282,10 +274,8 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	return base, reverseMap
 }
 
-// In the native profile the Guard'ed client already carries the complete
-// anthropic-beta header (context_1m folded in), so the calls below bypass
-// AnthropicClient's wrappers, whose withContext1MBeta / context1MHeaderOpts
-// would append context-1m again as a second header value.
+// On the native profile the calls below bypass AnthropicClient's wrappers,
+// which would append context-1m as a second anthropic-beta value.
 
 // MessagesNew creates a new message request.
 func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {

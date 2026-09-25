@@ -66,18 +66,14 @@ func runInitConfig(output string) error {
 
 // providerEntry is a normalized provider for config file generation.
 type providerEntry struct {
-	ID       string
-	BaseURL  string
-	APIStyle string
-	Models   []string
-	// OAuthTokenRef, when set, emits `oauth_token: "<ref>"` instead of an
-	// empty apikey (Claude Code OAuth entries).
-	OAuthTokenRef string
+	ID            string
+	BaseURL       string
+	APIStyle      string
+	Models        []string
+	OAuthTokenRef string // emit oauth_token instead of apikey
 }
 
-// claudeCodeOAuthTemplateID is the catalog template of the Claude Code OAuth
-// provider; claudeCodeOAuthTokenEnv is the env var the generated entry reads
-// its token from.
+// The Claude Code OAuth catalog template and the env var its entry reads.
 const (
 	claudeCodeOAuthTemplateID = "claude-code"
 	claudeCodeOAuthTokenEnv   = "CLAUDE_CODE_OAUTH_TOKEN"
@@ -88,8 +84,7 @@ func buildProvidersConfig(templates map[string]*catalog.ProviderCatalog) string 
 	var entries []providerEntry
 	for _, tmpl := range templates {
 		// Skip OAuth-only providers — they can't be tested with an API key.
-		// Claude Code is the exception: its OAuth chain is what the gateway
-		// re-signs, so it gets an oauth_token entry instead.
+		// Claude Code gets an oauth_token entry instead.
 		oauthTokenRef := ""
 		if tmpl.AuthType == "oauth" {
 			if tmpl.ID != claudeCodeOAuthTemplateID {
@@ -159,12 +154,8 @@ func buildProvidersYAML(entries []providerEntry) string {
 	sb.WriteString("# entry; provider-level prompts are then ignored, only CLI --prompt wins.\n")
 	sb.WriteString("# Set `enable: false` on a provider to skip it (unset/true = enabled).\n")
 	sb.WriteString("#\n")
-	sb.WriteString("# Claude Code OAuth: set `oauth_token` instead of `apikey` (env-expanded the\n")
-	sb.WriteString("# same way). The token is the Bearer credential of a Claude Code login —\n")
-	sb.WriteString("# `claude setup-token` prints a long-lived one, or copy access_token from a\n")
-	sb.WriteString("# tingly-box Claude Code OAuth provider. Such an entry is routed through the\n")
-	sb.WriteString("# gateway's Claude OAuth chain signed as the newest native Claude Code client\n")
-	sb.WriteString("# (claude_code_version latest); only `api_style: anthropic` + the claude agent.\n")
+	sb.WriteString("# Claude Code OAuth: set `oauth_token` instead of `apikey` (e.g. from\n")
+	sb.WriteString("# `claude setup-token`). Runs as the latest native client; claude agent only.\n")
 	sb.WriteString("#\n")
 	sb.WriteString("providers:\n")
 	for _, e := range entries {

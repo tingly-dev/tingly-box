@@ -2,11 +2,9 @@ package transform
 
 import "github.com/tingly-dev/tingly-box/internal/protocol/ops"
 
-// ClaudeCodeVersionTransform carries the claude_code_version rule flag into
-// the chain's Extra map so the vendor transform's Claude Code identity rewrite
-// (ops.ApplyAnthropic{V1,Beta}MetadataTransform) can pick the profile. It is
-// a pre-Vendor stage: it must run before VendorTransform and touches nothing
-// else. Only added to the chain when the flag selects a non-legacy version.
+// ClaudeCodeVersionTransform stamps the claude_code_version flag into
+// ctx.Extra for the vendor transform's Claude Code identity rewrite. Runs
+// pre-Vendor, only when a native profile is selected.
 type ClaudeCodeVersionTransform struct {
 	version string
 }

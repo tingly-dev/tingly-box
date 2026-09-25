@@ -85,8 +85,7 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 	return env.repointBuiltinRuleWithFlags(agentType, providerUUID, upstreamModel, typ.RuleFlags{})
 }
 
-// repointBuiltinRuleWithFlags is repointBuiltinRule with the rule's flags set
-// (e.g. claude_code_version for the OAuth real-provider path).
+// repointBuiltinRuleWithFlags is repointBuiltinRule with rule flags set.
 func (env *AgentTestEnv) repointBuiltinRuleWithFlags(agentType AgentType, providerUUID, upstreamModel string, flags typ.RuleFlags) error {
 	builtinUUID, requestModel, err := BuiltinRuleRef(agentType)
 	if err != nil {

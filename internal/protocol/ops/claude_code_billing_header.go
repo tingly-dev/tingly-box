@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -13,41 +12,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 )
 
-// Native Claude Code identity for the claude_code_version rule flag.
-//
-// ApplyAnthropic{V1,Beta}MetadataTransform keep their historical (2.1.86)
-// behavior when the flag is unset; when a supported version is selected they
-// dispatch here instead. Everything below is reverse-engineered from the
-// official 2.1.258 bundle and verified with live captures — see
-// .design/claude-code-client-compat.md §3.3–§3.4.
-//
-// The x-anthropic-billing-header system block is rendered by the CLI as
-//
-//	x-anthropic-billing-header: cc_version=<ver>.<fp>; cc_entrypoint=<ep>;[ cch=00000;][ cc_workload=<w>;][ cc_is_subagent=true;][ cc_prev_req=<req_id>;][ cc_prompt_id=<uuid>;]
-//
-// where
-//   - cc_version is the package version plus a 3-hex fingerprint of the
-//     first user prompt (computeFingerprint);
-//   - cc_entrypoint is CLAUDE_CODE_ENTRYPOINT ("cli" for the interactive
-//     terminal, "sdk-cli" for -p / the Agent SDK, "remote" for CCR ...);
-//   - cch=00000 is a placeholder the JS layer writes; the native (Bun/Zig)
-//     layer of the official binary replaces it on the wire with a hash of
-//     the outgoing body. tingly-box does the same in the Claude OAuth client
-//     (internal/client/claude_cch.go), so this block must carry exactly the
-//     placeholder;
-//   - cc_workload, cc_is_subagent are emitted regardless of the base URL;
-//   - cc_prev_req and cc_prompt_id are direct-only extras added after 2.1.86.
-//
-// tingly-box rebuilds the block for its pinned version (the inbound client may
-// be an older CLI, an SDK entrypoint, or not Claude Code at all) but keeps the
-// per-session fields a real client already attached.
+// Native Claude Code identity (claude_code_version flag): rebuilds the
+// x-anthropic-billing-header block and metadata.user_id the way the CLI
+// renders them, keeping the per-session fields a real client attached. The
+// legacy path is untouched. See .design/claude-code.md Part B.
 
-// ClaudeCodeVersionExtraKey is the TransformContext.Extra key carrying the
-// resolved claude_code_version flag (set by transform.ClaudeCodeVersionTransform).
+// ClaudeCodeVersionExtraKey carries the flag in TransformContext.Extra.
 const ClaudeCodeVersionExtraKey = "claude_code_version"
 
-// ClaudeCodeVersionFromExtra returns the selected Claude Code version, or ""
-// for the legacy path.
+// ClaudeCodeVersionFromExtra returns the selected version, or "" for legacy.
 func ClaudeCodeVersionFromExtra(extra map[string]any) string {
 	if extra == nil {
 		return ""
@@ -57,87 +30,32 @@ func ClaudeCodeVersionFromExtra(extra map[string]any) string {
 }
 
 const (
-	// billingHeaderPrefix is the literal the CLI (and CleanHeaderTransform)
-	// key on. The trailing space is part of the rendered format.
-	billingHeaderPrefix = "x-anthropic-billing-header: "
-
-	// claudeCodeEntrypoint is the persona tingly-box presents: the interactive
-	// terminal. Must agree with the client's "(external, cli)" User-Agent.
-	claudeCodeEntrypoint = "cli"
-
-	// claudeCodeCCHPlaceholder is the JS-layer placeholder the client
-	// middleware finds and patches with the body hash. It must not be
-	// randomized here: the hash has to be computed over the final bytes.
-	claudeCodeCCHPlaceholder = "00000"
+	billingHeaderPrefix      = "x-anthropic-billing-header: "
+	claudeCodeEntrypoint     = "cli"   // matches the "(external, cli)" User-Agent
+	claudeCodeCCHPlaceholder = "00000" // patched with the body hash by the client middleware
 )
 
-// billingHeaderPreservedField describes a field a real client attaches that
-// tingly-box passes through unchanged, in the order the CLI renders them.
-type billingHeaderPreservedField struct {
+// billingHeaderPreservedFields are the inbound fields passed through, in the
+// CLI's render order. Validators mirror the CLI's own guards so a malformed
+// inbound block cannot inject text into the header.
+var billingHeaderPreservedFields = []struct {
 	key   string
 	valid *regexp.Regexp
-	// since is the first Claude Code version whose renderer emits the field
-	// ("" = every supported version); older impersonated versions drop it.
-	since string
+}{
+	{"cc_workload", regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)},
+	{"cc_is_subagent", regexp.MustCompile(`^true$`)},
+	{"cc_prev_req", regexp.MustCompile(`^req_[A-Za-z0-9_-]{1,36}$`)},
+	{"cc_prompt_id", regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)},
+	{"cc_turn_origin", regexp.MustCompile(`^[a-z][a-z_]{0,31}$`)},
 }
 
-// billingHeaderPreservedFields is the ordered pass-through allowlist. The
-// validators mirror the CLI's own guards (cc_prev_req / cc_prompt_id are
-// regex-checked before emission) or the value space the CLI can produce, so a
-// malformed inbound block can never smuggle arbitrary text into the header
-// tingly-box vouches for.
-var billingHeaderPreservedFields = []billingHeaderPreservedField{
-	{key: "cc_workload", valid: regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)},
-	{key: "cc_is_subagent", valid: regexp.MustCompile(`^true$`)},
-	{key: "cc_prev_req", valid: regexp.MustCompile(`^req_[A-Za-z0-9_-]{1,36}$`)},
-	{key: "cc_prompt_id", valid: regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)},
-	// cc_turn_origin (2.1.280+): what started the turn — human / sdk /
-	// scheduled / task_notification / peer / auto_continuation /
-	// host_synthetic / system / unknown, or a host-supplied initiator.
-	// Direct-only like cc_prompt_id; regex mirrors the CLI's own guard.
-	{key: "cc_turn_origin", valid: regexp.MustCompile(`^[a-z][a-z_]{0,31}$`), since: "2.1.280"},
-}
-
-// billingHeaderFieldSince reports whether a preserved field exists in the
-// renderer of the impersonated version. Versions compare as dotted integers.
-func billingHeaderFieldSince(version, since string) bool {
-	if since == "" {
-		return true
-	}
-	return compareDottedVersions(version, since) >= 0
-}
-
-// compareDottedVersions compares "a.b.c" strings numerically, segment by
-// segment; a missing segment counts as 0.
-func compareDottedVersions(a, b string) int {
-	as, bs := strings.Split(a, "."), strings.Split(b, ".")
-	for i := 0; i < len(as) || i < len(bs); i++ {
-		var x, y int
-		if i < len(as) {
-			x, _ = strconv.Atoi(as[i])
-		}
-		if i < len(bs) {
-			y, _ = strconv.Atoi(bs[i])
-		}
-		if x != y {
-			if x < y {
-				return -1
-			}
-			return 1
-		}
-	}
-	return 0
-}
-
-// IsBillingHeaderText reports whether a system block carries Claude Code's
-// billing header.
+// IsBillingHeaderText reports whether a system block is the billing header.
 func IsBillingHeaderText(text string) bool {
 	return strings.HasPrefix(strings.TrimSpace(text), "x-anthropic-billing-header:")
 }
 
-// parseBillingHeaderFields splits a billing header block into its key/value
-// pairs, in order. Tolerates a missing prefix and sloppy whitespace; a
-// segment without "=" is dropped.
+// parseBillingHeaderFields splits a billing header block into ordered
+// key/value pairs; segments without "=" are dropped.
 func parseBillingHeaderFields(text string) [][2]string {
 	body := strings.TrimSpace(text)
 	if i := strings.Index(body, ":"); i >= 0 && strings.HasPrefix(body, "x-anthropic-billing-header") {
@@ -158,14 +76,10 @@ func parseBillingHeaderFields(text string) [][2]string {
 	return fields
 }
 
-// BuildClaudeCodeBillingHeader renders the billing header block for the
-// impersonated version. ccVersion is the full "<ver>.<fp>" value; existing is
-// the inbound block (or "") whose pass-through fields are preserved.
-//
-// Layout follows the renderer field-for-field:
-//
-//	cc_version; cc_entrypoint; cch; cc_workload; cc_is_subagent; cc_prev_req; cc_prompt_id[; cc_turn_origin (2.1.280+)]
-func BuildClaudeCodeBillingHeader(version, ccVersion, existing string) string {
+// BuildClaudeCodeBillingHeader renders the billing header block. ccVersion is
+// "<ver>.<fp>"; existing is the inbound block (or "") whose preserved fields
+// are kept.
+func BuildClaudeCodeBillingHeader(ccVersion, existing string) string {
 	var b strings.Builder
 	b.WriteString(billingHeaderPrefix)
 	b.WriteString("cc_version=")
@@ -187,7 +101,7 @@ func BuildClaudeCodeBillingHeader(version, ccVersion, existing string) string {
 	}
 	for _, f := range billingHeaderPreservedFields {
 		v, ok := inbound[f.key]
-		if !ok || !f.valid.MatchString(v) || !billingHeaderFieldSince(version, f.since) {
+		if !ok || !f.valid.MatchString(v) {
 			continue
 		}
 		b.WriteString(" ")
@@ -204,22 +118,16 @@ func computeCCVersionFor(messageText, version string) string {
 	return fmt.Sprintf("%s.%s", version, computeFingerprint(messageText, version))
 }
 
-// systemReminderPrefix opens the <system-reminder> blocks Claude Code attaches
-// to a user turn (skills list, agent types, current date, ...). Inside the CLI
-// those are separate "meta" messages; on the wire they are folded into the
-// same user message ahead of the prompt the person typed.
+// systemReminderPrefix opens the meta blocks the CLI folds into a user turn.
 const systemReminderPrefix = "<system-reminder>"
 
 func isSystemReminderText(text string) bool {
 	return strings.HasPrefix(strings.TrimLeft(text, " \t\r\n"), systemReminderPrefix)
 }
 
-// extractFirstUserPromptText returns the text 2.1.258 fingerprints for
-// cc_version: the first *non-meta* user message. On the wire that is the
-// first text block of the first user message that is not a system reminder
-// (2.1.86 still hashed the reminder itself — extractFirstUserMessageText; a
-// 2.1.258 capture of "say hi" fingerprints to 8ee only with the prompt text).
-// A user message made only of reminders is skipped; one with no text yields "".
+// extractFirstUserPromptText returns the text the fingerprint covers: the
+// first user text block that is not a system reminder. (Legacy 2.1.86 hashed
+// the reminder itself.)
 func extractFirstUserPromptText(messages []anthropic.MessageParam) string {
 	for _, msg := range messages {
 		if msg.Role != "user" {
@@ -267,15 +175,8 @@ func extractFirstBetaUserPromptText(messages []anthropic.BetaMessageParam) strin
 	return ""
 }
 
-// nativeMetadataUserID is metadata.user_id as 2.1.258 renders it:
-//
-//	{"device_id":"<64 hex>","account_uuid":"<uuid or empty>","session_id":"<uuid>"[,"parent_session_id":"<uuid>"]}
-//
-// Field order is what the CLI's JSON.stringify produces. parent_session_id is
-// attached by subagent (Agent tool) sessions only and is passed through so a
-// subagent request keeps its lineage after device/account are rewritten.
-// (2.1.258 also has a remote-only "tk" key that never appears on a local CLI
-// and is intentionally not modelled.)
+// nativeMetadataUserID is metadata.user_id in the CLI's field order.
+// parent_session_id comes from subagent sessions and is passed through.
 type nativeMetadataUserID struct {
 	DeviceID        string `json:"device_id"`
 	AccountUUID     string `json:"account_uuid"`
@@ -283,10 +184,9 @@ type nativeMetadataUserID struct {
 	ParentSessionID string `json:"parent_session_id,omitempty"`
 }
 
-// buildNativeMetadataUserID rewrites the inbound user_id (JSON or legacy
-// underscore form) with the gateway's device/account, keeping the client's
-// session (and parent session). Returns "" when the gateway has no identity to
-// stamp, in which case the field is left as the client sent it.
+// buildNativeMetadataUserID stamps the gateway's device/account onto the
+// inbound user_id, keeping the client's sessions. Returns "" when the gateway
+// has no identity, leaving the client's value in place.
 func buildNativeMetadataUserID(raw string, extra map[string]any) string {
 	m := nativeMetadataUserID{}
 	if raw != "" {
@@ -315,15 +215,14 @@ func buildNativeMetadataUserID(raw string, extra map[string]any) string {
 	return string(b)
 }
 
-// applyNativeClaudeCodeIdentityV1 is the claude_code_version path of
-// ApplyAnthropicV1MetadataTransform: billing header rebuilt in place for
-// version (or prepended), metadata.user_id rewritten.
+// applyNativeClaudeCodeIdentityV1 rebuilds (or prepends) the billing header
+// and rewrites metadata.user_id.
 func applyNativeClaudeCodeIdentityV1(req *anthropic.MessageNewParams, extra map[string]any, version string) *anthropic.MessageNewParams {
 	ccVersion := computeCCVersionFor(extractFirstUserPromptText(req.Messages), version)
 	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		req.System[0].Text = BuildClaudeCodeBillingHeader(version, ccVersion, req.System[0].Text)
+		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
 	} else {
-		req.System = append([]anthropic.TextBlockParam{{Text: BuildClaudeCodeBillingHeader(version, ccVersion, "")}}, req.System...)
+		req.System = append([]anthropic.TextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}}, req.System...)
 	}
 	if s := buildNativeMetadataUserID(req.Metadata.UserID.String(), extra); s != "" {
 		req.Metadata.UserID = param.NewOpt(s)
@@ -335,9 +234,9 @@ func applyNativeClaudeCodeIdentityV1(req *anthropic.MessageNewParams, extra map[
 func applyNativeClaudeCodeIdentityBeta(req *anthropic.BetaMessageNewParams, extra map[string]any, version string) *anthropic.BetaMessageNewParams {
 	ccVersion := computeCCVersionFor(extractFirstBetaUserPromptText(req.Messages), version)
 	if len(req.System) > 0 && IsBillingHeaderText(req.System[0].Text) {
-		req.System[0].Text = BuildClaudeCodeBillingHeader(version, ccVersion, req.System[0].Text)
+		req.System[0].Text = BuildClaudeCodeBillingHeader(ccVersion, req.System[0].Text)
 	} else {
-		req.System = append([]anthropic.BetaTextBlockParam{{Text: BuildClaudeCodeBillingHeader(version, ccVersion, "")}}, req.System...)
+		req.System = append([]anthropic.BetaTextBlockParam{{Text: BuildClaudeCodeBillingHeader(ccVersion, "")}}, req.System...)
 	}
 	if s := buildNativeMetadataUserID(req.Metadata.UserID.String(), extra); s != "" {
 		req.Metadata.UserID = param.NewOpt(s)

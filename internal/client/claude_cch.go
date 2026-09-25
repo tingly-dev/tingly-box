@@ -10,37 +10,20 @@ import (
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// cch: Claude Code's request-body hash in the billing header.
+// cch: the billing header's request-body hash. ops emits the placeholder
+// "cch=00000;" and this middleware patches it on the wire, like the official
+// binary's native layer (.design/claude-code.md §B3.3.4):
 //
-// The JS bundle renders "cch=00000;" as a placeholder; the native (Bun/Zig)
-// layer of the official binary rewrites it on the wire with a hash of the
-// outgoing body. Reverse-engineered and verified against three live
-// captures of the 2.1.258 Linux binary (.design/claude-code-client-compat.md
-// §3.3.4), the rule is:
+//	preimage = wire JSON with top-level "model" set to "" and "max_tokens" removed
+//	cch      = xxHash64(preimage, claudeCodeCCHSeed) & 0xFFFFF, 5 lowercase hex
 //
-//	preimage = final wire JSON (placeholder still in place)
-//	           with top-level "model" set to "" and "max_tokens" removed
-//	cch      = xxHash64(preimage, seed 0x4D659218E32A3268) & 0xFFFFF, 5 lowercase hex
-//
-// Two traps: the seed is release-specific (unchanged since 2.1.138), and the
-// hash is Bun/Zig's xxHash64 whose PRIME64_4 differs from the reference
-// implementation (0x85EBCA77C2B2AE63 instead of 0x85EBCA6B3B7B36EF) — a
-// stock xxhash library computes the wrong value.
-//
-// tingly-box mirrors the official split: ops emits the placeholder in the
-// system block, and this file's middleware hashes the exact bytes the Go SDK
-// is about to send and patches the placeholder in place. Hashing our own
-// bytes makes the value independent of the SDK's key order; the body is
-// first normalized to JavaScript's JSON.stringify escaping so a server-side
-// re-serialization (if any) sees the same bytes we hashed.
+// The hash is Bun/Zig's xxHash64, whose PRIME64_4 differs from the reference
+// implementation, so a stock xxhash library gives the wrong value. The body is
+// first normalized to JSON.stringify escaping.
 
 const (
-	// claudeCodeCCHPlaceholder is the exact substring ops emits and the
-	// native layer replaces.
-	claudeCodeCCHPlaceholder = "cch=00000;"
-
-	// claudeCodeCCHSeed is the xxHash64 seed baked into the 2.1.138+ binaries.
-	claudeCodeCCHSeed uint64 = 0x4D659218E32A3268
+	claudeCodeCCHPlaceholder        = "cch=00000;"
+	claudeCodeCCHSeed        uint64 = 0x4D659218E32A3268 // unchanged since 2.1.138
 
 	xxh64Prime1    uint64 = 0x9E3779B185EBCA87
 	xxh64Prime2    uint64 = 0xC2B2AE3D27D4EB4F
@@ -117,12 +100,9 @@ func formatClaudeCodeCCH(h uint64) string {
 	return fmt.Sprintf("%05x", h&0xFFFFF)
 }
 
-// canonicalizeJSONEscapes rewrites the escape sequences Go's encoder emits
-// but JavaScript's JSON.stringify does not, so the bytes on the wire (and in
-// the hash preimage) match what a JS client would have produced:
-// < > & (HTML-safe escaping) and U+2028 / U+2029 (line separators). Only
-// sequences that are real escapes (odd number of preceding backslashes) are
-// touched; the text "\\u003c" inside a string is left alone.
+// canonicalizeJSONEscapes undoes the escapes Go emits but JSON.stringify does
+// not (\u003c \u003e \u0026 \u2028 \u2029). Only real escapes (odd number of
+// preceding backslashes) are touched.
 func canonicalizeJSONEscapes(body []byte) []byte {
 	if !bytes.Contains(body, []byte(`\u`)) {
 		return body
@@ -171,9 +151,8 @@ type jsonMember struct {
 	prevComma, nextIdx int // index of the comma before the member (-1 if none); index after the trailing comma (or end)
 }
 
-// scanTopLevelMembers walks a compact-or-not JSON object and returns its
-// top-level members with byte spans. It never allocates a parse tree, so it is
-// cheap even on 100 KB bodies. Returns nil if the input is not an object.
+// scanTopLevelMembers returns a JSON object's top-level members with byte
+// spans, without building a parse tree. Returns nil if body is not an object.
 func scanTopLevelMembers(body []byte) []jsonMember {
 	n := len(body)
 	i := 0
@@ -287,9 +266,7 @@ func scanTopLevelMembers(body []byte) []jsonMember {
 	}
 }
 
-// claudeCodeCCHPreimage applies the native layer's edits to the wire body:
-// top-level "model" becomes "" and the top-level "max_tokens" member is
-// removed. Any other body is returned unchanged.
+// claudeCodeCCHPreimage blanks top-level "model" and drops "max_tokens".
 func claudeCodeCCHPreimage(body []byte) []byte {
 	members := scanTopLevelMembers(body)
 	if members == nil {
@@ -322,9 +299,8 @@ func claudeCodeCCHPreimage(body []byte) []byte {
 	return out
 }
 
-// rewriteClaudeCodeCCH canonicalizes body and, when it carries the
-// placeholder, returns the body with the computed cch patched in. ok is false
-// when there was nothing to rewrite (the canonicalized body is still returned).
+// rewriteClaudeCodeCCH canonicalizes body and patches the cch placeholder.
+// ok is false when there was no placeholder.
 func rewriteClaudeCodeCCH(body []byte) (out []byte, cch string, ok bool) {
 	out = canonicalizeJSONEscapes(body)
 	idx := bytes.Index(out, []byte(claudeCodeCCHPlaceholder))
@@ -338,8 +314,7 @@ func rewriteClaudeCodeCCH(body []byte) (out []byte, cch string, ok bool) {
 	return patched, cch, true
 }
 
-// claudeCodeCCHMiddleware is the SDK middleware that performs the rewrite on
-// the outgoing request, exactly where the official binary does it.
+// claudeCodeCCHMiddleware rewrites the outgoing body.
 func claudeCodeCCHMiddleware(req *http.Request, next anthropicOption.MiddlewareNext) (*http.Response, error) {
 	if req.Body == nil || req.Body == http.NoBody {
 		return next(req)

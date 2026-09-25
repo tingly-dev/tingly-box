@@ -271,7 +271,6 @@ func ApplyAnthropicV1MetadataTransform(req *anthropic.MessageNewParams, extra ma
 		return req
 	}
 	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
-		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
 		return applyNativeClaudeCodeIdentityV1(req, extra, v)
 	}
 
@@ -328,7 +327,6 @@ func ApplyAnthropicBetaMetadataTransform(req *anthropic.BetaMessageNewParams, ex
 		return req
 	}
 	if v := ClaudeCodeVersionFromExtra(extra); v != "" {
-		// claude_code_version rule flag: native-client identity (claude_code_billing_header.go).
 		return applyNativeClaudeCodeIdentityBeta(req, extra, v)
 	}
 

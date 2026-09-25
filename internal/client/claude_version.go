@@ -12,42 +12,26 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Native Claude Code profile for the claude_code_version rule flag.
-//
-// With the flag unset, ClaudeClient keeps the historical 2.1.86 emulation
-// (claude_round_tripper.go constants, static anthropic-beta list). With
-// typ.ClaudeCodeVersion2_1_258 selected, the overlays below replace the
-// version-bound pieces with what the official 2.1.258 native binary sends —
-// values taken from its bundle and confirmed by live captures against a fake
-// API (.design/claude-code-client-compat.md §2, §3.1).
+// Native Claude Code profile (claude_code_version flag): overlays on the
+// legacy client headers with what the official binary sends. See
+// .design/claude-code.md Part B.
 
 const (
-	// Since 2.1.251 the CLI ships as a native Bun binary, so the "node"
-	// runtime reports Bun's Node-compat version; the bundled @anthropic-ai/sdk
-	// is 0.112.1 in both 2.1.258 and 2.1.280.
-	nativeStainlessRuntimeVersion = "v26.3.0" // Bun 1.4.1
+	nativeStainlessRuntimeVersion = "v26.3.0" // Bun's Node-compat version
 	nativeStainlessPackageVersion = "0.112.1"
 
-	// 2.1.280+ hint headers sent on direct first-party traffic: the request
-	// class ("main" for the interactive thread; "subagent" / "auxiliary" /
-	// "compaction" / "workflow") and, for subagent requests, the agent type.
 	claudeRequestClassHeader = "x-claude-code-request-class"
 	claudeAgentTypeHeader    = "x-claude-code-agent-type"
 	claudeRequestClassMain   = "main"
-
-	// claudeXAppBackground is x-app for a background session
-	// (CLAUDE_CODE_SESSION_KIND=bg); replayed from the inbound client.
-	claudeXAppBackground = "cli-bg"
+	claudeXAppBackground     = "cli-bg" // x-app of a background session
 )
 
-// nativeClaudeCLIUserAgent is "claude-cli/<version> (external, cli)": the
-// interactive terminal entrypoint, matching cc_entrypoint=cli.
+// nativeClaudeCLIUserAgent matches cc_entrypoint=cli.
 func nativeClaudeCLIUserAgent(version string) string {
 	return "claude-cli/" + version + " (external, cli)"
 }
 
-// claudeCodeNativeVersion returns the native profile version selected by the
-// request's resolved rule flags, or "" for the legacy chain.
+// claudeCodeNativeVersion returns the selected native version, or "" for legacy.
 func claudeCodeNativeVersion(ctx context.Context) string {
 	v := typ.GetRuleFlags(ctx).ClaudeCodeVersion
 	if typ.ClaudeCodeVersionEnabled(v) {
@@ -56,12 +40,10 @@ func claudeCodeNativeVersion(ctx context.Context) string {
 	return ""
 }
 
-// claudeHintHeaderValueRe is the value space of the hint headers
-// (request class names and agent type slugs); anything else is dropped.
+// claudeHintHeaderValueRe bounds replayed hint header values.
 var claudeHintHeaderValueRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-// stainlessOSName maps a GOOS to the X-Stainless-OS value the JS SDK derives
-// from process.platform ("MacOS", "Linux", "Windows", ...).
+// stainlessOSName maps GOOS to the JS SDK's X-Stainless-OS value.
 func stainlessOSName(goos string) string {
 	switch goos {
 	case "darwin":
@@ -85,8 +67,7 @@ func stainlessOSName(goos string) string {
 	}
 }
 
-// stainlessArchName maps a GOARCH to the X-Stainless-Arch value the JS SDK
-// derives from process.arch ("x64", "arm64", ...).
+// stainlessArchName maps GOARCH to the JS SDK's X-Stainless-Arch value.
 func stainlessArchName(goarch string) string {
 	switch goarch {
 	case "amd64":
@@ -104,15 +85,10 @@ func stainlessArchName(goarch string) string {
 	}
 }
 
-// applyNativeClaudeCodeHeaders overlays the native profile on the legacy
-// client-level headers (WithHeader replaces, WithHeaderDel removes): the
-// version-bound UA and SDK triple, SDK display names for OS/arch, no
-// x-stainless-helper-method (the CLI calls messages.create({stream:true})
-// directly, never the .stream() helper), and the model-dependent
-// anthropic-beta baseline. Request-scoped flags are added per call in
-// nativeRequestOptions.
+// applyNativeClaudeCodeHeaders overlays the client-level native headers. The
+// CLI never uses the SDK's .stream() helper, so x-stainless-helper-method goes.
 func applyNativeClaudeCodeHeaders(options []anthropicOption.RequestOption, version, model string, isOAuthToken bool) []anthropicOption.RequestOption {
-	baseBetas := joinBetas(composeClaudeCodeBetas(claudeBetaSignals{Version: version, Model: model, OAuth: isOAuthToken}))
+	baseBetas := joinBetas(composeClaudeCodeBetas(claudeBetaSignals{Model: model, OAuth: isOAuthToken}))
 	return append(options,
 		anthropicOption.WithHeader("anthropic-beta", baseBetas),
 		anthropicOption.WithHeader("user-agent", nativeClaudeCLIUserAgent(version)),
@@ -124,11 +100,8 @@ func applyNativeClaudeCodeHeaders(options []anthropicOption.RequestOption, versi
 	)
 }
 
-// nativeRequestOptions returns the per-request overlays of the native
-// profile: the composed anthropic-beta list (overriding the client-level
-// baseline), the subagent lineage headers replayed from the inbound client,
-// and — last stop before the wire — the JS-canonical JSON + cch body hash
-// middleware (claude_cch.go), mirroring the official binary's native layer.
+// nativeRequestOptions returns the per-request overlays: composed betas,
+// replayed client hints, and the cch middleware (claude_cch.go).
 func (c *ClaudeClient) nativeRequestOptions(ctx context.Context, sig claudeBetaSignals) []anthropicOption.RequestOption {
 	options := []anthropicOption.RequestOption{
 		anthropicOption.WithHeader("anthropic-beta", joinBetas(composeClaudeCodeBetas(sig))),
@@ -144,25 +117,19 @@ func (c *ClaudeClient) nativeRequestOptions(ctx context.Context, sig claudeBetaS
 	if hints.ParentAgentID != "" {
 		options = append(options, anthropicOption.WithHeader("x-claude-code-parent-agent-id", sanitizeClaudeHeaderValue(hints.ParentAgentID)))
 	}
-	if sig.versionAtLeast(typ.ClaudeCodeVersion2_1_280) {
-		// Direct-traffic hint headers: replay the client's request class
-		// when it sent one, otherwise the interactive main thread; the agent
-		// type only ever comes from a subagent client.
-		class := claudeRequestClassMain
-		if claudeHintHeaderValueRe.MatchString(hints.RequestClass) {
-			class = hints.RequestClass
-		}
-		options = append(options, anthropicOption.WithHeader(claudeRequestClassHeader, class))
-		if claudeHintHeaderValueRe.MatchString(hints.AgentType) {
-			options = append(options, anthropicOption.WithHeader(claudeAgentTypeHeader, hints.AgentType))
-		}
+	// Request class defaults to the interactive main thread.
+	class := claudeRequestClassMain
+	if claudeHintHeaderValueRe.MatchString(hints.RequestClass) {
+		class = hints.RequestClass
+	}
+	options = append(options, anthropicOption.WithHeader(claudeRequestClassHeader, class))
+	if claudeHintHeaderValueRe.MatchString(hints.AgentType) {
+		options = append(options, anthropicOption.WithHeader(claudeAgentTypeHeader, hints.AgentType))
 	}
 	return options
 }
 
-// nativeCountTokensClient builds a client whose anthropic-beta header is the
-// count_tokens subset the CLI sends (claude-code, interleaved-thinking,
-// context-management, oauth) for model.
+// nativeCountTokensClient builds a client carrying the count_tokens beta subset.
 func (c *ClaudeClient) nativeCountTokensClient(ctx context.Context, model string) anthropic.Client {
 	sig := baseClaudeBetaSignals(ctx, model, c.isOAuth())
 	betas := filterClaudeCodeCountTokensBetas(composeClaudeCodeBetas(sig))
@@ -176,15 +143,12 @@ func (c *ClaudeClient) nativeCountTokensClient(ctx context.Context, model string
 	return anthropic.NewClient(options...)
 }
 
-// isOAuth reports whether the provider credential is a Claude OAuth token
-// (the oauth-2025-04-20 beta rides only on those).
+// isOAuth reports whether the credential is a Claude OAuth token.
 func (c *ClaudeClient) isOAuth() bool {
 	return IsClaudeOAuthToken(c.AnthropicClient.provider.GetAccessToken())
 }
 
-// sanitizeClaudeHeaderValue reproduces the CLI's agent-id header encoder:
-// '%' and every byte outside printable ASCII are percent-encoded so the value
-// is always a valid HTTP header value.
+// sanitizeClaudeHeaderValue percent-encodes '%' and non-printable bytes, like the CLI.
 func sanitizeClaudeHeaderValue(v string) string {
 	var b strings.Builder
 	for i := 0; i < len(v); i++ {

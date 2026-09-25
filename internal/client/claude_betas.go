@@ -10,26 +10,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// anthropic-beta composition for the Claude Code OAuth chain.
-//
-// Anthropic fingerprints Claude Code traffic and the anthropic-beta header is
-// one of the signals, so the header has to look like what the impersonated
-// release (constant.ClaudeCodeVersion) sends — in content and in order. This
-// file mirrors the 2.1.258 bundle's emission logic, reverse-engineered and
-// verified against live captures (.design/claude-code-client-compat.md §3):
-//
-//  1. a model-dependent baseline (the CLI's allModelBetas) — always sent;
-//  2. request-scoped flags the CLI adds when the body carries the matching
-//     feature (effort, 1h cache TTL, fast mode, ...) — derived from the body;
-//  3. request-scoped flags that cannot be derived from the body
-//     (per-turn-control, afk-mode, ...) — replayed from the inbound client's
-//     own header, allowlisted.
-//
-// Everything else the inbound client sends is dropped: an SDK-known flag no
-// real claude-cli ever emits (message-batches, pdfs, ...) would break the
-// header shape.
+// anthropic-beta composition for the native Claude Code profile, mirroring
+// the CLI (.design/claude-code.md Part B): a model-dependent baseline, flags derived
+// from the body, and an allowlisted replay of the inbound client's flags.
+// Anything else the client sends is dropped.
 
-// Beta flag identifiers as registered in the 2.1.258 bundle.
+// Beta flags the CLI registers.
 const (
 	betaClaudeCode                 = "claude-code-20250219"
 	betaOAuth                      = "oauth-2025-04-20"
@@ -54,24 +40,19 @@ const (
 	betaCacheDiagnosis             = "cache-diagnosis-2026-04-07"
 	betaAdvancedToolUse            = "advanced-tool-use-2025-11-20"
 	betaToolSearchTool             = "tool-search-tool-2025-10-19"
-
-	// Registered in 2.1.280 (absent from the 2.1.258 registry).
-	betaPerTurnTiming           = "timing-2026-09-09"
-	betaInlineTools             = "inline-tools-2026-09-15"
-	betaMidConvSystemClearAt    = "mid-conversation-system-clear-at-2026-08-21"
-	betaDangerousToolUse        = "dangerous-tool-use-2026-09-03"
-	betaThinkingBindingControls = "thinking-binding-controls-2026-08-01"
-	betaThinkingResumption      = "thinking-resumption-2026-07-17"
-	betaMessageThreads          = "message-threads-2026-08-12"
+	betaPerTurnTiming              = "timing-2026-09-09"
+	betaInlineTools                = "inline-tools-2026-09-15"
+	betaMidConvSystemClearAt       = "mid-conversation-system-clear-at-2026-08-21"
+	betaDangerousToolUse           = "dangerous-tool-use-2026-09-03"
+	betaThinkingBindingControls    = "thinking-binding-controls-2026-08-01"
+	betaThinkingResumption         = "thinking-resumption-2026-07-17"
+	betaMessageThreads             = "message-threads-2026-08-12"
 )
 
-// claudeCodeBetaEmissionOrder is the order the CLI pushes flags onto its
-// betas array: allModelBetas (top block) → per-query additions (rEt) → the
-// main query loop's feature pushes. composeClaudeCodeBetas emits its set in
-// this order so the joined header matches a real client's byte-for-byte for
-// the same feature set.
+// claudeCodeBetaEmissionOrder is the CLI's push order; the composed header
+// follows it so it matches a real client byte-for-byte.
 var claudeCodeBetaEmissionOrder = []string{
-	// allModelBetas
+	// model baseline
 	betaClaudeCode,
 	betaOAuth,
 	betaContext1M,
@@ -81,21 +62,16 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaContextManagement,
 	betaPromptCachingScope,
 	betaMidConversationSystem,
-	// query-scoped (rEt / the 2.1.280 Tw table)
+	// query-scoped
 	betaPerTurnControl,
 	betaPerTurnTiming,
 	betaMidConversationToolChanges,
 	betaInlineTools,
 	betaMidConvSystemClearAt,
-	// tool search rides the tools list and is pushed before the main loop
-	// (2.1.280 direct capture: …prompt-caching-scope,advanced-tool-use,effort,…).
+	// tool search (pushed before the main loop)
 	betaAdvancedToolUse,
 	betaToolSearchTool,
-	// main query loop, in call order (2.1.280; 2.1.258 is the same order
-	// minus the flags it does not register): effort → task budget →
-	// structured outputs → dangerous tool use → thinking binding → thinking
-	// display → thinking resumption → fast → afk → 1h cache → context hint →
-	// cache evict → cache diagnosis → message threads.
+	// main query loop, in call order
 	betaEffort,
 	betaTaskBudgets,
 	betaStructuredOutputs,
@@ -112,23 +88,9 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaMessageThreads,
 }
 
-// claudeCodeReplayableBetasSince lists replayable flags that only exist from
-// a given version on; a client replaying one against an older impersonated
-// version would produce a header shape that version never sends.
-var claudeCodeReplayableBetasSince = map[string]string{
-	betaPerTurnTiming:           typ.ClaudeCodeVersion2_1_280,
-	betaInlineTools:             typ.ClaudeCodeVersion2_1_280,
-	betaMidConvSystemClearAt:    typ.ClaudeCodeVersion2_1_280,
-	betaDangerousToolUse:        typ.ClaudeCodeVersion2_1_280,
-	betaThinkingBindingControls: typ.ClaudeCodeVersion2_1_280,
-	betaThinkingResumption:      typ.ClaudeCodeVersion2_1_280,
-	betaMessageThreads:          typ.ClaudeCodeVersion2_1_280,
-}
-
-// claudeCodeClientReplayableBetas is the allowlist of inbound flags replayed
-// upstream. Every entry is a flag the 2.1.258 CLI itself adds conditionally;
-// the body-derived ones are included too so a client-negotiated flag survives
-// even when tingly-box's own derivation misses the feature.
+// claudeCodeClientReplayableBetas are the inbound flags replayed upstream:
+// every flag the CLI adds conditionally, including body-derived ones in case
+// our derivation misses the feature.
 var claudeCodeClientReplayableBetas = map[string]struct{}{
 	betaContext1M:                  {},
 	betaPerTurnControl:             {},
@@ -154,8 +116,7 @@ var claudeCodeClientReplayableBetas = map[string]struct{}{
 	betaMessageThreads:             {},
 }
 
-// claudeCodeCountTokensBetas is the subset the CLI keeps for
-// /v1/messages/count_tokens (its countTokensBetas filter).
+// claudeCodeCountTokensBetas is the subset the CLI sends on count_tokens.
 var claudeCodeCountTokensBetas = map[string]struct{}{
 	betaClaudeCode:          {},
 	betaInterleavedThinking: {},
@@ -163,13 +124,9 @@ var claudeCodeCountTokensBetas = map[string]struct{}{
 	betaOAuth:               {},
 }
 
-// claudeBetaSignals is everything composeClaudeCodeBetas needs to know about
-// one request. Model is the outbound (provider) model id.
+// claudeBetaSignals are the request facts composeClaudeCodeBetas reads.
+// Model is the outbound (provider) model id.
 type claudeBetaSignals struct {
-	// Version is the impersonated release (typ.ClaudeCodeVersion*); it
-	// gates the flags that only exist from a given version on. Empty means
-	// the oldest native profile (2.1.258).
-	Version   string
 	Model     string
 	OAuth     bool
 	Context1M bool
@@ -181,23 +138,15 @@ type claudeBetaSignals struct {
 	ThinkingDisplayUpdates bool
 	CacheTTL1h             bool
 	ToolSearch             bool
-	// ThinkingActive (2.1.280+): thinking adaptive/enabled → the CLI sends
-	// thinking-binding-controls on direct first-party traffic.
-	ThinkingActive bool
-	// Diagnostics (2.1.280+): body carries the top-level "diagnostics"
-	// request → cache-diagnosis.
-	Diagnostics bool
+	ThinkingActive         bool // thinking adaptive/enabled → thinking-binding-controls
+	Diagnostics            bool // body "diagnostics" → cache-diagnosis
 
-	// ClientBetas are the inbound client's flags (typ.ClaudeCodeClientHints).
-	ClientBetas []string
+	ClientBetas []string // inbound anthropic-beta
 }
 
-// modelDateSuffixRe strips the -YYYYMMDD snapshot suffix of a model id
-// (claude-haiku-4-5-20251001 → claude-haiku-4-5), the CLI's normalized form.
 var modelDateSuffixRe = regexp.MustCompile(`-\d{8}$`)
 
-// normalizeClaudeModel reproduces the CLI's model normalization enough for
-// the capability checks below: lowercase, no [1m] marker, no snapshot date.
+// normalizeClaudeModel lowercases and strips the [1m] marker and snapshot date.
 func normalizeClaudeModel(model string) string {
 	m := strings.ToLower(strings.TrimSpace(model))
 	m = strings.TrimSuffix(m, "[1m]")
@@ -210,8 +159,7 @@ func claudeModelIsHaiku(model string) bool {
 	return strings.Contains(normalizeClaudeModel(model), "haiku")
 }
 
-// claudeModelSupportsInterleavedThinking mirrors the CLI's capability check:
-// everything except claude-haiku-4-5 and the claude-3 family.
+// claudeModelSupportsInterleavedThinking: all but claude-haiku-4-5 and claude-3.
 func claudeModelSupportsInterleavedThinking(model string) bool {
 	m := normalizeClaudeModel(model)
 	if strings.Contains(m, "claude-3-") {
@@ -220,15 +168,12 @@ func claudeModelSupportsInterleavedThinking(model string) bool {
 	return m != "claude-haiku-4-5"
 }
 
-// claudeModelSupportsContextManagement: first-party models outside the
-// claude-3 family.
+// claudeModelSupportsContextManagement: all but claude-3.
 func claudeModelSupportsContextManagement(model string) bool {
 	return !strings.Contains(normalizeClaudeModel(model), "claude-3-")
 }
 
-// claudeLegacyMidConversationModels are the models the CLI explicitly keeps
-// off mid-conversation-system (its hard-coded denylist); newer families
-// (5-series, mythos, fable, ...) get the flag.
+// claudeLegacyMidConversationModels is the CLI's mid-conversation-system denylist.
 var claudeLegacyMidConversationModels = map[string]struct{}{
 	"claude-opus-4":     {},
 	"claude-opus-4-0":   {},
@@ -253,13 +198,12 @@ func claudeModelSupportsMidConversationSystem(model string) bool {
 	return !legacy
 }
 
-// composeClaudeCodeBetas returns the ordered anthropic-beta flags for one
-// request, per the rules at the top of this file.
+// composeClaudeCodeBetas returns the ordered anthropic-beta flags for one request.
 func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 	want := map[string]struct{}{}
 	add := func(flag string) { want[flag] = struct{}{} }
 
-	// 1. allModelBetas
+	// model baseline
 	if !claudeModelIsHaiku(sig.Model) {
 		add(betaClaudeCode)
 	}
@@ -282,7 +226,7 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 		add(betaMidConversationSystem)
 	}
 
-	// 2. body-derived
+	// body-derived
 	if sig.EffortSet {
 		add(betaEffort)
 	}
@@ -304,25 +248,19 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 	if sig.ToolSearch {
 		add(betaAdvancedToolUse)
 	}
-	if sig.versionAtLeast(typ.ClaudeCodeVersion2_1_280) {
-		if sig.ThinkingActive {
-			add(betaThinkingBindingControls)
-		}
-		if sig.Diagnostics {
-			add(betaCacheDiagnosis)
-		}
+	if sig.ThinkingActive {
+		add(betaThinkingBindingControls)
+	}
+	if sig.Diagnostics {
+		add(betaCacheDiagnosis)
 	}
 
-	// 3. replayed from the inbound client
+	// replayed from the inbound client
 	for _, flag := range sig.ClientBetas {
 		flag = strings.TrimSpace(flag)
-		if _, ok := claudeCodeClientReplayableBetas[flag]; !ok {
-			continue
+		if _, ok := claudeCodeClientReplayableBetas[flag]; ok {
+			add(flag)
 		}
-		if since, gated := claudeCodeReplayableBetasSince[flag]; gated && !sig.versionAtLeast(since) {
-			continue
-		}
-		add(flag)
 	}
 
 	out := make([]string, 0, len(want))
@@ -334,23 +272,7 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 	return out
 }
 
-// versionAtLeast reports whether the impersonated version is v or newer.
-// Only the versions the chain knows are ordered; an unknown/empty version
-// counts as the oldest native profile.
-func (sig claudeBetaSignals) versionAtLeast(v string) bool {
-	rank := func(x string) int {
-		switch x {
-		case typ.ClaudeCodeVersion2_1_280:
-			return 2
-		default:
-			return 1
-		}
-	}
-	return rank(sig.Version) >= rank(v)
-}
-
-// filterClaudeCodeCountTokensBetas reduces a composed list to the subset the
-// CLI sends on count_tokens, preserving order.
+// filterClaudeCodeCountTokensBetas keeps the count_tokens subset, in order.
 func filterClaudeCodeCountTokensBetas(betas []string) []string {
 	out := make([]string, 0, len(claudeCodeCountTokensBetas))
 	for _, b := range betas {
@@ -361,22 +283,17 @@ func filterClaudeCodeCountTokensBetas(betas []string) []string {
 	return out
 }
 
-// joinBetas renders the header value the way the JS SDK does
-// (Array.prototype.toString → comma-joined, no spaces).
+// joinBetas renders the header value like the JS SDK (comma-joined, no spaces).
 func joinBetas(betas []string) string {
 	return strings.Join(betas, ",")
 }
 
-// baseClaudeBetaSignals seeds the signals with the facts known before the
-// body is inspected: model, auth kind, the context_1m rule flag and the
-// inbound client's hints.
+// baseClaudeBetaSignals seeds the signals known before the body is inspected.
 func baseClaudeBetaSignals(ctx context.Context, model string, oauth bool) claudeBetaSignals {
-	flags := typ.GetRuleFlags(ctx)
 	return claudeBetaSignals{
-		Version:     flags.ClaudeCodeVersion,
 		Model:       model,
 		OAuth:       oauth,
-		Context1M:   flags.Context1M,
+		Context1M:   typ.GetRuleFlags(ctx).Context1M,
 		ClientBetas: typ.GetClaudeCodeClientHints(ctx).Betas,
 	}
 }
@@ -438,9 +355,7 @@ func betaClaudeBetaSignals(ctx context.Context, req *anthropic.BetaMessageNewPar
 		if t.OfToolSearchToolRegex20251119 != nil || t.OfToolSearchToolBm25_20251119 != nil {
 			sig.ToolSearch = true
 		}
-		// Deferred tool loading (defer_loading) rides the same beta; Claude
-		// Code's own ToolSearch tool is a plain named tool alongside
-		// DeferredToolPlaceholder entries.
+		// defer_loading and Claude Code's own ToolSearch tool ride the same beta.
 		if tool := t.OfTool; tool != nil && (tool.DeferLoading.Valid() && tool.DeferLoading.Value || tool.Name == "ToolSearch") {
 			sig.ToolSearch = true
 		}

@@ -288,42 +288,24 @@ type RuleFlags struct {
 	// EffectiveRecording).
 	Recording string `json:"recording,omitempty" yaml:"recording,omitempty"`
 
-	// ClaudeCodeVersion selects which Claude Code release the Claude OAuth
-	// chain impersonates upstream (User-Agent and SDK headers, anthropic-beta
-	// composition, the x-anthropic-billing-header block including its cch
-	// body hash, metadata.user_id). Empty (default) keeps the historical
-	// 2.1.86 emulation byte-for-byte; ClaudeCodeVersion2_1_258 switches to
-	// the native-client profile. A version string rather than a bool so the
-	// next release can be added and rolled out the same way — see
-	// .design/claude-code-client-compat.md.
+	// ClaudeCodeVersion selects the Claude Code release the Claude OAuth chain
+	// impersonates. Empty keeps the legacy 2.1.86 emulation unchanged. See
+	// .design/claude-code.md Part B.
 	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
 }
 
-// Claude Code versions selectable through the claude_code_version flag.
+// Values of the claude_code_version flag.
 const (
-	// ClaudeCodeVersionLegacy is the default: the 2.1.86 emulation that
-	// predates the flag.
-	ClaudeCodeVersionLegacy = ""
-	// ClaudeCodeVersion2_1_258 reproduces the native 2.1.258 client.
-	ClaudeCodeVersion2_1_258 = "2.1.258"
-	// ClaudeCodeVersion2_1_280 reproduces the native 2.1.280 client (adds
-	// cc_turn_origin, the request-class hint headers and the 2026-09 betas).
-	ClaudeCodeVersion2_1_280 = "2.1.280"
-	// ClaudeCodeVersionLatest is the newest profile the chain reproduces: the
-	// one Anthropic currently accepts for OAuth traffic, and the one the
-	// harness's real-provider OAuth mode signs requests as.
+	ClaudeCodeVersionLegacy  = ""        // 2.1.86 emulation (default)
+	ClaudeCodeVersion2_1_280 = "2.1.280" // native client profile
+	// ClaudeCodeVersionLatest is the profile Anthropic currently accepts.
 	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_280
 )
 
-// ClaudeCodeVersionEnabled reports whether v selects a non-legacy Claude Code
-// profile the chain knows how to reproduce. Unknown values fall back to the
-// legacy behavior rather than a half-applied profile.
+// ClaudeCodeVersionEnabled reports whether v selects a native profile.
+// Unknown values fall back to legacy.
 func ClaudeCodeVersionEnabled(v string) bool {
-	switch v {
-	case ClaudeCodeVersion2_1_258, ClaudeCodeVersion2_1_280:
-		return true
-	}
-	return false
+	return v == ClaudeCodeVersion2_1_280
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being

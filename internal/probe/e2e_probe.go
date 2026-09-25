@@ -85,11 +85,8 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 }
 
 // targetIsClaudeCode reports whether the probe's real upstream is a Claude
-// Code OAuth provider: the pinned provider of a provider target, or any
-// service provider of a rule target. Through-TB probes hand the SDK a
-// loopback provider (an API-key provider pointing at TB), so the builders
-// cannot tell from that client alone that the request will end up on an
-// OAuth credential and needs the Claude Code preamble.
+// Code OAuth provider. Through-TB probes hand the SDK a loopback provider, so
+// the builders cannot tell from the client alone.
 func (e *E2EProber) targetIsClaudeCode(req *E2ERequest) bool {
 	if e.config == nil || req == nil {
 		return false

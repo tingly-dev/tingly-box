@@ -15,10 +15,8 @@ type ProviderConfig struct {
 	Name    string `yaml:"name"`
 	BaseURL string `yaml:"baseurl"`
 	APIKey  string `yaml:"apikey"`
-	// OAuthToken, when set, makes the entry a Claude Code OAuth provider
-	// (Bearer token from `claude setup-token` or a tingly-box OAuth login)
-	// instead of an API-key provider. Env-expanded like apikey. Only
-	// anthropic-style entries driven by the claude agent support it.
+	// OAuthToken makes the entry a Claude Code OAuth provider (claude agent,
+	// anthropic style). Env-expanded like apikey.
 	OAuthToken string   `yaml:"oauth_token"`
 	APIStyle   string   `yaml:"api_style"` // required: "openai" | "anthropic" | "google"
 	APIType    string   `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
@@ -52,8 +50,7 @@ type RealModelEntry struct {
 	Provider string // original provider name
 	BaseURL  string
 	APIKey   string
-	// OAuthToken is the Claude Code OAuth bearer token (already env-expanded);
-	// non-empty selects the OAuth provider path over APIKey.
+	// OAuthToken selects the Claude Code OAuth path over APIKey.
 	OAuthToken string
 	Model      string
 	APIStyle   string
@@ -61,8 +58,7 @@ type RealModelEntry struct {
 	Prompt     string // per-provider prompt override (already env-expanded); empty -> agent default
 }
 
-// IsOAuth reports whether the entry is driven by an OAuth token rather than
-// an API key.
+// IsOAuth reports whether the entry uses an OAuth token.
 func (e RealModelEntry) IsOAuth() bool { return strings.TrimSpace(e.OAuthToken) != "" }
 
 // ExpandProvidersConfig expands a ProvidersConfig into individual test entries.

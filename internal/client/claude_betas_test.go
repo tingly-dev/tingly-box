@@ -18,10 +18,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// The expectations below are the anthropic-beta headers captured from the
-// official 2.1.258 binary (interactive persona; the -p capture differs only
-// by redact-thinking, which the CLI drops in non-interactive mode). See
-// .design/claude-code-client-compat.md §3.
+// Expectations are live captures of the official binary (interactive
+// persona; -p drops redact-thinking). See .design/claude-code.md Part B.
 
 func TestComposeClaudeCodeBetas_Sonnet46OAuthCapture(t *testing.T) {
 	got := composeClaudeCodeBetas(claudeBetaSignals{
@@ -68,17 +66,10 @@ func TestComposeClaudeCodeBetas_Context1MSitsAfterOAuth(t *testing.T) {
 	assert.Equal(t, []string{betaClaudeCode, betaOAuth, betaContext1M, betaInterleavedThinking}, got[:4])
 }
 
-// 2.1.280, direct first-party, -p, OAuth, thinking adaptive, ToolSearch +
-// deferred tools in the tool list, diagnostics in the body (live capture):
-//
-//	claude-code,oauth,interleaved-thinking,thinking-token-count,context-management,
-//	prompt-caching-scope,advanced-tool-use,effort,thinking-binding-controls,
-//	extended-cache-ttl,cache-diagnosis
-//
-// (interactive adds redact-thinking after interleaved-thinking).
-func TestComposeClaudeCodeBetas_280DirectCapture(t *testing.T) {
+// Direct first-party capture: thinking adaptive, ToolSearch + deferred tools,
+// diagnostics in the body.
+func TestComposeClaudeCodeBetas_DirectCapture(t *testing.T) {
 	got := composeClaudeCodeBetas(claudeBetaSignals{
-		Version:        "2.1.280",
 		Model:          "claude-sonnet-4-6",
 		OAuth:          true,
 		EffortSet:      true,
@@ -90,16 +81,10 @@ func TestComposeClaudeCodeBetas_280DirectCapture(t *testing.T) {
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07", joinBetas(got))
 }
 
-// The 2.1.280-only flags are neither derived nor replayed for the 2.1.258
-// profile, whose registry does not know them.
-func TestComposeClaudeCodeBetas_280FlagsGatedByVersion(t *testing.T) {
+// Replayed client flags land in the CLI's emission order.
+func TestComposeClaudeCodeBetas_ReplayedFlagsInEmissionOrder(t *testing.T) {
 	client := []string{"timing-2026-09-09", "inline-tools-2026-09-15", "mid-conversation-system-clear-at-2026-08-21", "dangerous-tool-use-2026-09-03", "thinking-binding-controls-2026-08-01", "thinking-resumption-2026-07-17", "message-threads-2026-08-12", "per-turn-control-2026-07-01"}
 	sig := claudeBetaSignals{Model: "claude-sonnet-4-6", OAuth: true, ThinkingActive: true, Diagnostics: true, ClientBetas: client}
-
-	sig.Version = "2.1.258"
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01", joinBetas(composeClaudeCodeBetas(sig)))
-
-	sig.Version = "2.1.280"
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,timing-2026-09-09,inline-tools-2026-09-15,mid-conversation-system-clear-at-2026-08-21,dangerous-tool-use-2026-09-03,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17,cache-diagnosis-2026-04-07,message-threads-2026-08-12", joinBetas(composeClaudeCodeBetas(sig)))
 }
 
@@ -151,13 +136,12 @@ func TestNormalizeClaudeModel(t *testing.T) {
 	assert.Equal(t, "claude-3-5-haiku", normalizeClaudeModel("claude-3-5-haiku-20241022"))
 }
 
-func TestBetaClaudeBetaSignals_280BodyFields(t *testing.T) {
+func TestBetaClaudeBetaSignals_BodyFields(t *testing.T) {
 	var req anthropic.BetaMessageNewParams
 	body := `{"model":"claude-sonnet-4-6","max_tokens":1,"messages":[],"thinking":{"type":"adaptive","display":"omitted"},"diagnostics":{"previous_message_id":null},"tools":[{"name":"ToolSearch","input_schema":{"type":"object"}},{"name":"Read","input_schema":{"type":"object"},"defer_loading":true}]}`
 	require.NoError(t, json.Unmarshal([]byte(body), &req))
-	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280})
+	ctx := context.Background()
 	sig := betaClaudeBetaSignals(ctx, &req, true)
-	assert.Equal(t, "2.1.280", sig.Version)
 	assert.True(t, sig.ThinkingActive)
 	assert.True(t, sig.Diagnostics)
 	assert.True(t, sig.ToolSearch)
@@ -240,15 +224,12 @@ func newCapturingAnthropicServer(t *testing.T, capture *http.Header) *httptest.S
 	}))
 }
 
-// newTestClaudeClient builds a Claude OAuth client with a native profile
-// selected (claude_code_version=2.1.258 unless ctx already selects one);
-// other rule flags on ctx are kept.
+// newTestClaudeClient builds a Claude OAuth client on the native profile,
+// keeping the other rule flags on ctx.
 func newTestClaudeClient(t *testing.T, ctx context.Context, apiBase string) *ClaudeClient {
 	t.Helper()
 	flags := typ.GetRuleFlags(ctx)
-	if flags.ClaudeCodeVersion == "" {
-		flags.ClaudeCodeVersion = typ.ClaudeCodeVersion2_1_258
-	}
+	flags.ClaudeCodeVersion = typ.ClaudeCodeVersionLatest
 	ctx = typ.WithRuleFlags(ctx, flags)
 	provider := &typ.Provider{
 		Name:     "test-claude",
@@ -301,8 +282,9 @@ func TestClaudeClient_WireHeaders(t *testing.T) {
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,context-1m-2025-08-07,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,effort-2025-11-24", betas[0])
 	assert.Equal(t, 1, strings.Count(betas[0], "context-1m-2025-08-07"))
 
-	assert.Equal(t, "claude-cli/2.1.258 (external, cli)", captured.Get("User-Agent"))
+	assert.Equal(t, "claude-cli/2.1.280 (external, cli)", captured.Get("User-Agent"))
 	assert.Equal(t, "cli", captured.Get("X-App"))
+	assert.Equal(t, "main", captured.Get("X-Claude-Code-Request-Class"))
 	assert.Equal(t, "11111111-2222-3333-4444-555555555555", captured.Get("X-Claude-Code-Session-Id"))
 	assert.Equal(t, "Bearer sk-ant-oat01-testtoken", captured.Get("Authorization"))
 	assert.Equal(t, "true", captured.Get("Anthropic-Dangerous-Direct-Browser-Access"))
@@ -358,10 +340,8 @@ func TestClaudeClient_CountTokensBetaSubset(t *testing.T) {
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27", betas[0])
 }
 
-// With claude_code_version unset the chain must be byte-for-byte the legacy
-// 2.1.86 emulation: pinned UA and SDK triple, the helper-method header, the
-// static beta list, the cch placeholder untouched and Go's HTML-safe JSON
-// escaping still on the wire.
+// With claude_code_version unset the chain is the legacy 2.1.86 emulation,
+// byte-for-byte.
 func TestClaudeClient_LegacyProfileUnchanged(t *testing.T) {
 	var captured http.Header
 	var body []byte
@@ -406,19 +386,17 @@ func TestClaudeClient_LegacyProfileUnchanged(t *testing.T) {
 	assert.Contains(t, string(body), `\u003csystem-reminder\u003e`, "legacy chain keeps Go's JSON escaping")
 }
 
-func TestClaudeClient_WireHeaders280(t *testing.T) {
+func TestClaudeClient_WireHintHeaders(t *testing.T) {
 	var captured http.Header
 	srv := newCapturingAnthropicServer(t, &captured)
 	defer srv.Close()
 
-	ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280})
-	ctx = typ.WithClaudeCodeClientHints(ctx, typ.ClaudeCodeClientHints{
+	ctx := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{
 		Betas:        []string{"thinking-resumption-2026-07-17"},
 		RequestClass: "subagent",
 		AgentType:    "explore",
 	})
 	c := newTestClaudeClient(t, ctx, srv.URL)
-	require.Equal(t, "2.1.280", c.nativeVersion)
 
 	req := betaRequestWithMetadata()
 	req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
@@ -434,25 +412,17 @@ func TestClaudeClient_WireHeaders280(t *testing.T) {
 	require.Len(t, betas, 1)
 	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17", betas[0])
 
-	// No hints: the interactive main thread; no agent type; invalid class ignored.
-	ctx2 := typ.WithRuleFlags(context.Background(), typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280})
-	ctx2 = typ.WithClaudeCodeClientHints(ctx2, typ.ClaudeCodeClientHints{RequestClass: "Bad Class"})
+	// Invalid class falls back to the main thread; no agent type.
+	ctx2 := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{RequestClass: "Bad Class"})
 	c2 := newTestClaudeClient(t, ctx2, srv.URL)
 	_, err = c2.BetaMessagesNew(ctx2, betaRequestWithMetadata())
 	require.NoError(t, err)
 	assert.Equal(t, "main", captured.Get("X-Claude-Code-Request-Class"))
 	assert.Empty(t, captured.Get("X-Claude-Code-Agent-Type"))
-
-	// 2.1.258 never sends the hint headers.
-	ctx3 := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{RequestClass: "main"})
-	c3 := newTestClaudeClient(t, ctx3, srv.URL) // helper pins 2.1.258
-	_, err = c3.BetaMessagesNew(ctx3, betaRequestWithMetadata())
-	require.NoError(t, err)
-	assert.Empty(t, captured.Get("X-Claude-Code-Request-Class"))
 }
 
 // A background session (x-app: cli-bg) keeps its kind upstream on the native
-// profiles; the interactive default and the legacy chain send "cli".
+// profile; the interactive default sends "cli".
 func TestClaudeClient_XAppBackgroundSession(t *testing.T) {
 	var captured http.Header
 	srv := newCapturingAnthropicServer(t, &captured)

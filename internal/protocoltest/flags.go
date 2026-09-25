@@ -635,14 +635,9 @@ func ruleFlagCases() []flagCase {
 		}},
 
 		// ── claude_code_version ──────────────────────────────────────────────
-		// Asserted on the real Claude OAuth path. Unset keeps the legacy 2.1.86
-		// emulation byte-for-byte; "2.1.258" re-signs the request as the
-		// native client (.design/claude-code-client-compat.md): UA and SDK
-		// triple, one composed anthropic-beta value with the inbound
-		// per-turn flag replayed and the foreign flag dropped, subagent
-		// headers and x-app: cli-bg forwarded, no helper-method header, billing header rebuilt
-		// in place with the prompt fingerprint and the client's
-		// cc_is_subagent kept, cch hashed, metadata parent session kept.
+		// On the real Claude OAuth path: unset keeps the legacy emulation;
+		// "2.1.280" re-signs the request as the native client
+		// (.design/claude-code.md Part B).
 		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
 			s := flagScenario()
 			env.virtual.RegisterScenario(s)
@@ -668,7 +663,6 @@ func ruleFlagCases() []flagCase {
 				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 			}
 			addRule("pv-flag-ccver-legacy", "")
-			addRule("pv-flag-ccver-258", typ.ClaudeCodeVersion2_1_258)
 			addRule("pv-flag-ccver-280", typ.ClaudeCodeVersion2_1_280)
 
 			type upstream struct {
@@ -754,11 +748,12 @@ func ruleFlagCases() []flagCase {
 				t.Errorf("legacy metadata must not carry parent_session_id: %v", legacy.meta)
 			}
 
-			// 2.1.258: native client identity.
-			native := send("pv-flag-ccver-258")
-			if got := native.headers.Get("User-Agent"); got != "claude-cli/2.1.258 (external, cli)" {
+			// 2.1.280: native client identity.
+			native := send("pv-flag-ccver-280")
+			if got := native.headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
 				t.Errorf("native User-Agent = %q", got)
 			}
+			// Inbound per-turn flag replayed, foreign message-batches dropped.
 			if got := native.headers.Values("Anthropic-Beta"); len(got) != 1 {
 				t.Errorf("anthropic-beta must be one header value, got %v", got)
 			} else if want := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01"; got[0] != want {
@@ -785,12 +780,14 @@ func ruleFlagCases() []flagCase {
 			if got := native.headers.Get("X-App"); got != "cli-bg" {
 				t.Errorf("native chain must replay the client's x-app: cli-bg, got %q", got)
 			}
+			if got := native.headers.Get("X-Claude-Code-Request-Class"); got != "main" {
+				t.Errorf("x-claude-code-request-class = %q, want main", got)
+			}
 			if len(native.system) != 2 {
 				t.Fatalf("system blocks = %d, want 2 (billing header rebuilt in place): %v", len(native.system), native.system)
 			}
-			// cch is the xxHash64 of the wire body patched in by the client
-			// middleware; the algorithm is pinned in internal/client/claude_cch_test.go.
-			if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.258\.8ee; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(native.system[0]) {
+			// cch algorithm is pinned in internal/client/claude_cch_test.go.
+			if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(native.system[0]) {
 				t.Errorf("native billing header = %q", native.system[0])
 			}
 			if strings.Contains(native.system[0], "cch=00000;") {
@@ -804,28 +801,6 @@ func ruleFlagCases() []flagCase {
 			}
 			if native.meta["parent_session_id"] != "99999999-8888-7777-6666-555555555555" {
 				t.Errorf("parent_session_id not preserved: %v", native.meta)
-			}
-			if got := native.headers.Get("X-Claude-Code-Request-Class"); got != "" {
-				t.Errorf("2.1.258 must not send the request-class hint, got %q", got)
-			}
-
-			// 2.1.280: same identity one release on, plus the direct-traffic
-			// hint header and the version-specific fingerprint.
-			v280 := send("pv-flag-ccver-280")
-			if got := v280.headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
-				t.Errorf("2.1.280 User-Agent = %q", got)
-			}
-			if got := v280.headers.Get("X-Claude-Code-Request-Class"); got != "main" {
-				t.Errorf("2.1.280 x-claude-code-request-class = %q, want main", got)
-			}
-			if got := v280.headers.Get("X-App"); got != "cli-bg" {
-				t.Errorf("2.1.280 chain must replay the client's x-app: cli-bg, got %q", got)
-			}
-			if len(v280.system) == 0 || !regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`).MatchString(v280.system[0]) {
-				t.Errorf("2.1.280 billing header = %q", v280.system)
-			}
-			if got := v280.headers.Values("Anthropic-Beta"); len(got) != 1 || !strings.HasPrefix(got[0], "claude-code-20250219,oauth-2025-04-20,") {
-				t.Errorf("2.1.280 anthropic-beta = %v", got)
 			}
 		}},
 

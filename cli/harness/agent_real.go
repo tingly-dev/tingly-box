@@ -37,16 +37,13 @@ func missingFields(entry protocoltest.RealModelEntry) []string {
 	if strings.TrimSpace(entry.BaseURL) == "" {
 		miss = append(miss, "baseurl")
 	}
-	// Credential: an oauth_token (Claude Code OAuth) stands in for apikey. A
-	// token left as an unexpanded ${VAR} is reported as the missing field the
-	// user actually wrote, not as a missing apikey.
+	// An oauth_token stands in for apikey.
 	apiKey := strings.TrimSpace(entry.APIKey)
 	token := strings.TrimSpace(entry.OAuthToken)
 	switch {
 	case token != "" && looksLikeUnexpandedEnvRef(token):
 		miss = append(miss, "oauth_token")
-	case token != "":
-		// OAuth credential present; apikey not needed.
+	case token != "": // OAuth entry; no apikey needed
 	case apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey):
 		miss = append(miss, "apikey")
 	}
@@ -74,9 +71,8 @@ func looksLikeUnexpandedEnvRef(s string) bool {
 	return unexpandedBraced.MatchString(s) || unexpandedBare.MatchString(s)
 }
 
-// setupRealUpstream binds the agent's built-in rule to the entry's live
-// provider: the Claude Code OAuth path when the entry carries an oauth_token
-// (signed as the newest native client), the API-key path otherwise.
+// setupRealUpstream binds the built-in rule to the entry's live provider,
+// via Claude Code OAuth when the entry has an oauth_token.
 func setupRealUpstream(env *protocoltest.AgentTestEnv, agentType protocoltest.AgentType, providerName string, entry protocoltest.RealModelEntry, apiStyle string) error {
 	if entry.IsOAuth() {
 		if apiStyle != "anthropic" {
@@ -88,11 +84,8 @@ func setupRealUpstream(env *protocoltest.AgentTestEnv, agentType protocoltest.Ag
 	return env.SetupRealAgent(agentType, providerName, entry.Model, entry.BaseURL, entry.APIKey, apiStyle)
 }
 
-// claudeOAuthAccountID resolves the account uuid behind a Claude Code OAuth
-// token the same way a tingly-box login does (oauth.AnthropicHook.AfterToken
-// → Anthropic's account endpoint), so the metadata account_uuid the harness
-// sends is the real one. Empty when the lookup fails; the env then falls back
-// to a random uuid, which is what a login without account info stores.
+// claudeOAuthAccountID resolves the token's account uuid like a login does;
+// "" when the lookup fails (the env then uses a random uuid).
 func claudeOAuthAccountID(token string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

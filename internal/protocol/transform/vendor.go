@@ -71,10 +71,8 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 	return req
 }
 
-// isClaudeCodeBackend reports whether the request is bound for Anthropic's
-// Claude Code backend: either by host, or because the provider is a Claude
-// Code OAuth issuer whatever its APIBase (a relay in front of Anthropic still
-// needs the billing header / metadata identity the OAuth chain re-signs).
+// isClaudeCodeBackend: Anthropic's host, or a Claude Code OAuth provider on
+// any host (a relay still needs the identity rewrite).
 func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
 	if host == "api.anthropic.com" || host == "claude.ai" {
 		return true

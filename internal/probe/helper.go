@@ -44,11 +44,8 @@ type probeParams struct {
 	// with the SDK type of its protocol; nil = build the fixture. The
 	// builders only fill what the target decides on top of it.
 	Raw any
-	// ClaudeCodePreamble: the probe's real target is a Claude Code OAuth
-	// provider even though the SDK client points elsewhere (the TB loopback
-	// of a through-TB probe), so the request must carry the Claude Code
-	// system preamble the credential is authorized for. Direct probes get
-	// the same from the provider itself.
+	// ClaudeCodePreamble: the real target is a Claude Code OAuth provider, so
+	// add the Claude Code system preamble even on a loopback client.
 	ClaudeCodePreamble bool
 }
 
