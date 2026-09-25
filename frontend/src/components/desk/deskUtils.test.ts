@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {buildTranscript, cacheHitPct, formatTokens, groupSessionsByFolder, pendingRequestId, sessionUsage, toolSummary} from './deskUtils';
+import {agentReport, buildTranscript, cacheHitPct, formatTokens, groupSessionsByFolder, pendingRequestId, sessionUsage, toolSummary} from './deskUtils';
 
 const msg = (m: Partial<MessageInfo>): MessageInfo => ({content: '', timestamp: '2026-01-01T00:00:00Z', ...m} as MessageInfo);
 
@@ -44,6 +44,40 @@ describe('buildTranscript', () => {
         ]);
         expect(blocks.map((b) => b.type)).toEqual(['activity', 'request']);
         expect(blocks[0]).toMatchObject({steps: [{type: 'tool', name: 'Bash', result: 'ok'}]});
+    });
+
+    it('nests a subagent\'s own work under the Agent call and folds its task state', () => {
+        const blocks = buildTranscript([
+            msg({kind: 'tool_use', content: 'Read', request_id: 't0'}),
+            msg({kind: 'tool_use', content: 'Agent', request_id: 'a1', payload: {description: 'Scan repo', prompt: 'look around'}}),
+            msg({kind: 'task', request_id: 'a1', payload: {event: 'task_started', task_id: 'x1', background: true, subagent_type: 'Explore'}}),
+            msg({kind: 'tool_use', content: 'Grep', request_id: 's1', parent: 'a1'}),
+            msg({kind: 'tool_result', content: '3 matches', request_id: 's1', parent: 'a1'}),
+            msg({kind: 'task', request_id: 'a1', payload: {event: 'task_progress', description: 'Running Grep', last_tool: 'Grep', usage: {total_tokens: 900, tool_uses: 1, duration_ms: 400}}}),
+            msg({role: 'assistant', content: 'Found the config loader.', parent: 'a1'}),
+            msg({kind: 'tool_result', content: 'Async agent launched', request_id: 'a1'}),
+            msg({kind: 'task', request_id: 'a1', payload: {event: 'task_notification', status: 'completed', summary: 'Found it', usage: {total_tokens: 1200, tool_uses: 1, duration_ms: 900}}}),
+            msg({role: 'assistant', content: 'Working on it in the background.'}),
+        ]);
+
+        expect(blocks.map((b) => b.type)).toEqual(['activity', 'agent', 'assistant']);
+        const agent = blocks[1];
+        if (agent.type !== 'agent') throw new Error('expected agent');
+        expect(agent.call).toMatchObject({name: 'Agent', result: 'Async agent launched'});
+        expect(agent.children.map((b) => b.type)).toEqual(['activity', 'assistant']);
+        expect(agent.task).toMatchObject({taskId: 'x1', status: 'completed', background: true, subagentType: 'Explore', summary: 'Found it', usage: {tool_uses: 1}});
+        expect(agent.task?.activity).toBeUndefined();
+        expect(agentReport(agent)).toBe('Found the config loader.');
+    });
+
+    it('puts a background command\'s task state on its tool step', () => {
+        const blocks = buildTranscript([
+            msg({kind: 'tool_use', content: 'Bash', request_id: 'b1', payload: {command: 'npm test', run_in_background: true}}),
+            msg({kind: 'task', request_id: 'b1', payload: {event: 'task_started', task_id: 'bash1', background: true, task_type: 'local_bash'}}),
+            msg({kind: 'tool_result', content: 'Command running in background with ID: bash1', request_id: 'b1'}),
+            msg({kind: 'task', request_id: 'b1', payload: {event: 'task_updated', status: 'stopped'}}),
+        ]);
+        expect(blocks[0]).toMatchObject({type: 'activity', steps: [{name: 'Bash', task: {taskId: 'bash1', status: 'stopped', background: true}}]});
     });
 
     it('starts a new activity block after anything that is not activity', () => {

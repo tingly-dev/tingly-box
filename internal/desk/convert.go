@@ -22,6 +22,12 @@ const maxToolOutput = 4 * 1024
 // the turn ends (see turnUsage).
 type converter struct {
 	seenTools map[string]bool
+	// toolParent attributes a tool_result to the subagent whose tool_use it
+	// answers: results don't carry parent_tool_use_id themselves.
+	toolParent map[string]string
+	// taskTool maps a background task to the tool call that started it, for
+	// the events (task_updated) that name only the task.
+	taskTool map[string]string
 
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
@@ -29,7 +35,7 @@ type converter struct {
 }
 
 func newConverter() *converter {
-	return &converter{seenTools: map[string]bool{}, calls: map[string]anthropic.Usage{}}
+	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, calls: map[string]anthropic.Usage{}}
 }
 
 // turnUsage is the payload of a "usage" transcript entry: one per turn.
@@ -75,7 +81,9 @@ func (c *converter) messages(raw any) []session.Message {
 			out = out[:maxToolOutput] + "\n… (truncated)"
 		}
 		payload, _ := json.Marshal(map[string]any{"is_error": m.IsError})
-		return []session.Message{c.msg("tool_result", out, m.ToolUseID, payload)}
+		entry := c.msg("tool_result", out, m.ToolUseID, payload)
+		entry.Parent = c.toolParent[m.ToolUseID]
+		return []session.Message{entry}
 	case *claude.ResultMessage:
 		var out []session.Message
 		if m.IsError && m.Result != "" {
@@ -92,6 +100,9 @@ func (c *converter) messages(raw any) []session.Message {
 				c.model = model
 			}
 			return []session.Message{c.msg("system", "claude code session "+m.SessionID, "", nil)}
+		}
+		if t, ok := c.task(m); ok {
+			return []session.Message{t}
 		}
 		return nil
 	}
@@ -130,7 +141,11 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 	if id := m.Message.ID; id != "" {
 		c.calls[id] = m.Message.Usage
 	}
-	if m.ParentToolUseID == nil {
+	parent := ""
+	if m.ParentToolUseID != nil {
+		parent = *m.ParentToolUseID
+	}
+	if parent == "" {
 		usage := m.Message.Usage
 		if n := usage.InputTokens + usage.CacheReadInputTokens + usage.CacheCreationInputTokens; n > 0 {
 			c.contextTokens = n
@@ -140,7 +155,7 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 	var text strings.Builder
 	flush := func() {
 		if t := strings.TrimSpace(text.String()); t != "" {
-			out = append(out, session.Message{Role: "assistant", Content: t, Timestamp: time.Now()})
+			out = append(out, session.Message{Role: "assistant", Content: t, Parent: parent, Timestamp: time.Now()})
 		}
 		text.Reset()
 	}
@@ -149,7 +164,9 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 		case claude.ContentBlockTypeThinking:
 			flush()
 			if t := strings.TrimSpace(block.Thinking); t != "" {
-				out = append(out, c.msg("thinking", t, "", nil))
+				entry := c.msg("thinking", t, "", nil)
+				entry.Parent = parent
+				out = append(out, entry)
 			}
 		case claude.ContentBlockTypeText:
 			if text.Len() > 0 {
@@ -162,14 +179,117 @@ func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
 				continue
 			}
 			c.seenTools[block.ID] = true
-			out = append(out, c.msg("tool_use", block.Name, block.ID, json.RawMessage(block.Input)))
+			c.toolParent[block.ID] = parent
+			entry := c.msg("tool_use", block.Name, block.ID, json.RawMessage(block.Input))
+			entry.Parent = parent
+			out = append(out, entry)
 		}
 	}
 	flush()
 	if m.Error != "" {
-		out = append(out, c.msg("error", m.Error, "", nil))
+		entry := c.msg("error", m.Error, "", nil)
+		entry.Parent = parent
+		out = append(out, entry)
 	}
 	return out
+}
+
+// taskEvent is the payload of a "task" transcript entry: one lifecycle event
+// of a subagent or background shell command, as Claude Code reports it in
+// its system messages (task_started, task_progress, task_updated,
+// task_notification, background_tasks_changed). The entry's RequestID is the
+// tool call that started the task, so the page can put its state on that
+// call. Only the fields that event carries are set.
+type taskEvent struct {
+	Event        string      `json:"event"`
+	TaskID       string      `json:"task_id,omitempty"`
+	TaskType     string      `json:"task_type,omitempty"` // local_agent, local_bash
+	Description  string      `json:"description,omitempty"`
+	SubagentType string      `json:"subagent_type,omitempty"`
+	Background   *bool       `json:"background,omitempty"`
+	Status       string      `json:"status,omitempty"` // completed, stopped, failed…
+	Summary      string      `json:"summary,omitempty"`
+	LastTool     string      `json:"last_tool,omitempty"`
+	OutputFile   string      `json:"output_file,omitempty"`
+	Usage        *taskUsage  `json:"usage,omitempty"`
+	Tasks        []taskBrief `json:"tasks,omitempty"` // background_tasks_changed: the full live set
+}
+
+type taskUsage struct {
+	TotalTokens int64 `json:"total_tokens"`
+	ToolUses    int64 `json:"tool_uses"`
+	DurationMS  int64 `json:"duration_ms"`
+}
+
+type taskBrief struct {
+	TaskID      string `json:"task_id"`
+	TaskType    string `json:"task_type,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// task turns a task lifecycle system message into a "task" entry.
+func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
+	raw := m.Raw
+	ev := taskEvent{Event: m.SubType, TaskID: m.TaskID, TaskType: m.TaskType, Description: m.Description}
+	switch m.SubType {
+	case claude.SystemSubtypeTaskStarted:
+		ev.SubagentType, _ = raw["subagent_type"].(string)
+		if bg, ok := raw["is_backgrounded"].(bool); ok {
+			ev.Background = &bg
+		}
+		if m.ToolUseID != "" {
+			c.taskTool[m.TaskID] = m.ToolUseID
+		}
+	case claude.SystemSubtypeTaskProgress:
+		ev.LastTool, _ = raw["last_tool_name"].(string)
+		ev.Usage = taskUsageOf(raw["usage"])
+	case claude.SystemSubtypeTaskUpdated:
+		if patch, ok := raw["patch"].(map[string]any); ok {
+			ev.Status, _ = patch["status"].(string)
+		}
+	case claude.SystemSubtypeTaskNotification, claude.SystemSubtypeTaskCompleted:
+		ev.Status, _ = raw["status"].(string)
+		ev.Summary, _ = raw["summary"].(string)
+		ev.OutputFile, _ = raw["output_file"].(string)
+		ev.Usage = taskUsageOf(raw["usage"])
+	case claude.SystemSubtypeBackgroundTasksChanged:
+		ev.Tasks = []taskBrief{}
+		if list, ok := raw["tasks"].([]any); ok {
+			for _, item := range list {
+				if t, ok := item.(map[string]any); ok {
+					b := taskBrief{}
+					b.TaskID, _ = t["task_id"].(string)
+					b.TaskType, _ = t["task_type"].(string)
+					b.Description, _ = t["description"].(string)
+					ev.Tasks = append(ev.Tasks, b)
+				}
+			}
+		}
+	default:
+		return session.Message{}, false
+	}
+	toolUseID := m.ToolUseID
+	if toolUseID == "" {
+		toolUseID = c.taskTool[m.TaskID]
+	}
+	payload, _ := json.Marshal(ev)
+	content := ev.Summary
+	if content == "" {
+		content = ev.Description
+	}
+	return c.msg("task", content, toolUseID, payload), true
+}
+
+func taskUsageOf(v any) *taskUsage {
+	u, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	num := func(k string) int64 {
+		f, _ := u[k].(float64)
+		return int64(f)
+	}
+	return &taskUsage{TotalTokens: num("total_tokens"), ToolUses: num("tool_uses"), DurationMS: num("duration_ms")}
 }
 
 func (c *converter) msg(kind, text, reqID string, payload json.RawMessage) session.Message {

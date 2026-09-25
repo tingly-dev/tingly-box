@@ -297,6 +297,39 @@ one reader per process lifetime (`resident.go`), created right after `Open`.
 - **The one-shot fallback can't keep background work**: its process exits
   with the turn. Background tasks need the pooled path.
 
+### 3.8 Subagents and task events in the transcript
+
+Two things the converter now keeps instead of flattening or dropping:
+
+- **Attribution.** Claude Code tags a subagent's messages with
+  `parent_tool_use_id` (the `Agent` call that runs it). Transcript entries
+  carry it as `Message.Parent` (JSON `parent`, omitted for the main
+  conversation; the transcript is an append-only JSONL file, so old
+  transcripts read unchanged). Tool results don't carry the id, so a result
+  inherits its call's parent.
+- **Task lifecycle.** `task_started`, `task_progress`, `task_updated`,
+  `task_notification` and `background_tasks_changed` become `task` entries
+  whose `RequestID` is the tool call that started the task (the Agent call,
+  or a backgrounded `Bash`); `task_updated`, which names only the task, is
+  mapped back through the task id. The payload (`taskEvent`) keeps only what
+  the page shows: subagent type, background flag, current action, status,
+  summary, output file and usage (tokens, tool uses, time).
+
+`convert_test.go` replays a captured 2.1.282 run
+(`testdata/claude-2.1.282-agents-and-background.jsonl`: a background
+subagent, a background command, and a foreground subagent that runs a
+command of its own) through the real accumulator, so a CLI change that
+moves these fields fails there first.
+
+On the page (`buildTranscript`), each `Agent` call becomes an `agent` block:
+a card with the subagent's description and type, a background tag, its
+state (running with its current action, done, stopped, failed) and usage,
+and — expanded — the prompt, everything it did (its own activity rows) and
+its report (its last reply). Its entries never reach the main column, so the
+conversation reads as the main agent's. A foreground run still "running"
+after its turn ended was cut off with the turn and reads as stopped. A
+backgrounded command's step carries a `background · <state>` tag.
+
 ## 4. HTTP surface
 
 `internal/server/module/desk` is a thin adapter: request/response

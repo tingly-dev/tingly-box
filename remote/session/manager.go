@@ -76,6 +76,9 @@ type Message struct {
 	// Payload is kind-specific structured data (e.g. a tool's input), kept
 	// opaque here so this package does not depend on any agent's types.
 	Payload json.RawMessage `json:"payload,omitempty"`
+	// Parent is the tool_use id of the subagent call that produced this
+	// entry; empty for the main conversation.
+	Parent string `json:"parent,omitempty"`
 }
 
 // Manager handles session lifecycle
