@@ -1,6 +1,10 @@
 package agentboot
 
-import "github.com/tingly-dev/tingly-box/agentboot/protocol"
+import (
+	"errors"
+
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
+)
 
 // AgentTransportFactory creates the protocol state for one execution.
 //
@@ -75,4 +79,40 @@ type AgentTransport interface {
 
 	// SetExecutionContext injects provider-neutral per-execution metadata.
 	SetExecutionContext(context ExecutionContext)
+}
+
+// ControlRequest is a host-initiated request to a running agent process —
+// the reverse direction of ApprovalRequestEvent/AskRequestEvent.
+type ControlRequest interface{ isControlRequest() }
+
+// InterruptRequest stops the in-flight turn. The process stays alive and
+// takes the next turn normally; background work it started keeps running.
+type InterruptRequest struct{}
+
+// StopTaskRequest stops one background task (a backgrounded shell command
+// or subagent) by the id the agent reported for it.
+type StopTaskRequest struct{ TaskID string }
+
+func (InterruptRequest) isControlRequest() {}
+func (StopTaskRequest) isControlRequest()  {}
+
+// ErrControlUnsupported is returned for a [ControlRequest] the session's
+// agent transport can't encode.
+var ErrControlUnsupported = errors.New("agentboot: agent does not support this control request")
+
+// ControlRequestEncoder is implemented by transports whose agent accepts
+// host-initiated control requests on stdin. Optional: sessions whose
+// transport lacks it return ErrControlUnsupported.
+type ControlRequestEncoder interface {
+	// EncodeControlRequest returns the wire value for req, or nil if the
+	// agent has no such request.
+	EncodeControlRequest(reqID string, req ControlRequest) any
+}
+
+// TurnStartDetector is implemented by transports that can tell which event
+// opens a turn. A persistent agent can start a turn of its own — Claude Code
+// does when a background task finishes after the turn that started it — and
+// the session only recognizes such a turn through this. Optional.
+type TurnStartDetector interface {
+	IsTurnStart(ev protocol.Event) bool
 }

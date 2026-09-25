@@ -146,8 +146,7 @@ var ErrSessionEventsClosedMidTurn = errors.New("agentboot: persistent session ev
 // caller's ctx (see [Runner.Open]'s doc comment) so that it survives past
 // the call that opened it. That means nothing else stops a runaway or
 // unwanted turn — ctx.Done() here is it. There is no way to interrupt just
-// the in-flight turn without ending the process (the CLI's stream-json
-// protocol has no documented per-turn interrupt), so on ctx.Done()
+// the in-flight turn without ending the process here, so on ctx.Done()
 // RunTurnWithPrompter closes the whole session — the same effect ctx
 // cancellation has on a one-shot Execute — and returns ctx.Err(). Callers
 // driving a cancelable request (a timeout, a user "/stop") should expect
@@ -155,6 +154,13 @@ var ErrSessionEventsClosedMidTurn = errors.New("agentboot: persistent session ev
 //
 // Dispatch for MessageEvent/ApprovalRequestEvent/AskRequestEvent/ErrorEvent
 // mirrors RunWithPrompter exactly.
+//
+// It reads only while this turn is in flight: anything the process emits
+// between turns (background task progress, a turn the agent starts on its
+// own) stays buffered and is read as part of the next turn. For a process
+// that runs background work, drive it with a [Conductor] instead, which
+// reads for the process's whole life and interrupts rather than closes on
+// cancellation.
 func RunTurnWithPrompter(ctx context.Context, session PersistentSession, prompter Prompter, sink MessageSink) (*Result, error) {
 	events := session.Events()
 	for {

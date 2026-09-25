@@ -257,6 +257,46 @@ return a copy taken under the manager's lock — and using those instead of
 `Get`/`GetOrLoad`/`ListByChat` everywhere a `Session` value crosses out of
 `Service` to a caller.
 
+### 3.7 Resident processes are read for their whole life
+
+A resident process does not only speak during Desk's turns. Verified against
+Claude Code 2.1.282 in stream-json mode (a scripted fake Messages API in
+front of the real CLI):
+
+- **Background work reports between turns.** Subagents run in the
+  background by default (`Agent`'s `run_in_background` defaults to true),
+  and `Bash` can too. Their progress arrives as `system` messages
+  (`background_tasks_changed`, `task_started`, `task_progress`,
+  `task_updated`, `task_notification`) whenever it happens — including after
+  the turn that started them has ended.
+- **Claude Code starts turns by itself.** When a background task finishes
+  after its turn, the CLI hands the notification to the model and runs a
+  whole turn (`system/init` … `result`) with no user message.
+- **The host can stop a turn or a task without the process.** An
+  `interrupt` control_request ends only the in-flight turn (its result is
+  `error_during_execution`) and the process takes the next message
+  normally; `stop_task {task_id}` stops one background task
+  (`task_notification` status `stopped`). Neither is in the public docs.
+
+`RunTurnWithPrompter` read events only while the caller's turn was in
+flight, so everything above sat in the session's buffer and the next message
+read it as its own turn — including the unsolicited turn's `result`, which
+ended that message's turn before it started. Hence `agentboot.Conductor`:
+one reader per process lifetime (`resident.go`), created right after `Open`.
+
+- **Every message is recorded as it arrives**, in or between turns, and
+  keeps the pool from evicting a process that is still reporting.
+- **An unsolicited turn is a turn.** The session reads as running with a
+  note saying why, gets a `run` (so its approvals, Stop and the "busy"
+  check behave as usual), and settles when its result arrives. A message
+  sent meanwhile is refused with 409, which the page queues.
+- **Stop interrupts, it no longer kills.** Stop sends `interrupt`, so the
+  process and its background tasks survive and the next message reuses the
+  process. Only an agent that can't, or doesn't within the grace period, is
+  closed as before.
+- **The one-shot fallback can't keep background work**: its process exits
+  with the turn. Background tasks need the pooled path.
+
 ## 4. HTTP surface
 
 `internal/server/module/desk` is a thin adapter: request/response

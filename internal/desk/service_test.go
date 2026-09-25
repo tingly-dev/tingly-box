@@ -265,6 +265,9 @@ type fakePersistentSession struct {
 	events chan agentboot.StreamEvent
 
 	script func(ctx context.Context, prompt string, s *fakePersistentSession)
+
+	interrupts   int
+	stoppedTasks []string
 }
 
 // newFakePersistentSession builds a session already Running its first turn
@@ -290,6 +293,26 @@ func (s *fakePersistentSession) Send(ctx context.Context, prompt string) error {
 }
 
 func (s *fakePersistentSession) Events() <-chan agentboot.StreamEvent { return s.events }
+
+// Interrupt ends the running turn with an error result and keeps the
+// session, as Claude Code's interrupt control request does.
+func (s *fakePersistentSession) Interrupt(context.Context) error {
+	s.mu.Lock()
+	running := s.status == agentboot.SessionStateRunning
+	s.interrupts++
+	s.mu.Unlock()
+	if running {
+		go s.completeTurn(&agentboot.Result{Error: "error_during_execution"})
+	}
+	return nil
+}
+
+func (s *fakePersistentSession) StopTask(_ context.Context, taskID string) error {
+	s.mu.Lock()
+	s.stoppedTasks = append(s.stoppedTasks, taskID)
+	s.mu.Unlock()
+	return nil
+}
 
 func (s *fakePersistentSession) Respond(reqID string, resp agentboot.ControlResponse) error {
 	return agentboot.ErrUnknownRequestID
@@ -1275,4 +1298,124 @@ func mustSnapshot(t *testing.T, svc *Service, id string) *session.Session {
 		t.Fatalf("session %s not found", id)
 	}
 	return &snap
+}
+
+// hasMessage reports whether the transcript has an entry containing text.
+func hasMessage(t *testing.T, svc *Service, id, text string) bool {
+	t.Helper()
+	msgs, _ := svc.Messages(id)
+	for _, m := range msgs {
+		if strings.Contains(m.Content, text) {
+			return true
+		}
+	}
+	return false
+}
+
+// Stop interrupts the turn instead of ending the process: background work
+// the process runs survives, and the next message reuses it.
+func TestPersistentInterrupt_KeepsTheProcess(t *testing.T) {
+	var resident *fakePersistentSession
+	var started atomic.Bool
+	svc, fa := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, func(ctx context.Context, prompt string, s *fakePersistentSession) {
+			if started.CompareAndSwap(false, true) { // the first turn runs until interrupted
+				return
+			}
+			completingPersistentScript(ctx, prompt, s)
+		})
+		return resident, nil
+	})
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "long"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusRunning, time.Second)
+
+	if err := svc.Interrupt(sess.ID); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+	if final := waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second); final.Error != "" {
+		t.Fatalf("Error = %q, want none after a user interrupt", final.Error)
+	}
+	if !hasMessage(t, svc, sess.ID, "interrupted") {
+		t.Fatal("want an 'interrupted' note")
+	}
+	if st := resident.Status(); st == agentboot.SessionStateTerminated {
+		t.Fatal("interrupting ended the process; it must stay up for its background work")
+	}
+
+	if err := svc.SendMessage(context.Background(), sess.ID, "again"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if got := fa.openCalls.Load(); got != 1 {
+		t.Fatalf("Open called %d times, want 1: the interrupted process should take the next message", got)
+	}
+}
+
+// startUnsolicited plays Claude Code starting a turn by itself.
+func (s *fakePersistentSession) startUnsolicited() {
+	s.mu.Lock()
+	s.status = agentboot.SessionStateRunning
+	s.mu.Unlock()
+	s.events <- agentboot.TurnStartEvent{Unsolicited: true}
+}
+
+func TestUnsolicitedTurn_IsRecordedAndSettles(t *testing.T) {
+	var resident *fakePersistentSession
+	svc, _ := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, completingPersistentScript)
+		return resident, nil
+	})
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	// A background task finished: Claude Code starts a turn of its own.
+	resident.startUnsolicited()
+	waitStatus(t, svc, sess.ID, session.StatusRunning, time.Second)
+	if !hasMessage(t, svc, sess.ID, "background task finished") {
+		t.Fatal("want a note saying why the session is working again")
+	}
+	if err := svc.SendMessage(context.Background(), sess.ID, "meanwhile"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("SendMessage during Claude's own turn: err = %v, want ErrConflict (the page queues it)", err)
+	}
+
+	resident.completeTurn(&agentboot.Result{})
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if err := svc.SendMessage(context.Background(), sess.ID, "now"); err != nil {
+		t.Fatalf("SendMessage after it settled: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+}
+
+func TestUnsolicitedTurn_StopInterruptsIt(t *testing.T) {
+	var resident *fakePersistentSession
+	svc, _ := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, completingPersistentScript)
+		return resident, nil
+	})
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	resident.startUnsolicited()
+	waitStatus(t, svc, sess.ID, session.StatusRunning, time.Second)
+	if err := svc.Interrupt(sess.ID); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+	if final := waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second); final.Error != "" {
+		t.Fatalf("Error = %q, want none: the user stopped it", final.Error)
+	}
+	resident.mu.Lock()
+	n := resident.interrupts
+	resident.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("process interrupted %d times, want 1", n)
+	}
 }

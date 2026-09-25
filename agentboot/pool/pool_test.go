@@ -26,7 +26,9 @@ func newFakeSession(status agentboot.SessionState) *fakeSession {
 	return &fakeSession{status: status}
 }
 
-func (f *fakeSession) Send(context.Context, string) error { return nil }
+func (f *fakeSession) Send(context.Context, string) error     { return nil }
+func (f *fakeSession) Interrupt(context.Context) error        { return nil }
+func (f *fakeSession) StopTask(context.Context, string) error { return nil }
 func (f *fakeSession) Events() <-chan agentboot.StreamEvent {
 	return nil
 }

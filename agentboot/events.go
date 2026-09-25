@@ -93,6 +93,16 @@ const (
 // TurnCompleteEvent is the per-turn boundary signal that ExecutionHandle
 // gets for free from the channel closing. Result carries that turn's
 // events/duration/error, scoped to just that turn (not the whole session).
+// TurnStartEvent marks a turn the agent started by itself, with no Send —
+// Claude Code reacting to a background task that finished after the turn
+// that started it. Its events, approvals and TurnCompleteEvent follow like
+// any turn's. Turns started by Send are not announced (the caller knows).
+type TurnStartEvent struct {
+	Unsolicited bool
+}
+
+func (TurnStartEvent) isStreamEvent() {}
+
 type TurnCompleteEvent struct {
 	Result *Result
 }

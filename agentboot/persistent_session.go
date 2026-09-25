@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot/process"
@@ -66,6 +67,19 @@ type PersistentSession interface {
 	// Status reports the session's current lifecycle state.
 	Status() SessionState
 
+	// Interrupt stops the in-flight turn without ending the process: the
+	// turn ends with its TurnCompleteEvent (an error result) and the session
+	// returns to Idle, ready for the next Send; background work keeps
+	// running. A no-op when no turn is in flight. Returns
+	// ErrControlUnsupported if the agent has no interrupt, in which case
+	// only Close stops the turn.
+	Interrupt(ctx context.Context) error
+
+	// StopTask stops one background task by the id the agent reported for
+	// it; the agent reports the outcome through its own events. Returns
+	// ErrControlUnsupported if the agent has no such request.
+	StopTask(ctx context.Context, taskID string) error
+
 	// Close asks the current turn (if any) to finish, then shuts the
 	// underlying process down: close stdin, wait a grace period, then Kill
 	// if it hasn't exited. Idempotent; safe to call from any state. Blocks
@@ -97,6 +111,8 @@ type persistentSession struct {
 
 	terminateOnce sync.Once
 	done          chan struct{}
+
+	controlSeq atomic.Uint64
 }
 
 func (s *persistentSession) Events() <-chan StreamEvent { return s.events }
@@ -155,6 +171,48 @@ func (s *persistentSession) Respond(reqID string, resp ControlResponse) error {
 		return errors.New("agentboot: transport produced nil control response")
 	}
 	return s.encoder.Encode(wire)
+}
+
+func (s *persistentSession) Interrupt(_ context.Context) error {
+	s.mu.Lock()
+	state := s.state
+	s.mu.Unlock()
+	switch state {
+	case SessionStateRunning:
+		return s.sendControl(InterruptRequest{})
+	case SessionStateIdle:
+		return nil
+	default:
+		return ErrSessionClosed
+	}
+}
+
+func (s *persistentSession) StopTask(_ context.Context, taskID string) error {
+	if taskID == "" {
+		return errors.New("agentboot: StopTask needs a task id")
+	}
+	if st := s.Status(); st == SessionStateClosing || st == SessionStateTerminated {
+		return ErrSessionClosed
+	}
+	return s.sendControl(StopTaskRequest{TaskID: taskID})
+}
+
+// sendControl writes a host-initiated control request. Its acknowledgement
+// isn't awaited: the agent reports the effect through its ordinary events
+// (the interrupted turn's result, a task's final notification).
+func (s *persistentSession) sendControl(req ControlRequest) error {
+	enc, ok := s.transport.(ControlRequestEncoder)
+	if !ok {
+		return ErrControlUnsupported
+	}
+	wire := enc.EncodeControlRequest(fmt.Sprintf("agentboot_ctl_%d", s.controlSeq.Add(1)), req)
+	if wire == nil {
+		return ErrControlUnsupported
+	}
+	if err := s.encoder.Encode(wire); err != nil {
+		return fmt.Errorf("agentboot: send control request: %w", err)
+	}
+	return nil
 }
 
 func (s *persistentSession) Close(ctx context.Context) error {
@@ -250,10 +308,23 @@ func (s *persistentSession) emit(ev StreamEvent) {
 // drives turn/session state accordingly. It runs until decoderEvents
 // closes, then finalizes via terminate.
 func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr func() error) {
+	detector, _ := s.transport.(TurnStartDetector)
 	for ev := range decoderEvents {
 		s.mu.Lock()
+		// A turn opening while Idle wasn't started by Send: the agent began
+		// it itself. Track it like any turn, so Send refuses to interleave
+		// with it and its TurnCompleteEvent has a turn to close.
+		unsolicited := detector != nil && s.state == SessionStateIdle && detector.IsTurnStart(ev)
+		if unsolicited {
+			s.state = SessionStateRunning
+			s.turnStart = time.Now()
+			s.turnEvents = nil
+		}
 		s.turnEvents = append(s.turnEvents, ev)
 		s.mu.Unlock()
+		if unsolicited {
+			s.emit(TurnStartEvent{Unsolicited: true})
+		}
 
 		kind, parsed := s.transport.Classify(ev)
 

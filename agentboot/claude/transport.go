@@ -114,6 +114,33 @@ func (t *Transport) EncodeUserMessage(prompt string) any {
 	}
 }
 
+// EncodeControlRequest converts a host-initiated request into Claude's
+// control_request wire shape. Implements [agentboot.ControlRequestEncoder].
+// Both requests are acknowledged with a control_response the transport
+// ignores; their effect arrives as ordinary events (the interrupted turn's
+// error result, the task's "stopped" task_notification).
+func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequest) any {
+	var body map[string]any
+	switch r := req.(type) {
+	case agentboot.InterruptRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeInterrupt}
+	case agentboot.StopTaskRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeStopTask, "task_id": r.TaskID}
+	default:
+		return nil
+	}
+	return map[string]any{"type": ControlMsgTypeRequest, "request_id": reqID, "request": body}
+}
+
+// IsTurnStart reports whether ev opens a turn: in stream-json mode Claude
+// Code begins every turn, including one it starts itself after a
+// background task finishes, with a system/init message. Implements
+// [agentboot.TurnStartDetector].
+func (t *Transport) IsTurnStart(ev protocol.Event) bool {
+	subtype, _ := ev.Data["subtype"].(string)
+	return ev.Type == SDKSystemMessage && subtype == SystemSubtypeInit
+}
+
 // --- internal: control-event parsing ----------------------------------------
 
 // parseControlRequest dispatches on the request subtype to produce either an
