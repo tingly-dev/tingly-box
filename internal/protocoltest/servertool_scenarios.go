@@ -3,6 +3,7 @@ package protocoltest
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -23,12 +24,16 @@ const (
 	// OwnedToolFinalText is the model's answer after the tool round.
 	OwnedToolFinalText  = "owned-tool-final"
 	ownedToolResultText = "echo-result"
+	ownedToolErrorText  = "echo-failed"
 )
 
 // EchoServertoolProvider is an in-process server tool that records every
 // execution so tests can assert the tool ran exactly once with the model's
 // arguments.
 type EchoServertoolProvider struct {
+	// Fail makes every execution return an error instead of a result.
+	Fail bool
+
 	mu    sync.Mutex
 	calls []map[string]any
 }
@@ -55,6 +60,9 @@ func (p *EchoServertoolProvider) Descriptor() coretool.VirtualTool {
 			p.mu.Lock()
 			p.calls = append(p.calls, call.Arguments)
 			p.mu.Unlock()
+			if p.Fail {
+				return coretool.ToolResult{}, errors.New(ownedToolErrorText)
+			}
 			return coretool.TextToolResult(ownedToolResultText), nil
 		},
 	}
@@ -64,12 +72,23 @@ func (p *EchoServertoolProvider) Hook() servertool.Hook { return nil }
 
 var _ servertool.ToolProvider = (*EchoServertoolProvider)(nil)
 
+// ownedToolCallIDs are the call ids the owned-tool fixtures use per format.
+var ownedToolCallIDs = [][]byte{[]byte("toolu-owned-tool"), []byte("call-owned-tool")}
+
 // callsOwnedTool reports whether the mock model should call the echo tool:
 // like a real model it only does so when the gateway offered the tool, and
-// only until the request carries the tool's result (continuation round).
+// only until the request carries that call (i.e. the continuation round,
+// whatever the tool returned — result or error).
 func callsOwnedTool(request []byte) bool {
-	return bytes.Contains(request, []byte(OwnedToolWireName)) &&
-		!bytes.Contains(request, []byte(ownedToolResultText))
+	if !bytes.Contains(request, []byte(OwnedToolWireName)) {
+		return false
+	}
+	for _, id := range ownedToolCallIDs {
+		if bytes.Contains(request, id) {
+			return false
+		}
+	}
+	return true
 }
 
 // OwnedToolScenario: when the gateway offers the echo tool, round 1 calls it
@@ -325,6 +344,131 @@ func OwnedThenClientToolScenario() Scenario {
 			FormatOpenAIChat: {
 				NonStreamFor: nonStream(matrixChatOwnedTool(), chatClientTool),
 				StreamFor:    stream(matrixChatOwnedToolStream(), chatClientToolStream),
+			},
+		},
+	}
+}
+
+// AlwaysOwnedToolScenario: the model calls the owned echo tool in every round
+// it is offered, whatever came back — the gateway must stop at its round limit.
+func AlwaysOwnedToolScenario() Scenario {
+	always := func(tool, final any) func([]byte) (int, []byte) {
+		return func(request []byte) (int, []byte) {
+			if bytes.Contains(request, []byte(OwnedToolWireName)) {
+				return http.StatusOK, mustMarshal(tool)
+			}
+			return http.StatusOK, mustMarshal(final)
+		}
+	}
+	alwaysStream := func(tool, final []string) func([]byte) []string {
+		return func(request []byte) []string {
+			if bytes.Contains(request, []byte(OwnedToolWireName)) {
+				return tool
+			}
+			return final
+		}
+	}
+	return Scenario{
+		Name:        "mcp_always_owned_tool",
+		Description: "Model keeps calling the server tool; the loop must be bounded",
+		Tags:        []string{"mcp", "servertool"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
+				NonStreamFor: always(matrixAnthropicOwnedTool(), matrixAnthropicOwnedToolFinal()),
+				StreamFor:    alwaysStream(matrixAnthropicOwnedToolStream(), matrixAnthropicOwnedToolFinalStream()),
+			},
+			FormatOpenAIChat: {
+				NonStreamFor: always(matrixChatOwnedTool(), matrixChatOwnedToolFinal()),
+				StreamFor:    alwaysStream(matrixChatOwnedToolStream(), matrixChatOwnedToolFinalStream()),
+			},
+		},
+	}
+}
+
+const clientToolResultText = "weather-result"
+
+// MixedToolScenario: the first round calls the owned echo tool and the client
+// tool get_weather together. Once the request carries the client tool's
+// result, the model answers with OwnedToolFinalText.
+func MixedToolScenario() Scenario {
+	anthropicMixed := map[string]any{
+		"id": "msg-mixed", "type": "message", "role": "assistant", "model": "worker-model",
+		"content": []map[string]any{
+			{"type": "tool_use", "id": "toolu-owned-tool", "name": OwnedToolWireName, "input": map[string]any{"q": "x"}},
+			{"type": "tool_use", "id": "toolu-client-tool", "name": clientToolName, "input": map[string]any{"location": "Paris"}},
+		},
+		"stop_reason": "tool_use",
+		"usage":       map[string]any{"input_tokens": 8, "output_tokens": 6},
+	}
+	anthropicMixedStream := []string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg-mixed","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":8,"output_tokens":0}}}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu-owned-tool","name":"` + OwnedToolWireName + `","input":{}}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"x\"}"}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":0}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu-client-tool","name":"get_weather","input":{}}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\"}"}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":1}`,
+		`event: message_delta`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":6}}`,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+	}
+	chatMixed := map[string]any{
+		"id": "chatcmpl-mixed", "object": "chat.completion", "created": 1, "model": "worker-model",
+		"choices": []map[string]any{{
+			"index": 0,
+			"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{
+				{"id": "call-owned-tool", "type": "function", "function": map[string]any{"name": OwnedToolWireName, "arguments": `{"q":"x"}`}},
+				{"id": "call-client-tool", "type": "function", "function": map[string]any{"name": clientToolName, "arguments": `{"location":"Paris"}`}},
+			}},
+			"finish_reason": "tool_calls",
+		}},
+		"usage": map[string]any{"prompt_tokens": 8, "completion_tokens": 6, "total_tokens": 14},
+	}
+	chatMixedStream := []string{
+		// One chunk per tool call, as OpenAI streams parallel calls.
+		`data: {"id":"chatcmpl-mixed","object":"chat.completion.chunk","created":1,"model":"worker-model","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-owned-tool","type":"function","function":{"name":"` + OwnedToolWireName + `","arguments":"{\"q\":\"x\"}"}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-mixed","object":"chat.completion.chunk","created":1,"model":"worker-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call-client-tool","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-mixed","object":"chat.completion.chunk","created":1,"model":"worker-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+	}
+
+	final := func(request []byte) bool { return bytes.Contains(request, []byte(clientToolResultText)) }
+	nonStream := func(mixed, done any) func([]byte) (int, []byte) {
+		return func(request []byte) (int, []byte) {
+			if final(request) {
+				return http.StatusOK, mustMarshal(done)
+			}
+			return http.StatusOK, mustMarshal(mixed)
+		}
+	}
+	stream := func(mixed, done []string) func([]byte) []string {
+		return func(request []byte) []string {
+			if final(request) {
+				return done
+			}
+			return mixed
+		}
+	}
+	return Scenario{
+		Name:        "mcp_mixed_tools",
+		Description: "One round calls a server tool and a client tool together",
+		Tags:        []string{"mcp", "servertool"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
+				NonStreamFor: nonStream(anthropicMixed, matrixAnthropicOwnedToolFinal()),
+				StreamFor:    stream(anthropicMixedStream, matrixAnthropicOwnedToolFinalStream()),
+			},
+			FormatOpenAIChat: {
+				NonStreamFor: nonStream(chatMixed, matrixChatOwnedToolFinal()),
+				StreamFor:    stream(chatMixedStream, matrixChatOwnedToolFinalStream()),
 			},
 		},
 	}
