@@ -119,7 +119,7 @@ const ActivityRow = ({steps, live, expandAll}: {steps: ActivityStep[]; live: boo
         : t('desk.usedTools', {defaultValue: tools.length === 1 ? 'Used 1 tool' : 'Used {{count}} tools', count: tools.length});
 
     return (
-        <Box>
+        <Box data-call-ids={tools.map((s) => (s.type === 'tool' ? s.id : '')).join(' ')} sx={{borderRadius: 1}}>
             <Box
                 role="button"
                 onClick={() => setOpen((v) => !v)}
@@ -311,7 +311,7 @@ const AgentCard = ({block, turnLive, expandAll, onRespond}: {
     }[status];
 
     return (
-        <Paper variant="outlined" sx={{borderRadius: 2, overflow: 'hidden'}}>
+        <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: 2, overflow: 'hidden'}}>
             <Box
                 role="button"
                 aria-expanded={open}

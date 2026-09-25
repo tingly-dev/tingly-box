@@ -39,7 +39,7 @@ const sessions: Sess[] = [
     { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', model: '', awaiting_input: true, background_tasks: [], created_at: ago(12), last_activity: ago(1) },
     { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', model: 'opus', awaiting_input: false, background_tasks: [], created_at: ago(90), last_activity: ago(40) },
     { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', model: '', awaiting_input: false, background_tasks: [], created_at: ago(200), last_activity: ago(199) },
-    { id: 'desk-5', project: TB, status: 'completed', request: 'Audit how the auth middleware handles expired tokens', response: '', permission_mode: 'acceptEdits', profile: '', model: '', awaiting_input: false, background_tasks: [{ task_id: 'ar1', task_type: 'local_agent', description: 'Review refresh path' }], created_at: ago(30), last_activity: ago(2) },
+    { id: 'desk-5', project: TB, status: 'completed', request: 'Audit how the auth middleware handles expired tokens', response: '', permission_mode: 'acceptEdits', profile: '', model: '', awaiting_input: false, background_tasks: [{ task_id: 'ar1', task_type: 'local_agent', description: 'Review refresh path' }, { task_id: 'bd1', task_type: 'local_bash', description: 'Start the dev server' }], created_at: ago(30), last_activity: ago(2) },
     { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', model: '', awaiting_input: false, background_tasks: [], created_at: ago(3000), last_activity: ago(2900) },
 ]
 
@@ -131,6 +131,10 @@ const messages: Record<string, Msg[]> = {
         { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'task_started', task_id: 'bt1', task_type: 'local_bash', background: true, description: 'Run middleware tests' }, timestamp: ago(26) },
         { kind: 'tool_result', content: 'Command running in background with ID: bt1.', request_id: 'b-test', payload: { is_error: false }, timestamp: ago(26) },
         { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'output_file', task_id: 'bt1', output_file: '/tmp/claude-501/-Users-me-code-tingly-box/desk-5/tasks/bt1.output' }, timestamp: ago(26) },
+        { kind: 'tool_use', content: 'Bash', request_id: 'b-dev', payload: { command: 'pnpm --dir frontend dev --port 5173', description: 'Start the dev server', run_in_background: true }, timestamp: ago(25) },
+        { kind: 'task', content: '', request_id: 'b-dev', payload: { event: 'task_started', task_id: 'bd1', task_type: 'local_bash', background: true, description: 'Start the dev server' }, timestamp: ago(25) },
+        { kind: 'tool_result', content: 'Command running in background with ID: bd1.', request_id: 'b-dev', payload: { is_error: false }, timestamp: ago(25) },
+        { kind: 'task', content: '', request_id: 'b-dev', payload: { event: 'output_file', task_id: 'bd1', output_file: '/tmp/claude-501/-Users-me-code-tingly-box/desk-5/tasks/bd1.output' }, timestamp: ago(25) },
         { kind: 'tool_use', content: 'Read', request_id: 'r1', parent: 'a-review', payload: { file_path: 'internal/server/middleware/auth.go' }, timestamp: ago(20) },
         { kind: 'tool_result', content: 'func (m *Auth) refresh(…', request_id: 'r1', parent: 'a-review', payload: { is_error: false }, timestamp: ago(20) },
         { kind: 'task', content: '', request_id: 'a-review', payload: { event: 'task_progress', description: 'Tracing concurrent refresh calls', last_tool: 'Grep', usage: { total_tokens: 41300, tool_uses: 6, duration_ms: 312000 } }, timestamp: ago(3) },
@@ -143,6 +147,7 @@ const messages: Record<string, Msg[]> = {
     ],
 }
 
+let devReads = 0
 const find = (id: string) => sessions.find((s) => s.id === id)
 const touch = (s: Sess, status?: string) => {
     if (status) s.status = status
@@ -293,6 +298,14 @@ export const deskHandlers = [
         return new HttpResponse(null, { status: 202 })
     }),
     http.get('/api/v1/desk/sessions/:id/tasks/:taskId/output', ({ params }) => {
+        if (params.taskId === 'bd1') {
+            // A running server: each read shows a few more request lines.
+            devReads++
+            const lines = ['> frontend@0.1.0 dev', '> vite --port 5173', '', '  VITE v6.3.5  ready in 412 ms', '', '  ➜  Local:   http://localhost:5173/']
+            for (let i = 0; i < devReads * 2; i++) lines.push(`${new Date(Date.now() - (devReads * 2 - i) * 1000).toLocaleTimeString()} [vite] hmr update /src/pages/desk/DeskPage.tsx`)
+            const content = lines.join('\n') + '\n'
+            return HttpResponse.json({ content, truncated: false, size: content.length })
+        }
         if (params.taskId !== 'bt1') return HttpResponse.json({ error: { message: 'output not found' } }, { status: 404 })
         const content = '=== RUN   TestAuth_Check\n--- PASS: TestAuth_Check (0.01s)\n=== RUN   TestAuth_RefreshConcurrent\n--- PASS: TestAuth_RefreshConcurrent (0.23s)\nPASS\nok  \tgithub.com/tingly-dev/tingly-box/internal/server/middleware\t1.412s\n\n[exited with code 0]\n'
         return HttpResponse.json({ content, truncated: false, size: content.length })

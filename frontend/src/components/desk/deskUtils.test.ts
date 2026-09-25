@@ -192,4 +192,20 @@ describe('backgroundTasks', () => {
         ]);
         expect(rows[0].outputFile).toBe('/tmp/x/tasks/t3.output');
     });
+
+    it('carries what a row opens into: the call, and a subagent\'s latest steps and reply', () => {
+        const rows = backgroundTasks([
+            msg({kind: 'tool_use', content: 'Agent', request_id: 'a1', payload: {prompt: 'check races', subagent_type: 'Explore'}, timestamp: '2026-01-01T00:00:00Z'}),
+            started('a1', 'x1', 'local_agent', 'Review'),
+            msg({kind: 'tool_use', content: 'Read', request_id: 's1', parent: 'a1', payload: {file_path: 'auth.go'}}),
+            msg({kind: 'tool_use', content: 'Grep', request_id: 's2', parent: 'a1', payload: {pattern: 'refresh'}}),
+            msg({role: 'assistant', content: 'Found a race.', parent: 'a1'}),
+        ], [{task_id: 'x1', task_type: 'local_agent', description: 'Review'}]);
+        expect(rows[0]).toMatchObject({
+            input: {prompt: 'check races'},
+            startedAt: '2026-01-01T00:00:00Z',
+            recent: [{name: 'Read', summary: 'auth.go'}, {name: 'Grep', summary: 'refresh'}],
+            reply: 'Found a race.',
+        });
+    });
 });

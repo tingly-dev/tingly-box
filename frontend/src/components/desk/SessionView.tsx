@@ -107,6 +107,17 @@ const SessionView = ({
         stickToBottom.current = true;
     }, [session.id]);
 
+    // reveal scrolls the conversation to the call that started a task and
+    // flashes it, so "where did this come from" is one click from the panel.
+    const reveal = (callId: string) => {
+        setTasksAnchor(null);
+        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-call-ids~="${CSS.escape(callId)}"]`);
+        if (!el) return;
+        stickToBottom.current = false;
+        el.scrollIntoView({behavior: 'smooth', block: 'center'});
+        el.animate?.([{outline: '2px solid transparent'}, {outline: '2px solid var(--mui-palette-primary-main, #1976d2)'}, {outline: '2px solid transparent'}], {duration: 1600});
+    };
+
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0}}>
             <Stack
@@ -179,7 +190,7 @@ const SessionView = ({
                 anchorOrigin={{vertical: 'bottom', horizontal: 'right'}}
                 transformOrigin={{vertical: 'top', horizontal: 'right'}}
             >
-                <BackgroundTasksPanel sessionId={session.id} tasks={tasks} onChanged={onRefresh}/>
+                <BackgroundTasksPanel sessionId={session.id} tasks={tasks} onChanged={onRefresh} onReveal={reveal}/>
             </Popover>
             <ConfirmDialog
                 open={confirm !== null}

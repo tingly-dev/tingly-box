@@ -358,7 +358,12 @@ place rather than living only in the transcript:
 On the page: a header entry, always present so it can be found before it
 is needed (an icon, whose empty state says what will appear there), turns
 into a labeled "N running" pill while work runs, and opens the list — running first, each
-with its state, what it is doing, usage, Stop, and Output for commands. The
+with its state and elapsed time. A row opens into what the task is: a
+command shows its command line and its output (loaded on open, refreshed
+every 2 s while it runs, exit code included once done); a subagent shows its
+type, usage, what it was asked, what it is doing now, its latest steps and
+its latest reply or report. Every row can Stop (while running) and "Show in
+conversation", which scrolls to the call that started it and flashes it. The
 sidebar marks a session with running background work (quieter than a
 running turn: nothing waits on the user). Archive and Continue in terminal
 end the process, so with tasks running they ask first; a profile, model or

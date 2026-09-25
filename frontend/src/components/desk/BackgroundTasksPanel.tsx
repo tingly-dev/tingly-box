@@ -1,28 +1,35 @@
-import {Block, Cancel, CheckCircle, PlayerStop, Refresh, Robot, Terminal} from '@/components/icons';
+import {Block, Cancel, CheckCircle, ChevronRight, ExpandMore, PlayerStop, Robot, Terminal} from '@/components/icons';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {TaskOutput} from '@/services/deskApi';
-import {Box, Button, CircularProgress, IconButton, Stack, Tooltip, Typography} from '@mui/material';
-import {useState} from 'react';
+import {Box, Button, CircularProgress, Collapse, Stack, Typography} from '@mui/material';
+import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {BackgroundTask} from './deskUtils';
-import {formatTokens} from './deskUtils';
+import {formatTokens, timeAgo} from './deskUtils';
 
 interface BackgroundTasksPanelProps {
     sessionId: string;
     tasks: BackgroundTask[];
     // Called after a task was stopped, to pick up its final state.
     onChanged: () => void;
+    // Scrolls the conversation to the call that started a task.
+    onReveal: (callId: string) => void;
 }
 
 const mono = {fontFamily: 'monospace', fontSize: '0.75rem'};
+const OUTPUT_TAIL = 16 * 1024;
+const OUTPUT_REFRESH_MS = 2000;
 
 // BackgroundTasksPanel lists what the session runs in the background —
 // shell commands and subagents started with run_in_background — the work
-// that outlives the turn that started it. Each can be stopped on its own,
-// and a command's output read while it runs.
-const BackgroundTasksPanel = ({sessionId, tasks, onChanged}: BackgroundTasksPanelProps) => {
+// that outlives the turn that started it. Each row opens into what the task
+// is: the command and its live output, or the subagent's brief, what it is
+// doing and what it last said.
+const BackgroundTasksPanel = ({sessionId, tasks, onChanged, onReveal}: BackgroundTasksPanelProps) => {
     const {t} = useTranslation();
+    // A lone task opens by itself: the panel was opened to look at it.
+    const [openId, setOpenId] = useState<string | null>(tasks.length === 1 ? tasks[0].taskId : null);
     if (tasks.length === 0) {
         return (
             <Box sx={{p: 2, maxWidth: 360}}>
@@ -36,20 +43,55 @@ const BackgroundTasksPanel = ({sessionId, tasks, onChanged}: BackgroundTasksPane
         );
     }
     return (
-        <Stack sx={{width: 440, maxWidth: '90vw', maxHeight: '70vh', overflowY: 'auto', py: 0.5}} divider={<Box sx={{borderTop: 1, borderColor: 'divider'}}/>}>
-            {tasks.map((task) => <TaskRow key={task.taskId} sessionId={sessionId} task={task} onChanged={onChanged}/>)}
+        <Stack sx={{width: 520, maxWidth: '92vw', maxHeight: '75vh', overflowY: 'auto', py: 0.5}} divider={<Box sx={{borderTop: 1, borderColor: 'divider'}}/>}>
+            {tasks.map((task) => (
+                <TaskRow
+                    key={task.taskId}
+                    sessionId={sessionId}
+                    task={task}
+                    open={openId === task.taskId}
+                    onToggle={() => setOpenId(openId === task.taskId ? null : task.taskId)}
+                    onChanged={onChanged}
+                    onReveal={onReveal}
+                />
+            ))}
         </Stack>
     );
 };
 
-const TaskRow = ({sessionId, task, onChanged}: {sessionId: string; task: BackgroundTask; onChanged: () => void}) => {
+const formatDuration = (ms: number): string => {
+    const sec = Math.max(0, Math.round(ms / 1000));
+    if (sec < 60) return `${sec}s`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+    return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+};
+
+// useNow is the current time, ticking every second while on, so a running
+// task's elapsed time moves.
+const useNow = (on: boolean): number => {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!on) return;
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [on]);
+    return now;
+};
+
+const TaskRow = ({sessionId, task, open, onToggle, onChanged, onReveal}: {
+    sessionId: string;
+    task: BackgroundTask;
+    open: boolean;
+    onToggle: () => void;
+    onChanged: () => void;
+    onReveal: (callId: string) => void;
+}) => {
     const {t} = useTranslation();
     const notify = useNotify();
     const [stopping, setStopping] = useState(false);
-    const [output, setOutput] = useState<TaskOutput | null>(null);
-    const [loading, setLoading] = useState(false);
     const running = task.status === 'running' && !task.ended;
     const isAgent = task.taskType === 'local_agent';
+    const now = useNow(running);
 
     const stop = async () => {
         setStopping(true);
@@ -62,17 +104,6 @@ const TaskRow = ({sessionId, task, onChanged}: {sessionId: string; task: Backgro
         }
     };
 
-    const loadOutput = async () => {
-        setLoading(true);
-        try {
-            setOutput(await deskApi.getTaskOutput(sessionId, task.taskId, 16 * 1024));
-        } catch (err) {
-            notify.error(err instanceof Error ? err.message : t('desk.outputFailed', {defaultValue: 'Failed to read the output'}));
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const state = task.ended
         ? t('desk.taskEnded', {defaultValue: 'ended with the session\'s process'})
         : {
@@ -81,9 +112,9 @@ const TaskRow = ({sessionId, task, onChanged}: {sessionId: string; task: Backgro
             stopped: t('desk.taskStopped', {defaultValue: 'stopped'}),
             failed: t('desk.taskFailed', {defaultValue: 'failed'}),
         }[task.status];
-    const usage = task.usage
-        ? `${task.usage.tool_uses} ${t('desk.tools', {defaultValue: 'tools'})} · ${formatTokens(task.usage.total_tokens)} ${t('desk.tokens', {defaultValue: 'tokens'})}`
-        : '';
+    const started = task.startedAt ? Date.parse(task.startedAt) : NaN;
+    const elapsed = task.usage?.duration_ms
+        ?? (Number.isNaN(started) ? undefined : (running ? now : Date.parse(task.finishedAt ?? '') || now) - started);
     const icon = running
         ? <CircularProgress size={14}/>
         : task.status === 'completed'
@@ -93,51 +124,181 @@ const TaskRow = ({sessionId, task, onChanged}: {sessionId: string; task: Backgro
                 : <Block sx={{fontSize: 16, color: 'text.secondary'}}/>;
 
     return (
-        <Box sx={{px: 1.5, py: 1}}>
-            <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
+        <Box>
+            <Stack
+                direction="row"
+                spacing={1}
+                role="button"
+                aria-expanded={open}
+                onClick={onToggle}
+                sx={{alignItems: 'center', minWidth: 0, px: 1.5, py: 1, cursor: 'pointer', '&:hover': {bgcolor: 'action.hover'}}}
+            >
                 {isAgent ? <Robot sx={{fontSize: 16, color: 'text.secondary'}}/> : <Terminal sx={{fontSize: 16, color: 'text.secondary'}}/>}
                 <Box sx={{flex: 1, minWidth: 0}}>
                     <Typography variant="body2" noWrap sx={{color: 'text.primary', fontWeight: 500}}>
-                        {task.description || task.taskId}
+                        {task.description || task.input?.description || task.taskId}
                     </Typography>
                     <Typography variant="caption" noWrap component="div" sx={{color: task.status === 'failed' ? 'error.main' : 'text.secondary'}}>
-                        {[state, usage || (isAgent ? task.subagentType : '')].filter(Boolean).join(' · ')}
+                        {[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
                     </Typography>
                 </Box>
                 <Box sx={{display: 'flex', alignItems: 'center', flexShrink: 0}} title={state}>{icon}</Box>
-                {!isAgent && task.outputFile && (
-                    <Button size="small" onClick={() => (output ? setOutput(null) : void loadOutput())} disabled={loading} sx={{minWidth: 0, flexShrink: 0}}>
-                        {output ? t('desk.hideOutput', {defaultValue: 'Hide'}) : t('desk.output', {defaultValue: 'Output'})}
-                    </Button>
-                )}
-                {running && (
-                    <Tooltip title={t('desk.stopTask', {defaultValue: 'Stop this task'})}>
-                        <span>
-                            <IconButton size="small" onClick={() => void stop()} disabled={stopping} aria-label={t('desk.stopTask', {defaultValue: 'Stop this task'})}>
-                                {stopping ? <CircularProgress size={14}/> : <PlayerStop fontSize="small"/>}
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
+                {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
             </Stack>
-            {output && (
-                <Box sx={{mt: 1, position: 'relative'}}>
-                    {output.truncated && (
-                        <Typography variant="caption" sx={{color: 'text.secondary'}}>
-                            {t('desk.outputTail', {defaultValue: 'Last {{size}} of {{total}}', size: formatBytes(output.content.length), total: formatBytes(output.size)})}
-                        </Typography>
-                    )}
-                    <Box component="pre" sx={{...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
-                        {output.content || t('desk.noOutputYet', {defaultValue: '(no output yet)'})}
+            <Collapse in={open} unmountOnExit>
+                <Stack spacing={1.25} sx={{px: 1.5, pb: 1.5, pl: 4.5}}>
+                    {isAgent ? <AgentDetail task={task} running={running}/> : <CommandDetail sessionId={sessionId} task={task} running={running}/>}
+                    <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                        {task.startedAt && (
+                            <Typography variant="caption" sx={{color: 'text.secondary', flex: 1}}>
+                                {t('desk.taskStartedAgo', {defaultValue: 'Started {{when}}', when: timeAgo(task.startedAt)})}
+                            </Typography>
+                        )}
+                        {task.callId && (
+                            <Button size="small" onClick={() => onReveal(task.callId)} sx={{textTransform: 'none'}}>
+                                {t('desk.showInConversation', {defaultValue: 'Show in conversation'})}
+                            </Button>
+                        )}
+                        {running && (
+                            <Button
+                                size="small"
+                                color="inherit"
+                                variant="outlined"
+                                startIcon={stopping ? <CircularProgress size={12}/> : <PlayerStop sx={{fontSize: '14px !important'}}/>}
+                                disabled={stopping}
+                                onClick={() => void stop()}
+                                aria-label={t('desk.stopTask', {defaultValue: 'Stop this task'})}
+                                sx={{textTransform: 'none', borderColor: 'divider'}}
+                            >
+                                {t('desk.stop', {defaultValue: 'Stop'})}
+                            </Button>
+                        )}
+                    </Stack>
+                </Stack>
+            </Collapse>
+        </Box>
+    );
+};
+
+const Label = ({children}: {children: string}) => (
+    <Typography variant="caption" component="div" sx={{color: 'text.secondary', mb: 0.25}}>{children}</Typography>
+);
+
+// CommandDetail is the command and its output: loaded on open, refreshed
+// while it runs, so the panel is a live view of what it prints.
+const CommandDetail = ({sessionId, task, running}: {sessionId: string; task: BackgroundTask; running: boolean}) => {
+    const {t} = useTranslation();
+    const [output, setOutput] = useState<TaskOutput | null>(null);
+    const [missing, setMissing] = useState(false);
+
+    useEffect(() => {
+        if (!task.outputFile) return;
+        let live = true;
+        const load = () => deskApi.getTaskOutput(sessionId, task.taskId, OUTPUT_TAIL)
+            .then((o) => {
+                if (live) {
+                    setOutput(o);
+                    setMissing(false);
+                }
+            })
+            .catch(() => live && setMissing(true));
+        void load();
+        const id = running ? setInterval(load, OUTPUT_REFRESH_MS) : undefined;
+        return () => {
+            live = false;
+            if (id) clearInterval(id);
+        };
+    }, [sessionId, task.taskId, task.outputFile, running]);
+
+    return (
+        <>
+            {task.input?.command && (
+                <Box>
+                    <Label>{t('desk.command', {defaultValue: 'Command'})}</Label>
+                    <Box component="pre" sx={{...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 120, overflow: 'auto'}}>
+                        {task.input.command}
                     </Box>
-                    {running && (
-                        <IconButton size="small" onClick={() => void loadOutput()} aria-label={t('common.refresh', {defaultValue: 'Refresh'})} sx={{position: 'absolute', top: output.truncated ? 20 : 2, right: 2}}>
-                            <Refresh sx={{fontSize: 16}}/>
-                        </IconButton>
-                    )}
                 </Box>
             )}
-        </Box>
+            {task.summary && !running && (
+                <Typography variant="body2" sx={{color: 'text.primary'}}>{task.summary}</Typography>
+            )}
+            <Box>
+                <Label>
+                    {output?.truncated
+                        ? t('desk.outputTail', {defaultValue: 'Output — last {{size}} of {{total}}', size: formatBytes(output.content.length), total: formatBytes(output.size)})
+                        : t('desk.output', {defaultValue: 'Output'})}
+                </Label>
+                <Box component="pre" sx={{...mono, m: 0, p: 1, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary', maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+                    {!task.outputFile || missing
+                        ? t('desk.outputUnavailable', {defaultValue: '(output not available)'})
+                        : output === null
+                            ? t('common.loading', {defaultValue: 'Loading…'})
+                            : output.content || t('desk.noOutputYet', {defaultValue: '(no output yet)'})}
+                </Box>
+            </Box>
+        </>
+    );
+};
+
+// AgentDetail is the subagent's brief and its progress: what it was asked,
+// what it is doing, its latest steps and what it last said. The full run is
+// its card in the conversation.
+const AgentDetail = ({task, running}: {task: BackgroundTask; running: boolean}) => {
+    const {t} = useTranslation();
+    const usage = task.usage;
+    return (
+        <>
+            <Stack direction="row" spacing={2} sx={{flexWrap: 'wrap', rowGap: 0.5}}>
+                {(task.subagentType || task.input?.subagent_type) && (
+                    <Typography variant="caption" sx={{color: 'text.secondary'}}>
+                        {t('desk.agentType', {defaultValue: 'Type'})}: <Box component="span" sx={{color: 'text.primary'}}>{task.subagentType || task.input?.subagent_type}</Box>
+                    </Typography>
+                )}
+                {usage && (
+                    <Typography variant="caption" sx={{color: 'text.secondary'}}>
+                        {t('desk.usage', {defaultValue: 'Used'})}: <Box component="span" sx={{color: 'text.primary'}}>
+                            {usage.tool_uses} {t('desk.tools', {defaultValue: 'tools'})} · {formatTokens(usage.total_tokens)} {t('desk.tokens', {defaultValue: 'tokens'})}
+                        </Box>
+                    </Typography>
+                )}
+            </Stack>
+            {task.input?.prompt && (
+                <Box>
+                    <Label>{t('desk.agentPrompt', {defaultValue: 'Asked to'})}</Label>
+                    <Typography variant="body2" sx={{color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 96, overflow: 'auto'}}>
+                        {task.input.prompt}
+                    </Typography>
+                </Box>
+            )}
+            {running && task.activity && (
+                <Box>
+                    <Label>{t('desk.agentNow', {defaultValue: 'Now'})}</Label>
+                    <Typography variant="body2" sx={{color: 'text.primary'}}>{task.activity}</Typography>
+                </Box>
+            )}
+            {task.recent && task.recent.length > 0 && (
+                <Box>
+                    <Label>{t('desk.agentRecent', {defaultValue: 'Recent steps'})}</Label>
+                    <Stack spacing={0.25}>
+                        {task.recent.map((step, i) => (
+                            <Stack key={i} direction="row" spacing={1} sx={{minWidth: 0, alignItems: 'baseline'}}>
+                                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', flexShrink: 0}}>{step.name}</Typography>
+                                <Typography variant="body2" noWrap sx={{...mono, color: 'text.secondary'}}>{step.summary}</Typography>
+                            </Stack>
+                        ))}
+                    </Stack>
+                </Box>
+            )}
+            {(task.reply || (!running && task.summary)) && (
+                <Box>
+                    <Label>{running ? t('desk.agentLatest', {defaultValue: 'Latest reply'}) : t('desk.agentReport', {defaultValue: 'Report'})}</Label>
+                    <Typography variant="body2" sx={{color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflow: 'auto'}}>
+                        {task.reply || task.summary}
+                    </Typography>
+                </Box>
+            )}
+        </>
     );
 };
 
