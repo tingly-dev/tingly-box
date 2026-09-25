@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -971,11 +975,304 @@ func TestStartTurn_LosingClaimRecordsNothing(t *testing.T) {
 	svc.runs[sess.ID] = &run{cancel: func() {}, done: make(chan struct{})}
 	svc.mu.Unlock()
 
-	if svc.startTurn(sess.ID, sess.Project, "second", "", true) {
+	if svc.startTurn(sess.ID, sess.Project, "second", turnSettings{}, true) {
 		t.Fatal("startTurn succeeded while another turn held the claim")
 	}
 	after, _ := svc.Messages(sess.ID)
 	if len(after) != len(before) {
 		t.Fatalf("losing startTurn changed the transcript: %d -> %d messages", len(before), len(after))
 	}
+}
+
+// fakeRouting knows one profile, "p1".
+type fakeRouting struct{}
+
+func (fakeRouting) GetClaudeCodeEnv(context.Context) ([]string, error) {
+	return []string{"ANTHROPIC_BASE_URL=http://gateway"}, nil
+}
+
+func (fakeRouting) GetClaudeCodeSettingsPathForProfile(_ context.Context, id string) (string, error) {
+	if id != "p1" {
+		return "", fmt.Errorf("claude code profile %q not found", id)
+	}
+	return "/profiles/p1/settings.json", nil
+}
+
+func newRoutedTestService(t *testing.T, fa *fakeAgent, p *pool.Pool) *Service {
+	t.Helper()
+	mgr := session.NewManager(session.Config{Timeout: time.Hour, MessageRetention: time.Hour}, newMemStore())
+	t.Cleanup(mgr.Stop)
+	agentSvc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewAgentService: %v", err)
+	}
+	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: fakeRouting{}, Pool: p, Launcher: "/opt/tingly box/tingly-box"})
+}
+
+func TestProfile_TurnLaunchesWithTheProfileSettingsInsteadOfEnv(t *testing.T) {
+	got := make(chan agentboot.ExecutionOptions, 1)
+	fa := &fakeAgent{script: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle) {
+		got <- opts
+		completingScript(ctx, prompt, opts, h)
+	}}
+	svc := newRoutedTestService(t, fa, nil)
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "p1"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	opts := <-got
+	if opts.SettingsPath != "/profiles/p1/settings.json" || len(opts.Env) != 0 {
+		t.Fatalf("launch got SettingsPath=%q Env=%v; want the profile's settings and no main-scenario env", opts.SettingsPath, opts.Env)
+	}
+	if snap, _ := svc.sessions.Snapshot(sess.ID); snap.Profile != "p1" {
+		t.Fatalf("session profile = %q, want p1", snap.Profile)
+	}
+}
+
+func TestProfile_UnknownProfileIsRejectedUpFront(t *testing.T) {
+	svc := newRoutedTestService(t, &fakeAgent{script: completingScript}, nil)
+	_, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "nope"})
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("CreateSession with unknown profile: err = %v, want ErrValidation", err)
+	}
+}
+
+func TestProfile_SwitchingRestartsTheResidentProcess(t *testing.T) {
+	var mu sync.Mutex
+	var opened []agentboot.ExecutionOptions
+	fa := &fakeAgent{script: completingScript, openFn: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		mu.Lock()
+		opened = append(opened, opts)
+		mu.Unlock()
+		return newFakePersistentSession(ctx, prompt, completingPersistentScript), nil
+	}}
+	p := pool.New(pool.Config{MaxSessions: 10, IdleTimeout: time.Hour})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+	svc := newRoutedTestService(t, fa, p)
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if _, err := svc.SetProfile(context.Background(), sess.ID, "p1"); err != nil {
+		t.Fatalf("SetProfile: %v", err)
+	}
+	if err := svc.SendMessage(context.Background(), sess.ID, "again"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for fa.openCalls.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("Open called %d times, want 2: a process launched without the profile must not serve it", fa.openCalls.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if opened[1].SettingsPath != "/profiles/p1/settings.json" || !opened[1].Resume {
+		t.Fatalf("restarted with SettingsPath=%q Resume=%v; want the profile, resuming the same session", opened[1].SettingsPath, opened[1].Resume)
+	}
+}
+
+func TestAwaitingInput_TracksAnOpenApproval(t *testing.T) {
+	svc, _ := newTestService(t, approvalScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for !svc.AwaitingInput(sess.ID) {
+		if time.Now().After(deadline) {
+			t.Fatal("AwaitingInput never became true while the approval was open")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := svc.Respond(sess.ID, "req-1", true, ""); err != nil {
+		t.Fatalf("Respond: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+	if svc.AwaitingInput(sess.ID) {
+		t.Fatal("AwaitingInput still true after the approval was answered and the turn ended")
+	}
+}
+
+func TestHandoff_RefusesDuringATurn(t *testing.T) {
+	svc, _ := newTestService(t, blockingScript)
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if _, err := svc.Handoff(sess.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("Handoff during a turn: err = %v, want ErrConflict", err)
+	}
+	_ = svc.Interrupt(sess.ID)
+}
+
+func TestHandoff_ReleasesTheResidentProcessAndBuildsTheCommand(t *testing.T) {
+	var resident *fakePersistentSession
+	fa := &fakeAgent{script: completingScript, openFn: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, completingPersistentScript)
+		return resident, nil
+	}}
+	p := pool.New(pool.Config{MaxSessions: 10, IdleTimeout: time.Hour})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+	svc := newRoutedTestService(t, fa, p)
+	dir := filepath.Join(t.TempDir(), "it's here")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: dir, Prompt: "hi", Profile: "p1"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	cmd, err := svc.Handoff(sess.ID)
+	if err != nil {
+		t.Fatalf("Handoff: %v", err)
+	}
+	if st := resident.Status(); st != agentboot.SessionStateTerminated {
+		t.Fatalf("resident process state after Handoff = %v, want terminated: it would share the session file with the terminal", st)
+	}
+	want := `cd '` + strings.ReplaceAll(dir, `'`, `'\''`) + `' && '/opt/tingly box/tingly-box' profile 'p1' --resume '` + sess.ID + `'`
+	if cmd != want {
+		t.Fatalf("command:\n got %s\nwant %s", cmd, want)
+	}
+}
+
+// An edited profile keeps its settings path, so the path alone would let a
+// resident process keep running on the settings it was launched with.
+func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"model":"a"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := agentboot.ExecutionOptions{SettingsPath: path}
+	before := launchSignature(opts)
+	if err := os.WriteFile(path, []byte(`{"model":"b"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if launchSignature(opts) == before {
+		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
+	}
+}
+
+func TestNewService_DefaultsTheLauncherToItsOwnExecutable(t *testing.T) {
+	svc, _ := newTestService(t, completingScript)
+	if !filepath.IsAbs(svc.launcher) {
+		t.Fatalf("launcher = %q, want an absolute path so the command works off PATH (npx, a build dir)", svc.launcher)
+	}
+}
+
+// tierRouting has a unified main routing and one separate-mode profile,
+// "sep", whose settings file is real so its env can be read.
+type tierRouting struct{ sepPath string }
+
+func (tierRouting) GetClaudeCodeEnv(context.Context) ([]string, error) {
+	return []string{
+		"ANTHROPIC_MODEL=tingly/cc", "ANTHROPIC_DEFAULT_OPUS_MODEL=tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL=tingly/cc", "ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc",
+	}, nil
+}
+
+func (r tierRouting) GetClaudeCodeSettingsPathForProfile(_ context.Context, id string) (string, error) {
+	if id != "sep" {
+		return "", fmt.Errorf("claude code profile %q not found", id)
+	}
+	return r.sepPath, nil
+}
+
+func newTierTestService(t *testing.T, fa *fakeAgent) *Service {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	settings := `{"env":{"ANTHROPIC_MODEL":"sep/default[1m]","ANTHROPIC_DEFAULT_OPUS_MODEL":"sep/opus",` +
+		`"ANTHROPIC_DEFAULT_SONNET_MODEL":"sep/sonnet","ANTHROPIC_DEFAULT_HAIKU_MODEL":"sep/haiku"}}`
+	if err := os.WriteFile(path, []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mgr := session.NewManager(session.Config{Timeout: time.Hour, MessageRetention: time.Hour}, newMemStore())
+	t.Cleanup(mgr.Stop)
+	agentSvc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewAgentService: %v", err)
+	}
+	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: tierRouting{sepPath: path}})
+}
+
+func TestModels_ReadsTiersFromTheEnvClaudeCodeGets(t *testing.T) {
+	svc := newTierTestService(t, &fakeAgent{script: completingScript})
+
+	main, err := svc.Models(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Models(main): %v", err)
+	}
+	if !main.Unified || len(main.Tiers) != 1 || main.Tiers[0].Model != "tingly/cc" {
+		t.Fatalf("main = %+v, want unified with the one model", main)
+	}
+
+	sep, err := svc.Models(context.Background(), "sep")
+	if err != nil {
+		t.Fatalf("Models(sep): %v", err)
+	}
+	want := []agent.ClaudeCodeTier{{Alias: "", Model: "sep/default"}, {Alias: "opus", Model: "sep/opus"}, {Alias: "sonnet", Model: "sep/sonnet"}, {Alias: "haiku", Model: "sep/haiku"}}
+	if sep.Unified || !slices.Equal(sep.Tiers, want) {
+		t.Fatalf("sep = %+v, want separate tiers %v (the [1m] marker stripped)", sep, want)
+	}
+}
+
+func TestSetModel_OnlyASeparateProfileCanPickATier(t *testing.T) {
+	got := make(chan agentboot.ExecutionOptions, 2)
+	fa := &fakeAgent{script: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle) {
+		got <- opts
+		completingScript(ctx, prompt, opts, h)
+	}}
+	svc := newTierTestService(t, fa)
+	ctx := context.Background()
+
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Model: "opus"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("a tier under the unified main routing: err = %v, want ErrValidation", err)
+	}
+
+	sess, err := svc.CreateSession(ctx, CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "sep", Model: "opus"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if opts := <-got; opts.Model != "opus" {
+		t.Fatalf("turn launched with Model %q, want opus", opts.Model)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if _, err := svc.SetModel(ctx, sess.ID, "gpt"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("unknown tier: err = %v, want ErrValidation", err)
+	}
+	if _, err := svc.SetModel(ctx, sess.ID, "haiku"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
+	if got := svc.TierModel(ctx, mustSnapshot(t, svc, sess.ID)); got != "sep/haiku" {
+		t.Fatalf("TierModel = %q, want sep/haiku", got)
+	}
+
+	// Back to the unified main routing: the tier no longer means anything.
+	updated, err := svc.SetProfile(ctx, sess.ID, "")
+	if err != nil {
+		t.Fatalf("SetProfile: %v", err)
+	}
+	if updated.Model != "" {
+		t.Fatalf("model after switching to a unified profile = %q, want reset", updated.Model)
+	}
+}
+
+func mustSnapshot(t *testing.T, svc *Service, id string) *session.Session {
+	t.Helper()
+	snap, ok := svc.sessions.Snapshot(id)
+	if !ok {
+		t.Fatalf("session %s not found", id)
+	}
+	return &snap
 }

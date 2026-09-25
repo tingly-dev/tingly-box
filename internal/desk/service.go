@@ -19,10 +19,14 @@ package desk
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -30,6 +34,8 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -50,6 +56,9 @@ const agentType = "claude"
 // in production; a nil Routing runs with the host's own environment.
 type Routing interface {
 	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
+	// GetClaudeCodeSettingsPathForProfile materializes a Claude Code profile's
+	// settings file and returns its path, for --settings.
+	GetClaudeCodeSettingsPathForProfile(ctx context.Context, profileID string) (string, error)
 }
 
 // Service is the single entry point every HTTP handler goes through.
@@ -65,6 +74,11 @@ type Service struct {
 	// with (see launchSignature), so a changed permission mode or gateway
 	// env restarts it instead of being silently ignored.
 	launch map[string]string
+	// model is each session's latest requested model (from its usage
+	// entries), so Status needn't reload the transcript to find it.
+	model map[string]string
+	// launcher is the tingly-box binary Handoff's command runs.
+	launcher string
 }
 
 // run is what Interrupt and Respond need for a session with a turn in
@@ -94,15 +108,36 @@ type Config struct {
 	// enable unconditionally; nil keeps every turn one-shot, unchanged
 	// from before this existed.
 	Pool *pool.Pool
+	// Launcher is the tingly-box binary Handoff's command runs. Empty means
+	// this process's own executable, by absolute path: it works whether
+	// tingly-box is on PATH, run through npx, or started from a build dir.
+	Launcher string
 }
 
 // NewService builds a Service. Construct it once per process: it treats
 // every web session still marked running or pending as left over from a
 // previous process (see recoverInterrupted).
 func NewService(cfg Config) *Service {
-	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}}
+	s := &Service{sessions: cfg.Sessions, agent: cfg.Agent, routing: cfg.Routing, pool: cfg.Pool, runs: map[string]*run{}, launch: map[string]string{}, model: map[string]string{}}
+	s.launcher = cfg.Launcher
+	if s.launcher == "" {
+		s.launcher = selfExecutable()
+	}
 	s.recoverInterrupted()
 	return s
+}
+
+// selfExecutable is this process's binary by absolute, symlink-resolved
+// path, or the bare command name if that can't be determined.
+func selfExecutable() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "tingly-box"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe
 }
 
 // recoverInterrupted marks web sessions that were mid-turn when the previous
@@ -137,11 +172,19 @@ func (s *Service) Shutdown(ctx context.Context) {
 
 // launchSignature captures the launch-time settings a persistent process
 // cannot change once started. Env is sorted because Routing builds it from
-// a map.
+// a map. A profile's settings file keeps its path when the profile is
+// edited, so its content is part of the signature, not just the path.
 func launchSignature(opts agentboot.ExecutionOptions) string {
 	env := append([]string(nil), opts.Env...)
 	sort.Strings(env)
-	return opts.PermissionMode + "\x00" + strings.Join(env, "\x00")
+	settings := opts.SettingsPath
+	if settings != "" {
+		if b, err := os.ReadFile(settings); err == nil {
+			sum := sha256.Sum256(b)
+			settings += "@" + hex.EncodeToString(sum[:])
+		}
+	}
+	return opts.PermissionMode + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -219,6 +262,11 @@ type CreateSessionInput struct {
 	Path           string
 	Prompt         string
 	PermissionMode string
+	// Profile is a Claude Code profile id; "" uses the main claude_code
+	// scenario's routing.
+	Profile string
+	// Model is a model tier alias (see Models); "" is the profile's default.
+	Model string
 }
 
 // CreateSession opens a conversation in a folder and starts its first turn.
@@ -237,19 +285,29 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*se
 	if !ValidPermissionMode(in.PermissionMode) {
 		return nil, invalid("unknown permission mode %q", in.PermissionMode)
 	}
+	in.Profile = strings.TrimSpace(in.Profile)
+	if err := s.checkProfile(ctx, in.Profile); err != nil {
+		return nil, err
+	}
+	in.Model = strings.TrimSpace(in.Model)
+	if err := s.checkModel(ctx, in.Profile, in.Model); err != nil {
+		return nil, err
+	}
 
 	sess := s.sessions.CreateWith(webChatID, agentType, path)
 	id := sess.ID
 	s.sessions.SetRequest(id, in.Prompt)
 	s.sessions.Update(id, func(sess *session.Session) {
 		sess.PermissionMode = in.PermissionMode
+		sess.Profile = in.Profile
+		sess.Model = in.Model
 		// CreateWith stamps now+Timeout, and the manager's expiry sweep
 		// deletes the session and its transcript from the store once that
 		// passes. A Desk session lives until it is archived, the same way
 		// @cc's sessions clear ExpiresAt.
 		sess.ExpiresAt = time.Time{}
 	})
-	s.startTurn(id, path, in.Prompt, in.PermissionMode, false)
+	s.startTurn(id, path, in.Prompt, turnSettings{PermissionMode: in.PermissionMode, Profile: in.Profile, Model: in.Model}, false)
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
 }
@@ -276,6 +334,66 @@ func (s *Service) ListSessions(active bool) []session.Session {
 	}
 	sortSessionsByActivity(out)
 	return out
+}
+
+// Scenario is the gateway scenario a session's turns are routed through:
+// the main claude_code scenario, or its profile's.
+func Scenario(profile string) string {
+	if profile == "" {
+		return string(typ.ScenarioClaudeCode)
+	}
+	return string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile))
+}
+
+// RequestedModel is the model id the session's latest completed turn asked
+// the gateway for (the id routing rules match on), or "" before any turn
+// has reached the model.
+func (s *Service) RequestedModel(id string) string {
+	s.mu.Lock()
+	model, ok := s.model[id]
+	s.mu.Unlock()
+	if ok {
+		return model
+	}
+	// Not seen since this server started: find it once in the transcript.
+	msgs, _ := s.sessions.GetMessages(id)
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if m := usageModel(msgs[i]); m != "" {
+			model = m
+			break
+		}
+	}
+	// Only a found model is kept: with none yet, the next turn's usage
+	// arrives through noteUsage, and the scan stays cheap until then.
+	if model != "" {
+		s.mu.Lock()
+		if _, raced := s.model[id]; !raced {
+			s.model[id] = model
+		}
+		model = s.model[id]
+		s.mu.Unlock()
+	}
+	return model
+}
+
+// noteUsage keeps RequestedModel current as a turn records its usage.
+func (s *Service) noteUsage(id string, m session.Message) {
+	if model := usageModel(m); model != "" {
+		s.mu.Lock()
+		s.model[id] = model
+		s.mu.Unlock()
+	}
+}
+
+func usageModel(m session.Message) string {
+	if m.Kind != "usage" {
+		return ""
+	}
+	var u turnUsage
+	if json.Unmarshal(m.Payload, &u) != nil {
+		return ""
+	}
+	return u.Model
 }
 
 func (s *Service) Messages(id string) ([]session.Message, error) {
@@ -305,7 +423,7 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
 	// the atomic one, and it records the message only once it has won, so a
 	// losing concurrent send leaves nothing in the transcript.
-	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, true) {
+	if !s.startTurn(id, sess.Project, text, settingsOf(sess), true) {
 		return conflict("session is %s", sess.Status)
 	}
 	return nil
@@ -333,6 +451,198 @@ func (s *Service) SetPermissionMode(id, mode string) (*session.Session, error) {
 	s.appendSystem(id, "permission mode: "+modeLabel(mode))
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
+}
+
+// SetProfile changes which Claude Code profile the session's next turn runs
+// with ("" for the main claude_code routing). A resident process started with
+// another profile is restarted for that turn (see launchSignature).
+func (s *Service) SetProfile(ctx context.Context, id, profile string) (*session.Session, error) {
+	profile = strings.TrimSpace(profile)
+	if _, ok := s.sessions.Get(id); !ok {
+		return nil, notFound("session", id)
+	}
+	if err := s.checkProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+	// A unified profile has one model for every tier, so a tier picked under
+	// the previous profile no longer means anything.
+	resetModel := false
+	if choice, err := s.Models(ctx, profile); err == nil && choice.Unified {
+		resetModel = true
+	}
+	s.sessions.Update(id, func(sess *session.Session) {
+		sess.Profile = profile
+		if resetModel {
+			sess.Model = ""
+		}
+	})
+	s.appendSystem(id, "profile: "+profileLabel(profile))
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+// checkProfile rejects a profile that can't be launched, so the mistake
+// surfaces on the request instead of as a silent fallback on the next turn.
+func (s *Service) checkProfile(ctx context.Context, profile string) error {
+	if profile == "" || s.routing == nil {
+		return nil
+	}
+	if _, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile); err != nil {
+		return invalid("profile %q: %v", profile, err)
+	}
+	return nil
+}
+
+// SetModel picks the model tier the session's next turns ask for. A resident
+// process started with another tier restarts with --resume (launchSignature).
+func (s *Service) SetModel(ctx context.Context, id, model string) (*session.Session, error) {
+	model = strings.TrimSpace(model)
+	// A copy: the live *Session is written by a turn's goroutine.
+	sess, ok := s.sessions.Snapshot(id)
+	if !ok {
+		return nil, notFound("session", id)
+	}
+	if err := s.checkModel(ctx, sess.Profile, model); err != nil {
+		return nil, err
+	}
+	s.sessions.Update(id, func(sess *session.Session) { sess.Model = model })
+	s.appendSystem(id, "model: "+modelLabel(model))
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+// checkModel accepts the default tier always, and a named tier only where
+// the profile routes tiers separately: under a unified profile every tier
+// is the same model, so choosing one would change nothing.
+func (s *Service) checkModel(ctx context.Context, profile, model string) error {
+	if model == "" {
+		return nil
+	}
+	if !slices.Contains(agent.ClaudeCodeTierAliases, model) {
+		return invalid("unknown model tier %q", model)
+	}
+	if choice, err := s.Models(ctx, profile); err == nil && choice.Unified {
+		return invalid("profile %s routes every tier to one model; edit its rules to change it", profileLabel(profile))
+	}
+	return nil
+}
+
+// Models reads a profile's tiers from the env Claude Code itself is given —
+// the main scenario's env, or the profile's settings file — so they are
+// exactly what the process will request. It backs validation here; the
+// public listing is the scenario module's GET /scenario/claude_code/models.
+func (s *Service) Models(ctx context.Context, profile string) (agent.ClaudeCodeTiers, error) {
+	env, err := s.claudeEnv(ctx, profile)
+	if err != nil {
+		return agent.ClaudeCodeTiers{}, err
+	}
+	return agent.ClaudeCodeTiersFromEnv(env), nil
+}
+
+// TierModel is the gateway model a session's chosen tier requests, or "".
+func (s *Service) TierModel(ctx context.Context, sess *session.Session) string {
+	choice, err := s.Models(ctx, sess.Profile)
+	if err != nil {
+		return ""
+	}
+	for _, t := range choice.Tiers {
+		if t.Alias == sess.Model {
+			return t.Model
+		}
+	}
+	return choice.Tiers[0].Model
+}
+
+func (s *Service) claudeEnv(ctx context.Context, profile string) (map[string]string, error) {
+	if s.routing == nil {
+		return nil, errors.New("no gateway routing configured")
+	}
+	env := map[string]string{}
+	if profile == "" {
+		list, err := s.routing.GetClaudeCodeEnv(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, kv := range list {
+			if k, v, ok := strings.Cut(kv, "="); ok {
+				env[k] = v
+			}
+		}
+		return env, nil
+	}
+	path, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile)
+	if err != nil {
+		return nil, err
+	}
+	return agent.ReadClaudeCodeSettingsEnv(path)
+}
+
+func modelLabel(model string) string {
+	if model == "" {
+		return "default"
+	}
+	return model
+}
+
+func profileLabel(profile string) string {
+	if profile == "" {
+		return "default"
+	}
+	return profile
+}
+
+// AwaitingInput reports whether the session's live turn is blocked on the
+// user: an approval or a question nobody has answered yet.
+func (s *Service) AwaitingInput(id string) bool {
+	s.mu.Lock()
+	r, ok := s.runs[id]
+	s.mu.Unlock()
+	return ok && r.prompter.hasPending()
+}
+
+// Handoff releases a session so it can be continued in a terminal, and
+// returns the command that does it. The resident process is closed first:
+// two processes writing one Claude session file corrupts it (see
+// evictPersistent). A turn in flight is refused rather than killed, and the
+// session is claimed while the process closes, so a turn can't start in
+// between and have its process closed under it.
+//
+// The command goes through tingly-box (`cc`, or `profile <id>` for a
+// profile; the binary by absolute path, see Config.Launcher) rather than
+// bare `claude`, so the terminal routes through the
+// same gateway and settings the web turns used, with no token in the
+// command itself.
+func (s *Service) Handoff(id string) (string, error) {
+	sess, ok := s.sessions.SnapshotOrLoad(id)
+	if !ok {
+		return "", notFound("session", id)
+	}
+	done := make(chan struct{})
+	s.mu.Lock()
+	if _, busy := s.runs[id]; busy {
+		s.mu.Unlock()
+		return "", conflict("stop the current turn before continuing in a terminal")
+	}
+	s.runs[id] = &run{cancel: func() {}, prompter: newWebPrompter(id, s.sessions), done: done}
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.runs, id)
+		s.mu.Unlock()
+		close(done)
+	}()
+	s.evictPersistent(id)
+
+	launch := shellQuote(s.launcher) + " cc"
+	if sess.Profile != "" {
+		launch = shellQuote(s.launcher) + " profile " + shellQuote(sess.Profile)
+	}
+	return "cd " + shellQuote(sess.Project) + " && " + launch + " --resume " + shellQuote(id), nil
+}
+
+// shellQuote single-quotes s for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Respond answers a pending approval or ask request.

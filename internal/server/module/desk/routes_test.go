@@ -21,7 +21,7 @@ func TestRegisterRoutes_GateBlocksWhenDisabled(t *testing.T) {
 	apiV1 := manager.NewGroup("api", "v1", "")
 
 	enabled := false
-	RegisterRoutes(apiV1, NewHandler(nil), func() bool { return enabled })
+	RegisterRoutes(apiV1, NewHandler(nil, nil), func() bool { return enabled })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/desk/permission-modes", nil)
 	w := httptest.NewRecorder()

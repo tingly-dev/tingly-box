@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -17,7 +18,18 @@ const turnTimeout = 2 * time.Hour
 // flight — the caller has already decided that should not happen, but the
 // claim is atomic here to close the race between two requests for the same
 // session arriving together.
-func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode string, resume bool) bool {
+// turnSettings are the per-session choices a turn launches with.
+type turnSettings struct {
+	PermissionMode string
+	Profile        string
+	Model          string
+}
+
+func settingsOf(sess session.Session) turnSettings {
+	return turnSettings{PermissionMode: sess.PermissionMode, Profile: sess.Profile, Model: sess.Model}
+}
+
+func (s *Service) startTurn(sessionID, projectPath, prompt string, ts turnSettings, resume bool) bool {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(sessionID, s.sessions)
 	done := make(chan struct{})
@@ -38,11 +50,12 @@ func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode strin
 	s.appendUserMessage(sessionID, prompt)
 	s.sessions.SetRunning(sessionID)
 
-	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, resume, prompter, cancel, done)
+	go s.runTurn(turnCtx, sessionID, projectPath, prompt, ts, resume, prompter, cancel, done)
 	return true
 }
 
-func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt string, ts turnSettings, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+	permissionMode, profile := ts.PermissionMode, ts.Profile
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, sessionID)
@@ -51,12 +64,25 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		close(done)
 	}()
 
+	// A profile's settings file carries its own gateway routing, so it
+	// replaces the main scenario's env rather than adding to it (the same
+	// either/or @cc's ClaudeCodeExecutor uses).
 	var execEnv []string
+	var settingsPath string
 	if s.routing != nil {
-		if env, err := s.routing.GetClaudeCodeEnv(ctx); err == nil {
-			execEnv = env
-		} else {
-			s.appendSystem(sessionID, "gateway routing unavailable, running with host defaults: "+err.Error())
+		if profile != "" {
+			if p, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile); err == nil {
+				settingsPath = p
+			} else {
+				s.appendSystem(sessionID, fmt.Sprintf("profile %s unavailable, running with the default routing: %v", profile, err))
+			}
+		}
+		if settingsPath == "" {
+			if env, err := s.routing.GetClaudeCodeEnv(ctx); err == nil {
+				execEnv = env
+			} else {
+				s.appendSystem(sessionID, "gateway routing unavailable, running with host defaults: "+err.Error())
+			}
 		}
 	}
 
@@ -75,6 +101,7 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		}
 		for _, m := range conv.messages(raw) {
 			s.sessions.AppendMessage(sessionID, m)
+			s.noteUsage(sessionID, m)
 		}
 	}
 
@@ -83,7 +110,9 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		Resume:               resume,
 		PermissionPromptTool: "stdio",
 		PermissionMode:       permissionMode,
+		Model:                ts.Model,
 		Env:                  execEnv,
+		SettingsPath:         settingsPath,
 	}
 
 	var werr error

@@ -1,4 +1,5 @@
-import {MenuItem, TextField} from '@mui/material';
+import {Lock} from '@/components/icons';
+import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 
 interface PermissionModeSelectProps {
@@ -7,24 +8,37 @@ interface PermissionModeSelectProps {
     onChange: (mode: string) => void;
 }
 
-// The permission-mode picker used both when starting a session
-// (SessionListPanel) and when changing an existing one's mode for its next
-// turn (TranscriptPanel) — same field, same empty-string-means-inherit
-// semantics either way.
+// A compact, chip-sized picker for the composer's context row. Empty means
+// "inherit": the Claude Code settings' own default mode decides.
 const PermissionModeSelect = ({value, permissionModes, onChange}: PermissionModeSelectProps) => {
     const {t} = useTranslation();
+    const inherit = t('desk.permissionInherit', {defaultValue: 'Default permissions'});
     return (
-        <TextField
-            select
+        <Select
             size="small"
-            label={t('desk.permissionMode', {defaultValue: 'Permission'})}
+            variant="standard"
+            disableUnderline
+            displayEmpty
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            sx={{minWidth: 160}}
+            renderValue={(v) => (
+                <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
+                    <Lock sx={{fontSize: 14}}/>
+                    <Typography variant="caption" sx={{color: 'inherit'}}>{v || inherit}</Typography>
+                </Stack>
+            )}
+            sx={{
+                px: 1,
+                borderRadius: 1.5,
+                border: 1,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '& .MuiSelect-select': {py: 0.25, display: 'flex', alignItems: 'center'},
+            }}
         >
-            <MenuItem value="">{t('desk.permissionInherit', {defaultValue: 'Inherit (default)'})}</MenuItem>
+            <MenuItem value="">{inherit}</MenuItem>
             {permissionModes.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-        </TextField>
+        </Select>
     );
 };
 

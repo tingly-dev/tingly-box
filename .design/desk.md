@@ -161,7 +161,89 @@ which is already globally unique:
   recovery step, building a `Service` rewrites stored sessions. See §4 for
   why schema generation must not build one.
 
-### 3.3 A shared-mutable-state gotcha this surfaced
+### 3.3 Profiles
+
+A session can run with a Claude Code profile (`Session.Profile`, a
+`remote_sessions.profile` column). Its turns launch with the profile's
+materialized `--settings` file (`Routing.GetClaudeCodeSettingsPathForProfile`)
+instead of the main scenario's env, the same either/or @cc's
+`ClaudeCodeExecutor` uses, and fall back to the main routing with a system
+note if the profile can't be resolved. Create and `SetProfile` reject an
+unknown profile up front. The settings path is part of the launch signature
+(§3.1) together with a hash of the file's content, so switching or editing
+a profile restarts the resident process with `--resume` on the next turn.
+
+**Model.** Beside the profile, the composer always names the model the
+session runs on (ux-principles.md §5), and profile and model are shown the
+same way for every profile. The tiers come from the standard scenario API,
+`GET /scenario/claude_code/models?profile=` (scenario module, not Desk: what
+a profile offers is profile knowledge, reusable by the profile pages and the
+CLI). It reads them from the env Claude Code is actually given
+(`ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`, from the
+main env or the profile's resolved settings — resolved, not materialized, so
+the GET writes nothing) through `agent.ClaudeCodeTiersFromEnv`, each with its
+predicted route (`statusline.PreviewRoute`). Desk only owns the session's
+choice (`PUT /desk/sessions/:id/model`) and validates it with the same
+helper:
+
+- A **separate** profile (tiers differ) lets the session pick a tier
+  (`Session.Model`, a `remote_sessions.model` column), passed to Claude Code
+  as `--model opus|sonnet|haiku`; "" is `ANTHROPIC_MODEL`. The tier is part
+  of the launch signature.
+- A **unified** profile (every tier the same model) shows its one model with
+  no menu, and the backend rejects a tier. Changing that model means editing
+  the profile's rules, which would change every client using the profile,
+  so it is not offered from a session (ux-principles.md §12). Switching a
+  session to a unified profile clears its tier.
+
+Picking an arbitrary provider model per session is deliberately not offered:
+it would bypass the rules' load balancing and quota fallback, and become a
+second control over the same thing the profile decides.
+
+### 3.4 Status line
+
+The composer carries the web version of the status line tingly-box
+installs for Claude Code in a terminal (`internal/server/module/statusline`):
+requested model → routed model @ provider, context use, session tokens, and
+the routed provider's quota and balance.
+
+- **Tokens** come from a `usage` transcript entry the converter writes per
+  turn (`turnUsage` in `convert.go`): calls deduplicated by message id and
+  summed, as the gateway returned them; context use from the last
+  main-thread call; model and window from the init message and the result's
+  `modelUsage`. Claude Code's own cost figure is left out: it prices every
+  call at Anthropic list prices, which is wrong once a profile routes
+  elsewhere. Being transcript entries, they persist without a schema change.
+- **Routing and quota** come from `GET /desk/sessions/:id/status`, which
+  resolves the chosen tier's model (else the latest turn's requested model) in the session's scenario
+  (`claude_code` or `claude_code:<profile>`) through the statusline
+  handler's own `ResolveRoute`, and renders quota windows with the same
+  `QuotaSegments` the terminal line uses, so the two never disagree. It is
+  a prediction of the load balancer's pick, as the terminal line is, made
+  with `PreviewService` so a status read never claims a recovering
+  provider's half-open probe slot.
+- A window at 80% is marked, one at 90% or exhausted is red, and an
+  exhausted one points at the profile picker beside it.
+
+### 3.5 Handoff to a terminal
+
+`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && '<tingly-box>'
+cc --resume '<id>'` (`… profile '<profile>' …` for a profile), all
+shell-quoted. `<tingly-box>` is the server's own executable by absolute path
+(`os.Executable`, symlinks resolved), so the command works when tingly-box
+isn't on PATH, e.g. under npx. Going through tingly-box rather than bare `claude` keeps the
+terminal on the same gateway routing the web turns used, with no token in
+the command. It refuses during a turn, and claims the session while it
+releases the resident process, so a turn can't start in between and two
+processes never write one Claude session file. A later message from the web
+starts a new resident process with `--resume`, so the page tells the user to
+use one place at a time rather than trying to lock either side.
+
+`SessionInfo.awaiting_input` is true while an approval or question is open
+(`webPrompter.hasPending`), so the list can say "waiting" without loading
+every transcript.
+
+### 3.6 A shared-mutable-state gotcha this surfaced
 
 `session.Manager.Get`/`GetOrLoad`/`ListByChat` return the **live**,
 mutably-shared `*Session` held in the manager's map — safe only if read
@@ -196,16 +278,55 @@ restart recovery (§3.2) against a live server's sessions.
 
 ## 5. Frontend
 
-`frontend/src/pages/desk/DeskPage.tsx` (+
-`frontend/src/components/desk/*`): one work surface, no
-folder-then-session wizard (ux-principles.md §2) — a folder/prompt composer
-and the session list share the left column; the right column is the
-selected session's transcript and composer. `FolderPicker` is a plain
-Autocomplete over typed input + recently-used paths (`RecentFolder[]`) —
-no directory-browsing UI, matching the backend having no such endpoint. A
-session's one still-open approval/ask request is the only one that renders
-action buttons (`findPendingRequest` in `deskUtils.ts`), so the page
-always shows exactly what the user can act on next (ux-principles.md §11).
+`frontend/src/pages/desk/DeskPage.tsx` (+ `frontend/src/components/desk/*`)
+follows the layout of Claude Code on the web, so it reads as the same kind
+of tool:
+
+- **Sidebar** (`DeskSidebar`): "New session", a search box, and sessions
+  grouped by folder (most recent first), each group with a "+" that starts a
+  new session in that folder. A row is the session's first prompt plus a
+  mark only when it needs attention: an amber "waiting" pill when an
+  approval or question is open, a spinner while running, a red dot when
+  failed, and a dot (plus a bold title) for a turn that finished while the
+  user was elsewhere; archived sessions are dimmed.
+- **Attention** (`useDeskAttention`): while the tab is in the background, a
+  browser notification when a session starts waiting on the user or a turn
+  ends (permission is asked on the first send, a user gesture); the tab title
+  carries a `(n)` count of waiting and unseen sessions. Both are scoped to
+  the page and undone when it unmounts (ux-principles.md §12).
+- **New session** (`NewSessionView`): opens straight onto the prompt, no
+  wizard (ux-principles.md §2). Folder and permission mode are context on
+  the composer, prefilled with the folder used last. `FolderPicker` is
+  typed input + recently-used paths only, matching the backend having no
+  directory-browsing endpoint (§6).
+- **Session** (`SessionView` + `Transcript`): a title bar (first prompt,
+  folder chip with the full path on hover, archive), one centered
+  conversation column, and the composer pinned below it. `buildTranscript`
+  (`deskUtils.ts`) collapses each run of thinking and tool calls into one
+  "Used N tools" row, pairing every call with its result by `request_id`,
+  and attaches an approval's or question's answer to it, so the replies stay
+  the visual anchor (ux-principles.md §9). Only the one request still waiting
+  on a live turn is actionable (§11); an answered one collapses to a line.
+  Replies render as Markdown through `@ant-design/x-markdown` (already used
+  by the Skills page) with `escapeRawHtml` on, so HTML in a model's output is
+  shown as text, never rendered; fenced code goes through `CodeBlock`.
+- **Composer** (`Composer`): Enter sends, Shift+Enter adds a line, and an
+  IME composition's Enter never sends. While a turn runs, Stop shows and
+  the input stays open: a message sent then is queued above the composer
+  and all queued ones go out as one message when the turn completes. ✕ on a
+  queued one puts it back into the input; Stop puts them all back (changing
+  course, as in the terminal); after a failed turn they're held with "Send
+  now". Drafts and queues are per session and survive switching sessions.
+- **Title bar actions**: expand all tool calls (remembered in
+  `localStorage`, each row still toggles on its own) and "Continue in
+  terminal" (§3.5), which copies the command and keeps it on screen with its
+  own copy button, since a copy right after a request can be refused.
+- **Narrow screens**: the list and the session are two views, with a back
+  button in the session's title bar.
+
+Mock mode (`src/mocks/deskHandlers.ts`) serves every state above (a turn
+waiting on approval, finished, failed, archived) and simulates turns, so the
+page can be previewed and screenshotted without a backend.
 
 Nav: one row ("Desk") alongside "Remote Control" and "IM Notify"
 under the existing "Remote" rail icon in `layout/useActivityItems.tsx` — a

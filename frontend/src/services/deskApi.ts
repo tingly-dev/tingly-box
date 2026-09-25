@@ -14,6 +14,8 @@ import {
 export type SessionInfo = components['schemas']['SessionInfo'];
 export type MessageInfo = components['schemas']['MessageInfo'];
 export type RecentFolder = components['schemas']['RecentFolder'];
+export type SessionStatus = components['schemas']['SessionStatusResponse'];
+export type QuotaSegment = components['schemas']['QuotaSegmentInfo'];
 
 type ClientCall<T> = (client: ApiClient, headers: Record<string, string>) => Promise<{
     data?: T;
@@ -64,10 +66,30 @@ export const getMessages = (sessionId: string): Promise<MessageInfo[]> =>
         params: {path: {session_id: sessionId}},
     })).then((r) => r.messages);
 
-export const createSession = (path: string, prompt: string, permissionMode?: string): Promise<SessionInfo> =>
+export const createSession = (path: string, prompt: string, permissionMode?: string, profile?: string, model?: string): Promise<SessionInfo> =>
     call((client, headers) => client.POST('/api/v1/desk/sessions', {
         headers,
-        body: {path, prompt, permission_mode: permissionMode || ''},
+        body: {path, prompt, permission_mode: permissionMode || '', profile: profile || '', model: model || ''},
+    }));
+
+export const setModel = (sessionId: string, model: string): Promise<SessionInfo> =>
+    call((client, headers) => client.PUT('/api/v1/desk/sessions/{session_id}/model', {
+        headers,
+        params: {path: {session_id: sessionId}},
+        body: {model},
+    }));
+
+export const setProfile = (sessionId: string, profile: string): Promise<SessionInfo> =>
+    call((client, headers) => client.PUT('/api/v1/desk/sessions/{session_id}/profile', {
+        headers,
+        params: {path: {session_id: sessionId}},
+        body: {profile},
+    }));
+
+export const getStatus = (sessionId: string): Promise<SessionStatus> =>
+    call((client, headers) => client.GET('/api/v1/desk/sessions/{session_id}/status', {
+        headers,
+        params: {path: {session_id: sessionId}},
     }));
 
 export const sendMessage = (sessionId: string, text: string): Promise<void> =>
@@ -102,3 +124,11 @@ export const archive = (sessionId: string): Promise<SessionInfo> =>
         headers,
         params: {path: {session_id: sessionId}},
     }));
+
+// handoff releases the session's resident process and returns the shell
+// command that resumes it in a local terminal.
+export const handoff = (sessionId: string): Promise<string> =>
+    call((client, headers) => client.POST('/api/v1/desk/sessions/{session_id}/handoff', {
+        headers,
+        params: {path: {session_id: sessionId}},
+    })).then((r) => r.command);

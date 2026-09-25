@@ -17,9 +17,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// LoadBalancer interface defines the load balancer operations we need
+// LoadBalancer interface defines the load balancer operations we need. The
+// status line only displays the pick, never dispatches to it, so it uses the
+// side-effect-free PreviewService: SelectService would claim a half-open
+// breaker's probe slot on every status poll.
 type LoadBalancer interface {
-	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
+	PreviewService(rule *typ.Rule) (*loadbalance.Service, error)
 }
 
 // Handler handles Claude Code status HTTP requests
@@ -286,7 +289,7 @@ func (h *Handler) getTBModelMapping(modelID string, scenario typ.RuleScenario) *
 	}
 
 	// Get the service that would be selected
-	service, err := h.loadBalancer.SelectService(rule)
+	service, err := h.loadBalancer.PreviewService(rule)
 	if err != nil || service == nil {
 		return nil
 	}
@@ -357,21 +360,12 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 }
 
 func formatQuotaInline(usage *quota.ProviderUsage) string {
-	if usage == nil {
-		return ""
-	}
-
 	var quotas, balances []string
-	for _, window := range usage.Windows {
-		if window == nil {
-			continue
-		}
-		// A balance may have no reported cap. An explicit available amount
-		// remains useful even when its usage percentage is unknown.
-		if window.Type == quota.WindowTypeBalance && (window.Available != nil || window.Countable()) {
-			balances = append(balances, formatQuotaBalance(window))
-		} else if window.Countable() {
-			quotas = append(quotas, formatQuotaWindow(window)+" left")
+	for _, seg := range QuotaSegments(usage) {
+		if seg.Balance {
+			balances = append(balances, seg.Text)
+		} else {
+			quotas = append(quotas, seg.Text)
 		}
 	}
 	var sections []string
@@ -385,6 +379,86 @@ func formatQuotaInline(usage *quota.ProviderUsage) string {
 		return ""
 	}
 	return " | " + strings.Join(sections, " | ")
+}
+
+// QuotaSegment is one quota window as the status line shows it.
+type QuotaSegment struct {
+	Type    string // window type: session, daily, weekly, balance, ...
+	Balance bool   // a balance ("$12.40"), not a used/limit window
+	// Text is the rendered value, the same string the terminal status line
+	// prints: "60% left", "12K/100K left", "$12.40".
+	Text         string
+	UsedPercent  float64
+	ResetsAt     *time.Time
+	LimitReached bool
+}
+
+// QuotaSegments lists a provider's windows that have something to show, in
+// the provider's order. The terminal status line and Desk both render from
+// this, so the two never disagree.
+func QuotaSegments(usage *quota.ProviderUsage) []QuotaSegment {
+	if usage == nil {
+		return nil
+	}
+	var out []QuotaSegment
+	for _, window := range usage.Windows {
+		if window == nil {
+			continue
+		}
+		seg := QuotaSegment{
+			Type:         string(window.Type),
+			UsedPercent:  window.Percent(),
+			ResetsAt:     window.ResetsAt,
+			LimitReached: window.LimitReached != nil && *window.LimitReached,
+		}
+		// A balance may have no reported cap. An explicit available amount
+		// remains useful even when its usage percentage is unknown.
+		if window.Type == quota.WindowTypeBalance && (window.Available != nil || window.Countable()) {
+			seg.Balance, seg.Text = true, formatQuotaBalance(window)
+		} else if window.Countable() {
+			seg.Text = formatQuotaWindow(window) + " left"
+		} else {
+			continue
+		}
+		out = append(out, seg)
+	}
+	return out
+}
+
+// Route is where a request for a model is routed in a scenario, and the
+// quota of the provider it lands on: the tingly-box half of the status line.
+type Route struct {
+	ProviderName string
+	Model        string
+	Quota        []QuotaSegment
+}
+
+// PreviewRoute is ResolveRoute without the quota lookup, for listing several
+// routes at once. It returns nil when no rule matches the model.
+func (h *Handler) PreviewRoute(scenario, modelID string) *Route {
+	mapping := h.getTBModelMapping(modelID, typ.RuleScenario(scenario))
+	if mapping == nil {
+		return nil
+	}
+	return &Route{ProviderName: mapping.providerName, Model: mapping.model}
+}
+
+// ResolveRoute resolves the route the way the terminal status line does. It
+// returns nil when no rule matches the model in the scenario.
+func (h *Handler) ResolveRoute(ctx context.Context, scenario, modelID string) *Route {
+	mapping := h.getTBModelMapping(modelID, typ.RuleScenario(scenario))
+	if mapping == nil {
+		return nil
+	}
+	route := &Route{ProviderName: mapping.providerName, Model: mapping.model}
+	if h.quotaMgr != nil {
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		if usage, err := h.quotaMgr.GetQuota(ctx, mapping.providerUUID); err == nil {
+			route.Quota = QuotaSegments(usage)
+		}
+	}
+	return route
 }
 
 func formatQuotaBalance(window *quota.UsageWindow) string {

@@ -244,7 +244,20 @@ type ResultMessage struct {
 	Usage             UsageInfo          `json:"usage,omitempty"`
 	SessionID         string             `json:"session_id,omitempty"`
 	PermissionDenials []PermissionDenial `json:"permission_denials,omitempty"`
-	Timestamp         time.Time          `json:"timestamp,omitempty"`
+	// ModelUsage is keyed by the model id the CLI requested (what a gateway
+	// routes on), and carries each model's context window size.
+	ModelUsage map[string]ModelUsage `json:"modelUsage,omitempty"`
+	Timestamp  time.Time             `json:"timestamp,omitempty"`
+}
+
+// ModelUsage is one model's entry in ResultMessage.ModelUsage.
+type ModelUsage struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
+	CostUSD                  float64 `json:"costUSD"`
+	ContextWindow            int     `json:"contextWindow"`
 }
 
 // PermissionDenial represents a denied permission request

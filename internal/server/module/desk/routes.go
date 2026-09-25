@@ -83,6 +83,32 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) 
 		swagger.WithRequestModel(RespondRequest{}),
 		mw,
 	)
+	apiV1.POST("/desk/sessions/:session_id/handoff", h.Handoff,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Release a session so it can be continued in a terminal, returning the command"),
+		swagger.WithResponseModel(HandoffResponse{}),
+		mw,
+	)
+	apiV1.GET("/desk/sessions/:session_id/status", h.Status,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Where a session's model requests are routed and the quota they draw on"),
+		swagger.WithResponseModel(SessionStatusResponse{}),
+		mw,
+	)
+	apiV1.PUT("/desk/sessions/:session_id/profile", h.SetProfile,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Change which Claude Code profile a session's next turn runs with"),
+		swagger.WithRequestModel(SetProfileRequest{}),
+		swagger.WithResponseModel(SessionInfo{}),
+		mw,
+	)
+	apiV1.PUT("/desk/sessions/:session_id/model", h.SetModel,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Change which model tier a session's next turn asks for"),
+		swagger.WithRequestModel(SetModelRequest{}),
+		swagger.WithResponseModel(SessionInfo{}),
+		mw,
+	)
 	apiV1.PUT("/desk/sessions/:session_id/permission-mode", h.SetPermissionMode,
 		swagger.WithTags("desk"),
 		swagger.WithDescription("Change a session's permission mode for its next turn"),

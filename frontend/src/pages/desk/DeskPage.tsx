@@ -1,13 +1,12 @@
-import {PageLayout} from '@/components/PageLayout';
-import EmptyState from '@/components/EmptyState';
-import UnifiedCard from '@/components/UnifiedCard';
-import SessionListPanel from '@/components/desk/SessionListPanel';
-import TranscriptPanel from '@/components/desk/TranscriptPanel';
+import DeskSidebar from '@/components/desk/DeskSidebar';
+import NewSessionView from '@/components/desk/NewSessionView';
+import SessionView from '@/components/desk/SessionView';
 import {isBusyStatus} from '@/components/desk/deskUtils';
+import {requestNotifications, useDeskAttention} from '@/components/desk/useDeskAttention';
 import {useNotify} from '@/hooks/useNotify';
 import * as deskApi from '@/services/deskApi';
 import type {MessageInfo, RecentFolder, SessionInfo} from '@/services/deskApi';
-import {Grid} from '@mui/material';
+import {Box, useMediaQuery, useTheme} from '@mui/material';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
@@ -26,20 +25,27 @@ const DeskPage = () => {
     const notify = useNotify();
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedId = searchParams.get('session');
+    const theme = useTheme();
+    const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
 
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [recentFolders, setRecentFolders] = useState<RecentFolder[]>([]);
     const [permissionModes, setPermissionModes] = useState<string[]>([]);
     const [messages, setMessages] = useState<MessageInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [creating, setCreating] = useState(false);
+    // Per session: follow-ups queued behind a running turn, and the unsent
+    // text in the composer (kept when switching between sessions).
+    const [queues, setQueues] = useState<Record<string, string[]>>({});
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     const selectedSession = sessions.find((s) => s.id === selectedId) || null;
     const selectedBusy = selectedSession ? isBusyStatus(selectedSession.status) : false;
     // Lets a late messages response for a previously selected session be
     // dropped instead of overwriting the current one's transcript.
     const selectedIdRef = useRef(selectedId);
-    selectedIdRef.current = selectedId;
+    useEffect(() => {
+        selectedIdRef.current = selectedId;
+    }, [selectedId]);
 
     const loadSessions = useCallback(async () => {
         try {
@@ -117,42 +123,89 @@ const DeskPage = () => {
         return () => clearInterval(id);
     }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
 
-    const selectSession = (id: string) => {
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('session', id);
-            return next;
-        });
-    };
-
     // Resolves false on failure so the composer keeps what the user typed.
-    const handleCreate = async (path: string, prompt: string, permissionMode: string): Promise<boolean> => {
-        setCreating(true);
+    const handleCreate = async (path: string, prompt: string, permissionMode: string, profile: string, model: string): Promise<boolean> => {
+        requestNotifications();
         try {
-            const session = await deskApi.createSession(path, prompt, permissionMode || undefined);
+            const session = await deskApi.createSession(path, prompt, permissionMode || undefined, profile || undefined, model || undefined);
             // A brand-new session (and possibly a brand-new folder) needs the
             // full lists, unlike the single-session refreshes below.
             await Promise.all([loadSessions(), loadRecentFolders()]);
-            selectSession(session.id);
+            setSearchParams({session: session.id});
             return true;
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.startFailed', {defaultValue: 'Failed to start session'}));
             return false;
-        } finally {
-            setCreating(false);
         }
     };
 
-    const handleSend = async (text: string): Promise<boolean> => {
-        if (!selectedId) return false;
+    // send posts a message to any session (not only the one on screen: a
+    // queue drains wherever it is).
+    const send = useCallback(async (id: string, text: string): Promise<boolean> => {
         try {
-            await deskApi.sendMessage(selectedId, text);
+            await deskApi.sendMessage(id, text);
         } catch (err) {
             notify.error(err instanceof Error ? err.message : t('desk.sendFailed', {defaultValue: 'Failed to send message'}));
             return false;
         }
-        await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
+        if (selectedIdRef.current === id) {
+            await Promise.all([loadMessages(id), refreshSelectedSession(id)]);
+        } else {
+            await loadSessions();
+        }
         return true;
+    }, [notify, t, loadMessages, refreshSelectedSession, loadSessions]);
+
+    // While a turn runs, a message waits in the queue instead of being
+    // refused; the drain below sends it when the turn ends.
+    const handleSend = async (text: string): Promise<boolean> => {
+        if (!selectedId) return false;
+        requestNotifications();
+        if (selectedBusy) {
+            setQueues((q) => ({...q, [selectedId]: [...(q[selectedId] ?? []), text]}));
+            return true;
+        }
+        return send(selectedId, text);
+    };
+
+    // Sends a session's queue as one message. Taken out of state first so a
+    // later poll can't send it twice; put back in front if the send fails,
+    // and then not retried on its own until the session changes (else a
+    // refused send would retry on every render).
+    const draining = useRef(new Set<string>());
+    const refused = useRef(new Map<string, string>());
+    const flushQueue = useCallback(async (session: SessionInfo, items: string[]) => {
+        const id = session.id;
+        if (draining.current.has(id) || items.length === 0) return;
+        draining.current.add(id);
+        setQueues((q) => ({...q, [id]: (q[id] ?? []).slice(items.length)}));
+        const ok = await send(id, items.join('\n\n'));
+        if (ok) {
+            refused.current.delete(id);
+        } else {
+            refused.current.set(id, session.last_activity);
+            setQueues((q) => ({...q, [id]: [...items, ...(q[id] ?? [])]}));
+        }
+        draining.current.delete(id);
+    }, [send]);
+
+    // A turn that completed sends what was queued behind it. A failed one
+    // holds the queue, so a broken setup doesn't fail every follow-up too.
+    useEffect(() => {
+        for (const s of sessions) {
+            const items = queues[s.id];
+            if (!items?.length || s.status !== 'completed') continue;
+            if (refused.current.get(s.id) === s.last_activity) continue;
+            void flushQueue(s, items);
+        }
+    }, [sessions, queues, flushQueue]);
+
+    const unqueue = (index: number) => {
+        if (!selectedId) return;
+        const item = (queues[selectedId] ?? [])[index];
+        if (item === undefined) return;
+        setQueues((q) => ({...q, [selectedId]: (q[selectedId] ?? []).filter((_, i) => i !== index)}));
+        setDrafts((d) => ({...d, [selectedId]: d[selectedId] ? `${item}\n\n${d[selectedId]}` : item}));
     };
 
     const handleRespond = async (requestId: string, approved: boolean, answer: string) => {
@@ -167,6 +220,13 @@ const DeskPage = () => {
 
     const handleInterrupt = async () => {
         if (!selectedId) return;
+        // Stopping means changing course, so queued follow-ups go back into
+        // the input rather than out as the next turn (as the terminal does).
+        const held = queues[selectedId] ?? [];
+        if (held.length > 0) {
+            setQueues((q) => ({...q, [selectedId]: []}));
+            setDrafts((d) => ({...d, [selectedId]: [...held, d[selectedId] ?? ''].filter(Boolean).join('\n\n')}));
+        }
         try {
             await deskApi.interrupt(selectedId);
             await Promise.all([loadMessages(selectedId), refreshSelectedSession(selectedId)]);
@@ -185,6 +245,38 @@ const DeskPage = () => {
         }
     };
 
+    const handleHandoff = async (): Promise<string | null> => {
+        if (!selectedId) return null;
+        try {
+            return await deskApi.handoff(selectedId);
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('desk.handoffFailed', {defaultValue: 'Failed to hand off the session'}));
+            return null;
+        }
+    };
+
+    const handleProfileChange = async (profile: string) => {
+        if (!selectedId) return;
+        try {
+            const updated = await deskApi.setProfile(selectedId, profile);
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            await loadMessages(selectedId);
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('desk.profileFailed', {defaultValue: 'Failed to change profile'}));
+        }
+    };
+
+    const handleModelChange = async (model: string) => {
+        if (!selectedId) return;
+        try {
+            const updated = await deskApi.setModel(selectedId, model);
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            await loadMessages(selectedId);
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('desk.modelFailed', {defaultValue: 'Failed to change model'}));
+        }
+    };
+
     const handlePermissionModeChange = async (mode: string) => {
         if (!selectedId) return;
         try {
@@ -195,27 +287,38 @@ const DeskPage = () => {
         }
     };
 
+    const openSession = useCallback((id: string) => setSearchParams({session: id}), [setSearchParams]);
+    const unseen = useDeskAttention(sessions, selectedId, openSession);
+    const openNew = (folder?: string) => setSearchParams(folder ? {new: '1', folder} : {new: '1'});
+    const backToList = () => setSearchParams({});
+
+    // On narrow screens the list and the work area are separate views: the
+    // list shows until a session (or a new one) is opened.
+    const showList = !isNarrow || (!selectedId && !searchParams.has('new'));
+    const showMain = !isNarrow || !showList;
+
     return (
-        <PageLayout
-            loading={loading}
-            title={t('desk.title', {defaultValue: 'Desk'})}
-            subtitle={t('desk.subtitle', {defaultValue: 'Run Claude Code in a folder on this machine, from any browser.'})}
+        <Box
+            sx={{
+                height: '100%',
+                minHeight: 520,
+                display: 'flex',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 2,
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+            }}
         >
-            <Grid container spacing={2}>
-                <Grid size={{xs: 12, md: 4}}>
-                    <SessionListPanel
-                        sessions={sessions}
-                        recentFolders={recentFolders}
-                        permissionModes={permissionModes}
-                        selectedId={selectedId}
-                        onSelect={selectSession}
-                        onCreate={handleCreate}
-                        creating={creating}
-                    />
-                </Grid>
-                <Grid size={{xs: 12, md: 8}}>
-                    {selectedSession ? (
-                        <TranscriptPanel
+            {showList && (
+                <Box sx={{width: isNarrow ? '100%' : 280, flexShrink: 0, borderRight: isNarrow ? 0 : 1, borderColor: 'divider', bgcolor: 'background.default'}}>
+                    <DeskSidebar sessions={sessions} selectedId={selectedId} unseen={unseen} onSelect={openSession} onNew={openNew}/>
+                </Box>
+            )}
+            {showMain && (
+                <Box sx={{flex: 1, minWidth: 0}}>
+                    {loading ? null : selectedSession ? (
+                        <SessionView
                             session={selectedSession}
                             messages={messages}
                             permissionModes={permissionModes}
@@ -224,18 +327,29 @@ const DeskPage = () => {
                             onInterrupt={handleInterrupt}
                             onArchive={handleArchive}
                             onPermissionModeChange={handlePermissionModeChange}
+                            onProfileChange={handleProfileChange}
+                            onModelChange={handleModelChange}
+                            queued={queues[selectedSession.id] ?? []}
+                            onUnqueue={unqueue}
+                            onSendQueuedNow={() => void flushQueue(selectedSession, queues[selectedSession.id] ?? [])}
+                            draft={drafts[selectedSession.id] ?? ''}
+                            onDraftChange={(text) => setDrafts((d) => ({...d, [selectedSession.id]: text}))}
+                            onHandoff={handleHandoff}
+                            onBack={isNarrow ? backToList : undefined}
                         />
                     ) : (
-                        <UnifiedCard size="full">
-                            <EmptyState
-                                title={t('desk.noSelection', {defaultValue: 'No session selected'})}
-                                description={t('desk.noSelectionDescription', {defaultValue: 'Start a new one on the left, or pick one from the list.'})}
-                            />
-                        </UnifiedCard>
+                        <NewSessionView
+                            // Remount per folder so a folder group's "+" resets the form.
+                            key={searchParams.get('folder') ?? ''}
+                            initialFolder={searchParams.get('folder') ?? undefined}
+                            recentFolders={recentFolders}
+                            permissionModes={permissionModes}
+                            onCreate={handleCreate}
+                        />
                     )}
-                </Grid>
-            </Grid>
-        </PageLayout>
+                </Box>
+            )}
+        </Box>
     );
 };
 

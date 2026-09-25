@@ -100,6 +100,13 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
+	router.GET("/scenario/:scenario/models", handler.GetClaudeCodeModels,
+		swagger.WithDescription("List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route"),
+		swagger.WithTags("scenarios"),
+		swagger.WithQuery("profile", "string", "Claude Code profile id; empty is the main claude_code routing"),
+		swagger.WithResponseModel(ClaudeCodeModelsResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/profiles/:id/claude-config", handler.GetProfileClaudeConfig,
 		swagger.WithDescription("Get the effective and inherited Claude Code profile configuration"),
 		swagger.WithTags("scenarios"),

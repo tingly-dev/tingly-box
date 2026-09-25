@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -16,11 +17,37 @@ const maxToolOutput = 4 * 1024
 // converter turns agentboot's Claude messages into transcript entries. It
 // dedupes tool_use blocks, which can arrive both inside an assistant
 // message and as a standalone message depending on the CLI version.
+//
+// It also tallies the turn's token usage for the "usage" entry written when
+// the turn ends (see turnUsage).
 type converter struct {
 	seenTools map[string]bool
+
+	model         string                     // requested model id, from the session init
+	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
+	contextTokens int64                      // prompt size of the latest main-thread call
 }
 
-func newConverter() *converter { return &converter{seenTools: map[string]bool{}} }
+func newConverter() *converter {
+	return &converter{seenTools: map[string]bool{}, calls: map[string]anthropic.Usage{}}
+}
+
+// turnUsage is the payload of a "usage" transcript entry: one per turn.
+// Token counts are summed over the turn's API calls as the gateway returned
+// them. Claude Code's own cost figure is left out: it prices every call at
+// Anthropic list prices, which is wrong whenever a profile routes elsewhere.
+type turnUsage struct {
+	Model            string `json:"model,omitempty"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	// ContextTokens is how full the context was on the turn's last
+	// main-thread call; ContextWindow is the model's window, when known.
+	ContextTokens int64 `json:"context_tokens"`
+	ContextWindow int   `json:"context_window,omitempty"`
+	DurationMS    int64 `json:"duration_ms,omitempty"`
+}
 
 func (c *converter) messages(raw any) []session.Message {
 	switch m := raw.(type) {
@@ -50,12 +77,20 @@ func (c *converter) messages(raw any) []session.Message {
 		payload, _ := json.Marshal(map[string]any{"is_error": m.IsError})
 		return []session.Message{c.msg("tool_result", out, m.ToolUseID, payload)}
 	case *claude.ResultMessage:
+		var out []session.Message
 		if m.IsError && m.Result != "" {
-			return []session.Message{c.msg("error", m.Result, "", nil)}
+			out = append(out, c.msg("error", m.Result, "", nil))
 		}
-		return nil
+		if u, ok := c.usage(m); ok {
+			payload, _ := json.Marshal(u)
+			out = append(out, c.msg("usage", "", "", payload))
+		}
+		return out
 	case *claude.SystemMessage:
 		if m.SubType == claude.SystemSubtypeInit {
+			if model, ok := m.Raw["model"].(string); ok {
+				c.model = model
+			}
 			return []session.Message{c.msg("system", "claude code session "+m.SessionID, "", nil)}
 		}
 		return nil
@@ -63,7 +98,44 @@ func (c *converter) messages(raw any) []session.Message {
 	return nil
 }
 
+// usage totals the turn's API calls. It reports nothing for a turn that made
+// no call (one that failed before reaching the model).
+func (c *converter) usage(res *claude.ResultMessage) (turnUsage, bool) {
+	if len(c.calls) == 0 {
+		return turnUsage{}, false
+	}
+	u := turnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
+	for _, call := range c.calls {
+		u.InputTokens += call.InputTokens
+		u.OutputTokens += call.OutputTokens
+		u.CacheReadTokens += call.CacheReadInputTokens
+		u.CacheWriteTokens += call.CacheCreationInputTokens
+	}
+	// A resident process sends its init once, so later turns name the main
+	// model only through modelUsage: take the one that did the most work,
+	// ties broken by id so the pick doesn't follow map order.
+	if u.Model == "" {
+		most := -1
+		for id, mu := range res.ModelUsage {
+			if mu.OutputTokens > most || (mu.OutputTokens == most && id < u.Model) {
+				u.Model, most = id, mu.OutputTokens
+			}
+		}
+	}
+	u.ContextWindow = res.ModelUsage[u.Model].ContextWindow
+	return u, true
+}
+
 func (c *converter) assistant(m *claude.AssistantMessage) []session.Message {
+	if id := m.Message.ID; id != "" {
+		c.calls[id] = m.Message.Usage
+	}
+	if m.ParentToolUseID == nil {
+		usage := m.Message.Usage
+		if n := usage.InputTokens + usage.CacheReadInputTokens + usage.CacheCreationInputTokens; n > 0 {
+			c.contextTokens = n
+		}
+	}
 	var out []session.Message
 	var text strings.Builder
 	flush := func() {

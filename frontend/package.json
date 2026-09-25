@@ -37,6 +37,7 @@
     "openai": "^6.49.0",
     "openapi-fetch": "^0.17.0",
     "prism-react-renderer": "^2.4.1",
+    "prismjs": "^1.30.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

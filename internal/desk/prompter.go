@@ -36,6 +36,13 @@ func newWebPrompter(sessionID string, sessions *session.Manager) *webPrompter {
 	return &webPrompter{sessionID: sessionID, sessions: sessions, pending: map[string]chan approvalResult{}}
 }
 
+// hasPending reports whether a question or approval is waiting on the user.
+func (p *webPrompter) hasPending() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.pending) > 0
+}
+
 // resolve answers a pending request. Returns false if there was none (an
 // unknown or already-answered id).
 func (p *webPrompter) resolve(requestID string, approved bool, answer string) bool {

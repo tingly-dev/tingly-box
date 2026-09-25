@@ -2276,6 +2276,39 @@
         }
       }
     },
+    "/api/v1/desk/sessions/{session_id}/handoff": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Release a session so it can be continued in a terminal, returning the command",
+        "description": "Release a session so it can be continued in a terminal, returning the command",
+        "operationId": "apiV1DeskSessionsSession_idHandoffPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desk/sessions/{session_id}/interrupt": {
       "post": {
         "tags": [
@@ -2384,6 +2417,50 @@
         }
       }
     },
+    "/api/v1/desk/sessions/{session_id}/model": {
+      "put": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Change which model tier a session's next turn asks for",
+        "description": "Change which model tier a session's next turn asks for",
+        "operationId": "apiV1DeskSessionsSession_idModelPut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetModelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desk/sessions/{session_id}/permission-mode": {
       "put": {
         "tags": [
@@ -2410,6 +2487,50 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetPermissionModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/profile": {
+      "put": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Change which Claude Code profile a session's next turn runs with",
+        "description": "Change which Claude Code profile a session's next turn runs with",
+        "operationId": "apiV1DeskSessionsSession_idProfilePut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProfileRequest"
               }
             }
           }
@@ -2465,6 +2586,39 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/status": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Where a session's model requests are routed and the quota they draw on",
+        "description": "Where a session's model requests are routed and the quota they draw on",
+        "operationId": "apiV1DeskSessionsSession_idStatusGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStatusResponse"
                 }
               }
             }
@@ -5640,6 +5794,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioFlagResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/models": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route",
+        "description": "List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route",
+        "operationId": "apiV1ScenarioScenarioModelsGet",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "description": "Claude Code profile id; empty is the main claude_code routing",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeModelsResponse"
                 }
               }
             }
@@ -9398,6 +9594,67 @@
           "success"
         ]
       },
+      "ClaudeCodeModelTier": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "provider_model": {
+            "type": "string",
+            "description": "Field provider_model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          }
+        },
+        "required": [
+          "alias",
+          "model"
+        ]
+      },
+      "ClaudeCodeModelsData": {
+        "type": "object",
+        "properties": {
+          "tiers": {
+            "type": "array",
+            "description": "Field tiers",
+            "items": {
+              "$ref": "#/components/schemas/ClaudeCodeModelTier"
+            }
+          },
+          "unified": {
+            "type": "boolean",
+            "description": "Field unified"
+          }
+        },
+        "required": [
+          "unified",
+          "tiers"
+        ]
+      },
+      "ClaudeCodeModelsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ClaudeCodeModelsData"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
@@ -10005,6 +10262,10 @@
       "CreateSessionRequest": {
         "type": "object",
         "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
           "path": {
             "type": "string",
             "description": "Field path"
@@ -10012,6 +10273,10 @@
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
           },
           "prompt": {
             "type": "string",
@@ -10021,7 +10286,9 @@
         "required": [
           "path",
           "prompt",
-          "permission_mode"
+          "permission_mode",
+          "profile",
+          "model"
         ]
       },
       "CurlData": {
@@ -11283,6 +11550,18 @@
       "H": {
         "type": "object",
         "additionalProperties": {}
+      },
+      "HandoffResponse": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          }
+        },
+        "required": [
+          "command"
+        ]
       },
       "HealthInfoResponse": {
         "type": "object",
@@ -14477,6 +14756,44 @@
           "success"
         ]
       },
+      "QuotaSegmentInfo": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "boolean",
+            "description": "Field balance"
+          },
+          "limit_reached": {
+            "type": "boolean",
+            "description": "Field limit_reached"
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field resets_at"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          },
+          "used_percent": {
+            "type": "number",
+            "format": "double",
+            "description": "Field used_percent"
+          }
+        },
+        "required": [
+          "type",
+          "balance",
+          "text",
+          "used_percent",
+          "limit_reached"
+        ]
+      },
       "RecentFolder": {
         "type": "object",
         "properties": {
@@ -15497,6 +15814,10 @@
       "SessionInfo": {
         "type": "object",
         "properties": {
+          "awaiting_input": {
+            "type": "boolean",
+            "description": "Field awaiting_input"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -15515,9 +15836,17 @@
             "format": "date-time",
             "description": "Field last_activity"
           },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
           },
           "project": {
             "type": "string",
@@ -15543,6 +15872,9 @@
           "request",
           "response",
           "permission_mode",
+          "profile",
+          "model",
+          "awaiting_input",
           "created_at",
           "last_activity"
         ]
@@ -15562,6 +15894,50 @@
           "sessions"
         ]
       },
+      "SessionStatusResponse": {
+        "type": "object",
+        "properties": {
+          "provider_model": {
+            "type": "string",
+            "description": "Field provider_model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "quota": {
+            "type": "array",
+            "description": "Field quota",
+            "items": {
+              "$ref": "#/components/schemas/QuotaSegmentInfo"
+            }
+          },
+          "requested_model": {
+            "type": "string",
+            "description": "Field requested_model"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          }
+        },
+        "required": [
+          "scenario",
+          "quota"
+        ]
+      },
+      "SetModelRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          }
+        },
+        "required": [
+          "model"
+        ]
+      },
       "SetPermissionModeRequest": {
         "type": "object",
         "properties": {
@@ -15572,6 +15948,18 @@
         },
         "required": [
           "mode"
+        ]
+      },
+      "SetProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Field profile"
+          }
+        },
+        "required": [
+          "profile"
         ]
       },
       "Settings": {
