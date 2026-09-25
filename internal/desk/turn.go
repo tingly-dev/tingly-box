@@ -115,6 +115,9 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt st
 	conv := newConverter()
 	sink := func(raw any) { s.record(sessionID, conv, raw) }
 	_, werr = s.agent.Run(ctx, agentboot.RunRequest{ProjectPath: projectPath, Prompt: prompt, Opts: opts}, prompter, sink)
+	// A one-shot process exits with its turn, and its background tasks
+	// with it.
+	s.clearTasks(sessionID)
 	s.finishTurn(ctx, sessionID, werr)
 }
 

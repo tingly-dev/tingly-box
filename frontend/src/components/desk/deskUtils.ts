@@ -80,6 +80,8 @@ export interface TaskEvent {
 // TaskState is a task's latest known state, folded from its events.
 export interface TaskState {
     taskId?: string;
+    taskType?: string; // local_bash, local_agent
+    description?: string;
     status: 'running' | 'completed' | 'stopped' | 'failed';
     background: boolean;
     subagentType?: string;
@@ -144,6 +146,11 @@ export const foldTasks = (messages: MessageInfo[]): Map<string, TaskState> => {
             case 'task_started':
                 t.background = ev.background ?? false;
                 t.subagentType = ev.subagent_type || t.subagentType;
+                t.taskType = ev.task_type || t.taskType;
+                t.description = ev.description || t.description;
+                break;
+            case 'output_file':
+                t.outputFile = ev.output_file;
                 break;
             case 'task_progress':
                 t.activity = ev.description;
@@ -157,7 +164,7 @@ export const foldTasks = (messages: MessageInfo[]): Map<string, TaskState> => {
             case 'task_completed':
                 t.status = finalStatus(ev.status ?? 'completed');
                 t.summary = ev.summary;
-                t.outputFile = ev.output_file;
+                t.outputFile = ev.output_file || t.outputFile;
                 if (ev.usage) t.usage = ev.usage;
                 t.activity = undefined;
                 break;
@@ -350,3 +357,38 @@ export const formatTokens = (n: number): string => {
 };
 
 export {timeAgo} from '@/utils/timeAgo';
+
+// BackgroundTask is one row of the background tasks panel.
+export interface BackgroundTask extends TaskState {
+    taskId: string;
+    callId: string;
+    // The process that ran it is gone without saying how it ended (a server
+    // restart, an archive): it isn't running any more, whatever was last said.
+    ended: boolean;
+}
+
+// backgroundTasks lists the session's background tasks from its transcript,
+// running ones first. live is what the backend reports running right now
+// (SessionInfo.background_tasks), which settles a task whose process went
+// away without a final event.
+export const backgroundTasks = (
+    messages: MessageInfo[],
+    live: {task_id: string; task_type: string; description: string}[],
+): BackgroundTask[] => {
+    const liveIds = new Set(live.map((t) => t.task_id));
+    const rows: BackgroundTask[] = [];
+    const seen = new Set<string>();
+    for (const [callId, t] of foldTasks(messages)) {
+        if (!t.background || !t.taskId) continue;
+        seen.add(t.taskId);
+        const ended = t.status === 'running' && !liveIds.has(t.taskId);
+        rows.push({...t, taskId: t.taskId, callId, ended});
+    }
+    for (const t of live) {
+        if (!seen.has(t.task_id)) {
+            rows.push({taskId: t.task_id, callId: '', status: 'running', background: true, taskType: t.task_type, description: t.description, ended: false});
+        }
+    }
+    const rank = (r: BackgroundTask) => (r.status === 'running' && !r.ended ? 0 : 1);
+    return rows.map((r, i) => ({r, i})).sort((a, b) => rank(a.r) - rank(b.r) || b.i - a.i).map(({r}) => r);
+};

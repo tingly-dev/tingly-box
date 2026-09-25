@@ -330,6 +330,41 @@ conversation reads as the main agent's. A foreground run still "running"
 after its turn ended was cut off with the turn and reads as stopped. A
 backgrounded command's step carries a `background · <state>` tag.
 
+### 3.9 Background tasks
+
+What a session runs in the background (a `Bash` or subagent started with
+`run_in_background`) outlives the turn that started it, so it gets its own
+place rather than living only in the transcript:
+
+- **Live set** (`tasks.go`). `background_tasks_changed` carries the full set
+  of running tasks; the Service keeps the latest per session and reports it
+  as `SessionInfo.background_tasks`. The set dies with its process: the
+  resident's `OnTerminated` clears it, and so does the end of a one-shot
+  turn. The page trusts it over the transcript, so a task whose process went
+  away without a final event (a restart, an archive) reads as ended, not
+  running forever.
+- **Kept alive.** A process with background tasks is idle between turns, and
+  a long command can go minutes without an event, so the pool's idle sweep
+  would reclaim it and end its tasks. While a session has live tasks it is
+  touched every minute.
+- **Stop one task**: `POST /desk/sessions/:id/tasks/:task_id/stop` sends
+  `stop_task`; the task's "stopped" notification settles it.
+- **Read output**: `GET /desk/sessions/:id/tasks/:task_id/output` returns the
+  tail of its output file (a command's stdout and exit code). The path is
+  the one Claude Code reported for that task in the call's result ("Output
+  is being written to: …"), recorded as an `output_file` task event; only a
+  file shaped `…/tasks/<task_id>.output` is read.
+
+On the page: a header entry (shown once the session has had any background
+work, badged with the running count) opens the list — running first, each
+with its state, what it is doing, usage, Stop, and Output for commands. The
+sidebar marks a session with running background work (quieter than a
+running turn: nothing waits on the user). Archive and Continue in terminal
+end the process, so with tasks running they ask first; a profile, model or
+permission change says that the next message's restart will stop them. A
+session with live tasks is polled like one mid-turn, since that is when
+their progress, and the turn Claude starts when one finishes, arrive.
+
 ## 4. HTTP surface
 
 `internal/server/module/desk` is a thin adapter: request/response

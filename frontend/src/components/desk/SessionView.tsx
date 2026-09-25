@@ -1,11 +1,13 @@
-import {Archive, ArrowBack, Check, Close, ContentCopy, FoldUp, Terminal, UnfoldMore} from '@/components/icons';
+import {Archive, ArrowBack, Check, Close, ContentCopy, FoldUp, Stream, Terminal, UnfoldMore} from '@/components/icons';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import {useCopyFeedback} from '@/hooks/useCopyFeedback';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {Alert, Box, Button, Chip, IconButton, Stack, Tooltip, Typography} from '@mui/material';
+import {Alert, Badge, Box, Button, Chip, IconButton, Popover, Stack, Tooltip, Typography} from '@mui/material';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import BackgroundTasksPanel from './BackgroundTasksPanel';
 import Composer from './Composer';
-import {buildTranscript, isBusyStatus, pendingRequestId, sessionTitle} from './deskUtils';
+import {backgroundTasks, buildTranscript, isBusyStatus, pendingRequestId, sessionTitle} from './deskUtils';
 import FolderChip from './FolderChip';
 import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
@@ -34,6 +36,8 @@ interface SessionViewProps {
     // Releases the session to a local terminal; resolves the command to run,
     // or null if it couldn't.
     onHandoff: () => Promise<string | null>;
+    // Re-reads the transcript and the session now, e.g. after stopping a task.
+    onRefresh: () => void;
     // Set on narrow screens, where the session list is a separate view.
     onBack?: () => void;
 }
@@ -51,7 +55,7 @@ const readExpand = () => {
 
 const SessionView = ({
     session, messages, permissionModes, onSend, onRespond, onInterrupt, onArchive, onPermissionModeChange, onProfileChange, onModelChange,
-    queued, onUnqueue, onSendQueuedNow, draft, onDraftChange, onHandoff, onBack,
+    queued, onUnqueue, onSendQueuedNow, draft, onDraftChange, onHandoff, onRefresh, onBack,
 }: SessionViewProps) => {
     const {t} = useTranslation();
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,6 +85,13 @@ const SessionView = ({
     };
 
     const blocks = useMemo(() => buildTranscript(messages), [messages]);
+    const liveTasks = session.background_tasks ?? [];
+    const tasks = useMemo(() => backgroundTasks(messages, session.background_tasks ?? []), [messages, session.background_tasks]);
+    const [tasksAnchor, setTasksAnchor] = useState<HTMLElement | null>(null);
+    // Archiving or handing off ends the process, and every background task
+    // it runs: ask first while any is running.
+    const [confirm, setConfirm] = useState<'archive' | 'handoff' | null>(null);
+    const guarded = (action: 'archive' | 'handoff', run: () => void) => () => (liveTasks.length > 0 ? setConfirm(action) : run());
     const turnInFlight = isBusyStatus(session.status);
     const pendingId = pendingRequestId(blocks, turnInFlight);
     const isClosed = session.status === 'closed';
@@ -113,6 +124,15 @@ const SessionView = ({
                 {session.status === 'failed' && <Chip size="small" color="error" variant="outlined" label={t('desk.statusFailed', {defaultValue: 'failed'})}/>}
                 {isClosed && <Chip size="small" variant="outlined" label={t('desk.statusArchived', {defaultValue: 'archived'})}/>}
                 <Box sx={{flex: 1}}/>
+                {tasks.length > 0 && (
+                    <Tooltip title={t('desk.backgroundTasks', {defaultValue: 'Background tasks'})}>
+                        <IconButton size="small" onClick={(e) => setTasksAnchor(e.currentTarget)} aria-label={t('desk.backgroundTasks', {defaultValue: 'Background tasks'})}>
+                            <Badge badgeContent={liveTasks.length} color="primary" sx={{'& .MuiBadge-badge': {fontSize: '0.65rem', height: 16, minWidth: 16}}}>
+                                <Stream fontSize="small"/>
+                            </Badge>
+                        </IconButton>
+                    </Tooltip>
+                )}
                 <Tooltip title={expandAll
                     ? t('desk.collapseTools', {defaultValue: 'Collapse tool calls'})
                     : t('desk.expandTools', {defaultValue: 'Expand all tool calls'})}
@@ -128,7 +148,7 @@ const SessionView = ({
                     >
                         {/* span: a disabled button fires no events for the tooltip */}
                         <span>
-                            <IconButton size="small" disabled={turnInFlight} onClick={() => void handoff()} aria-label={t('desk.handoff', {defaultValue: 'Continue in terminal'})}>
+                            <IconButton size="small" disabled={turnInFlight} onClick={guarded('handoff', () => void handoff())} aria-label={t('desk.handoff', {defaultValue: 'Continue in terminal'})}>
                                 <Terminal fontSize="small"/>
                             </IconButton>
                         </span>
@@ -136,10 +156,38 @@ const SessionView = ({
                 )}
                 {!isClosed && (
                     <Tooltip title={t('desk.archiveHint', {defaultValue: 'Archive — ends the session; the folder and history stay'})}>
-                        <IconButton size="small" onClick={onArchive} aria-label={t('desk.archive', {defaultValue: 'Archive'})}><Archive fontSize="small"/></IconButton>
+                        <IconButton size="small" onClick={guarded('archive', () => void onArchive())} aria-label={t('desk.archive', {defaultValue: 'Archive'})}><Archive fontSize="small"/></IconButton>
                     </Tooltip>
                 )}
             </Stack>
+            <Popover
+                open={tasksAnchor !== null}
+                anchorEl={tasksAnchor}
+                onClose={() => setTasksAnchor(null)}
+                anchorOrigin={{vertical: 'bottom', horizontal: 'right'}}
+                transformOrigin={{vertical: 'top', horizontal: 'right'}}
+            >
+                <BackgroundTasksPanel sessionId={session.id} tasks={tasks} onChanged={onRefresh}/>
+            </Popover>
+            <ConfirmDialog
+                open={confirm !== null}
+                title={confirm === 'archive'
+                    ? t('desk.archiveWithTasks', {defaultValue: 'Archive and stop background tasks?'})
+                    : t('desk.handoffWithTasks', {defaultValue: 'Continue in terminal and stop background tasks?'})}
+                description={t('desk.tasksWillStop', {
+                    defaultValue: '{{count}} background task(s) still running will stop with this session\'s Claude process.',
+                    count: liveTasks.length,
+                })}
+                confirmLabel={confirm === 'archive' ? t('desk.archive', {defaultValue: 'Archive'}) : t('desk.handoff', {defaultValue: 'Continue in terminal'})}
+                confirmColor="warning"
+                onClose={() => setConfirm(null)}
+                onConfirm={() => {
+                    const action = confirm;
+                    setConfirm(null);
+                    if (action === 'archive') void onArchive();
+                    else void handoff();
+                }}
+            />
 
             <Box
                 ref={scrollRef}

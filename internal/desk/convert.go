@@ -2,6 +2,7 @@ package desk
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"time"
 
@@ -83,7 +84,16 @@ func (c *converter) messages(raw any) []session.Message {
 		payload, _ := json.Marshal(map[string]any{"is_error": m.IsError})
 		entry := c.msg("tool_result", out, m.ToolUseID, payload)
 		entry.Parent = c.toolParent[m.ToolUseID]
-		return []session.Message{entry}
+		entries := []session.Message{entry}
+		// A call that started a background task says where its output
+		// goes ("Output is being written to: …", "output_file: …"); the
+		// task's own events only name that file once it has finished.
+		if match := taskOutputRe.FindStringSubmatch(out); match != nil {
+			ev, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: match[2], OutputFile: match[1]})
+			c.taskTool[match[2]] = m.ToolUseID
+			entries = append(entries, c.msg("task", "", m.ToolUseID, ev))
+		}
+		return entries
 	case *claude.ResultMessage:
 		var out []session.Message
 		if m.IsError && m.Result != "" {
@@ -279,6 +289,10 @@ func (c *converter) task(m *claude.SystemMessage) (session.Message, bool) {
 	}
 	return c.msg("task", content, toolUseID, payload), true
 }
+
+// taskOutputRe finds a background task's output file in the result of the
+// call that started it: /…/tasks/<task_id>.output.
+var taskOutputRe = regexp.MustCompile(`(/\S*/tasks/([A-Za-z0-9_-]+)\.output)`)
 
 func taskUsageOf(v any) *taskUsage {
 	u, ok := v.(map[string]any)

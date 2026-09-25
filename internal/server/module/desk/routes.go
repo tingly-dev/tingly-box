@@ -89,6 +89,18 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) 
 		swagger.WithResponseModel(HandoffResponse{}),
 		mw,
 	)
+	apiV1.POST("/desk/sessions/:session_id/tasks/:task_id/stop", h.StopTask,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Stop one of a session's background tasks (a backgrounded command or subagent)"),
+		mw,
+	)
+	apiV1.GET("/desk/sessions/:session_id/tasks/:task_id/output", h.TaskOutput,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Read the end of a background task's output file"),
+		swagger.WithQuery("tail_bytes", "int", "How many bytes from the end to return (default and max 256 KiB)"),
+		swagger.WithResponseModel(TaskOutputResponse{}),
+		mw,
+	)
 	apiV1.GET("/desk/sessions/:session_id/status", h.Status,
 		swagger.WithTags("desk"),
 		swagger.WithDescription("Where a session's model requests are routed and the quota they draw on"),

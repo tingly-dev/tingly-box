@@ -2626,6 +2626,99 @@
         }
       }
     },
+    "/api/v1/desk/sessions/{session_id}/tasks/{task_id}/output": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Read the end of a background task's output file",
+        "description": "Read the end of a background task's output file",
+        "operationId": "apiV1DeskSessionsSession_idTasksTask_idOutputGet",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tail_bytes",
+            "in": "query",
+            "description": "How many bytes from the end to return (default and max 256 KiB)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOutputResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/tasks/{task_id}/stop": {
+      "post": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Stop one of a session's background tasks (a backgrounded command or subagent)",
+        "description": "Stop one of a session's background tasks (a backgrounded command or subagent)",
+        "operationId": "apiV1DeskSessionsSession_idTasksTask_idStopPost",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardrails/builtins": {
       "get": {
         "tags": [
@@ -9283,6 +9376,28 @@
           "data"
         ]
       },
+      "BackgroundTaskInfo": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Field task_id"
+          },
+          "task_type": {
+            "type": "string",
+            "description": "Field task_type"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "description"
+        ]
+      },
       "BatchGetQuotaRequest": {
         "type": "object",
         "properties": {
@@ -15822,6 +15937,13 @@
             "type": "boolean",
             "description": "Field awaiting_input"
           },
+          "background_tasks": {
+            "type": "array",
+            "description": "Field background_tasks",
+            "items": {
+              "$ref": "#/components/schemas/BackgroundTaskInfo"
+            }
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -15879,6 +16001,7 @@
           "profile",
           "model",
           "awaiting_input",
+          "background_tasks",
           "created_at",
           "last_activity"
         ]
@@ -16658,6 +16781,29 @@
         "required": [
           "kind",
           "id"
+        ]
+      },
+      "TaskOutputResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          }
+        },
+        "required": [
+          "content",
+          "truncated",
+          "size"
         ]
       },
       "TeamInfo": {

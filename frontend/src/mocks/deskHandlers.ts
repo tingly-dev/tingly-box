@@ -26,6 +26,7 @@ type Sess = {
     profile: string
     model: string
     awaiting_input: boolean
+    background_tasks: { task_id: string; task_type: string; description: string }[]
     created_at: string
     last_activity: string
 }
@@ -35,11 +36,11 @@ const SITE = '/Users/me/code/website'
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
 const sessions: Sess[] = [
-    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', model: '', awaiting_input: true, created_at: ago(12), last_activity: ago(1) },
-    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', model: 'opus', awaiting_input: false, created_at: ago(90), last_activity: ago(40) },
-    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(200), last_activity: ago(199) },
-    { id: 'desk-5', project: TB, status: 'completed', request: 'Audit how the auth middleware handles expired tokens', response: '', permission_mode: 'acceptEdits', profile: '', model: '', awaiting_input: false, created_at: ago(30), last_activity: ago(2) },
-    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(3000), last_activity: ago(2900) },
+    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', model: '', awaiting_input: true, background_tasks: [], created_at: ago(12), last_activity: ago(1) },
+    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', model: 'opus', awaiting_input: false, background_tasks: [], created_at: ago(90), last_activity: ago(40) },
+    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', model: '', awaiting_input: false, background_tasks: [], created_at: ago(200), last_activity: ago(199) },
+    { id: 'desk-5', project: TB, status: 'completed', request: 'Audit how the auth middleware handles expired tokens', response: '', permission_mode: 'acceptEdits', profile: '', model: '', awaiting_input: false, background_tasks: [{ task_id: 'ar1', task_type: 'local_agent', description: 'Review refresh path' }], created_at: ago(30), last_activity: ago(2) },
+    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', model: '', awaiting_input: false, background_tasks: [], created_at: ago(3000), last_activity: ago(2900) },
 ]
 
 const messages: Record<string, Msg[]> = {
@@ -129,6 +130,7 @@ const messages: Record<string, Msg[]> = {
         { kind: 'tool_use', content: 'Bash', request_id: 'b-test', payload: { command: 'go test ./internal/server/middleware/... -race', description: 'Run middleware tests', run_in_background: true }, timestamp: ago(26) },
         { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'task_started', task_id: 'bt1', task_type: 'local_bash', background: true, description: 'Run middleware tests' }, timestamp: ago(26) },
         { kind: 'tool_result', content: 'Command running in background with ID: bt1.', request_id: 'b-test', payload: { is_error: false }, timestamp: ago(26) },
+        { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'output_file', task_id: 'bt1', output_file: '/tmp/claude-501/-Users-me-code-tingly-box/desk-5/tasks/bt1.output' }, timestamp: ago(26) },
         { kind: 'tool_use', content: 'Read', request_id: 'r1', parent: 'a-review', payload: { file_path: 'internal/server/middleware/auth.go' }, timestamp: ago(20) },
         { kind: 'tool_result', content: 'func (m *Auth) refresh(…', request_id: 'r1', parent: 'a-review', payload: { is_error: false }, timestamp: ago(20) },
         { kind: 'task', content: '', request_id: 'a-review', payload: { event: 'task_progress', description: 'Tracing concurrent refresh calls', last_tool: 'Grep', usage: { total_tokens: 41300, tool_uses: 6, duration_ms: 312000 } }, timestamp: ago(3) },
@@ -198,7 +200,7 @@ export const deskHandlers = [
     http.post('/api/v1/desk/sessions', async ({ request }) => {
         const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string; profile?: string; model?: string }
         const now = new Date().toISOString()
-        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', model: body.model ?? '', awaiting_input: false, created_at: now, last_activity: now }
+        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', model: body.model ?? '', awaiting_input: false, background_tasks: [], created_at: now, last_activity: now }
         sessions.push(s)
         push(s.id, { role: 'user', content: body.prompt })
         runTurn(s, 'Looked around the project — here is what I found and what I would change next.')
@@ -280,9 +282,25 @@ export const deskHandlers = [
         const launch = s.profile ? `${tb} profile '${s.profile}'` : `${tb} cc`
         return HttpResponse.json({ command: `cd '${s.project}' && ${launch} --resume '${s.id}'` })
     }),
+    http.post('/api/v1/desk/sessions/:id/tasks/:taskId/stop', ({ params }) => {
+        const s = find(params.id as string)
+        if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        const task = s.background_tasks.find((t) => t.task_id === params.taskId)
+        if (!task) return HttpResponse.json({ error: { message: `task ${params.taskId} is not running` } }, { status: 409 })
+        s.background_tasks = s.background_tasks.filter((t) => t !== task)
+        const call = (messages[s.id] ?? []).find((m) => m.kind === 'task' && (m.payload as { task_id?: string }).task_id === task.task_id)
+        push(s.id, { kind: 'task', content: task.description, request_id: call?.request_id, payload: { event: 'task_notification', task_id: task.task_id, status: 'stopped', summary: task.description } })
+        return new HttpResponse(null, { status: 202 })
+    }),
+    http.get('/api/v1/desk/sessions/:id/tasks/:taskId/output', ({ params }) => {
+        if (params.taskId !== 'bt1') return HttpResponse.json({ error: { message: 'output not found' } }, { status: 404 })
+        const content = '=== RUN   TestAuth_Check\n--- PASS: TestAuth_Check (0.01s)\n=== RUN   TestAuth_RefreshConcurrent\n--- PASS: TestAuth_RefreshConcurrent (0.23s)\nPASS\nok  \tgithub.com/tingly-dev/tingly-box/internal/server/middleware\t1.412s\n\n[exited with code 0]\n'
+        return HttpResponse.json({ content, truncated: false, size: content.length })
+    }),
     http.post('/api/v1/desk/sessions/:id/archive', ({ params }) => {
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        s.background_tasks = []
         touch(s, 'closed')
         return HttpResponse.json(s)
     }),

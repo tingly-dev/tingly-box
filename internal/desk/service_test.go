@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/pool"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -1417,5 +1419,91 @@ func TestUnsolicitedTurn_StopInterruptsIt(t *testing.T) {
 	resident.mu.Unlock()
 	if n != 1 {
 		t.Fatalf("process interrupted %d times, want 1", n)
+	}
+}
+
+func tasksChanged(tasks ...map[string]any) agentboot.MessageEvent {
+	list := make([]any, 0, len(tasks))
+	for _, t := range tasks {
+		list = append(list, t)
+	}
+	return agentboot.MessageEvent{Raw: &claude.SystemMessage{Type: "system", SubType: claude.SystemSubtypeBackgroundTasksChanged, Raw: map[string]any{"tasks": list}}}
+}
+
+func TestBackgroundTasks_FollowTheProcess(t *testing.T) {
+	var resident *fakePersistentSession
+	svc, _ := newPersistentTestService(t, completingScript, func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.PersistentSession, error) {
+		resident = newFakePersistentSession(ctx, prompt, func(ctx context.Context, prompt string, s *fakePersistentSession) {
+			s.emit(tasksChanged(map[string]any{"task_id": "b1", "task_type": "local_bash", "description": "Run tests"}))
+			completingPersistentScript(ctx, prompt, s)
+		})
+		return resident, nil
+	})
+	sess, err := svc.CreateSession(context.Background(), CreateSessionInput{Path: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if got := svc.BackgroundTasks(sess.ID); len(got) != 1 || got[0].TaskID != "b1" || got[0].TaskType != "local_bash" {
+		t.Fatalf("BackgroundTasks = %+v, want the running command", got)
+	}
+	if err := svc.StopTask(context.Background(), sess.ID, "nope"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("StopTask(unknown) err = %v, want ErrConflict", err)
+	}
+	if err := svc.StopTask(context.Background(), sess.ID, "b1"); err != nil {
+		t.Fatalf("StopTask: %v", err)
+	}
+	resident.mu.Lock()
+	stopped := append([]string(nil), resident.stoppedTasks...)
+	resident.mu.Unlock()
+	if len(stopped) != 1 || stopped[0] != "b1" {
+		t.Fatalf("process asked to stop %v, want [b1]", stopped)
+	}
+
+	// The process ends: so do its tasks, whatever was last reported.
+	resident.crash("gone")
+	deadline := time.Now().Add(time.Second)
+	for len(svc.BackgroundTasks(sess.ID)) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("tasks still listed after their process ended")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestTaskOutput_ReadsOnlyTheReportedFile(t *testing.T) {
+	svc, mgr := newTestService(t, completingScript)
+	sess := mgr.CreateWith(webChatID, agentType, t.TempDir())
+	dir := filepath.Join(t.TempDir(), "sess", "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "b1.output")
+	if err := os.WriteFile(path, []byte("line1\nline2\n[exited with code 0]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: "b1", OutputFile: path})
+	mgr.AppendMessage(sess.ID, session.Message{Kind: "task", RequestID: "toolu_1", Payload: payload})
+
+	out, err := svc.TaskOutput(sess.ID, "b1", 0)
+	if err != nil || out.Content != "line1\nline2\n[exited with code 0]\n" || out.Truncated {
+		t.Fatalf("TaskOutput = %+v, %v", out, err)
+	}
+	full := "line1\nline2\n[exited with code 0]\n"
+	if out, err = svc.TaskOutput(sess.ID, "b1", 12); err != nil || !out.Truncated || out.Content != full[len(full)-12:] {
+		t.Fatalf("tail = %+v, %v; want the last 12 bytes", out, err)
+	}
+	if _, err := svc.TaskOutput(sess.ID, "b2", 0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unreported task: err = %v, want ErrNotFound", err)
+	}
+	if _, err := svc.TaskOutput(sess.ID, "../etc", 0); !errors.Is(err, ErrValidation) {
+		t.Fatalf("bad id: err = %v, want ErrValidation", err)
+	}
+	// A reported path that isn't a task output file is never read.
+	bad, _ := json.Marshal(taskEvent{Event: "output_file", TaskID: "b3", OutputFile: "/etc/passwd"})
+	mgr.AppendMessage(sess.ID, session.Message{Kind: "task", Payload: bad})
+	if _, err := svc.TaskOutput(sess.ID, "b3", 0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign path: err = %v, want ErrNotFound", err)
 	}
 }

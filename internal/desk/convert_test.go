@@ -205,3 +205,20 @@ func TestConverter_AttributesSubagentsAndRecordsTasks(t *testing.T) {
 		t.Fatalf("background shell update = %+v", updated)
 	}
 }
+
+func TestConverter_RecordsWhereABackgroundTaskWritesItsOutput(t *testing.T) {
+	msgs := replayFixture(t, "claude-2.1.282-agents-and-background.jsonl")
+	outputs := map[string]taskEvent{}
+	for _, m := range msgs {
+		var ev taskEvent
+		if m.Kind == "task" && json.Unmarshal(m.Payload, &ev) == nil && ev.Event == "output_file" {
+			outputs[m.RequestID] = ev
+		}
+	}
+	for call, id := range map[string]string{"toolu_bash_bg": "bjtpax2er", "toolu_agent_bg": "ac07a7160a001cde7"} {
+		ev, ok := outputs[call]
+		if !ok || ev.TaskID != id || filepath.Base(ev.OutputFile) != id+".output" {
+			t.Fatalf("output of %s = %+v, want task %s's .output file", call, ev, id)
+		}
+	}
+}

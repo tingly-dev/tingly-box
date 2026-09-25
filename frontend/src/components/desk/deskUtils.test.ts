@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {MessageInfo, SessionInfo} from '@/services/deskApi';
-import {agentReport, buildTranscript, cacheHitPct, formatTokens, groupSessionsByFolder, pendingRequestId, sessionUsage, toolSummary} from './deskUtils';
+import {agentReport, backgroundTasks, buildTranscript, cacheHitPct, formatTokens, groupSessionsByFolder, pendingRequestId, sessionUsage, toolSummary} from './deskUtils';
 
 const msg = (m: Partial<MessageInfo>): MessageInfo => ({content: '', timestamp: '2026-01-01T00:00:00Z', ...m} as MessageInfo);
 
@@ -167,5 +167,29 @@ describe('formatTokens', () => {
         expect(formatTokens(950)).toBe('950');
         expect(formatTokens(12_345)).toBe('12.3k');
         expect(formatTokens(1_234_567)).toBe('1.2M');
+    });
+});
+
+describe('backgroundTasks', () => {
+    const started = (call: string, id: string, type: string, description: string) =>
+        msg({kind: 'task', request_id: call, payload: {event: 'task_started', task_id: id, task_type: type, background: true, description}});
+
+    it('lists background work, running first, and settles what its process took down', () => {
+        const rows = backgroundTasks([
+            started('c1', 't1', 'local_bash', 'Old build'),
+            msg({kind: 'task', request_id: 'c1', payload: {event: 'task_notification', status: 'completed'}}),
+            started('c2', 't2', 'local_agent', 'Review'),
+            started('c3', 't3', 'local_bash', 'Dev server'),
+            msg({kind: 'task', request_id: 'c3', payload: {event: 'output_file', task_id: 't3', output_file: '/tmp/x/tasks/t3.output'}}),
+            // A foreground subagent is not background work.
+            msg({kind: 'task', request_id: 'c4', payload: {event: 'task_started', task_id: 't4', background: false}}),
+        ], [{task_id: 't3', task_type: 'local_bash', description: 'Dev server'}]);
+
+        expect(rows.map((r) => [r.taskId, r.status, r.ended])).toEqual([
+            ['t3', 'running', false],
+            ['t2', 'running', true],
+            ['t1', 'completed', false],
+        ]);
+        expect(rows[0].outputFile).toBe('/tmp/x/tasks/t3.output');
     });
 });
