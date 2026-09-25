@@ -40,8 +40,8 @@ wants, the same way any other caller of `/tingly/*` does.
                              ┌───────────────────────┐
                              │ your Python process     │
                              │  srv = tingly.Server()   │
-                             │  @srv.chat               │
-                             │  def handle(body):       │
+                             │  @srv.openai_chat("m")   │
+                             │  def reply(messages):    │
                              │      ... your logic ...  │
                              │      return srv.tb.chat(  │
                              │        model=...,         │──(3)──► back into tb, a
@@ -83,12 +83,12 @@ here unchanged; see `internal/server/module/providerquota/routes.go`.
 enough to stand up the loop above end to end. `Server` does answer all
 three protocols tb dispatches an outbound provider over (see below), since
 tb's own **dual provider** mechanism already exists to carry two of them
-and the third rides the same URL — but a handler gets the raw request
-body exactly as the caller sent it, on every endpoint, with no typed
-wrapper and no normalization across protocols. A prototype hands a handler
-the real wire shape and stops there; inventing a shape of our own to sit in
-front of it — even a "small" one — is exactly the kind of forward-looking
-design this v1 doesn't need yet. Everything else (codegen, discovery,
+and the third rides the same URL — but a function gets its protocol's own
+fields exactly as the caller sent them: unpacked from the body, never
+wrapped in a type of ours, never normalized across protocols. A prototype
+hands over the real wire values and stops there; inventing a shape of our
+own to sit in front of them — even a "small" one — is exactly the kind of
+forward-looking design this v1 doesn't need yet. Everything else (codegen, discovery,
 incremental streaming, helpers) stays a deliberate non-goal until someone has a
 concrete need for it.
 
@@ -102,25 +102,25 @@ sdk/python/
   scripts/
     extract_quota_schema.py  # openapi.json -> just the provider-quota schema closure
   tingly/
-    __init__.py               # exports Server, Client, and the sugar functions
+    __init__.py               # exports Server, Client, and the module-level functions
     client.py                 # Client — call tb from Python; quota methods
-    server.py                 # Server — raw layer: be a provider from Python
-    sugar.py                  # text / image / image_edit / serve — the few-lines layer
+    server.py                 # Server — the one provider contract: register functions, serve them
+    default.py                # tingly.openai_chat / ... / serve — the same methods on a default Server
     _generated_quota.py       # pydantic v2, from `task gen:py:quota` — NOT committed
   examples/
     relay.py              # pure forwarder, all three text protocols, independently
     fanout.py             # ask N tb models, merge the replies
-    image.py              # image provider via sugar, with a fake (stdlib PNG) model
+    image.py              # image provider via tingly.image, with a fake (stdlib PNG) model
   tests/
     test_framework.py     # Server + Client against a stub HTTP server
-    test_sugar.py         # the sugar layer end to end
+    test_default.py       # the module-level functions (the default Server)
     test_e2e_tb.py        # against a real tb binary (skipped without TINGLY_TB_BIN)
     helpers.py            # shared HTTP / multipart helpers (not a test module)
 ```
 
 No CLI, no transports/helpers packages, and — after an earlier draft added
 one and rolled it back — no hand-written request/response type module
-either. If a handler needs the real `anthropic`/`openai` SDK client, it
+either. If a function needs the real `anthropic`/`openai` SDK client, it
 constructs one itself, pointed at the URL and token `Client` already
 resolved — nothing to wrap yet.
 
@@ -163,117 +163,137 @@ matter what the original caller used.
 plane — quota — covered in its own section below. Every other admin-plane
 call (list providers, create rule, …) stays out of scope: a plain
 `httpx`/`requests` call against tb's already-public API covers those if a
-handler ever needs them, and there is still no generated control-plane
+function ever needs them, and there is still no generated control-plane
 wrapper for the *rest* of the API surface (see Non-goals).
 
 ## `Server` — be a provider
 
+**One contract, reachable two ways.** `Server` is the provider: one method
+per endpoint registers a plain Python function under a model name, and
+`run()` serves them. The module-level `tingly.openai_chat(...)` & co. are
+the same methods on a default `Server` the module creates on first use,
+and `tingly.serve()` is that server's `run()`. So what a function receives
+and returns is defined in exactly one place (`server.py`); there is no
+second, "raw" way to write a provider.
+
+```python
+import tingly
+
+@tingly.image("qwen-image-2.1")
+def generate(prompt):
+    return pipe(prompt).images[0]
+
+tingly.serve()
+```
+
+is the same as `srv = tingly.Server()`, `@srv.image("qwen-image-2.1")`,
+`srv.run()`. Build your own `Server` when you need what the default one
+doesn't have: `.tb` (a `Client` back into tb — `Server(tb_base_url=...,
+tb_token=...)`, falling back to `TINGLY_BASE_URL` / `TINGLY_TOKEN`), more
+than one server in a process, or isolation in tests:
+
 ```python
 from tingly import Server, text_of
 
-srv = Server("my-sdk", tb_base_url="http://localhost:12580", tb_token=os.environ["TINGLY_TOKEN"])
+srv = Server(tb_base_url="http://localhost:12580", tb_token=os.environ["TINGLY_TOKEN"])
 
-@srv.chat
-def handle_chat(body):
-    # body is the raw OpenAI chat-completion request, unmodified.
-    return srv.tb.chat(model="claude-opus-4-8", messages=body["messages"],
-                        scenario="custom")
+@srv.openai_chat("relay")
+def relay(messages):
+    return srv.tb.chat(model="claude-opus-4-8", messages=messages)   # dict, passed through
 
-@srv.responses
-def handle_responses(body):
-    # body is the raw OpenAI Responses request, unmodified — body["input"],
-    # not body["messages"].
-    return text_of(srv.tb.chat(model="claude-opus-4-8",
-                                messages=[{"role": "user", "content": body["input"]}],
-                                scenario="custom"))
-
-@srv.messages
-def handle_messages(body):
-    # body is the raw Anthropic messages request, unmodified. This handler
-    # is responsible for its own translation if it needs one; .tb still
-    # only speaks OpenAI to tb.
-    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=body["messages"],
-                                scenario="custom"))
+@srv.anthropic_message("relay")
+def relay_anthropic(messages, system=None):
+    return text_of(srv.tb.chat(model="claude-opus-4-8", messages=messages))
 
 srv.run(port=8765)
 ```
 
-`run()` starts a stdlib `ThreadingHTTPServer` exposing:
+### What a function receives, and returns
 
-- `GET /v1/models` (and `/models`) — a one-entry model list (`srv.name`), so
-  tb's "supports_models_endpoint" refresh can discover it, exactly like
-  Ollama.
-- `POST /v1/chat/completions` (and `/chat/completions`) — OpenAI Chat
-  Completions. Hands `@srv.chat`'s handler **the raw parsed request body,
-  unmodified**. A `dict` result is passed through as-is (the common case —
-  it's already an OpenAI ChatCompletion, e.g. straight from
-  `srv.tb.chat(...)`); a `str` is wrapped into a minimal one-choice
-  ChatCompletion envelope.
-- `POST /v1/responses` (and `/responses`) — OpenAI Responses, tb's third
-  outbound provider shape alongside Chat and Anthropic (see
-  `.design/openai-endpoint-routing.md` — a provider declares
-  `EndpointModeResponses`/`EndpointModeBoth` and tb dispatches accordingly;
-  it is not a second base URL, just a different path under the same OpenAI
-  URL). Hands `@srv.responses`'s handler the raw request body — `input`,
-  not `messages`. A `dict` result passes through as-is; a `str` is wrapped
-  into a minimal one-output-item Responses envelope, validated against the
-  real `openai.types.responses.Response` pydantic model while building this
-  (round-trips clean — see `sdk/python/tingly/server.py`'s
-  `_wrap_text_openai_responses`).
-- `POST /v1/messages` (and `/messages`) — Anthropic. Hands `@srv.messages`'s
-  handler **the raw parsed request body, unmodified** — content blocks,
-  `system`, tool defs and all. A `dict` result is passed through as-is
-  (assumed already Anthropic-shaped); a `str` is wrapped into a minimal
-  Anthropic message envelope. Always treated as beta-shaped
-  unconditionally — no `?beta=true` / `anthropic-version` branching, the
-  same simplification tb's own `vmodel` virtual server already makes at its
-  HTTP boundary ("accepts both and canonicalizes to the beta superset").
+**Unpack, don't convert.** A function receives the field(s) that are the
+point of the call, positionally, plus the rest of the same request body as
+keyword arguments — every value exactly as the caller sent it, never
+translated, normalized or wrapped.
 
-**The three handlers are completely independent — there is no bridge
-between them, and none gets a typed wrapper.** Each receives exactly the
-parsed JSON body the caller sent; nothing extracts fields into a
-dataclass, and nothing converts a reply from one protocol's shape into
-another's. A provider that wants to serve more than one protocol registers
-more than one decorator and writes native code for each against the real
-shape — the framework's job stops at routing the request to the right
-handler and applying a purely-local (never cross-protocol) string-to-envelope
-wrap when a handler returns text. This was tried twice, over two revisions,
-and rolled back both times: first a shared `ChatRequest` normalizing across
-protocols (folding Anthropic's `system` into a message, flattening content
-blocks to text, converting an OpenAI dict reply into an Anthropic envelope
-via `text_of()`), then — after that was cut — a "small" OpenAI-only
-`ChatRequest` dataclass still standing in front of `@srv.chat`'s raw body.
-Both were the same mistake at different sizes: planning a shape on the
-handler's behalf instead of handing over what the caller actually sent.
-Register only the decorator(s) you want; an endpoint with no handler
-answers 404.
+| method (and `tingly.` function) | endpoint | positional | may return |
+|---|---|---|---|
+| `openai_chat(model)`, alias `chat` | `POST /v1/chat/completions` | `messages` (the body's list, as-is) | `str` or a ChatCompletion `dict` |
+| `openai_responses(model)`, alias `responses` | `POST /v1/responses` | `input` (a string or the item list, as-is) | `str` or a Response `dict` |
+| `anthropic_message(model)`, alias `message` | `POST /v1/messages` | `messages` (the body's list, as-is) | `str` or a Message `dict` |
+| `image(model)` | `POST /v1/images/generations` | `prompt` | image(s) or an `ImagesResponse` `dict` (see Images) |
+| `image_edit(model)` | `POST /v1/images/edits` | `prompt`, `images` (`list[bytes]`) | same as `image` |
 
-**The request's *type hint* is a different question from its runtime
-shape, and answering it doesn't reopen that mistake.** `openai` and
-`anthropic` each already ship the exact types these bodies are —
-`CompletionCreateParamsBase`, `ResponseCreateParamsBase`,
-`MessageCreateParamsBase` — and critically, all three are `TypedDict`s in
-the upstream SDKs, not Pydantic models: a `TypedDict` is a pure static-typing
-construct, structurally identical to a plain `dict` at runtime, so
-annotating a handler's parameter with one adds real IDE/type-checker
-support and **changes nothing at runtime** — no wrapping, no validation, no
-invented shape, just a label pointing at a shape that already has an
-authoritative, officially-maintained definition instead of none. (Verified,
-not assumed: installed both packages and confirmed with
-`typing_extensions.is_typeddict()` before relying on it — see below.) The
-imports live behind `if TYPE_CHECKING:` in `server.py`, so `openai`/
-`anthropic` are never required at runtime — `import tingly` doesn't
-change — only a type checker or an editor with those packages installed
-benefits. Response types (`ChatCompletion`, `Response`, `Message`) *are*
-Pydantic models in both SDKs, since they parse untrusted API JSON; reusing
-those for real (not just as a type hint) would mean actually depending on
-`openai`/`anthropic` at runtime, which is a materially bigger step —
-tracked as open, not decided, in Non-goals.
+- **Only the keyword arguments a function declares are passed.** `def
+  generate(prompt)` gets just `prompt`; `def generate(prompt, size=None)`
+  also gets `size` when the request carries it; `**kw` gets the whole rest
+  of the body. The rest includes `model`, so a function answering several
+  names can declare `model` to see which one was asked for. This is what
+  lets a one-liner stay one line without its author learning the request
+  body first — and what makes a separate whole-body contract unnecessary.
+- **A `str` is wrapped** into a minimal envelope of the endpoint's own
+  protocol (the Responses one validated against the real
+  `openai.types.responses.Response` model while building it — see
+  `_wrap_text_openai_responses`). **A `dict` passes through as-is**, e.g.
+  straight from `srv.tb.chat(...)` for `openai_chat`, since `.tb` always
+  speaks OpenAI.
+- **Several models, one process.** Each registration names its model;
+  `GET /v1/models` (and `/models`) lists every registered name — nothing
+  else defines that list — so tb's model discovery finds them all, exactly
+  like Ollama. A request is routed by its `model` field. If exactly one
+  function is registered on an endpoint, it answers whatever the name (the
+  same leniency as the optional `/v1` prefix, so a mistyped model in a curl
+  test doesn't fail); with several, an unknown name is a 500 naming the
+  registered ones.
+- An endpoint with no function answers 404; `run()` with nothing registered
+  raises.
+- **Nothing bridges the text protocols.** Each method unpacks only its own
+  protocol's body; a function registered with `openai_chat` never sees an
+  Anthropic request, and no reply is converted from one protocol's shape
+  into another's. Which one tb calls is decided by how the provider is
+  registered (below). `/v1/messages` is always treated as beta-shaped — no
+  `?beta=true` / `anthropic-version` branching, the same simplification
+  tb's own `vmodel` virtual server makes at its HTTP boundary.
+- Path leniency is the one deliberate bit of cleverness: every route also
+  answers without the `/v1` prefix, since which shape a caller's configured
+  base URL expects isn't worth troubleshooting by hand.
 
-Path leniency is the one deliberate bit of cleverness `Server` does apply,
-regardless of protocol: every route also answers without the `/v1` prefix,
-since which shape a caller's configured base URL expects isn't worth
-troubleshooting by hand.
+**Names.** Text has three wire protocols, so each text method carries its
+protocol's full name — `openai_chat`, `openai_responses`,
+`anthropic_message` — with the short aliases `chat`, `responses`, `message`
+(the same functions under a second name, not a separate contract; the full
+names stay canonical in docs and error messages). Images have one protocol
+each, so those are named for the capability: `image`, `image_edit`.
+Because `srv.chat` and `tingly.chat` are now literally the same method,
+one word has one meaning (`.design/ux-principles.md`).
+
+### Why one contract, not two
+
+This SDK briefly had two: a raw layer (`@srv.chat` handed the whole parsed
+body to `handler(body)`) and a sugar layer on top (`@tingly.text("m")`
+unpacked it). That was two ways to write the same provider, two
+registration styles, and the same word meaning two things (`tingly.chat`
+vs `srv.chat`). Everything the raw layer offered that sugar didn't turned
+out to be small: the whole body is `**rest`; the model name is `model`,
+passed when declared; `.tb` and explicit instances are just `Server`
+itself. So the two were merged into the unpacked contract above, and the
+whole-body handler is gone.
+
+Unpacking is not a return of what was rolled back earlier. Twice, over two
+revisions, a shape stood in front of the wire body: first a shared
+`ChatRequest` normalizing across protocols (folding Anthropic's `system`
+into a message, flattening content blocks, converting an OpenAI dict reply
+into an Anthropic envelope via `text_of()`), then a "small" OpenAI-only
+`ChatRequest` dataclass. Both invented a type and made the handler read the
+request through it. Unpacking invents nothing: `messages` *is* the body's
+list, `system` *is* the body's value, content blocks and tool defs included.
+
+Request typing follows from that. Handlers used to be annotated with the
+upstream SDKs' `TypedDict` bodies (`CompletionCreateParamsBase` & co.,
+`TYPE_CHECKING`-only); a function now receives fields, not a body, so
+those no longer attach to anything in the SDK. A function author who wants
+types annotates its own parameters (`messages:
+list[ChatCompletionMessageParam]`) — still zero runtime cost, still no
+dependency on `openai`/`anthropic`.
 
 ### Streaming: the whole reply, replayed as one chunk
 
@@ -284,9 +304,9 @@ and tb turned that into an **empty stream with no error anywhere** (tb
 logs `upstream 200`). Silent failure on the most common client is not an
 acceptable prototype gap.
 
-The fix keeps the handler contract untouched. When a request to
+The fix keeps the function contract untouched. When a request to
 `/chat/completions`, `/responses` or `/messages` carries `stream: true`,
-`Server` calls the handler once exactly as before, builds the complete
+`Server` calls the function once exactly as before, builds the complete
 reply exactly as before (a `str` wrapped, a `dict` passed through), and
 then **replays that complete reply as an SSE stream in the same protocol,
 with all of its content in a single chunk**:
@@ -299,12 +319,12 @@ with all of its content in a single chunk**:
 
 This is not protocol conversion — the reply never changes protocol, it
 changes from "whole" to "streamed" within one. It also means a relay
-handler that returns `srv.tb.chat(...)`'s dict streams correctly with no
+function that returns `srv.tb.chat(...)`'s dict streams correctly with no
 change. What it doesn't give is incremental output: the first byte arrives
-when the handler has finished. Handlers that want to stream token by token
-(a generator contract) remain future work. Images are never streamed.
+when the function has finished. Functions that want to stream token by
+token (a generator contract) remain future work. Images are never streamed.
 
-Because the reply is built before the first byte is written, a handler
+Because the reply is built before the first byte is written, a function
 error still comes back as a normal HTTP 500, never a half-written stream.
 
 ### The no-key + Anthropic-style footgun (and why it isn't a backend fix)
@@ -325,9 +345,14 @@ entirely since it never checked it.
 
 ### Register it with tb
 
-As a **dual** provider (see `.design/dual-provider.md`) — the "Dual
-endpoint" card, not "Custom endpoint": Connect AI → **Self-hosted** →
-**Dual endpoint**, OpenAI URL `http://localhost:8765/v1`, Anthropic URL
+Only OpenAI-protocol functions (`openai_chat`, `openai_responses`, images):
+a plain **Custom endpoint** (OpenAI, `http://localhost:8765/v1`, no key).
+tb translates Anthropic- and Responses-speaking clients into Chat for a
+Chat-mode provider, so `openai_chat` alone serves most plugins.
+
+To also get the Anthropic body natively (`anthropic_message`), register it
+as a **dual** provider (see `.design/dual-provider.md`) — the "Dual
+endpoint" card: Connect AI → **Self-hosted** → **Dual endpoint**, OpenAI URL `http://localhost:8765/v1`, Anthropic URL
 `http://localhost:8765` (the Anthropic SDK strips a trailing `/v1` if
 present, so either works, but the bare host matches how Bedrock/Vertex/
 Azure templates present their Anthropic side), same shared token (see
@@ -335,14 +360,14 @@ above). tb then dispatches each inbound request to whichever URL matches
 the *client's own* protocol — exactly the mechanism dual-provider was built
 for, just with a Python process instead of Vertex/Bedrock behind it.
 
-`@srv.responses` needs no third URL: per `.design/openai-endpoint-routing.md`,
+`openai_responses` needs no third URL: per `.design/openai-endpoint-routing.md`,
 Responses-vs-Chat is a *path* choice under the same OpenAI base URL
 (`EndpointModeChat`/`Responses`/`Both`, a property of the provider row, not
 a second `api_base` field — dual-provider only has `APIBaseOpenAI` and
 `APIBaseAnthropic`), so the same OpenAI URL registered above already
 carries it.
 
-## Images — `@srv.images` / `@srv.image_edits`
+## Images — `image` / `image_edit`
 
 The motivating case: a self-deployable image model (say Qwen-Image 2.1)
 that people already drive from a Python script. Before this section,
@@ -365,24 +390,20 @@ tb reads the reply as `openai.ImagesResponse`
 (`{"created", "data": [{"b64_json" | "url"}], "usage"?}`), and only
 `b64_json` entries are persisted to tb's image directory.
 
-So `Server` gains two more raw handlers, same contract as the other three —
-raw request in, dict passed through or a convenience value wrapped:
+So `Server` has two image methods, same contract as the text ones:
 
-- `@srv.images` → `POST /v1/images/generations` (and `/images/generations`).
-  Body is the parsed JSON, unmodified. Type hint:
-  `openai.types.image_generate_params.ImageGenerateParamsBase` (a `TypedDict`,
-  `TYPE_CHECKING`-only, like the others).
-- `@srv.image_edits` → `POST /v1/images/edits` (and `/images/edits`). The
-  body is multipart, not JSON, so "raw" here means the form decoded into a
-  dict — the only decoding done, the multipart counterpart of `json.loads`:
-  text fields stay strings under their own names (`"prompt"`, `"model"`,
-  `"n": "1"` — no coercion to int), file fields become `bytes`. The SDK
-  sends one image as `image` and several as `image[]`; both land in
-  `body["image"]` as a `list[bytes]`, since that's one field on the wire in
-  two encodings, not two fields. `mask`, when present, is `bytes`. Typed as
-  a plain `dict`, not `ImageEditParamsBase`: that `TypedDict` says `n: int`,
-  and a multipart body says `"1"` — claiming the upstream type would be a lie
-  about the runtime value.
+- `image(model)` → `POST /v1/images/generations` (and `/images/generations`).
+  The body is JSON; the function gets `prompt`, and the rest (`size`, `n`,
+  `quality`, …) as declared keywords.
+- `image_edit(model)` → `POST /v1/images/edits` (and `/images/edits`). The
+  body is multipart, not JSON, so the form is first decoded into a dict —
+  the only decoding done, the multipart counterpart of `json.loads`: text
+  fields stay strings under their own names (`"prompt"`, `"model"`, `"n":
+  "1"` — no coercion to int), file fields become `bytes`. The SDK sends one
+  image as `image` and several as `image[]`; both arrive as one
+  `list[bytes]`, since that's one field on the wire in two encodings, not
+  two fields. The function gets `prompt` and that list as `images`; `mask`,
+  when sent, is `bytes` in the rest.
 
 Convenience return for both: `bytes` (one image), a `list` of them, or any
 object with a `.save(fp, format)` method (a PIL image — what a diffusers
@@ -395,107 +416,25 @@ zero runtime dependencies.
 
 ### Register it with tb
 
-Unlike text, images need no dual URL: a plain **Custom endpoint** (OpenAI,
-`http://localhost:8765/v1`, no key) is enough, and the no-key Anthropic
-footgun above doesn't apply. Then point a rule in the `imagegen` scenario at
-that provider and the model name the `Server` advertises on `/v1/models`.
+A plain **Custom endpoint** (OpenAI, `http://localhost:8765/v1`, no key),
+as for text; the no-key Anthropic footgun above doesn't apply. Then point a
+rule in the `imagegen` scenario at that provider and the model name the
+function was registered under (listed on `/v1/models`).
 
-## Sugar — the few-lines path
+## Known limitations, not addressed yet
 
-Everything above is the raw layer: exact protocol in, exact protocol out.
-It's the right floor, and it stays — but it is not a few-lines experience.
-Wrapping a Python image pipeline still means knowing the OpenAI images body,
-picking a decorator per endpoint, and registering by hand. The target is:
-
-```python
-import tingly
-
-@tingly.image("qwen-image-2.1")
-def generate(prompt):
-    return pipe(prompt).images[0]
-
-tingly.serve()
-```
-
-### What sugar is, and what it deliberately isn't
-
-The earlier rollbacks (see `Server` above) were about the *raw* layer
-inventing a shape in front of the wire body. Sugar is a separate, opt-in
-layer on top, and it stays on the right side of that line by following one
-rule: **unpack, don't convert.** A sugar function receives the one field
-that is the point of the call, plus the rest of the same body as keyword
-arguments — never a translated or normalized version of it — and its return
-value is wrapped by the same convenience wrappers the raw layer already
-has. Nothing is bridged between protocols.
-
-Sugar names say which contract a function signs up for, and are kept
-distinct from the raw names so one word never means two contracts
-(`.design/ux-principles.md`). Text has three wire protocols, so each text
-decorator is named for its protocol in full — `tingly.openai_chat`,
-`tingly.openai_responses`, `tingly.anthropic_message` (vs the raw
-`srv.chat` / `srv.responses` / `srv.messages`). Images have one protocol
-each, so those are named for the capability — `tingly.image`,
-`tingly.image_edit` (vs `srv.images` / `srv.image_edits`).
-
-The text decorators also have short aliases — `tingly.chat`,
-`tingly.responses`, `tingly.message` — for the one-liner that doesn't want
-to spell the protocol out. They are the same functions under a second name
-(`tingly.chat is tingly.openai_chat`), not a separate contract. The short
-names do overlap the raw `srv.chat` / `srv.responses`, but the two never
-meet: one is a module-level decorator taking a model name, the other a
-method on a `Server` you built yourself, and both serve the same endpoint.
-The full names stay canonical in docs and error messages.
-
-| sugar | endpoint it serves | function receives | may return |
-|---|---|---|---|
-| `@tingly.openai_chat(model)`, alias `chat` | `/v1/chat/completions` | `messages` (the body's list, as-is), `**rest` | `str` or a ChatCompletion `dict` |
-| `@tingly.openai_responses(model)`, alias `responses` | `/v1/responses` | `input` (a string or the item list, as-is), `**rest` (incl. `instructions`) | `str` or a Response `dict` |
-| `@tingly.anthropic_message(model)`, alias `message` | `/v1/messages` | `messages` (the body's list, as-is), `**rest` (incl. `system`) | `str` or a Message `dict` |
-| `@tingly.image(model)` | `/v1/images/generations` | `prompt`, `**rest` | image (`bytes` / `.save()`-able / list), or an `ImagesResponse` `dict` |
-| `@tingly.image_edit(model)` | `/v1/images/edits` | `prompt`, `images` (`list[bytes]`), `**rest` (incl. `mask`) | same as `image` |
-
-`tingly.serve(host=..., port=8765)` runs one module-level `Server` holding
-everything registered through the decorators.
-
-- **Only the keyword arguments the function accepts are passed.** A
-  function declared `def generate(prompt)` gets just `prompt`; one with
-  `size=None` also gets `size` when the request carries it; one with
-  `**kw` gets everything. This is what lets the one-liner stay one line
-  without the author learning the request body first.
-- **One decorator per text protocol, never bridged.** Each unpacks only
-  its own protocol's body; a function registered with `openai_chat` never
-  sees an Anthropic request, and nothing converts between them. Which one
-  tb calls is decided by how the provider is registered: a plain OpenAI
-  (Chat-mode) provider gets Chat — and tb already translates Anthropic- and
-  Responses-speaking clients into Chat for it, so `openai_chat` alone is
-  enough for most plugins; `openai_responses` is for a provider in
-  Responses mode; `anthropic_message` for an Anthropic-style or Dual
-  provider that should get the Anthropic body natively.
-- **Several models, one process.** Each decorator names its model; they
-  are all listed on `/v1/models`, and a request is routed by its `model`
-  field. If exactly one function is registered for an endpoint it
-  answers regardless of the name — the same kind of leniency as the
-  optional `/v1` prefix, so a mistyped model name in a curl test doesn't
-  404.
-- To support the model list, `Server` gains `models: list[str]` (initially
-  `[name]`), which `/v1/models` lists. That is the only change sugar makes
-  to the raw layer.
-
-Known limitations, not addressed yet:
-
-- **Streaming is single-chunk** (inherited from the raw layer, see
-  "Streaming" above): streaming clients work, but the whole reply arrives
-  at once when the function returns.
+- **Streaming is single-chunk** (see "Streaming" above): streaming clients
+  work, but the whole reply arrives at once when the function returns.
 - **No serialisation of GPU work.** Requests are handled on threads; two
   concurrent image requests call the same pipeline concurrently. A
   single-GPU pipeline usually needs a lock — the author's to add for now.
 - **Registration is still by hand** (auto-registration stays parked, below).
   So "one line" is one line of code plus one Connect AI entry and one
-  `imagegen` rule, not zero setup.
+  rule, not zero setup.
 
-The example (`examples/image.py`) fakes the model: it renders a solid-colour
-PNG with the stdlib instead of loading a real pipeline, so it runs anywhere
-and still returns a real image tb can persist.
+The image example (`examples/image.py`) fakes the model: it renders a
+solid-colour PNG with the stdlib instead of loading a real pipeline, so it
+runs anywhere and still returns a real image tb can persist.
 
 ## End-to-end test against a real tb
 
@@ -581,7 +520,7 @@ field to build on, unlike `EnsureSmartGuideRuleForBot`'s rule-UUID pattern —
 adding one was considered and set aside; the record below gets the same
 result without touching the generic Provider API's shape). Concretely, a
 small JSON file next to wherever `Server` runs (path configurable, default
-derived from `srv.name`) stores `{"uuid": "...", "name": "..."}` after the
+derived from the first registered model name) stores `{"uuid": "...", "name": "..."}` after the
 first successful registration, and is kept **permanently** — nothing ever
 deletes it (see "no delete, ever" below):
 
@@ -593,17 +532,18 @@ deletes it (see "no delete, ever" below):
    stop. If the `PUT` 404s (the row was deleted out from under it, e.g. by
    hand in Connect AI), treat it as gone and fall through to step 3.
 3. No local record (or it just went stale per step 2) → `GET
-   /api/v2/providers`, look for a row named `srv.name`:
+   /api/v2/providers`, look for a row with the provider name (by default
+   the first registered model name):
    - **Found → refuse.** Raise, naming the conflicting provider; do not
      touch it. This `Server` has no record of having created it, so it
      might be a real stranger's row that merely happens to share a name.
-   - **Not found → `POST /api/v2/providers`**: `name=srv.name`,
+   - **Not found → `POST /api/v2/providers`**: `name=<provider name>`,
      `auth_type="api_key"`, `no_key_required=True`, `token=<placeholder>`
      (sidesteps the anthropic-sdk-go empty-key footgun above),
      `api_style="openai"`, `api_base`/`api_base_openai` =
-     `http://{advertise_host}:{port}/v1` when `@srv.chat` is registered,
-     `api_base_anthropic` = the bare URL when `@srv.messages` is
-     registered — only the URL(s) for protocols the `Server` actually
+     `http://{advertise_host}:{port}/v1` when an OpenAI-protocol function
+     is registered, `api_base_anthropic` = the bare URL when an
+     `anthropic_message` function is registered — only the URL(s) for protocols the `Server` actually
      serves. Write the returned UUID to the local record.
 
 That's the whole lifecycle — there is no step 4. `run()` only ever creates
@@ -675,8 +615,8 @@ usages = tb.list_quota()                            # ListQuotaResponse
 one = tb.get_quota(usages.data[0].provider_uuid)     # ProviderUsage
 ```
 
-This is a deliberate exception to `Server`'s "hand over the raw wire body,
-invent nothing" rule, and the two aren't in tension: that rule is about a
+This is a deliberate exception to `Server`'s "hand over the wire values as
+sent, invent nothing" rule, and the two aren't in tension: that rule is about a
 protocol the SDK doesn't own (OpenAI's or Anthropic's own wire format, where
 any shape this SDK invented would be a guess). Quota is the opposite case —
 tb's *own* API, already precisely specified in its own `openapi.json`, with
@@ -716,23 +656,21 @@ means something concrete — everything before this only ever touched
 
 Deliberately deferred, not forgotten:
 
-- Incremental streaming (a generator handler contract yielding tokens) —
+- Incremental streaming (a generator contract yielding tokens) —
   `Server` streams, but always as one chunk; and `Client.chat` as a stream.
-- Serialising work per model in the sugar layer (a lock around a
-  single-GPU pipeline) — left to the function author for now.
+- Serialising work per model in `Server` (a lock around a single-GPU
+  pipeline) — left to the function author for now.
 - Image `response_format: "url"` — replies are always `b64_json`.
-- Any bridging between `@srv.chat`, `@srv.responses`, and `@srv.messages` —
-  a shared request shape, content-block flattening, `system`-folding, or
-  converting one protocol's reply into another's. Tried, rolled back (see
-  above); revisit only once a concrete handler needs to serve more than one
-  protocol from one piece of logic, not preemptively.
-- Typing `Server`'s handler *return* value, or `Client.chat()`'s return
-  value, against the real response Pydantic models (`ChatCompletion`,
-  `Response`, `Message`) — unlike the request-side `TypedDict`s, doing this
-  for real (not just as a hint) means actually depending on `openai`/
-  `anthropic` at runtime, not only under `TYPE_CHECKING`. Raised, not
-  decided; revisit if the request-side, zero-cost version proves useful
-  enough to make that tradeoff worth it.
+- Any bridging between `openai_chat`, `openai_responses` and
+  `anthropic_message` — a shared request shape, content-block flattening,
+  `system`-folding, or converting one protocol's reply into another's.
+  Tried, rolled back (see above); revisit only once a concrete function
+  needs to serve more than one protocol from one piece of logic, not
+  preemptively.
+- Typing a function's return value, or `Client.chat()`'s, against the real
+  response Pydantic models (`ChatCompletion`, `Response`, `Message`) —
+  doing this for real means depending on `openai`/`anthropic` at runtime.
+  Raised, not decided.
 - `Client` speaking Anthropic or Responses wire to tb (`.tb` is OpenAI Chat
   only; tb accepts that on any scenario regardless of the original caller's
   protocol, so there's no loss in staying single-shape outbound).
@@ -743,7 +681,7 @@ Deliberately deferred, not forgotten:
 - A generated control-plane client for the rest of the admin API (create
   providers/rules, etc.) — quota is the one surface with a concrete need
   today; everything else stays a plain `httpx`/`requests` call against tb's
-  already-public API if a handler ever needs it.
+  already-public API if a function ever needs it.
 - Auto-registration — parked (see above): a fixed port registered once by
   hand in Connect AI already covers the common case cheaply enough that
   the mechanism isn't worth building yet. Registering the provider stays a
@@ -759,14 +697,14 @@ Deliberately deferred, not forgotten:
 | File | Role |
 |---|---|
 | `sdk/python/tingly/client.py` | `Client.chat()` — call any tb scenario/model; quota methods |
-| `sdk/python/tingly/server.py` | `Server` — `@srv.chat` / `@srv.responses` / `@srv.messages` / `@srv.images` / `@srv.image_edits`, `models`, `.tb`, `.run()`, path leniency, all raw-body, `TYPE_CHECKING`-only request typing |
-| `.design/openai-endpoint-routing.md` | Why `@srv.responses` exists and needs no second URL — tb's Chat/Responses/Both provider dispatch model |
+| `sdk/python/tingly/server.py` | `Server` — the one contract: `openai_chat` / `openai_responses` / `anthropic_message` (+ aliases) / `image` / `image_edit`, unpacking, model routing, `models`, `.tb`, `.run()`, wrapping, streaming, path leniency |
+| `sdk/python/tingly/default.py` | `tingly.openai_chat` & co. and `tingly.serve()` — the same methods on a lazily created default `Server` |
+| `.design/openai-endpoint-routing.md` | Why `openai_responses` exists and needs no second URL — tb's Chat/Responses/Both provider dispatch model |
 | `sdk/python/tingly/_generated_quota.py` | Generated (`task gen:py:quota`), not committed |
 | `sdk/python/scripts/extract_quota_schema.py` | `openapi.json` → provider-quota schema closure, for the generator |
 | `Taskfile.yml` (`gen:py:quota`) | The generation task itself |
-| `sdk/python/tingly/sugar.py` | `tingly.openai_chat` / `openai_responses` / `anthropic_message` / `image` / `image_edit` / `serve` — unpack-don't-convert layer over one module-level `Server` |
 | `sdk/python/examples/relay.py` | Pure forwarder, all three text protocols, independently |
-| `sdk/python/examples/image.py` | Image provider via sugar, fake stdlib-PNG model |
+| `sdk/python/examples/image.py` | Image provider via `tingly.image`, fake stdlib-PNG model |
 | `internal/protocolserver/openai_image.go`, `openai_image_edit.go` | What tb sends a provider for `/images/generations` (JSON) and `/images/edits` (multipart) |
 | `internal/vision/imagegen/vendor.go` | `DetectVendor` — why a localhost `Server` always gets the plain OpenAI images call |
 | `sdk/python/examples/fanout.py` | Multi-model ask + merge (OpenAI only) |
