@@ -46,6 +46,14 @@
 | G5 | 后续轮次的 Guardrails 用的是第一轮的历史（`messages` 只捕获一次） | `ReattachGuardrailsHooks` 调用点 |
 | G6 | 三套 MCP 循环：toolengine、Chat→Anthropic 的 `ErrMCPStreamContinue` 循环、Beta→Chat 的 hooks；后两者没有 Guardrails | `openai_mcp.go`、`mcp_stream_anthropic_to_openai.go` |
 | G7 | 非流式只检查第一个 tool_use | `guardrails/adapter/anthropic_v1.go:59` |
+| G8 | 跨协议路径（Anthropic 客户端 → OpenAI provider）没有任何响应侧 Guardrails | `protocol_dispatch.go` / `protocol_cross.go` 各 leaf |
+| M1 | Responses 源：server 工具被注入上游但调用不被拦截，直接泄漏给客户端 | Responses 入口 |
+| M2 | Chat→Chat 流式工具循环：工具执行了，最终答案却以空 `data:` 帧到达客户端 | toolengine Chat adapter |
+| M3 | OpenAI Responses 目标：根本不向模型提供 server 工具 | transform chain |
+
+G1（含非流式 block / alias 还原被 `WriteAnthropicMessage` 的 RawJSON 丢弃）已在
+`claude/lucid-heisenberg-ppa3kj-g1` 修复；其余缺口在 harness 中以 `knownGaps` 登记（见 §5）。
+另修复：全新配置首次启动时 MCP runtime 为 nil（`NewRuntime` 早于 `RegisterBuiltinTools`）。
 
 ---
 
@@ -135,10 +143,14 @@ V1 不再是链路中的协议，只在两个边缘处理：
 3. **只接过 V1 调用的 provider**：由 Provider 边缘 downgrade 保证 wire 不变，而不是赌它们接受 `?beta=true`。
 4. count_tokens 同样存在 V1 / Beta 两份，一并处理。
 
-### 4.4 若采纳，对计划的影响
+### 4.4 决定（已采纳）
 
-在 P1 之前插入一步 "V1 → 边缘"：V1 源请求在入口 upgrade，走现有 Beta 路径（目标 `TypeAnthropicBeta`），
-响应在出口 downgrade；随后删除 V1 专有 leaf 与 adapter。之后 P1 只需实现 Beta / Chat / Responses 之间的 Bridge。
+- 采纳；Provider 边缘**做** downgrade。
+- **不单独做清理步骤**：新协议层从一开始就没有 V1 这个协议——客户端边缘 upgrade/downgrade 在
+  HTTP Adapter（P4），provider 边缘 downgrade 在 Provider Endpoint（P2）；旧 V1 代码随 V1 源
+  协议对切流一并删除，不预先重构即将被替换的代码。
+- "Beta 是超集"的前提在 harness 中提前验证：V1 请求经 upgrade → Beta → downgrade 与现行 V1 路径
+  逐字节比对（上游请求 + 客户端响应），在搭协议层之前暴露问题，不动生产代码。
 
 ---
 
@@ -165,10 +177,9 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | # | 分支 | 内容 | 生产行为 |
 |---|---|---|---|
 | 0 | `claude/lucid-heisenberg-ppa3kj` | 本文档 | 无 |
-| F | `fix/g1-stream-block` | G1 热修复：toolengine 流式路径执行 Guardrails 的 block 改写（复用 `RewriteAnthropicToolUseEvent`） | 修安全缺口 |
-| H1 | `harness/1-infra` | `TestEnv` 加 guardrails / servertool 选项；假上游按请求内容切换回复；全矩阵 `go test` 入口；client 输出 + 上游请求 golden 快照（`-update`，id / 时间戳归一化）；补 V1→V1 pair | 无 |
-| H2 | `harness/2-guardrails-mcp` | 真实 HTTP 用例：Guardrails（block 文本 / block tool_use 不泄漏 / 请求侧 tool_result block / mask 往返）、MCP（owned 循环 / mixed continuation / max rounds / 工具报错）、二者组合；× 协议对 × 流/非流。G2–G7 登记 known gap；生成首批 golden | 无 |
-| V | `stage/0-v1-edge`（取决于 §4） | V1 upgrade / downgrade 边缘，V1 源改走 Beta；删除 V1 专有 leaf / adapter | V1 源路径变化（golden 逐字节验证上游请求） |
+| F | `claude/lucid-heisenberg-ppa3kj-g1`（**已推送**） | G1 热修复：toolengine 流式路径执行 block 改写；非流式 block / alias 还原写回 RawJSON | 修安全缺口 |
+| H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，叠在 F 上） | MCP runtime 首启修复；假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 修首启 MCP |
+| H2 | 待做 | client 输出 + 上游请求 golden 快照（`-update`，id / 时间戳归一化）；全矩阵 `go test` 入口；V1→V1 pair；V1 经 Beta upgrade/downgrade 的逐字节比对；mixed continuation / max rounds / 工具报错 | 无 |
 | P1 | `stage/1-contracts` | `internal/protocol/stage` 契约 + identity + 单测 | 无 |
 | P2 | `stage/2-bridges` | Bridge（包装现有 converter）+ Provider Endpoint + in-memory bridge 矩阵（搬 `bridge_matrix.go`） | 无 |
 | P3 | `stage/3-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
