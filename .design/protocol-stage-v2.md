@@ -48,8 +48,10 @@
 | G7 | 非流式只检查第一个 tool_use | `guardrails/adapter/anthropic_v1.go:59` |
 | G8 | 跨协议路径（Anthropic 客户端 → OpenAI provider）没有任何响应侧 Guardrails | `protocol_dispatch.go` / `protocol_cross.go` 各 leaf |
 | M1 | Responses 源：server 工具被注入上游但调用不被拦截，直接泄漏给客户端 | Responses 入口 |
-| M2 | Chat→Chat 流式工具循环：工具执行了，最终答案却以空 `data:` 帧到达客户端 | toolengine Chat adapter |
+| ~~M2~~ | ~~Chat→Chat 流式工具循环：最终答案以空 `data:` 帧到达客户端~~（已由热修复 `-chat-mcp-stream` 修复） | toolengine |
 | M3 | OpenAI Responses 目标：根本不向模型提供 server 工具 | transform chain |
+| M4 | Anthropic 客户端 → Chat provider 流式循环：到达轮数上限时整个请求 500，其他路径均正常结束 | `mcp_stream_anthropic_to_openai.go` |
+| M5 | Chat 客户端 → Anthropic provider 流式：mixed 轮次的 server 工具结果不会拼回后续请求 | `openai_mcp.go` |
 
 G1（含非流式 block / alias 还原被 `WriteAnthropicMessage` 的 RawJSON 丢弃）已在
 `claude/lucid-heisenberg-ppa3kj-g1` 修复；其余缺口在 harness 中以 `knownGaps` 登记（见 §5）。
@@ -182,7 +184,10 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | F | `claude/lucid-heisenberg-ppa3kj-g1`（**已推送**） | G1 热修复：toolengine 流式路径执行 block 改写；非流式 block / alias 还原写回 RawJSON | 修安全缺口 |
 | F2 | `claude/lucid-heisenberg-ppa3kj-mcp-init`（**已推送**，基于 main） | 独立热修复：全新配置首次启动时 MCP runtime 为 nil；附回归测试 | 修首启 MCP |
 | H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，基于 F + merge F2） | 假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 无 |
-| H2 | 待做 | client 输出 + 上游请求 golden 快照（`-update`，id / 时间戳归一化）；全矩阵 `go test` 入口；V1→V1 pair；V1 经 Beta upgrade/downgrade 的逐字节比对；mixed continuation / max rounds / 工具报错 | 无 |
+| F3 | `claude/lucid-heisenberg-ppa3kj-model-leak`（**已推送**，基于 main） | 独立热修复：客户端响应报告上游 model id（Anthropic 非流式、拦截器流式、Responses 入口从不设 `ResponseModel`） | 修信息泄漏 |
+| F4 | `claude/lucid-heisenberg-ppa3kj-chat-mcp-stream`（**已推送**，基于 main） | 独立热修复：M2 | 修 Chat MCP 流式 |
+| F5 | `claude/lucid-heisenberg-ppa3kj-chat-google`（**已推送**，基于 main） | 独立热修复：Chat → Google 目标返回空 200；接上现有 converter，未处理的源显式报错 | 修 Chat→Google |
+| H2 | 并入 `-h1`（**已推送**） | 每个协议对 × 12 场景 × 流/非流的 golden wire 快照（上游请求 + 客户端响应，`-update`）；全矩阵与 idempotent 的 `go test` 入口；V1 ⇄ Beta 请求 wire 逐字节等价（§4 前提成立）；MCP 工具报错 / 轮数上限 / mixed 续接。登记 M4 M5，删除 M2 | 无 |
 | P1 | `stage/1-contracts` | `internal/protocol/stage` 契约 + identity + 单测 | 无 |
 | P2 | `stage/2-bridges` | Bridge（包装现有 converter）+ Provider Endpoint + in-memory bridge 矩阵（搬 `bridge_matrix.go`） | 无 |
 | P3 | `stage/3-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
