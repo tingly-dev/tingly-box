@@ -1875,7 +1875,7 @@ export default {
     "gallery": {
       "action": "Обзор",
       "viewOlderHint": "Показать все {{count}} изображений в обзоре",
-      "showMore": "Показать ещё (осталось {{count}})",
+      "pageRange": "{{from}}–{{to}} из {{total}}",
       "clearAll": "Очистить сессию",
       "clearAllTitle": "Очистить эту сессию?",
       "clearAllBody_one": "Удаляет {{count}} изображение из плейграунда. Файлы, уже записанные в папку вывода, остаются на диске.",

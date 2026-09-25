@@ -1849,7 +1849,7 @@ export default {
     "gallery": {
       "action": "总览",
       "viewOlderHint": "在总览中查看全部 {{count}} 张图片",
-      "showMore": "加载更多（还有 {{count}} 张）",
+      "pageRange": "第 {{from}}–{{to}} 张，共 {{total}} 张",
       "clearAll": "清空会话",
       "clearAllTitle": "清空这次会话？",
       "clearAllBody_one": "会从 Playground 里移除这 {{count}} 张图片。已经写入输出目录的文件不受影响。",
