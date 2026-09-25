@@ -25,6 +25,7 @@ import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
+import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
 
@@ -332,6 +333,13 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
                         {/* Row 2: provider name (center) + api style tag (right) */}
                         <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, position: 'relative', px: '28px' }}>
+                            {/* Quota (left) mirrors the api style tag (right); a missing
+                                or disabled provider shows its warning instead. */}
+                            {!providerWarning && (
+                                <Box sx={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}>
+                                    <ServiceNodeQuota providerUuid={provider.provider} />
+                                </Box>
+                            )}
                             {providerWarning && (
                                 <NodeTooltip title={providerWarning} placement="bottom">
                                     <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />

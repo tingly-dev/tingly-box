@@ -605,7 +605,12 @@ export default {
       "selectModel": "Select Model",
       "testService": "Test Service",
       "editProvider": "Edit Provider",
-      "deleteService": "Delete Service"
+      "deleteService": "Delete Service",
+      "quota": {
+        "left": "{{value}} left",
+        "resetsIn": "resets in {{duration}}",
+        "updated": "Updated {{duration}} ago"
+      }
     },
     "tier": {
       "invalidInput": "Please enter a valid number.",

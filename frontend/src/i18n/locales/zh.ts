@@ -606,7 +606,12 @@ export default {
       "selectModel": "选择模型",
       "testService": "测试服务",
       "editProvider": "编辑服务商凭证",
-      "deleteService": "删除服务"
+      "deleteService": "删除服务",
+      "quota": {
+        "left": "剩余 {{value}}",
+        "resetsIn": "{{duration}} 后重置",
+        "updated": "{{duration}} 前更新"
+      }
     },
     "tier": {
       "invalidInput": "请输入有效的数字。",
