@@ -33,8 +33,10 @@ Register it once in tb: **Connect AI → Self-hosted → Custom endpoint**,
 OpenAI, `http://localhost:8765/v1`, no key. For images, point an `imagegen`
 rule at that provider and your model name. For text, tb translates
 Anthropic- and Responses-speaking clients into Chat for this provider, so
-Chat is all you write. Not yet supported: streaming, and serialising calls
-to a single-GPU pipeline (add a lock yourself if you need one).
+Chat is all you write. Not yet supported: streaming — a client that asks tb
+to stream gets an *empty* reply with no error, so use non-streaming calls —
+and serialising calls to a single-GPU pipeline (add a lock yourself if you
+need one).
 
 [`examples/image.py`](examples/image.py) is a complete image provider with a
 fake model (a stdlib-rendered PNG), so it runs anywhere.

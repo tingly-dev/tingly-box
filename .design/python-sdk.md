@@ -435,9 +435,11 @@ everything registered through the decorators.
 
 Known limitations, not addressed yet:
 
-- **No streaming** (inherited from the raw layer). A client that streams
-  chat through tb will make tb ask this provider for a stream it doesn't
-  produce; text sugar is for non-streaming callers until that changes.
+- **No streaming** (inherited from the raw layer) — and it fails silently.
+  Observed end to end: a client calling tb with `stream=True` reaches the
+  plugin, which replies with a normal JSON completion; tb logs `upstream
+  200` and the client receives an empty stream — no error anywhere. Text
+  sugar is for non-streaming callers until that changes.
 - **No serialisation of GPU work.** Requests are handled on threads; two
   concurrent image requests call the same pipeline concurrently. A
   single-GPU pipeline usually needs a lock — the author's to add for now.
@@ -489,12 +491,12 @@ already in `openapi.json` (`internal/server/module/provider/{types,routes}.go`):
 
 | Call | Use |
 |---|---|
-| `GET /api/v1/providers` | find an existing row by name |
-| `POST /api/v1/providers` | create |
-| `PUT /api/v1/providers/:uuid` | update (port changed since last run) |
+| `GET /api/v2/providers` | find an existing row by name |
+| `POST /api/v2/providers` | create |
+| `PUT /api/v2/providers/:uuid` | update (port changed since last run) |
 
 All three already require `UserToken` — the same `admin_token` `Client`'s
-quota methods added. `DELETE /api/v1/providers/:uuid` exists too, but
+quota methods added. `DELETE /api/v2/providers/:uuid` exists too, but
 auto-registration never calls it — see "no delete, ever" below.
 
 ### Identity: name, guarded by a local record of what we created
@@ -519,16 +521,16 @@ deletes it (see "no delete, ever" below):
 1. Bind the HTTP server first (`port=0` is the point — the OS picks a free
    one; auto-registration is what removes the reason to ever hardcode a
    port).
-2. Local record present → `PUT /api/v1/providers/{recorded uuid}` directly.
+2. Local record present → `PUT /api/v2/providers/{recorded uuid}` directly.
    No name lookup, no collision check: this `Server` made that row, full
    stop. If the `PUT` 404s (the row was deleted out from under it, e.g. by
    hand in Connect AI), treat it as gone and fall through to step 3.
 3. No local record (or it just went stale per step 2) → `GET
-   /api/v1/providers`, look for a row named `srv.name`:
+   /api/v2/providers`, look for a row named `srv.name`:
    - **Found → refuse.** Raise, naming the conflicting provider; do not
      touch it. This `Server` has no record of having created it, so it
      might be a real stranger's row that merely happens to share a name.
-   - **Not found → `POST /api/v1/providers`**: `name=srv.name`,
+   - **Not found → `POST /api/v2/providers`**: `name=srv.name`,
      `auth_type="api_key"`, `no_key_required=True`, `token=<placeholder>`
      (sidesteps the anthropic-sdk-go empty-key footgun above),
      `api_style="openai"`, `api_base`/`api_base_openai` =
