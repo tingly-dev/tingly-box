@@ -12,6 +12,7 @@ type Msg = {
     kind?: string
     request_id?: string
     payload?: unknown
+    parent?: string
     timestamp: string
 }
 type Sess = {
@@ -37,6 +38,7 @@ const sessions: Sess[] = [
     { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', model: '', awaiting_input: true, created_at: ago(12), last_activity: ago(1) },
     { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', model: 'opus', awaiting_input: false, created_at: ago(90), last_activity: ago(40) },
     { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(200), last_activity: ago(199) },
+    { id: 'desk-5', project: TB, status: 'completed', request: 'Audit how the auth middleware handles expired tokens', response: '', permission_mode: 'acceptEdits', profile: '', model: '', awaiting_input: false, created_at: ago(30), last_activity: ago(2) },
     { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(3000), last_activity: ago(2900) },
 ]
 
@@ -105,6 +107,33 @@ const messages: Record<string, Msg[]> = {
     'desk-3': [
         { role: 'user', content: 'Update the pricing page copy', timestamp: ago(200) },
         { kind: 'error', content: 'agent CLI not available', timestamp: ago(199) },
+    ],
+    // Subagents: a foreground Explore run that finished, and a background
+    // review still running after its turn ended, next to a background test run.
+    'desk-5': [
+        { role: 'user', content: 'Audit how the auth middleware handles expired tokens', timestamp: ago(30) },
+        { role: 'assistant', content: 'I\'ll map the middleware first, then have a reviewer check the refresh path while the tests run.', timestamp: ago(29) },
+        { kind: 'tool_use', content: 'Agent', request_id: 'a-explore', payload: { description: 'Map auth middleware', subagent_type: 'Explore', prompt: 'Find where HTTP requests are authenticated and how expired tokens are detected. Report file paths and the decision points.', run_in_background: false }, timestamp: ago(29) },
+        { kind: 'task', content: '', request_id: 'a-explore', payload: { event: 'task_started', task_id: 'ae1', task_type: 'local_agent', subagent_type: 'Explore', background: false, description: 'Map auth middleware' }, timestamp: ago(29) },
+        { kind: 'tool_use', content: 'Grep', request_id: 'x1', parent: 'a-explore', payload: { pattern: 'ExpiresAt|isExpired', path: 'internal/server' }, timestamp: ago(28) },
+        { kind: 'tool_result', content: 'internal/server/middleware/auth.go:88\ninternal/server/middleware/auth.go:131', request_id: 'x1', parent: 'a-explore', payload: { is_error: false }, timestamp: ago(28) },
+        { kind: 'tool_use', content: 'Read', request_id: 'x2', parent: 'a-explore', payload: { file_path: 'internal/server/middleware/auth.go' }, timestamp: ago(28) },
+        { kind: 'tool_result', content: 'func (m *Auth) Check(c *gin.Context) {…', request_id: 'x2', parent: 'a-explore', payload: { is_error: false }, timestamp: ago(28) },
+        { kind: 'task', content: '', request_id: 'a-explore', payload: { event: 'task_progress', description: 'Reading auth.go', last_tool: 'Read', usage: { total_tokens: 18200, tool_uses: 2, duration_ms: 21000 } }, timestamp: ago(28) },
+        { role: 'assistant', parent: 'a-explore', content: 'Tokens are checked in `internal/server/middleware/auth.go`:\n\n- `Check` (line 88) rejects a token whose `ExpiresAt` is past, with **401**.\n- `refresh` (line 131) retries once with the refresh token, but does not clear the cached session on failure.', timestamp: ago(27) },
+        { kind: 'task', content: '', request_id: 'a-explore', payload: { event: 'task_notification', status: 'completed', summary: 'Mapped the auth middleware', usage: { total_tokens: 24100, tool_uses: 2, duration_ms: 38000 } }, timestamp: ago(27) },
+        { kind: 'tool_result', content: '[Subagent hand-back] Tokens are checked in internal/server/middleware/auth.go…', request_id: 'a-explore', payload: { is_error: false }, timestamp: ago(27) },
+        { kind: 'tool_use', content: 'Agent', request_id: 'a-review', payload: { description: 'Review refresh path', subagent_type: 'general-purpose', prompt: 'Review refresh() in internal/server/middleware/auth.go for races when two requests refresh the same expired token.' }, timestamp: ago(26) },
+        { kind: 'task', content: '', request_id: 'a-review', payload: { event: 'task_started', task_id: 'ar1', task_type: 'local_agent', subagent_type: 'general-purpose', background: true, description: 'Review refresh path' }, timestamp: ago(26) },
+        { kind: 'tool_result', content: 'Async agent launched successfully.', request_id: 'a-review', payload: { is_error: false }, timestamp: ago(26) },
+        { kind: 'tool_use', content: 'Bash', request_id: 'b-test', payload: { command: 'go test ./internal/server/middleware/... -race', description: 'Run middleware tests', run_in_background: true }, timestamp: ago(26) },
+        { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'task_started', task_id: 'bt1', task_type: 'local_bash', background: true, description: 'Run middleware tests' }, timestamp: ago(26) },
+        { kind: 'tool_result', content: 'Command running in background with ID: bt1.', request_id: 'b-test', payload: { is_error: false }, timestamp: ago(26) },
+        { kind: 'tool_use', content: 'Read', request_id: 'r1', parent: 'a-review', payload: { file_path: 'internal/server/middleware/auth.go' }, timestamp: ago(20) },
+        { kind: 'tool_result', content: 'func (m *Auth) refresh(…', request_id: 'r1', parent: 'a-review', payload: { is_error: false }, timestamp: ago(20) },
+        { kind: 'task', content: '', request_id: 'a-review', payload: { event: 'task_progress', description: 'Tracing concurrent refresh calls', last_tool: 'Grep', usage: { total_tokens: 41300, tool_uses: 6, duration_ms: 312000 } }, timestamp: ago(3) },
+        { role: 'assistant', content: 'The middleware map is above. A reviewer is checking the refresh path for races and the middleware tests are running; I\'ll pick up both when they report back.', timestamp: ago(25) },
+        { kind: 'task', content: '', request_id: 'b-test', payload: { event: 'task_notification', status: 'completed', summary: 'Background command "Run middleware tests" completed (exit code 0)' }, timestamp: ago(2) },
     ],
     'desk-4': [
         { role: 'user', content: 'Draft release notes for v1.2', timestamp: ago(3000) },

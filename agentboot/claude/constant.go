@@ -72,6 +72,9 @@ const (
 	SystemSubtypeTaskProgress     = "task_progress"
 	SystemSubtypeTaskNotification = "task_notification"
 	SystemSubtypeTaskUpdated      = "task_updated"
+	// SystemSubtypeBackgroundTasksChanged carries the full set of running
+	// background tasks (task_id, task_type, description) whenever it changes.
+	SystemSubtypeBackgroundTasksChanged = "background_tasks_changed"
 	// SystemSubtypeTaskCompleted is emitted by older Claude Code versions.
 	SystemSubtypeTaskCompleted = "task_completed"
 	// SystemSubtypeAPIRetry is emitted by the Claude Code CLI when an upstream

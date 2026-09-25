@@ -55,7 +55,44 @@ export interface ToolStep {
     input: unknown;
     result?: string;
     isError: boolean;
+    // Set when the call started a background task (a backgrounded command).
+    task?: TaskState;
 }
+
+// TaskEvent is the payload of a "task" transcript entry (internal/desk/
+// convert.go taskEvent): one lifecycle event of a subagent or background
+// command, keyed by the tool call that started it (the entry's request_id).
+export interface TaskEvent {
+    event: string;
+    task_id?: string;
+    task_type?: string;
+    description?: string;
+    subagent_type?: string;
+    background?: boolean;
+    status?: string;
+    summary?: string;
+    last_tool?: string;
+    output_file?: string;
+    usage?: {total_tokens: number; tool_uses: number; duration_ms: number};
+    tasks?: {task_id: string; task_type?: string; description?: string}[];
+}
+
+// TaskState is a task's latest known state, folded from its events.
+export interface TaskState {
+    taskId?: string;
+    status: 'running' | 'completed' | 'stopped' | 'failed';
+    background: boolean;
+    subagentType?: string;
+    // What it is doing now, while running ("Running Search the codebase").
+    activity?: string;
+    lastTool?: string;
+    summary?: string;
+    outputFile?: string;
+    usage?: {total_tokens: number; tool_uses: number; duration_ms: number};
+}
+
+// The tools that run a subagent: Agent in current Claude Code, Task before.
+export const isAgentTool = (name: string): boolean => name === 'Agent' || name === 'Task';
 
 export interface ThinkingStep {
     type: 'thinking';
@@ -68,6 +105,9 @@ export type TranscriptBlock =
     | {type: 'user'; message: MessageInfo}
     | {type: 'assistant'; message: MessageInfo}
     | {type: 'activity'; steps: ActivityStep[]}
+    // A subagent run: the Agent call, what the subagent did (its own
+    // blocks), and its task state. The final report is its last reply.
+    | {type: 'agent'; call: ToolStep; children: TranscriptBlock[]; task?: TaskState}
     | {type: 'request'; message: MessageInfo; response?: MessageInfo}
     | {type: 'error'; message: MessageInfo}
     | {type: 'system'; message: MessageInfo};
@@ -77,11 +117,82 @@ export type TranscriptBlock =
 // transcript leaves it out.
 const SESSION_INIT_PREFIX = 'claude code session ';
 
+const finalStatus = (status?: string): TaskState['status'] => {
+    switch (status) {
+        case 'completed':
+            return 'completed';
+        case 'stopped':
+        case 'killed':
+            return 'stopped';
+        case 'failed':
+        case 'error':
+            return 'failed';
+        default:
+            return 'running';
+    }
+};
+
+// foldTasks folds each tool call's task events into its latest state.
+export const foldTasks = (messages: MessageInfo[]): Map<string, TaskState> => {
+    const tasks = new Map<string, TaskState>();
+    for (const m of messages) {
+        if (m.kind !== 'task' || !m.request_id || m.payload == null) continue;
+        const ev = m.payload as TaskEvent;
+        const t = tasks.get(m.request_id) ?? {status: 'running', background: false};
+        if (ev.task_id) t.taskId = ev.task_id;
+        switch (ev.event) {
+            case 'task_started':
+                t.background = ev.background ?? false;
+                t.subagentType = ev.subagent_type || t.subagentType;
+                break;
+            case 'task_progress':
+                t.activity = ev.description;
+                t.lastTool = ev.last_tool;
+                if (ev.usage) t.usage = ev.usage;
+                break;
+            case 'task_updated':
+                if (ev.status) t.status = finalStatus(ev.status);
+                break;
+            case 'task_notification':
+            case 'task_completed':
+                t.status = finalStatus(ev.status ?? 'completed');
+                t.summary = ev.summary;
+                t.outputFile = ev.output_file;
+                if (ev.usage) t.usage = ev.usage;
+                t.activity = undefined;
+                break;
+        }
+        tasks.set(m.request_id, t);
+    }
+    return tasks;
+};
+
 // buildTranscript turns the flat transcript into what the page renders:
 // consecutive thinking and tool calls collapse into one activity block (each
 // tool paired with its result by request_id), and an approval or question
-// carries its answer instead of the answer showing as a separate line.
+// carries its answer instead of the answer showing as a separate line. A
+// subagent's own entries (those with a parent) nest under the Agent call
+// that ran it instead of mixing into the conversation.
 export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
+    const tasks = foldTasks(messages);
+    const byParent = new Map<string, MessageInfo[]>();
+    const main: MessageInfo[] = [];
+    const agentCalls = new Set(messages.filter((m) => m.kind === 'tool_use' && isAgentTool(m.content) && m.request_id).map((m) => m.request_id));
+    for (const m of messages) {
+        // Output whose subagent call isn't in the transcript stays visible
+        // in the conversation rather than disappearing.
+        if (m.parent && agentCalls.has(m.parent)) {
+            const list = byParent.get(m.parent) ?? [];
+            list.push(m);
+            byParent.set(m.parent, list);
+        } else {
+            main.push(m);
+        }
+    }
+    return buildBlocks(main, byParent, tasks);
+};
+
+const buildBlocks = (messages: MessageInfo[], byParent: Map<string, MessageInfo[]>, tasks: Map<string, TaskState>): TranscriptBlock[] => {
     const blocks: TranscriptBlock[] = [];
     const requests = new Map<string, Extract<TranscriptBlock, {type: 'request'}>>();
     let activity: Extract<TranscriptBlock, {type: 'activity'}> | null = null;
@@ -103,9 +214,17 @@ export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
                 currentActivity().steps.push({type: 'thinking', text: m.content});
                 continue;
             case 'tool_use': {
-                const tool: ToolStep = {type: 'tool', id: m.request_id ?? '', name: m.content, input: m.payload, isError: false};
+                const id = m.request_id ?? '';
+                const tool: ToolStep = {type: 'tool', id, name: m.content, input: m.payload, isError: false, task: tasks.get(id)};
+                if (id) tools.set(id, tool);
+                if (isAgentTool(m.content)) {
+                    // A subagent is a unit of work of its own, not one more
+                    // step in a row: it gets a block, and splits the row.
+                    activity = null;
+                    blocks.push({type: 'agent', call: tool, children: buildBlocks(byParent.get(id) ?? [], byParent, tasks), task: tasks.get(id)});
+                    continue;
+                }
                 currentActivity().steps.push(tool);
-                if (tool.id) tools.set(tool.id, tool);
                 continue;
             }
             case 'tool_result': {
@@ -122,6 +241,9 @@ export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
             case 'usage':
                 // Per-turn token accounting; the status line reads it, the
                 // transcript doesn't show it (see sessionUsage).
+                continue;
+            case 'task':
+                // Folded into the state of the call that started the task.
                 continue;
             case 'approval_response':
             case 'ask_response': {
@@ -151,6 +273,16 @@ export const buildTranscript = (messages: MessageInfo[]): TranscriptBlock[] => {
         }
     }
     return blocks;
+};
+
+// agentReport is what a subagent handed back: its last reply, else the
+// summary Claude Code reported for it.
+export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): string | undefined => {
+    for (let i = block.children.length - 1; i >= 0; i--) {
+        const c = block.children[i];
+        if (c.type === 'assistant' && c.message.content.trim()) return c.message.content;
+    }
+    return block.task?.summary;
 };
 
 // A request is answerable only while its turn is live and nothing has

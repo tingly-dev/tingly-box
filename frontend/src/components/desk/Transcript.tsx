@@ -1,10 +1,11 @@
-import {Check, ChevronRight, Close, ErrorOutline, ExpandMore} from '@/components/icons';
+import {Block, Cancel, Check, CheckCircle, ChevronRight, Close, ErrorOutline, ExpandMore, Robot} from '@/components/icons';
 import type {MessageInfo} from '@/services/deskApi';
-import {Box, Button, CircularProgress, Collapse, Paper, Stack, TextField, Typography} from '@mui/material';
+import {Box, Button, Chip, CircularProgress, Collapse, Paper, Stack, TextField, Typography} from '@mui/material';
+import type {TFunction} from 'i18next';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import type {ActivityStep, TranscriptBlock} from './deskUtils';
-import {toolSummary} from './deskUtils';
+import type {ActivityStep, TaskState, TranscriptBlock} from './deskUtils';
+import {agentReport, formatTokens, toolSummary} from './deskUtils';
 import Markdown from './Markdown';
 
 interface TranscriptProps {
@@ -36,6 +37,34 @@ const UserBubble = ({message}: {message: MessageInfo}) => (
 
 const AssistantText = ({message}: {message: MessageInfo}) => <Markdown content={message.content}/>;
 
+const formatDuration = (ms: number): string => {
+    const sec = Math.round(ms / 1000);
+    return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
+};
+
+const statusLabel = (t: TFunction, status: TaskState['status']) => ({
+    running: t('desk.taskRunning', {defaultValue: 'running'}),
+    completed: t('desk.taskDone', {defaultValue: 'done'}),
+    stopped: t('desk.taskStopped', {defaultValue: 'stopped'}),
+    failed: t('desk.taskFailed', {defaultValue: 'failed'}),
+}[status]);
+
+// TaskTag marks a call that runs in the background, with its state: the
+// turn that started it may be long over while it still works.
+const TaskTag = ({task}: {task: TaskState}) => {
+    const {t} = useTranslation();
+    return (
+        <Chip
+            size="small"
+            variant="outlined"
+            color={task.status === 'failed' ? 'error' : 'default'}
+            icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
+            label={`${t('desk.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
+            sx={{height: 20, flexShrink: 0, '& .MuiChip-label': {px: 0.75, fontSize: '0.7rem'}}}
+        />
+    );
+};
+
 const StepDetail = ({step}: {step: ActivityStep}) => {
     if (step.type === 'thinking') {
         return (
@@ -54,6 +83,7 @@ const StepDetail = ({step}: {step: ActivityStep}) => {
                 {summary && (
                     <Typography variant="body2" color="text.secondary" noWrap sx={mono}>{summary}</Typography>
                 )}
+                {step.task?.background && <TaskTag task={step.task}/>}
             </Stack>
             {step.result && (
                 <Box
@@ -188,6 +218,164 @@ const RequestCard = ({block, pending, onRespond}: {
     );
 };
 
+interface BlockListProps {
+    blocks: TranscriptBlock[];
+    pendingRequestId?: string;
+    working: boolean;
+    expandAll: boolean;
+    onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
+}
+
+// BlockList renders a run of blocks: the conversation, or a subagent's own
+// work inside its card.
+const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond}: BlockListProps) => (
+    <>
+        {blocks.map((b, i) => {
+            switch (b.type) {
+                case 'user':
+                    return <UserBubble key={i} message={b.message}/>;
+                case 'assistant':
+                    return <AssistantText key={i} message={b.message}/>;
+                case 'activity':
+                    return <ActivityRow key={i} steps={b.steps} live={working && i === blocks.length - 1} expandAll={expandAll}/>;
+                case 'agent':
+                    return <AgentCard key={i} block={b} turnLive={working} expandAll={expandAll} onRespond={onRespond}/>;
+                case 'request':
+                    return (
+                        <RequestCard
+                            key={i}
+                            block={b}
+                            pending={b.message.request_id === pendingRequestId}
+                            onRespond={(approved, answer) => onRespond(b.message.request_id ?? '', approved, answer)}
+                        />
+                    );
+                case 'error':
+                    return (
+                        <Stack key={i} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: 'error.main'}}>
+                            <ErrorOutline sx={{fontSize: 18, mt: 0.25}}/>
+                            <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
+                        </Stack>
+                    );
+                case 'system':
+                    return (
+                        <Typography key={i} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
+                            {b.message.content}
+                        </Typography>
+                    );
+            }
+        })}
+    </>
+);
+
+// agentStatus is the card's state. Without task events (older Claude Code)
+// the call's result means it finished; a foreground run left "running"
+// after its turn ended was cut off with the turn.
+const agentStatus = (block: Extract<TranscriptBlock, {type: 'agent'}>, turnLive: boolean): TaskState['status'] => {
+    const status = block.task?.status ?? (block.call.result !== undefined ? 'completed' : 'running');
+    if (status === 'running' && !turnLive && !block.task?.background) return 'stopped';
+    return status;
+};
+
+// AgentCard is one subagent run: what it was asked, how it is going (its
+// current action, tools, tokens, time), and — expanded — everything it did
+// and the report it handed back. Its own work stays inside the card so the
+// conversation reads as the main agent's.
+const AgentCard = ({block, turnLive, expandAll, onRespond}: {
+    block: Extract<TranscriptBlock, {type: 'agent'}>;
+    turnLive: boolean;
+    expandAll: boolean;
+    onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
+}) => {
+    const {t} = useTranslation();
+    const [toggled, setToggled] = useState<{under: boolean; open: boolean} | null>(null);
+    const open = toggled?.under === expandAll ? toggled.open : expandAll;
+    const input = (block.call.input ?? {}) as {description?: string; prompt?: string; subagent_type?: string};
+    const task = block.task;
+    const status = agentStatus(block, turnLive);
+    const running = status === 'running';
+    const report = agentReport(block);
+    const usage = task?.usage;
+    const meta = usage
+        ? [
+            t('desk.toolCount', {defaultValue: usage.tool_uses === 1 ? '1 tool' : '{{count}} tools', count: usage.tool_uses}),
+            `${formatTokens(usage.total_tokens)} ${t('desk.tokens', {defaultValue: 'tokens'})}`,
+            formatDuration(usage.duration_ms),
+        ].join(' · ')
+        : '';
+
+    const statusIcon = {
+        running: <CircularProgress size={14}/>,
+        completed: <CheckCircle sx={{fontSize: 16, color: 'success.main'}}/>,
+        stopped: <Block sx={{fontSize: 16, color: 'text.secondary'}}/>,
+        failed: <Cancel sx={{fontSize: 16, color: 'error.main'}}/>,
+    }[status];
+
+    return (
+        <Paper variant="outlined" sx={{borderRadius: 2, overflow: 'hidden'}}>
+            <Box
+                role="button"
+                aria-expanded={open}
+                onClick={() => setToggled({under: expandAll, open: !open})}
+                sx={{px: 1.5, py: 1, cursor: 'pointer', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
+            >
+                <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
+                    <Robot sx={{fontSize: 18, color: 'text.secondary', flexShrink: 0}}/>
+                    <Typography variant="body2" noWrap sx={{fontWeight: 600, color: 'text.primary', minWidth: 0}}>
+                        {input.description || t('desk.subagent', {defaultValue: 'Subagent'})}
+                    </Typography>
+                    {(task?.subagentType || input.subagent_type) && (
+                        <Typography variant="caption" sx={{color: 'text.secondary', flexShrink: 0}}>
+                            {task?.subagentType || input.subagent_type}
+                        </Typography>
+                    )}
+                    {task?.background && (
+                        <Chip size="small" variant="outlined" label={t('desk.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: '0.7rem'}}}/>
+                    )}
+                    <Box sx={{flex: 1}}/>
+                    <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', flexShrink: 0}} title={statusLabel(t, status)}>
+                        {statusIcon}
+                    </Stack>
+                    {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
+                </Stack>
+                {(running && task?.activity) || meta ? (
+                    <Typography variant="caption" noWrap component="div" sx={{color: 'text.secondary', pl: 3.25, mt: 0.25}}>
+                        {[running ? task?.activity : statusLabel(t, status), meta].filter(Boolean).join(' · ')}
+                    </Typography>
+                ) : null}
+            </Box>
+            <Collapse in={open} unmountOnExit>
+                <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
+                    {input.prompt && (
+                        <Box>
+                            <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('desk.agentPrompt', {defaultValue: 'Asked to'})}</Typography>
+                            <Typography variant="body2" sx={{color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflow: 'auto'}}>
+                                {input.prompt}
+                            </Typography>
+                        </Box>
+                    )}
+                    {/* The report is its last reply, shown below; the run
+                        above it is everything before. */}
+                    <BlockList
+                        blocks={report && block.children[block.children.length - 1]?.type === 'assistant' ? block.children.slice(0, -1) : block.children}
+                        working={running}
+                        expandAll={expandAll}
+                        onRespond={onRespond}
+                    />
+                    {report && (
+                        <Box>
+                            <Typography variant="caption" sx={{color: 'text.secondary'}}>{t('desk.agentReport', {defaultValue: 'Report'})}</Typography>
+                            <Markdown content={report}/>
+                        </Box>
+                    )}
+                    {running && block.children.length === 0 && (
+                        <Typography variant="body2" sx={{color: 'text.secondary'}}>{t('desk.working', {defaultValue: 'Working…'})}</Typography>
+                    )}
+                </Stack>
+            </Collapse>
+        </Paper>
+    );
+};
+
 const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond}: TranscriptProps) => {
     const {t} = useTranslation();
     const last = blocks[blocks.length - 1];
@@ -197,38 +385,7 @@ const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRes
 
     return (
         <Stack spacing={2.5}>
-            {blocks.map((b, i) => {
-                switch (b.type) {
-                    case 'user':
-                        return <UserBubble key={i} message={b.message}/>;
-                    case 'assistant':
-                        return <AssistantText key={i} message={b.message}/>;
-                    case 'activity':
-                        return <ActivityRow key={i} steps={b.steps} live={working && i === blocks.length - 1} expandAll={expandAll}/>;
-                    case 'request':
-                        return (
-                            <RequestCard
-                                key={i}
-                                block={b}
-                                pending={b.message.request_id === pendingRequestId}
-                                onRespond={(approved, answer) => onRespond(b.message.request_id ?? '', approved, answer)}
-                            />
-                        );
-                    case 'error':
-                        return (
-                            <Stack key={i} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: 'error.main'}}>
-                                <ErrorOutline sx={{fontSize: 18, mt: 0.25}}/>
-                                <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
-                            </Stack>
-                        );
-                    case 'system':
-                        return (
-                            <Typography key={i} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
-                                {b.message.content}
-                            </Typography>
-                        );
-                }
-            })}
+            <BlockList blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond}/>
             {showWorking && (
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', color: 'text.secondary'}}>
                     <CircularProgress size={12}/>

@@ -52,7 +52,10 @@ type MessageInfo struct {
 	Kind      string          `json:"kind,omitempty"`
 	RequestID string          `json:"request_id,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"`
-	Timestamp time.Time       `json:"timestamp"`
+	// Parent is the tool_use id of the subagent call that produced this
+	// entry; empty for the main conversation.
+	Parent    string    `json:"parent,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 func messageToInfo(m session.Message) MessageInfo {
@@ -62,6 +65,7 @@ func messageToInfo(m session.Message) MessageInfo {
 		Kind:      m.Kind,
 		RequestID: m.RequestID,
 		Payload:   m.Payload,
+		Parent:    m.Parent,
 		Timestamp: m.Timestamp,
 	}
 }
