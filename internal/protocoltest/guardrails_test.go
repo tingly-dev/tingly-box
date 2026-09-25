@@ -42,43 +42,73 @@ func newBlockToolUseGuardrails() *guardrails.Guardrails {
 	}
 }
 
-// TestGuardrailsBlocksToolUseAnthropic pins that a blocked response tool_use
-// never reaches an Anthropic client, on both the V1 path (served by the
-// toolengine stream interceptor even without MCP) and the Beta passthrough.
-func TestGuardrailsBlocksToolUseAnthropic(t *testing.T) {
+// Guardrails applies to the Anthropic scenarios only (GuardrailsSupportedScenarios);
+// whether OpenAI ingress gets it is an open product decision, so only
+// Anthropic sources are asserted here.
+var anthropicSources = []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta}
+
+var guardrailsTargets = []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses}
+
+var _ = registerKnownGaps(KnownGap{
+	ID:     "G8",
+	Reason: "cross-protocol paths (Anthropic client, OpenAI provider) apply no response guardrails",
+},
+	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_chat/stream=false",
+	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_chat/stream=true",
+	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=false",
+	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=true",
+	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_chat/stream=false",
+	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_chat/stream=true",
+	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=false",
+	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=true",
+)
+
+// TestGuardrailsBlocksToolUse pins that a blocked response tool_use never
+// reaches an Anthropic client, whichever provider protocol served it.
+func TestGuardrailsBlocksToolUse(t *testing.T) {
 	t.Parallel()
 
-	for _, source := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
-		for _, streaming := range []bool{false, true} {
-			source, streaming := source, streaming
-			t.Run(fmt.Sprintf("%s/stream=%v", source, streaming), func(t *testing.T) {
-				t.Parallel()
+	for _, source := range anthropicSources {
+		for _, target := range guardrailsTargets {
+			for _, streaming := range []bool{false, true} {
+				source, target, streaming := source, target, streaming
+				t.Run(fmt.Sprintf("%s->%s/stream=%v", source, target, streaming), func(t *testing.T) {
+					t.Parallel()
 
-				env := NewTestEnv(t, NewTestEnvOptionWithGuardrails(newBlockToolUseGuardrails()))
-				scenario := ToolUseScenario()
-				if streaming {
-					scenario = StreamingToolUseScenario()
-				}
-				env.SetupRoute(source, source, scenario)
-				model := env.findRouteModel(source, source, scenario.Name)
-				path, body := buildRequest(source, model, streaming)
+					env := NewTestEnv(t, NewTestEnvOptionWithGuardrails(newBlockToolUseGuardrails()))
+					scenario := ToolUseScenario()
+					if streaming {
+						scenario = StreamingToolUseScenario()
+					}
+					env.SetupRoute(source, target, scenario)
+					model := env.findRouteModel(source, target, scenario.Name)
+					path, body := buildRequest(source, model, streaming)
 
-				status, raw := sendRaw(t, env, path, body)
-				if status != http.StatusOK {
-					t.Fatalf("status = %d: %s", status, raw)
-				}
-				if strings.Contains(raw, `"type":"tool_use"`) {
-					t.Fatalf("blocked tool_use leaked to client:\n%s", raw)
-				}
-				if strings.Contains(raw, `"stop_reason":"tool_use"`) {
-					t.Fatalf("stop_reason still tool_use after block:\n%s", raw)
-				}
-				if !strings.Contains(raw, "Blocked by guardrails") {
-					t.Fatalf("response carries no block message:\n%s", raw)
-				}
-			})
+					status, raw := sendRaw(t, env, path, body)
+					checkCase(t, t.Name(), blockedToolUseFailures(status, raw), "client response:\n"+raw)
+				})
+			}
 		}
 	}
+}
+
+// blockedToolUseFailures lists how an Anthropic client response violates
+// "the blocked tool_use was replaced by the guardrails message".
+func blockedToolUseFailures(status int, raw string) []string {
+	var failures []string
+	if status != http.StatusOK {
+		failures = append(failures, fmt.Sprintf("status = %d", status))
+	}
+	if strings.Contains(raw, `"type":"tool_use"`) {
+		failures = append(failures, "blocked tool_use leaked to client")
+	}
+	if strings.Contains(raw, `"stop_reason":"tool_use"`) {
+		failures = append(failures, "stop_reason still tool_use after block")
+	}
+	if !strings.Contains(raw, "Blocked by guardrails") {
+		failures = append(failures, "no block message in response")
+	}
+	return failures
 }
 
 // TestGuardrailsRestoresCredentialAliasAnthropic pins that a protected
