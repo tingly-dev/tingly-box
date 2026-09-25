@@ -251,3 +251,81 @@ func matrixResponsesOwnedToolFinalStream() []string {
 		`data: [DONE]`,
 	}
 }
+
+const (
+	OwnedThenClientToolScenarioName = "mcp_owned_then_client_tool"
+	clientToolName                  = "get_weather"
+)
+
+// OwnedThenClientToolScenario: round 1 calls the owned echo tool; once its
+// result is in the request, round 2 calls the client tool get_weather.
+func OwnedThenClientToolScenario() Scenario {
+	anthropicClientTool := map[string]any{
+		"id": "msg-client-tool", "type": "message", "role": "assistant", "model": "worker-model",
+		"content":     []map[string]any{{"type": "tool_use", "id": "toolu-client-tool", "name": clientToolName, "input": map[string]any{"location": "Paris"}}},
+		"stop_reason": "tool_use",
+		"usage":       map[string]any{"input_tokens": 12, "output_tokens": 5},
+	}
+	anthropicClientToolStream := []string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg-client-tool","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":12,"output_tokens":0}}}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu-client-tool","name":"get_weather","input":{}}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Paris\"}"}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":0}`,
+		`event: message_delta`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":5}}`,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+	}
+	chatClientTool := map[string]any{
+		"id": "chatcmpl-client-tool", "object": "chat.completion", "created": 2, "model": "worker-model",
+		"choices": []map[string]any{{
+			"index": 0,
+			"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{{
+				"id": "call-client-tool", "type": "function", "function": map[string]any{"name": clientToolName, "arguments": `{"location":"Paris"}`},
+			}}},
+			"finish_reason": "tool_calls",
+		}},
+		"usage": map[string]any{"prompt_tokens": 12, "completion_tokens": 5, "total_tokens": 17},
+	}
+	chatClientToolStream := []string{
+		`data: {"id":"chatcmpl-client-tool","object":"chat.completion.chunk","created":2,"model":"worker-model","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-client-tool","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-client-tool","object":"chat.completion.chunk","created":2,"model":"worker-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+	}
+
+	nonStream := func(first, second any) func([]byte) (int, []byte) {
+		return func(request []byte) (int, []byte) {
+			if callsOwnedTool(request) {
+				return http.StatusOK, mustMarshal(first)
+			}
+			return http.StatusOK, mustMarshal(second)
+		}
+	}
+	stream := func(first, second []string) func([]byte) []string {
+		return func(request []byte) []string {
+			if callsOwnedTool(request) {
+				return first
+			}
+			return second
+		}
+	}
+	return Scenario{
+		Name:        OwnedThenClientToolScenarioName,
+		Description: "Server tool round followed by a client tool call",
+		Tags:        []string{"mcp", "servertool", "guardrails"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
+				NonStreamFor: nonStream(matrixAnthropicOwnedTool(), anthropicClientTool),
+				StreamFor:    stream(matrixAnthropicOwnedToolStream(), anthropicClientToolStream),
+			},
+			FormatOpenAIChat: {
+				NonStreamFor: nonStream(matrixChatOwnedTool(), chatClientTool),
+				StreamFor:    stream(matrixChatOwnedToolStream(), chatClientToolStream),
+			},
+		},
+	}
+}
