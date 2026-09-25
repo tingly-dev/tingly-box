@@ -17,11 +17,6 @@ var _ = registerKnownGaps(KnownGap{
 	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=false",
 	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=true",
 ) && registerKnownGaps(KnownGap{
-	ID:     "M2",
-	Reason: "Chat->Chat streaming tool loop: the tool runs but the final answer reaches the client as empty data frames",
-},
-	"TestMCPOwnedToolLoop/openai_chat->openai_chat/stream=true",
-) && registerKnownGaps(KnownGap{
 	ID:     "M3",
 	Reason: "OpenAI Responses target: server tools are not offered to the model at all",
 },
