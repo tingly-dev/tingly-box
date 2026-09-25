@@ -117,3 +117,11 @@ export const archive = (sessionId: string): Promise<SessionInfo> =>
         headers,
         params: {path: {session_id: sessionId}},
     }));
+
+// handoff releases the session's resident process and returns the shell
+// command that resumes it in a local terminal.
+export const handoff = (sessionId: string): Promise<string> =>
+    call((client, headers) => client.POST('/api/v1/desk/sessions/{session_id}/handoff', {
+        headers,
+        params: {path: {session_id: sessionId}},
+    })).then((r) => r.command);

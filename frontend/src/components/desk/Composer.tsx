@@ -13,18 +13,27 @@ interface ComposerProps {
     context?: ReactNode;
     canSubmit?: boolean;
     disabled?: boolean;
-    // While a turn runs the send button becomes a stop button.
+    // Set while a turn runs: a Stop button shows, and Send stays available
+    // for whatever onSubmit does meanwhile (the session view queues it).
     onStop?: () => void;
     autoFocus?: boolean;
     minRows?: number;
+    // Optional control of the text, for callers that put text back into the
+    // input (a queued message taken back); uncontrolled otherwise.
+    text?: string;
+    onTextChange?: (text: string) => void;
 }
 
 // Composer is the one input for both starting a session and continuing it:
 // Enter sends, Shift+Enter adds a line, and an IME composition's Enter
 // (confirming a candidate) never sends.
-const Composer = ({placeholder, onSubmit, context, canSubmit = true, disabled, onStop, autoFocus, minRows = 2}: ComposerProps) => {
+const Composer = ({
+    placeholder, onSubmit, context, canSubmit = true, disabled, onStop, autoFocus, minRows = 2, text: controlled, onTextChange,
+}: ComposerProps) => {
     const {t} = useTranslation();
-    const [text, setText] = useState('');
+    const [own, setOwn] = useState('');
+    const text = controlled ?? own;
+    const setText = (v: string) => (onTextChange ? onTextChange(v) : setOwn(v));
     const [submitting, setSubmitting] = useState(false);
 
     const ready = canSubmit && !disabled && !submitting && text.trim() !== '';
@@ -75,14 +84,8 @@ const Composer = ({placeholder, onSubmit, context, canSubmit = true, disabled, o
                     }}
                     sx={{fontSize: '0.9375rem', lineHeight: 1.6, color: 'text.primary'}}
                 />
-                <Box sx={{flexShrink: 0, pb: 0.25}}>
-                    {onStop ? (
-                        <Tooltip title={t('desk.interrupt', {defaultValue: 'Stop the current turn'})}>
-                            <IconButton size="small" onClick={onStop} aria-label={t('desk.interruptShort', {defaultValue: 'Stop'})} sx={{bgcolor: 'action.selected'}}>
-                                <PlayerStop fontSize="small"/>
-                            </IconButton>
-                        </Tooltip>
-                    ) : (
+                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0, pb: 0.25}}>
+                    {(!onStop || text.trim() !== '') && (
                         <IconButton
                             size="small"
                             color="primary"
@@ -93,7 +96,14 @@ const Composer = ({placeholder, onSubmit, context, canSubmit = true, disabled, o
                             {submitting ? <CircularProgress size={18}/> : <Send fontSize="small"/>}
                         </IconButton>
                     )}
-                </Box>
+                    {onStop && (
+                        <Tooltip title={t('desk.interrupt', {defaultValue: 'Stop the current turn'})}>
+                            <IconButton size="small" onClick={onStop} aria-label={t('desk.interruptShort', {defaultValue: 'Stop'})} sx={{bgcolor: 'action.selected'}}>
+                                <PlayerStop fontSize="small"/>
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Stack>
             </Stack>
         </Paper>
     );

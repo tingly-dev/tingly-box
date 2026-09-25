@@ -22,6 +22,7 @@ type Sess = {
     error?: string
     permission_mode: string
     profile: string
+    awaiting_input: boolean
     created_at: string
     last_activity: string
 }
@@ -31,10 +32,10 @@ const SITE = '/Users/me/code/website'
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
 const sessions: Sess[] = [
-    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', created_at: ago(12), last_activity: ago(1) },
-    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', created_at: ago(90), last_activity: ago(40) },
-    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', created_at: ago(200), last_activity: ago(199) },
-    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', created_at: ago(3000), last_activity: ago(2900) },
+    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', awaiting_input: true, created_at: ago(12), last_activity: ago(1) },
+    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', awaiting_input: false, created_at: ago(90), last_activity: ago(40) },
+    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', awaiting_input: false, created_at: ago(200), last_activity: ago(199) },
+    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', awaiting_input: false, created_at: ago(3000), last_activity: ago(2900) },
 ]
 
 const messages: Record<string, Msg[]> = {
@@ -161,7 +162,7 @@ export const deskHandlers = [
     http.post('/api/v1/desk/sessions', async ({ request }) => {
         const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string; profile?: string }
         const now = new Date().toISOString()
-        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', created_at: now, last_activity: now }
+        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', awaiting_input: false, created_at: now, last_activity: now }
         sessions.push(s)
         push(s.id, { role: 'user', content: body.prompt })
         runTurn(s, 'Looked around the project — here is what I found and what I would change next.')
@@ -176,6 +177,7 @@ export const deskHandlers = [
     http.post('/api/v1/desk/sessions/:id/messages', async ({ params, request }) => {
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (s.status === 'running' || s.status === 'pending') return HttpResponse.json({ error: { message: 'a turn is already in progress' } }, { status: 409 })
         const { text } = (await request.json()) as { text: string }
         push(s.id, { role: 'user', content: text })
         runTurn(s, `On it — "${text}" is done.`)
@@ -186,6 +188,7 @@ export const deskHandlers = [
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
         const { request_id, approved } = (await request.json()) as { request_id: string; approved: boolean }
         push(s.id, { kind: 'approval_response', content: approved ? 'approved' : 'denied', request_id })
+        s.awaiting_input = false
         setTimeout(() => {
             push(s.id, { role: 'assistant', content: approved ? 'All green across 5 race-checked runs.' : 'Skipped running the tests.' })
             touch(s, 'completed')
@@ -218,8 +221,16 @@ export const deskHandlers = [
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
         push(s.id, { kind: 'system', content: 'interrupted; send a message to resume' })
+        s.awaiting_input = false
         touch(s, 'completed')
         return new HttpResponse(null, { status: 204 })
+    }),
+    http.post('/api/v1/desk/sessions/:id/handoff', ({ params }) => {
+        const s = find(params.id as string)
+        if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        if (s.status === 'running' || s.status === 'pending') return HttpResponse.json({ error: { message: 'a turn is in progress; stop it or wait for it to finish' } }, { status: 409 })
+        const settings = s.profile ? ` --settings '/Users/me/.tingly-box/claude/${s.profile}.json'` : ''
+        return HttpResponse.json({ command: `cd '${s.project}' && claude --resume '${s.id}'${settings}` })
     }),
     http.post('/api/v1/desk/sessions/:id/archive', ({ params }) => {
         const s = find(params.id as string)

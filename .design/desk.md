@@ -196,7 +196,20 @@ the routed provider's quota and balance.
 - A window at 80% is marked, one at 90% or exhausted is red, and an
   exhausted one points at the profile picker beside it.
 
-### 3.5 A shared-mutable-state gotcha this surfaced
+### 3.5 Handoff to a terminal
+
+`POST /desk/sessions/:id/handoff` returns `cd '<folder>' && claude --resume
+'<id>'` (plus `--settings '<path>'` for a profile), all shell-quoted. It
+refuses during a turn and releases the session's resident process first, so
+two processes never write one Claude session file. A later message from the
+web starts a new resident process with `--resume`, so the page tells the
+user to use one place at a time rather than trying to lock either side.
+
+`SessionInfo.awaiting_input` is true while an approval or question is open
+(`webPrompter.hasPending`), so the list can say "waiting" without loading
+every transcript.
+
+### 3.6 A shared-mutable-state gotcha this surfaced
 
 `session.Manager.Get`/`GetOrLoad`/`ListByChat` return the **live**,
 mutably-shared `*Session` held in the manager's map — safe only if read
@@ -238,8 +251,15 @@ of tool:
 - **Sidebar** (`DeskSidebar`): "New session", a search box, and sessions
   grouped by folder (most recent first), each group with a "+" that starts a
   new session in that folder. A row is the session's first prompt plus a
-  mark only when it needs attention (spinner while running, red dot when
-  failed); archived sessions are dimmed.
+  mark only when it needs attention: an amber "waiting" pill when an
+  approval or question is open, a spinner while running, a red dot when
+  failed, and a dot (plus a bold title) for a turn that finished while the
+  user was elsewhere; archived sessions are dimmed.
+- **Attention** (`useDeskAttention`): while the tab is in the background, a
+  browser notification when a session starts waiting on the user or a turn
+  ends (permission is asked on the first send, a user gesture); the tab title
+  carries a `(n)` count of waiting and unseen sessions. Both are scoped to
+  the page and undone when it unmounts (ux-principles.md §12).
 - **New session** (`NewSessionView`): opens straight onto the prompt, no
   wizard (ux-principles.md §2). Folder and permission mode are context on
   the composer, prefilled with the folder used last. `FolderPicker` is
@@ -257,8 +277,16 @@ of tool:
   by the Skills page) with `escapeRawHtml` on, so HTML in a model's output is
   shown as text, never rendered; fenced code goes through `CodeBlock`.
 - **Composer** (`Composer`): Enter sends, Shift+Enter adds a line, and an
-  IME composition's Enter never sends. While a turn runs the send button
-  becomes Stop.
+  IME composition's Enter never sends. While a turn runs, Stop shows and
+  the input stays open: a message sent then is queued above the composer
+  and all queued ones go out as one message when the turn completes. ✕ on a
+  queued one puts it back into the input; Stop puts them all back (changing
+  course, as in the terminal); after a failed turn they're held with "Send
+  now". Drafts and queues are per session and survive switching sessions.
+- **Title bar actions**: expand all tool calls (remembered in
+  `localStorage`, each row still toggles on its own) and "Continue in
+  terminal" (§3.5), which copies the command and keeps it on screen with its
+  own copy button, since a copy right after a request can be refused.
 - **Narrow screens**: the list and the session are two views, with a back
   button in the session's title bar.
 

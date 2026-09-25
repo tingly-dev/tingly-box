@@ -11,13 +11,25 @@ interface DeskSidebarProps {
     onSelect: (id: string) => void;
     // folder is set when starting from a folder group's "+".
     onNew: (folder?: string) => void;
+    // Sessions whose turn ended while the user was elsewhere.
+    unseen: Set<string>;
 }
 
-// StatusMark says only what needs attention: a spinner while a turn runs, a
-// red dot when the last turn failed. A finished session needs no mark.
-const StatusMark = ({status}: {status: string}) => {
-    if (isBusyStatus(status)) return <CircularProgress size={10} thickness={6}/>;
-    if (status === 'failed') return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'error.main'}}/>;
+// StatusMark says only what needs attention, most urgent first: a turn
+// waiting on the user, one still running, one that failed, one that ended
+// while the user was elsewhere. A seen, finished session needs no mark.
+const StatusMark = ({session, unseen}: {session: SessionInfo; unseen: boolean}) => {
+    const {t} = useTranslation();
+    if (session.awaiting_input) {
+        return (
+            <Box component="span" sx={{px: 0.75, borderRadius: 1, fontSize: '0.65rem', fontWeight: 600, lineHeight: 1.6, bgcolor: 'warning.main', color: 'warning.contrastText'}}>
+                {t('desk.waitingMark', {defaultValue: 'waiting'})}
+            </Box>
+        );
+    }
+    if (isBusyStatus(session.status)) return <CircularProgress size={10} thickness={6}/>;
+    if (session.status === 'failed') return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'error.main'}}/>;
+    if (unseen) return <Box sx={{width: 7, height: 7, borderRadius: '50%', bgcolor: 'primary.main'}}/>;
     return null;
 };
 
@@ -30,7 +42,7 @@ const rowSx = {
     '&.Mui-selected': {fontWeight: 500},
 } as const;
 
-const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) => {
+const DeskSidebar = ({sessions, selectedId, onSelect, onNew, unseen}: DeskSidebarProps) => {
     const {t} = useTranslation();
     const [query, setQuery] = useState('');
 
@@ -96,8 +108,10 @@ const DeskSidebar = ({sessions, selectedId, onSelect, onNew}: DeskSidebarProps) 
                                     onClick={() => onSelect(s.id)}
                                     sx={{...rowSx, py: 0.5, opacity: s.status === 'closed' ? 0.55 : 1}}
                                 >
-                                    <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: '0.8125rem'}}>{sessionTitle(s)}</Typography>
-                                    <StatusMark status={s.status}/>
+                                    <Typography variant="body2" noWrap sx={{flex: 1, color: 'inherit', fontSize: '0.8125rem', fontWeight: unseen.has(s.id) ? 600 : undefined}}>
+                                        {sessionTitle(s)}
+                                    </Typography>
+                                    <StatusMark session={s} unseen={unseen.has(s.id)}/>
                                 </ListItemButton>
                             ))}
                         </List>

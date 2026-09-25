@@ -11,6 +11,8 @@ interface TranscriptProps {
     blocks: TranscriptBlock[];
     pendingRequestId?: string;
     working: boolean;
+    // Opens every activity row; each row can still be toggled on its own.
+    expandAll?: boolean;
     onRespond: (requestId: string, approved: boolean, answer: string) => Promise<void>;
 }
 
@@ -73,9 +75,12 @@ const StepDetail = ({step}: {step: ActivityStep}) => {
 // ActivityRow is one line for a run of thinking and tool calls ("Used 3
 // tools"), expandable into each call and its output: the reply stays the
 // visual anchor, and the detail is one click away rather than in the way.
-const ActivityRow = ({steps, live}: {steps: ActivityStep[]; live: boolean}) => {
+const ActivityRow = ({steps, live, expandAll}: {steps: ActivityStep[]; live: boolean; expandAll: boolean}) => {
     const {t} = useTranslation();
-    const [open, setOpen] = useState(false);
+    // A row's own toggle holds until "expand all" is flipped again.
+    const [toggled, setToggled] = useState<{under: boolean; open: boolean} | null>(null);
+    const open = toggled?.under === expandAll ? toggled.open : expandAll;
+    const setOpen = (next: (v: boolean) => boolean) => setToggled({under: expandAll, open: next(open)});
     const tools = steps.filter((s) => s.type === 'tool');
     const failed = tools.filter((s) => s.type === 'tool' && s.isError).length;
 
@@ -183,7 +188,7 @@ const RequestCard = ({block, pending, onRespond}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, onRespond}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, expandAll = false, onRespond}: TranscriptProps) => {
     const {t} = useTranslation();
     const last = blocks[blocks.length - 1];
     // The spinner rides on the last activity row while a turn runs; if the
@@ -199,7 +204,7 @@ const Transcript = ({blocks, pendingRequestId, working, onRespond}: TranscriptPr
                     case 'assistant':
                         return <AssistantText key={i} message={b.message}/>;
                     case 'activity':
-                        return <ActivityRow key={i} steps={b.steps} live={working && i === blocks.length - 1}/>;
+                        return <ActivityRow key={i} steps={b.steps} live={working && i === blocks.length - 1} expandAll={expandAll}/>;
                     case 'request':
                         return (
                             <RequestCard
