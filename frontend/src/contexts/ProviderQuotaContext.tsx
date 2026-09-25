@@ -1,15 +1,29 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchUIAPI } from '@/services/api';
 import { usePageVisibility } from '@/hooks/usePageVisibility';
 import type { ProviderQuota } from '@/types/quota';
 
 type QuotaByProvider = Record<string, ProviderQuota>;
 
-const ProviderQuotaContext = createContext<QuotaByProvider | undefined>(undefined);
+interface ProviderQuotaContextValue {
+    quota: QuotaByProvider;
+    refreshing: Set<string>;
+    failed: Set<string>;
+    refresh: (providerUuid: string) => Promise<void>;
+}
+
+const ProviderQuotaContext = createContext<ProviderQuotaContextValue | undefined>(undefined);
 
 // Re-read when the tab comes back after this long. The endpoint only reads the
 // backend cache (a background refresher keeps it current), so this is cheap.
 const STALE_AFTER_MS = 60_000;
+
+function without(set: Set<string>, uuid: string): Set<string> {
+    if (!set.has(uuid)) return set;
+    const next = new Set(set);
+    next.delete(uuid);
+    return next;
+}
 
 /**
  * Loads cached quota for a page's providers with one batch request, so every
@@ -22,6 +36,8 @@ export function ProviderQuotaProvider({ providerUuids, children }: {
     children: React.ReactNode;
 }) {
     const [quota, setQuota] = useState<QuotaByProvider>({});
+    const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
+    const [failed, setFailed] = useState<Set<string>>(new Set());
     const key = [...providerUuids].sort().join(',');
 
     const load = useCallback(async () => {
@@ -42,11 +58,45 @@ export function ProviderQuotaProvider({ providerUuids, children }: {
     }, [load]);
     usePageVisibility(load, STALE_AFTER_MS);
 
-    return <ProviderQuotaContext.Provider value={quota}>{children}</ProviderQuotaContext.Provider>;
+    // Unlike load, this asks the upstream provider, so a click while one is in
+    // flight is ignored rather than stacked. A failure keeps the old snapshot
+    // and is only reported in the node's tooltip.
+    const inFlight = useRef<Set<string>>(new Set());
+    const refresh = useCallback(async (providerUuid: string) => {
+        if (inFlight.current.has(providerUuid)) return;
+        inFlight.current.add(providerUuid);
+        setRefreshing(r => new Set(r).add(providerUuid));
+        try {
+            const usage = await fetchUIAPI(`/provider-quota/${providerUuid}/refresh`, { method: 'POST' });
+            // A refused upstream still answers 200, as a record carrying
+            // last_error and no windows; replacing the old reading with it
+            // would make the ring vanish instead of saying the refresh failed.
+            if (!usage?.provider_uuid || (usage.last_error && !usage.windows?.length)) {
+                setFailed(f => new Set(f).add(providerUuid));
+                return;
+            }
+            setQuota(q => ({ ...q, [providerUuid]: usage }));
+            setFailed(f => without(f, providerUuid));
+        } catch (error) {
+            console.debug('[ProviderQuotaProvider] refresh failed:', error);
+            setFailed(f => new Set(f).add(providerUuid));
+        } finally {
+            inFlight.current.delete(providerUuid);
+            setRefreshing(r => without(r, providerUuid));
+        }
+    }, []);
+
+    const value = useMemo(() => ({ quota, refreshing, failed, refresh }), [quota, refreshing, failed, refresh]);
+    return <ProviderQuotaContext.Provider value={value}>{children}</ProviderQuotaContext.Provider>;
 }
 
-/** Cached quota for one provider; undefined outside a ProviderQuotaProvider. */
-export function useProviderQuotaOf(providerUuid?: string): ProviderQuota | undefined {
-    const quota = useContext(ProviderQuotaContext);
-    return providerUuid ? quota?.[providerUuid] : undefined;
+/** Quota state for one provider; quota is undefined outside a ProviderQuotaProvider. */
+export function useProviderQuotaOf(providerUuid?: string) {
+    const ctx = useContext(ProviderQuotaContext);
+    return {
+        quota: providerUuid ? ctx?.quota[providerUuid] : undefined,
+        refreshing: !!providerUuid && !!ctx?.refreshing.has(providerUuid),
+        failed: !!providerUuid && !!ctx?.failed.has(providerUuid),
+        refresh: ctx && providerUuid ? () => ctx.refresh(providerUuid) : undefined,
+    };
 }

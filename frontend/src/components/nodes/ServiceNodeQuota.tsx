@@ -28,13 +28,14 @@ function formatDuration(ms: number): string {
 /**
  * The provider's binding quota on a service node: a ring showing the remaining
  * share of its tightest window, mirroring the api style badges on the right.
- * Exact figures, reset times and balances live in the tooltip.
+ * Exact figures, reset times and balances live in the tooltip; clicking the
+ * ring asks upstream for a fresh reading.
  * Renders nothing when the provider reports no comparable figure
  * (.design/quota-semantics.md §3.6).
  */
 export const ServiceNodeQuota: React.FC<{ providerUuid: string }> = ({ providerUuid }) => {
     const { t } = useTranslation();
-    const quota = useProviderQuotaOf(providerUuid);
+    const { quota, refreshing, failed, refresh } = useProviderQuotaOf(providerUuid);
     const tightest = tightestWindow(quota);
     if (!quota || !tightest) return null;
 
@@ -61,11 +62,17 @@ export const ServiceNodeQuota: React.FC<{ providerUuid: string }> = ({ providerU
                     </Box>
                 );
             })}
-            {Number.isFinite(fetchedAt) && (
-                <Box sx={{ mt: 0.5, opacity: 0.7 }}>
-                    {t('rule.service.quota.updated', { duration: formatDuration(now - fetchedAt) })}
-                </Box>
+            {failed && (
+                <Box sx={{ mt: 0.5, color: QUOTA_COLORS.error }}>{t('rule.service.quota.refreshFailed')}</Box>
             )}
+            <Box sx={{ mt: 0.5, opacity: 0.7 }}>
+                {refreshing
+                    ? t('rule.service.quota.refreshing')
+                    : [
+                        Number.isFinite(fetchedAt) && t('rule.service.quota.updated', { duration: formatDuration(now - fetchedAt) }),
+                        refresh && t('rule.service.quota.clickToRefresh'),
+                    ].filter(Boolean).join(' · ')}
+            </Box>
         </Box>
     );
 
@@ -73,12 +80,37 @@ export const ServiceNodeQuota: React.FC<{ providerUuid: string }> = ({ providerU
         <NodeTooltip title={tooltip} placement="bottom">
             <Box
                 component="span"
-                role="img"
+                role="button"
+                tabIndex={0}
                 aria-label={t('rule.service.quota.left', { value: `${Math.round(remaining)}%` })}
-                onClick={(e) => e.stopPropagation()}
-                sx={{ display: 'inline-flex', opacity: stale ? 0.5 : 1, cursor: 'default' }}
+                aria-busy={refreshing}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    refresh?.();
+                }}
+                onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    refresh?.();
+                }}
+                sx={{
+                    display: 'inline-flex',
+                    borderRadius: '50%',
+                    opacity: stale && !refreshing ? 0.5 : 1,
+                    cursor: refreshing ? 'progress' : 'pointer',
+                    ...(refreshing && {
+                        '@keyframes quota-ring-spin': {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' },
+                        },
+                        animation: 'quota-ring-spin 1s linear infinite',
+                    }),
+                }}
             >
-                <QuotaRing remaining={remaining} color={color} />
+                {/* While refreshing, a fixed quarter arc spins like a loader — the
+                    real arc can be empty (used up), and an empty ring shows no motion. */}
+                <QuotaRing remaining={refreshing ? 25 : remaining} color={color} />
             </Box>
         </NodeTooltip>
     );

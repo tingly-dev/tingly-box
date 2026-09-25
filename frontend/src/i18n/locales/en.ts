@@ -609,7 +609,10 @@ export default {
       "quota": {
         "left": "{{value}} left",
         "resetsIn": "resets in {{duration}}",
-        "updated": "Updated {{duration}} ago"
+        "updated": "Updated {{duration}} ago",
+        "clickToRefresh": "click to refresh",
+        "refreshing": "Refreshing…",
+        "refreshFailed": "Refresh failed — showing the last reading"
       }
     },
     "tier": {

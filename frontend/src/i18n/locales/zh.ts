@@ -610,7 +610,10 @@ export default {
       "quota": {
         "left": "剩余 {{value}}",
         "resetsIn": "{{duration}} 后重置",
-        "updated": "{{duration}} 前更新"
+        "updated": "{{duration}} 前更新",
+        "clickToRefresh": "点击刷新",
+        "refreshing": "刷新中…",
+        "refreshFailed": "刷新失败，显示的是上次读数"
       }
     },
     "tier": {

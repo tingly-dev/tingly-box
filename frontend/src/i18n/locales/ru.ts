@@ -621,7 +621,10 @@ export default {
       "quota": {
         "left": "осталось {{value}}",
         "resetsIn": "сброс через {{duration}}",
-        "updated": "обновлено {{duration}} назад"
+        "updated": "обновлено {{duration}} назад",
+        "clickToRefresh": "нажмите, чтобы обновить",
+        "refreshing": "Обновление…",
+        "refreshFailed": "Не удалось обновить — показаны последние данные"
       }
     },
     "tier": {
