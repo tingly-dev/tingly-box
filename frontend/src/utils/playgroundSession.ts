@@ -85,12 +85,17 @@ export const loadPlaygroundSession = async <Run extends Identified, Import exten
                 readItems<Run>(db, runIds, runKey),
                 readItems<Import>(db, importIds, importKey),
             ]);
-            // Records whose id was listed but did not read back stay unknown
-            // to `stored`, so the next save writes them again.
-            stored = {
-                runs: new Map(runs.map((run) => [run.id, run])),
-                imports: new Map(imports.map((item) => [item.id, item])),
-            };
+            // A listed record that did not read back means the store is not
+            // what the lists say: treat it as unknown, so the next save
+            // rewrites it whole instead of diffing around the gap.
+            const complete = runs.length === (Array.isArray(runIds) ? runIds.length : 0)
+                && imports.length === (Array.isArray(importIds) ? importIds.length : 0);
+            stored = complete
+                ? {
+                    runs: new Map(runs.map((run) => [run.id, run])),
+                    imports: new Map(imports.map((item) => [item.id, item])),
+                }
+                : null;
             return { runs, imports };
         }
         const [runs, imports] = await Promise.all([read<Run[]>(db, LEGACY_RUNS), read<Import[]>(db, LEGACY_IMPORTS)]);
