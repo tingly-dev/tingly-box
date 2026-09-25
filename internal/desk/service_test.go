@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -973,7 +974,7 @@ func TestStartTurn_LosingClaimRecordsNothing(t *testing.T) {
 	svc.runs[sess.ID] = &run{cancel: func() {}, done: make(chan struct{})}
 	svc.mu.Unlock()
 
-	if svc.startTurn(sess.ID, sess.Project, "second", "", "", true) {
+	if svc.startTurn(sess.ID, sess.Project, "second", turnSettings{}, true) {
 		t.Fatal("startTurn succeeded while another turn held the claim")
 	}
 	after, _ := svc.Messages(sess.ID)
@@ -1165,4 +1166,112 @@ func TestNewService_DefaultsTheLauncherToItsOwnExecutable(t *testing.T) {
 	if !filepath.IsAbs(svc.launcher) {
 		t.Fatalf("launcher = %q, want an absolute path so the command works off PATH (npx, a build dir)", svc.launcher)
 	}
+}
+
+// tierRouting has a unified main routing and one separate-mode profile,
+// "sep", whose settings file is real so its env can be read.
+type tierRouting struct{ sepPath string }
+
+func (tierRouting) GetClaudeCodeEnv(context.Context) ([]string, error) {
+	return []string{
+		"ANTHROPIC_MODEL=tingly/cc", "ANTHROPIC_DEFAULT_OPUS_MODEL=tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL=tingly/cc", "ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc",
+	}, nil
+}
+
+func (r tierRouting) GetClaudeCodeSettingsPathForProfile(_ context.Context, id string) (string, error) {
+	if id != "sep" {
+		return "", fmt.Errorf("claude code profile %q not found", id)
+	}
+	return r.sepPath, nil
+}
+
+func newTierTestService(t *testing.T, fa *fakeAgent) *Service {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	settings := `{"env":{"ANTHROPIC_MODEL":"sep/default[1m]","ANTHROPIC_DEFAULT_OPUS_MODEL":"sep/opus",` +
+		`"ANTHROPIC_DEFAULT_SONNET_MODEL":"sep/sonnet","ANTHROPIC_DEFAULT_HAIKU_MODEL":"sep/haiku"}}`
+	if err := os.WriteFile(path, []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mgr := session.NewManager(session.Config{Timeout: time.Hour, MessageRetention: time.Hour}, newMemStore())
+	t.Cleanup(mgr.Stop)
+	agentSvc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewAgentService: %v", err)
+	}
+	agentSvc.RegisterAgent(agentboot.AgentTypeClaude, fa)
+	return NewService(Config{Sessions: mgr, Agent: agentSvc, Routing: tierRouting{sepPath: path}})
+}
+
+func TestModels_ReadsTiersFromTheEnvClaudeCodeGets(t *testing.T) {
+	svc := newTierTestService(t, &fakeAgent{script: completingScript})
+
+	main, err := svc.Models(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Models(main): %v", err)
+	}
+	if !main.Unified || len(main.Tiers) != 1 || main.Tiers[0].Model != "tingly/cc" {
+		t.Fatalf("main = %+v, want unified with the one model", main)
+	}
+
+	sep, err := svc.Models(context.Background(), "sep")
+	if err != nil {
+		t.Fatalf("Models(sep): %v", err)
+	}
+	want := []ModelTier{{"", "sep/default"}, {"opus", "sep/opus"}, {"sonnet", "sep/sonnet"}, {"haiku", "sep/haiku"}}
+	if sep.Unified || !slices.Equal(sep.Tiers, want) {
+		t.Fatalf("sep = %+v, want separate tiers %v (the [1m] marker stripped)", sep, want)
+	}
+}
+
+func TestSetModel_OnlyASeparateProfileCanPickATier(t *testing.T) {
+	got := make(chan agentboot.ExecutionOptions, 2)
+	fa := &fakeAgent{script: func(ctx context.Context, prompt string, opts agentboot.ExecutionOptions, h *fakeHandle) {
+		got <- opts
+		completingScript(ctx, prompt, opts, h)
+	}}
+	svc := newTierTestService(t, fa)
+	ctx := context.Background()
+
+	if _, err := svc.CreateSession(ctx, CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Model: "opus"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("a tier under the unified main routing: err = %v, want ErrValidation", err)
+	}
+
+	sess, err := svc.CreateSession(ctx, CreateSessionInput{Path: t.TempDir(), Prompt: "hi", Profile: "sep", Model: "opus"})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if opts := <-got; opts.Model != "opus" {
+		t.Fatalf("turn launched with Model %q, want opus", opts.Model)
+	}
+	waitStatus(t, svc, sess.ID, session.StatusCompleted, time.Second)
+
+	if _, err := svc.SetModel(ctx, sess.ID, "gpt"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("unknown tier: err = %v, want ErrValidation", err)
+	}
+	if _, err := svc.SetModel(ctx, sess.ID, "haiku"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
+	if got := svc.TierModel(ctx, mustSnapshot(t, svc, sess.ID)); got != "sep/haiku" {
+		t.Fatalf("TierModel = %q, want sep/haiku", got)
+	}
+
+	// Back to the unified main routing: the tier no longer means anything.
+	updated, err := svc.SetProfile(ctx, sess.ID, "")
+	if err != nil {
+		t.Fatalf("SetProfile: %v", err)
+	}
+	if updated.Model != "" {
+		t.Fatalf("model after switching to a unified profile = %q, want reset", updated.Model)
+	}
+}
+
+func mustSnapshot(t *testing.T, svc *Service, id string) *session.Session {
+	t.Helper()
+	snap, ok := svc.sessions.Snapshot(id)
+	if !ok {
+		t.Fatalf("session %s not found", id)
+	}
+	return &snap
 }

@@ -18,7 +18,18 @@ const turnTimeout = 2 * time.Hour
 // flight — the caller has already decided that should not happen, but the
 // claim is atomic here to close the race between two requests for the same
 // session arriving together.
-func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode, profile string, resume bool) bool {
+// turnSettings are the per-session choices a turn launches with.
+type turnSettings struct {
+	PermissionMode string
+	Profile        string
+	Model          string
+}
+
+func settingsOf(sess session.Session) turnSettings {
+	return turnSettings{PermissionMode: sess.PermissionMode, Profile: sess.Profile, Model: sess.Model}
+}
+
+func (s *Service) startTurn(sessionID, projectPath, prompt string, ts turnSettings, resume bool) bool {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(sessionID, s.sessions)
 	done := make(chan struct{})
@@ -39,11 +50,12 @@ func (s *Service) startTurn(sessionID, projectPath, prompt, permissionMode, prof
 	s.appendUserMessage(sessionID, prompt)
 	s.sessions.SetRunning(sessionID)
 
-	go s.runTurn(turnCtx, sessionID, projectPath, prompt, permissionMode, profile, resume, prompter, cancel, done)
+	go s.runTurn(turnCtx, sessionID, projectPath, prompt, ts, resume, prompter, cancel, done)
 	return true
 }
 
-func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, permissionMode, profile string, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt string, ts turnSettings, resume bool, webPrompt *webPrompter, cancel context.CancelFunc, done chan struct{}) {
+	permissionMode, profile := ts.PermissionMode, ts.Profile
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, sessionID)
@@ -98,6 +110,7 @@ func (s *Service) runTurn(ctx context.Context, sessionID, projectPath, prompt, p
 		Resume:               resume,
 		PermissionPromptTool: "stdio",
 		PermissionMode:       permissionMode,
+		Model:                ts.Model,
 		Env:                  execEnv,
 		SettingsPath:         settingsPath,
 	}

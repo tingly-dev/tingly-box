@@ -19,6 +19,9 @@ type SessionInfo struct {
 	Error          string `json:"error,omitempty"`
 	PermissionMode string `json:"permission_mode"`
 	Profile        string `json:"profile"`
+	// Model is the model tier alias ("opus", "sonnet", "haiku"); empty is
+	// the profile's default model.
+	Model string `json:"model"`
 	// AwaitingInput is true while the session's turn waits on an approval
 	// or a question from the user.
 	AwaitingInput bool      `json:"awaiting_input"`
@@ -36,6 +39,7 @@ func sessionToInfo(s *session.Session) SessionInfo {
 		Error:          s.Error,
 		PermissionMode: s.PermissionMode,
 		Profile:        s.Profile,
+		Model:          s.Model,
 		CreatedAt:      s.CreatedAt,
 		LastActivity:   s.LastActivity,
 	}
@@ -70,6 +74,9 @@ type CreateSessionRequest struct {
 	PermissionMode string `json:"permission_mode"`
 	// Profile is a Claude Code profile id; empty uses the main claude_code routing.
 	Profile string `json:"profile"`
+	// Model is a model tier alias from GET /desk/models; empty is the
+	// profile's default.
+	Model string `json:"model"`
 }
 
 type SendMessageRequest struct {
@@ -92,6 +99,12 @@ type HandoffResponse struct {
 	Command string `json:"command"`
 }
 
+type SetModelRequest struct {
+	// Model is a model tier alias from GET /desk/models; empty is the
+	// profile's default.
+	Model string `json:"model"`
+}
+
 type SetProfileRequest struct {
 	// Profile is a Claude Code profile id; empty switches back to the main
 	// claude_code routing.
@@ -107,8 +120,9 @@ type SessionStatusResponse struct {
 	// Scenario is the gateway scenario the session's turns go through:
 	// "claude_code" or "claude_code:<profile id>".
 	Scenario string `json:"scenario"`
-	// RequestedModel is the model id the latest turn asked for; empty before
-	// any turn reached the model, in which case nothing below is set.
+	// RequestedModel is the model id the session's next turn asks for (its
+	// chosen tier), else the one its latest turn asked for; empty if neither
+	// is known, in which case nothing below is set.
 	RequestedModel string             `json:"requested_model,omitempty"`
 	ProviderName   string             `json:"provider_name,omitempty"`
 	ProviderModel  string             `json:"provider_model,omitempty"`
@@ -133,6 +147,23 @@ type SessionListResponse struct {
 
 type MessageListResponse struct {
 	Messages []MessageInfo `json:"messages"`
+}
+
+// ModelsResponse is what a profile offers to pick from. Unified means every
+// tier maps to one model: Tiers then holds just the default, and the model
+// can only be changed by editing the profile's rules.
+type ModelsResponse struct {
+	Unified bool            `json:"unified"`
+	Tiers   []ModelTierInfo `json:"tiers"`
+}
+
+// ModelTierInfo is one pickable model: the alias passed as --model ("" for
+// the default), the gateway model it requests, and where that is routed.
+type ModelTierInfo struct {
+	Alias         string `json:"alias"`
+	Model         string `json:"model"`
+	ProviderName  string `json:"provider_name,omitempty"`
+	ProviderModel string `json:"provider_model,omitempty"`
 }
 
 type PermissionModesResponse struct {

@@ -26,6 +26,7 @@ type RemoteSessionRecord struct {
 	Error          string `gorm:"column:error;type:text"`
 	PermissionMode string `gorm:"column:permission_mode"`
 	Profile        string `gorm:"column:profile"`
+	Model          string `gorm:"column:model"`
 
 	CreatedAt    time.Time `gorm:"column:created_at"`
 	LastActivity time.Time `gorm:"column:last_activity;index:idx_remote_sessions_bind,priority:4"`

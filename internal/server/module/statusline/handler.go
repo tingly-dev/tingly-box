@@ -433,6 +433,16 @@ type Route struct {
 	Quota        []QuotaSegment
 }
 
+// PreviewRoute is ResolveRoute without the quota lookup, for listing several
+// routes at once. It returns nil when no rule matches the model.
+func (h *Handler) PreviewRoute(scenario, modelID string) *Route {
+	mapping := h.getTBModelMapping(modelID, typ.RuleScenario(scenario))
+	if mapping == nil {
+		return nil
+	}
+	return &Route{ProviderName: mapping.providerName, Model: mapping.model}
+}
+
 // ResolveRoute resolves the route the way the terminal status line does. It
 // returns nil when no rule matches the model in the scenario.
 func (h *Handler) ResolveRoute(ctx context.Context, scenario, modelID string) *Route {

@@ -22,6 +22,7 @@ type Sess = {
     error?: string
     permission_mode: string
     profile: string
+    model: string
     awaiting_input: boolean
     created_at: string
     last_activity: string
@@ -32,10 +33,10 @@ const SITE = '/Users/me/code/website'
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
 const sessions: Sess[] = [
-    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', awaiting_input: true, created_at: ago(12), last_activity: ago(1) },
-    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', awaiting_input: false, created_at: ago(90), last_activity: ago(40) },
-    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', awaiting_input: false, created_at: ago(200), last_activity: ago(199) },
-    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', awaiting_input: false, created_at: ago(3000), last_activity: ago(2900) },
+    { id: 'desk-1', project: TB, status: 'running', request: 'Fix the flaky persistent session test in internal/desk', response: '', permission_mode: '', profile: '', model: '', awaiting_input: true, created_at: ago(12), last_activity: ago(1) },
+    { id: 'desk-2', project: TB, status: 'completed', request: 'Add a dark mode toggle to the settings page', response: '', permission_mode: 'acceptEdits', profile: 'p1', model: 'opus', awaiting_input: false, created_at: ago(90), last_activity: ago(40) },
+    { id: 'desk-3', project: SITE, status: 'failed', request: 'Update the pricing page copy', response: '', error: 'agent CLI not available', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(200), last_activity: ago(199) },
+    { id: 'desk-4', project: SITE, status: 'closed', request: 'Draft release notes for v1.2', response: '', permission_mode: '', profile: '', model: '', awaiting_input: false, created_at: ago(3000), last_activity: ago(2900) },
 ]
 
 const messages: Record<string, Msg[]> = {
@@ -146,6 +147,24 @@ const routes: Record<string, object> = {
         quota: [{ type: 'balance', balance: true, text: '$12.40', used_percent: 0, limit_reached: false }],
     },
 }
+// The tiers each profile offers: the main routing is unified (one model for
+// every tier), p1 routes tiers separately.
+const tiers: Record<string, { unified: boolean; tiers: { alias: string; model: string; provider_name: string; provider_model: string }[] }> = {
+    '': { unified: true, tiers: [{ alias: '', model: 'tingly/cc', provider_name: 'Anthropic (team)', provider_model: 'claude-sonnet-4-5' }] },
+    p1: {
+        unified: false,
+        tiers: [
+            { alias: '', model: 'tingly/cc-default', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
+            { alias: 'opus', model: 'tingly/cc-opus', provider_name: 'Zhipu', provider_model: 'glm-4.6' },
+            { alias: 'sonnet', model: 'tingly/cc-sonnet', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
+            { alias: 'haiku', model: 'tingly/cc-haiku', provider_name: 'DeepSeek', provider_model: 'deepseek-chat' },
+        ],
+    },
+}
+const tierOf = (s: Sess) => {
+    const t = tiers[s.profile] ?? tiers['']
+    return t.tiers.find((x) => x.alias === s.model) ?? t.tiers[0]
+}
 const sorted = () => [...sessions].sort((a, b) => b.last_activity.localeCompare(a.last_activity))
 
 export const deskHandlers = [
@@ -160,9 +179,9 @@ export const deskHandlers = [
         HttpResponse.json({ modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.get('/api/v1/desk/sessions', () => HttpResponse.json({ sessions: sorted() })),
     http.post('/api/v1/desk/sessions', async ({ request }) => {
-        const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string; profile?: string }
+        const body = (await request.json()) as { path: string; prompt: string; permission_mode?: string; profile?: string; model?: string }
         const now = new Date().toISOString()
-        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', awaiting_input: false, created_at: now, last_activity: now }
+        const s: Sess = { id: `desk-${Date.now()}`, project: body.path, status: 'pending', request: body.prompt, response: '', permission_mode: body.permission_mode ?? '', profile: body.profile ?? '', model: body.model ?? '', awaiting_input: false, created_at: now, last_activity: now }
         sessions.push(s)
         push(s.id, { role: 'user', content: body.prompt })
         runTurn(s, 'Looked around the project — here is what I found and what I would change next.')
@@ -199,15 +218,30 @@ export const deskHandlers = [
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
         const scenario = s.profile ? `claude_code:${s.profile}` : 'claude_code'
-        const usage = [...(messages[s.id] ?? [])].reverse().find((m) => m.kind === 'usage')
-        const requested = (usage?.payload as { model?: string } | undefined)?.model
-        if (!requested) return HttpResponse.json({ scenario, quota: [] })
-        return HttpResponse.json({ scenario, requested_model: requested, ...routes[s.profile] ?? routes[''] })
+        const tier = tierOf(s)
+        const quota = (routes[s.profile] ?? routes['']) as { quota: unknown[] }
+        return HttpResponse.json({ scenario, requested_model: tier.model, provider_name: tier.provider_name, provider_model: tier.provider_model, quota: quota.quota })
+    }),
+    http.get('/api/v1/desk/models', ({ request }) => {
+        const profile = new URL(request.url).searchParams.get('profile') ?? ''
+        return HttpResponse.json(tiers[profile] ?? tiers[''])
+    }),
+    http.put('/api/v1/desk/sessions/:id/model', async ({ params, request }) => {
+        const s = find(params.id as string)
+        if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
+        const model = ((await request.json()) as { model: string }).model
+        if (model && (tiers[s.profile] ?? tiers['']).unified) {
+            return HttpResponse.json({ error: { message: 'this profile routes every tier to one model; edit its rules to change it' } }, { status: 400 })
+        }
+        s.model = model
+        push(s.id, { kind: 'system', content: `model: ${model || 'default'}` })
+        return HttpResponse.json(s)
     }),
     http.put('/api/v1/desk/sessions/:id/profile', async ({ params, request }) => {
         const s = find(params.id as string)
         if (!s) return HttpResponse.json({ error: { message: 'session not found' } }, { status: 404 })
         s.profile = ((await request.json()) as { profile: string }).profile
+        if ((tiers[s.profile] ?? tiers['']).unified) s.model = ''
         push(s.id, { kind: 'system', content: `profile: ${s.profile || 'default'}` })
         return HttpResponse.json(s)
     }),

@@ -26,6 +26,8 @@ type Handler struct {
 // draws on, the way the terminal status line does (statusline.Handler).
 type RouteResolver interface {
 	ResolveRoute(ctx context.Context, scenario, modelID string) *statusline.Route
+	// PreviewRoute is ResolveRoute without the quota lookup.
+	PreviewRoute(scenario, modelID string) *statusline.Route
 }
 
 func NewHandler(svc *desk.Service, routes RouteResolver) *Handler {
@@ -76,7 +78,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 	sess, err := h.svc.CreateSession(c.Request.Context(), desk.CreateSessionInput{
-		Path: req.Path, Prompt: req.Prompt, PermissionMode: req.PermissionMode, Profile: req.Profile,
+		Path: req.Path, Prompt: req.Prompt, PermissionMode: req.PermissionMode, Profile: req.Profile, Model: req.Model,
 	})
 	if err != nil {
 		sendServiceError(c, err)
@@ -180,7 +182,10 @@ func (h *Handler) Status(c *gin.Context) {
 		return
 	}
 	resp := SessionStatusResponse{Scenario: desk.Scenario(sess.Profile), Quota: []QuotaSegmentInfo{}}
-	resp.RequestedModel = h.svc.RequestedModel(sess.ID)
+	resp.RequestedModel = h.svc.TierModel(c.Request.Context(), sess)
+	if resp.RequestedModel == "" {
+		resp.RequestedModel = h.svc.RequestedModel(sess.ID)
+	}
 	if h.routes != nil && resp.RequestedModel != "" {
 		if route := h.routes.ResolveRoute(c.Request.Context(), resp.Scenario, resp.RequestedModel); route != nil {
 			resp.ProviderName, resp.ProviderModel = route.ProviderName, route.Model
@@ -193,6 +198,41 @@ func (h *Handler) Status(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// Models lists the model tiers a profile offers, each with its route.
+func (h *Handler) Models(c *gin.Context) {
+	profile := c.Query("profile")
+	choice, err := h.svc.Models(c.Request.Context(), profile)
+	if err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	resp := ModelsResponse{Unified: choice.Unified, Tiers: make([]ModelTierInfo, 0, len(choice.Tiers))}
+	for _, t := range choice.Tiers {
+		info := ModelTierInfo{Alias: t.Alias, Model: t.Model}
+		if h.routes != nil && t.Model != "" {
+			if route := h.routes.PreviewRoute(desk.Scenario(profile), t.Model); route != nil {
+				info.ProviderName, info.ProviderModel = route.ProviderName, route.Model
+			}
+		}
+		resp.Tiers = append(resp.Tiers, info)
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) SetModel(c *gin.Context) {
+	var req SetModelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	sess, err := h.svc.SetModel(c.Request.Context(), c.Param("session_id"), req.Model)
+	if err != nil {
+		sendServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, h.info(sess))
 }
 
 func (h *Handler) SetProfile(c *gin.Context) {

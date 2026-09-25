@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -182,7 +183,7 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			settings += "@" + hex.EncodeToString(sum[:])
 		}
 	}
-	return opts.PermissionMode + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
+	return opts.PermissionMode + "\x00" + opts.Model + "\x00" + settings + "\x00" + strings.Join(env, "\x00")
 }
 
 // ---------- folders (a thin, un-persisted convenience) ----------
@@ -263,6 +264,8 @@ type CreateSessionInput struct {
 	// Profile is a Claude Code profile id; "" uses the main claude_code
 	// scenario's routing.
 	Profile string
+	// Model is a model tier alias (see Models); "" is the profile's default.
+	Model string
 }
 
 // CreateSession opens a conversation in a folder and starts its first turn.
@@ -285,6 +288,10 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*se
 	if err := s.checkProfile(ctx, in.Profile); err != nil {
 		return nil, err
 	}
+	in.Model = strings.TrimSpace(in.Model)
+	if err := s.checkModel(ctx, in.Profile, in.Model); err != nil {
+		return nil, err
+	}
 
 	sess := s.sessions.CreateWith(webChatID, agentType, path)
 	id := sess.ID
@@ -292,13 +299,14 @@ func (s *Service) CreateSession(ctx context.Context, in CreateSessionInput) (*se
 	s.sessions.Update(id, func(sess *session.Session) {
 		sess.PermissionMode = in.PermissionMode
 		sess.Profile = in.Profile
+		sess.Model = in.Model
 		// CreateWith stamps now+Timeout, and the manager's expiry sweep
 		// deletes the session and its transcript from the store once that
 		// passes. A Desk session lives until it is archived, the same way
 		// @cc's sessions clear ExpiresAt.
 		sess.ExpiresAt = time.Time{}
 	})
-	s.startTurn(id, path, in.Prompt, in.PermissionMode, in.Profile, false)
+	s.startTurn(id, path, in.Prompt, turnSettings{PermissionMode: in.PermissionMode, Profile: in.Profile, Model: in.Model}, false)
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
 }
@@ -414,7 +422,7 @@ func (s *Service) SendMessage(ctx context.Context, id, text string) error {
 	// canSteer above is only a pre-check; startTurn's own claim on s.runs is
 	// the atomic one, and it records the message only once it has won, so a
 	// losing concurrent send leaves nothing in the transcript.
-	if !s.startTurn(id, sess.Project, text, sess.PermissionMode, sess.Profile, true) {
+	if !s.startTurn(id, sess.Project, text, settingsOf(sess), true) {
 		return conflict("session is %s", sess.Status)
 	}
 	return nil
@@ -455,7 +463,18 @@ func (s *Service) SetProfile(ctx context.Context, id, profile string) (*session.
 	if err := s.checkProfile(ctx, profile); err != nil {
 		return nil, err
 	}
-	s.sessions.Update(id, func(sess *session.Session) { sess.Profile = profile })
+	// A unified profile has one model for every tier, so a tier picked under
+	// the previous profile no longer means anything.
+	resetModel := false
+	if choice, err := s.Models(ctx, profile); err == nil && choice.Unified {
+		resetModel = true
+	}
+	s.sessions.Update(id, func(sess *session.Session) {
+		sess.Profile = profile
+		if resetModel {
+			sess.Model = ""
+		}
+	})
 	s.appendSystem(id, "profile: "+profileLabel(profile))
 	snap, _ := s.sessions.Snapshot(id)
 	return &snap, nil
@@ -471,6 +490,153 @@ func (s *Service) checkProfile(ctx context.Context, profile string) error {
 		return invalid("profile %q: %v", profile, err)
 	}
 	return nil
+}
+
+// SetModel picks the model tier the session's next turns ask for. A resident
+// process started with another tier restarts with --resume (launchSignature).
+func (s *Service) SetModel(ctx context.Context, id, model string) (*session.Session, error) {
+	model = strings.TrimSpace(model)
+	// A copy: the live *Session is written by a turn's goroutine.
+	sess, ok := s.sessions.Snapshot(id)
+	if !ok {
+		return nil, notFound("session", id)
+	}
+	if err := s.checkModel(ctx, sess.Profile, model); err != nil {
+		return nil, err
+	}
+	s.sessions.Update(id, func(sess *session.Session) { sess.Model = model })
+	s.appendSystem(id, "model: "+modelLabel(model))
+	snap, _ := s.sessions.Snapshot(id)
+	return &snap, nil
+}
+
+// checkModel accepts the default tier always, and a named tier only where
+// the profile routes tiers separately: under a unified profile every tier
+// is the same model, so choosing one would change nothing.
+func (s *Service) checkModel(ctx context.Context, profile, model string) error {
+	if model == "" {
+		return nil
+	}
+	if !slices.Contains(modelTiers, model) {
+		return invalid("unknown model tier %q", model)
+	}
+	if choice, err := s.Models(ctx, profile); err == nil && choice.Unified {
+		return invalid("profile %s routes every tier to one model; edit its rules to change it", profileLabel(profile))
+	}
+	return nil
+}
+
+// modelTiers are the aliases Claude Code's --model takes that map to a
+// tier env var; "" (no --model) is ANTHROPIC_MODEL.
+var modelTiers = []string{"opus", "sonnet", "haiku"}
+
+var tierEnvKeys = map[string]string{
+	"":       "ANTHROPIC_MODEL",
+	"opus":   "ANTHROPIC_DEFAULT_OPUS_MODEL",
+	"sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+	"haiku":  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+}
+
+// ModelTier is one model a session can ask for: the alias passed as
+// --model and the gateway model id it maps to.
+type ModelTier struct {
+	Alias string
+	Model string
+}
+
+// ModelChoice is what a profile offers. Unified means every tier maps to one
+// model, and Tiers then holds just the default.
+type ModelChoice struct {
+	Unified bool
+	Tiers   []ModelTier
+}
+
+// Models reads a profile's tiers from the env Claude Code itself is given —
+// the main scenario's env, or the profile's settings file — so what is shown
+// is exactly what the process will request.
+func (s *Service) Models(ctx context.Context, profile string) (ModelChoice, error) {
+	env, err := s.claudeEnv(ctx, profile)
+	if err != nil {
+		return ModelChoice{}, err
+	}
+	def := tierModel(env, "")
+	choice := ModelChoice{Unified: true, Tiers: []ModelTier{{Alias: "", Model: def}}}
+	for _, alias := range modelTiers {
+		m := tierModel(env, alias)
+		if m == "" {
+			continue
+		}
+		if m != def {
+			choice.Unified = false
+		}
+		choice.Tiers = append(choice.Tiers, ModelTier{Alias: alias, Model: m})
+	}
+	if choice.Unified {
+		choice.Tiers = choice.Tiers[:1]
+	}
+	return choice, nil
+}
+
+// tierModel is the model a tier's env var names, without the "[1m]" marker
+// Claude Code strips before requesting (serverconfig.Context1MSuffix), so it
+// is the id the gateway sees.
+func tierModel(env map[string]string, alias string) string {
+	return strings.TrimSuffix(env[tierEnvKeys[alias]], "[1m]")
+}
+
+// TierModel is the gateway model a session's chosen tier requests, or "".
+func (s *Service) TierModel(ctx context.Context, sess *session.Session) string {
+	choice, err := s.Models(ctx, sess.Profile)
+	if err != nil {
+		return ""
+	}
+	for _, t := range choice.Tiers {
+		if t.Alias == sess.Model {
+			return t.Model
+		}
+	}
+	return choice.Tiers[0].Model
+}
+
+func (s *Service) claudeEnv(ctx context.Context, profile string) (map[string]string, error) {
+	if s.routing == nil {
+		return nil, errors.New("no gateway routing configured")
+	}
+	env := map[string]string{}
+	if profile == "" {
+		list, err := s.routing.GetClaudeCodeEnv(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, kv := range list {
+			if k, v, ok := strings.Cut(kv, "="); ok {
+				env[k] = v
+			}
+		}
+		return env, nil
+	}
+	path, err := s.routing.GetClaudeCodeSettingsPathForProfile(ctx, profile)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var settings struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := json.Unmarshal(b, &settings); err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return settings.Env, nil
+}
+
+func modelLabel(model string) string {
+	if model == "" {
+		return "default"
+	}
+	return model
 }
 
 func profileLabel(profile string) string {

@@ -170,8 +170,29 @@ instead of the main scenario's env, the same either/or @cc's
 `ClaudeCodeExecutor` uses, and fall back to the main routing with a system
 note if the profile can't be resolved. Create and `SetProfile` reject an
 unknown profile up front. The settings path is part of the launch signature
-(§3.1), so switching profile mid-session restarts the resident process with
-`--resume` on the next turn.
+(§3.1) together with a hash of the file's content, so switching or editing
+a profile restarts the resident process with `--resume` on the next turn.
+
+**Model.** Beside the profile, the composer always names the model the
+session runs on (ux-principles.md §5), and profile and model are shown the
+same way for every profile. `GET /desk/models?profile=` reads the tiers from
+the env Claude Code is actually given (`ANTHROPIC_MODEL` and
+`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`, from the main env or the
+profile's settings file), each with its predicted route:
+
+- A **separate** profile (tiers differ) lets the session pick a tier
+  (`Session.Model`, a `remote_sessions.model` column), passed to Claude Code
+  as `--model opus|sonnet|haiku`; "" is `ANTHROPIC_MODEL`. The tier is part
+  of the launch signature.
+- A **unified** profile (every tier the same model) shows its one model with
+  no menu, and the backend rejects a tier. Changing that model means editing
+  the profile's rules, which would change every client using the profile,
+  so it is not offered from a session (ux-principles.md §12). Switching a
+  session to a unified profile clears its tier.
+
+Picking an arbitrary provider model per session is deliberately not offered:
+it would bypass the rules' load balancing and quota fallback, and become a
+second control over the same thing the profile decides.
 
 ### 3.4 Status line
 
@@ -188,7 +209,7 @@ the routed provider's quota and balance.
   call at Anthropic list prices, which is wrong once a profile routes
   elsewhere. Being transcript entries, they persist without a schema change.
 - **Routing and quota** come from `GET /desk/sessions/:id/status`, which
-  resolves the latest turn's requested model in the session's scenario
+  resolves the chosen tier's model (else the latest turn's requested model) in the session's scenario
   (`claude_code` or `claude_code:<profile>`) through the statusline
   handler's own `ResolveRoute`, and renders quota windows with the same
   `QuotaSegments` the terminal line uses, so the two never disagree. It is

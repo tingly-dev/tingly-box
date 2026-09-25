@@ -2124,6 +2124,39 @@
         }
       }
     },
+    "/api/v1/desk/models": {
+      "get": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "List the model tiers a Claude Code profile offers, each with its route",
+        "description": "List the model tiers a Claude Code profile offers, each with its route",
+        "operationId": "apiV1DeskModelsGet",
+        "parameters": [
+          {
+            "name": "profile",
+            "in": "query",
+            "description": "Claude Code profile id; empty is the main claude_code routing",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desk/permission-modes": {
       "get": {
         "tags": [
@@ -2410,6 +2443,50 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desk/sessions/{session_id}/model": {
+      "put": {
+        "tags": [
+          "desk"
+        ],
+        "summary": "Change which model tier a session's next turn asks for",
+        "description": "Change which model tier a session's next turn asks for",
+        "operationId": "apiV1DeskSessionsSession_idModelPut",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetModelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
                 }
               }
             }
@@ -10115,6 +10192,10 @@
       "CreateSessionRequest": {
         "type": "object",
         "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
           "path": {
             "type": "string",
             "description": "Field path"
@@ -10136,7 +10217,8 @@
           "path",
           "prompt",
           "permission_mode",
-          "profile"
+          "profile",
+          "model"
         ]
       },
       "CurlData": {
@@ -12944,6 +13026,51 @@
           "requests"
         ]
       },
+      "ModelTierInfo": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "provider_model": {
+            "type": "string",
+            "description": "Field provider_model"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          }
+        },
+        "required": [
+          "alias",
+          "model"
+        ]
+      },
+      "ModelsResponse": {
+        "type": "object",
+        "properties": {
+          "tiers": {
+            "type": "array",
+            "description": "Field tiers",
+            "items": {
+              "$ref": "#/components/schemas/ModelTierInfo"
+            }
+          },
+          "unified": {
+            "type": "boolean",
+            "description": "Field unified"
+          }
+        },
+        "required": [
+          "unified",
+          "tiers"
+        ]
+      },
       "OAuthAuthorizeRequest": {
         "type": "object",
         "properties": {
@@ -15684,6 +15811,10 @@
             "format": "date-time",
             "description": "Field last_activity"
           },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
           "permission_mode": {
             "type": "string",
             "description": "Field permission_mode"
@@ -15717,6 +15848,7 @@
           "response",
           "permission_mode",
           "profile",
+          "model",
           "awaiting_input",
           "created_at",
           "last_activity"
@@ -15767,6 +15899,18 @@
         "required": [
           "scenario",
           "quota"
+        ]
+      },
+      "SetModelRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          }
+        },
+        "required": [
+          "model"
         ]
       },
       "SetPermissionModeRequest": {

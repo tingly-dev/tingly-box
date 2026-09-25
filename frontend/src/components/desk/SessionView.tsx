@@ -7,6 +7,7 @@ import {useTranslation} from 'react-i18next';
 import Composer from './Composer';
 import {buildTranscript, isBusyStatus, pendingRequestId, sessionTitle} from './deskUtils';
 import FolderChip from './FolderChip';
+import ModelSelect from './ModelSelect';
 import PermissionModeSelect from './PermissionModeSelect';
 import ProfileSelect from './ProfileSelect';
 import StatusLine from './StatusLine';
@@ -22,6 +23,7 @@ interface SessionViewProps {
     onArchive: () => Promise<void>;
     onPermissionModeChange: (mode: string) => Promise<void>;
     onProfileChange: (profile: string) => Promise<void>;
+    onModelChange: (model: string) => Promise<void>;
     // Follow-ups typed while a turn runs; they are sent together once it
     // ends. Taking one back puts its text into the draft.
     queued: string[];
@@ -48,7 +50,7 @@ const readExpand = () => {
 };
 
 const SessionView = ({
-    session, messages, permissionModes, onSend, onRespond, onInterrupt, onArchive, onPermissionModeChange, onProfileChange,
+    session, messages, permissionModes, onSend, onRespond, onInterrupt, onArchive, onPermissionModeChange, onProfileChange, onModelChange,
     queued, onUnqueue, onSendQueuedNow, draft, onDraftChange, onHandoff, onBack,
 }: SessionViewProps) => {
     const {t} = useTranslation();
@@ -232,6 +234,7 @@ const SessionView = ({
                             context={(
                                 <>
                                     <ProfileSelect value={session.profile} onChange={(p) => void onProfileChange(p)}/>
+                                    <ModelSelect profile={session.profile} value={session.model} onChange={(m) => void onModelChange(m)}/>
                                     <PermissionModeSelect
                                         value={session.permission_mode}
                                         permissionModes={permissionModes}
@@ -241,7 +244,7 @@ const SessionView = ({
                             )}
                         />
                     )}
-                    <StatusLine sessionId={session.id} profile={session.profile} messages={messages}/>
+                    <StatusLine sessionId={session.id} profile={session.profile} model={session.model} messages={messages}/>
                 </Box>
             </Box>
         </Box>

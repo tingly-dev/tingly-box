@@ -124,10 +124,10 @@ const DeskPage = () => {
     }, [selectedId, selectedBusy, loadMessages, refreshSelectedSession]);
 
     // Resolves false on failure so the composer keeps what the user typed.
-    const handleCreate = async (path: string, prompt: string, permissionMode: string, profile: string): Promise<boolean> => {
+    const handleCreate = async (path: string, prompt: string, permissionMode: string, profile: string, model: string): Promise<boolean> => {
         requestNotifications();
         try {
-            const session = await deskApi.createSession(path, prompt, permissionMode || undefined, profile || undefined);
+            const session = await deskApi.createSession(path, prompt, permissionMode || undefined, profile || undefined, model || undefined);
             // A brand-new session (and possibly a brand-new folder) needs the
             // full lists, unlike the single-session refreshes below.
             await Promise.all([loadSessions(), loadRecentFolders()]);
@@ -266,6 +266,17 @@ const DeskPage = () => {
         }
     };
 
+    const handleModelChange = async (model: string) => {
+        if (!selectedId) return;
+        try {
+            const updated = await deskApi.setModel(selectedId, model);
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            await loadMessages(selectedId);
+        } catch (err) {
+            notify.error(err instanceof Error ? err.message : t('desk.modelFailed', {defaultValue: 'Failed to change model'}));
+        }
+    };
+
     const handlePermissionModeChange = async (mode: string) => {
         if (!selectedId) return;
         try {
@@ -317,6 +328,7 @@ const DeskPage = () => {
                             onArchive={handleArchive}
                             onPermissionModeChange={handlePermissionModeChange}
                             onProfileChange={handleProfileChange}
+                            onModelChange={handleModelChange}
                             queued={queues[selectedSession.id] ?? []}
                             onUnqueue={unqueue}
                             onSendQueuedNow={() => void flushQueue(selectedSession, queues[selectedSession.id] ?? [])}

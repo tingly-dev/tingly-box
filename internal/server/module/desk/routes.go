@@ -38,6 +38,13 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) 
 		swagger.WithResponseModel(RecentFoldersResponse{}),
 		mw,
 	)
+	apiV1.GET("/desk/models", h.Models,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("List the model tiers a Claude Code profile offers, each with its route"),
+		swagger.WithQuery("profile", "string", "Claude Code profile id; empty is the main claude_code routing"),
+		swagger.WithResponseModel(ModelsResponse{}),
+		mw,
+	)
 	apiV1.GET("/desk/permission-modes", h.PermissionModes,
 		swagger.WithTags("desk"),
 		swagger.WithDescription("List the selectable Claude Code permission modes"),
@@ -99,6 +106,13 @@ func RegisterRoutes(apiV1 *swagger.RouteGroup, h *Handler, enabled func() bool) 
 		swagger.WithTags("desk"),
 		swagger.WithDescription("Change which Claude Code profile a session's next turn runs with"),
 		swagger.WithRequestModel(SetProfileRequest{}),
+		swagger.WithResponseModel(SessionInfo{}),
+		mw,
+	)
+	apiV1.PUT("/desk/sessions/:session_id/model", h.SetModel,
+		swagger.WithTags("desk"),
+		swagger.WithDescription("Change which model tier a session's next turn asks for"),
+		swagger.WithRequestModel(SetModelRequest{}),
 		swagger.WithResponseModel(SessionInfo{}),
 		mw,
 	)
