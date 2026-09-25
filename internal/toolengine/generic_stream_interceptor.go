@@ -702,8 +702,10 @@ func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error
 		return []byte(e.RawJSON()), nil
 	case *anthropic.BetaRawMessageStreamEventUnion:
 		return []byte(e.RawJSON()), nil
+	case openai.ChatCompletionChunk:
+		// OpenAIChatStreamHandle yields chunks by value.
+		return []byte(e.RawJSON()), nil
 	case *openai.ChatCompletionChunk:
-		// For OpenAI, return the raw JSON string
 		return []byte(e.RawJSON()), nil
 	default:
 		// Fallback: return empty payload for unknown types
