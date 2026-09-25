@@ -53,7 +53,9 @@
 
 G1（含非流式 block / alias 还原被 `WriteAnthropicMessage` 的 RawJSON 丢弃）已在
 `claude/lucid-heisenberg-ppa3kj-g1` 修复；其余缺口在 harness 中以 `knownGaps` 登记（见 §5）。
-另修复：全新配置首次启动时 MCP runtime 为 nil（`NewRuntime` 早于 `RegisterBuiltinTools`）。
+另修复（独立分支 `claude/lucid-heisenberg-ppa3kj-mcp-init`）：全新配置首次启动时 MCP runtime 为 nil（`NewRuntime` 早于 `RegisterBuiltinTools`）。
+
+独立热修复原则：不依赖重构的 bug 修复各自基于 main 开分支，可单独合入；harness / 重构分支通过 merge 引入它们，不重复提交。
 
 ---
 
@@ -178,7 +180,8 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 |---|---|---|---|
 | 0 | `claude/lucid-heisenberg-ppa3kj` | 本文档 | 无 |
 | F | `claude/lucid-heisenberg-ppa3kj-g1`（**已推送**） | G1 热修复：toolengine 流式路径执行 block 改写；非流式 block / alias 还原写回 RawJSON | 修安全缺口 |
-| H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，叠在 F 上） | MCP runtime 首启修复；假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 修首启 MCP |
+| F2 | `claude/lucid-heisenberg-ppa3kj-mcp-init`（**已推送**，基于 main） | 独立热修复：全新配置首次启动时 MCP runtime 为 nil；附回归测试 | 修首启 MCP |
+| H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，基于 F + merge F2） | 假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 无 |
 | H2 | 待做 | client 输出 + 上游请求 golden 快照（`-update`，id / 时间戳归一化）；全矩阵 `go test` 入口；V1→V1 pair；V1 经 Beta upgrade/downgrade 的逐字节比对；mixed continuation / max rounds / 工具报错 | 无 |
 | P1 | `stage/1-contracts` | `internal/protocol/stage` 契约 + identity + 单测 | 无 |
 | P2 | `stage/2-bridges` | Bridge（包装现有 converter）+ Provider Endpoint + in-memory bridge 矩阵（搬 `bridge_matrix.go`） | 无 |
