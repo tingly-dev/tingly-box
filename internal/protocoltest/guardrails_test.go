@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -41,26 +40,6 @@ func newBlockToolUseGuardrails() *guardrails.Guardrails {
 		}),
 		HasActivePolicies: true,
 	}
-}
-
-func sendRaw(t *testing.T, env *TestEnv, path string, body []byte) (int, string) {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodPost, env.GatewayURL()+path, bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+env.ModelToken())
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do request: %v", err)
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-	return resp.StatusCode, string(raw)
 }
 
 // TestGuardrailsBlocksToolUseAnthropic pins that a blocked response tool_use
