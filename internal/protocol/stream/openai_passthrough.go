@@ -180,6 +180,15 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				}
 			}
 
+			// Thinking text reaches the client only in delta extras (reasoning /
+			// reasoning_details / reasoning_content) — none of the declared SDK
+			// fields above carry it (#1773).
+			if extras := parseRawJSON(choice.Delta.RawJSON()); extras != nil {
+				if reasoning := ExtractReasoningText(extras); reasoning != "" {
+					delta["reasoning_content"] = reasoning
+				}
+			}
+
 			finishReason := &choice.FinishReason
 			if finishReason != nil && *finishReason == "" {
 				finishReason = nil

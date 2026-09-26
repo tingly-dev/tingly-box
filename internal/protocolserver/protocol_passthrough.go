@@ -248,6 +248,8 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 		return
 	}
 
+	normalizeOpenAIChatReasoningExtras(response, responseMap)
+
 	// Update response model if configured
 	responseMap["model"] = responseModel
 	if stripUsage {
@@ -380,4 +382,33 @@ func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transfo
 
 	// Track usage from stream handler
 	ph.trackUsageWithTokenUsage(c, usage, err)
+}
+
+// normalizeOpenAIChatReasoningExtras backfills message.reasoning_content on a
+// re-serialized chat completion response map: plain json.Marshal drops the
+// SDK-preserved message extras (the metadata struct is tagged json:"-"), so
+// upstream thinking text never survives that round-trip (#1773). Choices with
+// no thinking text are left untouched — fabricating an empty field is the
+// DeepSeek vendor transform's job, not the passthrough's.
+func normalizeOpenAIChatReasoningExtras(resp *openai.ChatCompletion, responseMap map[string]interface{}) {
+	choices, ok := responseMap["choices"].([]interface{})
+	if !ok {
+		return
+	}
+	for i, choice := range resp.Choices {
+		if i >= len(choices) {
+			break
+		}
+		message, ok := choices[i].(map[string]interface{})["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		var extras map[string]interface{}
+		if raw := choice.Message.RawJSON(); raw != "" {
+			_ = json.Unmarshal([]byte(raw), &extras)
+		}
+		if reasoning := stream.ExtractReasoningText(extras); reasoning != "" {
+			message["reasoning_content"] = reasoning
+		}
+	}
 }
