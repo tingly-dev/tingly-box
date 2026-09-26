@@ -48,7 +48,26 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 
 ### Install
 
-**Run with npx (quickest)**
+<details open>
+<summary><strong>Install globally with npm (recommended)</strong></summary>
+
+```bash
+npm install -g tingly-box@latest   # --registry=<mirror> works here too
+
+tb start   # tb = tingly-box; runs in the background (--no-daemon for foreground)
+tb open    # open the web UI
+
+# update: reinstall, then restart to apply
+npm install -g tingly-box@latest
+tb restart
+```
+
+> if any trouble, please check tingly-box output, or call for an issue to help.
+
+</details>
+
+<details>
+<summary><strong>Run with npx</strong></summary>
 
 ```bash
 # One command: fetch, restart the server in the background, migrate and open the web UI
@@ -65,22 +84,10 @@ npx --registry=https://mirrors.huaweicloud.com/repository/npm/ -y tingly-box@lat
 npx --registry=http://mirrors.tencent.com/npm/ -y tingly-box@latest
 ```
 
-**Install globally with npm**
+</details>
 
-```bash
-npm install -g tingly-box@latest   # --registry=<mirror> works here too
-
-tb start   # tb = tingly-box; runs in the background (--no-daemon for foreground)
-tb open    # open the web UI
-
-# update: reinstall, then restart to apply
-npm install -g tingly-box@latest
-tb restart
-```
-
-> if any trouble, please check tingly-box output, or call for an issue to help.
-
-**Install Node & NPX**
+<details>
+<summary><strong>Install Node & NPX</strong></summary>
 
 ```
 # MacOS & Linux
@@ -111,7 +118,10 @@ npx -v
 https://nodejs.org/en/download
 ```
 
-**From Docker (GitHub Host)**
+</details>
+
+<details open>
+<summary><strong>From Docker (GitHub Host)</strong></summary>
 
 ```bash
 mkdir tingly-data
@@ -122,7 +132,9 @@ docker run -d \
   ghcr.io/tingly-dev/tingly-box
 ```
 
-**From Docker Compose (recommended for isolated env), building your own image, or troubleshooting** — see the [Docker Guide](./docs/docker.md).
+</details>
+
+For Docker Compose (recommended for isolated env), building your own image, or troubleshooting — see the [Docker Guide](./docs/docker.md).
 
 ### Integration Guide
 
