@@ -1,6 +1,6 @@
 # Protocol Stage v2 — Guardrails × MCP 统一与重新落地
 
-> Status: **Plan**（尚未开始编码；§4 为讨论中的提案）
+> Status: **进行中**（P1–P4 已推送，未接入请求路径；§4 已采纳）
 > 前身：`origin/expr/protocol_stage`、`origin/feat/protocol-stage-hardening-port`
 > （原设计文档 `protocol-stage-chain.md` / `protocol-stage-tool-loop.md` 保留在那两个分支上）。
 
@@ -97,6 +97,12 @@ Provider Endpoint         包装 forwarding.Forward*
 每轮用当轮真实历史调用 Gate（修 G5），Gate 负责 alias 还原（修 G4）。没有 MCP 时注册表为空，
 Stage 退化为"透传 + Gate"。跨协议 MCP 不再需要单独的循环（修 G6）——所有源 / 目标都经 Bridge 到 Beta。
 
+与旧设计的区别：旧设计是 `Guardrail(ToolLoop(Provider))` 两个 Stage，外层 Guardrail 看不到被
+内部消化的 tool 调用，只能另设 `ToolPolicy`；v2 合成一个 Stage、一个决策点。
+
+复用而非重写：toolengine 的 Beta adapter、continuation store、`ServerToolExecutor`；Guardrails 的
+`evaluate` / `core` / `pipeline` 求值与 mask 逻辑。流式按旧设计缓冲一轮（可见前缀无法证明本轮没有内部 tool_use）。
+
 ### 2.3 Tool Round Stage 的行为决定（P4 落地）
 
 以"切流时客户端可见形态不变，只修 known-gap"为原则：
@@ -115,12 +121,6 @@ Stage 退化为"透传 + Gate"。跨协议 MCP 不再需要单独的循环（修
 | Guardrails 失败 | fail-open，同旧路径 | 无 |
 
 给 P5 的备注：Chat / Responses → Beta bridge 产出的消息没有 RawJSON，直接 `json.Marshal` 会带出 SDK 所有零值字段；HTTP Adapter 需要按 wire 形态序列化。
-
-与旧设计的区别：旧设计是 `Guardrail(ToolLoop(Provider))` 两个 Stage，外层 Guardrail 看不到被
-内部消化的 tool 调用，只能另设 `ToolPolicy`；v2 合成一个 Stage、一个决策点。
-
-复用而非重写：toolengine 的 Beta adapter、continuation store、`ServerToolExecutor`；Guardrails 的
-`evaluate` / `core` / `pipeline` 求值与 mask 逻辑。流式按旧设计缓冲一轮（可见前缀无法证明本轮没有内部 tool_use）。
 
 ---
 
