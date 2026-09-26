@@ -10,7 +10,7 @@
 
 | # | 约束 | 含义 |
 |---|---|---|
-| C1 | **核心目标是统一 Guardrails 与 MCP** | 两者合成**一个**特性 Stage，只在**一个**工作协议上实现一次 |
+| C1 | `claude/lucid-heisenberg-ppa3kj-c1`（**已推送**，叠在 h3 上） | 第一次切流：Anthropic Beta 客户端 → Anthropic provider 全部请求走 Stage 管线（Stage 仅在 MCP / Guardrails 生效时插入）；删除 `passthroughAnthropicBeta`、Beta 的 generic MCP dispatch、`StreamAnthropicBeta`；保留工具执行期间的 `: keep-alive`（`stage.Heartbeat`）；G2 Beta→Beta 移出 known-gap；golden 不变，harness CLI 1132 例 0 失败 | Beta→Beta |
 | C1' | **先协议，后应用** | 先立协议边界（Endpoint / Bridge），再把 Guardrails × MCP 落在其上；否则应用层会被迫理解 N 个协议，协议层改造时又要返工 |
 | C2 | **Harness 先行** | 每一步行为变化之前，harness 已经能钉住当前行为（包括已知缺陷） |
 | C3 | **不带录制** | recording 不作为本重构的约束或交付；不移植 `internal/record`，也不为它改接口。录制调用点原样保留、原样搬运 |
@@ -266,7 +266,7 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | P5 | `claude/lucid-heisenberg-ppa3kj-p5`（**已推送**，叠在 p4b 上） | Anthropic 客户端（V1 / Beta）的 HTTP Adapter：`sdkstream` 把 EventStream 呈现为 SDK stream，直接复用现有写出器（SSE、首块提交、model 改写、错误事件、usage）；V1 在边缘 downgrade（同 wire 字节，V1 无法表达的内容显式报错）；执行过 server 工具后出错时提交 failover gate，不重试。验收：对照 golden，Beta→Beta 24 例逐字节一致（上游请求 + 客户端响应）；V1 24 例除预期统一外一致 | 无 |
 | H3 | `claude/lucid-heisenberg-ppa3kj-h3`（**已推送**，叠在 p5 上） | IR 往返保真度 harness（§2.4 加粗四对，开 MCP 时）：Chat↔Beta↔Chat、Responses↔Beta↔Responses、Chat→Beta→Responses、Responses→Beta→Chat 的请求 / 非流式响应 / 流式响应，与直连对比，损失登记为 known-gap | 无 |
 | P5b | 待定 | OpenAI 客户端（Chat / Responses）的 HTTP Adapter；前提是 H3（§8.5） | 无 |
-| C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
+| C1 | `claude/lucid-heisenberg-ppa3kj-c1`（**已推送**，叠在 h3 上） | 第一次切流：Anthropic Beta 客户端 → Anthropic provider 全部请求走 Stage 管线（Stage 仅在 MCP / Guardrails 生效时插入）；删除 `passthroughAnthropicBeta`、Beta 的 generic MCP dispatch、`StreamAnthropicBeta`；保留工具执行期间的 `: keep-alive`（`stage.Heartbeat`）；G2 Beta→Beta 移出 known-gap；golden 不变，harness CLI 1132 例 0 失败 | Beta→Beta |
 | C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
 | Z | `stage/9-cleanup` | 删除 `HandleContext` stream hooks、`ErrMCPStreamContinue`、toolengine `FormatAdapter.SendEvent` 等遗留；Google 目标去留 | 收尾 |
 
