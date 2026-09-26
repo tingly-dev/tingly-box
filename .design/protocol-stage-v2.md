@@ -10,7 +10,7 @@
 
 | # | 约束 | 含义 |
 |---|---|---|
-| C1 | `claude/lucid-heisenberg-ppa3kj-c1`（**已推送**，叠在 h3 上） | 第一次切流：Anthropic Beta 客户端 → Anthropic provider 全部请求走 Stage 管线（Stage 仅在 MCP / Guardrails 生效时插入）；删除 `passthroughAnthropicBeta`、Beta 的 generic MCP dispatch、`StreamAnthropicBeta`；保留工具执行期间的 `: keep-alive`（`stage.Heartbeat`）；G2 Beta→Beta 移出 known-gap；golden 不变，harness CLI 1132 例 0 失败 | Beta→Beta |
+| C1 | **核心目标是统一 Guardrails 与 MCP** | 两者合成**一个**特性 Stage，只在**一个**工作协议上实现一次 |
 | C1' | **先协议，后应用** | 先立协议边界（Endpoint / Bridge），再把 Guardrails × MCP 落在其上；否则应用层会被迫理解 N 个协议，协议层改造时又要返工 |
 | C2 | **Harness 先行** | 每一步行为变化之前，harness 已经能钉住当前行为（包括已知缺陷） |
 | C3 | **不带录制** | recording 不作为本重构的约束或交付；不移植 `internal/record`，也不为它改接口。录制调用点原样保留、原样搬运 |
