@@ -139,7 +139,7 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-![Agent Integration Demo](./docs/images/2-claude-code.png)
+![Agent Integration Demo](./docs/images/1-2-claude-code.png)
 
 </details>
 
@@ -152,9 +152,9 @@ Give your whole team one endpoint backed by centrally managed model rules. Each 
 2. Navigate to **Team**, configure the model rules, then hand out keys via **Sharing Keys**
 3. Track per-user consumption under **Dashboard → Team usage**
 
-![Team Demo](./docs/images/5-team.png)
+![Team Demo](./docs/images/2-1-team.png)
 
-![Team Usage Demo](./docs/images/8-team-usage.png)
+![Team Usage Demo](./docs/images/4-2-team-usage.png)
 
 </details>
 
@@ -163,7 +163,7 @@ Give your whole team one endpoint backed by centrally managed model rules. Each 
 
 Route image generation and editing through the same gateway. Point any OpenAI-compatible image client at `http://localhost:12580/tingly/imagegen` and pick the upstream image models with rules, like any other scenario. Try prompts right away in **Image → Playground**.
 
-![Image API Demo](./docs/images/6-image-api.png)
+![Image API Demo](./docs/images/3-1-image-api.png)
 
 </details>
 
@@ -219,7 +219,7 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - Team collaboration with shared agent access
 - Monitor and control agents while away from your workstation
 
-![Remote Control Demo](./docs/images/10-remote.png)
+![Remote Control Demo](./docs/images/5-1-remote.png)
 
 </details>
 
@@ -282,7 +282,7 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-![OAuth Provider Demo](./docs/images/11-connect-ai.png)
+![OAuth Provider Demo](./docs/images/6-1-connect-ai.png)
 
 </details>
 
@@ -321,7 +321,7 @@ npx tingly-box@latest
 
 Then open `http://localhost:12580` in your browser.
 
-![Dashboard](./docs/images/7-dashboard.png)
+![Dashboard](./docs/images/4-1-dashboard.png)
 
 </details>
 

@@ -10,26 +10,28 @@
  * Dev server must be running on :3000:
  *   USE_MOCK=true node_modules/.bin/vite --mode mock --port 3000 &
  *
- * Output ordering follows the sidebar (ActivityBar) layout top-to-bottom, so
- * the numbered files and output.gif walk the product the way the nav does:
+ * Output ordering follows the sidebar (ActivityBar) layout top-to-bottom.
+ * Files are named `<group>-<index>-<name>.png`: the group number is the
+ * sidebar entry, the index is the shot's position inside it — so a new shot
+ * slots into its group without renumbering the others, and a plain
+ * alphabetical sort (create_gif.sh) yields the GIF frame order.
  *
- *   Agent
- *     1-agents.png        – Agent selection overview
- *     2-claude-code.png   – Claude Code setup + routing rules
- *     3-routing.png       – OpenAI SDK smart routing
- *     4-model-select.png  – Model select dialog (routing graph → New Rule)
- *   Team
- *     5-team.png          – Team scenario: shared endpoint + model rules
- *   Image
- *     6-image-api.png     – Image API endpoint + image model rules
- *   Dashboard
- *     7-dashboard.png     – Usage dashboard (today)
- *     8-team-usage.png    – Per-user team usage
- *     9-heatmap.png       – Token heatmap (Activity view, 90d)
- *   Remote
- *     10-remote.png       – Telegram remote control routes
- *   Credential
- *     11-connect-ai.png   – Connect AI provider dialog
+ *   1 Agent
+ *     1-1-agents.png        – Agent selection overview
+ *     1-2-claude-code.png   – Claude Code setup + routing rules
+ *     1-3-routing.png       – OpenAI SDK smart routing
+ *     1-4-model-select.png  – Model select dialog (routing graph → New Rule)
+ *   2 Team
+ *     2-1-team.png          – Team scenario: shared endpoint + model rules
+ *   3 Image
+ *     3-1-image-api.png     – Image API endpoint + image model rules
+ *   4 Dashboard
+ *     4-1-dashboard.png     – Usage dashboard (today)
+ *     4-2-team-usage.png    – Per-user team usage
+ *   5 Remote
+ *     5-1-remote.png        – Telegram remote control routes
+ *   6 Credential
+ *     6-1-connect-ai.png    – Connect AI provider dialog
  *
  *   theme-preview/{light,dark,claude}-dashboard.png
  *
@@ -104,14 +106,14 @@ const browser = await chromium.launch({
 });
 
 // ── Agent ─────────────────────────────────────────────────────────────────
-await shoot(browser, '/agent', '1-agents.png', { settle: 2500 });
-await shoot(browser, '/agent/claude_code', '2-claude-code.png', { settle: 3000 });
-await shoot(browser, '/agent/openai', '3-routing.png', { settle: 3000 });
+await shoot(browser, '/agent', '1-1-agents.png', { settle: 2500 });
+await shoot(browser, '/agent/claude_code', '1-2-claude-code.png', { settle: 3000 });
+await shoot(browser, '/agent/openai', '1-3-routing.png', { settle: 3000 });
 
 // Model select dialog: open the routing page, click "New Rule" to open the
 // ModelSelectDialog, then click the Anthropic provider tab so the right-side
 // models panel loads. The dialog animates in; wait for its title first.
-await shoot(browser, '/agent/openai', '4-model-select.png', {
+await shoot(browser, '/agent/openai', '1-4-model-select.png', {
     settle: 3000,
     interact: async (page) => {
         try {
@@ -129,36 +131,23 @@ await shoot(browser, '/agent/openai', '4-model-select.png', {
 });
 
 // ── Team ──────────────────────────────────────────────────────────────────
-await shoot(browser, '/agent/team', '5-team.png', { settle: 3000 });
+await shoot(browser, '/agent/team', '2-1-team.png', { settle: 3000 });
 
 // ── Image ─────────────────────────────────────────────────────────────────
-await shoot(browser, '/image/api', '6-image-api.png', { settle: 3000 });
+await shoot(browser, '/image/api', '3-1-image-api.png', { settle: 3000 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
-await shoot(browser, '/dashboard/today', '7-dashboard.png', {
+await shoot(browser, '/dashboard/today', '4-1-dashboard.png', {
     waitFor: '.MuiGrid-root', settle: 3500,
 });
-await shoot(browser, '/dashboard/users', '8-team-usage.png', { settle: 3500 });
+await shoot(browser, '/dashboard/users', '4-2-team-usage.png', { settle: 3500 });
 
-// The heatmap lives inside the Dashboard page as a view-mode toggle
-// ("Activity"), not its own route.
-await shoot(browser, '/dashboard/90d', '9-heatmap.png', {
-    waitFor: '.MuiGrid-root', settle: 3500,
-    interact: async (page) => {
-        try {
-            const activityBtn = page.getByRole('button', { name: 'Activity' });
-            await activityBtn.waitFor({ timeout: 6000 });
-            await activityBtn.click();
-            await page.waitForTimeout(1500);
-        } catch (e) { console.warn('  ⚠ activity heatmap toggle failed:', e.message.slice(0, 80)); }
-    },
-});
 
 // ── Remote ────────────────────────────────────────────────────────────────
-await shoot(browser, '/remote-agent/telegram', '10-remote.png', { settle: 4000 });
+await shoot(browser, '/remote-agent/telegram', '5-1-remote.png', { settle: 4000 });
 
 // ── Credential ────────────────────────────────────────────────────────────
-await shoot(browser, '/credentials', '11-connect-ai.png', {
+await shoot(browser, '/credentials', '6-1-connect-ai.png', {
     settle: 2500,
     interact: async (page) => {
         try {
