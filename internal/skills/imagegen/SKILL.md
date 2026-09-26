@@ -57,9 +57,12 @@ generate in the background:
    written (non-empty). Any failure exits non-zero with an `error:` / `NEED_INPUT:` line —
    relay that instead. Look at an image only if the user explicitly asks you to judge or
    describe it.
-   Output goes to `./generated-images/` unless the user named a place (`--out`). Keep the
-   path — a follow-up "make it bluer" is an `edit --image <that path>` (the script reads the
-   file itself; you don't need to).
+   Each image comes with `path` (relative to `cwd`, the directory you ran the script from)
+   and `abs_path`. Report both to the user. Use `abs_path` when passing the file on (a later
+   `edit --image`, other tools, another directory), so it can't be misresolved after a `cd`.
+   Output goes to `./generated-images/` unless the user named a place (`--out`). A follow-up
+   "make it bluer" is an `edit --image <abs_path>` (the script reads the file itself; you
+   don't need to).
 
 ### Options
 

@@ -173,6 +173,15 @@ def slug(text):
     return s[:40] or "image"
 
 
+def rel_path(path):
+    """Path relative to the working directory the agent ran the script from;
+    falls back to absolute when there is none (e.g. another drive on Windows)."""
+    try:
+        return os.path.relpath(path)
+    except ValueError:
+        return os.path.abspath(path)
+
+
 def save_images(payload, out_dir, prompt, ext):
     os.makedirs(out_dir, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -192,7 +201,7 @@ def save_images(payload, out_dir, prompt, ext):
             f.write(blob)
         if not os.path.isfile(path) or os.path.getsize(path) == 0:
             sys.exit(f"error: failed to write {path}")
-        entry = {"path": os.path.abspath(path), "bytes": len(blob)}
+        entry = {"path": rel_path(path), "abs_path": os.path.abspath(path), "bytes": len(blob)}
         if item.get("revised_prompt"):
             entry["revised_prompt"] = item["revised_prompt"]
         saved.append(entry)
@@ -237,7 +246,8 @@ def cmd_edit(args):
 
 
 def report(base, source, model, saved):
-    print(json.dumps({"endpoint": base, "source": source, "model": model, "images": saved}, indent=2))
+    out = {"endpoint": base, "source": source, "model": model, "cwd": os.getcwd(), "images": saved}
+    print(json.dumps(out, indent=2))
 
 
 # ---------------------------------------------------------------- cli
