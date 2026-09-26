@@ -501,8 +501,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool,
 ) {
-	recorder := recording.FromGin(c)
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+	responseModel := reqCtx.ResponseModel
 
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID); ok {
@@ -515,10 +514,6 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 
 	if isStreaming {
 		switch reqCtx.SourceAPI {
-		case protocol.TypeAnthropicV1:
-			ph.StreamOpenAIChatToAnthropicV1WithMCP(c, provider, req, actualModel, responseModel)
-		case protocol.TypeAnthropicBeta:
-			ph.StreamOpenAIChatToAnthropicBetaWithMCP(c, provider, req, actualModel, responseModel)
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: source and target are both OpenAI Chat format
 			disableStreamUsage := ShouldStripUsage(reqCtx.Extra)
@@ -534,6 +529,10 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			ph.streamOpenAIChat(c, provider, req, responseModel, disableStreamUsage)
 		case protocol.TypeOpenAIResponses:
 			ph.streamOpenAIChatToResponses(c, reqCtx, provider)
+		default:
+			// Anthropic clients reach Chat providers through the Stage pipeline
+			// (serveAnthropicOnOpenAIChat) and never dispatch here.
+			ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an OpenAI Chat target", reqCtx.SourceAPI))
 		}
 	} else {
 		switch reqCtx.SourceAPI {
@@ -552,66 +551,9 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			ph.nonstreamOpenAIChatToResponses(c, reqCtx, provider)
 			return
 		default:
-			// Forward request to provider for format conversion
-		}
-
-		var resp *openai.ChatCompletion
-		var err error
-		var usage *protocol.TokenUsage
-		if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
-			var genericUsage *mcp.TokenUsage
-			resp, genericUsage, err = ph.RunGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
-			if err != nil {
-				stream.SendForwardingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-			if genericUsage != nil {
-				usage = protocol.NewTokenUsageWithCache(genericUsage.InputTokens, genericUsage.OutputTokens, genericUsage.CacheTokens)
-			}
-		} else {
-			wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-			fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-			resp, _, err = forwarding.ForwardOpenAIChat(fc, wrapper, req)
-			if err != nil {
-				stream.SendForwardingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-			usage = usagepkg.FromOpenAIChatCompletion(resp.Usage)
-		}
-
-		ph.trackUsageWithTokenUsage(c, usage, err)
-
-		switch reqCtx.SourceAPI {
-		case protocol.TypeAnthropicV1:
-			anthropicResp := nonstream.HandleOpenAIChatToAnthropic(resp, responseModel)
-			if ShouldRoundtripResponse(c, "openai") {
-				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
-				if err != nil {
-					stream.SendInternalError(c, "Failed to roundtrip resp: "+err.Error())
-					return
-				}
-				anthropicResp = roundtripped
-			}
-			ph.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-			if recorder != nil {
-				recorder.SetAssembledResponse(anthropicResp)
-				recorder.RecordResponse(provider, reqCtx.RequestModel)
-			}
-			nonstream.WriteAnthropicMessage(c, anthropicResp)
-		case protocol.TypeAnthropicBeta:
-			anthropicResp := nonstream.HandleOpenAIChatToAnthropicBeta(resp, responseModel)
-			ph.updateAffinityMessageID(c, rule, anthropicResp.ID)
-			if recorder != nil {
-				recorder.SetAssembledResponse(anthropicResp)
-				recorder.RecordResponse(provider, reqCtx.RequestModel)
-			}
-			nonstream.WriteAnthropicMessage(c, anthropicResp)
+			// Anthropic clients reach Chat providers through the Stage pipeline
+			// (serveAnthropicOnOpenAIChat) and never dispatch here.
+			ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an OpenAI Chat target", reqCtx.SourceAPI))
 		}
 	}
 }

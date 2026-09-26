@@ -157,14 +157,6 @@ func TestMCPServerToolError(t *testing.T) {
 	}
 }
 
-var _ = registerKnownGaps(KnownGap{
-	ID:     "M4",
-	Reason: "Anthropic client -> Chat provider streaming loop fails the request (500) at the round limit instead of ending it like other paths",
-},
-	"TestMCPToolLoopBounded/anthropic_v1->openai_chat/stream=true",
-	"TestMCPToolLoopBounded/anthropic_beta->openai_chat/stream=true",
-)
-
 // TestMCPToolLoopBounded pins that a model which keeps calling a server tool
 // cannot hold the request forever, and that the loop's cut-off never hands
 // the server tool call to the client.

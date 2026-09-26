@@ -36,16 +36,6 @@ func newBlockToolNamedGuardrails(fragment string) *guardrails.Guardrails {
 	}
 }
 
-var _ = registerKnownGaps(KnownGap{
-	ID:     "G2",
-	Reason: "server-owned tool calls are executed without consulting guardrails",
-},
-	"TestGuardrailsBlocksServerTool/anthropic_v1->openai_chat/stream=false",
-	"TestGuardrailsBlocksServerTool/anthropic_v1->openai_chat/stream=true",
-	"TestGuardrailsBlocksServerTool/anthropic_beta->openai_chat/stream=false",
-	"TestGuardrailsBlocksServerTool/anthropic_beta->openai_chat/stream=true",
-)
-
 // TestGuardrailsBlocksServerTool pins that a server-owned tool call blocked
 // by guardrails is not executed and the client gets the block message.
 func TestGuardrailsBlocksServerTool(t *testing.T) {
@@ -90,16 +80,6 @@ func TestGuardrailsBlocksServerTool(t *testing.T) {
 		}
 	}
 }
-
-var _ = registerKnownGaps(KnownGap{
-	ID:     "G8",
-	Reason: "cross-protocol paths (Anthropic client, OpenAI provider) apply no response guardrails",
-},
-	"TestGuardrailsBlocksClientToolAfterServerRound/anthropic_v1->openai_chat/stream=false",
-	"TestGuardrailsBlocksClientToolAfterServerRound/anthropic_v1->openai_chat/stream=true",
-	"TestGuardrailsBlocksClientToolAfterServerRound/anthropic_beta->openai_chat/stream=false",
-	"TestGuardrailsBlocksClientToolAfterServerRound/anthropic_beta->openai_chat/stream=true",
-)
 
 // TestGuardrailsBlocksClientToolAfterServerRound pins the composition order:
 // the server tool runs (allowed), and the client tool the model calls in the

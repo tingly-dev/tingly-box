@@ -141,7 +141,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-error-midstream-close","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-error-midstream-close","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -150,7 +150,7 @@ event:content_block_delta
 data:{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello world this stream will be truncated"}}
 
 event:error
-data:{"error":{"message":"upstream stream ended before completion","type":"stream_error"},"type":"error"}
+data:{"error":{"code":"stream_failed","message":"upstream stream ended before completion","type":"stream_error"},"type":"error"}
 
 === incomplete stream=false
 --- upstream request
@@ -187,7 +187,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-incomplete","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-incomplete","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -239,7 +239,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-multi_turn","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-multi_turn","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -291,7 +291,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-streaming_text","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-streaming_text","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -343,7 +343,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-streaming_tool_use","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-streaming_tool_use","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"<ID2>","name":"get_weather","input":{}}}
@@ -398,7 +398,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-text","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-text","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -450,7 +450,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-thinking","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-thinking","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -502,7 +502,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-tool_result","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-tool_result","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -554,7 +554,7 @@ POST /v1/chat/completions
 }
 --- client response (status 200)
 event:message_start
-data:{"type":"message_start","message":{"id":"<ID1>","type":"message","role":"assistant","content":[],"model":"pv-anthropic_beta-to-openai_chat-tool_use","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+data:{"message":{"content":[],"id":"<ID1>","model":"pv-anthropic_beta-to-openai_chat-tool_use","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":0}},"type":"message_start"}
 
 event:content_block_start
 data:{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"<ID2>","name":"get_weather","input":{}}}

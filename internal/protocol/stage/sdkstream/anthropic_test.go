@@ -141,3 +141,17 @@ func TestAnthropicHeartbeat(t *testing.T) {
 	}
 	require.Equal(t, textStream, got, "without a callback heartbeats are dropped")
 }
+
+// An in-band error event ends the stream with an error carrying its message.
+func TestAnthropicInBandError(t *testing.T) {
+	events := append(betaEvents(t, textStream[0]),
+		stage.Event{Value: protocolstream.AnthropicEvent{Type: "error", Data: map[string]any{
+			"type": "error", "error": map[string]any{"type": "stream_error", "message": "upstream stream ended before completion"},
+		}}})
+	sdk := AnthropicBeta(context.Background(), &sliceStream{events: events})
+	require.True(t, sdk.Next())
+	require.False(t, sdk.Next())
+	var inBand InBandError
+	require.ErrorAs(t, sdk.Err(), &inBand)
+	require.Equal(t, "upstream stream ended before completion", sdk.Err().Error())
+}

@@ -80,6 +80,11 @@ type transformSourceOptions struct {
 
 	hasNativeAdvisor bool
 
+	// sourceOnly runs only the source half of the chain (sourceTransforms):
+	// the request keeps the client's protocol, and the pipeline converts it
+	// and runs the target half per provider call (targetTransformStage).
+	sourceOnly bool
+
 	// extraOpts are appended after the shared options: WithMaxTokens for the
 	// Responses path, and WithContext for the Beta path. The latter is
 	// preserved drift, not design — historically only the Beta entry point
@@ -100,6 +105,9 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	chain, err := ph.buildTransformChain(c, target, scenarioType, preBaseTransforms, preVendorTransforms)
 	if err != nil {
 		return nil, err
+	}
+	if src.sourceOnly {
+		chain = transform.NewTransformChain(ph.sourceTransforms(c, preBaseTransforms))
 	}
 
 	var scenarioFlags *typ.ScenarioFlags
@@ -203,6 +211,16 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 // inserted after Consistency but BEFORE Vendor — this also means the StagePost
 // recording captures the truly-final, dispatched request.
 func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
+	transforms := ph.sourceTransforms(c, preBase)
+	// 2. Base transform (protocol conversion)
+	transforms = append(transforms, baseTransformFor(targetType))
+	transforms = append(transforms, ph.targetTransforms(c, targetType, preVendor)...)
+	return transform.NewTransformChain(transforms), nil
+}
+
+// sourceTransforms is the part of the chain that acts on the client's own
+// request shape, before any protocol conversion.
+func (ph *ProtocolHandler) sourceTransforms(c *gin.Context, preBase []transform.Transform) []transform.Transform {
 	recorder := recording.FromGin(c)
 
 	var transforms []transform.Transform
@@ -217,9 +235,15 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 	if recorder.Wants(typ.RecordClientRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePre))
 	}
+	return transforms
+}
 
-	// 2. Base transform (protocol conversion)
-	transforms = append(transforms, baseTransformFor(targetType))
+// targetTransforms is the part of the chain that acts on the converted,
+// upstream-bound request, after protocol conversion.
+func (ph *ProtocolHandler) targetTransforms(c *gin.Context, targetType protocol.APIType, preVendor []transform.Transform) []transform.Transform {
+	recorder := recording.FromGin(c)
+
+	var transforms []transform.Transform
 	if ph.mcpEnabled() {
 		transforms = append(transforms, ph.mcpChainTransforms(ph.mcpStripDisabledToolsEnabled())...)
 	}
@@ -238,8 +262,7 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 	if recorder.Wants(typ.RecordUpstreamRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePost))
 	}
-
-	return transform.NewTransformChain(transforms), nil
+	return transforms
 }
 
 // scenarioFlagsOrNil returns the scenario flags or nil.

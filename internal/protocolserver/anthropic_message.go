@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -269,6 +270,21 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider)
 
+	if target == protocol.TypeOpenAIChat {
+		source, err := transformRequest(ph, c, req.MessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
+			source:               protocol.TypeAnthropicV1,
+			defaultScenarioFlags: true,
+			sourceOnly:           true,
+		})
+		if err != nil {
+			ph.FailAttemptSetup(c, err)
+			return
+		}
+		defer source.Release()
+		ph.serveAnthropicOnOpenAIChat(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
+		return
+	}
+
 	reqCtx, err := ph.TransformAnthropicV1(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
@@ -394,6 +410,23 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
+
+	if target == protocol.TypeOpenAIChat {
+		source, err := transformRequest(ph, c, req.BetaMessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
+			source:               protocol.TypeAnthropicBeta,
+			defaultScenarioFlags: true,
+			hasNativeAdvisor:     HasNativeAdvisorBeta(req),
+			extraOpts:            []transform.TransformOption{transform.WithContext(c.Request.Context())},
+			sourceOnly:           true,
+		})
+		if err != nil {
+			ph.FailAttemptSetup(c, err)
+			return
+		}
+		defer source.Release()
+		ph.serveAnthropicOnOpenAIChat(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
+		return
+	}
 
 	reqCtx, err := ph.TransformAnthropicBeta(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {

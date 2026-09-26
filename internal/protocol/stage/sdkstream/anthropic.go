@@ -88,6 +88,16 @@ func (d *anthropicDecoder) Next() bool {
 		d.err = err
 		return false
 	}
+	if gjson.GetBytes(data, "type").String() == "error" {
+		// An in-band error a bridge's converter emitted (e.g. a truncated
+		// upstream). Surface it as the stream's error with its own message,
+		// so the writer reports it once rather than wrapping its JSON.
+		d.err = InBandError{
+			Type:    gjson.GetBytes(data, "error.type").String(),
+			Message: gjson.GetBytes(data, "error.message").String(),
+		}
+		return false
+	}
 	if d.v1 {
 		if err := checkV1Event(data); err != nil {
 			d.err = err
@@ -103,6 +113,14 @@ func (d *anthropicDecoder) Event() anthropicstream.Event { return d.event }
 func (d *anthropicDecoder) Close() error { return d.events.Close() }
 
 func (d *anthropicDecoder) Err() error { return d.err }
+
+// InBandError is an error event carried inside a stream.
+type InBandError struct {
+	Type    string
+	Message string
+}
+
+func (e InBandError) Error() string { return e.Message }
 
 // WireJSON renders a stage event value as its wire payload. Carrier types
 // expose the payload through RawJSON, as the SSE writers use it.

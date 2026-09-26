@@ -53,12 +53,8 @@ var _ = registerKnownGaps(KnownGap{
 	ID:     "G8",
 	Reason: "cross-protocol paths (Anthropic client, OpenAI provider) apply no response guardrails",
 },
-	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_chat/stream=false",
-	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_chat/stream=true",
 	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=false",
 	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=true",
-	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_chat/stream=false",
-	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_chat/stream=true",
 	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=false",
 	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=true",
 )

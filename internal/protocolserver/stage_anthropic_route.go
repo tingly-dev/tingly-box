@@ -23,7 +23,7 @@ import (
 // provider through the Protocol Stage pipeline (cutover C1).
 func (ph *ProtocolHandler) serveAnthropicBetaStage(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool) {
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-	ph.serveAnthropicStage(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicBeta, req, upstream.AnthropicWireBeta)
+	ph.serveAnthropicOnAnthropic(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicBeta, req, upstream.AnthropicWireBeta)
 }
 
 // serveAnthropicV1Stage serves an Anthropic V1 client on an Anthropic provider
@@ -38,15 +38,10 @@ func (ph *ProtocolHandler) serveAnthropicV1Stage(c *gin.Context, reqCtx *transfo
 		ph.FailAttemptSetup(c, err)
 		return
 	}
-	ph.serveAnthropicStage(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicV1, req, upstream.AnthropicWireV1)
+	ph.serveAnthropicOnAnthropic(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicV1, req, upstream.AnthropicWireV1)
 }
 
-// serveAnthropicStage runs an Anthropic client's prepared Beta request
-// through the Stage pipeline: the Tool Round Stage decides every tool call -
-// Guardrails first, then MCP ownership - when either is on for the request,
-// and is left out otherwise, so a plain request reaches the provider and the
-// client exactly as before.
-func (ph *ProtocolHandler) serveAnthropicStage(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool, client protocol.APIType, req *anthropic.BetaMessageNewParams, wire upstream.AnthropicWire) {
+func (ph *ProtocolHandler) serveAnthropicOnAnthropic(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool, client protocol.APIType, req *anthropic.BetaMessageNewParams, wire upstream.AnthropicWire) {
 	terminal, err := upstream.NewAnthropic(upstream.Config{
 		Clients:  ph.deps.ClientPool,
 		Provider: provider,
@@ -56,31 +51,56 @@ func (ph *ProtocolHandler) serveAnthropicStage(c *gin.Context, reqCtx *transform
 		ph.FailAttemptSetup(c, err)
 		return
 	}
+	ph.serveAnthropicPipeline(c, anthropicRoute{
+		Client: client, Request: req, Rule: rule, Provider: provider,
+		ActualModel: reqCtx.RequestModel, ResponseModel: reqCtx.ResponseModel, Streaming: isStreaming,
+	}, terminal)
+}
 
+// anthropicRoute identifies one Anthropic client attempt on the pipeline.
+type anthropicRoute struct {
+	Client        protocol.APIType
+	Request       *anthropic.BetaMessageNewParams
+	Rule          *typ.Rule
+	Provider      *typ.Provider
+	ActualModel   string
+	ResponseModel string
+	Streaming     bool
+	Finish        func(*anthropic.BetaMessage) (*anthropic.BetaMessage, error)
+}
+
+// serveAnthropicPipeline serves an Anthropic client's prepared Beta request
+// over providerSide, a Beta endpoint reaching the provider (directly, or
+// through a Bridge to the provider's protocol). The Tool Round Stage decides
+// every tool call - Guardrails first, then MCP ownership - when either is on
+// for the request, and is left out otherwise, so a plain request reaches the
+// provider and the client exactly as before.
+func (ph *ProtocolHandler) serveAnthropicPipeline(c *gin.Context, route anthropicRoute, providerSide stage.Endpoint) {
 	var config toolround.Config
 	if ph.mcpEnabled() && ph.deps.MCPRuntime != nil {
 		executor := mcp.NewServerToolExecutor(newServerOpsAdapter(ph, recording.FromGin(c)))
-		config.Owner = mcp.NewAnthropicBetaOwner(ph.deps.MCPRuntime.VirtualRegistry(), executor, provider.UUID)
+		config.Owner = mcp.NewAnthropicBetaOwner(ph.deps.MCPRuntime.VirtualRegistry(), executor, route.Provider.UUID)
 	}
 	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
-		base := BuildGuardrailsBaseInput(c, reqCtx.RequestModel, provider, guardrailscore.DirectionResponse, nil)
+		base := BuildGuardrailsBaseInput(c, route.ActualModel, route.Provider, guardrailscore.DirectionResponse, nil)
 		base.State.CredentialMask = EnsureGuardrailsCredentialMaskState(c)
 		config.Gate = requestScreenedGate{guardrailspipeline.NewToolRoundGate(ph.currentGuardrailsRuntime(), base)}
 	}
-	endpoint, err := stage.Compose(terminal, toolround.New(config))
+	endpoint, err := stage.Compose(providerSide, toolround.New(config))
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
 	}
 
 	ph.ServeStageAnthropic(c, endpoint, StageAnthropicAttempt{
-		Client:        client,
-		Request:       req,
-		Rule:          rule,
-		Provider:      provider,
-		ActualModel:   reqCtx.RequestModel,
-		ResponseModel: reqCtx.ResponseModel,
-		Streaming:     isStreaming,
+		Client:        route.Client,
+		Request:       route.Request,
+		Rule:          route.Rule,
+		Provider:      route.Provider,
+		ActualModel:   route.ActualModel,
+		ResponseModel: route.ResponseModel,
+		Streaming:     route.Streaming,
+		Finish:        route.Finish,
 	})
 }
 
