@@ -28,6 +28,7 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 
 - activity bar 新增 **Image**,两个子项:
   - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先)。
+  - **Library** — `/image/library`,留存的 Prompt 素材(整段 / 词条 / 描述语句)与参考图,见 `image-library.md`。
   - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
 - 名字统一为 **Image API**:侧栏、Agent 概览卡、页面标题都是这一个词。
 - Gallery / 草图 / mask / 切分仍是 Playground 内的对话框(原则 12),不升级为子导航。

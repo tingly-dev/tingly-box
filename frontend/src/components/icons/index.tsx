@@ -142,6 +142,10 @@ import {
     IconArrowBackUp,
     IconAiAgents,
     IconPhoto,
+    IconBookmark,
+    IconBookmarkPlus,
+    IconLibraryPhoto,
+    IconScissors,
     IconVector,
     IconTools,
     IconServer,
@@ -351,6 +355,13 @@ export const AiAgents = tablerMui(IconAiAgents);
 
 // --- Media -------------------------------------------------------------------
 export const Photo = tablerMui(IconPhoto);
+// Kept for later: saving a prompt or image to the Image library, and the
+// library itself.
+export const Bookmark = tablerMui(IconBookmark);
+export const BookmarkAdd = tablerMui(IconBookmarkPlus);
+export const PhotoLibrary = tablerMui(IconLibraryPhoto);
+// Splitting a prompt into the terms and phrases worth keeping.
+export const ContentCut = tablerMui(IconScissors);
 export const Vector = tablerMui(IconVector);
 export const WaveSine = tablerMui(IconWaveSine);
 export const Circle = tablerMui(IconCircleFilled);

@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { BookmarkAdd, Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
@@ -39,6 +39,8 @@ interface ImageGenLightboxProps {
     onReuseRun: (run: GenerationRun) => void;
     onSlice: (image: SelectedImage) => void;
     onDownload: (image: SelectedImage) => void;
+    // Keeps the open image in the Image library, beyond this session.
+    onSaveToLibrary: (image: SelectedImage) => void;
     // The request's reference images, so a `reference` image can tell whether
     // it is a re-openable sketch.
     referenceImages: ReferenceImage[];
@@ -62,6 +64,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onReuseRun,
     onSlice,
     onDownload,
+    onSaveToLibrary,
     referenceImages,
     onEditSketch,
     onUseAsReference,
@@ -302,6 +305,15 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             sx={overlayIconSx}
                         >
                             <Download fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('imageLibrary.saveImage', { defaultValue: 'Save to library' })}>
+                        <IconButton
+                            onClick={() => { if (selectedImage) onSaveToLibrary(selectedImage); }}
+                            aria-label={t('imageLibrary.saveImage', { defaultValue: 'Save to library' })}
+                            sx={overlayIconSx}
+                        >
+                            <BookmarkAdd fontSize="small" />
                         </IconButton>
                     </Tooltip>
                     {/* An image that is already a reference has nowhere to

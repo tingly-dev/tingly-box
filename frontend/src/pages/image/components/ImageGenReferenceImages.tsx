@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
+import { Brush, Close, ContentPaste, Create, FileUpload, PhotoLibrary, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
@@ -241,6 +241,8 @@ interface ReferenceImagesRowProps {
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
     onEditSketch: (index: number | null) => void;
+    // Opens the picker over images kept in the Image library.
+    onOpenLibrary: () => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onReorder: (from: number, to: number) => void;
@@ -264,6 +266,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     promptFileInputRef,
     onOpenReference,
     onEditSketch,
+    onOpenLibrary,
     onEditMask,
     onRemoveReference,
     onReorder,
@@ -282,7 +285,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     // than let the tint imply otherwise).
     const hasMaskedReference = referenceImages[0]?.mask !== undefined;
     const hasStrandedMask = !hasMaskedReference && referenceImages.some((ref) => ref.mask !== undefined);
-    // The three ways a reference image gets here, as equals. Drop is not in
+    // The four ways a reference image gets here, as equals. Drop is not in
     // the list because it has no button — the dashed box itself is the target.
     const referenceSources = [
         {
@@ -301,6 +304,12 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             label: t('playground.sketch.action', { defaultValue: 'Sketch' }),
             icon: <Create fontSize="small" />,
             onClick: () => onEditSketch(null),
+        },
+        {
+            key: 'library',
+            label: t('imageLibrary.referenceSource', { defaultValue: 'Library' }),
+            icon: <PhotoLibrary fontSize="small" />,
+            onClick: onOpenLibrary,
         },
     ];
     return (

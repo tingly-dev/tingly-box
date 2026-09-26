@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob, parseImageSize } from '@tingly/vision';
 import { addReferences, reorderReferences } from './imageGenSession';
+import type { LibraryReference } from '@/utils/imageLibrary';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
@@ -153,6 +154,44 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         }
     }, [referenceImages.length, showNotification, t]);
 
+    // Images kept in the library go into the row like any other upload, under
+    // the name they were kept as. Unlike "use as reference" on a single image,
+    // nothing is evicted: the user picked these, so the ones that do not fit
+    // are left out and the row says how many.
+    const handleAddLibraryReferences = useCallback(async (items: LibraryReference[]) => {
+        if (items.length === 0) return;
+        const room = Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length);
+        const { next: accepted, ignored } = addReferences([] as LibraryReference[], items, room, 'ignore');
+        if (ignored > 0) {
+            showNotification(
+                t('playground.referenceCapReached', {
+                    defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
+                    max: MAX_EDIT_REFERENCE_IMAGES,
+                    ignored,
+                }),
+                'warning',
+            );
+        }
+        try {
+            const next = await Promise.all(accepted.map(async (item): Promise<ReferenceImage> => {
+                const blob = await fetchBlob(item.src);
+                const type = blob.type || 'image/png';
+                return {
+                    file: new File([blob], item.name, { type }),
+                    previewUrl: item.src,
+                    source: 'upload',
+                    ...(item.width && item.height ? { width: item.width, height: item.height } : {}),
+                };
+            }));
+            setReferenceImages((current) => addReferences(current, next, MAX_EDIT_REFERENCE_IMAGES, 'ignore').next);
+        } catch {
+            showNotification(
+                t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
+                'error',
+            );
+        }
+    }, [referenceImages.length, showNotification, t]);
+
     // A sketch is just another way to get a reference image: it lands in the
     // same list, goes through the same request, and shows up in the run
     // history like any upload. Redrawing replaces the sketch in place so it
@@ -228,6 +267,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         handleReorderReference,
         handleReferenceKeyDown,
         handleUseAsReference,
+        handleAddLibraryReferences,
         sketchTarget,
         setSketchTarget,
         handleOpenSketch,
