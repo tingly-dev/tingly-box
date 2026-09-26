@@ -51,9 +51,15 @@ generate in the background:
    turn. Independent variants can run as parallel background tasks.
    No background support → run in the foreground with a tool timeout above the script's
    (`--timeout`, default 300 s; Claude Code's Bash default of 120 s is too short).
-4. When it finishes, report the saved path(s) from the JSON output and show/open the image
-   if the client can. Output goes to `./generated-images/` unless the user named a place
-   (`--out`). Keep the path — a follow-up "make it bluer" is an `edit --image <that path>`.
+4. When it finishes, check the exit status and report the saved path(s) from the JSON
+   output. **Do not read, open or view the image files** — loading an image costs a lot of
+   tokens and adds nothing: exit 0 means the request succeeded and every listed file was
+   written (non-empty). Any failure exits non-zero with an `error:` / `NEED_INPUT:` line —
+   relay that instead. Look at an image only if the user explicitly asks you to judge or
+   describe it.
+   Output goes to `./generated-images/` unless the user named a place (`--out`). Keep the
+   path — a follow-up "make it bluer" is an `edit --image <that path>` (the script reads the
+   file itself; you don't need to).
 
 ### Options
 

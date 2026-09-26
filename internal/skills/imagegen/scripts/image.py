@@ -186,9 +186,16 @@ def save_images(payload, out_dir, prompt, ext):
                 blob = resp.read()
         else:
             continue
+        if not blob:
+            sys.exit(f"error: image {i + 1} in the response is empty")
         with open(path, "wb") as f:
             f.write(blob)
-        saved.append({"path": os.path.abspath(path), "revised_prompt": item.get("revised_prompt")})
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            sys.exit(f"error: failed to write {path}")
+        entry = {"path": os.path.abspath(path), "bytes": len(blob)}
+        if item.get("revised_prompt"):
+            entry["revised_prompt"] = item["revised_prompt"]
+        saved.append(entry)
     if not saved:
         sys.exit("error: response contained no images: " + json.dumps(payload)[:500])
     return saved
