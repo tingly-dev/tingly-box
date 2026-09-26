@@ -120,7 +120,7 @@ https://nodejs.org/en/download
 
 </details>
 
-<details>
+<details open>
 <summary><strong>From Docker (GitHub Host)</strong></summary>
 
 ```bash
