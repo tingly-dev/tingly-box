@@ -1,7 +1,6 @@
 package protocolserver
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -15,9 +14,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// This file hosts the Responses↔Chat and AnthropicBeta→Responses
-// cross-format paths. Anthropic clients on a Responses provider are served by
-// the Stage pipeline (serveAnthropicOnOpenAI).
+// This file hosts the Responses↔Chat cross-format paths. Anthropic clients
+// on OpenAI providers, and OpenAI clients on Anthropic providers, are served
+// by the Stage pipeline (serveAnthropicOnOpenAI, serveOpenAIOnAnthropic).
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
 func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
@@ -53,54 +52,6 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 	}
 	hc := protocol.NewHandleContext(c, responseModel)
 	usage, err := stream.HandleOpenAIChatToResponsesStream(hc, chatStream, responseModel)
-	ph.trackUsageWithTokenUsage(c, usage, err)
-}
-
-// nonstreamAnthropicBetaToResponses handles a Responses-shaped client
-// request that has been normalized to Anthropic Beta and forwarded to an
-// Anthropic provider (non-streaming).
-func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
-	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-	wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.failRequest(c, err, "Failed to forward request")
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleAnthropicBetaToResponses(hc, anthropicResp, reqCtx.RequestModel)
-	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
-}
-
-// streamAnthropicBetaToResponses handles a Responses-shaped client
-// request that has been normalized to Anthropic Beta and forwarded to an
-// Anthropic provider (streaming).
-func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider) {
-	responseModel := reqCtx.ResponseModel
-	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-
-	wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := forwarding.NewForwardContext(ctx, provider)
-	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.failRequest(c, err, "Failed to create streaming request")
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, responseModel)
-	usage, err := stream.HandleAnthropicBetaToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 	ph.trackUsageWithTokenUsage(c, usage, err)
 }
 

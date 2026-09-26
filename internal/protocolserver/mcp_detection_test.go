@@ -25,7 +25,7 @@ func TestHasDeclaredMCPTools_OpenAI(t *testing.T) {
 	require.True(t, HasDeclaredMCPTools(req))
 }
 
-func TestHasDeclaredMCPTools_AnthropicV1AndBeta(t *testing.T) {
+func TestHasDeclaredMCPTools_AnthropicV1(t *testing.T) {
 	v1Req := &anthropic.MessageNewParams{
 		Tools: []anthropic.ToolUnionParam{
 			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "normal_tool"),
@@ -34,13 +34,6 @@ func TestHasDeclaredMCPTools_AnthropicV1AndBeta(t *testing.T) {
 	}
 	require.True(t, HasDeclaredMCPAnthropicV1Tools(v1Req))
 
-	betaReq := &anthropic.BetaMessageNewParams{
-		Tools: []anthropic.BetaToolUnionParam{
-			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "normal_tool"),
-			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__websearch__search"),
-		},
-	}
-	require.True(t, HasDeclaredMCPAnthropicBetaTools(betaReq))
 }
 
 func TestHasOnlyMCPToolCalls(t *testing.T) {

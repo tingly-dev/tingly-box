@@ -56,20 +56,3 @@ func HasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
 	}
 	return false
 }
-
-// HasDeclaredMCPAnthropicBetaTools reports whether req declares any MCP-named
-// tool in its Anthropic beta tool list.
-func HasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool {
-	// FIXME: we can not use such a simple logic to check
-	if req == nil || len(req.Tools) == 0 {
-		return false
-	}
-
-	for _, t := range req.Tools {
-		if t.OfTool != nil && mcpruntime.IsMCPToolName(t.OfTool.Name) {
-			return true
-		}
-	}
-
-	return false
-}

@@ -10,10 +10,8 @@ import (
 
 var _ = registerKnownGaps(KnownGap{
 	ID:     "M1",
-	Reason: "Responses source: the server tool is injected upstream but its call is not intercepted, so it leaks to the client",
+	Reason: "Responses client on an OpenAI Chat provider: the server tool is injected upstream but its call is not intercepted, so it leaks to the client",
 },
-	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=false",
-	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=true",
 	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=false",
 	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=true",
 ) && registerKnownGaps(KnownGap{
@@ -70,8 +68,9 @@ func TestMCPOwnedToolLoop(t *testing.T) {
 					failures = append(failures, "server tool call leaked to client")
 				}
 				// While the server tool runs the client hears a keep-alive, so
-				// idle-timeout proxies do not drop the stream.
-				if streaming && pair.Source == protocol.TypeAnthropicBeta && pair.Target == protocol.TypeAnthropicBeta &&
+				// idle-timeout proxies do not drop the stream - on every pair
+				// the Stage pipeline serves.
+				if streaming && stagePipelinePair(pair.Source, pair.Target) &&
 					!strings.Contains(raw, ": keep-alive") {
 					failures = append(failures, "no keep-alive while the server tool ran")
 				}
@@ -228,13 +227,6 @@ func followUpWithClientToolResult(source protocol.APIType, model, toolID string,
 	}
 }
 
-var _ = registerKnownGaps(KnownGap{
-	ID:     "M5",
-	Reason: "Chat client -> Anthropic provider streaming: the mixed round's server-tool result is not spliced into the follow-up",
-},
-	"TestMCPMixedToolContinuation/openai_chat->anthropic_beta/stream=true",
-)
-
 // TestMCPMixedToolContinuation pins the two-request mixed round: the server
 // tool runs in the first request and is hidden, the client receives only its
 // own tool call, and when it returns that result the gateway resumes the
@@ -299,4 +291,14 @@ func TestMCPMixedToolContinuation(t *testing.T) {
 			}
 		}
 	}
+}
+
+// stagePipelinePair reports whether the Protocol Stage pipeline serves the
+// pair: Anthropic clients on any provider, OpenAI clients on Anthropic.
+func stagePipelinePair(source, target protocol.APIType) bool {
+	switch source {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		return true
+	}
+	return target == protocol.TypeAnthropicBeta || target == protocol.TypeAnthropicV1
 }

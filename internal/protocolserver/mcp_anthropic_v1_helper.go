@@ -209,54 +209,6 @@ func (ph *ProtocolHandler) RunGenericAnthropicV1NonStream(
 	return v1Resp, &usage, nil
 }
 
-func (ph *ProtocolHandler) RunGenericAnthropicBetaNonStream(
-	ctx context.Context,
-	provider *typ.Provider,
-	req *anthropic.BetaMessageNewParams,
-	recorder *recording.ProtocolRecorder,
-) (*anthropic.BetaMessage, *mcp.TokenUsage, error) {
-
-	adapter := mcp.NewAnthropicBetaAdapter()
-	forwarder := mcp.NewAnthropicBetaForwarder(ph.deps.ClientPool, &forwardContextProvider{})
-	virtualRegistry := ph.deps.MCPRuntime.VirtualRegistry()
-	serverOps := newServerOpsAdapter(ph, recorder)
-	toolExecutor := mcp.NewServerToolExecutor(serverOps)
-
-	var recorderAdapter mcp.ProtocolRecorder
-	if recorder != nil {
-		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
-	}
-
-	processor := mcp.NewGenericLoopProcessor(
-		ctx,
-		serverOps,
-		provider,
-		nil,
-		virtualRegistry,
-		recorderAdapter,
-		adapter,
-		forwarder,
-		toolExecutor,
-		mcp.InterceptorConfig{MaxRounds: 3},
-	)
-
-	response, err := processor.Run(req)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	betaResp, ok := response.(*anthropic.BetaMessage)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected generic response type: %T", response)
-	}
-
-	usage, err := adapter.ExtractUsage(response)
-	if err != nil {
-		return betaResp, nil, nil
-	}
-	return betaResp, &usage, nil
-}
-
 // DispatchGenericOpenAIChatNonStream handles O→O non-streaming with generic processor
 func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 	c *gin.Context,
@@ -343,4 +295,3 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 		ph.handlePreStreamFailure(c, err, recorder)
 	}
 }
-
