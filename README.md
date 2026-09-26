@@ -154,7 +154,7 @@ Give your whole team one endpoint backed by centrally managed model rules. Each 
 
 ![Team Demo](./docs/images/2-1-team.png)
 
-![Team Usage Demo](./docs/images/4-2-team-usage.png)
+![Team Usage Demo](./docs/images/4-1-team-usage.png)
 
 </details>
 
@@ -163,7 +163,9 @@ Give your whole team one endpoint backed by centrally managed model rules. Each 
 
 Route image generation and editing through the same gateway. Point any OpenAI-compatible image client at `http://localhost:12580/tingly/imagegen` and pick the upstream image models with rules, like any other scenario. Try prompts right away in **Image → Playground**.
 
-![Image API Demo](./docs/images/3-1-image-api.png)
+![Image Playground Demo](./docs/images/3-1-image-playground.png)
+
+![Image API Demo](./docs/images/3-2-image-api.png)
 
 </details>
 
@@ -321,7 +323,7 @@ npx tingly-box@latest
 
 Then open `http://localhost:12580` in your browser.
 
-![Dashboard](./docs/images/4-1-dashboard.png)
+![Dashboard](./docs/images/4-2-dashboard.png)
 
 </details>
 

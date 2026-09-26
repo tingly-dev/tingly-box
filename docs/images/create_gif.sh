@@ -7,6 +7,7 @@ cd "$SCRIPT_DIR"
 # Default values
 OUTPUT="output.gif"
 DURATION=1800
+FRAMES="gif-frames.txt"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -15,14 +16,19 @@ while [[ $# -gt 0 ]]; do
             OUTPUT="$2"
             shift 2
             ;;
+        -f|--frames)
+            FRAMES="$2"
+            shift 2
+            ;;
         -d|--duration)
             DURATION="$2"
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [-o OUTPUT] [-d DURATION]"
+            echo "Usage: $0 [-o OUTPUT] [-d DURATION] [-f FRAMES]"
             echo "  -o, --output    Output GIF filename (default: output.gif)"
-            echo "  -d, --duration  Duration per frame in ms (default: 500)"
+            echo "  -d, --duration  Duration per frame in ms (default: 1800)"
+            echo "  -f, --frames    File listing GIF frames in order (default: gif-frames.txt)"
             exit 0
             ;;
         *)
@@ -44,11 +50,27 @@ if ! python3 -c "import PIL" 2>/dev/null; then
     exit 1
 fi
 
-# Get all PNG files in alphabetical order
-IMAGES=($(ls -1 *.png 2>/dev/null))
+# Frames come from an explicit list, not a directory glob: docs/images holds
+# more screenshots than the demo GIF should show. One filename per line;
+# blank lines and '#' comments are ignored.
+if [ ! -f "$FRAMES" ]; then
+    echo "Error: frame list $FRAMES not found"
+    exit 1
+fi
+IMAGES=()
+while IFS= read -r line; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [ -z "$line" ] && continue
+    if [ ! -f "$line" ]; then
+        echo "Error: $line (listed in $FRAMES) not found"
+        exit 1
+    fi
+    IMAGES+=("$line")
+done < "$FRAMES"
 
 if [ ${#IMAGES[@]} -eq 0 ]; then
-    echo "Error: No PNG files found in $SCRIPT_DIR"
+    echo "Error: $FRAMES lists no frames"
     exit 1
 fi
 
