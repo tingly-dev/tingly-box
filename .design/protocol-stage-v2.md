@@ -139,6 +139,23 @@ Beta 是 Tool Round Stage 的 IR。Stage 按请求插入：本请求有 server �
 H3 对加粗的四个协议对（开 MCP 时）逐一比对请求 / 非流式响应 / 流式响应在往返前后与直连的差异，损失登记为 known-gap，
 OpenAI 源的切流在其清零或被明确接受后进行。Guardrails 目前只对 Anthropic 场景启用（§8.2），所以现阶段触发往返的只有 MCP。
 
+#### 2.4.1 H3 当前登记的 IR 损失（开 MCP 时，OpenAI 源切流前需清零或明确接受）
+
+| ID | 损失 | 影响的协议对 |
+|---|---|---|
+| I1 | IR 注入客户端未要求的输出上限（`max_tokens` / `max_output_tokens` 4096），并覆盖客户端的 `max_completion_tokens` | Chat→Chat、Responses→Responses |
+| I2 | 采样与请求元数据丢失：`temperature`、`top_p`、`stop`、`seed`、presence/frequency penalty、`user` | 四对均有 |
+| I3 | 结构化输出（`response_format` / `text.format` json_schema）丢失 | Chat→Chat、Responses→Responses |
+| I4 | 推理强度（`reasoning_effort` / `reasoning.effort`）丢失 | Chat→Chat、Chat→Responses、Responses→Responses |
+| I5 | `developer` 消息丢失 | Chat→Chat |
+| I6 | 输入图片的 `detail` 丢失 | Responses→Responses |
+| R1 | 响应、输出 item、function call 的 ID 被重新生成，而非沿用 provider 的 | Chat→Chat、Responses→Responses |
+| R2 | Responses 的 `object` 被规范化为 `"response"`，未沿用 provider 的值 | Responses→Responses |
+| R3 | 流式的长度截断（`finish_reason: length`）变成 `stop` | Chat→Chat、Chat→Responses |
+| R4 | provider 流式未报 usage 时，IR 的估算与直连不同 | Responses→Chat |
+
+另：IR 降到 Chat 时会给上游 assistant 消息加非标准字段 `x_thinking`（空值时被比较忽略），切流前需确认对各 Chat provider 无害。
+
 ---
 
 ## 3. 为什么先协议后应用
@@ -231,7 +248,7 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | P4b | `claude/lucid-heisenberg-ppa3kj-p4b`（**已推送**，叠在 p4 上） | `guardrailspipeline.ToolRoundGate`：复用现有 Guardrails 管线实现 Gate（每请求一份 mask 状态，fail-open）。内存测试覆盖 G2 G3 G4 G5 G7 G8 | 无 |
 | F6 | `claude/lucid-heisenberg-ppa3kj-continuation-scope`（**已推送**，基于 main） | 独立热修复：continuation 无会话时共用一个键（跨会话串入）；同会话任意请求都会取走存储轮次。改为无会话不存、只有携带对应 tool_result 的 follow-up 才取用（V1 / Beta / Chat） | 修跨会话泄漏 |
 | P5 | `claude/lucid-heisenberg-ppa3kj-p5`（**已推送**，叠在 p4b 上） | Anthropic 客户端（V1 / Beta）的 HTTP Adapter：`sdkstream` 把 EventStream 呈现为 SDK stream，直接复用现有写出器（SSE、首块提交、model 改写、错误事件、usage）；V1 在边缘 downgrade（同 wire 字节，V1 无法表达的内容显式报错）；执行过 server 工具后出错时提交 failover gate，不重试。验收：对照 golden，Beta→Beta 24 例逐字节一致（上游请求 + 客户端响应）；V1 24 例除预期统一外一致 | 无 |
-| H3 | `claude/lucid-heisenberg-ppa3kj-h3`（叠在 p5 上） | IR 往返保真度 harness（§2.4 加粗四对，开 MCP 时）：Chat↔Beta↔Chat、Responses↔Beta↔Responses、Chat→Beta→Responses、Responses→Beta→Chat 的请求 / 非流式响应 / 流式响应，与直连对比，损失登记为 known-gap | 无 |
+| H3 | `claude/lucid-heisenberg-ppa3kj-h3`（**已推送**，叠在 p5 上） | IR 往返保真度 harness（§2.4 加粗四对，开 MCP 时）：Chat↔Beta↔Chat、Responses↔Beta↔Responses、Chat→Beta→Responses、Responses→Beta→Chat 的请求 / 非流式响应 / 流式响应，与直连对比，损失登记为 known-gap | 无 |
 | P5b | 待定 | OpenAI 客户端（Chat / Responses）的 HTTP Adapter；前提是 H3（§8.5） | 无 |
 | C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
 | C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
