@@ -232,14 +232,19 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                     defaultValue: 'View all {{count}} images in the overview',
                                     count: timeline.length,
                                 })}
+                                // In the sideways strip it is a narrow tile at
+                                // the start of the row. On the wrapping workbench
+                                // a full-height column would eat a card slot and
+                                // push the first card off its row, so there it is
+                                // a slim bar across the top instead.
                                 sx={{
-                                    flex: '0 0 84px',
-                                    height: STRIP_CARD_HEIGHT,
+                                    flex: { xs: '0 0 84px', lg: '0 0 100%' },
+                                    height: { xs: STRIP_CARD_HEIGHT, lg: 36 },
                                     display: 'flex',
-                                    flexDirection: 'column',
+                                    flexDirection: { xs: 'column', lg: 'row' },
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: 0.5,
+                                    gap: { xs: 0.5, lg: 1 },
                                     borderRadius: 1.5,
                                     border: '1px dashed',
                                     borderColor: 'divider',
@@ -253,7 +258,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                     +{olderTimelineCount}
                                 </Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, color: 'text.disabled' }}>
+                                <Typography variant="caption" sx={{ fontSize: { xs: 10, lg: 12 }, color: 'text.disabled' }}>
                                     {t('playground.gallery.action', { defaultValue: 'Overview' })}
                                 </Typography>
                             </ButtonBase>

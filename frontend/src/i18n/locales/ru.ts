@@ -1862,6 +1862,7 @@ export default {
     "referenceHint": "До {{max}} изображений · PNG, JPEG или WebP · отправляются через images/edits",
     "removeReferenceImage": "Удалить исходное изображение {{number}}",
     "useAsReference": "Использовать как референс",
+    "preview": "Предпросмотр",
     "referenceLoadFailed": "Не удалось использовать это изображение как исходное",
     "referenceCapReached": "Помещается только {{max}} референсов — {{ignored}} не добавлены",
     "referenceEvicted": "Добавлено как референс — самый старый уступил место (максимум {{max}})",

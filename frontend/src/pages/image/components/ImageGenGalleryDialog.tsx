@@ -340,16 +340,23 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                             </Typography>
                                         </Stack>
                                     ) : (
+                                        // Clicking a tile takes it back into the
+                                        // playground — the thing done most often
+                                        // from here. A generation loads the request
+                                        // that made it; an imported image becomes a
+                                        // reference. Looking closer is the zoom action.
                                         <ButtonBase
-                                            onClick={() => (tile.kind === 'import'
-                                                ? onOpenImport(tile.item)
-                                                : onOpenOutput(tile.run, tile.imageIndex, tile.src))}
+                                            onClick={() => {
+                                                if (tile.kind === 'import') {
+                                                    onUseAsReference(tile.item.src);
+                                                    onClose();
+                                                } else {
+                                                    onReuseRun(tile.run);
+                                                }
+                                            }}
                                             aria-label={tile.kind === 'import'
-                                                ? t('playground.openImported', { defaultValue: 'Open {{name}}', name: tile.item.name })
-                                                : t('playground.openResult', {
-                                                    defaultValue: 'Open generated image {{number}}',
-                                                    number: tile.imageIndex + 1,
-                                                })}
+                                                ? t('playground.useAsReference', { defaultValue: 'Use as reference' })
+                                                : t('playground.reuse.action', { defaultValue: 'Edit this request' })}
                                             sx={{
                                                 width: '100%',
                                                 height: '100%',
@@ -367,7 +374,9 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                                 fit="contain"
                                             />
                                             <Box className="tile-zoom" sx={zoomScrimSx}>
-                                                <ZoomIn sx={{ fontSize: 28 }} />
+                                                {tile.kind === 'import'
+                                                    ? <Edit sx={{ fontSize: 28 }} />
+                                                    : <RestartAlt sx={{ fontSize: 28 }} />}
                                             </Box>
                                         </ButtonBase>
                                     )}
@@ -402,13 +411,23 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                         )}
                                         {(tile.kind === 'output' || tile.kind === 'import') && (
                                             <TileAction
+                                                label={t('playground.preview', { defaultValue: 'Preview' })}
+                                                icon={<ZoomIn fontSize="small" />}
+                                                onClick={() => (tile.kind === 'import'
+                                                    ? onOpenImport(tile.item)
+                                                    : onOpenOutput(tile.run, tile.imageIndex, tile.src))}
+                                                testId="imagegen-gallery-preview"
+                                            />
+                                        )}
+                                        {tile.kind === 'output' && (
+                                            <TileAction
                                                 label={t('playground.useAsReference', { defaultValue: 'Use as reference' })}
                                                 icon={<Edit fontSize="small" />}
-                                                onClick={() => onUseAsReference(tile.kind === 'import' ? tile.item.src : tile.src)}
+                                                onClick={() => onUseAsReference(tile.src)}
                                                 testId="imagegen-gallery-use-as-reference"
                                             />
                                         )}
-                                        {tile.kind !== 'import' && (
+                                        {tile.kind === 'failed' && (
                                             <TileAction
                                                 label={t('playground.reuse.action', { defaultValue: 'Edit this request' })}
                                                 icon={<RestartAlt fontSize="small" />}
