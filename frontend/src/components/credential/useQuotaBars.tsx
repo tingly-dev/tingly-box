@@ -23,6 +23,10 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
 
   const resourceItems: ResourceItem[] = React.useMemo(() => {
     if (!quota) return [];
+    // A tingly-box upstream already shows one bar per model (the backend
+    // lifts each model's binding window into `windows`); its per-model
+    // breakdowns exist for routing, and a count bar here would repeat them.
+    if (quota.provider_type === 'tingly_box') return [];
     const breakdowns = quota.breakdowns;
     if (!breakdowns?.length) return [];
 
