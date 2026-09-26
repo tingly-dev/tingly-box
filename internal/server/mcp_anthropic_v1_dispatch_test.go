@@ -6,59 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// TestShouldUseGenericMCPForProvider tests the provider limit checking logic
-func TestShouldUseGenericMCPForProvider(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
-
-	tests := []struct {
-		name         string
-		providerName string
-		limits       string
-		expected     bool
-	}{
-		{
-			name:         "No limits - all providers allowed",
-			providerName: "test-provider",
-			limits:       "",
-			expected:     true,
-		},
-		{
-			name:         "Wildcard - all providers allowed",
-			providerName: "test-provider",
-			limits:       "*",
-			expected:     true,
-		},
-		{
-			name:         "Provider in limits list",
-			providerName: "test-provider",
-			limits:       "test-provider,another-provider",
-			expected:     true,
-		},
-		{
-			name:         "Provider not in limits list",
-			providerName: "test-provider",
-			limits:       "another-provider,yet-another",
-			expected:     false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s.config.GenericMCP.ProviderLimits = tt.limits
-			provider := &typ.Provider{Name: tt.providerName}
-			result := protocolserver.ShouldUseGenericMCPForProvider(s.config, provider)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
 
 // TestGenericMCPConfigDefaults tests that the GenericMCP config has safe defaults
 func TestGenericMCPConfigDefaults(t *testing.T) {

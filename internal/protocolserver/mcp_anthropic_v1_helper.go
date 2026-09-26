@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
+	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -160,53 +159,6 @@ func (ph *ProtocolHandler) RunGenericOpenAIChatNonStream(
 		return openaiResp, nil, nil
 	}
 	return openaiResp, &usage, nil
-}
-
-func (ph *ProtocolHandler) RunGenericAnthropicV1NonStream(
-	ctx context.Context,
-	provider *typ.Provider,
-	req *anthropic.MessageNewParams,
-	recorder *recording.ProtocolRecorder,
-) (*anthropic.Message, *mcp.TokenUsage, error) {
-	adapter := mcp.NewAnthropicV1Adapter()
-	forwarder := mcp.NewAnthropicV1Forwarder(ph.deps.ClientPool, &forwardContextProvider{})
-	virtualRegistry := ph.deps.MCPRuntime.VirtualRegistry()
-	serverOps := newServerOpsAdapter(ph, recorder)
-	toolExecutor := mcp.NewServerToolExecutor(serverOps)
-
-	var recorderAdapter mcp.ProtocolRecorder
-	if recorder != nil {
-		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
-	}
-
-	processor := mcp.NewGenericLoopProcessor(
-		ctx,
-		serverOps,
-		provider,
-		nil,
-		virtualRegistry,
-		recorderAdapter,
-		adapter,
-		forwarder,
-		toolExecutor,
-		mcp.InterceptorConfig{MaxRounds: 3},
-	)
-
-	response, err := processor.Run(req)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	v1Resp, ok := response.(*anthropic.Message)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected generic response type: %T", response)
-	}
-
-	usage, err := adapter.ExtractUsage(response)
-	if err != nil {
-		return v1Resp, nil, nil
-	}
-	return v1Resp, &usage, nil
 }
 
 // DispatchGenericOpenAIChatNonStream handles O→O non-streaming with generic processor

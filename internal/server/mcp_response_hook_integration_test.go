@@ -230,127 +230,6 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 	require.Equal(t, "worker final answer", finalResp.Choices[0].Message.Content)
 }
 
-func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
-	var advisorCalls int
-	var workerCalls int
-	var workerSawToolResult bool
-
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-
-		var req map[string]any
-		require.NoError(t, json.Unmarshal(body, &req))
-		model, _ := req["model"].(string)
-
-		switch model {
-		case "claude-opus-4-6":
-			advisorCalls++
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":    "msg_advisor",
-				"type":  "message",
-				"role":  "assistant",
-				"model": "claude-opus-4-6",
-				"content": []map[string]any{
-					{"type": "text", "text": `{"assessment":"ok","recommendation":"anthropic-advisor-plan"}`},
-				},
-				"stop_reason": "end_turn",
-				"usage": map[string]any{
-					"input_tokens":  10,
-					"output_tokens": 5,
-				},
-			})
-		case "claude-worker-v1":
-			workerCalls++
-			hasToolResult := strings.Contains(string(body), `"tool_result"`)
-			if messages, ok := req["messages"].([]any); ok {
-				for _, m := range messages {
-					mm, _ := m.(map[string]any)
-					content, _ := mm["content"].([]any)
-					for _, cb := range content {
-						block, _ := cb.(map[string]any)
-						if block["type"] != "tool_result" {
-							continue
-						}
-						if strings.Contains(string(body), "anthropic-advisor-plan") {
-							workerSawToolResult = true
-						}
-					}
-				}
-			}
-			if !hasToolResult {
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"id":    "msg_worker_tool",
-					"type":  "message",
-					"role":  "assistant",
-					"model": "claude-worker-v1",
-					"content": []map[string]any{
-						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__builtin__advisor", "input": map[string]any{}},
-					},
-					"stop_reason": "tool_use",
-					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
-				})
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":    "msg_worker_final",
-				"type":  "message",
-				"role":  "assistant",
-				"model": "claude-worker-v1",
-				"content": []map[string]any{
-					{"type": "text", "text": "anthropic worker final"},
-				},
-				"stop_reason": "end_turn",
-				"usage": map[string]any{
-					"input_tokens":  20,
-					"output_tokens": 8,
-				},
-			})
-		default:
-			t.Fatalf("unexpected model: %s", model)
-		}
-	}))
-	defer mockServer.Close()
-
-	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{
-			advisortest.Source(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
-		},
-	})
-
-	provider := &typ.Provider{
-		UUID:     "worker-anthropic-v1",
-		Name:     "worker-anthropic-v1",
-		APIBase:  mockServer.URL,
-		Token:    "worker-key",
-		APIStyle: protocol.APIStyleAnthropic,
-		Enabled:  true,
-	}
-
-	req := &anthropic.MessageNewParams{
-		Model:     "claude-worker-v1",
-		MaxTokens: 1024,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("help")),
-		},
-		Tools: []anthropic.ToolUnionParam{
-			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
-		},
-	}
-
-	finalResp, _, err := s.aiHandler.RunGenericAnthropicV1NonStream(context.Background(), provider, req, nil)
-	require.NoError(t, err)
-	require.Equal(t, 1, advisorCalls)
-	require.Equal(t, 2, workerCalls)
-	require.True(t, workerSawToolResult)
-	require.Len(t, finalResp.Content, 1)
-	require.Equal(t, "text", string(finalResp.Content[0].Type))
-	require.Equal(t, "anthropic worker final", finalResp.Content[0].Text)
-}
-
 func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t *testing.T) {
 	var workerCalls int
 	var workerSawDisabledError bool
@@ -582,7 +461,6 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
 		},
 	}
-	require.True(t, protocolserver.HasDeclaredMCPAnthropicV1Tools(&req))
 
 	reqCtx := transform.NewTransformContext(&req)
 	reqCtx.SourceAPI = protocol.TypeAnthropicV1

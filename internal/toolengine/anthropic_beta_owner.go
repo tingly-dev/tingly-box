@@ -2,6 +2,7 @@ package toolengine
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
@@ -33,7 +34,7 @@ func (o *AnthropicBetaOwner) Owns(name string) bool {
 }
 
 func (o *AnthropicBetaOwner) Execute(ctx context.Context, call toolround.ToolCall, request *anthropic.BetaMessageNewParams) (context.Context, anthropic.BetaToolResultBlockParam) {
-	tool := &AnthropicBetaTool{ToolUseBlock: anthropic.BetaToolUseBlock{ID: call.ID, Name: call.Name, Input: call.Input}}
+	tool := ownedToolCall{call}
 	next, result, err := o.executor.ExecuteToolWithContext(ctx, tool, extractMessagesForToolCall(request))
 	if err != nil {
 		logrus.WithError(err).Warnf("tool execution failed: %s", call.Name)
@@ -117,4 +118,18 @@ func (o *AnthropicBetaOwner) continuationKey(ctx context.Context) (string, bool)
 		return "", false
 	}
 	return continuationKey(session, o.providerUUID, "anthropic-beta"), true
+}
+
+// ownedToolCall presents a Tool Round call as the executor's Tool.
+type ownedToolCall struct{ call toolround.ToolCall }
+
+func (t ownedToolCall) ID() string   { return t.call.ID }
+func (t ownedToolCall) Name() string { return t.call.Name }
+
+func (t ownedToolCall) Arguments() string {
+	b, err := json.Marshal(t.call.Input)
+	if err != nil || len(b) == 0 {
+		return "{}"
+	}
+	return string(b)
 }
