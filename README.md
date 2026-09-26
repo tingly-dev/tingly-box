@@ -34,6 +34,7 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 * **Production-Ready**
   * Smart Routing — Intelligently route requests across models and tokens based on cost, speed, or custom policies
   * Remote Control — Control AI agents remotely through Telegram, DingTalk, Feishu, Lark, Weixin, WeCom, Slack, and Discord
+  * Image API — Route image generation and editing through the same gateway, with a built-in playground
   * Team Management — Isolate data per user with dedicated API tokens, usage tracking, provider access, and configuration
   * Usage Analytics — Track token consumption, latency, cost estimates, and model selection per request
   * Blazing Fast Performance — Typically adds **< 1ms** of overhead
@@ -150,7 +151,33 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-![Agent Integration Demo](./docs/images/5-claude-code.png)
+![Agent Integration Demo](./docs/images/1-2-claude-code.png)
+
+</details>
+
+<details>
+<summary><strong>Team - Shared Model Deployment</strong></summary>
+
+Give your whole team one endpoint backed by centrally managed model rules. Each member gets a dedicated sharing key, and usage is tracked per user.
+
+1. Open Web UI like `http://localhost:12580`
+2. Navigate to **Team**, configure the model rules, then hand out keys via **Sharing Keys**
+3. Track per-user consumption under **Dashboard → Team usage**
+
+![Team Demo](./docs/images/2-1-team.png)
+
+![Team Usage Demo](./docs/images/4-1-team-usage.png)
+
+</details>
+
+<details>
+<summary><strong>Image API</strong></summary>
+
+Route image generation and editing through the same gateway. Point any OpenAI-compatible image client at `http://localhost:12580/tingly/imagegen` and pick the upstream image models with rules, like any other scenario. Try prompts right away in **Image → Playground**.
+
+![Image Playground Demo](./docs/images/3-1-image-playground.png)
+
+![Image API Demo](./docs/images/3-2-image-api.png)
 
 </details>
 
@@ -206,7 +233,7 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - Team collaboration with shared agent access
 - Monitor and control agents while away from your workstation
 
-![Remote Control Demo](./docs/images/7-remote.png)
+![Remote Control Demo](./docs/images/5-1-remote.png)
 
 </details>
 
@@ -269,7 +296,7 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-![OAuth Provider Demo](./docs/images/3-connect-ai.png)
+![OAuth Provider Demo](./docs/images/6-1-connect-ai.png)
 
 </details>
 
@@ -308,7 +335,7 @@ npx tingly-box@latest
 
 Then open `http://localhost:12580` in your browser.
 
-![Dashboard](./docs/images/1-dashboard.png)
+![Dashboard](./docs/images/4-2-dashboard.png)
 
 </details>
 
