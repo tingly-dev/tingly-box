@@ -93,11 +93,29 @@ func TestAnthropicV1BetaWireEquivalence(t *testing.T) {
 			require.Equal(t, v1Wire, canonicalWire(t, beta), "V1 -> Beta changed the wire request")
 
 			// Downgrade at the provider edge (no Beta-only content present).
-			betaRaw, err := json.Marshal(beta)
+			back, err := ConvertAnthropicBetaToV1Request(beta)
 			require.NoError(t, err)
-			var back anthropic.MessageNewParams
-			require.NoError(t, json.Unmarshal(betaRaw, &back))
-			require.Equal(t, v1Wire, canonicalWire(t, &back), "V1 -> Beta -> V1 changed the wire request")
+			require.Equal(t, v1Wire, canonicalWire(t, back), "V1 -> Beta -> V1 changed the wire request")
 		})
 	}
+}
+
+// The downgrade refuses what V1 cannot carry instead of dropping it, so a
+// Beta-only addition reaching a V1-wire provider surfaces as an error.
+func TestAnthropicBetaToV1DowngradeRefusesBetaOnly(t *testing.T) {
+	var withField anthropic.BetaMessageNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","max_tokens":64,
+		"messages":[{"role":"user","content":"hi"}],
+		"mcp_servers":[{"type":"url","name":"s","url":"https://example.com/mcp"}]}`), &withField))
+	_, err := ConvertAnthropicBetaToV1Request(&withField)
+	require.ErrorContains(t, err, "mcp_servers")
+
+	withBetas := anthropic.BetaMessageNewParams{
+		Model:     "m",
+		MaxTokens: 64,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+		Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaMCPClient2025_04_04},
+	}
+	_, err = ConvertAnthropicBetaToV1Request(&withBetas)
+	require.ErrorContains(t, err, "anthropic-beta")
 }

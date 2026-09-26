@@ -11,4 +11,8 @@
 // wire, so V1 requests are upgraded to Beta at the client edge and downgraded
 // only where a provider needs the V1 path; every Endpoint, Stage and Bridge in
 // a chain speaks anthropic_beta for Anthropic. The contracts enforce this.
+//
+// Terminal provider endpoints live in stage/upstream; the cross-protocol
+// bridges live in stage/anthropicbridge, stage/openaibridge and
+// stage/responsesbridge.
 package stage

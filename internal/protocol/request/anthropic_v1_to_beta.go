@@ -6,6 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 )
 
 // ConvertAnthropicV1ToBetaRequest projects an Anthropic v1 MessageNewParams onto
@@ -46,4 +47,51 @@ func ConvertAnthropicV1ToBetaRequestWithError(req *anthropic.MessageNewParams) (
 		return nil, fmt.Errorf("unmarshal Anthropic v1 request as Beta: %w", err)
 	}
 	return &beta, nil
+}
+
+// ConvertAnthropicBetaToV1Request is the provider-edge downgrade: the inverse
+// projection for providers reached over the V1 wire. It is lossless for any
+// request that originated as V1, so it refuses, rather than silently drops,
+// what V1 cannot express: anthropic-beta header values and Beta-only
+// top-level fields.
+func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anthropic.MessageNewParams, error) {
+	if req == nil {
+		return nil, nil
+	}
+	if len(req.Betas) > 0 {
+		return nil, fmt.Errorf("downgrade Anthropic Beta request: anthropic-beta %v has no V1 form", req.Betas)
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Anthropic Beta request: %w", err)
+	}
+	var v1 anthropic.MessageNewParams
+	if err := json.Unmarshal(data, &v1); err != nil {
+		return nil, fmt.Errorf("unmarshal Anthropic Beta request as v1: %w", err)
+	}
+	v1Data, err := json.Marshal(&v1)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Anthropic v1 request: %w", err)
+	}
+	if dropped := droppedTopLevelFields(data, v1Data); len(dropped) > 0 {
+		return nil, fmt.Errorf("downgrade Anthropic Beta request: Beta-only fields %v have no V1 form", dropped)
+	}
+	return &v1, nil
+}
+
+func droppedTopLevelFields(from, to []byte) []string {
+	kept := map[string]bool{}
+	gjson.ParseBytes(to).ForEach(func(key, _ gjson.Result) bool {
+		kept[key.String()] = true
+		return true
+	})
+	var dropped []string
+	gjson.ParseBytes(from).ForEach(func(key, _ gjson.Result) bool {
+		if !kept[key.String()] {
+			dropped = append(dropped, key.String())
+		}
+		return true
+	})
+	return dropped
 }
