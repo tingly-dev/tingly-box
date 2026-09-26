@@ -10,7 +10,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
-	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
@@ -82,19 +81,6 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
 		if isAnthropicContentDeltaEvent(evt.Type) {
 			protocol.MarkFirstToken(hc.GinContext)
-		}
-
-		if hc.Guardrails != nil && hc.Guardrails.Enabled {
-			if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
-				processErr = err
-				return false
-			} else if handled {
-				for _, rewrittenEvent := range rewritten {
-					sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
-				}
-				hc.GinContext.Writer.Flush()
-				return true
-			}
 		}
 
 		// For message_start events, modify the model in the raw JSON
@@ -219,19 +205,6 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
 		if isAnthropicContentDeltaEvent(evt.Type) {
 			protocol.MarkFirstToken(hc.GinContext)
-		}
-
-		if hc.Guardrails != nil && hc.Guardrails.Enabled {
-			if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
-				processErr = err
-				return false
-			} else if handled {
-				for _, rewrittenEvent := range rewritten {
-					sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
-				}
-				hc.GinContext.Writer.Flush()
-				return true
-			}
 		}
 
 		// For message_start events, modify the model in the raw JSON

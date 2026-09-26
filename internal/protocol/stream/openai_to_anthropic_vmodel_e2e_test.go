@@ -22,7 +22,7 @@ import (
 
 // TestOpenAIToAnthropicStream_VModelUsage drives a real OpenAI streaming client
 // against the in-process vmodel virtualserver and runs the response through
-// HandleOpenAIToAnthropicStreamResponse. It exists to lock down the
+// the OpenAI Chat to Anthropic converter. It exists to lock down the
 // finish_reason/usage-chunk ordering: real OpenAI emits the usage-only chunk
 // AFTER the finish_reason chunk, and the converter must keep draining past
 // finish_reason to capture it.
@@ -55,7 +55,7 @@ func TestOpenAIToAnthropicStream_VModelUsage(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/messages", nil)
 
-	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, "virtual-gpt-4"), nil, stream, "virtual-gpt-4")
+	usage, err := writeAnthropicSSE(protocol.NewHandleContext(c, "virtual-gpt-4"), NewOpenAIChatToAnthropicBetaConverter(stream, "virtual-gpt-4", nil))
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 
@@ -132,7 +132,7 @@ func TestOpenAIToAnthropicStream_VModelFullUsage(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/messages", nil)
 
-			usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, modelID), nil, stream, modelID)
+			usage, err := writeAnthropicSSE(protocol.NewHandleContext(c, modelID), NewOpenAIChatToAnthropicBetaConverter(stream, modelID, nil))
 			require.NoError(t, err)
 			require.NotNil(t, usage)
 

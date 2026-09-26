@@ -126,11 +126,6 @@ func TestResponsesToAnthropicUsesCallIDForToolResultRoundTrip(t *testing.T) {
 	require.Len(t, beta.Content, 1)
 	assert.Equal(t, "tool_use", beta.Content[0].Type)
 	assert.Equal(t, "call_provider_1", beta.Content[0].ID)
-
-	v1 := HandleResponsesToAnthropicV1(resp, "public-model")
-	require.Len(t, v1.Content, 1)
-	assert.Equal(t, "tool_use", v1.Content[0].Type)
-	assert.Equal(t, "call_provider_1", v1.Content[0].ID)
 }
 
 // TestBuildResponsesPayloadFromAnthropicBeta_UsageDetails verifies that the

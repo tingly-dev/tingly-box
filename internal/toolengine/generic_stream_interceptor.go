@@ -457,13 +457,6 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 			if payload, err := i.extractEventPayload(event); err == nil {
 				i.roundMessageDelta = payload
 			}
-			rewritten, err := i.rewriteMessageDelta(event)
-			if err != nil {
-				return err
-			}
-			if rewritten != nil {
-				i.roundMessageDelta = rewritten
-			}
 			logrus.Debugf("[MCP-Interceptor] Round %d: forwarded message_delta stop_reason=%s", i.round, stopReason)
 		}
 		// Silently accumulate, interceptor controls end timing
@@ -528,9 +521,6 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 	}
 
 	// External tool: pass through to client
-	if handled, err := i.sendRewrittenClientEvent(event); handled || err != nil {
-		return err
-	}
 	payload, err := i.extractEventPayload(event)
 	if err != nil {
 		return err
@@ -548,9 +538,6 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 	}
 
 	// External tool delta: pass through
-	if handled, err := i.sendRewrittenClientEvent(event); handled || err != nil {
-		return err
-	}
 	payload, err := i.extractEventPayload(event)
 	if err != nil {
 		return err
@@ -568,9 +555,6 @@ func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
 	}
 
 	// External tool stop: pass through
-	if handled, err := i.sendRewrittenClientEvent(event); handled || err != nil {
-		return err
-	}
 	payload, err := i.extractEventPayload(event)
 	if err != nil {
 		return err
@@ -707,46 +691,6 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 
 func (i *GenericStreamInterceptor) extractModel(req any) string {
 	return extractModelFromRequest(req, i.provider)
-}
-
-// sendRewrittenClientEvent offers a client-bound tool event to
-// config.RewriteClientEvent. When handled, the replacement events (if any)
-// are sent instead and the caller must drop the original.
-func (i *GenericStreamInterceptor) sendRewrittenClientEvent(event any) (bool, error) {
-	if i.config.RewriteClientEvent == nil {
-		return false, nil
-	}
-	handled, out, err := i.config.RewriteClientEvent(streamEventPointer(event))
-	if err != nil || !handled {
-		return handled, err
-	}
-	for _, rewritten := range out {
-		payload, err := json.Marshal(rewritten.Payload)
-		if err != nil {
-			return true, err
-		}
-		if rewritten.EventType == "content_block_delta" {
-			i.recordTTFT()
-		}
-		if err := i.adapter.SendEvent(i.c, rewritten.EventType, payload); err != nil {
-			return true, err
-		}
-	}
-	return true, nil
-}
-
-// rewriteMessageDelta returns the rewritten payload for the round's terminal
-// message_delta (e.g. stop_reason tool_use -> end_turn after a blocked
-// tool_use), or nil when the original payload stands.
-func (i *GenericStreamInterceptor) rewriteMessageDelta(event any) ([]byte, error) {
-	if i.config.RewriteClientEvent == nil {
-		return nil, nil
-	}
-	handled, out, err := i.config.RewriteClientEvent(streamEventPointer(event))
-	if err != nil || !handled || len(out) == 0 {
-		return nil, err
-	}
-	return json.Marshal(out[len(out)-1].Payload)
 }
 
 // streamEventPointer returns Anthropic stream events by pointer. Stream

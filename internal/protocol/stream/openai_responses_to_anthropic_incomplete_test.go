@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,14 +15,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// TestHandleResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens guards
+// TestResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens guards
 // against the regression where the migrated responsesToAnthropicConverter
 // treated response.incomplete as a protocol error (discarding output + usage)
 // instead of a terminal success. It feeds a truncated Responses API stream
 // (max_output_tokens) through the real JSON decoder and asserts the converter
 // preserves the partial text, emits a clean message_delta/message_stop with
 // stop_reason=max_tokens, and reports upstream usage rather than an error.
-func TestHandleResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens(t *testing.T) {
+func TestResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -45,7 +46,7 @@ func TestHandleResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens(t *tes
 		newFakeResponsesDecoder(events), nil,
 	)
 
-	usage, err := HandleResponsesToAnthropicV1Stream(protocol.NewHandleContext(c, "proxy-model"), stream, "proxy-model")
+	usage, err := writeAnthropicSSE(protocol.NewHandleContext(c, "proxy-model"), NewOpenAIResponsesToAnthropicConverter(context.Background(), stream, "proxy-model"))
 	require.NoError(t, err, "response.incomplete must be a terminal success, not an error")
 	require.NotNil(t, usage)
 

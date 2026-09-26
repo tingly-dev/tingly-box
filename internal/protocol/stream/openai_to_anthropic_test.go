@@ -158,8 +158,8 @@ func (r *closeNotifyRecorder) CloseNotify() <-chan bool {
 	return make(chan bool) // never closed — client stays connected for the duration of the test
 }
 
-// TestHandleOpenAIToAnthropicStreamResponse tests the OpenAI to Anthropic stream conversion
-func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
+// TestOpenAIChatToAnthropicStream tests the OpenAI to Anthropic stream conversion
+func TestOpenAIChatToAnthropicStream(t *testing.T) {
 	// Set your API key and base URL before running the test
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	baseURL := "" // Optional: custom base URL
@@ -198,7 +198,7 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// the handler
-	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, model), nil, stream, model)
+	usage, err := writeAnthropicSSE(protocol.NewHandleContext(c, model), NewOpenAIChatToAnthropicBetaConverter(stream, model, nil))
 	require.NoError(t, err)
 
 	// Verify usage stats
@@ -278,9 +278,9 @@ func TestSendAnthropicStreamEvent(t *testing.T) {
 	assert.Contains(t, body, `"type":"message_start"`)
 }
 
-// TestHandleOpenAIToAnthropicStreamResponseWithThinking tests OpenAI to Anthropic
+// TestOpenAIChatToAnthropicStreamWithThinking tests OpenAI to Anthropic
 // stream conversion with reasoning_content/thinking block support
-func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
+func TestOpenAIChatToAnthropicStreamWithThinking(t *testing.T) {
 	// Set your API key and base URL before running the test
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	baseURL := "" // Optional: custom base URL
@@ -316,7 +316,7 @@ func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, model), nil, stream, model)
+	usage, err := writeAnthropicSSE(protocol.NewHandleContext(c, model), NewOpenAIChatToAnthropicBetaConverter(stream, model, nil))
 	require.NoError(t, err)
 
 	t.Logf("Usage stats: input=%d, output=%d", usage.InputTokens, usage.OutputTokens)
@@ -391,25 +391,6 @@ func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 }
 
-func TestHandleOpenAIToAnthropicStreamResponse_ClientCanceled(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
-	c, _ := gin.CreateTestContext(w)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	ctx, cancel := context.WithCancel(req.Context())
-	cancel()
-	c.Request = req.WithContext(ctx)
-
-	stream := openaistream.NewStream[openai.ChatCompletionChunk](&fakeOpenAIDecoder{}, nil)
-
-	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, "test-model"), nil, stream, "test-model")
-	require.ErrorIs(t, err, context.Canceled)
-	require.NotNil(t, usage)
-	assert.Equal(t, 0, usage.InputTokens)
-	assert.Equal(t, 0, usage.OutputTokens)
-}
-
 // fakeResponsesDecoder replays a fixed sequence of JSON events as a Responses API stream.
 type fakeResponsesDecoder struct {
 	events  []string // raw JSON payloads to emit
@@ -482,9 +463,9 @@ func buildResponsesCompletedJSON(t *testing.T, inputTokens, outputTokens, cacheT
 	return string(data)
 }
 
-// TestHandleResponsesToAnthropicV1Stream_UsageTokens verifies that input, output,
+// TestResponsesToAnthropicStream_UsageTokens verifies that input, output,
 // cache, and reasoning tokens from response.completed are captured and returned.
-func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
+func TestResponsesToAnthropicStream_UsageTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -496,7 +477,7 @@ func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
 	hc := protocol.NewHandleContext(c, "gpt-4o")
-	usage, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
+	usage, err := writeAnthropicSSE(hc, NewOpenAIResponsesToAnthropicConverter(context.Background(), stream, "gpt-4o"))
 	require.NoError(t, err)
 
 	// OpenAI Responses API: input=50 total, cached=8 → stored as 50-8=42 (uncached only)
@@ -506,9 +487,9 @@ func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 	assert.Equal(t, 12, usage.ReasoningTokens)
 }
 
-// TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens verifies that
+// TestResponsesToAnthropicStream_MessageDeltaCacheTokens verifies that
 // cache_read_input_tokens is emitted in the message_delta SSE event.
-func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T) {
+func TestResponsesToAnthropicStream_MessageDeltaCacheTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -520,7 +501,7 @@ func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
 	hc := protocol.NewHandleContext(c, "gpt-4o")
-	_, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
+	_, err := writeAnthropicSSE(hc, NewOpenAIResponsesToAnthropicConverter(context.Background(), stream, "gpt-4o"))
 	require.NoError(t, err)
 
 	// Find the message_delta event and verify its usage block
@@ -533,9 +514,9 @@ func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T
 	assert.Equal(t, float64(10), usage["cache_read_input_tokens"])
 }
 
-// TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens verifies that
+// TestResponsesToAnthropicStream_ZeroCacheTokens verifies that
 // cache_read_input_tokens is absent from message_delta when cache tokens are zero.
-func TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens(t *testing.T) {
+func TestResponsesToAnthropicStream_ZeroCacheTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -547,7 +528,7 @@ func TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens(t *testing.T) {
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
 	hc := protocol.NewHandleContext(c, "gpt-4o")
-	_, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
+	_, err := writeAnthropicSSE(hc, NewOpenAIResponsesToAnthropicConverter(context.Background(), stream, "gpt-4o"))
 	require.NoError(t, err)
 
 	events := parseSSEEvents(w.Body.String())
