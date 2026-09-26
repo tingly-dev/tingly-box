@@ -73,13 +73,17 @@ type toolRoundHarness struct {
 }
 
 func newToolRoundHarness(t *testing.T, echo *EchoServertoolProvider, target protocol.APIType, s Scenario) *toolRoundHarness {
+	return newGatedToolRoundHarness(t, echo, nil, target, s)
+}
+
+func newGatedToolRoundHarness(t *testing.T, echo *EchoServertoolProvider, gate toolround.Gate, target protocol.APIType, s Scenario) *toolRoundHarness {
 	t.Helper()
 	runtime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig { return &typ.MCPRuntimeConfig{} })
 	t.Cleanup(runtime.Close)
 	pipeline := servertool.NewPipeline()
 	pipeline.Register(echo)
 	pipeline.RegisterInto(runtime.VirtualRegistry())
-	owner := toolengine.NewAnthropicBetaOwner(runtime.VirtualRegistry(), toolengine.NewServerToolExecutor(runtimeExecutor{runtime, pipeline}), "provider-"+string(target))
+	owner := toolengine.NewAnthropicBetaOwner(runtime.VirtualRegistry(), toolengine.NewServerToolExecutor(runtimeExecutor{runtime, pipeline}), "provider-"+t.Name())
 
 	h := &toolRoundHarness{echo: echo}
 	h.terminal = &recordingEndpoint{Endpoint: &fixtureEndpoint{protocol: target, mock: s.MockResponses[targetFormat(target)]}}
@@ -92,7 +96,7 @@ func newToolRoundHarness(t *testing.T, echo *EchoServertoolProvider, target prot
 		provider, err = stage.Adapt(h.terminal, anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{}))
 	}
 	require.NoError(t, err)
-	h.endpoint, err = stage.Compose(provider, toolround.New(toolround.Config{Owner: owner}))
+	h.endpoint, err = stage.Compose(provider, toolround.New(toolround.Config{Owner: owner, Gate: gate}))
 	require.NoError(t, err)
 	return h
 }

@@ -80,7 +80,9 @@ func TestGuardrailsBlocksServerTool(t *testing.T) {
 					if n := len(echo.Calls()); n != 0 {
 						failures = append(failures, fmt.Sprintf("blocked server tool executed %d times", n))
 					}
-					if strings.Contains(raw, OwnedToolWireName) {
+					// The block message may name the refused command; only a
+					// tool_use block for the server tool is a leak.
+					if strings.Contains(raw, ownedToolUseMarker) {
 						failures = append(failures, "server tool call leaked to client")
 					}
 					if !strings.Contains(raw, "Blocked by guardrails") {
