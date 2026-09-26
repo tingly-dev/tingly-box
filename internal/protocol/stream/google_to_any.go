@@ -77,6 +77,9 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 		// Send initial chunk if not already sent
 		if !hasStarted {
+			// First SSE byte for this stream — open the failover gate so
+			// buffered output flushes and later writes pass straight through.
+			protocol.CommitFirstChunk(c)
 			chunk := map[string]interface{}{
 				"id":      chatID,
 				"object":  "chat.completion.chunk",

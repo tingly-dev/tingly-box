@@ -516,6 +516,10 @@ func (ph *ProtocolHandler) dispatchGoogle(
 			usage, err = stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, responseModel)
 		case protocol.TypeAnthropicBeta:
 			usage, err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, responseModel)
+		case protocol.TypeOpenAIChat:
+			err = stream.HandleGoogleToOpenAIStreamResponse(c, streamResp, responseModel)
+		default:
+			err = fmt.Errorf("google target does not support %s clients", reqCtx.SourceAPI)
 		}
 		if err != nil {
 			ph.trackUsageWithTokenUsage(c, usage, err)
@@ -574,6 +578,19 @@ func (ph *ProtocolHandler) dispatchGoogle(
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
 			nonstream.WriteAnthropicMessage(c, anthropicResp)
+		case protocol.TypeOpenAIChat:
+			chatResp := nonstream.HandleGoogleToOpenAI(resp, responseModel)
+			if recorder != nil {
+				recorder.SetAssembledResponse(chatResp)
+				recorder.RecordResponse(provider, reqCtx.RequestModel)
+			}
+			c.JSON(http.StatusOK, chatResp)
+		default:
+			err := fmt.Errorf("google target does not support %s clients", reqCtx.SourceAPI)
+			stream.SendInternalError(c, err.Error())
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
 		}
 	}
 }
