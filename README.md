@@ -120,7 +120,8 @@ https://nodejs.org/en/download
 
 </details>
 
-**From Docker (GitHub Host)**
+<details>
+<summary><strong>From Docker (GitHub Host)</strong></summary>
 
 ```bash
 mkdir tingly-data
@@ -131,7 +132,9 @@ docker run -d \
   ghcr.io/tingly-dev/tingly-box
 ```
 
-**From Docker Compose (recommended for isolated env), building your own image, or troubleshooting** — see the [Docker Guide](./docs/docker.md).
+</details>
+
+For Docker Compose (recommended for isolated env), building your own image, or troubleshooting — see the [Docker Guide](./docs/docker.md).
 
 ### Integration Guide
 
