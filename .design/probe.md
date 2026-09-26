@@ -104,13 +104,13 @@ Two Claude Code OAuth specifics ride on this path, because a through-TB probe
 hands the SDK a loopback provider and TB a synthetic rule, so neither side can
 tell on its own that the request will land on an OAuth credential:
 
-- `ResolveRuleFlagsWithScenario` defaults the synthetic rule's
-  `claude_code_version` to `typ.ClaudeCodeVersionLatest` when the pinned
-  provider is Claude Code OAuth (the legacy emulation can no longer pass
-  upstream, so probing with it would report a credential failure that isn't
-  one). Matched rules keep the flag's off-by-default rollout; a scenario value
-  or an explicit `X-Tingly-Probe-Flags` (`""` = legacy) still wins, and the
-  value is visible in `X-Tingly-Applied-Flags`.
+- `ResolveRuleFlagsWithScenario` resolves an unset `claude_code_version` to
+  `typ.ClaudeCodeVersionLatest` on Claude Code OAuth providers — for the
+  synthetic rule exactly as for matched rules (the legacy emulation can no
+  longer pass upstream, so probing with it would report a credential failure
+  that isn't one). A scenario value or an explicit `X-Tingly-Probe-Flags`
+  (`"2.1.86"` = legacy) still wins, and the resolved value is visible in
+  `X-Tingly-Applied-Flags`.
 - `E2EProber.targetIsClaudeCode` sets `probeParams.ClaudeCodePreamble` from the
   real target (pinned provider, or any service provider of a rule target) so
   the Anthropic builders prepend the Claude Code system preamble exactly as the

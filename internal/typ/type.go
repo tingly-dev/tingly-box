@@ -289,21 +289,35 @@ type RuleFlags struct {
 	Recording string `json:"recording,omitempty" yaml:"recording,omitempty"`
 
 	// ClaudeCodeVersion selects the Claude Code release the Claude OAuth chain
-	// impersonates. Empty keeps the legacy 2.1.86 emulation unchanged. See
-	// .design/claude-code.md Part B.
+	// impersonates. Empty follows the default (ClaudeCodeVersionLatest);
+	// "2.1.86" keeps the legacy emulation. See .design/claude-code.md Part B.
 	ClaudeCodeVersion string `json:"claude_code_version,omitempty" yaml:"claude_code_version,omitempty"`
 }
 
 // Values of the claude_code_version flag.
 const (
-	ClaudeCodeVersionLegacy  = ""        // 2.1.86 emulation (default)
+	ClaudeCodeVersionDefault = ""        // follows ClaudeCodeVersionLatest
+	ClaudeCodeVersionLegacy  = "2.1.86"  // legacy emulation
 	ClaudeCodeVersion2_1_280 = "2.1.280" // native client profile
-	// ClaudeCodeVersionLatest is the profile Anthropic currently accepts.
+	// ClaudeCodeVersionLatest is the profile Anthropic currently accepts and
+	// the one ClaudeCodeVersionDefault resolves to.
 	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_280
 )
 
-// ClaudeCodeVersionEnabled reports whether v selects a native profile.
-// Unknown values fall back to legacy.
+// ResolveClaudeCodeVersion maps a configured claude_code_version to the
+// concrete version to impersonate. Empty and unknown values follow the
+// default (latest); only an explicit "2.1.86" selects the legacy emulation.
+func ResolveClaudeCodeVersion(v string) string {
+	switch v {
+	case ClaudeCodeVersionLegacy, ClaudeCodeVersion2_1_280:
+		return v
+	default:
+		return ClaudeCodeVersionLatest
+	}
+}
+
+// ClaudeCodeVersionEnabled reports whether a resolved version selects a
+// native profile (anything but legacy or unset).
 func ClaudeCodeVersionEnabled(v string) bool {
 	return v == ClaudeCodeVersion2_1_280
 }

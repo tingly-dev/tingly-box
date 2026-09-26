@@ -649,12 +649,11 @@ func TestResolveRuleFlagsWithScenario_ExtraHeaders(t *testing.T) {
 	}
 }
 
-// Provider-level probes run under a synthetic rule with no flags. For a
-// Claude OAuth provider that means the legacy emulation, which Anthropic no
-// longer accepts, so the probe defaults to the latest native profile — and
-// only there: matched rules keep the flag's off-by-default rollout, other
-// providers are untouched, and an explicit overlay still wins.
-func TestResolveRuleFlagsWithScenario_ProbeDefaultsClaudeCodeVersionForOAuth(t *testing.T) {
+// claude_code_version resolves to a concrete version on Claude OAuth:
+// empty (unset) follows the default, i.e. the latest native profile, for
+// matched rules, the synthetic probe rule and a nil rule alike; an explicit
+// "2.1.86" keeps the legacy emulation; other providers are untouched.
+func TestResolveRuleFlagsWithScenario_ClaudeCodeVersionDefaultsToLatest(t *testing.T) {
 	oauthProvider := &typ.Provider{
 		AuthType:    typ.AuthTypeOAuth,
 		OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode},
@@ -666,37 +665,43 @@ func TestResolveRuleFlagsWithScenario_ProbeDefaultsClaudeCodeVersionForOAuth(t *
 			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, p)
 	}
 
-	if got := resolve(newGinContext(t), synthetic(), oauthProvider).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLatest {
-		t.Errorf("synthetic probe rule + Claude OAuth provider: ClaudeCodeVersion = %q, want %q", got, typ.ClaudeCodeVersionLatest)
+	for name, rule := range map[string]*typ.Rule{
+		"synthetic probe rule": synthetic(),
+		"matched rule":         {UUID: "real-rule"},
+		"nil rule":             nil,
+	} {
+		if got := resolve(newGinContext(t), rule, oauthProvider).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLatest {
+			t.Errorf("%s + Claude OAuth provider, flag unset: ClaudeCodeVersion = %q, want %q", name, got, typ.ClaudeCodeVersionLatest)
+		}
 	}
 	if got := resolve(newGinContext(t), synthetic(), apiKeyProvider).ClaudeCodeVersion; got != "" {
-		t.Errorf("synthetic probe rule + API-key provider must not get a profile, got %q", got)
+		t.Errorf("API-key provider must not get a profile, got %q", got)
 	}
-	if got := resolve(newGinContext(t), &typ.Rule{UUID: "real-rule"}, oauthProvider).ClaudeCodeVersion; got != "" {
-		t.Errorf("a matched rule without the flag must stay legacy (rollout default), got %q", got)
-	}
-	if got := resolve(newGinContext(t), nil, oauthProvider).ClaudeCodeVersion; got != "" {
-		t.Errorf("nil rule must stay legacy, got %q", got)
+
+	// An explicit legacy value on the rule keeps the 2.1.86 emulation.
+	legacyRule := &typ.Rule{UUID: "legacy-rule", Flags: typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersionLegacy}}
+	if got := resolve(newGinContext(t), legacyRule, oauthProvider).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLegacy {
+		t.Errorf("explicit legacy rule: got %q, want %q", got, typ.ClaudeCodeVersionLegacy)
 	}
 
 	// A matched rule without the flag inherits the scenario value.
 	c := newGinContext(t)
 	got := ResolveRuleFlagsWithScenario(c, &typ.Rule{UUID: "real-rule"}, typ.ScenarioClaudeCode,
-		&typ.ScenarioConfig{Flags: typ.ScenarioFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280}},
+		&typ.ScenarioConfig{Flags: typ.ScenarioFlags{ClaudeCodeVersion: typ.ClaudeCodeVersionLegacy}},
 		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
-	if got.ClaudeCodeVersion != typ.ClaudeCodeVersion2_1_280 {
+	if got.ClaudeCodeVersion != typ.ClaudeCodeVersionLegacy {
 		t.Errorf("scenario flag must be inherited, got %q", got.ClaudeCodeVersion)
 	}
 
-	// An explicit overlay "" forces the legacy emulation for a diagnostic run.
+	// An explicit overlay "2.1.86" forces the legacy emulation for a diagnostic run.
 	c = newGinContext(t)
-	encoded, err := typ.EncodeFlagOverlay(typ.FlagOverlay{"claude_code_version": []byte(`""`)})
+	encoded, err := typ.EncodeFlagOverlay(typ.FlagOverlay{"claude_code_version": []byte(`"2.1.86"`)})
 	if err != nil {
 		t.Fatalf("EncodeFlagOverlay: %v", err)
 	}
 	c.Request.Header.Set(typ.ProbeFlagsHeader, encoded)
-	if got := resolve(c, synthetic(), oauthProvider).ClaudeCodeVersion; got != "" {
-		t.Errorf("overlay \"\" must force legacy, got %q", got)
+	if got := resolve(c, synthetic(), oauthProvider).ClaudeCodeVersion; got != typ.ClaudeCodeVersionLegacy {
+		t.Errorf("overlay \"2.1.86\" must force legacy, got %q", got)
 	}
 	// The resolved value reaches the context (NewClaudeClient reads it there).
 	c = newGinContext(t)

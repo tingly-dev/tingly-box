@@ -190,14 +190,6 @@ func ResolveRuleFlagsWithScenario(
 		flags.Recording = ""
 	}
 
-	// Provider-level probes run under a flagless synthetic rule; a Claude
-	// OAuth credential only passes as the latest native client, so default
-	// it there. Matched rules keep the off-by-default rollout; the overlay
-	// below can still force legacy with "".
-	if rule != nil && rule.UUID == ProbeSyntheticRuleUUID && flags.ClaudeCodeVersion == "" && provider.IsClaudeCodeProvider() {
-		flags.ClaudeCodeVersion = typ.ClaudeCodeVersionLatest
-	}
-
 	// Probe overlay (X-Tingly-Probe-Flags, Bench page): a per-request flag set
 	// applied after scenario inheritance so it can override any configured
 	// value — including turning a scenario-default flag off — but before the
@@ -217,11 +209,18 @@ func ResolveRuleFlagsWithScenario(
 		flags.CleanHeader = false
 	}
 
-	// The native Claude Code identity needs the Claude OAuth client (it
-	// patches cch on the wire); on any other provider it would send an
-	// unpatched placeholder, so the profile only applies to Claude OAuth.
-	if flags.ClaudeCodeVersion != "" && provider != nil && !provider.IsClaudeCodeProvider() {
-		flags.ClaudeCodeVersion = ""
+	// claude_code_version only applies to Claude OAuth: there the configured
+	// value (empty = default) resolves to the concrete version, so downstream
+	// consumers only ever see "2.1.86" or a native version. The native
+	// identity needs the Claude OAuth client (it patches cch on the wire); on
+	// any other provider it would send an unpatched placeholder, so the flag
+	// is cleared there.
+	if provider != nil {
+		if provider.IsClaudeCodeProvider() {
+			flags.ClaudeCodeVersion = typ.ResolveClaudeCodeVersion(flags.ClaudeCodeVersion)
+		} else {
+			flags.ClaudeCodeVersion = ""
+		}
 	}
 
 	// Attach the whole resolved flag set once, at the single merge point, so
