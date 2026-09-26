@@ -1840,6 +1840,7 @@ export default {
     "referenceHint": "Up to {{max}} images · PNG, JPEG, or WebP · sent via images/edits",
     "removeReferenceImage": "Remove reference image {{number}}",
     "useAsReference": "Use as reference",
+    "preview": "Preview",
     "referenceLoadFailed": "Could not use this image as a reference",
     "referenceCapReached": "Only {{max}} reference images fit — {{ignored}} were left out",
     "referenceEvicted": "Added as a reference — the oldest one made room (max {{max}})",

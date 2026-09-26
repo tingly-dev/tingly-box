@@ -1836,6 +1836,7 @@ export default {
     "referenceHint": "最多 {{max}} 张 · 支持 PNG、JPEG 或 WebP · 经 images/edits 发送",
     "removeReferenceImage": "移除第 {{number}} 张参考图像",
     "useAsReference": "用作参考图",
+    "preview": "预览",
     "referenceLoadFailed": "无法将该图像用作参考图",
     "referenceCapReached": "参考图最多 {{max}} 张——有 {{ignored}} 张没有加入",
     "referenceEvicted": "已加为参考图——最旧的那张被挤出（上限 {{max}} 张）",

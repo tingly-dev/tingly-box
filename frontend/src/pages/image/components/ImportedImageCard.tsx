@@ -33,7 +33,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
             variant="outlined"
             sx={{
                 flex: { xs: '0 0 min(82vw, 320px)', md: stripCardBasis(null) },
-                height: STRIP_CARD_HEIGHT,
+                height: { xs: STRIP_CARD_HEIGHT, lg: 'auto' },
                 bgcolor: 'background.paper',
                 scrollSnapAlign: 'start',
             }}
@@ -56,7 +56,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 .join(' · ')}
                         </Typography>
                     </Box>
-                    <Box sx={{ position: 'relative', flex: 1, minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                    <Box sx={{ position: 'relative', flex: { xs: 1, lg: 'none' }, aspectRatio: { lg: '1 / 1' }, minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
                         <ButtonBase
                             onClick={onOpen}
                             aria-label={t('playground.openImported', { defaultValue: 'Open {{name}}', name: item.name })}

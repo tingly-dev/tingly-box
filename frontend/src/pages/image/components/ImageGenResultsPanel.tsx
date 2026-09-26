@@ -5,7 +5,7 @@ import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
-import { STRIP_CARD_HEIGHT } from './imageGenSession';
+import { STRIP_CARD_HEIGHT, WRAP_GRID_COLUMNS, WRAP_GRID_GAP } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
 
 // One timeline for the results panel: images brought in to work on and
@@ -200,16 +200,20 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                         ref={historyTrackRef}
                         data-testid="imagegen-history-track"
                         sx={{
-                            display: 'flex',
-                            gap: 1.5,
+                            // A short strip (stacked layout) scrolls sideways.
+                            // The full-height workbench is a grid that scrolls
+                            // down instead: columns from the panel's width, so
+                            // a row is always full rather than one card and a
+                            // gap (see WRAP_GRID_COLUMNS).
+                            display: { xs: 'flex', lg: 'grid' },
+                            gridTemplateColumns: { lg: WRAP_GRID_COLUMNS },
+                            // Rows as tall as their cards; `auto` would squeeze
+                            // them to fit the panel (cards clip, so their
+                            // min-height is 0) instead of scrolling.
+                            gridAutoRows: { lg: 'max-content' },
+                            gap: { xs: 1.5, lg: `${WRAP_GRID_GAP}px` },
                             flex: 1,
                             minHeight: 0,
-                            // A short strip (stacked layout) scrolls sideways.
-                            // The full-height workbench wraps into rows instead:
-                            // cards stop growing at a set height, and the height
-                            // left over shows more of the session rather than
-                            // one screen-sized picture (see stripCardBasis).
-                            flexWrap: { xs: 'nowrap', lg: 'wrap' },
                             alignContent: 'flex-start',
                             overflowX: { xs: 'auto', lg: 'hidden' },
                             overflowY: { xs: 'hidden', lg: 'auto' },
@@ -232,14 +236,20 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                     defaultValue: 'View all {{count}} images in the overview',
                                     count: timeline.length,
                                 })}
+                                // In the sideways strip it is a narrow tile at
+                                // the start of the row. On the wrapping workbench
+                                // a full-height column would eat a card slot and
+                                // push the first card off its row, so there it is
+                                // a slim bar across the top instead.
                                 sx={{
-                                    flex: '0 0 84px',
-                                    height: STRIP_CARD_HEIGHT,
+                                    flex: { xs: '0 0 84px' },
+                                    gridColumn: { lg: '1 / -1' },
+                                    height: { xs: STRIP_CARD_HEIGHT, lg: 36 },
                                     display: 'flex',
-                                    flexDirection: 'column',
+                                    flexDirection: { xs: 'column', lg: 'row' },
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: 0.5,
+                                    gap: { xs: 0.5, lg: 1 },
                                     borderRadius: 1.5,
                                     border: '1px dashed',
                                     borderColor: 'divider',
@@ -253,7 +263,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                     +{olderTimelineCount}
                                 </Typography>
-                                <Typography variant="caption" sx={{ fontSize: 10, color: 'text.disabled' }}>
+                                <Typography variant="caption" sx={{ fontSize: { xs: 10, lg: 12 }, color: 'text.disabled' }}>
                                     {t('playground.gallery.action', { defaultValue: 'Overview' })}
                                 </Typography>
                             </ButtonBase>

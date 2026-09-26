@@ -12,6 +12,7 @@ import {
     stripCardBasis,
     STRIP_CARD_HEIGHT,
     runImage,
+    wrapCardSpanSx,
 } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
 
@@ -258,5 +259,17 @@ describe('stripCardBasis', () => {
 
     it('stops growing past the height cap, the same one the card height uses', () => {
         expect(STRIP_CARD_HEIGHT).toBe('min(100%, 396px)');
+    });
+});
+
+describe('wrapCardSpanSx', () => {
+    it('adds nothing for a single-column card', () => {
+        expect(wrapCardSpanSx(1)).toEqual({});
+    });
+    it('spans more columns only once the strip is wide enough for them', () => {
+        expect(wrapCardSpanSx(3)).toEqual({
+            '@container (min-width: 532px)': { gridColumn: 'span 2' },
+            '@container (min-width: 804px)': { gridColumn: 'span 3' },
+        });
     });
 });
