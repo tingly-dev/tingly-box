@@ -82,11 +82,7 @@ func (ph *ProtocolHandler) DispatchChainResult(
 	case protocol.TypeOpenAIChat:
 		ph.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeAnthropicV1:
-		if isStreaming {
-			ph.StreamAnthropicV1(c, reqCtx, rule, provider)
-		} else {
-			ph.NonstreamAnthropicV1(c, reqCtx, rule, provider)
-		}
+		ph.serveAnthropicV1Stage(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeAnthropicBeta:
 		ph.dispatchAnthropicBeta(c, reqCtx, rule, provider, isStreaming)
 	case protocol.TypeOpenAIResponses:

@@ -9,6 +9,7 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/toolround"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/upstream"
@@ -19,18 +20,38 @@ import (
 )
 
 // serveAnthropicBetaStage serves an Anthropic Beta client on an Anthropic
-// provider through the Protocol Stage pipeline (cutover C1): the Tool Round
-// Stage decides every tool call - Guardrails first, then MCP ownership - when
-// either is on for the request, and is left out otherwise, so a plain request
-// reaches the provider exactly as before.
+// provider through the Protocol Stage pipeline (cutover C1).
 func (ph *ProtocolHandler) serveAnthropicBetaStage(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool) {
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
+	ph.serveAnthropicStage(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicBeta, req, upstream.AnthropicWireBeta)
+}
 
+// serveAnthropicV1Stage serves an Anthropic V1 client on an Anthropic provider
+// through the Protocol Stage pipeline (cutover C1-V1). The V1 request is
+// upgraded to Beta at this edge (lossless, pinned by the V1/Beta equivalence
+// corpus) and reaches the provider over the V1 wire as before; the answer is
+// downgraded back to V1 by the adapter.
+func (ph *ProtocolHandler) serveAnthropicV1Stage(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool) {
+	v1 := reqCtx.Request.(*anthropic.MessageNewParams)
+	req, err := request.ConvertAnthropicV1ToBetaRequestWithError(v1)
+	if err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
+	}
+	ph.serveAnthropicStage(c, reqCtx, rule, provider, isStreaming, protocol.TypeAnthropicV1, req, upstream.AnthropicWireV1)
+}
+
+// serveAnthropicStage runs an Anthropic client's prepared Beta request
+// through the Stage pipeline: the Tool Round Stage decides every tool call -
+// Guardrails first, then MCP ownership - when either is on for the request,
+// and is left out otherwise, so a plain request reaches the provider and the
+// client exactly as before.
+func (ph *ProtocolHandler) serveAnthropicStage(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool, client protocol.APIType, req *anthropic.BetaMessageNewParams, wire upstream.AnthropicWire) {
 	terminal, err := upstream.NewAnthropic(upstream.Config{
 		Clients:  ph.deps.ClientPool,
 		Provider: provider,
 		Model:    reqCtx.RequestModel,
-	}, upstream.AnthropicWireBeta)
+	}, wire)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
@@ -53,7 +74,7 @@ func (ph *ProtocolHandler) serveAnthropicBetaStage(c *gin.Context, reqCtx *trans
 	}
 
 	ph.ServeStageAnthropic(c, endpoint, StageAnthropicAttempt{
-		Client:        protocol.TypeAnthropicBeta,
+		Client:        client,
 		Request:       req,
 		Rule:          rule,
 		Provider:      provider,
@@ -65,7 +86,7 @@ func (ph *ProtocolHandler) serveAnthropicBetaStage(c *gin.Context, reqCtx *trans
 
 // requestScreenedGate is the Guardrails gate for a request whose client-side
 // screening already ran before the transform chain
-// (ApplyGuardrailsToAnthropicV1BetaRequest in runAnthropicBetaAttempt), with
+// (ApplyGuardrailsToAnthropicV1[Beta]Request in runAnthropic*Attempt), with
 // the same credential mask state, so the gate does not screen it again.
 type requestScreenedGate struct {
 	*guardrailspipeline.ToolRoundGate

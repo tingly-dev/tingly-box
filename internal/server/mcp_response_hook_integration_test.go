@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
+	"github.com/tingly-dev/tingly-box/internal/recording/recordingtest"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -698,7 +699,9 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	reqCtx.RequestModel = "claude-worker-v1"
 	reqCtx.ResponseModel = "proxy-model"
 
-	w := httptest.NewRecorder()
+	// A streaming response needs a CloseNotify-capable writer, as a real
+	// connection provides.
+	w := recordingtest.NewStreamableRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{}`))
 	rule := &typ.Rule{}

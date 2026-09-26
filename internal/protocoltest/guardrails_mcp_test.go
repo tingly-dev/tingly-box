@@ -40,8 +40,6 @@ var _ = registerKnownGaps(KnownGap{
 	ID:     "G2",
 	Reason: "server-owned tool calls are executed without consulting guardrails",
 },
-	"TestGuardrailsBlocksServerTool/anthropic_v1->anthropic_beta/stream=false",
-	"TestGuardrailsBlocksServerTool/anthropic_v1->anthropic_beta/stream=true",
 	"TestGuardrailsBlocksServerTool/anthropic_v1->openai_chat/stream=false",
 	"TestGuardrailsBlocksServerTool/anthropic_v1->openai_chat/stream=true",
 	"TestGuardrailsBlocksServerTool/anthropic_beta->openai_chat/stream=false",
