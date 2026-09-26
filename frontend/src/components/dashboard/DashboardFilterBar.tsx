@@ -18,6 +18,8 @@ import { Refresh as RefreshIcon, FilterOff } from '@/components/icons';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import type { ProviderOptionGroup, UsageIdentity } from '@/hooks/useDashboardData';
 import { shortenUserId } from '@/hooks/useDashboardData';
+import { useTeamContext } from '@/contexts/TeamContext';
+import { groupSharingKeysByTeam } from './groupSharingKeysByTeam';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -25,6 +27,20 @@ const identityLabel = (t: (key: string, options?: Record<string, unknown>) => st
     identity.type === 'owner'
         ? t('dashboard.overview.mainAccount', { defaultValue: 'Main account' })
         : identity.label;
+
+// Shared by the provider and sharing-key pickers so both group the same way.
+const GROUP_SUBHEADER_SX = {
+    fontWeight: 600,
+    fontSize: '0.7rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    lineHeight: '28px',
+    pt: 1,
+    pl: 1.5,
+    borderLeft: '3px solid',
+    borderLeftColor: 'primary.main',
+    backgroundColor: 'action.hover',
+} as const;
 
 /**
  * Header action bar of the usage dashboard: provider / model / identity
@@ -68,6 +84,11 @@ export default function DashboardFilterBar({
     onRefresh: () => void;
 }) {
     const { t } = useTranslation();
+    const { teams } = useTeamContext();
+    const sharingKeyGroups = groupSharingKeysByTeam(
+        usageIdentities.filter((identity) => identity.type === 'sharing_key'),
+        teams,
+    );
 
     return (
         <>
@@ -86,18 +107,7 @@ export default function DashboardFilterBar({
                     {providerGroups.map((group) => [
                         <ListSubheader
                             key={`header-${group.authType}`}
-                            sx={{
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                lineHeight: '28px',
-                                pt: 1,
-                                pl: 1.5,
-                                borderLeft: '3px solid',
-                                borderLeftColor: 'primary.main',
-                                backgroundColor: 'action.hover',
-                            }}
+                            sx={GROUP_SUBHEADER_SX}
                         >
                             {group.label}
                         </ListSubheader>,
@@ -148,29 +158,33 @@ export default function DashboardFilterBar({
                             {identity.label}
                         </MenuItem>
                     ))}
-                    {usageIdentities.some((identity) => identity.type === 'sharing_key') && (
-                        <ListSubheader>{t('dashboard.overview.sharingKeys', { defaultValue: 'Sharing Keys' })}</ListSubheader>
-                    )}
-                    {usageIdentities.filter((identity) => identity.type === 'sharing_key').map((identity) => (
-                        <MenuItem key={identity.userId} value={identity.userId}>
-                            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
-                                <Typography variant="body2" noWrap>
-                                    {identityLabel(t, identity)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
-                                </Typography>
-                                <Tooltip title={identity.userId} placement="right">
-                                    <Typography
-                                        variant="caption"
-                                        sx={{
-                                            color: "text.secondary",
-                                            fontFamily: 'monospace',
-                                            flexShrink: 0
-                                        }}>
-                                        {shortenUserId(identity.userId)}
+                    {sharingKeyGroups.map((group) => [
+                        <ListSubheader key={`keys-${group.team?.id ?? 'other'}`} sx={GROUP_SUBHEADER_SX}>
+                            {group.team
+                                ? t('dashboard.overview.sharingKeysForTeam', { team: group.team.name })
+                                : t('dashboard.overview.sharingKeys', { defaultValue: 'Sharing Keys' })}
+                        </ListSubheader>,
+                        ...group.identities.map((identity) => (
+                            <MenuItem key={identity.userId} value={identity.userId}>
+                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
+                                    <Typography variant="body2" noWrap>
+                                        {identityLabel(t, identity)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
                                     </Typography>
-                                </Tooltip>
-                            </Box>
-                        </MenuItem>
-                    ))}
+                                    <Tooltip title={identity.userId} placement="right">
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontFamily: 'monospace',
+                                                flexShrink: 0
+                                            }}>
+                                            {shortenUserId(identity.userId)}
+                                        </Typography>
+                                    </Tooltip>
+                                </Box>
+                            </MenuItem>
+                        )),
+                    ])}
                 </Select>
             </FormControl>
 

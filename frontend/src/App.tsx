@@ -41,6 +41,7 @@ const ClaudeCodeProfilePage = lazy(() => import('./pages/scenario/ClaudeCodeProf
 const UseClaudeDesktopPage = lazy(() => import('./pages/scenario/UseClaudeDesktopPage'));
 const UseCustomPage = lazy(() => import('./pages/scenario/UseCustomPage'));
 const UseTeamPage = lazy(() => import('./pages/scenario/UseTeamPage'));
+const TeamKeysPage = lazy(() => import('./pages/scenario/TeamKeysPage'));
 const AgentOverviewPage = lazy(() => import('./pages/scenario/AgentOverviewPage'));
 const UseOpenCodePage = lazy(() => import('./pages/scenario/UseOpenCodePage'));
 const UsePiPage = lazy(() => import('./pages/scenario/UsePiPage'));
@@ -250,6 +251,7 @@ function AppContent() {
                         bookmarked path working. */}
                     <Route path="/agent/agent" element={<Navigate to="/agent/custom" replace />} />
                     <Route path="/agent/team" element={<UseTeamPage />} />
+                    <Route path="/agent/team/keys" element={<TeamKeysPage />} />
                     <Route path="/agent/team/:teamSlug" element={<UseTeamPage />} />
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
                     <Route path="/agent/pi" element={<UsePiPage />} />
@@ -273,8 +275,8 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
-                    {/* Sharing Keys are managed per Team (.design/team.md §9). */}
-                    <Route path="/tingly-box-token" element={<Navigate to="/agent/team" replace />} />
+                    {/* The old Credentials > Sharing page; keys now live under Team (.design/team.md §9). */}
+                    <Route path="/tingly-box-token" element={<Navigate to="/agent/team/keys" replace />} />
                     <Route path="/system/develop" element={<DevelopPage />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     <Route path="/system/experimental" element={<ExperimentalPage />} />

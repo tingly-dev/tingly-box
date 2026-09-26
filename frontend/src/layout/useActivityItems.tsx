@@ -115,6 +115,15 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <IconUsers sx={{fontSize: 20}} />,
             })),
             {path: '#add-team', label: t('layout.addTeam'), icon: <IconPlus sx={{fontSize: 20}} />},
+            // Overview of every Team's keys, grouped by Team — last, after the
+            // Team list, since it spans all of them.
+            {type: 'divider'},
+            {
+                path: '/agent/team/keys',
+                label: t('layout.teamAllKeys', {defaultValue: 'All Keys'}),
+                icon: <IconKey sx={{fontSize: 20}} />,
+                tooltip: t('layout.teamAllKeysTooltip'),
+            },
         ];
 
         type HideableScenario = { id: string; nav: NavItem };

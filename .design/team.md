@@ -158,9 +158,17 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 - 提示必须展示真实允许端点 `/tingly/team`、`/tingly/team/v1`，并明确排除其他 Team、
   scenario 与管理 API。
 - 不提供“允许其他端点”开关；需要更高权限时应选择另一种凭证，而不是扩大 Team Key。
-- Sharing Key 只在 Team 下管理（Team 页的 Sharing Keys 弹窗），不在 Credentials 下另设
-  独立入口：没有 Team 语义的全局列表会重新制造“通用分发令牌”的权限错觉，创建时也会把 Key
-  悄悄归入 `default` Team。旧的 `/tingly-box-token` 路由重定向到 `/agent/team`。
+- Sharing Key 只在 Team 下管理，不在 Credentials 下另设独立入口：没有 Team 语义的全局列表
+  会重新制造“通用分发令牌”的权限错觉，创建时也会把 Key 悄悄归入 `default` Team。
+  - 单个 Team：Team 页的 Sharing Keys 弹窗。
+  - 全部 Team：Team 侧栏末尾（所有 Team 与 `Add Team` 之后）的 `All Keys`
+    （`/agent/team/keys`）。按 Team 分组，每组的创建按钮只会创建到该 Team，跨 Team 只能
+    通过移动。旧的 `/tingly-box-token` 路由重定向到这里。
+  - 两处共用 `useSharingKeyActions`（创建/移动/启停/删除弹窗与提示）、`SharingKeysTable`
+    （固定列宽，多组表格列对齐）和 `CreateSharingKeyButton`（停用 Team 禁用并说明原因）。
+    新建 Key 后立即显示明文，方便直接复制。
+  - 其他选择 Sharing Key 的地方同样按 Team 分组，例如 Dashboard 的 Identity 筛选
+    （`groupSharingKeysByTeam`）。
 
 这对应 `.design/ux-principles.md` 的命名统一、展示具体值、合理默认、内嵌教育和降低视觉噪声。
 
