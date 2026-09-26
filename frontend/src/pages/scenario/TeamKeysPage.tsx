@@ -56,7 +56,7 @@ const TeamKeysPage = () => {
         <PageLayout loading={teamsLoading || keysLoading}>
             <Stack spacing={2.5}>
                 <PageHeader
-                    title={t('sharingKeys.allTitle')}
+                    title={t('sharingKeys.teamKeysTitle')}
                     subtitle={t('sharingKeys.allSubtitle', { keys: keys.length, teams: teams.length })}
                 />
 

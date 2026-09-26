@@ -161,7 +161,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 - Sharing Key 只在 Team 下管理，不在 Credentials 下另设独立入口：没有 Team 语义的全局列表
   会重新制造“通用分发令牌”的权限错觉，创建时也会把 Key 悄悄归入 `default` Team。
   - 单个 Team：Team 页的 Sharing Keys 弹窗。
-  - 全部 Team：Team 侧栏末尾（所有 Team 与 `Add Team` 之后）的 `All Keys`
+  - 全部 Team：Team 侧栏末尾（所有 Team 与 `Add Team` 之后）的 `Team Keys`
     （`/agent/team/keys`）。按 Team 分组，每组的创建按钮只会创建到该 Team，跨 Team 只能
     通过移动。旧的 `/tingly-box-token` 路由重定向到这里。
   - 两处共用 `useSharingKeyActions`（创建/移动/启停/删除弹窗与提示）、`SharingKeysTable`

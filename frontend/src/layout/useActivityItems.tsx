@@ -120,9 +120,9 @@ export function useActivityItems(): ActivityItem[] {
             {type: 'divider'},
             {
                 path: '/agent/team/keys',
-                label: t('layout.teamAllKeys', {defaultValue: 'All Keys'}),
+                label: t('layout.teamKeys', {defaultValue: 'Team Keys'}),
                 icon: <IconKey sx={{fontSize: 20}} />,
-                tooltip: t('layout.teamAllKeysTooltip'),
+                tooltip: t('layout.teamKeysTooltip'),
             },
         ];
 
