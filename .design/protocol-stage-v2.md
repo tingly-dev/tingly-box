@@ -181,12 +181,12 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | # | 分支 | 内容 | 生产行为 |
 |---|---|---|---|
 | 0 | `claude/lucid-heisenberg-ppa3kj` | 本文档 | 无 |
-| F | `claude/lucid-heisenberg-ppa3kj-g1`（**PR #1843**） | G1 热修复：toolengine 流式路径执行 block 改写；非流式 block / alias 还原写回 RawJSON | 修安全缺口 |
-| F2 | `claude/lucid-heisenberg-ppa3kj-mcp-init`（**PR #1844**，基于 main） | 独立热修复：全新配置首次启动时 MCP runtime 为 nil；附回归测试 | 修首启 MCP |
-| H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，基于 F + merge F2） | 假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 无 |
-| F3 | `claude/lucid-heisenberg-ppa3kj-model-leak`（**PR #1845**，基于 main） | 独立热修复：客户端响应报告上游 model id（Anthropic 非流式、拦截器流式、Responses 入口从不设 `ResponseModel`） | 修信息泄漏 |
-| F4 | `claude/lucid-heisenberg-ppa3kj-chat-mcp-stream`（**PR #1846**，基于 main） | 独立热修复：M2 | 修 Chat MCP 流式 |
-| F5 | `claude/lucid-heisenberg-ppa3kj-chat-google`（**PR #1847**，基于 main） | 独立热修复：Chat → Google 目标返回空 200；接上现有 converter，未处理的源显式报错 | 修 Chat→Google |
+| F | `claude/lucid-heisenberg-ppa3kj-g1`（**已合入 #1843**） | G1 热修复：toolengine 流式路径执行 block 改写；非流式 block / alias 还原写回 RawJSON | 修安全缺口 |
+| F2 | `claude/lucid-heisenberg-ppa3kj-mcp-init`（**已合入 #1844**，基于 main） | 独立热修复：全新配置首次启动时 MCP runtime 为 nil；附回归测试 | 修首启 MCP |
+| H1 | `claude/lucid-heisenberg-ppa3kj-h1`（**已推送**，热修复合入后 rebase 到 main；只含 harness 提交） | 假上游按请求内容回复；`WithServertoolProviders` + echo 工具；`knownGaps` 登记；MCP 12 对 × 流/非流；Guardrails（Anthropic 源 × 3 目标）及与 MCP 的组合。登记 G2 G8 M1 M2 M3 | 无 |
+| F3 | `claude/lucid-heisenberg-ppa3kj-model-leak`（**已合入 #1845**，基于 main） | 独立热修复：客户端响应报告上游 model id（Anthropic 非流式、拦截器流式、Responses 入口从不设 `ResponseModel`） | 修信息泄漏 |
+| F4 | `claude/lucid-heisenberg-ppa3kj-chat-mcp-stream`（**已合入 #1846**，基于 main） | 独立热修复：M2 | 修 Chat MCP 流式 |
+| F5 | `claude/lucid-heisenberg-ppa3kj-chat-google`（**已合入 #1847**，基于 main） | 独立热修复：Chat → Google 目标返回空 200；接上现有 converter，未处理的源显式报错 | 修 Chat→Google |
 | H2 | 并入 `-h1`（**已推送**） | 每个协议对 × 12 场景 × 流/非流的 golden wire 快照（上游请求 + 客户端响应，`-update`）；全矩阵与 idempotent 的 `go test` 入口；V1 ⇄ Beta 请求 wire 逐字节等价（§4 前提成立）；MCP 工具报错 / 轮数上限 / mixed 续接。登记 M4 M5，删除 M2 | 无 |
 | P1 | `claude/lucid-heisenberg-ppa3kj-p1`（**已推送**，叠在 h1 上） | `internal/protocol/stage` 契约 + 单测：Endpoint / Stage / Compose / Bridge / 精确配对 Registry / BuildTopology；链内拒绝 `anthropic_v1`（只在边缘处理）；去掉隐式 identity 回退与反射 nil 检查 | 无 |
 | P2 | `stage/2-bridges` | Bridge（包装现有 converter）+ Provider Endpoint + in-memory bridge 矩阵（搬 `bridge_matrix.go`） | 无 |
