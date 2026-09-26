@@ -30,6 +30,7 @@ type responsesStreamIterator struct {
 	ctx     context.Context
 	current responses.ResponseStreamEventUnion
 	err     error
+	held    bool // current was read by prime and not yet handed out
 
 	closeOnce sync.Once
 	closeErr  error
@@ -37,6 +38,10 @@ type responsesStreamIterator struct {
 
 func (s *responsesStreamIterator) setContext(ctx context.Context) { s.ctx = ctx }
 func (s *responsesStreamIterator) Next() bool {
+	if s.held {
+		s.held = false
+		return true
+	}
 	if s.err != nil {
 		return false
 	}
@@ -66,6 +71,18 @@ func (s *responsesStreamIterator) Next() bool {
 	}
 	return true
 }
+
+// prime reads the first upstream event ahead of the converter, which emits
+// message_start before reading, so a failure to open the stream (a 429, say)
+// reaches the caller before anything is sent to the client.
+func (s *responsesStreamIterator) prime() error {
+	if s.Next() {
+		s.held = true
+		return nil
+	}
+	return s.err
+}
+
 func (s *responsesStreamIterator) Current() responses.ResponseStreamEventUnion { return s.current }
 func (s *responsesStreamIterator) Err() error                                  { return s.err }
 func (s *responsesStreamIterator) Close() error {
@@ -77,6 +94,7 @@ type anthropicResponsesStream struct {
 	iterator  *responsesStreamIterator
 	converter protocolstream.StreamConverter
 	model     string
+	primed    bool
 }
 
 func (s *anthropicResponsesStream) Next(ctx context.Context) (stage.Event, error) {
@@ -84,6 +102,12 @@ func (s *anthropicResponsesStream) Next(ctx context.Context) (stage.Event, error
 		return stage.Event{}, err
 	}
 	s.iterator.setContext(ctx)
+	if !s.primed {
+		s.primed = true
+		if err := s.iterator.prime(); err != nil {
+			return stage.Event{}, err
+		}
+	}
 	value, done, err := s.converter.Next()
 	if err != nil {
 		return stage.Event{}, err

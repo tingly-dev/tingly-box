@@ -18,12 +18,8 @@ var _ = registerKnownGaps(KnownGap{
 	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=true",
 ) && registerKnownGaps(KnownGap{
 	ID:     "M3",
-	Reason: "OpenAI Responses target: server tools are not offered to the model at all",
+	Reason: "OpenAI client on an OpenAI Responses target: server tools are not offered to the model at all",
 },
-	"TestMCPOwnedToolLoop/anthropic_v1->openai_responses/stream=false",
-	"TestMCPOwnedToolLoop/anthropic_v1->openai_responses/stream=true",
-	"TestMCPOwnedToolLoop/anthropic_beta->openai_responses/stream=false",
-	"TestMCPOwnedToolLoop/anthropic_beta->openai_responses/stream=true",
 	"TestMCPOwnedToolLoop/openai_chat->openai_responses/stream=false",
 	"TestMCPOwnedToolLoop/openai_chat->openai_responses/stream=true",
 	"TestMCPOwnedToolLoop/openai_responses->openai_responses/stream=false",

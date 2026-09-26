@@ -74,8 +74,14 @@ func (e *targetTransformEndpoint) prepare(call stage.Call) (stage.Call, error) {
 	if tctx.Extra == nil {
 		tctx.Extra = map[string]interface{}{}
 	}
-	if e.stage.target == protocol.TypeOpenAIChat && call.State.OpenAIChat != nil {
-		tctx.Config.OpenAIConfig = call.State.OpenAIChat
+	switch e.stage.target {
+	case protocol.TypeOpenAIChat:
+		if call.State.OpenAIChat != nil {
+			tctx.Config.OpenAIConfig = call.State.OpenAIChat
+		}
+	case protocol.TypeOpenAIResponses:
+		// As BaseTransform sets for an Anthropic request converted to Responses.
+		tctx.Config.ResponsesConfig = &protocol.OpenAIConfig{HasThinking: false, ReasoningEffort: "none"}
 	}
 	final, err := transform.NewTransformChain(e.stage.transforms).Execute(&tctx)
 	if err != nil {

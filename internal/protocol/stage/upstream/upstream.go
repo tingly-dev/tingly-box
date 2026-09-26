@@ -35,6 +35,9 @@ type Config struct {
 	// Model is the provider-bound model used to resolve the client. It is also
 	// the fallback Response.Model when the provider reports none.
 	Model string
+	// StreamOnly marks a provider that only streams (Codex): a complete call
+	// is sent as a stream and answered with the stream's final response.
+	StreamOnly bool
 }
 
 func (c Config) validate() error {

@@ -2,7 +2,9 @@ package upstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"sync"
 
@@ -102,6 +104,9 @@ type openAIResponsesEndpoint struct{ config Config }
 func (*openAIResponsesEndpoint) Protocol() protocol.APIType { return protocol.TypeOpenAIResponses }
 
 func (e *openAIResponsesEndpoint) Complete(ctx context.Context, call stage.Call) (*stage.Response, error) {
+	if e.config.StreamOnly {
+		return e.completeFromStream(ctx, call)
+	}
 	req, err := openAIResponsesRequest(call.Request)
 	if err != nil {
 		return nil, err
@@ -211,4 +216,54 @@ func (s *openAIStream[T]) Close() error {
 
 func (s *openAIStream[T]) Result() stage.StreamResult {
 	return stage.StreamResult{Usage: s.usage, Model: s.model}
+}
+
+// completeFromStream answers a complete call from a stream-only provider with
+// the response its stream ends with. Some stream-only backends (ChatGPT's
+// Codex) end with a response whose output is empty and deliver the items only
+// as response.output_item.done events, so those items fill an empty output. A
+// stream that yields no output at all is an error, never an empty answer
+// (#1316), so failover can retry it.
+func (e *openAIResponsesEndpoint) completeFromStream(ctx context.Context, call stage.Call) (*stage.Response, error) {
+	events, err := e.Stream(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	defer events.Close()
+	var final *responses.Response
+	var items []responses.ResponseOutputItemUnion
+	for {
+		event, err := events.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		union, ok := event.Value.(responses.ResponseStreamEventUnion)
+		if !ok {
+			continue
+		}
+		switch union.Type {
+		case "response.output_item.done":
+			items = append(items, union.Item)
+		case "response.completed", "response.incomplete", "response.failed":
+			response := union.Response
+			final = &response
+		}
+	}
+	if final == nil {
+		return nil, fmt.Errorf("OpenAI Responses upstream endpoint: stream ended without a final response")
+	}
+	if len(final.Output) == 0 {
+		final.Output = items
+	}
+	if len(final.Output) == 0 {
+		return nil, fmt.Errorf("OpenAI Responses upstream endpoint: stream ended with no output (status %q)", final.Status)
+	}
+	return &stage.Response{
+		Value: final,
+		Usage: protocolusage.FromOpenAIResponses(final.Usage),
+		Model: e.config.model(string(final.Model)),
+	}, nil
 }

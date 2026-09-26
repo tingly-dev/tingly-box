@@ -417,12 +417,11 @@ func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scena
 // SetupCodexAssemblyRoute wires a route to a provider flagged as Codex via
 // OAuthDetail.Issuer rather than a literal APIBase match, so it can point at
 // the VirtualServer instead of the real chatgpt.com host. Codex only speaks
-// the streaming Responses API, so a non-streaming request against it is
-// routed by dispatchOpenAIResponses through the assembly path — the
-// "nonstream client / stream upstream / assemble" cell of the
-// {v1,beta} × {nonstream,stream,assemble} matrix (protocol_cross.go) that
-// was unreachable before provider.IsCodexProvider() decoupled the routing
-// check from the literal dial target. (The mux also needs /codex/responses
+// the streaming Responses API, so a non-streaming Anthropic request against
+// it is answered from the upstream stream (upstream.Config.StreamOnly in
+// serveAnthropicOnOpenAI) — the "nonstream client / stream upstream /
+// assemble" cell, reachable because provider.IsCodexProvider() is decoupled
+// from the literal dial target. (The mux also needs /codex/responses
 // registered — see vmodel/benchmark/scenario_responder.go — since that's
 // the path Codex's RoundTripper rewrites /v1/responses to.)
 func (env *TestEnv) SetupCodexAssemblyRoute(source protocol.APIType, s Scenario) {

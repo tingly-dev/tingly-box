@@ -270,7 +270,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider)
 
-	if target == protocol.TypeOpenAIChat {
+	if target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses {
 		source, err := transformRequest(ph, c, req.MessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
 			source:               protocol.TypeAnthropicV1,
 			defaultScenarioFlags: true,
@@ -281,7 +281,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 			return
 		}
 		defer source.Release()
-		ph.serveAnthropicOnOpenAIChat(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
+		ph.serveAnthropicOnOpenAI(c, target, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
 		return
 	}
 
@@ -411,7 +411,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
 
-	if target == protocol.TypeOpenAIChat {
+	if target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses {
 		source, err := transformRequest(ph, c, req.BetaMessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
 			source:               protocol.TypeAnthropicBeta,
 			defaultScenarioFlags: true,
@@ -424,7 +424,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 			return
 		}
 		defer source.Release()
-		ph.serveAnthropicOnOpenAIChat(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
+		ph.serveAnthropicOnOpenAI(c, target, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
 		return
 	}
 

@@ -148,7 +148,7 @@ func TestRoundTrip_CodexAssembly_Golden(t *testing.T) {
 }
 
 // TestRoundTrip_CodexAssembly_Beta mirrors the golden case for the Anthropic
-// beta source (assembleResponsesToAnthropicBeta instead of the v1 variant).
+// beta source.
 func TestRoundTrip_CodexAssembly_Beta(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()

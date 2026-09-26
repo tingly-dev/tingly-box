@@ -49,16 +49,6 @@ var anthropicSources = []protocol.APIType{protocol.TypeAnthropicV1, protocol.Typ
 
 var guardrailsTargets = []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses}
 
-var _ = registerKnownGaps(KnownGap{
-	ID:     "G8",
-	Reason: "cross-protocol paths (Anthropic client, OpenAI provider) apply no response guardrails",
-},
-	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=false",
-	"TestGuardrailsBlocksToolUse/anthropic_v1->openai_responses/stream=true",
-	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=false",
-	"TestGuardrailsBlocksToolUse/anthropic_beta->openai_responses/stream=true",
-)
-
 // TestGuardrailsBlocksToolUse pins that a blocked response tool_use never
 // reaches an Anthropic client, whichever provider protocol served it.
 func TestGuardrailsBlocksToolUse(t *testing.T) {

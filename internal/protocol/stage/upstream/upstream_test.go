@@ -544,3 +544,61 @@ func mustJSON(t *testing.T, value any) string {
 	require.NoError(t, err)
 	return string(data)
 }
+
+// A stream-only provider (Codex) answers a complete call from its stream.
+func TestUpstreamResponsesStreamOnly(t *testing.T) {
+	fake := newFakeProvider(t, scenario.TextScenario())
+	config := fake.config(protocol.APIStyleOpenAI)
+	config.StreamOnly = true
+	endpoint, err := NewOpenAIResponses(config)
+	require.NoError(t, err)
+	response, err := endpoint.Complete(context.Background(), stage.Call{Request: &responses.ResponseNewParams{
+		Model: "provider-model", Input: responses.ResponseNewParamsInputUnion{OfString: openai.String("hi")},
+	}})
+	require.NoError(t, err)
+	final := response.Value.(*responses.Response)
+	require.Equal(t, "The capital of France is Paris.", final.OutputText())
+	require.True(t, response.Usage.HasUsage())
+	requests := fake.take()
+	require.Len(t, requests, 1)
+	require.Contains(t, requests[0].Body, `"stream":true`, "the provider is only ever asked to stream")
+}
+
+// A stream-only backend (Codex) may end with an empty output and deliver the
+// items only as output_item.done; an empty stream is an error (#1316).
+func TestUpstreamResponsesStreamOnlyOutputItems(t *testing.T) {
+	message := `{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Paris","annotations":[]}]}`
+	completed := `{"type":"response.completed","sequence_number":3,"response":{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}}}`
+	cases := []struct {
+		name   string
+		events []string
+		want   string
+	}{
+		{"items fill an empty output", []string{
+			"event: response.output_item.done",
+			`data: {"type":"response.output_item.done","sequence_number":2,"output_index":0,"item":` + message + `}`,
+			"event: response.completed", "data: " + completed,
+		}, "Paris"},
+		{"no output is an error", []string{"event: response.completed", "data: " + completed}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeProvider(t, scenario.Scenario{MockResponses: map[scenario.ResponseFormat]scenario.MockResponseBuilder{
+				scenario.FormatOpenAIResponses: {Stream: func() []string { return tc.events }},
+			}})
+			config := fake.config(protocol.APIStyleOpenAI)
+			config.StreamOnly = true
+			endpoint, err := NewOpenAIResponses(config)
+			require.NoError(t, err)
+			response, err := endpoint.Complete(context.Background(), stage.Call{Request: &responses.ResponseNewParams{
+				Model: "provider-model", Input: responses.ResponseNewParamsInputUnion{OfString: openai.String("hi")},
+			}})
+			if tc.want == "" {
+				require.ErrorContains(t, err, "no output")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, response.Value.(*responses.Response).OutputText())
+		})
+	}
+}
