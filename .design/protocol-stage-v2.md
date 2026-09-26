@@ -212,7 +212,9 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | P3 | `claude/lucid-heisenberg-ppa3kj-p3`（**已推送**，叠在 p2 上） | `stage/upstream` 终端 endpoint：Anthropic（Beta）/ Chat / Responses，只包装 `forwarding.Forward*`，不做请求准备；`AnthropicWireV1` 在 provider 边缘 downgrade 请求、upgrade 响应与流事件；`request.ConvertAnthropicBetaToV1Request` 拒绝（而非丢弃）V1 无法表达的内容。测试：每个 endpoint × 流/非流发往 provider 的 method / path / query / beta 头 / body 与旧路径直接调用 forwarding 逐一相同（V1 覆盖 upgrade → 链 → downgrade 全程）；两种 Anthropic wire 结果一致；6 个 bridge 叠在真实 endpoint 上跑通 | 无 |
 | P4a | `claude/lucid-heisenberg-ppa3kj-p4`（**已推送**，叠在 p3 上） | `stage/toolround`：Tool Round Stage（Beta），Gate 接口 + MCP Ownership；`toolengine.AnthropicBetaOwner` 复用 registry / ToolExecutor / continuation store（键格式不变）；`stage.CommittedError`；continuation 限定会话并与 follow-up 关联。内存测试：真实 MCP runtime + servertool pipeline + H1 fixture，经 P2 bridge 覆盖 Beta / Chat / Responses 目标（含 M4、M5） | 无 |
 | P4b | `claude/lucid-heisenberg-ppa3kj-p4b`（**已推送**，叠在 p4 上） | `guardrailspipeline.ToolRoundGate`：复用现有 Guardrails 管线实现 Gate（每请求一份 mask 状态，fail-open）。内存测试覆盖 G2 G3 G4 G5 G7 G8 | 无 |
-| P5 | `stage/5-http-adapter` | 各客户端协议的 HTTP Adapter（JSON / SSE / 首块提交 / model 改写 / usage / affinity） | 无 |
+| F6 | `claude/lucid-heisenberg-ppa3kj-continuation-scope`（**已推送**，基于 main） | 独立热修复：continuation 无会话时共用一个键（跨会话串入）；同会话任意请求都会取走存储轮次。改为无会话不存、只有携带对应 tool_result 的 follow-up 才取用（V1 / Beta / Chat） | 修跨会话泄漏 |
+| P5 | `claude/lucid-heisenberg-ppa3kj-p5`（**已推送**，叠在 p4b 上） | Anthropic 客户端（V1 / Beta）的 HTTP Adapter：`sdkstream` 把 EventStream 呈现为 SDK stream，直接复用现有写出器（SSE、首块提交、model 改写、错误事件、usage）；V1 在边缘 downgrade（同 wire 字节，V1 无法表达的内容显式报错）；执行过 server 工具后出错时提交 failover gate，不重试。验收：对照 golden，Beta→Beta 24 例逐字节一致（上游请求 + 客户端响应）；V1 24 例除预期统一外一致 | 无 |
+| P5b | 待定 | OpenAI 客户端（Chat / Responses）的 HTTP Adapter；前置决策见 §8.3 | 无 |
 | C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
 | C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
 | Z | `stage/9-cleanup` | 删除 `HandleContext` stream hooks、`ErrMCPStreamContinue`、toolengine `FormatAdapter.SendEvent` 等遗留；Google 目标去留 | 收尾 |
@@ -236,3 +238,10 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 2. OpenAI 入口（Chat / Responses 源）是否启用 Guardrails：切流后技术上直接可得，是产品决策；此前保持 `GuardrailsSupportedScenarios` 不变。
 3. Gate 是否对非 tool 的**文本**做流式评估（今天只有非流式评估文本）。
 4. Chat → Google：补齐还是显式不支持。
+
+3. **OpenAI 源经 Beta 中转**：Tool Round Stage 固定在 Beta，Chat→Chat / Responses→Responses 若接入 Stage 就变成
+   Chat→Beta→Chat，需要 idempotent harness 证明往返无损，否则这些同协议对只在需要时插入 Stage（与 C5"不按特性分流"冲突）。
+   只影响 OpenAI 源的切流（C2 之后），C1（Beta→Beta）与 V1 不受影响。
+4. **V1 客户端的预期差异**（V1 切流时 golden 会变）：SSE 帧统一为 Beta 写出器格式（`event:X` / `data:...`，旧 V1 走拦截器为
+   `event: X` 带空格）；非流式转发失败的错误文案由 "Failed to create streaming request" 改为 "Failed to forward request"（状态码不变）；
+   截断流的错误事件由 `upstream_truncated` 统一为 `incomplete_stream`。
