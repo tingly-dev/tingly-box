@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,9 +10,12 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -285,6 +289,161 @@ func TestValidateCodexStreamResponse_AllowsAmbiguousNonSSEContentType(t *testing
 	}
 
 	require.NoError(t, validateCodexStreamResponse(resp))
+}
+
+// fakeRoundTripper returns a fixed response for every request, standing in
+// for the real transport underneath codexRoundTripper.
+type codexFakeRoundTripper struct {
+	status int
+	body   string
+}
+
+func (f codexFakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: f.status,
+		Status:     http.StatusText(f.status),
+		Body:       io.NopCloser(strings.NewReader(f.body)),
+		Header:     make(http.Header),
+	}, nil
+}
+
+// codexTestClient builds a real *openai.Client whose HTTP calls go through
+// the real codexRoundTripper to inner, so these tests exercise the whole
+// production error path — RoundTrip's body normalization plus the SDK's own
+// res.StatusCode >= 400 handling in Execute — not just the RoundTripper in
+// isolation. codexRoundTripper rewrites unprefixed paths as
+// codexProtocolResponsesSSE (see rewriteCodexPath), which is what a plain
+// "images/generations" fake base exercises here; the images-specific
+// (codexProtocolPlainJSON) routing is covered separately in
+// codex_images_test.go.
+func codexTestClient(inner http.RoundTripper) openai.Client {
+	return openai.NewClient(
+		option.WithBaseURL("http://example.com/"),
+		option.WithAPIKey("test"),
+		option.WithMaxRetries(0),
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: inner}}),
+	)
+}
+
+// TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError guards against a
+// non-200 Codex response (e.g. a 400 content_policy_violation on image
+// generation) being turned into a generic Go error. This RoundTripper used
+// to return a bare fmt.Errorf, which net/http's Client.Do wraps in
+// *url.Error — and *url.Error satisfies net.Error (it has a Timeout()
+// method), so protocol.ClassifyUpstreamFailure's transport-failure fallback
+// mis-reported a real, actionable 400 as a generic 502 "network_error",
+// discarding the real status and message entirely.
+func TestCodexRoundTripper_NonOKStatusClassifiesAsOpenAIError(t *testing.T) {
+	oc := codexTestClient(codexFakeRoundTripper{
+		status: http.StatusBadRequest,
+		body:   `{"error":{"message":"Your request was rejected due to content policy.","code":"content_policy_violation"}}`,
+	})
+
+	var resp map[string]any
+	doErr := oc.Post(context.Background(), "images/generations", map[string]any{}, &resp)
+	require.Error(t, doErr)
+
+	var oaiErr *openai.Error
+	require.ErrorAs(t, doErr, &oaiErr, "expected the error to unwrap to *openai.Error")
+	assert.Equal(t, http.StatusBadRequest, oaiErr.StatusCode)
+	assert.Equal(t, "content_policy_violation", oaiErr.Code)
+	assert.Equal(t, "Your request was rejected due to content policy.", oaiErr.Message)
+
+	// This is the end-to-end shape the client-facing error goes through:
+	// the real 400 and message must survive, not the "502 network_error"
+	// catch-all a bare fmt.Errorf here used to produce.
+	failure := protocol.ClassifyUpstreamFailure(doErr, http.StatusInternalServerError)
+	assert.Equal(t, http.StatusBadRequest, failure.Status)
+	assert.Contains(t, failure.Message, "content_policy_violation")
+	assert.Contains(t, failure.Message, "Your request was rejected due to content policy.")
+	assert.NotContains(t, failure.Message, "network_error")
+}
+
+// TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper covers Codex's
+// ChatGPT backend not always nesting its error under an "error" key the way
+// the public OpenAI API does — the message must still make it through.
+// normalizeCodexErrorBody doesn't special-case this: since the whole body
+// here already looks like {"message":..., "code":...}, wrapping it under
+// "error" (the one shape the SDK's own extraction handles) is enough for the
+// SDK to populate Code/Message directly.
+func TestCodexRoundTripper_NonOKStatusWithoutErrorWrapper(t *testing.T) {
+	oc := codexTestClient(codexFakeRoundTripper{
+		status: http.StatusTooManyRequests,
+		body:   `{"message":"rate limited","code":"rate_limit_exceeded"}`,
+	})
+
+	var resp map[string]any
+	doErr := oc.Post(context.Background(), "images/generations", map[string]any{}, &resp)
+	require.Error(t, doErr)
+
+	var oaiErr *openai.Error
+	require.ErrorAs(t, doErr, &oaiErr)
+	assert.Equal(t, http.StatusTooManyRequests, oaiErr.StatusCode)
+	assert.Equal(t, "rate_limit_exceeded", oaiErr.Code)
+	assert.Equal(t, "rate limited", oaiErr.Message)
+}
+
+// TestCodexRoundTripper_NonOKStatusBareStringError covers the shape that
+// motivated normalizeCodexErrorBody in the first place: "error" present but
+// not an object. Letting the SDK's own gjson.GetBytes(contents,
+// "error").Raw extraction see a bare JSON string fails its UnmarshalJSON
+// outright (a *json.UnmarshalTypeError, not even an *openai.Error) — see
+// that function's doc and TestCodexRoundTripper_ImagesErrorStatusSurfaced in
+// codex_images_test.go for the same fixture at the RoundTrip layer.
+func TestCodexRoundTripper_NonOKStatusBareStringError(t *testing.T) {
+	oc := codexTestClient(codexFakeRoundTripper{
+		status: http.StatusBadRequest,
+		body:   `{"error":"bad image"}`,
+	})
+
+	var resp map[string]any
+	doErr := oc.Post(context.Background(), "images/generations", map[string]any{}, &resp)
+	require.Error(t, doErr)
+
+	var oaiErr *openai.Error
+	require.ErrorAs(t, doErr, &oaiErr, "expected the error to unwrap to *openai.Error, not a bare json error")
+	assert.Equal(t, http.StatusBadRequest, oaiErr.StatusCode)
+	assert.Equal(t, "bad image", oaiErr.Message)
+}
+
+// TestCodexRoundTripper_NonOKStatusNotRetried guards the other half of the
+// network_error bug: a real *http.Response (not a RoundTrip error) lets the
+// SDK's shouldRetry judge retryability from the status code, so a
+// deterministic 400 isn't retried as if the connection had dropped — which
+// would silently re-send a policy-blocked prompt. This holds even with the
+// SDK's default retry count (2), not just because tingly-box's own client
+// construction happens to set option.WithMaxRetries(0).
+func TestCodexRoundTripper_NonOKStatusNotRetried(t *testing.T) {
+	var hits int32
+	handler := &countingRoundTripper{status: http.StatusBadRequest, body: `{"error":{"message":"blocked"}}`, hits: &hits}
+	oc := openai.NewClient(
+		option.WithBaseURL("http://example.com/"),
+		option.WithAPIKey("test"),
+		// Deliberately not setting MaxRetries: this must hold on the SDK's
+		// own default (2 retries), not rely on tingly-box overriding it.
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: handler}}),
+	)
+
+	var resp map[string]any
+	doErr := oc.Post(context.Background(), "images/generations", map[string]any{}, &resp)
+	require.Error(t, doErr)
+	assert.EqualValues(t, 1, hits, "a deterministic 400 must not be retried")
+}
+
+type countingRoundTripper struct {
+	status int
+	body   string
+	hits   *int32
+}
+
+func (c *countingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	*c.hits++
+	return &http.Response{
+		StatusCode: c.status,
+		Status:     http.StatusText(c.status),
+		Body:       io.NopCloser(strings.NewReader(c.body)),
+		Header:     make(http.Header),
+	}, nil
 }
 
 // TestCodexBodyIsStableAcrossBreakpointRotation is the end-to-end guard for the

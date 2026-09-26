@@ -34,7 +34,7 @@ func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *opena
 			return conv.Usage(), nil
 		}
 
-		logrus.WithContext(c.Request.Context()).Errorf("Chat to Responses stream error: %v", err)
+		LogRequestError(c, err, "Chat to Responses stream error")
 
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)

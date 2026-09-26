@@ -71,7 +71,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
 			return usage, nil
 		}
-		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		LogRequestError(c, err, "Anthropic stream error")
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
@@ -90,7 +90,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 		if errors.Is(err, io.EOF) {
 			return usage, nil
 		}
-		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		LogRequestError(c, err, "Anthropic stream error")
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {

@@ -3,6 +3,7 @@ package protocolserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -25,17 +28,12 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
-	logrus.Debugf("scenario: %s beta: %v", c.Query("scenario"), beta)
+	logrus.WithContext(c.Request.Context()).Debugf("scenario: %s beta: %v", scenario, beta)
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		logrus.Debugf("Failed to read request body: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-			},
-		})
+		rejectRequestWithStatus(c, http.StatusInternalServerError, "inbound", "", "", err)
 		return
 	}
 
@@ -44,48 +42,26 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 	// always use beta for token count
 	var params anthropic.BetaMessageCountTokensParams
 	if err := json.Unmarshal(bodyBytes, &params); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Message error: %s", err.Error()),
-				Type:    "invalid_request_error",
-			},
-		})
-		logrus.WithError(err).Errorf("Anthropic beta decode error")
-		c.Abort()
+		rejectRequest(c, "inbound", "", fmt.Errorf("Message error: %w", err))
 		return
 	}
 
 	requestModel = params.Model
 	if requestModel == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", errors.New("Model is required"))
 		return
 	}
 
 	// Check if this is the request requestModel name first
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 
 	provider, selectedService, err := ph.selectService(c, scenarioType, rule, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", requestModel, err)
 		return
 	}
 
@@ -96,6 +72,12 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 		scenarioConfig = ph.deps.Config.GetScenarioConfig(scenarioType)
 	}
 	ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, provider)
+
+	// count_tokens never goes through SetTrackingContext (it records no
+	// usage), so label the access log here or the Requests view shows the
+	// row without scenario/model.
+	c.Set(ContextKeyScenario, ExtractScenarioFromPath(c.Request.URL.Path))
+	c.Set(ContextKeyRequestModel, requestModel)
 
 	useModel := selectedService.Model
 	params.Model = useModel
@@ -112,8 +94,10 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 
 	apiStyle := provider.APIStyle
 	// The legacy path keeps its historical flagless context; a native Claude
-	// Code profile needs the resolved flags on the client context.
-	base := context.Background()
+	// Code profile needs the resolved flags on the client context. Either way
+	// the context carries the request_id, so the upstream log line lands on
+	// this request's Logs timeline.
+	base := obs.ContextWithRequestID(context.Background(), c.GetString(constant.CtxKeyRequestID))
 	if c.Request != nil && typ.ClaudeCodeVersionEnabled(typ.GetRuleFlags(c.Request.Context()).ClaudeCodeVersion) {
 		base = c.Request.Context()
 	}
@@ -123,12 +107,7 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 
 	switch apiStyle {
 	default:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", model, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
 		return
 	case protocol.APIStyleAnthropic:
 		// Backends without a count_tokens endpoint (Bedrock) get the local
@@ -153,7 +132,9 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 func (ph *ProtocolHandler) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper client.AnthropicClientInterface, req anthropic.BetaMessageCountTokensParams) {
 	message, err := wrapper.BetaMessagesCountTokens(ctx, &req)
 	if err != nil {
-		stream.SendInvalidRequestBodyError(c, err)
+		// An upstream failure: classified status + redacted message like
+		// every other forward, and logged on the request's timeline.
+		stream.SendForwardingError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, message)
@@ -162,7 +143,7 @@ func (ph *ProtocolHandler) anthropicCountTokensViaAPI(c *gin.Context, ctx contex
 func (ph *ProtocolHandler) anthropicCountTokensViaTiktoken(c *gin.Context, req anthropic.BetaMessageCountTokensParams) {
 	count, err := token.CountBetaTokensViaTiktoken(&req)
 	if err != nil {
-		stream.SendInvalidRequestBodyError(c, err)
+		rejectRequest(c, "transform", req.Model, fmt.Errorf("Invalid request body: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, anthropic.MessageTokensCount{

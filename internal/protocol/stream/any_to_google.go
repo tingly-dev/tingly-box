@@ -203,7 +203,7 @@ func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Str
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
+		LogRequestError(c, err, "OpenAI stream error")
 		return nil
 	}
 
@@ -372,7 +372,7 @@ func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstre
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		LogRequestError(c, err, "Anthropic stream error")
 		return nil
 	}
 

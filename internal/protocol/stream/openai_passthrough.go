@@ -255,6 +255,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			return usage, err
 		}
 
+		LogRequestError(c, err, "OpenAI stream error")
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": protocol.UpstreamMessage(err),
@@ -446,7 +447,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			return usage, nil
 		}
 
-		logrus.WithContext(c.Request.Context()).Errorf("Responses stream error: %v", err)
+		LogRequestError(c, err, "Responses stream error")
 		// Stream failed before any content reached the client: surface a
 		// retryable 5xx so mid-request failover can try the next tier,
 		// instead of a 200 SSE error event.
@@ -595,6 +596,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 			logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Stream canceled by client")
 			return usage, nil
 		}
+		LogRequestError(c, err, "[ChatGPT] stream error")
 		// Stream failed before any content reached the client: surface a
 		// retryable 5xx so mid-request failover can try the next tier.
 		if !c.Writer.Written() {
