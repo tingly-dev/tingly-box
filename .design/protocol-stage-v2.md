@@ -268,7 +268,8 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | P5b | 待定 | OpenAI 客户端（Chat / Responses）的 HTTP Adapter；前提是 H3（§8.5） | 无 |
 | C1 | `claude/lucid-heisenberg-ppa3kj-c1`（**已推送**，叠在 h3 上） | 第一次切流：Anthropic Beta 客户端 → Anthropic provider 全部请求走 Stage 管线（Stage 仅在 MCP / Guardrails 生效时插入）；删除 `passthroughAnthropicBeta`、Beta 的 generic MCP dispatch、`StreamAnthropicBeta`；保留工具执行期间的 `: keep-alive`（`stage.Heartbeat`）；G2 Beta→Beta 移出 known-gap；golden 不变，harness CLI 1132 例 0 失败 | Beta→Beta |
 | C1-V1 | `claude/lucid-heisenberg-ppa3kj-c1-v1`（**已推送**，叠在 c1 上） | V1 客户端 → Anthropic provider 走 Stage 管线：边缘 V1→Beta 升级、`AnthropicWireV1` 发往 provider、Adapter 降级回 V1；删除 `StreamAnthropicV1` / `NonstreamAnthropicV1`；golden 仅按 §8.6 预期变化（分帧、一处错误文案、截断错误码），provider 请求逐字节不变；G2 V1→Anthropic 移出 known-gap | V1→Anthropic |
-| C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
+| C2 | `claude/lucid-heisenberg-ppa3kj-c2`（**已推送**，叠在 c1-v1 上） | Anthropic 客户端（V1 / Beta）→ OpenAI Chat / Responses provider 走 Stage 管线：transform 链拆成 source 半（入口一次）与 target 半（`targetTransformStage`，每轮 provider 调用一次），Bridge 取代 BaseTransform；Responses 目标在 Beta 请求上注入 server tools（修 M3），Codex 走 `StreamOnly` 由流末 response 组装（空 output 用 `output_item.done` 补，全空报错保 #1316）；Responses bridge 预读首事件，429 等开流错误仍在写头前返回；删除 `dispatchOpenAIChat` / `dispatchOpenAIResponses` 的 Anthropic 分支、`StreamOpenAIChatToAnthropic*WithMCP`、`forwardResponses{Nonstream,Stream}` 及 6 个 Responses→Anthropic leaf；golden 仅截断错误多 `code:"stream_failed"`；G2/G8/M4（→Chat）、G8/M3（→Responses）移出 known-gap | Anthropic→Chat/Responses |
+| C3… | `stage/7-cut-*` | Chat / Responses 客户端 → Anthropic provider（入口 bridge 需透传 `stage.Heartbeat`）；OpenAI↔OpenAI 协议对按 §2.4.0 暂不接入 | 逐对 |
 | Z | `stage/9-cleanup` | 删除 `HandleContext` stream hooks、`ErrMCPStreamContinue`、toolengine `FormatAdapter.SendEvent` 等遗留；Google 目标去留 | 收尾 |
 
 独立小修（随时可合）：Chat → Google 目标可选中但无处理分支（静默无响应）；Responses 入口从不设置 `reqCtx.ResponseModel`。
