@@ -312,7 +312,7 @@ func (p *GenericLoopProcessor) adapterID() string {
 func (p *GenericLoopProcessor) applyStoredContinuation(req any) any {
 	sessionID := typ.GetSessionID(p.ctx)
 	key := continuationKey(sessionID, p.provider.UUID, p.adapterID())
-	segment, ok := mixedContinuationStore.pop(key)
+	segment, ok := mixedContinuationStore.popAnswered(key, req)
 	if !ok {
 		return req
 	}

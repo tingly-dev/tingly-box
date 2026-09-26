@@ -977,7 +977,7 @@ func (i *GenericStreamInterceptor) adapterID() string {
 func (i *GenericStreamInterceptor) applyStoredContinuation() {
 	sessionID := typ.GetSessionID(i.c.Request.Context())
 	key := continuationKey(sessionID, i.provider.UUID, i.adapterID())
-	segment, ok := mixedContinuationStore.pop(key)
+	segment, ok := mixedContinuationStore.popAnswered(key, i.currentReq)
 	if !ok {
 		return
 	}
