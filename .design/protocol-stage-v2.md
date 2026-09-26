@@ -190,7 +190,7 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | H2 | 并入 `-h1`（**已推送**） | 每个协议对 × 12 场景 × 流/非流的 golden wire 快照（上游请求 + 客户端响应，`-update`）；全矩阵与 idempotent 的 `go test` 入口；V1 ⇄ Beta 请求 wire 逐字节等价（§4 前提成立）；MCP 工具报错 / 轮数上限 / mixed 续接。登记 M4 M5，删除 M2 | 无 |
 | P1 | `claude/lucid-heisenberg-ppa3kj-p1`（**已推送**，叠在 h1 上） | `internal/protocol/stage` 契约 + 单测：Endpoint / Stage / Compose / Bridge / 精确配对 Registry / BuildTopology；链内拒绝 `anthropic_v1`（只在边缘处理）；去掉隐式 identity 回退与反射 nil 检查 | 无 |
 | P2 | `claude/lucid-heisenberg-ppa3kj-p2`（**已推送**，叠在 p1 上） | 6 个 Beta-only Bridge（Beta⇄Chat、Beta⇄Responses、Chat⇄Responses），包装现有 converter，不含 V1 / identity bridge；`TestBridgeMatrix`：每个 bridge × 成功场景 × 流/非流，在内存中复用 HTTP 矩阵的场景 fixture 与断言（错误场景属 HTTP 状态映射，归 P5） | 无 |
-| P3 | `stage/3-provider-endpoint` | Provider Endpoint：包装 `forwarding.Forward*`；Anthropic endpoint 内做 Beta → V1 downgrade；用 H2 golden 的上游请求快照验证 wire 不变 | 无 |
+| P3 | `claude/lucid-heisenberg-ppa3kj-p3`（**已推送**，叠在 p2 上） | `stage/upstream` 终端 endpoint：Anthropic（Beta）/ Chat / Responses，只包装 `forwarding.Forward*`，不做请求准备；`AnthropicWireV1` 在 provider 边缘 downgrade 请求、upgrade 响应与流事件；`request.ConvertAnthropicBetaToV1Request` 拒绝（而非丢弃）V1 无法表达的内容。测试：每个 endpoint × 流/非流发往 provider 的 method / path / query / beta 头 / body 与旧路径直接调用 forwarding 逐一相同（V1 覆盖 upgrade → 链 → downgrade 全程）；两种 Anthropic wire 结果一致；6 个 bridge 叠在真实 endpoint 上跑通 | 无 |
 | P4 | `stage/4-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
 | P5 | `stage/5-http-adapter` | 各客户端协议的 HTTP Adapter（JSON / SSE / 首块提交 / model 改写 / usage / affinity） | 无 |
 | C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
