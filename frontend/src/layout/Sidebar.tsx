@@ -21,6 +21,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
+import { teamPath } from '@/utils/team';
 import { useNotify } from '@/hooks/useNotify';
 import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, sidebarWidth } from './constants';
@@ -120,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
         }
         handleAddTeamClose();
         await refreshTeams();
-        navigate(`/agent/team/${result.data.slug}`);
+        navigate(teamPath(result.data));
         onClose();
     }, [newTeamName, notify, t, handleAddTeamClose, refreshTeams, navigate, onClose]);
 

@@ -39,6 +39,7 @@ import {
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
+import { orderTeams, teamPath } from '@/utils/team';
 import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
@@ -98,23 +99,31 @@ export function useActivityItems(): ActivityItem[] {
             subtitle: `${p.id} - ${p.name}`,
             icon: <Claude size={20} />,
         }));
-        const defaultTeam = teams.find(team => team.is_default);
+        const orderedTeams = orderTeams(teams);
         const teamNavItems: NavItem[] = [
-            {
+            // Before the Team list loads, keep a placeholder row for the default Team.
+            ...(orderedTeams[0]?.is_default ? [] : [{
                 path: '/agent/team',
                 label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
-                subtitle: defaultTeam
-                    ? `${defaultTeam.slug} - ${defaultTeam.name}`
-                    : t('layout.default'),
+                subtitle: t('layout.default'),
                 icon: <IconUsers sx={{fontSize: 20}} />,
-            },
-            ...teams.filter(team => !team.is_default).map(team => ({
-                path: `/agent/team/${team.slug}`,
+            }]),
+            ...orderedTeams.map(team => ({
+                path: teamPath(team),
                 label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
                 subtitle: `${team.slug} - ${team.name}`,
                 icon: <IconUsers sx={{fontSize: 20}} />,
             })),
             {path: '#add-team', label: t('layout.addTeam'), icon: <IconPlus sx={{fontSize: 20}} />},
+            // Overview of every Team's keys, grouped by Team — last, after the
+            // Team list, since it spans all of them.
+            {type: 'divider'},
+            {
+                path: '/agent/team/keys',
+                label: t('layout.teamKeys', {defaultValue: 'Team Keys'}),
+                icon: <IconKey sx={{fontSize: 20}} />,
+                tooltip: t('layout.teamKeysTooltip'),
+            },
         ];
 
         type HideableScenario = { id: string; nav: NavItem };
@@ -282,12 +291,6 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/credentials',
                 children: [
                     { path: '/credentials', label: t('layout.modelKey'), icon: <IconLock sx={{ fontSize: 20 }} /> },
-                    {
-                        path: '/tingly-box-token',
-                        label: t('layout.tinglyBox'),
-                        icon: <IconKey sx={{ fontSize: 20 }} />,
-                        tooltip: t('layout.tinglyBoxTooltip'),
-                    },
                     {
                         path: '/credentials/virtual-models',
                         // Abbreviated here only — the sidebar is the tight spot;

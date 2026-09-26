@@ -14,11 +14,12 @@ import {
     Switch,
     CircularProgress,
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export interface SharingKey {
     token_id: string;
     user_id: string;
-    team_id?: string;
+    team_id: string;
     display_name: string;
     enabled: boolean;
     last_used_at?: string;
@@ -45,13 +46,7 @@ interface SharingKeysTableProps {
     onCopy: (tokenId: string) => void;
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
-    onMove?: (token: SharingKey) => void;
-    /** Show the user_id column (default: true) */
-    showUserColumn?: boolean;
-    /** Show the last_used_at column (default: true) */
-    showLastUsedColumn?: boolean;
-    /** Label for the user column */
-    userColumnLabel?: string;
+    onMove: (token: SharingKey) => void;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -63,15 +58,26 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
-    showUserColumn = true,
-    showLastUsedColumn = true,
-    userColumnLabel = 'User',
 }) => {
-    const colSpan = 5 + (showUserColumn ? 1 : 0) + (showLastUsedColumn ? 1 : 0);
+    const { t } = useTranslation();
+    const colSpan = 7;
 
     return (
         <TableContainer>
-            <Table>
+            {/* Fixed layout + explicit widths so several tables stacked on one
+                page (one per Team) line their columns up; minWidth keeps the
+                columns readable and lets narrow screens scroll the table
+                instead of the page. */}
+            <Table sx={{ tableLayout: 'fixed', minWidth: 760 }}>
+                <colgroup>
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: 88 }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: 96 }} />
+                </colgroup>
                 <TableHead>
                     <TableRow
                         sx={{
@@ -88,13 +94,13 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                             },
                         }}
                     >
-                        <TableCell>Name</TableCell>
-                        {showUserColumn && <TableCell>{userColumnLabel}</TableCell>}
-                        <TableCell>Token</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Created</TableCell>
-                        {showLastUsedColumn && <TableCell>Last Used</TableCell>}
-                        <TableCell align="right">Actions</TableCell>
+                        <TableCell>{t('sharingKeys.table.name')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.user')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.token')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.status')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.created')}</TableCell>
+                        <TableCell>{t('sharingKeys.table.lastUsed')}</TableCell>
+                        <TableCell align="right">{t('sharingKeys.table.actions')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -132,7 +138,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     <Typography variant="body2" sx={{
                                         color: "text.secondary"
                                     }}>
-                                        No sharing keys yet. Create one to share model access with your team.
+                                        {t('sharingKeys.table.empty')}
                                     </Typography>
                                 </Stack>
                             </TableCell>
@@ -155,32 +161,31 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         <Box sx={{ color: key.enabled ? 'primary.main' : 'text.disabled', display: 'flex', flexShrink: 0 }}>
                                             <IconKey sx={{ fontSize: 15 }} />
                                         </Box>
-                                        <Typography variant="body2" sx={{
-                                            fontWeight: 600
+                                        <Typography variant="body2" noWrap title={key.display_name} sx={{
+                                            fontWeight: 600,
+                                            minWidth: 0,
                                         }}>
                                             {key.display_name}
                                         </Typography>
                                     </Stack>
                                 </TableCell>
-                                {showUserColumn && (
-                                    <TableCell>
-                                        <Tooltip title={key.user_id} placement="top">
-                                            <Stack
-                                                direction="row"
-                                                spacing={0.5}
-                                                sx={{
-                                                    alignItems: "center",
-                                                    width: 'fit-content',
-                                                    cursor: 'default'
-                                                }}>
-                                                <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                                                    {key.user_id.slice(0, 8)}…
-                                                </Typography>
-                                            </Stack>
-                                        </Tooltip>
-                                    </TableCell>
-                                )}
+                                <TableCell>
+                                    <Tooltip title={key.user_id} placement="top">
+                                        <Stack
+                                            direction="row"
+                                            spacing={0.5}
+                                            sx={{
+                                                alignItems: "center",
+                                                width: 'fit-content',
+                                                cursor: 'default'
+                                            }}>
+                                            <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
+                                            <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                                {key.user_id.slice(0, 8)}…
+                                            </Typography>
+                                        </Stack>
+                                    </Tooltip>
+                                </TableCell>
                                 <TableCell sx={{ maxWidth: 240 }}>
                                     <Box
                                         sx={{
@@ -207,7 +212,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         >
                                             {visibleTokens[key.token_id] ? key.token_id : maskToken(key.token_id)}
                                         </Typography>
-                                        <Tooltip title={visibleTokens[key.token_id] ? 'Hide' : 'Show'}>
+                                        <Tooltip title={visibleTokens[key.token_id] ? t('sharingKeys.table.hide') : t('sharingKeys.table.show')}>
                                             <IconButton
                                                 size="small"
                                                 sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
@@ -216,7 +221,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                                 {visibleTokens[key.token_id] ? <IconEyeOff sx={{ fontSize: 13 }} /> : <IconEye sx={{ fontSize: 13 }} />}
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title="Copy">
+                                        <Tooltip title={t('sharingKeys.table.copy')}>
                                             <IconButton
                                                 size="small"
                                                 sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
@@ -228,7 +233,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     </Box>
                                 </TableCell>
                                 <TableCell>
-                                    <Tooltip title={key.enabled ? 'Active' : 'Disabled'} placement="top">
+                                    <Tooltip title={key.enabled ? t('sharingKeys.table.active') : t('sharingKeys.table.inactive')} placement="top">
                                         <Switch
                                             size="small"
                                             checked={key.enabled}
@@ -249,25 +254,21 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         </Typography>
                                     </Stack>
                                 </TableCell>
-                                {showLastUsedColumn && (
-                                    <TableCell>
-                                        <Typography variant="caption" sx={{
-                                            color: "text.secondary"
-                                        }}>
-                                            {formatDate(key.last_used_at)}
-                                        </Typography>
-                                    </TableCell>
-                                )}
+                                <TableCell>
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
+                                        {formatDate(key.last_used_at)}
+                                    </Typography>
+                                </TableCell>
                                 <TableCell align="right">
                                     <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>
-                                        {onMove && (
-                                            <Tooltip title="Move to another team">
-                                                <IconButton size="small" onClick={() => onMove(key)}>
-                                                    <IconMove sx={{ fontSize: 16 }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                        <Tooltip title="Delete token">
+                                        <Tooltip title={t('sharingKeys.table.moveTooltip')}>
+                                            <IconButton size="small" onClick={() => onMove(key)}>
+                                                <IconMove sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={t('sharingKeys.table.deleteTooltip')}>
                                             <IconButton
                                                 size="small"
                                                 color="error"

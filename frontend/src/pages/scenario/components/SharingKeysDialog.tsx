@@ -1,24 +1,18 @@
-import { Key as IconKey, Add as IconPlus, Delete as IconTrash } from '@/components/icons';
+import { Key as IconKey } from '@/components/icons';
 import {
-    Button,
-    CircularProgress,
     Dialog,
-    DialogActions,
     DialogContent,
     DialogTitle,
-    MenuItem,
     Stack,
-    TextField,
-    Typography,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
-import { useNotify } from '@/hooks/useNotify';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
+import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
+import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
 import type { Team } from '@/types/team';
-import TeamKeyScopeAlert from './TeamKeyScopeAlert';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
 
 interface SharingKeysDialogProps {
     open: boolean;
@@ -29,20 +23,9 @@ interface SharingKeysDialogProps {
 
 const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, team, teams }) => {
     const { t } = useTranslation();
-    const notify = useNotify();
 
     const [sharingKeys, setSharingKeys] = useState<SharingKey[]>([]);
     const [keysLoading, setKeysLoading] = useState(true);
-    const [visibleTokens, setVisibleTokens] = useState<Record<string, boolean>>({});
-    const [createDialogOpen, setCreateDialogOpen] = useState(false);
-    const [newTokenName, setNewTokenName] = useState('');
-    const [creatingToken, setCreatingToken] = useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [tokenToDelete, setTokenToDelete] = useState<SharingKey | null>(null);
-    const [deletingToken, setDeletingToken] = useState(false);
-    const [tokenToMove, setTokenToMove] = useState<SharingKey | null>(null);
-    const [moveTargetTeamID, setMoveTargetTeamID] = useState('');
-    const [movingToken, setMovingToken] = useState(false);
 
     // Guards against a stale response for a previously selected team
     // overwriting the keys of the team the user has since switched to.
@@ -69,65 +52,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
         }
     }, [open, team.id]);
 
-    const handleCreateToken = async () => {
-        if (!newTokenName.trim()) {
-            notify.error(t('sharingKeys.nameRequired'));
-            return;
-        }
-        setCreatingToken(true);
-        const result = await api.createAPIToken({display_name: newTokenName.trim(), team_id: team.id});
-        setCreatingToken(false);
-        if (result.success) {
-            notify.success(t('sharingKeys.createSuccess'));
-            setCreateDialogOpen(false);
-            setNewTokenName('');
-            loadSharingKeys();
-        } else {
-            notify.error(result.error?.message || t('sharingKeys.createFailed'));
-        }
-    };
-
-    const handleMoveToken = async () => {
-        if (!tokenToMove || !moveTargetTeamID) return;
-        setMovingToken(true);
-        const result = await api.moveAPITokenToTeam(tokenToMove.token_id, moveTargetTeamID);
-        setMovingToken(false);
-        if (result.success) {
-            notify.success(t('sharingKeys.moveSuccess'));
-            setTokenToMove(null);
-            setMoveTargetTeamID('');
-            loadSharingKeys();
-        } else {
-            notify.error(result.error?.message || t('sharingKeys.moveFailed'));
-        }
-    };
-
-    const handleDeleteToken = async () => {
-        if (!tokenToDelete) return;
-        setDeletingToken(true);
-        const result = await api.deleteAPIToken(tokenToDelete.token_id);
-        setDeletingToken(false);
-        if (result.success) {
-            notify.success(t('sharingKeys.deleteSuccess'));
-            setDeleteDialogOpen(false);
-            setTokenToDelete(null);
-            loadSharingKeys();
-        } else {
-            notify.error(result.error?.message || t('sharingKeys.deleteFailed'));
-        }
-    };
-
-    const handleToggleEnabled = async (key: SharingKey) => {
-        const result = await api.setAPITokenEnabled(key.token_id, !key.enabled);
-        if (result.success) {
-            notify.success(key.enabled ? t('sharingKeys.disabled') : t('sharingKeys.enabled'));
-            loadSharingKeys();
-        } else {
-            notify.error(result.error?.message || t('sharingKeys.updateFailed'));
-        }
-    };
-
-    const eligibleMoveTargets = teams.filter((candidate) => candidate.id !== team.id && candidate.enabled);
+    const { tableProps, openCreate, dialogs } = useSharingKeyActions({ teams, onChanged: loadSharingKeys });
 
     return (
         <>
@@ -139,13 +64,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
                         <IconKey />
                         <span>{t('sharingKeys.titleForTeam', {team: team.name})}</span>
                     </Stack>
-                    <Button
-                        variant="contained"
-                        startIcon={<IconPlus sx={{ fontSize: 18 }} />}
-                        onClick={() => setCreateDialogOpen(true)}
-                    >
-                        {t('sharingKeys.createToken')}
-                    </Button>
+                    <CreateSharingKeyButton team={team} onClick={() => openCreate(team)} />
                 </DialogTitle>
                 <DialogContent>
                     <Stack spacing={2}>
@@ -153,99 +72,12 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose, te
                         <SharingKeysTable
                             tokens={sharingKeys}
                             loading={keysLoading}
-                            visibleTokens={visibleTokens}
-                            onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
-                            onCopy={(tokenId) => {
-                                navigator.clipboard.writeText(tokenId);
-                                notify.success(t('sharingKeys.copiedToClipboard'));
-                            }}
-                            onToggleEnabled={handleToggleEnabled}
-                            onDelete={(key) => {
-                                setTokenToDelete(key);
-                                setDeleteDialogOpen(true);
-                            }}
-                            onMove={(key) => {
-                                setTokenToMove(key);
-                                setMoveTargetTeamID('');
-                            }}
-                            showUserColumn={true}
-                            showLastUsedColumn={false}
+                            {...tableProps}
                         />
                     </Stack>
                 </DialogContent>
             </Dialog>
-            {/* Move Token Dialog */}
-            <Dialog open={Boolean(tokenToMove)} onClose={() => setTokenToMove(null)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('sharingKeys.moveToken')}</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        select
-                        fullWidth
-                        sx={{mt: 1}}
-                        label={t('sharingKeys.destinationTeam')}
-                        value={moveTargetTeamID}
-                        onChange={(event) => setMoveTargetTeamID(event.target.value)}
-                        helperText={t('sharingKeys.moveHelper', {name: tokenToMove?.display_name})}
-                    >
-                        {eligibleMoveTargets.length === 0 && (
-                            <MenuItem disabled value="">{t('sharingKeys.noDestinationTeam')}</MenuItem>
-                        )}
-                        {eligibleMoveTargets.map((candidate) => (
-                            <MenuItem key={candidate.id} value={candidate.id}>{candidate.name}</MenuItem>
-                        ))}
-                    </TextField>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setTokenToMove(null)} disabled={movingToken}>{t('common.cancel')}</Button>
-                    <Button variant="contained" onClick={handleMoveToken} disabled={movingToken || !moveTargetTeamID}>
-                        {t('sharingKeys.moveToken')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-            {/* Create Token Dialog */}
-            <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{t('sharingKeys.createDialogTitle')}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TeamKeyScopeAlert team={team} />
-                        <TextField
-                            label={t('sharingKeys.displayName')}
-                            fullWidth
-                            value={newTokenName}
-                            onChange={(e) => setNewTokenName(e.target.value)}
-                            placeholder={t('sharingKeys.displayNamePlaceholder')}
-                            helperText={t('sharingKeys.displayNameHelper')}
-                            autoFocus
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setCreateDialogOpen(false)}>{t('common.cancel')}</Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleCreateToken}
-                        disabled={creatingToken || !newTokenName.trim()}
-                        startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus sx={{ fontSize: 18 }} />}
-                    >
-                        {t('sharingKeys.createToken')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-            <ConfirmDialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                onConfirm={handleDeleteToken}
-                loading={deletingToken}
-                confirmColor="error"
-                confirmLabel={t('sharingKeys.deleteToken')}
-                title={
-                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                        <IconTrash color="error" />
-                        <span>{t('sharingKeys.deleteToken')}</span>
-                    </Stack>
-                }
-                description={t('sharingKeys.deleteConfirm', { name: tokenToDelete?.display_name })}
-            />
+            {dialogs}
         </>
     );
 };

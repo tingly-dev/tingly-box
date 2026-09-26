@@ -15,6 +15,7 @@ export interface APIToken {
     user_id?: string;
     display_name?: string;
     enabled?: boolean;
+    team_id?: string;
 }
 
 export interface UsageIdentity {
@@ -22,6 +23,8 @@ export interface UsageIdentity {
     label: string;
     type: 'owner' | 'sharing_key';
     enabled: boolean;
+    /** Owning Team of a sharing key; used to group the identity picker by Team. */
+    teamId?: string;
 }
 
 export type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
@@ -160,6 +163,7 @@ export function useDashboardData({
                         label: token.display_name?.trim() || t('dashboard.overview.unnamedSharingKey', { defaultValue: 'Unnamed sharing key' }),
                         type: 'sharing_key',
                         enabled: token.enabled !== false,
+                        teamId: token.team_id,
                     });
                 });
                 const sharingKeys = Array.from(sharingKeysByUserId.values())
