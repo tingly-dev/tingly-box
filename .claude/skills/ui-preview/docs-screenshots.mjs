@@ -142,7 +142,6 @@ await shoot(browser, '/dashboard/today', '4-1-dashboard.png', {
 });
 await shoot(browser, '/dashboard/users', '4-2-team-usage.png', { settle: 3500 });
 
-
 // ── Remote ────────────────────────────────────────────────────────────────
 await shoot(browser, '/remote-agent/telegram', '5-1-remote.png', { settle: 4000 });
 
