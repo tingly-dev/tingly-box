@@ -6659,8 +6659,8 @@
         "tags": [
           "teams"
         ],
-        "summary": "Update a team",
-        "description": "Update a team",
+        "summary": "Update a team's name and whether its sharing keys may read quota",
+        "description": "Update a team's name and whether its sharing keys may read quota",
         "operationId": "apiV1TeamsTeam_idPut",
         "parameters": [
           {
@@ -16838,6 +16838,10 @@
             "type": "string",
             "description": "Field name"
           },
+          "quota_visible": {
+            "type": "boolean",
+            "description": "Field quota_visible"
+          },
           "slug": {
             "type": "string",
             "description": "Field slug"
@@ -16853,6 +16857,7 @@
           "name",
           "slug",
           "enabled",
+          "quota_visible",
           "is_default",
           "created_at",
           "updated_at"
@@ -17446,6 +17451,10 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "quota_visible": {
+            "type": "boolean",
+            "description": "Field quota_visible"
           }
         },
         "required": [

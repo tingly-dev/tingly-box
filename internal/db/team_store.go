@@ -28,12 +28,16 @@ var legacyDefaultTeamNames = []string{"Default Team", "default"}
 // Human-readable names and slugs may change; ID is the durable identity stored
 // on tokens, rules, and usage records.
 type TeamRecord struct {
-	ID        string    `gorm:"primaryKey;column:id;size:36" json:"id"`
-	Slug      string    `gorm:"uniqueIndex;column:slug;not null;size:64" json:"slug"`
-	Name      string    `gorm:"column:name;not null;size:128" json:"name"`
-	Enabled   bool      `gorm:"column:enabled;not null;default:true" json:"enabled"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID      string `gorm:"primaryKey;column:id;size:36" json:"id"`
+	Slug    string `gorm:"uniqueIndex;column:slug;not null;size:64" json:"slug"`
+	Name    string `gorm:"column:name;not null;size:128" json:"name"`
+	Enabled bool   `gorm:"column:enabled;not null;default:true" json:"enabled"`
+	// QuotaVisible lets the team's sharing keys read the remaining quota of
+	// the team's models (GET /tingly/team/quota). Off by default: quota says
+	// how hard the operator's accounts are being used.
+	QuotaVisible bool      `gorm:"column:quota_visible;not null;default:false" json:"quota_visible"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (TeamRecord) TableName() string { return "teams" }
@@ -203,6 +207,22 @@ func (s *TeamStore) SetEnabled(id string, enabled bool) error {
 		return fmt.Errorf("failed to update team enabled state: %w", err)
 	}
 	record.Enabled = enabled
+	record.UpdatedAt = time.Now()
+	return nil
+}
+
+// SetQuotaVisible controls whether the team's sharing keys may read quota.
+func (s *TeamStore) SetQuotaVisible(id string, visible bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.cache[id]
+	if !ok {
+		return fmt.Errorf("team '%s' not found", id)
+	}
+	if err := s.db.Model(&TeamRecord{}).Where("id = ?", id).Update("quota_visible", visible).Error; err != nil {
+		return fmt.Errorf("failed to update team quota visibility: %w", err)
+	}
+	record.QuotaVisible = visible
 	record.UpdatedAt = time.Now()
 	return nil
 }

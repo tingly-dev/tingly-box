@@ -108,6 +108,14 @@ type ProtocolHandlerDeps struct {
 	// default) — it lets a rule-enabled request create the sink even when
 	// the scenario-level flag is off.
 	GetOrCreateScenarioSink func(scenario typ.RuleScenario, mode obs.RecordMode) *obs.Sink
+
+	// QuotaReader serves stored provider quota to GET /tingly/:scenario/quota
+	// (may be nil — the endpoint then answers 503).
+	QuotaReader QuotaReader
+
+	// TeamQuotaVisible reports whether a team's sharing keys may read quota.
+	// nil denies every sharing key.
+	TeamQuotaVisible func(teamID string) bool
 }
 
 // ProtocolHandler is the aggregate handler for the AI Model API. Individual method

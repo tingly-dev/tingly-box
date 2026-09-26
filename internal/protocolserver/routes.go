@@ -116,6 +116,10 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.ListModelsByScenario)...)
+
+	// Quota behind the scenario's models, projected per model — read by a
+	// downstream tingly-box's quota fetcher (.design/quota-relay.md).
+	group.GET("/quota", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleScenarioQuota)...)
 }
 
 // SetupOpenAIEndpoints registers the OpenAI-only endpoint set on group.

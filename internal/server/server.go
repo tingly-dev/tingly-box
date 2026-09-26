@@ -508,6 +508,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		AffinityStore:           server.affinityStore,
 		GetOrCreateScenarioSink: server.GetOrCreateScenarioSink,
 		GuardrailsState:         server.guardrailsState,
+		QuotaReader:             quotaReader(server.quotaManager),
+		TeamQuotaVisible:        teamQuotaVisible(cfg),
 	})
 
 	// Setup middleware
@@ -662,6 +664,29 @@ func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 
 	logrus.Info("Provider quota manager initialized")
 	return quotaMgr, nil
+}
+
+// quotaReader adapts the optional quota manager for the protocol handler,
+// keeping a nil manager a nil reader rather than a non-nil interface over nil.
+func quotaReader(mgr providerQuotaModule.Manager) protocolserver.QuotaReader {
+	if mgr == nil {
+		return nil
+	}
+	return mgr
+}
+
+// teamQuotaVisible answers whether a team shares quota with its sharing keys,
+// read from the team store's in-memory mirror on each request so a change
+// in the Team settings applies to the next quota read.
+func teamQuotaVisible(cfg *config.Config) func(teamID string) bool {
+	return func(teamID string) bool {
+		sm := cfg.StoreManager()
+		if sm == nil || sm.Team() == nil || teamID == "" {
+			return false
+		}
+		team, err := sm.Team().Get(teamID)
+		return err == nil && team.Enabled && team.QuotaVisible
+	}
 }
 
 // applyVisionProxy is the single entry point for the vision proxy plugin,

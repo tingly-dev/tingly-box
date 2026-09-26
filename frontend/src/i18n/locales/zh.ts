@@ -1740,6 +1740,8 @@ export default {
     "allKeysScopeSummary": "每个共享密钥只对其所属 Team 生效，通过 /tingly/team 与 /tingly/team/v1 访问。移动到其他 Team 会立即生效，密钥本身不变。",
     "keyScopeInfoLabel": "共享密钥访问范围",
     "editTeam": "Team 设置",
+    "shareQuota": "向共享密钥开放 quota",
+    "shareQuotaHint": "持有密钥的一方（例如用此 Team 密钥接入的另一台 Tingly Box）可以看到 Team 内各模型的剩余额度和重置时间。只共享百分比，provider、账号与余额不会外露。",
     "name": "Team 名称",
     "inactive": "已停用",
     "disabledHint": "此 Team 已停用；重新启用前，其共享密钥无法访问模型接口。",
