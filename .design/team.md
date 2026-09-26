@@ -158,6 +158,9 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 - 提示必须展示真实允许端点 `/tingly/team`、`/tingly/team/v1`，并明确排除其他 Team、
   scenario 与管理 API。
 - 不提供“允许其他端点”开关；需要更高权限时应选择另一种凭证，而不是扩大 Team Key。
+- Sharing Key 只在 Team 下管理（Team 页的 Sharing Keys 弹窗），不在 Credentials 下另设
+  独立入口：没有 Team 语义的全局列表会重新制造“通用分发令牌”的权限错觉，创建时也会把 Key
+  悄悄归入 `default` Team。旧的 `/tingly-box-token` 路由重定向到 `/agent/team`。
 
 这对应 `.design/ux-principles.md` 的命名统一、展示具体值、合理默认、内嵌教育和降低视觉噪声。
 

@@ -283,12 +283,6 @@ export function useActivityItems(): ActivityItem[] {
                 children: [
                     { path: '/credentials', label: t('layout.modelKey'), icon: <IconLock sx={{ fontSize: 20 }} /> },
                     {
-                        path: '/tingly-box-token',
-                        label: t('layout.tinglyBox'),
-                        icon: <IconKey sx={{ fontSize: 20 }} />,
-                        tooltip: t('layout.tinglyBoxTooltip'),
-                    },
-                    {
                         path: '/credentials/virtual-models',
                         // Abbreviated here only — the sidebar is the tight spot;
                         // the page itself (VirtualModelsPage) keeps the full

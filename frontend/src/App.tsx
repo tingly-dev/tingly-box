@@ -32,7 +32,6 @@ import { api } from './services/api';
 // is lazy-loaded: each becomes its own chunk that downloads on first visit
 // instead of being bundled into the initial page load.
 const HelpPage = lazy(() => import('./pages/HelpPage'));
-const SharingKeysPage = lazy(() => import('./pages/SharingKeysPage'));
 const VirtualModelsPage = lazy(() => import('./pages/VirtualModelsPage'));
 const UseOpenAIPage = lazy(() => import('./pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/scenario/UseAnthropicPage'));
@@ -274,7 +273,8 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
-                    <Route path="/tingly-box-token" element={<SharingKeysPage />} />
+                    {/* Sharing Keys are managed per Team (.design/team.md §9). */}
+                    <Route path="/tingly-box-token" element={<Navigate to="/agent/team" replace />} />
                     <Route path="/system/develop" element={<DevelopPage />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     <Route path="/system/experimental" element={<ExperimentalPage />} />
