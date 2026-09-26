@@ -139,6 +139,22 @@ Beta 是 Tool Round Stage 的 IR。Stage 按请求插入：本请求有 server �
 H3 对加粗的四个协议对（开 MCP 时）逐一比对请求 / 非流式响应 / 流式响应在往返前后与直连的差异，损失登记为 known-gap，
 OpenAI 源的切流在其清零或被明确接受后进行。Guardrails 目前只对 Anthropic 场景启用（§8.2），所以现阶段触发往返的只有 MCP。
 
+#### 2.4.0 支持策略（已决定）
+
+Guardrails 与 MCP 只在"经 IR 往返能稳定作用"的协议对上支持。不支持的协议对即使开启了 Guardrails / MCP，也按原协议处理：
+不注入 server 工具、不插 Stage、不做 Guardrails，原协议直通（不注入是为了避免重演 M1：工具发给了模型、调用泄漏给客户端）。
+不做"部分支持"或原协议放行层。跳过时给出可见信号（debug routing 头与日志），让用户知道本请求未启用的原因。
+
+| 协议对 | Guardrails / MCP | 依据 |
+|---|---|---|
+| Beta / V1 → 任意目标 | 支持 | 源协议即 IR（V1 边缘升降级无损，已验证） |
+| Chat / Responses → Anthropic | 支持 | 转换本来就要做，Stage 不增加往返 |
+| Chat→Chat、Responses→Responses、Chat→Responses、Responses→Chat | **不支持**，直到该协议对的 H3 known-gap 清零 | 往返有损（§2.4.1） |
+
+注意：旧路径今天 Chat→Chat 的 MCP 是可用的（toolengine OpenAI Chat 循环）。该协议对切流时若 H3 仍未清零，MCP 会随之关闭——这是按本策略接受的变化，届时在切流 PR 中列明。
+
+录制不在本重构范围内（C3）：新路径不做逐轮录制，旧 MCP 循环的逐轮录制随切流消失，另行解决。
+
 #### 2.4.1 H3 当前登记的 IR 损失（开 MCP 时，OpenAI 源切流前需清零或明确接受）
 
 | ID | 损失 | 影响的协议对 |
