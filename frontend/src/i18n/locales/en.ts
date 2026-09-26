@@ -1961,7 +1961,7 @@ export default {
           "tool": "Figure",
           "add": "Add figure",
           "presets": "Poses",
-          "views": "View",
+          "views": "Camera",
           "viewValue": "Turned {{yaw}}° · camera {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",
           "group": {
@@ -2009,13 +2009,20 @@ export default {
             "salute": "Saluting",
             "presenting": "Presenting"
           },
-          "view": {
-            "front": "Front",
-            "threeQuarter": "Three-quarter",
-            "side": "Side",
-            "back": "Back",
-            "above": "From above",
-            "below": "From below"
+          "camera": {
+            "elevation": {
+              "overhead": "Overhead",
+              "high": "High angle",
+              "eye": "Eye level",
+              "low": "Low angle",
+              "worm": "Worm's eye"
+            },
+            "azimuth": {
+              "front": "Front",
+              "side": "Profile",
+              "back": "Back"
+            },
+            "cell": "{{elevation}} · turned {{yaw}}°"
           },
                     "flip": "Mirror figure",
           "remove": "Remove figure",

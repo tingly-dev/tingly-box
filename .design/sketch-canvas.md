@@ -212,8 +212,20 @@ Sketch 对话框里紧挨着 Pen / Eraser 的第三个工具。它改变的是"�
   下去,没有东西可读了。
 - **视角是独立控件,不是姿势库里的更多条目**(原则 4)。同一个身体从侧面看还是同一个
   身体;把机位折进姿势列表,意味着点"坐下"会顺手把模型转个身。工具栏上那颗按钮的
-  文字**就是角度本身**(`35° / 8°`),既是标签也是读数(原则 5);展开是六个常用
-  机位,每一格画的是**这个人偶**在那个角度下的样子,不是一个相机图标。
+  文字**就是角度本身**(`35° / 8°`),既是标签也是读数(原则 5);展开是一张
+  **机位网格**,每一格画的是**这个人偶**在那个机位下的样子,不是一个相机图标。
+- **机位本身又是两根正交的轴,所以是网格不是列表**(原则 4 再用一次):
+  行 = 机位高度(顶视 +70° / 俯拍 +35° / 平视 0° / 仰拍 −30° / 虫视 −60°),
+  列 = 环绕方位,每 45° 一格绕一整圈(−135° … 0° 正面 … ±90° 纯侧面 … 180° 背面)。
+  "侧面仰拍"是一行一列,不是某人得事先想到的一个预设;5 × 8 = 40 格。
+  - **两侧都给,不靠镜像补。**镜像会把姿势一起翻过来:举右手的人从左边看,和他的
+    镜像不是同一张图。正面放在中间,一行读下来就是相机绕着人走一圈。
+  - 行的俯仰都在 ±78° 夹紧以内,否则点了一格落到的角度和高亮的那格对不上。
+  - 表头就是数值(`−30°`、`90°`),只有正面 / 侧面 / 背面三个地标额外带一个字。
+  - 用环形手柄转过之后没有格子被高亮——不把任意角度四舍五入成一个名字,读数行
+    给出真实的两个数(同 `viewPresetOf` 的规则)。
+  - `VIEW_PRESETS`(六个命名视角)仍然保留在包里,但只作为手柄可抓性 / 照片回算
+    这些度量的**固定参照集**,不再出现在 UI 上。
 - 镜像会把 yaw 取反:把一个朝左转 35° 的人镜像过来,他就是朝右转 35°,读数必须跟上。
 
 ### 4.5 姿势库
@@ -288,7 +300,7 @@ Sketch 对话框里紧挨着 Pen / Eraser 的第三个工具。它改变的是"�
 | 转身 / 换机位 | 拖**左下角圆环**手柄:横拖转身,竖拖抬降机位 |
 | 缩放 | 拖右下角方形手柄,绕人偶中心等比缩放,有下限防止缩成抓不住的点 |
 | 换姿势 | 工具栏 Poses → 缩略图网格(按当前机位画) |
-| 换机位 | 工具栏角度按钮(`35° / 8°`)→ 六个常用机位 |
+| 换机位 | 工具栏角度按钮(`35° / 8°`)→ 机位网格(高度 5 行 × 环绕 8 列) |
 | 摆头朝向 | 拖头前方那个**更小、空心**的手柄 |
 | 镜像 / 删除 | 工具栏按钮;删除也可用 Delete/Backspace(输入框内不抢键) |
 
@@ -348,7 +360,7 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 | `frontend/packages/mannequin/src/` | **人偶是一个独立的库**(`@tingly/mannequin` workspace 包),只依赖 `three`,不认识画布和应用。`index.ts` 是唯一入口 |
 | `mannequin/skeleton.ts` | 关节、父子关系、骨长(`BONE`)、朝向推导 |
 | `mannequin/rig.ts` | 关节限制:`constrainFigure` |
-| `mannequin/camera.ts` / `view.ts` | 每个人偶自己的透视相机;转身、视角预设 |
+| `mannequin/camera.ts` / `view.ts` | 每个人偶自己的透视相机;转身、视角预设、机位网格(`CAMERA_ELEVATIONS` × `CAMERA_AZIMUTHS`) |
 | `mannequin/poses/spec.ts` / `library.ts` | **形态库**:姿势的写法(角度 → 关节)和 36 个预设本身,纯数据 |
 | `mannequin/body.ts` | **模型库**:`MANIKIN` 尺寸、`figureSolids` 实体清单、配色 |
 | `mannequin/render3d.ts` | 把实体清单交给 three.js:与相机一致的投影、共享 WebGL 上下文、无 WebGL 回退 |
@@ -356,7 +368,7 @@ undo 步**:快照在第一次 pointermove 时才入栈。
 | `mannequin/landmarks.ts` | MediaPipe 关键点 ⇄ 人偶 |
 | `frontend/src/pages/image/components/SketchCanvasDialog.tsx` | 画布工作面:两层 canvas、工具、指针交互、undo、提交合成 |
 | `frontend/src/pages/image/components/PoseLibraryPopover.tsx` | 姿势库网格(缩略图走同一个渲染器,按当前机位画) |
-| `frontend/src/pages/image/components/ViewAnglePopover.tsx` | 机位网格(每格是这个人偶在该角度下的样子)+ 角度读数 |
+| `frontend/src/pages/image/components/ViewAnglePopover.tsx` | 机位网格(高度 × 环绕,每格是这个人偶在该机位下的样子)+ 角度读数 |
 | `frontend/src/pages/image/components/ImageGenPlaygroundCard.tsx` | 参考图列表、草图入口与 `layers` 的保管 |
 
 纯逻辑全部在 `@tingly/vision`(`sketchCanvas.ts`)和 `@tingly/mannequin` 两个

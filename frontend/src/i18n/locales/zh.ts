@@ -1957,7 +1957,7 @@ export default {
           "tool": "人形",
           "add": "添加人形",
           "presets": "姿势",
-          "views": "视角",
+          "views": "机位",
           "viewValue": "转身 {{yaw}}° · 机位 {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",
           "group": {
@@ -2005,13 +2005,20 @@ export default {
             "salute": "敬礼",
             "presenting": "展示"
           },
-          "view": {
-            "front": "正面",
-            "threeQuarter": "四分之三",
-            "side": "侧面",
-            "back": "背面",
-            "above": "俯视",
-            "below": "仰视"
+          "camera": {
+            "elevation": {
+              "overhead": "顶视",
+              "high": "俯拍",
+              "eye": "平视",
+              "low": "仰拍",
+              "worm": "虫视"
+            },
+            "azimuth": {
+              "front": "正面",
+              "side": "侧面",
+              "back": "背面"
+            },
+            "cell": "{{elevation}} · 转身 {{yaw}}°"
           },
                     "flip": "镜像翻转",
           "remove": "删除人形",

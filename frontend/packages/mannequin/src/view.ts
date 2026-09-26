@@ -102,6 +102,51 @@ export const viewPresetOf = (figure: PoseFigure): ViewPresetKey | null => {
 };
 
 
+// --- camera positions --------------------------------------------------------
+//
+// The named presets above are the fixed reference set the handle and landmark
+// measurements run against. What the toolbar offers is a camera *library*,
+// and a camera library is two orthogonal axes, and it is laid out as exactly that: how high the
+// camera stands (elevation) × where round the figure it stands (azimuth). A
+// photographer thinks "low angle, from the side", not "preset #7", and the
+// grid answers both questions at once instead of hiding them in one list.
+//
+// The elevation rows are the standard shot heights. Their pitch stays inside
+// MAX_VIEW_PITCH: straight down the body's axis there is nothing to read.
+export type CameraElevationKey = 'overhead' | 'high' | 'eye' | 'low' | 'worm';
+
+export interface CameraElevation { key: CameraElevationKey; pitch: number }
+
+export const CAMERA_ELEVATIONS: readonly CameraElevation[] = [
+    { key: 'overhead', pitch: 70 },
+    { key: 'high', pitch: 35 },
+    { key: 'eye', pitch: 0 },
+    { key: 'low', pitch: -30 },
+    { key: 'worm', pitch: -60 },
+];
+
+// All the way round in 45° steps. Both sides, not one side plus the mirror
+// button: mirroring flips the pose too, and a figure raising its right arm
+// seen from its left is a different picture from its mirror image. Front sits
+// in the middle so the row reads as the camera walking round the figure.
+export const CAMERA_AZIMUTHS: readonly number[] = [-135, -90, -45, 0, 45, 90, 135, 180];
+
+export const cameraTurn = (elevation: CameraElevation, azimuth: number): FigureTurn => ({
+    yaw: azimuth,
+    pitch: elevation.pitch,
+});
+
+// Which grid cell a figure is at, or null once it has been turned by hand —
+// same rule as viewPresetOf: never round an arbitrary angle to a name.
+export const cameraCellOf = (figure: PoseFigure): { elevation: CameraElevationKey; azimuth: number } | null => {
+    const turn = figureTurn(figure);
+    const elevation = CAMERA_ELEVATIONS.find((row) => Math.abs(turn.pitch - row.pitch) < 0.5);
+    if (!elevation) return null;
+    const azimuth = CAMERA_AZIMUTHS.find((yaw) => Math.abs(wrapYaw(turn.yaw - yaw)) < 0.5);
+    return azimuth === undefined ? null : { elevation: elevation.key, azimuth };
+};
+
+
 // Mirroring the coordinates is enough: the bone list is symmetric, so no
 // left/right relabelling is needed for the figure to render correctly. The
 // recorded view flips with it — mirroring a figure turned 35° to its left

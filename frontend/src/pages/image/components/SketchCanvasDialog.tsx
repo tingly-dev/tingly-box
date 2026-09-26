@@ -49,7 +49,6 @@ import {
     setFigureTurn,
     turnFigure,
     TURN_DEGREES_PER_PIXEL,
-    VIEW_PRESETS,
     hitTestJoint,
     swingTargetOf,
     nextFigureAt,
@@ -64,7 +63,7 @@ import {
     type JointKey,
     type PoseFigure,
     type PosePresetKey,
-    type ViewPresetKey,
+    type FigureTurn,
     drawFigure,
 } from '@tingly/mannequin';
 
@@ -390,11 +389,11 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         updateFigure(selectedFigure.id, (figure) => applyPreset(figure, preset, dims));
     }, [dims, selectedFigure, snapshot, updateFigure]);
 
-    const handleView = useCallback((view: ViewPresetKey) => {
+    const handleView = useCallback((turn: FigureTurn) => {
         setViewAnchor(null);
         if (!selectedFigure) return;
         snapshot();
-        updateFigure(selectedFigure.id, (figure) => setFigureTurn(figure, VIEW_PRESETS[view]));
+        updateFigure(selectedFigure.id, (figure) => setFigureTurn(figure, turn));
     }, [selectedFigure, snapshot, updateFigure]);
 
     const handleToolChange = useCallback((next: Tool) => {
@@ -735,8 +734,8 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                             variant="outlined"
                                             color="inherit"
                                             onClick={(event) => setViewAnchor(event.currentTarget)}
-                                            aria-label={t('playground.sketch.pose.views', { defaultValue: 'View' })}
-                                            title={t('playground.sketch.pose.views', { defaultValue: 'View' })}
+                                            aria-label={t('playground.sketch.pose.views', { defaultValue: 'Camera' })}
+                                            title={t('playground.sketch.pose.views', { defaultValue: 'Camera' })}
                                             startIcon={<Rotate3d fontSize="small" />}
                                             sx={{ textTransform: 'none', py: 0.1, px: 1, color: 'text.secondary' }}
                                         >

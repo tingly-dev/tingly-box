@@ -2034,13 +2034,20 @@ export default {
             "salute": "Отдаёт честь",
             "presenting": "Представляет"
           },
-          "view": {
-            "front": "Спереди",
-            "threeQuarter": "Три четверти",
-            "side": "Сбоку",
-            "back": "Сзади",
-            "above": "Сверху",
-            "below": "Снизу"
+          "camera": {
+            "elevation": {
+              "overhead": "Сверху",
+              "high": "Верхний ракурс",
+              "eye": "На уровне глаз",
+              "low": "Нижний ракурс",
+              "worm": "Снизу"
+            },
+            "azimuth": {
+              "front": "Анфас",
+              "side": "Профиль",
+              "back": "Сзади"
+            },
+            "cell": "{{elevation}} · поворот {{yaw}}°"
           },
                     "flip": "Отразить фигуру",
           "remove": "Удалить фигуру",

@@ -14,6 +14,10 @@ import {
     projectionOf,
     VIEW_PRESETS,
     viewPresetOf,
+    CAMERA_AZIMUTHS,
+    CAMERA_ELEVATIONS,
+    cameraCellOf,
+    cameraTurn,
     createFigure,
     distanceToSegment,
     figureBounds,
@@ -882,6 +886,35 @@ describe('the camera', () => {
         const figure = createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.side);
         expect(viewPresetOf(figure)).toBe('side');
         expect(viewPresetOf(turnFigure(figure, 13, 0))).toBeNull();
+    });
+
+    it('lands on every cell of the camera grid and names it back', () => {
+        // Every row must fit inside the pitch clamp, or clicking it would land
+        // the figure somewhere the grid does not highlight.
+        for (const elevation of CAMERA_ELEVATIONS) {
+            expect(Math.abs(elevation.pitch)).toBeLessThanOrEqual(MAX_VIEW_PITCH);
+            for (const azimuth of CAMERA_AZIMUTHS) {
+                const figure = setFigureTurn(createFigure('standing', DIMS), cameraTurn(elevation, azimuth));
+                expect(cameraCellOf(figure)).toEqual({ elevation: elevation.key, azimuth });
+            }
+        }
+    });
+
+    it('leaves the camera grid unselected once the figure is turned by hand', () => {
+        const figure = setFigureTurn(createFigure('standing', DIMS), cameraTurn(CAMERA_ELEVATIONS[1], 45));
+        expect(cameraCellOf(turnFigure(figure, 13, 0))).toBeNull();
+        expect(cameraCellOf(turnFigure(figure, 0, 9))).toBeNull();
+    });
+
+    it('shows a true profile from the side of the grid', () => {
+        // The two shoulders stack on top of each other in a side view — that
+        // is what makes it a profile rather than a steep three-quarter.
+        const eye = CAMERA_ELEVATIONS.find((row) => row.key === 'eye')!;
+        const figure = createFigure('standing', DIMS, undefined, 0, cameraTurn(eye, 90));
+        const joints = projectFigure(figure);
+        const span = Math.abs(joints.shoulderL.x - joints.shoulderR.x);
+        const front = projectFigure(createFigure('standing', DIMS, undefined, 0, cameraTurn(eye, 0)));
+        expect(span).toBeLessThan(Math.abs(front.shoulderL.x - front.shoulderR.x) * 0.15);
     });
 
     it('mirrors the view along with the body', () => {
