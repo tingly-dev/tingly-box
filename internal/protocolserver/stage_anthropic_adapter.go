@@ -30,6 +30,9 @@ type StageAnthropicAttempt struct {
 	ActualModel   string
 	ResponseModel string
 	Streaming     bool
+	// Finish, when set, rewrites a complete answer before it is tracked and
+	// written (e.g. the X-Tingly-Response-Roundtrip debug round trip).
+	Finish func(*anthropic.BetaMessage) (*anthropic.BetaMessage, error)
 }
 
 // ServeStageAnthropic is the HTTP adapter for Anthropic clients: it runs the
@@ -62,6 +65,14 @@ func (ph *ProtocolHandler) completeStageAnthropic(c *gin.Context, endpoint stage
 		ph.failRequest(c, fmt.Errorf("stage adapter: response has type %T, want *anthropic.BetaMessage", response.Value), "Invalid pipeline response")
 		holdAfterCompletion(c)
 		return
+	}
+
+	if attempt.Finish != nil {
+		if message, err = attempt.Finish(message); err != nil {
+			ph.failRequest(c, err, "Failed to finish response")
+			holdAfterCompletion(c)
+			return
+		}
 	}
 
 	// Usage covers every round of the pipeline, not only the final message.

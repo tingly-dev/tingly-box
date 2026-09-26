@@ -456,43 +456,12 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		require.GreaterOrEqual(t, probe.anthropicNonStreamCalls, 1)
 	})
 
-	t.Run("AnthropicV1_to_OpenAIChat_MCPAligned", func(t *testing.T) {
-		probe := &pathProbe{}
-		backend := newOpenAIPathBackend(t, probe)
-		defer backend.Close()
-
-		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		provider := &typ.Provider{UUID: "p-ao-v1", Name: "p-ao-v1", APIStyle: protocol.APIStyleOpenAI, APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
-
-		code, _, body := runDispatch(t, s, provider, buildOpenAIReq(true), protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, true)
-		require.Equal(t, http.StatusOK, code)
-		require.Equal(t, 0, probe.openaiNonStreamCalls)
-		require.Equal(t, 1, probe.openaiStreamCalls, "stream path should stay true-stream and avoid downgrade")
-
-		code, _, body = runDispatch(t, s, provider, buildOpenAIReq(false), protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, false)
-		require.Equal(t, http.StatusOK, code)
-		require.Contains(t, body, "\"tool_use\"")
-		require.Equal(t, 1, probe.openaiNonStreamCalls)
-	})
-
-	t.Run("AnthropicBeta_to_OpenAIChat_MCPAligned", func(t *testing.T) {
-		probe := &pathProbe{}
-		backend := newOpenAIPathBackend(t, probe)
-		defer backend.Close()
-
-		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		provider := &typ.Provider{UUID: "p-ao-beta", Name: "p-ao-beta", APIStyle: protocol.APIStyleOpenAI, APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
-
-		code, _, body := runDispatch(t, s, provider, buildOpenAIReq(true), protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, true)
-		require.Equal(t, http.StatusOK, code)
-		require.Equal(t, 0, probe.openaiNonStreamCalls)
-		require.Equal(t, 1, probe.openaiStreamCalls, "stream path should stay true-stream and avoid downgrade")
-
-		code, _, body = runDispatch(t, s, provider, buildOpenAIReq(false), protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, false)
-		require.Equal(t, http.StatusOK, code)
-		require.Contains(t, body, "\"tool_use\"")
-		require.Equal(t, 1, probe.openaiNonStreamCalls)
-	})
+	// Anthropic clients on OpenAI Chat providers no longer dispatch through
+	// DispatchChainResult with a pre-converted request: they are served by the
+	// Protocol Stage pipeline (serveAnthropicOnOpenAIChat). True-stream
+	// forwarding and the tool_use answer are pinned end to end over HTTP by
+	// protocoltest (TestGoldenWire and TestMCPOwnedToolLoop, anthropic_* ->
+	// openai_chat).
 }
 
 func TestAnthropicBetaPureExternalStreamDoesNotAppendSyntheticStop(t *testing.T) {
