@@ -350,6 +350,13 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeKimiCode
 	}
 
+	// Another tingly-box. Checked before the host rules: an edge reaches its
+	// central box on any host, local or remote, and the route shape is what
+	// says a gateway answers there.
+	if _, ok := GatewayQuotaURL(provider.APIBase); ok {
+		return ProviderTypeTinglyBox
+	}
+
 	// Fallback: infer from the APIBase host.
 	//
 	// The host, never the whole URL. Matching the URL made any path segment

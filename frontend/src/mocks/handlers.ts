@@ -1604,8 +1604,8 @@ let probeRequestCount = 0
 
 const defaultMockTeamID = '00000000-0000-0000-0000-000000000001'
 let mockTeams = [
-    { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-    { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
+    { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, quota_visible: false, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, quota_visible: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
 ]
 let mockSharingKeys = [
     { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
@@ -2683,7 +2683,7 @@ export const handlers = [
         const used = new Set(mockTeams.map((team) => /^t(\d+)$/.exec(team.slug)?.[1]).filter(Boolean).map(Number))
         let number = 1
         while (used.has(number)) number++
-        const team = {id: crypto.randomUUID(), name: body.name, slug: `t${number}`, enabled: true, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
+        const team = {id: crypto.randomUUID(), name: body.name, slug: `t${number}`, enabled: true, quota_visible: false, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
         mockTeams = [...mockTeams, team]
         return HttpResponse.json(team, {status: 201})
     }),

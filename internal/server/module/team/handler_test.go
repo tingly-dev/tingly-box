@@ -93,3 +93,37 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 		t.Fatalf("default delete status = %d: %s", defaultDelete.Code, defaultDelete.Body.String())
 	}
 }
+
+func TestHandler_UpdateQuotaVisible(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	manager, err := db.NewStoreManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	router := gin.New()
+	router.PUT("/teams/:team_id", NewHandler(manager.Team()).Update)
+	decode := func(body []byte) TeamInfo {
+		var info TeamInfo
+		if err := json.Unmarshal(body, &info); err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+
+	if record, _ := manager.Team().Get(db.DefaultTeamID); record.QuotaVisible {
+		t.Fatal("quota must be private by default")
+	}
+
+	shared := performRequest(router, http.MethodPut, "/teams/"+db.DefaultTeamID, `{"name":"Default","quota_visible":true}`)
+	if shared.Code != http.StatusOK || !decode(shared.Body.Bytes()).QuotaVisible {
+		t.Fatalf("share quota: %d %s", shared.Code, shared.Body.String())
+	}
+
+	// A rename without the field leaves the setting alone.
+	renamed := performRequest(router, http.MethodPut, "/teams/"+db.DefaultTeamID, `{"name":"Main"}`)
+	if info := decode(renamed.Body.Bytes()); info.Name != "Main" || !info.QuotaVisible {
+		t.Fatalf("rename changed quota visibility: %+v", info)
+	}
+}

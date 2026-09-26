@@ -93,7 +93,7 @@ func (h *Handler) GetClaudeCodeStatus(c *gin.Context) {
 		resp.TBScenario = mapping.scenario
 
 		// Fetch quota information
-		h.populateQuotaData(resp, mapping.providerUUID)
+		h.populateQuotaData(resp, mapping.providerUUID, mapping.model)
 	}
 
 	c.JSON(http.StatusOK, CombinedStatus{
@@ -308,8 +308,9 @@ func (h *Handler) getTBModelMapping(modelID string, scenario typ.RuleScenario) *
 	}
 }
 
-// populateQuotaData fetches and populates quota information for the given provider
-func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID string) {
+// populateQuotaData fetches and populates quota information for the given
+// provider, as seen by a request for model (see quota.ForModel).
+func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID, model string) {
 	if h.quotaMgr == nil || providerUUID == "" {
 		return
 	}
@@ -324,7 +325,7 @@ func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID strin
 	}
 
 	// The tightest window is the one the next request will hit.
-	window := usage.Tightest()
+	window := usage.ForModel(model).Tightest()
 	if window == nil {
 		return
 	}
@@ -356,7 +357,7 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	return formatQuotaInline(usage)
+	return formatQuotaInline(usage.ForModel(mapping.model))
 }
 
 func formatQuotaInline(usage *quota.ProviderUsage) string {
@@ -455,7 +456,7 @@ func (h *Handler) ResolveRoute(ctx context.Context, scenario, modelID string) *R
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		if usage, err := h.quotaMgr.GetQuota(ctx, mapping.providerUUID); err == nil {
-			route.Quota = QuotaSegments(usage)
+			route.Quota = QuotaSegments(usage.ForModel(mapping.model))
 		}
 	}
 	return route

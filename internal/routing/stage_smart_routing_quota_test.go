@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,32 @@ func TestSmartRouting_ServiceQuota_NoProviderWired_Passes(t *testing.T) {
 	require.Nil(t, final)
 	require.Len(t, narrowed, 1, "op must pass through (match) when quota is unwired, not block routing")
 	require.Equal(t, "prov-unknown", narrowed[0].Provider)
+}
+
+// TestSmartRouting_ServiceQuota_GatewayJudgesEachModel verifies a tingly-box
+// upstream is judged per model: one provider entry serves several models from
+// the central box, and an exhausted model must not mark its siblings hot.
+func TestSmartRouting_ServiceQuota_GatewayJudgesEachModel(t *testing.T) {
+	qp := newMockQuotaProvider()
+	qp.setGateway("central", map[string]float64{"opus": 97, "sonnet": 20})
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	stage.SetQuotaProvider(qp)
+
+	infos := stage.collectAllQuotaInfo(context.Background(), []smartrouting.SmartRouting{{
+		Ops: []smartrouting.SmartOp{testServiceQuotaOp(smartrouting.OpServiceQuotaPctGe, "85")},
+		Services: []*loadbalance.Service{
+			testService("central", "opus", true),
+			testService("central", "sonnet", true),
+			testService("central", "not-shared", true),
+		},
+	}})
+
+	got := make(map[string]float64)
+	for _, info := range infos {
+		got[info.ServiceID] = info.Pct
+	}
+	require.Equal(t, map[string]float64{
+		loadbalance.FormatServiceID("central", "opus"):   97,
+		loadbalance.FormatServiceID("central", "sonnet"): 20,
+	}, got, "each model reads its own quota; a model the gateway does not report stays unknown")
 }

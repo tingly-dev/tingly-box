@@ -240,7 +240,9 @@ func TestRefreshSkipsUnsupportedProviders(t *testing.T) {
 
 // A path segment is a user-chosen name and must never speak for a vendor.
 // Matching the whole URL read a local gateway route named "codex1" as Codex,
-// which sent that provider's token to chatgpt.com on the next refresh.
+// which sent that provider's token to chatgpt.com on the next refresh. The
+// /tingly/<scenario> route shape does identify a tingly-box gateway, whose
+// fetcher only ever calls back the host the provider already talks to.
 func TestInferProviderTypeIgnoresPathAndLocalHosts(t *testing.T) {
 	t.Parallel()
 
@@ -249,10 +251,14 @@ func TestInferProviderTypeIgnoresPathAndLocalHosts(t *testing.T) {
 		apiBase string
 		want    ProviderType
 	}{
-		{"local gateway route named codex", "http://localhost:12581/tingly/codex1", ""},
-		{"loopback ip", "http://127.0.0.1:12581/tingly/gemini", ""},
+		{"local gateway route named codex", "http://localhost:12581/tingly/codex1", ProviderTypeTinglyBox},
+		{"loopback ip", "http://127.0.0.1:12581/tingly/gemini", ProviderTypeTinglyBox},
+		{"remote gateway", "https://tb.example.com/tingly/team/v1", ProviderTypeTinglyBox},
+		{"gateway behind a proxy prefix", "https://example.com/llm/tingly/claude_code", ProviderTypeTinglyBox},
+		{"bare tingly path is no scenario", "http://localhost:12581/tingly", ""},
 		{"private lan", "http://192.168.1.10:8080/v1/cursor", ""},
-		{"container hostname", "http://tingly-box:12581/tingly/codex1", ""},
+		{"container hostname", "http://tingly-box:12581/tingly/codex1", ProviderTypeTinglyBox},
+		{"container hostname, not a gateway route", "http://tingly-box:12581/v1", ""},
 		{"mdns", "http://mac.local:12581/copilot/v1", ""},
 		{"vendor name only in the path", "https://gateway.example.com/proxy/openrouter.ai/api/v1", ""},
 		{"lookalike domain", "https://api.openai.com.evil.test/v1", ""},

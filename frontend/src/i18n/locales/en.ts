@@ -1719,6 +1719,8 @@ export default {
     "keyScopeInfoLabel": "Sharing key access scope",
     "editTeam": "Team settings",
     "name": "Team name",
+    "shareQuota": "Share quota with sharing keys",
+    "shareQuotaHint": "Key holders, such as another Tingly Box connected with this team's key, can see how much of each team model is left and when it resets. Only percentages are shared; providers, accounts and balances stay private.",
     "inactive": "Inactive",
     "disabledHint": "This team is disabled. Its sharing keys cannot access model endpoints until the team is enabled.",
     "enableTeam": "Enable team",

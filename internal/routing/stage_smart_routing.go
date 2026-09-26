@@ -374,7 +374,9 @@ func (s *SmartRoutingStage) collectAllCapacityInfo(rules []smartrouting.SmartRou
 // omitted (not zeroed) when its provider's standard quota is unknown —
 // unknown must never read as 0%.
 //
-// Uses usage.Pct(quota.WindowKindLimit), not the unfiltered usage.Pct():
+// Uses usage.ForModel(model).Pct(quota.WindowKindLimit) — ForModel only
+// narrows a tingly-box gateway to the service's model — not the unfiltered
+// usage.Pct():
 // the op reacts only to standard, self-healing quota, never a standing
 // balance/credit — see .design/quota-semantics.md §8.1.
 func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []smartrouting.SmartRouting) []smartrouting.ServiceQuotaInfo {
@@ -382,7 +384,7 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 		return nil
 	}
 	seen := make(map[string]struct{})
-	pctByProvider := make(map[string]*float64) // nil value = provider quota unknown
+	usageByProvider := make(map[string]*quota.ProviderUsage) // nil value = provider quota unknown
 	var result []smartrouting.ServiceQuotaInfo
 	for _, r := range rules {
 		for _, svc := range r.Services {
@@ -395,14 +397,18 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 			if svc.Provider == "" {
 				continue
 			}
-			pctPtr, looked := pctByProvider[svc.Provider]
+			usage, looked := usageByProvider[svc.Provider]
 			if !looked {
-				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil {
-					if pct, ok := usage.Pct(quota.WindowKindLimit); ok {
-						pctPtr = &pct
-					}
+				if u, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil {
+					usage = u
 				}
-				pctByProvider[svc.Provider] = pctPtr
+				usageByProvider[svc.Provider] = usage
+			}
+			// ForModel: a tingly-box upstream serves many models from one
+			// provider and each runs out on its own.
+			var pctPtr *float64
+			if pct, ok := usage.ForModel(svc.Model).Pct(quota.WindowKindLimit); ok {
+				pctPtr = &pct
 			}
 			if pctPtr == nil {
 				continue

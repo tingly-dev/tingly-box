@@ -40,6 +40,7 @@ const UseTeamPageContent: React.FC = () => {
     const [editorOpen, setEditorOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [teamName, setTeamName] = useState('');
+    const [quotaVisible, setQuotaVisible] = useState(false);
     const [saving, setSaving] = useState(false);
     const [toggling, setToggling] = useState(false);
 
@@ -50,6 +51,7 @@ const UseTeamPageContent: React.FC = () => {
     const openEditor = () => {
         if (!currentTeam) return;
         setTeamName(currentTeam.name);
+        setQuotaVisible(currentTeam.quota_visible);
         setEditorOpen(true);
     };
 
@@ -74,7 +76,7 @@ const UseTeamPageContent: React.FC = () => {
         if (!currentTeam || !teamName.trim()) return;
         const ok = await runTeamAction(
             setSaving,
-            () => api.updateTeam(currentTeam.id, {name: teamName.trim()}),
+            () => api.updateTeam(currentTeam.id, {name: teamName.trim(), quota_visible: quotaVisible}),
             t('teams.saveFailed'),
         );
         if (!ok) return;
@@ -236,6 +238,19 @@ const UseTeamPageContent: React.FC = () => {
                     <Stack spacing={2.5} sx={{mt: 1}}>
                         <TextField label={t('teams.name')} value={teamName} autoFocus fullWidth
                                    onChange={(event) => setTeamName(event.target.value)} />
+                        <Box>
+                            <FormControlLabel
+                                control={(
+                                    <Switch checked={quotaVisible}
+                                            onChange={(event) => setQuotaVisible(event.target.checked)} />
+                                )}
+                                label={t('teams.shareQuota')}
+                                sx={{m: 0}}
+                            />
+                            <Typography variant="body2" color="text.secondary" sx={{mt: 0.5}}>
+                                {t('teams.shareQuotaHint')}
+                            </Typography>
+                        </Box>
                     </Stack>
                 </DialogContent>
                 <DialogActions>

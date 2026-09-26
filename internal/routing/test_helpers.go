@@ -184,6 +184,21 @@ func (m *mockQuotaProvider) setResourcePct(providerUUID string, pct float64) {
 	}
 }
 
+// setGateway registers a tingly-box upstream that reports quota per model —
+// the shape quota.GatewayUsage produces for an edge's view of a central box.
+func (m *mockQuotaProvider) setGateway(providerUUID string, pctByModel map[string]float64) {
+	gq := &quota.GatewayQuota{}
+	for model, pct := range pctByModel {
+		gq.Models = append(gq.Models, quota.ModelQuota{Model: model, Windows: []*quota.UsageWindow{
+			{Key: "5h", Kind: quota.WindowKindLimit, Limit: 100, UsedPercent: pct},
+		}})
+	}
+	usage := quota.GatewayUsage(gq)
+	usage.ProviderUUID = providerUUID
+	usage.ProviderType = quota.ProviderTypeTinglyBox
+	m.usage[providerUUID] = usage
+}
+
 func (m *mockQuotaProvider) GetQuota(_ context.Context, providerUUID string) (*quota.ProviderUsage, error) {
 	usage, ok := m.usage[providerUUID]
 	if !ok {
