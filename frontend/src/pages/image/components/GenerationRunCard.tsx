@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Close, Edit, ErrorOutline, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
+import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 
@@ -114,7 +114,11 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                 flex: layout.cols === 1
                     ? { xs: '0 0 min(82vw, 320px)', md: stripCardBasis(null) }
                     : { xs: `0 0 min(88vw, ${layout.cardWidth}px)`, md: stripCardBasis(layout) },
-                height: STRIP_CARD_HEIGHT,
+                // On the wrapping workbench the card is a grid cell instead:
+                // its width is the column(s) it spans, and its height follows
+                // from square slots rather than from the panel.
+                height: { xs: STRIP_CARD_HEIGHT, lg: 'auto' },
+                ...wrapCardSpanSx(layout.cols),
                 bgcolor: 'background.paper',
                 borderStyle: run.status === 'pending' ? 'dashed' : 'solid',
                 borderColor: run.status === 'failed' ? 'error.main' : undefined,
@@ -237,7 +241,8 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                 display: 'grid',
                                 gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
                                 gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
-                                flex: 1,
+                                flex: { xs: 1, lg: 'none' },
+                                aspectRatio: { lg: `${layout.cols} / ${layout.rows}` },
                                 minHeight: 0,
                                 gap: 1,
                             }}

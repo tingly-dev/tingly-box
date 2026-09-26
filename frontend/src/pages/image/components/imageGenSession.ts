@@ -211,3 +211,27 @@ export const stripCardBasis = (layout: { rows: number; cols: number; cardWidth: 
     const square = `calc(${slot} * ${cols} + ${(cols - 1) * SLOT_GAP + CARD_PADDING}px)`;
     return `0 0 min(100%, max(${base}, ${square}))`;
 };
+
+// The full-height workbench (lg up) lays the strip out as a grid instead of a
+// sideways row. Columns come from the panel's width, not its height: as many
+// as fit at WRAP_COLUMN_MIN, stretched to fill the row. Sizing cards from the
+// height (stripCardBasis) left a panel just under two cards wide with one card
+// per row and the other half empty.
+export const WRAP_COLUMN_MIN = 260;
+export const WRAP_GRID_GAP = 12;
+
+/** gridTemplateColumns of the results strip on the wrapping workbench. */
+export const WRAP_GRID_COLUMNS = `repeat(auto-fill, minmax(min(100%, ${WRAP_COLUMN_MIN}px), 1fr))`;
+
+/**
+ * Container-query styles letting a run card with `cols` image columns span up
+ * to that many grid columns — as many as the strip has room for. The strip is
+ * the size container, so each query reads its width.
+ */
+export const wrapCardSpanSx = (cols: number): Record<string, { gridColumn: string }> => {
+    const sx: Record<string, { gridColumn: string }> = {};
+    for (let k = 2; k <= cols; k += 1) {
+        sx[`@container (min-width: ${k * WRAP_COLUMN_MIN + (k - 1) * WRAP_GRID_GAP}px)`] = { gridColumn: `span ${k}` };
+    }
+    return sx;
+};

@@ -5,7 +5,7 @@ import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
-import { STRIP_CARD_HEIGHT } from './imageGenSession';
+import { STRIP_CARD_HEIGHT, WRAP_GRID_COLUMNS, WRAP_GRID_GAP } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
 
 // One timeline for the results panel: images brought in to work on and
@@ -200,16 +200,20 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                         ref={historyTrackRef}
                         data-testid="imagegen-history-track"
                         sx={{
-                            display: 'flex',
-                            gap: 1.5,
+                            // A short strip (stacked layout) scrolls sideways.
+                            // The full-height workbench is a grid that scrolls
+                            // down instead: columns from the panel's width, so
+                            // a row is always full rather than one card and a
+                            // gap (see WRAP_GRID_COLUMNS).
+                            display: { xs: 'flex', lg: 'grid' },
+                            gridTemplateColumns: { lg: WRAP_GRID_COLUMNS },
+                            // Rows as tall as their cards; `auto` would squeeze
+                            // them to fit the panel (cards clip, so their
+                            // min-height is 0) instead of scrolling.
+                            gridAutoRows: { lg: 'max-content' },
+                            gap: { xs: 1.5, lg: `${WRAP_GRID_GAP}px` },
                             flex: 1,
                             minHeight: 0,
-                            // A short strip (stacked layout) scrolls sideways.
-                            // The full-height workbench wraps into rows instead:
-                            // cards stop growing at a set height, and the height
-                            // left over shows more of the session rather than
-                            // one screen-sized picture (see stripCardBasis).
-                            flexWrap: { xs: 'nowrap', lg: 'wrap' },
                             alignContent: 'flex-start',
                             overflowX: { xs: 'auto', lg: 'hidden' },
                             overflowY: { xs: 'hidden', lg: 'auto' },
@@ -238,7 +242,8 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 // push the first card off its row, so there it is
                                 // a slim bar across the top instead.
                                 sx={{
-                                    flex: { xs: '0 0 84px', lg: '0 0 100%' },
+                                    flex: { xs: '0 0 84px' },
+                                    gridColumn: { lg: '1 / -1' },
                                     height: { xs: STRIP_CARD_HEIGHT, lg: 36 },
                                     display: 'flex',
                                     flexDirection: { xs: 'column', lg: 'row' },
