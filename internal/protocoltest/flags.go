@@ -635,9 +635,10 @@ func ruleFlagCases() []flagCase {
 		}},
 
 		// ── claude_code_version ──────────────────────────────────────────────
-		// On the real Claude OAuth path: unset keeps the legacy emulation;
-		// "2.1.280" re-signs the request as the native client
-		// (.design/claude-code.md Part B).
+		// On the real Claude OAuth path: unset follows the default (latest
+		// native client); "2.1.86" keeps the legacy emulation; "2.1.280"
+		// re-signs the request as the native client (.design/claude-code.md
+		// Part B).
 		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
 			s := flagScenario()
 			env.virtual.RegisterScenario(s)
@@ -662,8 +663,9 @@ func ruleFlagCases() []flagCase {
 				rule.Flags = typ.RuleFlags{ClaudeCodeVersion: version}
 				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 			}
-			addRule("pv-flag-ccver-legacy", "")
+			addRule("pv-flag-ccver-legacy", typ.ClaudeCodeVersionLegacy)
 			addRule("pv-flag-ccver-280", typ.ClaudeCodeVersion2_1_280)
+			addRule("pv-flag-ccver-default", typ.ClaudeCodeVersionDefault)
 
 			type upstream struct {
 				headers http.Header
@@ -727,7 +729,7 @@ func ruleFlagCases() []flagCase {
 				return out
 			}
 
-			// Unset: legacy chain, exactly as before the flag existed.
+			// "2.1.86": legacy chain, exactly as before the flag existed.
 			legacy := send("pv-flag-ccver-legacy")
 			if got := legacy.headers.Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
 				t.Errorf("legacy User-Agent = %q", got)
@@ -803,6 +805,15 @@ func ruleFlagCases() []flagCase {
 				t.Errorf("parent_session_id not preserved: %v", native.meta)
 			}
 
+			// Unset: the default resolves to the latest native client.
+			def := send("pv-flag-ccver-default")
+			if got, want := def.headers.Get("User-Agent"), "claude-cli/"+typ.ClaudeCodeVersionLatest+" (external, cli)"; got != want {
+				t.Errorf("default User-Agent = %q, want %q", got, want)
+			}
+			if len(def.system) == 0 || !strings.HasPrefix(def.system[0], "x-anthropic-billing-header: cc_version="+typ.ClaudeCodeVersionLatest+".") {
+				t.Errorf("default billing header = %q", def.system)
+			}
+
 			// count_tokens follows the same profile. The virtual upstream has
 			// no count_tokens endpoint, so a local server captures it.
 			var ctHeaders http.Header
@@ -839,8 +850,11 @@ func ruleFlagCases() []flagCase {
 				}
 				return ctHeaders
 			}
-			if got := countTokens("pv-flag-ccver-ct-legacy", "").Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
+			if got := countTokens("pv-flag-ccver-ct-legacy", typ.ClaudeCodeVersionLegacy).Get("User-Agent"); got != "claude-cli/2.1.86 (external, cli)" {
 				t.Errorf("legacy count_tokens User-Agent = %q", got)
+			}
+			if got, want := countTokens("pv-flag-ccver-ct-default", typ.ClaudeCodeVersionDefault).Get("User-Agent"), "claude-cli/"+typ.ClaudeCodeVersionLatest+" (external, cli)"; got != want {
+				t.Errorf("default count_tokens User-Agent = %q, want %q", got, want)
 			}
 			ct := countTokens("pv-flag-ccver-ct-280", typ.ClaudeCodeVersion2_1_280)
 			if got := ct.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {

@@ -593,7 +593,7 @@ core efficiency win (skip process-spawn/startup cost per message).
 > wire 元素、官方客户端怎么生成它们、我们对齐到什么程度、哪些地方有意不对齐。结论全部来自官方 npm 包的逆向和
 > 真实二进制的抓包，可复现（§B2）。
 >
-> 当前只有两档：**Legacy**（2.1.86 模拟，默认）和原生 profile **2.1.280**。先看 §B0；升版看 §B6。
+> flag 有三个取值：空值 **Default**（解析为最新版本，当前即 2.1.280）、原生 profile **2.1.280**、**2.1.86**（Legacy 模拟，需显式选择）。先看 §B0；升版看 §B6。
 
 ---
 
@@ -610,20 +610,24 @@ Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控，低于要求的�
 只改版本号不够：同期的 SDK 版本、beta 列表、billing header、metadata 都变了，"新 UA + 旧的其他一切"本身就是
 指纹异常。所以原生 profile 逐项对齐真实客户端。
 
-### B0.1 启用方式：`claude_code_version` rule flag，默认关闭
+### B0.1 启用方式：`claude_code_version` rule flag，默认最新版本
 
 | 值 | 行为 |
 |---|---|
-| `""`（默认，Legacy） | 与 flag 出现之前**逐字节相同**的 2.1.86 模拟：`claude_round_tripper.go` 的常量、静态 beta 串、随机 `cch`、按字节的 fingerprint、`\u003c` 转义都原样保留 |
+| `""`（Default） | 跟随 `typ.ClaudeCodeVersionLatest`，当前解析为 `2.1.280`。存量配置里没写这个字段的规则自动走这一档，无需迁移 |
 | `2.1.280` | 原生客户端 profile（§B3，2.1.280 的差异见 §B8） |
+| `2.1.86`（Legacy） | 与 flag 出现之前**逐字节相同**的 2.1.86 模拟：`claude_round_tripper.go` 的常量、静态 beta 串、随机 `cch`、按字节的 fingerprint、`\u003c` 转义都原样保留 |
 
 - 定义在 `typ.RuleFlags.ClaudeCodeVersion`（registry：`claude_code_version`，enum，`request_anthropic` 分类）；
   也可在 scenario 级设置（`ScenarioFlags.ClaudeCodeVersion`，rule 值优先）。
 - **只作用于 Claude OAuth provider**：同一规则经负载均衡或 failover 落到其它 provider 时，flag 解析会清掉该值
-  （其它客户端没有 cch 中间件）。未知值按 Legacy 处理，不会出现半套 profile。
+  （其它客户端没有 cch 中间件）。未知值按 Default（最新版本）处理，不会出现半套 profile。
+- 解析点唯一：`ResolveRuleFlagsWithScenario` 在 scenario 继承与 probe overlay 之后，对 Claude OAuth provider 调
+  `typ.ResolveClaudeCodeVersion` 把配置值落成具体版本（`2.1.86` 或原生版本），下游只看到具体值，`""` 只表示"不适用"。
+  没经过规则解析的旁路（模型列表、light probe、vision proxy、advisor 等直接用 client pool 的调用）上下文里没有 flag，
+  仍按 Legacy 头发出。
 - 覆盖 `/v1/messages` 与 `/v1/messages/count_tokens`；Legacy 的 count_tokens 仍用不带 flag 的 context，行为不变。
-- provider 级 probe 在合成规则上默认用最新 profile 并补 Claude Code preamble（见 `.design/probe.md`）；
-  真实流量仍按规则自身的 flag。
+- provider 级 probe 的合成规则与普通规则一样按 Default 解析为最新 profile，并补 Claude Code preamble（见 `.design/probe.md`）。
 - 数据流：`ResolveRuleFlagsWithScenario` 合并 → `RulePreVendorTransforms` 挂 `ClaudeCodeVersionTransform`，把版本写进
   chain `Extra` → `ops.ApplyAnthropic*MetadataTransform` 按 `ClaudeCodeVersionFromExtra` 分派到
   `applyNativeClaudeCodeIdentity*`（Legacy 路径一行未动）→ `NewClaudeClient` 按 `claudeCodeNativeVersion(ctx)` 叠加
@@ -636,7 +640,7 @@ Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控，低于要求的�
 
 ✅ = 已实现并有测试；↩ = 不合成，只在入站已带时校验后保留；— = 依赖代理侧看不到的信息，无法对齐。
 
-| 类别 | 项 | Legacy（默认） | 2.1.280 | 备注 |
+| 类别 | 项 | Legacy（2.1.86） | 2.1.280（默认） | 备注 |
 |---|---|---|---|---|
 | client header | `User-Agent` | `claude-cli/2.1.86 (external, cli)` | ✅ `claude-cli/2.1.280 (external, cli)` | |
 | client header | `X-Stainless-Package/Runtime-Version` | `0.74.0` / `v24.3.0` | ✅ `0.112.1` / `v26.3.0` | 原生 Bun 二进制伪装的 Node 版本 |
@@ -1049,7 +1053,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 | wire 元素 | 生成 / 处理位置 | 关键符号 |
 |---|---|---|
-| 版本与开关 | `internal/typ/type.go`、`flag_registry.go`；`protocolserver/rule_flags.go`（scenario 继承、只作用于 Claude OAuth、probe 默认、`ClaudeCodeVersionTransform` 挂载） | `typ.ClaudeCodeVersion2_1_280`、`ClaudeCodeVersionLatest`、`ClaudeCodeVersionEnabled` |
+| 版本与开关 | `internal/typ/type.go`、`flag_registry.go`；`protocolserver/rule_flags.go`（scenario 继承、只作用于 Claude OAuth、默认值解析、`ClaudeCodeVersionTransform` 挂载） | `typ.ClaudeCodeVersion2_1_280`、`ClaudeCodeVersionLatest`、`ResolveClaudeCodeVersion`、`ClaudeCodeVersionEnabled` |
 | UA / stainless / 固定头 | Legacy：`internal/client/claude_round_tripper.go` + `claude_client.go::applyClaudeCodeHeaders`（未改）；原生覆盖层：`claude_version.go::applyNativeClaudeCodeHeaders` | `nativeClaudeCLIUserAgent`、`nativeStainless*`、`stainlessOSName/ArchName` |
 | `anthropic-beta` | `internal/client/claude_betas.go` | `composeClaudeCodeBetas`、`claudeCodeBetaEmissionOrder`、`claudeCodeClientReplayableBetas`、`v1/betaClaudeBetaSignals` |
 | 逐请求头与 cch 中间件 | `claude_version.go::nativeRequestOptions`（Guard / GuardBeta 在 `c.native` 时追加） | `sanitizeClaudeHeaderValue`、`claudeHintHeaderValueRe`、`claudeCodeCCHMiddleware` |
@@ -1057,7 +1061,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | count_tokens | `protocolserver/anthropic_count_tokens.go`（解析 flag，只在原生时传带 flag 的 context）；`claude_version.go::nativeCountTokensClient` | `filterClaudeCodeCountTokensBetas` |
 | 入站 hint 采集 | `protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
 | billing header 与 metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头分派（Legacy 原样）；调用方 `transform/vendor.go::isClaudeCodeBackend` | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`billingHeaderPreservedFields`、`computeFingerprintJS`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
-| probe | `internal/probe/e2e_probe.go`（`targetIsClaudeCode` → preamble）；合成规则的版本默认在 `rule_flags.go` | 见 `.design/probe.md` |
+| probe | `internal/probe/e2e_probe.go`（`targetIsClaudeCode` → preamble）；版本默认值的解析在 `rule_flags.go` | 见 `.design/probe.md` |
 | clean header | `protocolserver/transform/transform_clean_header.go`（未改） | — |
 
 `typ.DefaultUserAgents` 里的 2.1.86 字面量只是 `custom_user_agent` 的快选建议，与本 flag 无关，未改。
@@ -1066,11 +1070,11 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 - **单元与 wire 测试**：`internal/client/claude_betas_test.go`（beta 抓包原文、httptest 断言发出的头）、`claude_cch_test.go`
   （Python 参考实现向量、占位符定位）、`internal/protocol/ops/claude_code_billing_header_test.go`（fingerprint `31f`、
-  Node 算出的非 ASCII 向量、Legacy 回归）、`protocolserver/rule_flags_test.go`（provider 范围、probe 默认）、
+  Node 算出的非 ASCII 向量、Legacy 回归）、`protocolserver/rule_flags_test.go`（provider 范围、默认解析为最新）、
   `claude_code_hints_test.go`、`transform/vendor_claude_relay_test.go`。
   Legacy 护栏：`TestClaudeClient_LegacyProfileUnchanged`、`TestApplyAnthropicBetaMetadataTransform_LegacyUnchanged`。
 - **网关端到端**：`internal/protocoltest/flags.go` 的 `claude_code_version` case（`go test ./internal/protocoltest/ -run
-  TestRuleFlags/claude_code_version`，或 `harness matrix --mode=flags`）让同一请求分别以 Legacy 与 2.1.280 走完真实网关，
+  TestRuleFlags/claude_code_version`，或 `harness matrix --mode=flags`）让同一请求分别以 Legacy、2.1.280 与未设置（Default）走完真实网关，
   逐项断言上游收到的 UA、beta、子 agent 头、`x-app`、billing header、metadata，以及 count_tokens。升版后先跑它。
 - **抓包回放**：设 `TINGLY_CC_CAPTURE_DIR=<抓包目录>` 后，`TestRewriteClaudeCodeCCH_LiveCaptures` 对真实 body 逐字节重算 `cch`。
 - **真实上游**：唯一能证明服务端接受 `cch` 和指纹的方式。harness 的 real-provider 模式支持 Claude Code OAuth entry
@@ -1123,7 +1127,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 3. 按 §B2.4 抓包（API key / OAuth × 代理 / 强制直连，`env -i`），把 `anthropic-beta` 原文和 `cc_version` 写进测试
    （`TestComposeClaudeCodeBetas_*Capture`、`TestComputeCCVersionFor_MatchesLiveCapture`；`-p` 比交互式少一个 `redact-thinking`）。
 4. 原地升级：把 `ClaudeCodeVersion2_1_280` 常量与 registry 选项改成新版本（`ClaudeCodeVersionLatest` 随之指向它），
-   不做版本间门控。已存储旧版本号的规则会被判为未知、回落 Legacy，届时需要迁移或别名。
+   不做版本间门控。已存储旧版本号的规则会被判为未知、按 Default 解析为新的最新版本，无需迁移。
 5. 跑 `go test ./internal/client/ ./internal/protocol/... ./internal/protocolserver/ ./internal/protocoltest/`，`task codegen`
    刷新 openapi 和前端类型；用 §B4.2 的真实上游命令验证一次。
 6. 更新本部分的 §B0 与 §B8（新版本相对上一版的差异表）。
@@ -1139,7 +1143,6 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | `structured-outputs` 灰度分支 | `tengu_tool_pear` 开启且模型支持时进基线 | 仅 body 带 `format` 时加，另接受入站回放 | 灰度值按用户下发，代理侧看不到 |
 | 灰度 / env 门控的 beta（`timing`、`inline-tools`、`mid-conversation-tool-changes`、`thinking-resumption`、`message-threads`、`dangerous-tool-use`、`mid-conversation-system-clear-at`） | 由 env、GrowthBook 或服务端分类器决定 | 只回放入站已带的 | 代理侧看不到门控条件 |
 | `x-claude-code-agent-type` 默认值 | 仅子 agent 请求发 agent 名 | 只回放 | agent 名只有客户端知道 |
-| 规则显式选 Legacy | — | 与"未设置"同为空值，scenario 级设了 2.1.280 时单条规则无法退回 Legacy | Legacy 已被拒，实际影响很小 |
 
 风险：
 
