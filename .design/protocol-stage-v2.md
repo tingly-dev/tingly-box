@@ -151,7 +151,7 @@ V1 不再是链路中的协议，只在两个边缘处理：
 
 - 采纳；Provider 边缘**做** downgrade。
 - **不单独做清理步骤**：新协议层从一开始就没有 V1 这个协议——客户端边缘 upgrade/downgrade 在
-  HTTP Adapter（P4），provider 边缘 downgrade 在 Provider Endpoint（P2）；旧 V1 代码随 V1 源
+  HTTP Adapter（P5），provider 边缘 downgrade 在 Provider Endpoint（P3）；旧 V1 代码随 V1 源
   协议对切流一并删除，不预先重构即将被替换的代码。
 - "Beta 是超集"的前提在 harness 中提前验证：V1 请求经 upgrade → Beta → downgrade 与现行 V1 路径
   逐字节比对（上游请求 + 客户端响应），在搭协议层之前暴露问题，不动生产代码。
@@ -169,7 +169,7 @@ V1 不再是链路中的协议，只在两个边缘处理：
 
 hardening-port 分支可几乎原样搬的：`protocoltest/guardrails.go`、`mcp_matrix.go`、`TestEnv` 的
 guardrails / servertool 选项、tool loop / guardrail 组合测试 helper（去掉 stage 断言）、Responses
-tool-call-only 流的 `assembleFromEvents` 修复。`bridge_matrix.go` 留到 P1 与 stage 包一起搬。
+tool-call-only 流的 `assembleFromEvents` 修复。`bridge_matrix.go` 不搬（以 V1 为中心、自带 fixture）；P2 改为复用 vmodel 场景 fixture 与断言的紧凑内存矩阵。
 
 **已知缺口登记表**：用例写"期望的正确行为"；当前失败的登记在 `knownGaps`（带 G 编号），报告为
 known-gap 而非失败。修复分支必须同时删除对应条目。
@@ -189,11 +189,12 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | F5 | `claude/lucid-heisenberg-ppa3kj-chat-google`（**已合入 #1847**，基于 main） | 独立热修复：Chat → Google 目标返回空 200；接上现有 converter，未处理的源显式报错 | 修 Chat→Google |
 | H2 | 并入 `-h1`（**已推送**） | 每个协议对 × 12 场景 × 流/非流的 golden wire 快照（上游请求 + 客户端响应，`-update`）；全矩阵与 idempotent 的 `go test` 入口；V1 ⇄ Beta 请求 wire 逐字节等价（§4 前提成立）；MCP 工具报错 / 轮数上限 / mixed 续接。登记 M4 M5，删除 M2 | 无 |
 | P1 | `claude/lucid-heisenberg-ppa3kj-p1`（**已推送**，叠在 h1 上） | `internal/protocol/stage` 契约 + 单测：Endpoint / Stage / Compose / Bridge / 精确配对 Registry / BuildTopology；链内拒绝 `anthropic_v1`（只在边缘处理）；去掉隐式 identity 回退与反射 nil 检查 | 无 |
-| P2 | `stage/2-bridges` | Bridge（包装现有 converter）+ Provider Endpoint + in-memory bridge 矩阵（搬 `bridge_matrix.go`） | 无 |
-| P3 | `stage/3-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
-| P4 | `stage/4-http-adapter` | 各客户端协议的 HTTP Adapter（JSON / SSE / 首块提交 / model 改写 / usage / affinity） | 无 |
-| C1 | `stage/5-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
-| C2… | `stage/6-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
+| P2 | `claude/lucid-heisenberg-ppa3kj-p2`（**已推送**，叠在 p1 上） | 6 个 Beta-only Bridge（Beta⇄Chat、Beta⇄Responses、Chat⇄Responses），包装现有 converter，不含 V1 / identity bridge；`TestBridgeMatrix`：每个 bridge × 成功场景 × 流/非流，在内存中复用 HTTP 矩阵的场景 fixture 与断言（错误场景属 HTTP 状态映射，归 P5） | 无 |
+| P3 | `stage/3-provider-endpoint` | Provider Endpoint：包装 `forwarding.Forward*`；Anthropic endpoint 内做 Beta → V1 downgrade；用 H2 golden 的上游请求快照验证 wire 不变 | 无 |
+| P4 | `stage/4-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
+| P5 | `stage/5-http-adapter` | 各客户端协议的 HTTP Adapter（JSON / SSE / 首块提交 / model 改写 / usage / affinity） | 无 |
+| C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
+| C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
 | Z | `stage/9-cleanup` | 删除 `HandleContext` stream hooks、`ErrMCPStreamContinue`、toolengine `FormatAdapter.SendEvent` 等遗留；Google 目标去留 | 收尾 |
 
 独立小修（随时可合）：Chat → Google 目标可选中但无处理分支（静默无响应）；Responses 入口从不设置 `reqCtx.ResponseModel`。
@@ -211,7 +212,7 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 
 ## 8. 待讨论
 
-1. §4：是否采纳"Anthropic 内部只保留 Beta"，以及 Provider 边缘 downgrade 是否需要（还是直接统一发 Beta）。
+1. ~~§4：是否采纳"Anthropic 内部只保留 Beta"~~——已决定，见 §4.4。
 2. OpenAI 入口（Chat / Responses 源）是否启用 Guardrails：切流后技术上直接可得，是产品决策；此前保持 `GuardrailsSupportedScenarios` 不变。
 3. Gate 是否对非 tool 的**文本**做流式评估（今天只有非流式评估文本）。
 4. Chat → Google：补齐还是显式不支持。
