@@ -91,7 +91,7 @@ const { chromium } = createRequire('file://' + process.cwd() + '/')('playwright'
 | Script | Mode | Purpose |
 |--------|------|---------|
 | [`screenshot.mjs`](screenshot.mjs) | mock | **Ad-hoc template** — copy here and customise; do NOT commit |
-| [`docs-screenshots.mjs`](docs-screenshots.mjs) | mock | All 9 `docs/images/` product screenshots + theme previews |
+| [`docs-screenshots.mjs`](docs-screenshots.mjs) | mock | All 11 `docs/images/` product screenshots (sidebar order) + theme previews |
 | [`regression-credentials.mjs`](regression-credentials.mjs) | mock | Assertion-based regression for `/credentials` Add API Key flow |
 | [`scenario-routing-graph.mjs`](scenario-routing-graph.mjs) | real backend | Codex routing graph screenshots (requires running Go server) |
 
