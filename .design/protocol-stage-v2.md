@@ -267,6 +267,7 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | H3 | `claude/lucid-heisenberg-ppa3kj-h3`（**已推送**，叠在 p5 上） | IR 往返保真度 harness（§2.4 加粗四对，开 MCP 时）：Chat↔Beta↔Chat、Responses↔Beta↔Responses、Chat→Beta→Responses、Responses→Beta→Chat 的请求 / 非流式响应 / 流式响应，与直连对比，损失登记为 known-gap | 无 |
 | P5b | 待定 | OpenAI 客户端（Chat / Responses）的 HTTP Adapter；前提是 H3（§8.5） | 无 |
 | C1 | `claude/lucid-heisenberg-ppa3kj-c1`（**已推送**，叠在 h3 上） | 第一次切流：Anthropic Beta 客户端 → Anthropic provider 全部请求走 Stage 管线（Stage 仅在 MCP / Guardrails 生效时插入）；删除 `passthroughAnthropicBeta`、Beta 的 generic MCP dispatch、`StreamAnthropicBeta`；保留工具执行期间的 `: keep-alive`（`stage.Heartbeat`）；G2 Beta→Beta 移出 known-gap；golden 不变，harness CLI 1132 例 0 失败 | Beta→Beta |
+| C1-V1 | `claude/lucid-heisenberg-ppa3kj-c1-v1`（**已推送**，叠在 c1 上） | V1 客户端 → Anthropic provider 走 Stage 管线：边缘 V1→Beta 升级、`AnthropicWireV1` 发往 provider、Adapter 降级回 V1；删除 `StreamAnthropicV1` / `NonstreamAnthropicV1`；golden 仅按 §8.6 预期变化（分帧、一处错误文案、截断错误码），provider 请求逐字节不变；G2 V1→Anthropic 移出 known-gap | V1→Anthropic |
 | C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
 | Z | `stage/9-cleanup` | 删除 `HandleContext` stream hooks、`ErrMCPStreamContinue`、toolengine `FormatAdapter.SendEvent` 等遗留；Google 目标去留 | 收尾 |
 
