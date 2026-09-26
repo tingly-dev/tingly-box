@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -140,6 +141,13 @@ type InterceptorConfig struct {
 	// (e.g. guardrails stream accumulator). The interceptor does not know
 	// what this callback does — it only calls it.
 	OnBeforeRound func(round int) error
+	// RewriteClientEvent, when set, sees every client-bound tool_use event
+	// (block start / delta / stop) and the round's terminal message_delta.
+	// handled=true means the original event must not be sent; out holds the
+	// replacement events (possibly none while a block is being buffered).
+	// Guardrails uses it to hold a tool_use until evaluated and replace a
+	// blocked one with text.
+	RewriteClientEvent func(event any) (handled bool, out []protocol.GuardrailsBufferedEvent, err error)
 }
 
 // ResponseDecision represents the decision after classifying a response

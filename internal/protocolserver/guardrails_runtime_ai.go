@@ -132,6 +132,21 @@ func AttachGuardrailsHooks(c *gin.Context, runtime *guardrails.Guardrails, hc *p
 	}
 }
 
+// GuardrailsClientEventRewriter returns the toolengine interceptor hook that
+// enforces stream guardrails on client-bound Anthropic events: each tool_use
+// block is held until the stream hooks have evaluated it, a blocked one is
+// replaced with a text block (and the round's stop_reason with end_turn), and
+// credential aliases are restored in allowed ones. It is the interceptor-side
+// counterpart of the rewrite in stream.HandleAnthropic/HandleAnthropicBeta.
+func GuardrailsClientEventRewriter(hc *protocol.HandleContext) func(event any) (bool, []protocol.GuardrailsBufferedEvent, error) {
+	return func(event any) (bool, []protocol.GuardrailsBufferedEvent, error) {
+		if hc.Guardrails == nil || !hc.Guardrails.Enabled {
+			return false, nil, nil
+		}
+		return guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, event)
+	}
+}
+
 // ReattachGuardrailsHooks resets per-round guardrails state and re-registers fresh
 // hooks on hc for the next MCP loop round. It truncates OnStreamEventHooks back to
 // baseEventHooks (the count before guardrails was first attached) so previous-round
