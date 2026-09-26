@@ -201,7 +201,16 @@ def save_images(payload, out_dir, prompt, ext):
             f.write(blob)
         if not os.path.isfile(path) or os.path.getsize(path) == 0:
             sys.exit(f"error: failed to write {path}")
-        entry = {"path": rel_path(path), "abs_path": os.path.abspath(path), "bytes": len(blob)}
+        prompt_path = os.path.splitext(path)[0] + ".md"
+        with open(prompt_path, "w", encoding="utf-8") as f:
+            f.write(prompt.rstrip() + "\n")
+        entry = {
+            "path": rel_path(path),
+            "abs_path": os.path.abspath(path),
+            "bytes": len(blob),
+            "prompt_path": rel_path(prompt_path),
+            "prompt_abs_path": os.path.abspath(prompt_path),
+        }
         if item.get("revised_prompt"):
             entry["revised_prompt"] = item["revised_prompt"]
         saved.append(entry)

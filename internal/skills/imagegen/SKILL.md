@@ -60,6 +60,8 @@ generate in the background:
    Each image comes with `path` (relative to `cwd`, the directory you ran the script from)
    and `abs_path`. Report both to the user. Use `abs_path` when passing the file on (a later
    `edit --image`, other tools, another directory), so it can't be misresolved after a `cd`.
+   Next to every image the script writes a Markdown file with the same name (`.md`) holding
+   the prompt it was made from (`prompt_path` / `prompt_abs_path`); mention it, no need to read it.
    Output goes to `./generated-images/` unless the user named a place (`--out`). A follow-up
    "make it bluer" is an `edit --image <abs_path>` (the script reads the file itself; you
    don't need to).
