@@ -10,18 +10,16 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
-	"github.com/sirupsen/logrus"
-	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -119,41 +117,16 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 	}
 }
 
-// dispatchOpenAIResponses routes a Responses-API-bound request by the client's
-// source format. Anthropic sources on Codex providers use the assembly path
-// (Codex only streams), other providers use the plain non-streaming forward.
-//
-// Uses provider.IsCodexProvider() (OAuth issuer, falling back to literal
-// APIBase) rather than a raw APIBase equality check, so a test provider can
-// trip this branch via OAuthDetail.Issuer while APIBase points at a mock
-// server — see protocoltest.SetupCodexAssemblyRoute.
+// dispatchOpenAIResponses routes a Responses-API-bound request by the
+// client's source format. Anthropic sources never reach it: they are served
+// by the Stage pipeline (serveAnthropicOnOpenAI), which also assembles Codex
+// (stream-only) answers for non-streaming clients.
 func (ph *ProtocolHandler) dispatchOpenAIResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool,
 ) {
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
-	req := reqCtx.Request.(*responses.ResponseNewParams)
-
 	switch reqCtx.SourceAPI {
-	case protocol.TypeAnthropicV1:
-		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
-		if isStreaming {
-			ph.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-		} else if provider.IsCodexProvider() {
-			ph.assembleResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-		} else {
-			ph.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-		}
-	case protocol.TypeAnthropicBeta:
-		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
-		if isStreaming {
-			ph.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-		} else if provider.IsCodexProvider() {
-			ph.assembleResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-		} else {
-			ph.nonstreamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-		}
 	case protocol.TypeOpenAIChat:
 		// Client sent Responses API, but provider needs Chat format
 		// Forward as Chat, then convert response back to Responses format
@@ -169,6 +142,9 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 		} else {
 			ph.nonstreamOpenAIResponses(c, reqCtx, provider)
 		}
+	default:
+		// Anthropic clients are served by serveAnthropicOnOpenAI.
+		ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an OpenAI Responses target", reqCtx.SourceAPI))
 	}
 }
 
@@ -531,7 +507,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			ph.streamOpenAIChatToResponses(c, reqCtx, provider)
 		default:
 			// Anthropic clients reach Chat providers through the Stage pipeline
-			// (serveAnthropicOnOpenAIChat) and never dispatch here.
+			// (serveAnthropicOnOpenAI) and never dispatch here.
 			ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an OpenAI Chat target", reqCtx.SourceAPI))
 		}
 	} else {
@@ -552,7 +528,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			return
 		default:
 			// Anthropic clients reach Chat providers through the Stage pipeline
-			// (serveAnthropicOnOpenAIChat) and never dispatch here.
+			// (serveAnthropicOnOpenAI) and never dispatch here.
 			ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an OpenAI Chat target", reqCtx.SourceAPI))
 		}
 	}

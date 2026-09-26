@@ -175,3 +175,16 @@ func TestClassifyUpstreamFailure_MatchesIndividualAccessors(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyUpstreamFailure_EmptyResponse(t *testing.T) {
+	empty := &EmptyResponseError{Err: errors.New("stream ended without a final response")}
+	if got := ClassifyUpstreamFailure(empty, http.StatusInternalServerError); got.Status != http.StatusBadGateway {
+		t.Errorf("empty response status = %d, want %d", got.Status, http.StatusBadGateway)
+	}
+
+	// The provider's own status still wins over the empty-response default.
+	sdk := &EmptyResponseError{Err: newOpenAIError(t, 429, `{"code":"rate_limit_exceeded","message":"slow down","param":"","type":"rate_limit_error"}`)}
+	if got := ClassifyUpstreamFailure(sdk, http.StatusInternalServerError); got.Status != 429 {
+		t.Errorf("empty response with provider status = %d, want 429", got.Status)
+	}
+}

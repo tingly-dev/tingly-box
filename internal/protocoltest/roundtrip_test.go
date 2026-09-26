@@ -6,6 +6,7 @@ package protocoltest_test
 // DefaultPairs, error-status semantics, and the Codex assembly branch.
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -148,7 +149,7 @@ func TestRoundTrip_CodexAssembly_Golden(t *testing.T) {
 }
 
 // TestRoundTrip_CodexAssembly_Beta mirrors the golden case for the Anthropic
-// beta source (assembleResponsesToAnthropicBeta instead of the v1 variant).
+// beta source.
 func TestRoundTrip_CodexAssembly_Beta(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -180,15 +181,19 @@ func TestRoundTrip_CodexAssembly_PrimeFailure(t *testing.T) {
 
 // TestRoundTrip_CodexAssembly_NoContentBlocks reproduces #1316's repro end
 // to end via ErrorMidStreamCloseScenario, whose stream is cut before any
-// content block completes: a retryable error, not 200 with content:null.
+// content block completes: a retryable 502, not 200 with content:null.
 func TestRoundTrip_CodexAssembly_NoContentBlocks(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
+	for _, source := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
+		t.Run(string(source), func(t *testing.T) {
+			env := pt.NewTestEnv(t)
+			defer env.Close()
 
-	env.SetupCodexAssemblyRoute(protocol.TypeAnthropicV1, pt.ErrorMidStreamCloseScenario())
+			env.SetupCodexAssemblyRoute(source, pt.ErrorMidStreamCloseScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses, pt.ErrorMidStreamCloseScenario(), false)
+			result := env.SendAs(t, source, protocol.TypeOpenAIResponses, pt.ErrorMidStreamCloseScenario(), false)
 
-	assert.GreaterOrEqual(t, result.HTTPStatus, 400,
-		"a stream cut before any content block completes must fail, not return 200 with content:null")
+			assert.Equal(t, http.StatusBadGateway, result.HTTPStatus,
+				"a stream cut before any content block completes must fail as a bad gateway, not return 200 with content:null")
+		})
+	}
 }

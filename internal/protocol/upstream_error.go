@@ -28,6 +28,13 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 		return UpstreamFailure{Status: fallbackStatus}
 	}
 
+	// An upstream that answered with nothing usable failed as a gateway
+	// would: 502 unless the cause carries the provider's own status.
+	var empty *EmptyResponseError
+	if errors.As(err, &empty) {
+		fallbackStatus = http.StatusBadGateway
+	}
+
 	var oaiErr *openai.Error
 	if errors.As(err, &oaiErr) {
 		redacted := *oaiErr
@@ -56,6 +63,19 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 
 	return UpstreamFailure{Status: fallbackStatus, Message: err.Error()}
 }
+
+// EmptyResponseError marks an upstream call that ended without a usable
+// answer, such as a stream that closed before any output. It classifies as
+// 502 (see ClassifyUpstreamFailure), so failover retries another candidate.
+type EmptyResponseError struct {
+	Err error
+}
+
+func (e *EmptyResponseError) Error() string {
+	return "upstream returned an empty response: " + e.Err.Error()
+}
+
+func (e *EmptyResponseError) Unwrap() error { return e.Err }
 
 // UpstreamStatus extracts the HTTP status an upstream provider returned
 // (openai.Error / anthropic.Error / genai.APIError's own status), so a
