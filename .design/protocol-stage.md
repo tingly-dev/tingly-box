@@ -161,11 +161,9 @@ Gate 与 Owner 都是可选的：两者都没有时，Tool Round Stage 直接透
 | 对象 | 对照的现有路径 | 测试 |
 |---|---|---|
 | Bridge 发往 provider 的请求、Chat 的 `OpenAIConfig` | `transform.BaseTransform` | `protocoltest.TestBridgeRequestEquivalence` |
-| Bridge 返回的完整消息 | 现有非流式转换函数 | `protocoltest.TestBridgeResponseEquivalence` |
-| Bridge 返回的流（逐事件） | 现有流式 handler（经 SDK 自带 SSE 解码器喂入） | 同上 |
 | 终端 Endpoint 发给 provider 的请求 | 现有 `forwarding.Forward*` 调用 | `upstream.TestUpstreamWireMatchesDirectForward` |
 
-改动一个会影响输出的 Bridge 选项（如 `ResponseModel`、stream usage）会让差分测试失败，说明测试确实具备检出能力。
+Bridge 返回方向（完整消息与逐事件的流）在路由切换前曾与现有非流式转换函数和流式 handler 做过同样的差分；这些 handler 随路由切换删除后，返回方向由 HTTP 级的 golden wire 快照固定。
 
 差分测试无法覆盖的是**路由如何接入这一层**；那部分由 HTTP 级的 golden wire 快照（`protocoltest.TestGoldenWire`）在接入时证明。
 

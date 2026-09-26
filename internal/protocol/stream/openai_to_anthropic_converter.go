@@ -7,7 +7,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
-	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
@@ -476,37 +475,8 @@ func (c *openAIToAnthropicConverter) emitMessageStop() {
 	c.emitAnthropic(eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop})
 }
 
-// anthropicSSEWriter returns a writer that sends Anthropic SSE events using
-// c.SSEvent (no spaces after colons) and mirrors events to stream_event_recorder.
-func anthropicSSEWriter(c *gin.Context) func(interface{}) error {
-	return func(event interface{}) error {
-		e, ok := event.(anthropicStreamEvent)
-		if !ok {
-			return nil
-		}
-		sendAnthropicStreamEvent(c, e.eventType, e.data, nopFlusher{})
-		return nil
-	}
-}
-
-// anthropicSSEWriterWithFirstChunk wraps anthropicSSEWriter and calls CommitFirstChunk
-// on the first event, signalling that upstream is healthy before any byte hits the wire.
-func anthropicSSEWriterWithFirstChunk(c *gin.Context) func(interface{}) error {
-	first := true
-	inner := anthropicSSEWriter(c)
-	return func(event interface{}) error {
-		if first {
-			protocol.CommitFirstChunk(c)
-			first = false
-		}
-		return inner(event)
-	}
-}
-
 // nopFlusher satisfies http.Flusher with a no-op; gin's ResponseWriter handles flushing.
 type nopFlusher struct{}
-
-func (nopFlusher) Flush() {}
 
 // isErr is a helper to avoid errors package in this file.
 func isErr(err, target error) bool {

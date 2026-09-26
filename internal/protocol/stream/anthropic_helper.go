@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -132,8 +131,7 @@ func sendMessageStart(c *gin.Context, flusher http.Flusher, model string, inputT
 	sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 }
 
-// sendAnthropicStreamEvent sends one Anthropic SSE event and optionally records it
-// via StreamEventRecorder if one is stored in the Gin context.
+// sendAnthropicStreamEvent sends one Anthropic SSE event.
 // eventData may be a map or one of the typed wire event structs from
 // anthropic_wire_events.go; both marshal to the same wire shapes.
 // It also marks TTFT on the first content_block_delta event; MarkFirstToken is
@@ -152,21 +150,6 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData any, f
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
-
-	if recorder, exists := c.Get(constant.CtxKeyStreamEventRecorder); exists {
-		if r, ok := recorder.(StreamEventRecorder); ok {
-			if m, ok := eventData.(map[string]interface{}); ok {
-				r.RecordRawMapEvent(eventType, m)
-			} else {
-				// Typed wire event: recording is a debug/replay mode, so the
-				// map conversion cost is acceptable here and only here.
-				var m map[string]interface{}
-				if err := json.Unmarshal(eventJSON, &m); err == nil {
-					r.RecordRawMapEvent(eventType, m)
-				}
-			}
-		}
-	}
 }
 
 // sendThinkingSignature sends a signature_delta for a thinking block before it is stopped.

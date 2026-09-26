@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -47,10 +48,10 @@ func TestSendAnthropicStreamEvent_TTFTOnlyOnContentDelta(t *testing.T) {
 	}
 }
 
-// TestHandleResponsesToAnthropicV1Stream_RecordsTTFTOnDelta verifies the
+// TestResponsesToAnthropicStream_RecordsTTFTOnDelta verifies the
 // Responses→Anthropic conversion records TTFT at the first content delta, not
 // the leading response.created / message_start.
-func TestHandleResponsesToAnthropicV1Stream_RecordsTTFTOnDelta(t *testing.T) {
+func TestResponsesToAnthropicStream_RecordsTTFTOnDelta(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -75,7 +76,7 @@ func TestHandleResponsesToAnthropicV1Stream_RecordsTTFTOnDelta(t *testing.T) {
 		newFakeResponsesDecoder(events), nil,
 	)
 
-	_, err := HandleResponsesToAnthropicV1Stream(protocol.NewHandleContext(c, "proxy-model"), stream, "proxy-model")
+	_, err := writeAnthropicSSE(protocol.NewHandleContext(c, "proxy-model"), NewOpenAIResponsesToAnthropicConverter(context.Background(), stream, "proxy-model"))
 	require.NoError(t, err)
 
 	// TTFT must be recorded once content flowed.

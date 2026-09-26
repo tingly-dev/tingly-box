@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewHandleContext(t *testing.T) {
@@ -324,13 +323,10 @@ func TestHandleContext_ReleaseStreamStateDropsResponseHooks(t *testing.T) {
 	hc.WithOnStreamEvent(func(event interface{}) error { return nil })
 	hc.WithOnStreamComplete(func() {})
 	hc.WithOnStreamError(func(err error) {})
-	hc.EnsureGuardrailsStream().AnthropicToolEvents[0] = []GuardrailsBufferedEvent{{EventType: "content_block_delta"}}
 
 	hc.ReleaseStreamState()
 
 	assert.Nil(t, hc.OnStreamEventHooks)
 	assert.Nil(t, hc.OnStreamCompleteHooks)
 	assert.Nil(t, hc.OnStreamErrorHooks)
-	require.NotNil(t, hc.Guardrails)
-	assert.Nil(t, hc.Guardrails.Stream)
 }

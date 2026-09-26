@@ -22,11 +22,6 @@ func TestResponsesToAnthropicUsesCallID(t *testing.T) {
 	require.Len(t, beta.Content, 1)
 	assert.Equal(t, "tool_use", beta.Content[0].Type)
 	assert.Equal(t, "call_weather", beta.Content[0].ID)
-
-	v1 := HandleResponsesToAnthropicV1(&response, "public-model")
-	require.Len(t, v1.Content, 1)
-	assert.Equal(t, "tool_use", v1.Content[0].Type)
-	assert.Equal(t, "call_weather", v1.Content[0].ID)
 }
 
 func TestCompleteConversionsPreserveTruncation(t *testing.T) {
@@ -51,8 +46,6 @@ func TestCompleteConversionsPreserveTruncation(t *testing.T) {
 		"output":[{"id":"msg_1","type":"message","role":"assistant","status":"incomplete","content":[{"type":"output_text","text":"partial","annotations":[]}]}],
 		"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}
 	}`), &response))
-	responsesV1 := HandleResponsesToAnthropicV1(&response, "public-model")
-	assert.Equal(t, "max_tokens", string(responsesV1.StopReason))
 	responsesBeta := HandleResponsesToAnthropicBeta(&response, "public-model")
 	assert.Equal(t, "max_tokens", string(responsesBeta.StopReason))
 }

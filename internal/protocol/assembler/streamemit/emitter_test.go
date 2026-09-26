@@ -1,14 +1,11 @@
 package streamemit
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // feedV1Raw is a small helper that unmarshals a raw v1 event JSON and
@@ -343,32 +340,4 @@ func TestStreamEmitter_RejectsMixedVersions(t *testing.T) {
 
 	_, err = e.FeedV1Beta(betaEvent(t, fxMessageStart("msg_beta")))
 	assert.ErrorIs(t, err, ErrMixedVersions)
-}
-
-func TestStreamEmitter_GuardrailsCompatSketch(t *testing.T) {
-	// The output of streamemit is byte-compatible with
-	// protocol.GuardrailsBufferedEvent (it's the same type via alias).
-	// This test demonstrates that the Payload map a guardrails consumer
-	// would build by hand matches what the emitter produces.
-	e := New(Config{ToolPolicy: EmitOnComplete})
-	feedV1Raw(t, e, fxMessageStart("msg_gr"))
-	feedV1Raw(t, e, fxToolUseBlockStart(0, "toolu_gr", "f"))
-	feedV1Raw(t, e, fxInputJSONDelta(0, `{}`))
-	flushed := feedV1Raw(t, e, fxBlockStop(0))
-
-	// Construct an equivalent slice of GuardrailsBufferedEvent from the
-	// same raw JSON payloads — the alias makes assignment trivial.
-	var guardrailsView []protocol.GuardrailsBufferedEvent = flushed
-	require.Len(t, guardrailsView, 3)
-	assert.Equal(t, "content_block_start", guardrailsView[0].EventType)
-
-	// And the Payload round-trips through json.Marshal -> json.Unmarshal,
-	// which is what sendAnthropicStreamEvent does.
-	for _, ev := range guardrailsView {
-		raw, err := json.Marshal(ev.Payload)
-		require.NoError(t, err)
-		var back map[string]interface{}
-		require.NoError(t, json.Unmarshal(raw, &back))
-		assert.Equal(t, ev.Payload["type"], back["type"])
-	}
 }

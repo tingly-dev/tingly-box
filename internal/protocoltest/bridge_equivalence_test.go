@@ -3,45 +3,27 @@ package protocoltest
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
-	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
-	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// The bridges replace, one for one, the conversions the legacy paths perform
-// for an Anthropic Beta client on an OpenAI provider: BaseTransform on the way
-// up, and the legacy non-stream converters and stream handlers on the way
-// down. These tests run both on the same input and require the same output,
-// so the bridges are proven equivalent before any route uses them.
-//
-// Options mirror how the legacy paths call the converters: Chat requests are
-// converted in compatible mode with stream usage on, and the client-visible
-// model is the response model.
-
-const equivalenceResponseModel = "client-visible-model"
+// On the way up, the bridges convert an Anthropic Beta request for an OpenAI
+// provider exactly as BaseTransform does in the transform chain the other
+// routes still use. These tests run both on the same request and require the
+// same output. The way down is pinned by the wire golden snapshots of the
+// Anthropic client -> OpenAI provider pairs.
 
 func equivalenceBridges() []stage.Bridge {
 	return []stage.Bridge{
-		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{ResponseModel: equivalenceResponseModel}),
-		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{ResponseModel: equivalenceResponseModel}),
+		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
+		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{}),
 	}
 }
 
@@ -85,8 +67,8 @@ func TestBridgeRequestEquivalence(t *testing.T) {
 				bridge, name, body, streaming := bridge, name, body, streaming
 				t.Run(fmt.Sprintf("%s/%s/%s", bridge.Target(), name, streamMode(streaming)), func(t *testing.T) {
 					t.Parallel()
-					legacy := decodeBeta(t, body)
-					ctx := transform.NewTransformContext(legacy, transform.WithStreaming(streaming))
+					original := decodeBeta(t, body)
+					ctx := transform.NewTransformContext(original, transform.WithStreaming(streaming))
 					if err := transform.NewBaseTransform(bridge.Target()).Apply(ctx); err != nil {
 						t.Fatalf("BaseTransform: %v", err)
 					}
@@ -111,43 +93,6 @@ func TestBridgeRequestEquivalence(t *testing.T) {
 	}
 }
 
-// TestBridgeResponseEquivalence pins each bridge's client-visible answer to
-// the legacy one for every successful scenario the provider format has a
-// fixture for: the complete message through the legacy non-stream converter,
-// and the stream event by event through the legacy stream handler.
-func TestBridgeResponseEquivalence(t *testing.T) {
-	t.Parallel()
-	for _, bridge := range equivalenceBridges() {
-		for _, s := range AllScenarios() {
-			for _, streaming := range []bool{false, true} {
-				bridge, s, streaming := bridge, s, streaming
-				t.Run(fmt.Sprintf("%s/%s/%s", bridge.Target(), s.Name, streamMode(streaming)), func(t *testing.T) {
-					t.Parallel()
-					if reason, skip := bridgeMatrixSkip(s, bridge, streaming); skip {
-						t.Skip(reason)
-					}
-					mock := s.MockResponses[targetFormat(bridge.Target())]
-					if !streaming {
-						requireSameJSON(t, "complete message",
-							legacyCompleteBody(t, bridge.Target(), mock),
-							bridgeCompleteBody(t, bridge, mock))
-						return
-					}
-					legacy := legacyStreamPayloads(t, bridge.Target(), mock)
-					bridged := bridgeStreamPayloads(t, bridge, mock)
-					if len(legacy) != len(bridged) {
-						t.Fatalf("event count: legacy %d, bridge %d\nlegacy:\n%s\nbridge:\n%s",
-							len(legacy), len(bridged), strings.Join(legacy, "\n"), strings.Join(bridged, "\n"))
-					}
-					for i := range legacy {
-						requireSameJSON(t, fmt.Sprintf("stream event %d", i), []byte(legacy[i]), []byte(bridged[i]))
-					}
-				})
-			}
-		}
-	}
-}
-
 func decodeBeta(t *testing.T, body string) *anthropic.BetaMessageNewParams {
 	t.Helper()
 	var req anthropic.BetaMessageNewParams
@@ -159,152 +104,11 @@ func decodeBeta(t *testing.T, body string) *anthropic.BetaMessageNewParams {
 
 // requireSameJSON compares two JSON documents after the golden normalization
 // (sorted keys, numbered IDs, blanked timestamps).
-func requireSameJSON(t *testing.T, what string, legacy, bridged []byte) {
+func requireSameJSON(t *testing.T, what string, baseTransform, bridged []byte) {
 	t.Helper()
-	want := normalizeGolden(goldenJSON(legacy))
+	want := normalizeGolden(goldenJSON(baseTransform))
 	got := normalizeGolden(goldenJSON(bridged))
 	if want != got {
-		t.Fatalf("%s differs from the legacy path\n--- legacy\n%s\n+++ bridge\n%s", what, want, got)
+		t.Fatalf("%s differs from BaseTransform\n--- BaseTransform\n%s\n+++ bridge\n%s", what, want, got)
 	}
 }
-
-func legacyCompleteBody(t *testing.T, target protocol.APIType, mock MockResponseBuilder) []byte {
-	t.Helper()
-	_, body := mock.NonStream()
-	var message anthropic.BetaMessage
-	switch target {
-	case protocol.TypeOpenAIChat:
-		var completion openai.ChatCompletion
-		if err := json.Unmarshal(body, &completion); err != nil {
-			t.Fatalf("decode fixture: %v", err)
-		}
-		message = nonstream.HandleOpenAIChatToAnthropicBeta(&completion, equivalenceResponseModel)
-	case protocol.TypeOpenAIResponses:
-		var response responses.Response
-		if err := json.Unmarshal(body, &response); err != nil {
-			t.Fatalf("decode fixture: %v", err)
-		}
-		message = nonstream.HandleResponsesToAnthropicBeta(&response, equivalenceResponseModel)
-	}
-	return writeAnthropicMessage(t, message)
-}
-
-func bridgeCompleteBody(t *testing.T, bridge stage.Bridge, mock MockResponseBuilder) []byte {
-	t.Helper()
-	endpoint, err := stage.Adapt(&fixtureEndpoint{protocol: bridge.Target(), mock: mock}, bridge)
-	if err != nil {
-		t.Fatalf("adapt: %v", err)
-	}
-	request, err := sourceRequest(bridge.Source(), false)
-	if err != nil {
-		t.Fatalf("source request: %v", err)
-	}
-	response, err := endpoint.Complete(context.Background(), stage.Call{Request: request})
-	if err != nil {
-		t.Fatalf("bridge complete: %v", err)
-	}
-	return writeAnthropicMessage(t, response.Value)
-}
-
-// writeAnthropicMessage renders a message through the writer every
-// Anthropic client path shares, so both sides are compared as sent.
-func writeAnthropicMessage(t *testing.T, message any) []byte {
-	t.Helper()
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	nonstream.WriteAnthropicMessage(c, message)
-	return w.Body.Bytes()
-}
-
-// legacyStreamPayloads runs the legacy stream handler on the fixture, decoded
-// by the SDK's own SSE decoder as it is from a provider, and returns the data
-// payloads it writes to the client.
-func legacyStreamPayloads(t *testing.T, target protocol.APIType, mock MockResponseBuilder) []string {
-	t.Helper()
-	upstream := httptest.NewRecorder()
-	sse.WriteSSEResponse(upstream, mock.Stream())
-	response := upstream.Result()
-
-	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	hc := protocol.NewHandleContext(c, equivalenceResponseModel)
-
-	var err error
-	switch target {
-	case protocol.TypeOpenAIChat:
-		chunks := openaistream.NewStream[openai.ChatCompletionChunk](openaistream.NewDecoder(response), nil)
-		request, rerr := sourceRequest(protocol.TypeAnthropicBeta, true)
-		if rerr != nil {
-			t.Fatalf("source request: %v", rerr)
-		}
-		chat, _ := convertedChatRequest(t, request.(*anthropic.BetaMessageNewParams))
-		_, err = stream.HandleOpenAIToAnthropicBetaStreamWithMCPHooks(hc, chat, chunks, equivalenceResponseModel, nil)
-	case protocol.TypeOpenAIResponses:
-		events := openaistream.NewStream[responses.ResponseStreamEventUnion](openaistream.NewDecoder(response), nil)
-		_, err = stream.HandleResponsesToAnthropicBetaStream(hc, events, equivalenceResponseModel)
-	}
-	if err != nil {
-		t.Fatalf("legacy stream handler: %v", err)
-	}
-	var payloads []string
-	for _, line := range strings.Split(w.Body.String(), "\n") {
-		if payload, ok := sse.ParseSSEDataPayload(strings.TrimSpace(line)); ok {
-			payloads = append(payloads, payload)
-		}
-	}
-	return payloads
-}
-
-// convertedChatRequest is the Chat request the legacy stream handler receives:
-// the client's request after BaseTransform.
-func convertedChatRequest(t *testing.T, req *anthropic.BetaMessageNewParams) (*openai.ChatCompletionNewParams, *protocol.OpenAIConfig) {
-	t.Helper()
-	ctx := transform.NewTransformContext(req, transform.WithStreaming(true))
-	if err := transform.NewBaseTransform(protocol.TypeOpenAIChat).Apply(ctx); err != nil {
-		t.Fatalf("BaseTransform: %v", err)
-	}
-	return ctx.Request.(*openai.ChatCompletionNewParams), ctx.Config.OpenAIConfig
-}
-
-func bridgeStreamPayloads(t *testing.T, bridge stage.Bridge, mock MockResponseBuilder) []string {
-	t.Helper()
-	endpoint, err := stage.Adapt(&fixtureEndpoint{protocol: bridge.Target(), mock: mock}, bridge)
-	if err != nil {
-		t.Fatalf("adapt: %v", err)
-	}
-	request, err := sourceRequest(bridge.Source(), true)
-	if err != nil {
-		t.Fatalf("source request: %v", err)
-	}
-	ctx := context.Background()
-	events, err := endpoint.Stream(ctx, stage.Call{Request: request})
-	if err != nil {
-		t.Fatalf("bridge stream: %v", err)
-	}
-	defer events.Close()
-	var payloads []string
-	for {
-		event, err := events.Next(ctx)
-		if errors.Is(err, io.EOF) {
-			return payloads
-		}
-		if err != nil {
-			t.Fatalf("bridge stream event: %v", err)
-		}
-		data, err := wireJSON(event.Value)
-		if err != nil {
-			t.Fatalf("render event: %v", err)
-		}
-		payloads = append(payloads, data)
-	}
-}
-
-// closeNotifyRecorder gives the stream handlers the CloseNotifier a real
-// connection provides.
-type closeNotifyRecorder struct {
-	*httptest.ResponseRecorder
-}
-
-func (r *closeNotifyRecorder) CloseNotify() <-chan bool { return make(chan bool) }

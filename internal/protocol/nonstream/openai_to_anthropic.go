@@ -119,15 +119,6 @@ func marshalOpenAIChatToAnthropic(chat *openai.ChatCompletion, model string) ([]
 	return jsonBytes, nil
 }
 
-// HandleOpenAIChatToAnthropicBeta converts OpenAI response to Anthropic beta format
-func HandleOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string) anthropic.BetaMessage {
-	msg, err := ConvertOpenAIChatToAnthropicBeta(chat, model)
-	if err != nil {
-		return anthropic.BetaMessage{}
-	}
-	return *msg
-}
-
 // ConvertOpenAIChatToAnthropicBeta converts an OpenAI Chat completion to a
 // typed Anthropic beta response without writing it to an HTTP transport.
 func ConvertOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string) (*anthropic.BetaMessage, error) {
@@ -251,70 +242,6 @@ func HandleResponsesToAnthropicBeta(rs *responses.Response, model string) anthro
 
 	jsonBytes, _ := json.Marshal(wire)
 	var msg anthropic.BetaMessage
-	json.Unmarshal(jsonBytes, &msg)
-	return msg
-}
-
-// HandleResponsesToAnthropicV1 converts OpenAI Responses API response to Anthropic v1 format
-func HandleResponsesToAnthropicV1(rs *responses.Response, model string) anthropic.Message {
-	wire := wire.AnthropicMsgWire{
-		ID:           rs.ID,
-		Type:         "message",
-		Role:         "assistant",
-		Content:      []interface{}{},
-		Model:        model,
-		StopReason:   "end_turn",
-		StopSequence: "",
-		Usage:        anthropicUsageWire(usageconv.FromOpenAIResponses(rs.Usage)),
-	}
-
-	var contentBlocks []anthropic.ContentBlockParamUnion
-
-	for _, output := range rs.Output {
-		for _, content := range output.Content {
-			if content.Type == "output_text" {
-				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
-			}
-		}
-		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
-			argsStr := resolveResponsesArguments(rs, output)
-			var arguments map[string]interface{}
-			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
-				arguments = make(map[string]interface{})
-			}
-			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(responsesToolCallID(output), arguments, output.Name))
-			wire.StopReason = "tool_use"
-		}
-	}
-
-	for _, output := range rs.Output {
-		for _, content := range output.Content {
-			if content.Type == "reasoning_text" && content.Text != "" {
-				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
-			}
-		}
-	}
-	if rs.Status == "incomplete" {
-		if rs.IncompleteDetails.Reason == "content_filter" {
-			wire.StopReason = "refusal"
-		} else {
-			wire.StopReason = "max_tokens"
-		}
-	}
-
-	for _, output := range rs.Output {
-		for _, content := range output.Content {
-			if content.Type == "refusal" && content.Text != "" {
-				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
-				wire.StopReason = "refusal"
-			}
-		}
-	}
-
-	wire.Content = contentBlocks
-
-	jsonBytes, _ := json.Marshal(wire)
-	var msg anthropic.Message
 	json.Unmarshal(jsonBytes, &msg)
 	return msg
 }

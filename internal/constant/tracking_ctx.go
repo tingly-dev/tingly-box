@@ -40,8 +40,7 @@ const (
 	CtxKeyOperation = "tracking_operation" // string
 
 	// Protocol recording metadata.
-	CtxKeyProtocolRecorder    = "protocol_recorder"     // *recording.ProtocolRecorder
-	CtxKeyStreamEventRecorder = "stream_event_recorder" // protocol/stream.StreamEventRecorder
+	CtxKeyProtocolRecorder = "protocol_recorder" // *recording.ProtocolRecorder
 
 	// Guardrail runtime metadata.
 	CtxKeyCredentialMaskState = "guardrails_credential_mask_state" // *guardrails/core.CredentialMaskState

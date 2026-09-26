@@ -5,11 +5,6 @@ import (
 	"fmt"
 )
 
-// StreamEventRecorder is an interface for recording stream events during protocol conversion
-type StreamEventRecorder interface {
-	RecordRawMapEvent(eventType string, event map[string]interface{})
-}
-
 func PrintChunk(chunk any) {
 	switch chunk.(type) {
 	case string:

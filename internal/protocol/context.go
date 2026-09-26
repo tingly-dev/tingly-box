@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
 // HandleContext provides dependencies for handle functions.
@@ -19,10 +18,6 @@ type HandleContext struct {
 
 	// Model info
 	ResponseModel string
-
-	// Guardrails runtime state shared across request/response/stream phases for
-	// one proxied conversation.
-	Guardrails *HandleGuardrails
 
 	// Hooks for stream processing (chainable - multiple hooks can be added)
 	OnStreamEventHooks    []func(event interface{}) error
@@ -45,54 +40,6 @@ func NewHandleContext(c *gin.Context, responseModel string) *HandleContext {
 		GinContext:    c,
 		ResponseModel: responseModel,
 	}
-}
-
-type HandleGuardrails struct {
-	Enabled bool
-
-	CredentialMask *guardrailscore.CredentialMaskState
-	Stream         *GuardrailsStreamState
-}
-
-type GuardrailsStreamState struct {
-	// PendingBlockMessages stores early hook verdicts keyed by tool_use id.
-	PendingBlockMessages map[string]string
-	// PendingBlockedIndex tracks which content block index is currently blocked.
-	PendingBlockedIndex map[int]string
-	// RewroteBlockedToolUse is set once the current message's tool_use block has
-	// been replaced by a synthetic guardrails text block. The subsequent
-	// message_delta stop_reason must be rewritten away from tool_use.
-	RewroteBlockedToolUse bool
-	// AnthropicToolEvents buffers one tool_use block from start -> delta -> stop
-	// so the rewrite layer can either flush the original events or replace them.
-	AnthropicToolEvents map[int][]GuardrailsBufferedEvent
-	// AnthropicToolIDs links the buffered block index back to the provider tool id.
-	AnthropicToolIDs map[int]string
-}
-
-func (hc *HandleContext) EnsureGuardrails() *HandleGuardrails {
-	if hc.Guardrails == nil {
-		hc.Guardrails = &HandleGuardrails{}
-	}
-	return hc.Guardrails
-}
-
-func (hc *HandleContext) EnsureGuardrailsStream() *GuardrailsStreamState {
-	guardrails := hc.EnsureGuardrails()
-	if guardrails.Stream == nil {
-		guardrails.Stream = &GuardrailsStreamState{
-			PendingBlockMessages: make(map[string]string),
-			PendingBlockedIndex:  make(map[int]string),
-			AnthropicToolEvents:  make(map[int][]GuardrailsBufferedEvent),
-			AnthropicToolIDs:     make(map[int]string),
-		}
-	}
-	return guardrails.Stream
-}
-
-type GuardrailsBufferedEvent struct {
-	EventType string
-	Payload   map[string]interface{}
 }
 
 // WithOnStreamEvent adds a hook that is called for each stream event.
@@ -212,9 +159,6 @@ func (hc *HandleContext) ReleaseStreamState() {
 	hc.OnStreamEventHooks = nil
 	hc.OnStreamCompleteHooks = nil
 	hc.OnStreamErrorHooks = nil
-	if hc.Guardrails != nil {
-		hc.Guardrails.Stream = nil
-	}
 }
 
 func (hc *HandleContext) DispatchStreamError(err error) {
