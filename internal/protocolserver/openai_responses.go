@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -238,6 +239,23 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
+	if target == protocol.TypeAnthropicBeta {
+		source, err := transformRequest(ph, c, req.ResponseNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
+			source:     protocol.TypeOpenAIResponses,
+			sourceOnly: true,
+			extraOpts:  []transform.TransformOption{transform.WithMaxTokens(int64(maxAllowed))},
+		})
+		if err != nil {
+			ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
+			return
+		}
+		defer source.Release()
+		source.Extra["cursor_compat"] = ruleFlags.CursorCompat
+		source.Extra["skip_usage"] = ruleFlags.SkipUsage
+		ph.serveOpenAIOnAnthropic(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, actualModel, responseModel, isStreaming)
+		return
+	}
+
 	reqCtx, err := ph.TransformOpenAIResponses(c, req, target, provider, isStreaming, scenarioType, maxAllowed, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))

@@ -325,8 +325,9 @@ func ownedToolLoopCase(t flagTB, source, target protocol.APIType, streaming bool
 		failures = append(failures, "server tool call leaked to client")
 	}
 	// While the server tool runs the client hears a keep-alive, so
-	// idle-timeout proxies do not drop the stream.
-	if streaming && source == protocol.TypeAnthropicBeta && target == protocol.TypeAnthropicBeta &&
+	// idle-timeout proxies do not drop the stream - on every pair the Stage
+	// pipeline serves.
+	if streaming && stagePipelinePair(source, target) &&
 		!strings.Contains(raw, ": keep-alive") {
 		failures = append(failures, "no keep-alive while the server tool ran")
 	}
@@ -801,3 +802,13 @@ func credentialAliasClientToolCase(t flagTB, source, target protocol.APIType, st
 // ownedToolUseMarker appears only in a tool_use block for the server tool;
 // a block message may name the tool in plain text.
 const ownedToolUseMarker = `"name":"` + OwnedToolWireName + `"`
+
+// stagePipelinePair reports whether the Protocol Stage pipeline serves the
+// pair: Anthropic clients on any provider, OpenAI clients on Anthropic.
+func stagePipelinePair(source, target protocol.APIType) bool {
+	switch source {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		return true
+	}
+	return target == protocol.TypeAnthropicBeta || target == protocol.TypeAnthropicV1
+}

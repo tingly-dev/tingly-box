@@ -438,30 +438,13 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		require.GreaterOrEqual(t, probe.anthropicNonStreamCalls, 1)
 	})
 
-	t.Run("OpenAIChat_to_AnthropicBeta_StreamAligned", func(t *testing.T) {
-		probe := &pathProbe{}
-		backend := newAnthropicPathBackend(t, probe)
-		defer backend.Close()
-
-		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
-		provider := &typ.Provider{UUID: "p-oa-beta", Name: "p-oa-beta", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}
-
-		code, header, _ := runDispatch(t, s, provider, buildAnthropicBetaReq(true), protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, true)
-		require.Equal(t, http.StatusOK, code)
-		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
-		require.GreaterOrEqual(t, probe.anthropicStreamCalls, 1, "stream path should keep true stream forwarding")
-
-		code, _, _ = runDispatch(t, s, provider, buildAnthropicBetaReq(false), protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, false)
-		require.Equal(t, http.StatusOK, code)
-		require.GreaterOrEqual(t, probe.anthropicNonStreamCalls, 1)
-	})
-
-	// Anthropic clients on OpenAI Chat providers no longer dispatch through
-	// DispatchChainResult with a pre-converted request: they are served by the
-	// Protocol Stage pipeline (serveAnthropicOnOpenAIChat). True-stream
-	// forwarding and the tool_use answer are pinned end to end over HTTP by
-	// protocoltest (TestGoldenWire and TestMCPOwnedToolLoop, anthropic_* ->
-	// openai_chat).
+	// Anthropic clients on OpenAI providers, and OpenAI Chat clients on
+	// Anthropic providers, no longer dispatch through DispatchChainResult with
+	// a pre-converted request: they are served by the Protocol Stage pipeline
+	// (serveAnthropicOnOpenAI, serveOpenAIOnAnthropic). True-stream forwarding
+	// and the tool_use answer are pinned end to end over HTTP by protocoltest
+	// (TestGoldenWire and TestMCPOwnedToolLoop, anthropic_* -> openai_* and
+	// openai_* -> anthropic_beta).
 }
 
 func TestAnthropicBetaPureExternalStreamDoesNotAppendSyntheticStop(t *testing.T) {

@@ -76,17 +76,7 @@ type anthropicRoute struct {
 // for the request, and is left out otherwise, so a plain request reaches the
 // provider and the client exactly as before.
 func (ph *ProtocolHandler) serveAnthropicPipeline(c *gin.Context, route anthropicRoute, providerSide stage.Endpoint) {
-	var config toolround.Config
-	if ph.mcpEnabled() && ph.deps.MCPRuntime != nil {
-		executor := mcp.NewServerToolExecutor(newServerOpsAdapter(ph, recording.FromGin(c)))
-		config.Owner = mcp.NewAnthropicBetaOwner(ph.deps.MCPRuntime.VirtualRegistry(), executor, route.Provider.UUID)
-	}
-	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
-		base := BuildGuardrailsBaseInput(c, route.ActualModel, route.Provider, guardrailscore.DirectionResponse, nil)
-		base.State.CredentialMask = EnsureGuardrailsCredentialMaskState(c)
-		config.Gate = requestScreenedGate{guardrailspipeline.NewToolRoundGate(ph.currentGuardrailsRuntime(), base)}
-	}
-	endpoint, err := stage.Compose(providerSide, toolround.New(config))
+	endpoint, err := stage.Compose(providerSide, toolround.New(ph.toolRoundConfig(c, route.Provider, route.ActualModel, true)))
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
@@ -102,6 +92,29 @@ func (ph *ProtocolHandler) serveAnthropicPipeline(c *gin.Context, route anthropi
 		Streaming:     route.Streaming,
 		Finish:        route.Finish,
 	})
+}
+
+// toolRoundConfig returns the Tool Round Stage's Owner (MCP) and Gate
+// (Guardrails) for one request, each set only when the feature is on.
+// requestScreened says the client's request already went through the request
+// guardrails before the transform chain, so the gate does not screen it again.
+func (ph *ProtocolHandler) toolRoundConfig(c *gin.Context, provider *typ.Provider, actualModel string, requestScreened bool) toolround.Config {
+	var config toolround.Config
+	if ph.mcpEnabled() && ph.deps.MCPRuntime != nil {
+		executor := mcp.NewServerToolExecutor(newServerOpsAdapter(ph, recording.FromGin(c)))
+		config.Owner = mcp.NewAnthropicBetaOwner(ph.deps.MCPRuntime.VirtualRegistry(), executor, provider.UUID)
+	}
+	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
+		base := BuildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, nil)
+		base.State.CredentialMask = EnsureGuardrailsCredentialMaskState(c)
+		gate := guardrailspipeline.NewToolRoundGate(ph.currentGuardrailsRuntime(), base)
+		if requestScreened {
+			config.Gate = requestScreenedGate{gate}
+		} else {
+			config.Gate = gate
+		}
+	}
+	return config
 }
 
 // requestScreenedGate is the Guardrails gate for a request whose client-side

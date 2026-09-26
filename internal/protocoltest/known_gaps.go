@@ -81,30 +81,9 @@ func checkCase(t *testing.T, key string, failures []string, detail string) {
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 var _ = registerKnownGaps(KnownGap{
-	ID:     "M1",
-	Reason: "Responses client on an Anthropic provider: the server tool is injected upstream but its call is not intercepted, so it leaks to the client",
-},
-	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=false",
-	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=true",
-	"TestMCPTruncatedToolStream/openai_responses->anthropic_beta/stream=true",
-	"TestMCPToolInputOnBlockStart/openai_responses->anthropic_beta/stream=true",
-	"TestMCPNoFailoverAfterServerTool/openai_responses->anthropic_beta/stream=false",
-	"TestMCPNoFailoverAfterServerTool/openai_responses->anthropic_beta/stream=true",
-) && registerKnownGaps(KnownGap{
-	ID:     "M5",
-	Reason: "Chat client -> Anthropic provider streaming: the mixed round's server-tool result is not spliced into the follow-up",
-},
-	"TestMCPMixedToolContinuation/openai_chat->anthropic_beta/stream=true",
-) && registerKnownGaps(KnownGap{
-	ID:     "T2",
-	Reason: "Chat client -> Anthropic provider streaming: server tool input carried on content_block_start (no input_json_delta) is dropped; the tool runs with empty arguments",
-},
-	"TestMCPToolInputOnBlockStart/openai_chat->anthropic_beta/stream=true",
-) && registerKnownGaps(KnownGap{
 	ID:     "T3",
 	Reason: "a retryable failure after a server tool ran fails over to the next service, which replays the whole request: the tool runs again and the client gets a 200",
 },
-	"TestMCPNoFailoverAfterServerTool/openai_chat->anthropic_beta/stream=false",
 	"TestMCPNoFailoverAfterServerTool/openai_chat->openai_chat/stream=false",
 	"TestMCPNoFailoverAfterServerTool/openai_chat->openai_chat/stream=true",
 )

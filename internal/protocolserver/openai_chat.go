@@ -243,6 +243,22 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	// request context, so no separate call is needed here.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
 
+	if target == protocol.TypeAnthropicBeta {
+		source, err := transformRequest(ph, c, req.ChatCompletionNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
+			source:     protocol.TypeOpenAIChat,
+			sourceOnly: true,
+		})
+		if err != nil {
+			ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
+			return
+		}
+		defer source.Release()
+		source.Extra["cursor_compat"] = ruleFlags.CursorCompat
+		source.Extra["skip_usage"] = ruleFlags.SkipUsage
+		ph.serveOpenAIOnAnthropic(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, actualModel, responseModel, isStreaming)
+		return
+	}
+
 	// === Transform via pipeline ===
 	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {

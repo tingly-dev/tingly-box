@@ -1,13 +1,11 @@
 package protocolserver
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
@@ -16,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
@@ -95,23 +92,17 @@ func (ph *ProtocolHandler) DispatchChainResult(
 	}
 }
 
-// dispatchAnthropicBeta routes an Anthropic-beta-bound request by the client's
-// source format: Chat and Responses sources need their responses converted
-// back; everything else is beta passthrough.
+// dispatchAnthropicBeta serves an Anthropic-Beta-bound request. OpenAI
+// clients never reach it: they are served by the Stage pipeline
+// (serveOpenAIOnAnthropic).
 func (ph *ProtocolHandler) dispatchAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool,
 ) {
 	switch reqCtx.SourceAPI {
-	case protocol.TypeOpenAIChat:
-		ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming)
-	case protocol.TypeOpenAIResponses:
-		if isStreaming {
-			ph.streamAnthropicBetaToResponses(c, reqCtx, provider)
-		} else {
-			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, provider)
-		}
+	case protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:
+		ph.FailAttemptSetup(c, fmt.Errorf("unsupported source %s for an Anthropic Beta target", reqCtx.SourceAPI))
 	default:
 		ph.serveAnthropicBetaStage(c, reqCtx, rule, provider, isStreaming)
 	}
@@ -251,115 +242,6 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 		parts = append(parts, fmt.Sprintf("extra_headers=%d", len(f.ExtraHeaders)))
 	}
 	return strings.Join(parts, ", ")
-}
-
-// dispatchAnthropicBetaToOpenAIChat forwards an OpenAI-Chat-shaped client
-// request to an Anthropic beta provider. The client expects OpenAI format, so
-// responses are converted back.
-func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
-	c *gin.Context, reqCtx *transform.TransformContext,
-	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool,
-) {
-	recorder := recording.FromGin(c)
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
-	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-
-	wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, actualModel)
-	fc := forwarding.NewForwardContext(ctx, provider)
-
-	if isStreaming {
-		disableStreamUsage := ShouldStripUsage(reqCtx.Extra)
-		if reqCtx.ScenarioFlags != nil {
-			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.SkipUsage
-		}
-
-		if HasDeclaredMCPAnthropicBetaTools(req) && ph.mcpEnabled() {
-			ph.StreamAnthropicBetaToOpenAIChatWithMCP(c, provider, req, actualModel, responseModel, disableStreamUsage)
-			return
-		}
-
-		streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
-		if cancel != nil {
-			defer cancel()
-		}
-		if err != nil {
-			ph.failRequest(c, err, "Failed to create streaming request")
-			return
-		}
-
-		hc := protocol.NewHandleContext(c, responseModel)
-		tokenUsage, err := stream.AnthropicToOpenAIStream(hc, req, streamResp, responseModel, disableStreamUsage)
-		if err != nil {
-			if tokenUsage != nil {
-				if tokenUsage.InputTokens > 0 || tokenUsage.OutputTokens > 0 {
-					ph.trackUsageWithTokenUsage(c, tokenUsage, err)
-				} else {
-					// Track error even when no tokens were received (e.g., early 1302 rate limit)
-					ph.trackUsageFromContext(c, 0, 0, err)
-				}
-			}
-			SendErrorResponse(c, err, "Failed to create streaming request")
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
-			return
-		}
-
-		if tokenUsage.InputTokens > 0 || tokenUsage.OutputTokens > 0 {
-			ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
-		}
-	} else {
-		var anthropicResp *anthropic.BetaMessage
-		var usage *protocol.TokenUsage
-		var err error
-
-		if HasDeclaredMCPAnthropicBetaTools(req) && ph.mcpEnabled() {
-			var genericUsage *mcp.TokenUsage
-			anthropicResp, genericUsage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
-			if err != nil {
-				ph.respondMCPError(c, err, "Failed to handle MCP tool calls")
-				return
-			}
-			if genericUsage != nil {
-				usage = protocol.NewTokenUsageWithCache(genericUsage.InputTokens, genericUsage.OutputTokens, genericUsage.CacheTokens)
-			}
-		} else {
-			var cancel context.CancelFunc
-			anthropicResp, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				ph.failRequest(c, err, "Failed to forward Anthropic request")
-				return
-			}
-			usage = usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage)
-		}
-
-		ph.trackUsageWithTokenUsage(c, usage, nil)
-
-		openaiResp := ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-		if ShouldRoundtripResponse(c, "anthropic") {
-			roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
-			if err != nil {
-				SendErrorResponse(c, err, "Failed to roundtrip response")
-				return
-			}
-			openaiResp = roundtripped
-		}
-		if ShouldStripUsage(reqCtx.Extra) {
-			delete(openaiResp, "usage")
-		}
-
-		if recorder != nil {
-			recorder.SetAssembledResponse(anthropicResp)
-			recorder.RecordResponse(provider, reqCtx.RequestModel)
-		}
-		c.JSON(http.StatusOK, openaiResp)
-	}
 }
 
 func (ph *ProtocolHandler) dispatchGoogle(
