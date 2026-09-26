@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -146,7 +148,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 						"code":    "upstream_truncated",
 					},
 				})
-				return i.adapter.SendEvent(i.c, "error", payload)
+				return i.sendEvent("error", payload)
 			}
 			return err
 		}
@@ -203,14 +205,14 @@ func (i *GenericStreamInterceptor) sendFinalEvents() error {
 	if i.roundMessageDelta == nil {
 		return i.adapter.SendFinalMessage(i.c)
 	}
-	if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+	if err := i.sendEvent("message_delta", i.roundMessageDelta); err != nil {
 		return err
 	}
 	stop := i.roundMessageStop
 	if stop == nil {
 		stop, _ = json.Marshal(map[string]interface{}{"type": "message_stop"})
 	}
-	return i.adapter.SendEvent(i.c, "message_stop", stop)
+	return i.sendEvent("message_stop", stop)
 }
 
 // handlePureExternal hands non-virtual tools back to the client. Only virtual
@@ -222,12 +224,12 @@ func (i *GenericStreamInterceptor) handlePureExternal(response any) error {
 func (i *GenericStreamInterceptor) finishClientNativeToolUse() error {
 	i.stopAfterRound = true
 	if i.roundMessageDelta != nil {
-		if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+		if err := i.sendEvent("message_delta", i.roundMessageDelta); err != nil {
 			return err
 		}
 	}
 	if i.roundMessageStop != nil {
-		if err := i.adapter.SendEvent(i.c, "message_stop", i.roundMessageStop); err != nil {
+		if err := i.sendEvent("message_stop", i.roundMessageStop); err != nil {
 			return err
 		}
 	}
@@ -483,7 +485,7 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 			// Nothing forwardable; drop rather than emit an empty frame.
 			return nil
 		}
-		return i.adapter.SendEvent(i.c, "", payload)
+		return i.sendEvent("", payload)
 	}
 }
 
@@ -497,7 +499,7 @@ func (i *GenericStreamInterceptor) handleTextEvent(event any) error {
 	// Mark TTFT on the first content token; MarkFirstToken is idempotent.
 	i.recordTTFT()
 
-	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+	return i.sendEvent("content_block_delta", payload)
 }
 
 // handleToolStartEvent handles tool use start event
@@ -513,7 +515,7 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 		if err != nil {
 			return err
 		}
-		return i.adapter.SendEvent(i.c, "content_block_start", payload)
+		return i.sendEvent("content_block_start", payload)
 	}
 	i.recordRoundTool(tool)
 
@@ -533,7 +535,7 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 	if err != nil {
 		return err
 	}
-	return i.adapter.SendEvent(i.c, "content_block_start", payload)
+	return i.sendEvent("content_block_start", payload)
 }
 
 // handleToolDeltaEvent handles tool parameter delta event
@@ -555,7 +557,7 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 	}
 	// A tool input delta is content; mark TTFT (idempotent).
 	i.recordTTFT()
-	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+	return i.sendEvent("content_block_delta", payload)
 }
 
 // handleToolStopEvent handles tool stop event
@@ -573,7 +575,7 @@ func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
 	if err != nil {
 		return err
 	}
-	return i.adapter.SendEvent(i.c, "content_block_stop", payload)
+	return i.sendEvent("content_block_stop", payload)
 }
 
 // classifyResponse classifies the response to determine next action
@@ -984,4 +986,30 @@ func (i *GenericStreamInterceptor) applyStoredContinuation() {
 		return
 	}
 	i.currentReq = updated
+}
+
+// sendEvent writes one client-bound event, reporting config.ResponseModel
+// (the model the client asked for) instead of the provider's model id.
+func (i *GenericStreamInterceptor) sendEvent(eventType string, payload []byte) error {
+	return i.adapter.SendEvent(i.c, eventType, i.withResponseModel(payload))
+}
+
+func (i *GenericStreamInterceptor) withResponseModel(payload []byte) []byte {
+	model := i.config.ResponseModel
+	if model == "" || len(payload) == 0 {
+		return payload
+	}
+	path := "model" // OpenAI Chat chunk
+	if gjson.GetBytes(payload, "type").String() == "message_start" {
+		path = "message.model"
+	}
+	current := gjson.GetBytes(payload, path)
+	if !current.Exists() || current.String() == model {
+		return payload
+	}
+	patched, err := sjson.SetBytes(payload, path, model)
+	if err != nil {
+		return payload
+	}
+	return patched
 }

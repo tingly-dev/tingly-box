@@ -84,6 +84,9 @@ func (ph *ProtocolHandler) NonstreamAnthropicV1(
 	var anthropicMsg *anthropic.Message
 	if msg, ok := response.(*anthropic.Message); ok {
 		ph.updateAffinityMessageID(c, rule, string(msg.ID))
+		if reqCtx.ResponseModel != "" {
+			msg.Model = anthropic.Model(reqCtx.ResponseModel)
+		}
 		anthropicMsg = msg
 	}
 
@@ -143,7 +146,7 @@ func (ph *ProtocolHandler) StreamAnthropicV1(
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
 	guardrailsEnabled := ph.guardrailsEnabledForScenario(scenario)
-	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
+	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled, ResponseModel: responseModel}
 	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
 		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)

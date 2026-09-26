@@ -8,6 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
@@ -109,12 +111,32 @@ func HandleAnthropicV1Beta(hc *protocol.HandleContext, bm *anthropic.BetaMessage
 // Callers that mutate the message after receiving it (e.g. the MCP tool loop
 // filtering virtual tool_use blocks) must NOT use this helper: RawJSON would
 // be stale. They marshal the struct directly so the wire reflects the mutation.
+//
+// The public model is the one exception: callers set msg.Model to the model
+// the client asked for, and the raw body still carries the provider's model
+// id, so the writer patches that single field.
 func WriteAnthropicMessage(c *gin.Context, msg any) {
 	if r, ok := msg.(interface{ RawJSON() string }); ok {
 		if raw := strings.Clone(r.RawJSON()); raw != "" {
+			if model := anthropicMessageModel(msg); model != "" && gjson.Get(raw, "model").String() != model {
+				if patched, err := sjson.Set(raw, "model", model); err == nil {
+					raw = patched
+				}
+			}
 			c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
 			return
 		}
 	}
 	c.JSON(http.StatusOK, msg)
+}
+
+// anthropicMessageModel returns the model set on an Anthropic message struct.
+func anthropicMessageModel(msg any) string {
+	switch m := msg.(type) {
+	case *anthropic.Message:
+		return string(m.Model)
+	case *anthropic.BetaMessage:
+		return string(m.Model)
+	}
+	return ""
 }
