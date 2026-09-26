@@ -7,6 +7,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // ConvertOpenAIResponsesToAnthropicBetaRequest converts OpenAI Responses API params to Anthropic Beta Message API format.
@@ -306,20 +308,15 @@ func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputM
 
 // convertResponsesFunctionCallToAnthropicBeta converts Responses API function_call to Anthropic Beta tool_use block
 func convertResponsesFunctionCallToAnthropicBeta(call *responses.ResponseFunctionToolCallParam) anthropic.BetaMessageParam {
-	// Parse arguments JSON
-	var argsInput interface{}
-	if call.Arguments != "" {
-		if err := json.Unmarshal([]byte(call.Arguments), &argsInput); err != nil {
-			logrus.Warnf("Failed to parse function call arguments JSON for tool %s: %v", call.Name, err)
-			// Set to empty map to avoid nil issues
-			argsInput = map[string]interface{}{}
-		}
+	input, ok := protocol.ToolUseInput(call.Arguments)
+	if !ok {
+		logrus.Warnf("Function call arguments for tool %s are not a JSON object; sending empty input", call.Name)
 	}
 
 	// Create assistant message with tool_use block
 	return anthropic.BetaMessageParam{
 		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, argsInput, call.Name)},
+		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, input, call.Name)},
 	}
 }
 
