@@ -29,3 +29,8 @@ agent's own Tingly-Box connection (`ANTHROPIC_BASE_URL`/`OPENAI_BASE_URL` with
 scenarios such as `claude_code` do not declare `TransportImageGen`). Anything
 missing or rejected exits 2 with `NEED_INPUT:` and the agent asks the user — the
 script does not read config files, port files or guess defaults.
+
+Long-running calls use the agent's own background execution (e.g. Claude Code
+`run_in_background`, which notifies on exit), not a job system in the script:
+no polling, and one call still maps to one result. A fast foreground `models`
+preflight surfaces `NEED_INPUT` before the slow call goes to the background.

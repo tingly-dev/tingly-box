@@ -37,12 +37,23 @@ starting with `NEED_INPUT:` naming what is needed. Then:
 
 ## Workflow
 
-1. Turn the request into a concrete prompt: subject, style, composition, colors, text to
+Image calls are slow (often 30 s – several minutes), so validate fast in the foreground and
+generate in the background:
+
+1. **Preflight, once per session** — run `models` in the foreground. It returns in seconds and
+   surfaces any `NEED_INPUT:` while the user is still here; settle endpoint, token and model
+   now, then pass `--model` explicitly from here on.
+2. Turn the request into a concrete prompt: subject, style, composition, colors, text to
    render (quoted), what must stay unchanged (for edits).
-2. Run `generate` or `edit`. Output goes to `./generated-images/` unless the user named a
-   place (`--out`). Image calls can take a minute; the default timeout is 300 s.
-3. Report the saved path(s) from the JSON output and show/open the image if the client can.
-   Keep the path — a follow-up "make it bluer" is an `edit --image <that path>`.
+3. **Run `generate` / `edit` as a background task** when your harness has one (Claude Code:
+   Bash with `run_in_background: true` — you are notified when it exits; do not poll or
+   sleep). Tell the user it is generating and roughly how long, then keep working or end the
+   turn. Independent variants can run as parallel background tasks.
+   No background support → run in the foreground with a tool timeout above the script's
+   (`--timeout`, default 300 s; Claude Code's Bash default of 120 s is too short).
+4. When it finishes, report the saved path(s) from the JSON output and show/open the image
+   if the client can. Output goes to `./generated-images/` unless the user named a place
+   (`--out`). Keep the path — a follow-up "make it bluer" is an `edit --image <that path>`.
 
 ### Options
 
@@ -50,7 +61,7 @@ starting with `NEED_INPUT:` naming what is needed. Then:
 |------|--------|
 | `--size` | `1024x1024`, `1536x1024`, `1024x1536`, `auto` (provider-dependent) |
 | `--quality` | `low`, `medium`, `high`, `auto` |
-| `--background` | `transparent`, `opaque`, `auto` (transparent needs png/webp) |
+| `--background` | image background, not a background task: `transparent`, `opaque`, `auto` (transparent needs png/webp) |
 | `--output-format` | `png` (default), `jpeg`, `webp` |
 | `--n` | number of variants |
 | `--image` | input image; repeat for extra references (edit only) |
