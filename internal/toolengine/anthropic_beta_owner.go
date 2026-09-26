@@ -49,7 +49,11 @@ func (o *AnthropicBetaOwner) Execute(ctx context.Context, call toolround.ToolCal
 }
 
 func (o *AnthropicBetaOwner) Resume(ctx context.Context, request *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
-	segment, ok := mixedContinuationStore.pop(o.continuationKey(ctx))
+	key, ok := o.continuationKey(ctx)
+	if !ok {
+		return request
+	}
+	segment, ok := mixedContinuationStore.pop(key)
 	if !ok {
 		return request
 	}
@@ -57,9 +61,33 @@ func (o *AnthropicBetaOwner) Resume(ctx context.Context, request *anthropic.Beta
 	if !ok || len(messages) == 0 {
 		return request
 	}
+	if !answersContinuation(messages[0], request.Messages) {
+		// Not the follow-up to the stored round: keep it for the one that is.
+		mixedContinuationStore.put(key, segment)
+		return request
+	}
 	resumed := *request
 	resumed.Messages = mergeAnthropicBetaContinuation(messages, request.Messages)
 	return &resumed
+}
+
+// answersContinuation reports whether messages carry a tool_result for one
+// of the client calls in the stored assistant turn.
+func answersContinuation(turn anthropic.BetaMessageParam, messages []anthropic.BetaMessageParam) bool {
+	calls := map[string]bool{}
+	for _, block := range turn.Content {
+		if block.OfToolUse != nil {
+			calls[block.OfToolUse.ID] = true
+		}
+	}
+	for _, message := range messages {
+		for _, block := range message.Content {
+			if block.OfToolResult != nil && calls[block.OfToolResult.ToolUseID] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *AnthropicBetaOwner) Suspend(ctx context.Context, turn anthropic.BetaMessageParam, results []anthropic.BetaToolResultBlockParam) {
@@ -73,9 +101,20 @@ func (o *AnthropicBetaOwner) Suspend(ctx context.Context, turn anthropic.BetaMes
 		logrus.Warn("[MCP-CONT] mixed round produced no tool results to store")
 		return
 	}
-	mixedContinuationStore.put(o.continuationKey(ctx), []anthropic.BetaMessageParam{turn, anthropic.NewBetaUserMessage(blocks...)})
+	key, ok := o.continuationKey(ctx)
+	if !ok {
+		logrus.Warn("[MCP-CONT] mixed round without a session: server tool results cannot be resumed")
+		return
+	}
+	mixedContinuationStore.put(key, []anthropic.BetaMessageParam{turn, anthropic.NewBetaUserMessage(blocks...)})
 }
 
-func (o *AnthropicBetaOwner) continuationKey(ctx context.Context) string {
-	return continuationKey(typ.GetSessionID(ctx), o.providerUUID, "anthropic-beta")
+// continuationKey scopes stored rounds to the session and provider, with the
+// legacy loops' key format. Without a session there is no safe scope.
+func (o *AnthropicBetaOwner) continuationKey(ctx context.Context) (string, bool) {
+	session := typ.GetSessionID(ctx)
+	if session.Value == "" {
+		return "", false
+	}
+	return continuationKey(session, o.providerUUID, "anthropic-beta"), true
 }
