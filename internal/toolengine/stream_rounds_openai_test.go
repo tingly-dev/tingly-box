@@ -101,3 +101,35 @@ func TestStreamInterceptor_OpenAIChatFinalTextReachesClient(t *testing.T) {
 		t.Errorf("server tool call leaked to client:\n%s", body)
 	}
 }
+
+// noopServerOps satisfies the usage-reporting dependency; the interceptor
+// dereferences it unconditionally at the end of Run.
+type noopServerOps struct{}
+
+func (noopServerOps) TrackUsage(*gin.Context, int, int, int) {}
+func (noopServerOps) CallMCPTool(context.Context, string, string, []map[string]any) (string, error) {
+	return "", nil
+}
+func (noopServerOps) GetRecorder() ProtocolRecorder { return nil }
+
+type cannedExecutor struct{ text string }
+
+func (e cannedExecutor) ExecuteToolWithContext(ctx context.Context, tool Tool, _ []map[string]any) (context.Context, ToolExecutionResult, error) {
+	return ctx, ToolExecutionResult{ToolUseID: tool.ID(), Contents: coretool.TextToolResult(e.text).Contents}, nil
+}
+func (e cannedExecutor) ExecuteTool(ctx context.Context, tool Tool, m []map[string]any) (ToolExecutionResult, error) {
+	_, r, err := e.ExecuteToolWithContext(ctx, tool, m)
+	return r, err
+}
+func (e cannedExecutor) ExecuteTools(ctx context.Context, tools []Tool, m []map[string]any) ([]ToolExecutionResult, error) {
+	out := make([]ToolExecutionResult, 0, len(tools))
+	for _, tool := range tools {
+		r, _ := e.ExecuteTool(ctx, tool, m)
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// A server-executed tool name. advisor is the built-in one every classifier
+// already recognises, so the harness needs no registry setup.
+const roundsToolName = "tingly_box_mcp__advisor__advisor"

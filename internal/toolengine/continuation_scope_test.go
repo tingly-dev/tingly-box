@@ -53,12 +53,6 @@ func TestContinuationResumesOnlyItsFollowUp(t *testing.T) {
 		followUp, unrelate any
 	}{
 		{
-			name:     "anthropic-v1",
-			segment:  []anthropic.MessageParam{decode[anthropic.MessageParam](t, turn)},
-			followUp: ptr(decode[anthropic.MessageNewParams](t, request("toolu_client"))),
-			unrelate: ptr(decode[anthropic.MessageNewParams](t, request("toolu_other"))),
-		},
-		{
 			name:     "anthropic-beta",
 			segment:  []anthropic.BetaMessageParam{decode[anthropic.BetaMessageParam](t, turn)},
 			followUp: ptr(decode[anthropic.BetaMessageNewParams](t, request("toolu_client"))),

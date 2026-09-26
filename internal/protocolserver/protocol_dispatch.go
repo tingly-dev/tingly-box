@@ -15,44 +15,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/recording"
-	"github.com/tingly-dev/tingly-box/internal/server/config"
 	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// shouldUseGenericMCPForProvider checks if the provider is allowed to use generic MCP path
-func (ph *ProtocolHandler) shouldUseGenericMCPForProvider(provider *typ.Provider) bool {
-	return ShouldUseGenericMCPForProvider(ph.deps.Config, provider)
-}
-
-// ShouldUseGenericMCPForProvider is the pure-Config form of
-// Handler.shouldUseGenericMCPForProvider, exported so callers that only have
-// a *config.Config (e.g. tests constructing a bare *Server without a wired
-// aiHandler) can check the same provider-limits logic directly.
-func ShouldUseGenericMCPForProvider(cfg *config.Config, provider *typ.Provider) bool {
-	limits := cfg.GenericMCP.ProviderLimits
-	if limits == "" || limits == "*" {
-		// No limits configured, all providers can use generic path
-		return true
-	}
-
-	// Check if provider is in the limits list
-	// Format: comma-separated provider names (e.g., "provider1,provider2")
-	if limits == provider.Name {
-		return true
-	}
-
-	// Parse comma-separated limits and check if provider is in the list
-	// This is a simple implementation - can be improved with proper parsing
-	parts := strings.SplitSeq(limits, ",")
-	for part := range parts {
-		if strings.TrimSpace(part) == provider.Name {
-			return true
-		}
-	}
-
-	return false
-}
 
 // dispatchChainResult
 // do request from source to target, and return upstream response from target to source

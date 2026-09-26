@@ -965,10 +965,6 @@ func (i *GenericStreamInterceptor) adapterID() string {
 	switch i.adapter.(type) {
 	case *OpenAIChatAdapter:
 		return "openai-chat"
-	case *AnthropicV1Adapter:
-		return "anthropic-v1"
-	case *AnthropicBetaAdapter:
-		return "anthropic-beta"
 	default:
 		return fmt.Sprintf("%T", i.adapter)
 	}

@@ -97,23 +97,6 @@ func (s *continuationStore) popAnswered(key string, request any) (any, bool) {
 func continuationAnswered(segment, request any) bool {
 	calls := map[string]bool{}
 	switch seg := segment.(type) {
-	case []anthropic.MessageParam:
-		req, ok := request.(*anthropic.MessageNewParams)
-		if !ok || len(seg) == 0 {
-			return false
-		}
-		for _, block := range seg[0].Content {
-			if block.OfToolUse != nil {
-				calls[block.OfToolUse.ID] = true
-			}
-		}
-		for _, message := range req.Messages {
-			for _, block := range message.Content {
-				if block.OfToolResult != nil && calls[block.OfToolResult.ToolUseID] {
-					return true
-				}
-			}
-		}
 	case []anthropic.BetaMessageParam:
 		req, ok := request.(*anthropic.BetaMessageNewParams)
 		if !ok || len(seg) == 0 {

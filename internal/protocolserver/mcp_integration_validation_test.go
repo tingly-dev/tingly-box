@@ -23,11 +23,11 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 	}
 
 	virtualRegistry := coretool.NewVirtualToolRegistry()
-	adapter := mcp.NewAnthropicV1Adapter()
+	adapter := mcp.NewOpenAIChatAdapter()
 
 	// Create forwarder using the new forwarding package
 	ctxProvider := &forwardContextProvider{}
-	forwarder := mcp.NewAnthropicV1Forwarder(nil, ctxProvider)
+	forwarder := mcp.NewOpenAIChatForwarder(nil, ctxProvider)
 
 	// If we got here without import cycle error, the architecture is valid
 	assert.NotNil(t, provider)
@@ -40,14 +40,6 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 func TestGenericMCPIntegration_AllForwardersCreated(t *testing.T) {
 	ctxProvider := &forwardContextProvider{}
 
-	// Test Anthropic V1 forwarder
-	v1Forwarder := mcp.NewAnthropicV1Forwarder(nil, ctxProvider)
-	assert.NotNil(t, v1Forwarder, "AnthropicV1Forwarder should be created")
-
-	// Test Anthropic Beta forwarder
-	betaForwarder := mcp.NewAnthropicBetaForwarder(nil, ctxProvider)
-	assert.NotNil(t, betaForwarder, "AnthropicBetaForwarder should be created")
-
 	// Test OpenAI Chat forwarder
 	openaiForwarder := mcp.NewOpenAIChatForwarder(nil, ctxProvider)
 	assert.NotNil(t, openaiForwarder, "OpenAIChatForwarder should be created")
@@ -55,19 +47,15 @@ func TestGenericMCPIntegration_AllForwardersCreated(t *testing.T) {
 
 // TestGenericMCPIntegration_AllAdaptersCreated validates all adapter types can be created
 func TestGenericMCPIntegration_AllAdaptersCreated(t *testing.T) {
-	// Test Anthropic V1 adapter
-	v1Adapter := mcp.NewAnthropicV1Adapter()
-	assert.NotNil(t, v1Adapter, "AnthropicV1Adapter should be created")
-
 	// Test OpenAI Chat adapter
 	openaiAdapter := mcp.NewOpenAIChatAdapter()
 	assert.NotNil(t, openaiAdapter, "OpenAIChatAdapter should be created")
 
 	// Validate adapter can create requests and responses
-	req := v1Adapter.NewRequest()
+	req := openaiAdapter.NewRequest()
 	assert.NotNil(t, req, "Adapter should create request")
 
-	resp := v1Adapter.NewResponse()
+	resp := openaiAdapter.NewResponse()
 	assert.NotNil(t, resp, "Adapter should create response")
 }
 

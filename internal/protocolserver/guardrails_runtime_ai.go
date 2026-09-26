@@ -3,14 +3,10 @@ package protocolserver
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
-	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
-	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -102,81 +98,6 @@ func BuildGuardrailsBaseInput(c *gin.Context, actualModel string, provider *typ.
 }
 
 // ----------------------------------------------------------------------
-// Stream Response Guardrails
-// ----------------------------------------------------------------------
-
-// AttachGuardrailsHooks wires the shared stream guardrails runtime into a protocol
-// handle context. Provider-specific handlers only need to provide already-normalized
-// message history.
-func AttachGuardrailsHooks(c *gin.Context, runtime *guardrails.Guardrails, hc *protocol.HandleContext, actualModel string, provider *typ.Provider, messages []guardrailscore.Message) {
-	guardrailsState := hc.EnsureGuardrails()
-	baseInput := BuildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messages)
-	maskState := EnsureGuardrailsCredentialMaskState(c)
-	baseInput.State.CredentialMask = maskState
-	guardrailsState.Enabled = true
-	guardrailsState.CredentialMask = baseInput.State.CredentialMask
-	streamState := hc.EnsureGuardrailsStream()
-	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", baseInput.Scenario, baseInput.Model)
-
-	onEvent, onError := guardrailspipeline.NewGuardrailsHooks(
-		c.Request.Context(),
-		runtime,
-		baseInput,
-		streamState,
-	)
-	if onEvent != nil {
-		hc.WithOnStreamEvent(onEvent)
-	}
-	if onError != nil {
-		hc.WithOnStreamError(onError)
-	}
-}
-
-// GuardrailsClientEventRewriter returns the toolengine interceptor hook that
-// enforces stream guardrails on client-bound Anthropic events: each tool_use
-// block is held until the stream hooks have evaluated it, a blocked one is
-// replaced with a text block (and the round's stop_reason with end_turn), and
-// credential aliases are restored in allowed ones. It is the interceptor-side
-// counterpart of the rewrite in stream.HandleAnthropic/HandleAnthropicBeta.
-func GuardrailsClientEventRewriter(hc *protocol.HandleContext) func(event any) (bool, []protocol.GuardrailsBufferedEvent, error) {
-	return func(event any) (bool, []protocol.GuardrailsBufferedEvent, error) {
-		if hc.Guardrails == nil || !hc.Guardrails.Enabled {
-			return false, nil, nil
-		}
-		return guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, event)
-	}
-}
-
-// ReattachGuardrailsHooks resets per-round guardrails state and re-registers fresh
-// hooks on hc for the next MCP loop round. It truncates OnStreamEventHooks back to
-// baseEventHooks (the count before guardrails was first attached) so previous-round
-// guardrails hooks don't accumulate.
-func ReattachGuardrailsHooks(
-	c *gin.Context,
-	runtime *guardrails.Guardrails,
-	hc *protocol.HandleContext,
-	actualModel string,
-	provider *typ.Provider,
-	messages []guardrailscore.Message,
-	baseEventHooks int,
-	baseErrorHooks int,
-) {
-	// Truncate back to pre-guardrails hooks
-	if len(hc.OnStreamEventHooks) > baseEventHooks {
-		hc.OnStreamEventHooks = hc.OnStreamEventHooks[:baseEventHooks]
-	}
-	if len(hc.OnStreamErrorHooks) > baseErrorHooks {
-		hc.OnStreamErrorHooks = hc.OnStreamErrorHooks[:baseErrorHooks]
-	}
-	// Reset stream accumulator state so the new round starts clean
-	if hc.Guardrails != nil {
-		hc.Guardrails.Stream = nil
-	}
-	// Re-attach with a fresh accumulator
-	AttachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages)
-}
-
-// ----------------------------------------------------------------------
 // Request Guardrails
 // ----------------------------------------------------------------------
 
@@ -224,56 +145,4 @@ func ApplyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, runtime *guardrails
 	if err != nil {
 		return
 	}
-}
-
-// ----------------------------------------------------------------------
-// Non-Stream Response Guardrails
-// ----------------------------------------------------------------------
-
-// ApplyGuardrailsToAnthropicV1NonStreamResponse evaluates a fully assembled
-// Anthropic v1 response and rewrites it when guardrails block it.
-func ApplyGuardrailsToAnthropicV1NonStreamResponse(c *gin.Context, runtime *guardrails.Guardrails, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.Message) bool {
-	if req == nil || resp == nil {
-		return false
-	}
-
-	maskState := EnsureGuardrailsCredentialMaskState(c)
-	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
-	input := BuildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	input.State.CredentialMask = maskState
-	input.Payload.Protocol = "anthropic_v1"
-	input.Payload.Response = resp
-
-	mutation, err := guardrailspipeline.ProcessAnthropicV1NonStreamResponse(c.Request.Context(), runtime, input, resp)
-	if err != nil {
-		return false
-	}
-	if !mutation.Changed {
-		guardrailsmutate.RestoreAnthropicV1ResponseCredentials(maskState, resp)
-	}
-	return mutation.Changed
-}
-
-// ApplyGuardrailsToAnthropicV1BetaNonStreamResponse is the beta equivalent of
-// ApplyGuardrailsToAnthropicV1NonStreamResponse.
-func ApplyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Context, runtime *guardrails.Guardrails, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider, resp *anthropic.BetaMessage) bool {
-	if req == nil || resp == nil {
-		return false
-	}
-
-	maskState := EnsureGuardrailsCredentialMaskState(c)
-	messageHistory := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
-	input := BuildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
-	input.State.CredentialMask = maskState
-	input.Payload.Protocol = "anthropic_beta"
-	input.Payload.Response = resp
-
-	mutation, err := guardrailspipeline.ProcessAnthropicV1BetaNonStreamResponse(c.Request.Context(), runtime, input, resp)
-	if err != nil {
-		return false
-	}
-	if !mutation.Changed {
-		guardrailsmutate.RestoreAnthropicV1BetaResponseCredentials(maskState, resp)
-	}
-	return mutation.Changed
 }
