@@ -21,26 +21,45 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 )
 
+// Option configures a stream presentation.
+type Option func(*anthropicDecoder)
+
+// OnHeartbeat calls f for every stage.Heartbeat, on the goroutine reading the
+// stream (the one writing to the client), so f may write to the client.
+// Without it heartbeats are dropped.
+func OnHeartbeat(f func()) Option {
+	return func(d *anthropicDecoder) { d.heartbeat = f }
+}
+
 // AnthropicBeta returns events as an Anthropic Beta SDK stream. Closing the
 // SDK stream closes events.
-func AnthropicBeta(ctx context.Context, events stage.EventStream) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](&anthropicDecoder{ctx: ctx, events: events}, nil)
+func AnthropicBeta(ctx context.Context, events stage.EventStream, options ...Option) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](newAnthropicDecoder(ctx, events, false, options), nil)
 }
 
 // AnthropicV1 returns Beta events as an Anthropic V1 SDK stream for a V1
 // client. A block V1 cannot express ends the stream with an error.
-func AnthropicV1(ctx context.Context, events stage.EventStream) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](&anthropicDecoder{ctx: ctx, events: events, v1: true}, nil)
+func AnthropicV1(ctx context.Context, events stage.EventStream, options ...Option) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+	return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](newAnthropicDecoder(ctx, events, true, options), nil)
+}
+
+func newAnthropicDecoder(ctx context.Context, events stage.EventStream, v1 bool, options []Option) *anthropicDecoder {
+	d := &anthropicDecoder{ctx: ctx, events: events, v1: v1}
+	for _, option := range options {
+		option(d)
+	}
+	return d
 }
 
 // anthropicDecoder feeds wire payloads of stage events to the SDK stream,
 // which decodes them exactly as it decodes a provider's SSE body.
 type anthropicDecoder struct {
-	ctx    context.Context
-	events stage.EventStream
-	v1     bool
-	event  anthropicstream.Event
-	err    error
+	ctx       context.Context
+	events    stage.EventStream
+	v1        bool
+	heartbeat func()
+	event     anthropicstream.Event
+	err       error
 }
 
 func (d *anthropicDecoder) Next() bool {
@@ -48,6 +67,15 @@ func (d *anthropicDecoder) Next() bool {
 		return false
 	}
 	event, err := d.events.Next(d.ctx)
+	for err == nil {
+		if _, ok := event.Value.(stage.Heartbeat); !ok {
+			break
+		}
+		if d.heartbeat != nil {
+			d.heartbeat()
+		}
+		event, err = d.events.Next(d.ctx)
+	}
 	if errors.Is(err, io.EOF) {
 		return false
 	}

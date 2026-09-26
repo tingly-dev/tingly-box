@@ -223,9 +223,10 @@ func (g *fakeGate) Response(context.Context, *anthropic.BetaMessageNewParams, *a
 // ─── runner ────────────────────────────────────────────────────────────────
 
 type outcome struct {
-	message   *anthropic.BetaMessage // what the client receives
-	committed bool
-	usage     *protocol.TokenUsage
+	message    *anthropic.BetaMessage // what the client receives
+	committed  bool
+	usage      *protocol.TokenUsage
+	heartbeats int // streamed only: one per round that runs server tools
 }
 
 func clientRequest() *anthropic.BetaMessageNewParams {
@@ -255,7 +256,7 @@ func run(t *testing.T, config Config, provider *scriptedEndpoint, streaming bool
 	}
 	defer events.Close()
 	var assembled anthropic.BetaMessage
-	starts, nextIndex := 0, int64(0)
+	starts, nextIndex, heartbeats := 0, int64(0), 0
 	for {
 		event, err := events.Next(context.Background())
 		if errors.Is(err, io.EOF) {
@@ -264,6 +265,10 @@ func run(t *testing.T, config Config, provider *scriptedEndpoint, streaming bool
 		if err != nil {
 			result := events.Result()
 			return outcome{committed: result.SideEffectsCommitted}, err
+		}
+		if _, ok := event.Value.(stage.Heartbeat); ok {
+			heartbeats++
+			continue
 		}
 		beta := event.Value.(anthropic.BetaRawMessageStreamEventUnion)
 		switch beta.Type {
@@ -277,7 +282,7 @@ func run(t *testing.T, config Config, provider *scriptedEndpoint, streaming bool
 	}
 	require.Equal(t, 1, starts, "one client message per request")
 	result := events.Result()
-	return outcome{message: &assembled, committed: result.SideEffectsCommitted, usage: result.Usage}, nil
+	return outcome{message: &assembled, committed: result.SideEffectsCommitted, usage: result.Usage, heartbeats: heartbeats}, nil
 }
 
 func contentTypes(message *anthropic.BetaMessage) []string {
@@ -338,6 +343,9 @@ func TestOwnedToolLoop(t *testing.T) {
 
 		require.True(t, out.committed)
 		require.Equal(t, 20, out.usage.InputTokens, "usage covers every round")
+		if streaming {
+			require.Equal(t, 1, out.heartbeats, "the client hears from the stream while the tool runs")
+		}
 		require.Equal(t, anthropic.BetaStopReasonEndTurn, out.message.StopReason)
 		if streaming {
 			// Streamed rounds reach the client as one message, owned call hidden.

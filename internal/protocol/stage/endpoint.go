@@ -52,6 +52,13 @@ type Event struct {
 	Value any
 }
 
+// Heartbeat is an Event value a stage emits while it works without producing
+// output (for example while a server tool runs), so the client edge can keep
+// an idle connection alive. It carries no protocol payload: client adapters
+// consume it and never forward it as a protocol event, and a Bridge above
+// the stage that emits it must pass it through unchanged.
+type Heartbeat struct{}
+
 // StreamResult is the latest protocol-neutral summary of an EventStream. It is
 // valid before completion, but usage and model data may only become final after
 // Next returns io.EOF.

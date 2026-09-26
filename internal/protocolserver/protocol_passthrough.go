@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -179,27 +178,6 @@ func (ph *ProtocolHandler) StreamAnthropicV1(
 		ph.handlePreStreamFailure(c, err, recorder)
 		return
 	}
-}
-
-// StreamAnthropicBeta processes the Anthropic beta streaming
-// response. The resolved model is passed in as actualModel rather than read from
-// the request, so the handler no longer depends on req.Model.
-func (ph *ProtocolHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider) {
-	recorder := recording.FromGin(c)
-	hc := protocol.NewHandleContext(c, responseModel)
-
-	// Add recorder hooks if recorder is available
-	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
-
-	// response guardrails
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		hc.EnsureGuardrails().Enabled = true
-		AttachGuardrailsHooks(c, ph.currentGuardrailsRuntime(), hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
-	}
-
-	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)
-	ph.trackUsageWithTokenUsage(c, usageStat, err)
 }
 
 // nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.

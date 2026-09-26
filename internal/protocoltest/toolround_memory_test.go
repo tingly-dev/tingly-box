@@ -142,6 +142,9 @@ func (h *toolRoundHarness) send(ctx context.Context, t *testing.T, request *anth
 		if err != nil {
 			return out.String(), err
 		}
+		if _, ok := event.Value.(stage.Heartbeat); ok {
+			continue
+		}
 		data, err := wireJSON(event.Value)
 		require.NoError(t, err)
 		out.WriteString(data + "\n")

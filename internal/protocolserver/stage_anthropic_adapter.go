@@ -16,9 +16,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// stageAnthropicAttempt is one provider attempt of an Anthropic client
+// StageAnthropicAttempt is one provider attempt of an Anthropic client
 // (V1 or Beta) served by a Protocol Stage pipeline.
-type stageAnthropicAttempt struct {
+type StageAnthropicAttempt struct {
 	// Client is the client's protocol: anthropic_v1 or anthropic_beta.
 	Client protocol.APIType
 	// Request is the prepared Beta request (a V1 request upgraded at the edge).
@@ -32,11 +32,11 @@ type stageAnthropicAttempt struct {
 	Streaming     bool
 }
 
-// serveStageAnthropic is the HTTP adapter for Anthropic clients: it runs the
+// ServeStageAnthropic is the HTTP adapter for Anthropic clients: it runs the
 // pipeline and writes its answer through the same writers, tracking, affinity
 // and recording calls as the legacy Anthropic passthrough, so the client sees
 // the same bytes. A V1 client gets its Beta answer downgraded at this edge.
-func (ph *ProtocolHandler) serveStageAnthropic(c *gin.Context, endpoint stage.Endpoint, attempt stageAnthropicAttempt) {
+func (ph *ProtocolHandler) ServeStageAnthropic(c *gin.Context, endpoint stage.Endpoint, attempt StageAnthropicAttempt) {
 	if attempt.Client != protocol.TypeAnthropicV1 && attempt.Client != protocol.TypeAnthropicBeta {
 		ph.failRequest(c, fmt.Errorf("stage adapter: %q is not an Anthropic client protocol", attempt.Client), "Unsupported client protocol")
 		return
@@ -49,7 +49,7 @@ func (ph *ProtocolHandler) serveStageAnthropic(c *gin.Context, endpoint stage.En
 	ph.completeStageAnthropic(c, endpoint, call, attempt)
 }
 
-func (ph *ProtocolHandler) completeStageAnthropic(c *gin.Context, endpoint stage.Endpoint, call stage.Call, attempt stageAnthropicAttempt) {
+func (ph *ProtocolHandler) completeStageAnthropic(c *gin.Context, endpoint stage.Endpoint, call stage.Call, attempt StageAnthropicAttempt) {
 	recorder := recording.FromGin(c)
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
@@ -89,7 +89,7 @@ func (ph *ProtocolHandler) completeStageAnthropic(c *gin.Context, endpoint stage
 	nonstream.WriteAnthropicMessage(c, v1)
 }
 
-func (ph *ProtocolHandler) streamStageAnthropic(c *gin.Context, endpoint stage.Endpoint, call stage.Call, attempt stageAnthropicAttempt) {
+func (ph *ProtocolHandler) streamStageAnthropic(c *gin.Context, endpoint stage.Endpoint, call stage.Call, attempt StageAnthropicAttempt) {
 	recorder := recording.FromGin(c)
 	ctx := c.Request.Context()
 	events, err := endpoint.Stream(ctx, call)
@@ -101,11 +101,22 @@ func (ph *ProtocolHandler) streamStageAnthropic(c *gin.Context, endpoint stage.E
 	hc := protocol.NewHandleContext(c, attempt.ResponseModel)
 	recording.AttachRecorderHooks(hc, recorder, attempt.ActualModel, attempt.Provider)
 
+	// While the pipeline runs a server tool nothing else reaches the client;
+	// an SSE comment keeps idle-timeout proxies from dropping the stream, as
+	// the legacy tool loop did. Only once the stream has started: before the
+	// first byte a failover attempt must still be able to replace it.
+	keepAlive := sdkstream.OnHeartbeat(func() {
+		if c.Writer.Written() {
+			_, _ = fmt.Fprint(c.Writer, ": keep-alive\n\n")
+			c.Writer.Flush()
+		}
+	})
+
 	var usage *protocol.TokenUsage
 	if attempt.Client == protocol.TypeAnthropicBeta {
-		usage, err = stream.HandleAnthropicBeta(hc, sdkstream.AnthropicBeta(ctx, events))
+		usage, err = stream.HandleAnthropicBeta(hc, sdkstream.AnthropicBeta(ctx, events, keepAlive))
 	} else {
-		usage, err = stream.HandleAnthropic(hc, sdkstream.AnthropicV1(ctx, events))
+		usage, err = stream.HandleAnthropic(hc, sdkstream.AnthropicV1(ctx, events, keepAlive))
 	}
 	// Usage covers every round of the pipeline, not only the client-visible
 	// message_start and final message_delta.

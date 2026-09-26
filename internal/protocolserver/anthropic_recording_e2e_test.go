@@ -1,6 +1,10 @@
 package protocolserver_test
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/recording/recordingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -32,24 +39,6 @@ import (
 // since internal/server/recording's own tests (hook_external_test.go) need the
 // exact same helpers and Go test files (even in an external _test package)
 // are never importable from another package.
-
-// fakeDecoder implements ssestream.Decoder over a static event slice.
-type fakeDecoder struct {
-	events []ssestream.Event
-	i      int
-}
-
-func (f *fakeDecoder) Next() bool {
-	if f.i >= len(f.events) {
-		return false
-	}
-	f.i++
-	return true
-}
-
-func (f *fakeDecoder) Event() ssestream.Event { return f.events[f.i-1] }
-func (f *fakeDecoder) Close() error           { return nil }
-func (f *fakeDecoder) Err() error             { return nil }
 
 func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
@@ -79,14 +68,22 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 		{Type: "message_delta", Data: []byte(`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":3,"output_tokens":17}}`)},
 		{Type: "message_stop", Data: []byte(`{"type":"message_stop"}`)},
 	}
-	streamResp := ssestream.NewStream[anthropic.BetaRawMessageStreamEventUnion](&fakeDecoder{events: events}, nil)
+	var stageEvents []stage.Event
+	for _, event := range events {
+		var value anthropic.BetaRawMessageStreamEventUnion
+		require.NoError(t, json.Unmarshal(event.Data, &value))
+		stageEvents = append(stageEvents, stage.Event{Value: value})
+	}
 
 	req := &anthropic.BetaMessageNewParams{Model: anthropic.Model("actual-stream-model")}
 
-	// Direct call into the inner streaming handler — the function under
+	// The Anthropic client edge of the Stage pipeline is the function under
 	// test. If AttachRecorderHooks were dropped, the assertion below
 	// (assembled body in FinalResponse) would fail.
-	h.StreamAnthropicBeta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider)
+	h.ServeStageAnthropic(c, staticStreamEndpoint{events: stageEvents}, protocolserver.StageAnthropicAttempt{
+		Client: protocol.TypeAnthropicBeta, Request: req, Provider: provider,
+		ActualModel: string(req.Model), ResponseModel: "proxy-stream-model", Streaming: true,
+	})
 
 	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
@@ -120,3 +117,32 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	//	assert.EqualValues(t, 17, usage["output_tokens"], "usage from message_delta must propagate via assembler internal tracking")
 	assert.Nil(t, rec.FinalResponse, "response-side recording is paused — FinalResponse must not be emitted")
 }
+
+// staticStreamEndpoint streams a fixed Beta event sequence.
+type staticStreamEndpoint struct{ events []stage.Event }
+
+func (staticStreamEndpoint) Protocol() protocol.APIType { return protocol.TypeAnthropicBeta }
+
+func (staticStreamEndpoint) Complete(context.Context, stage.Call) (*stage.Response, error) {
+	return nil, errors.New("static endpoint streams only")
+}
+
+func (e staticStreamEndpoint) Stream(context.Context, stage.Call) (stage.EventStream, error) {
+	return &staticEventStream{events: e.events}, nil
+}
+
+type staticEventStream struct {
+	events []stage.Event
+	next   int
+}
+
+func (s *staticEventStream) Next(context.Context) (stage.Event, error) {
+	if s.next >= len(s.events) {
+		return stage.Event{}, io.EOF
+	}
+	s.next++
+	return s.events[s.next-1], nil
+}
+
+func (s *staticEventStream) Close() error               { return nil }
+func (s *staticEventStream) Result() stage.StreamResult { return stage.StreamResult{} }

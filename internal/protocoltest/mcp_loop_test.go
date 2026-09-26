@@ -73,6 +73,12 @@ func TestMCPOwnedToolLoop(t *testing.T) {
 				if strings.Contains(raw, OwnedToolWireName) {
 					failures = append(failures, "server tool call leaked to client")
 				}
+				// While the server tool runs the client hears a keep-alive, so
+				// idle-timeout proxies do not drop the stream.
+				if streaming && pair.Source == protocol.TypeAnthropicBeta && pair.Target == protocol.TypeAnthropicBeta &&
+					!strings.Contains(raw, ": keep-alive") {
+					failures = append(failures, "no keep-alive while the server tool ran")
+				}
 				checkCase(t, t.Name(), failures, "client response:\n"+raw)
 			})
 		}

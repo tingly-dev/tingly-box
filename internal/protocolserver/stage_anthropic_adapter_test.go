@@ -194,7 +194,7 @@ func runStageAnthropic(t *testing.T, s scenario.Scenario, clientProtocol protoco
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/tingly/anthropic/v1/messages", nil)
 	ph := &ProtocolHandler{}
-	ph.serveStageAnthropic(c, endpoint, stageAnthropicAttempt{
+	ph.ServeStageAnthropic(c, endpoint, StageAnthropicAttempt{
 		Client:        clientProtocol,
 		Request:       &beta,
 		Provider:      &typ.Provider{Name: "golden"},
@@ -328,7 +328,7 @@ func TestStageAnthropicAdapterHoldsFailoverAfterSideEffects(t *testing.T) {
 				c.Writer = gate
 
 				ph := &ProtocolHandler{}
-				ph.serveStageAnthropic(c, failingEndpoint{err: stage.WrapCommitted(upstreamErr, committed)}, stageAnthropicAttempt{
+				ph.ServeStageAnthropic(c, failingEndpoint{err: stage.WrapCommitted(upstreamErr, committed)}, StageAnthropicAttempt{
 					Client: protocol.TypeAnthropicBeta, Request: &anthropic.BetaMessageNewParams{},
 					Provider: &typ.Provider{Name: "p"}, ResponseModel: "m", Streaming: streaming,
 				})

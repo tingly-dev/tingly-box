@@ -119,3 +119,25 @@ func TestAnthropicV1MessageDowngrade(t *testing.T) {
 	_, err = AnthropicV1Downgrade(&message)
 	require.ErrorContains(t, err, `"mcp_tool_use" has no V1 form`)
 }
+
+// Heartbeats reach the callback and never the SDK stream.
+func TestAnthropicHeartbeat(t *testing.T) {
+	events := betaEvents(t, textStream...)
+	withBeat := append([]stage.Event{events[0], {Value: stage.Heartbeat{}}, {Value: stage.Heartbeat{}}}, events[1:]...)
+	beats := 0
+	sdk := AnthropicBeta(context.Background(), &sliceStream{events: withBeat}, OnHeartbeat(func() { beats++ }))
+	var got []string
+	for sdk.Next() {
+		got = append(got, sdk.Current().RawJSON())
+	}
+	require.NoError(t, sdk.Err())
+	require.Equal(t, textStream, got)
+	require.Equal(t, 2, beats)
+
+	sdk = AnthropicBeta(context.Background(), &sliceStream{events: withBeat})
+	got = nil
+	for sdk.Next() {
+		got = append(got, sdk.Current().RawJSON())
+	}
+	require.Equal(t, textStream, got, "without a callback heartbeats are dropped")
+}

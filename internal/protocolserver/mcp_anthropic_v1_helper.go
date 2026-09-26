@@ -8,10 +8,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	mcp "github.com/tingly-dev/tingly-box/internal/toolengine"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/recording"
@@ -346,114 +344,3 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 	}
 }
 
-// DispatchGenericAnthropicBetaNonStream handles Aβ→Aβ non-streaming with generic processor
-func (ph *ProtocolHandler) DispatchGenericAnthropicBetaNonStream(
-	c *gin.Context,
-	reqCtx *transform.TransformContext,
-	rule *typ.Rule,
-	provider *typ.Provider,
-) {
-	recorder := recording.FromGin(c)
-	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-	actualModel := reqCtx.RequestModel
-
-	response, usage, err := ph.RunGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
-	if err != nil {
-		ph.handlePreStreamFailure(c, err, recorder)
-		return
-	}
-
-	if usage != nil {
-		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
-		ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
-	}
-
-	// Update affinity and get typed message
-	ph.updateAffinityMessageID(c, rule, string(response.ID))
-	if reqCtx.ResponseModel != "" {
-		response.Model = anthropic.Model(reqCtx.ResponseModel)
-	}
-
-	// Response guardrails
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1BetaNonStreamResponse(c, ph.currentGuardrailsRuntime(), req, actualModel, provider, response)
-	}
-
-	// Return response
-	nonstream.WriteAnthropicMessage(c, response)
-}
-
-// DispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor
-func (ph *ProtocolHandler) DispatchGenericAnthropicBetaStream(
-	c *gin.Context,
-	reqCtx *transform.TransformContext,
-	rule *typ.Rule,
-	provider *typ.Provider,
-) {
-	recorder := recording.FromGin(c)
-	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-	actualModel := reqCtx.RequestModel
-	responseModel := reqCtx.ResponseModel
-
-	// Create adapter
-	adapter := mcp.NewAnthropicBetaAdapter()
-
-	// Create forwarder
-	forwarder := mcp.NewAnthropicBetaForwarder(ph.deps.ClientPool, &forwardContextProvider{})
-
-	// Get virtual registry
-	virtualRegistry := ph.deps.MCPRuntime.VirtualRegistry()
-
-	// Create server ops adapter
-	serverOps := newServerOpsAdapter(ph, recorder)
-	toolExecutor := mcp.NewServerToolExecutor(serverOps)
-
-	// Create recorder adapter
-	var recorderAdapter mcp.ProtocolRecorder
-	if recorder != nil {
-		recorderAdapter = &protocolRecorderAdapter{recorder: recorder}
-	}
-
-	// Create HandleContext for streaming
-	hc := protocol.NewHandleContext(c, responseModel)
-
-	// Add recorder hooks if available
-	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
-
-	// Response guardrails
-	scenario := GetTrackingContextScenario(c)
-	guardrailsEnabled := ph.guardrailsEnabledForScenario(scenario)
-	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled, ResponseModel: responseModel}
-	if guardrailsEnabled {
-		hc.EnsureGuardrails().Enabled = true
-		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
-		baseEventHooks := len(hc.OnStreamEventHooks)
-		baseErrorHooks := len(hc.OnStreamErrorHooks)
-		runtime := ph.currentGuardrailsRuntime()
-		AttachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages)
-		interceptorCfg.OnBeforeRound = func(round int) error {
-			ReattachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
-			return nil
-		}
-		interceptorCfg.RewriteClientEvent = GuardrailsClientEventRewriter(hc)
-	}
-
-	// Create and run generic interceptor
-	interceptor := mcp.NewGenericStreamInterceptor(
-		c,
-		serverOps,
-		provider,
-		hc,
-		virtualRegistry,
-		recorderAdapter,
-		adapter,
-		forwarder,
-		toolExecutor,
-		interceptorCfg,
-	)
-
-	if err := interceptor.Run(req); err != nil {
-		ph.handlePreStreamFailure(c, err, recorder)
-	}
-}

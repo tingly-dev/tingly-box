@@ -119,7 +119,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, provider)
 		}
 	default:
-		ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming)
+		ph.serveAnthropicBetaStage(c, reqCtx, rule, provider, isStreaming)
 	}
 }
 
@@ -387,101 +387,6 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
 		c.JSON(http.StatusOK, openaiResp)
-	}
-}
-
-func (ph *ProtocolHandler) passthroughAnthropicBeta(
-	c *gin.Context, reqCtx *transform.TransformContext,
-	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool,
-) {
-	recorder := recording.FromGin(c)
-	useGeneric := ph.mcpEnabled() && ph.shouldUseGenericMCPForProvider(provider)
-
-	if useGeneric {
-		if !isStreaming {
-			ph.DispatchGenericAnthropicBetaNonStream(c, reqCtx, rule, provider)
-			return
-		}
-		ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider)
-		return
-	}
-
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
-	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-
-	if isStreaming {
-		if ph.mcpEnabled() {
-			declaredMCP := HasDeclaredMCPAnthropicBetaTools(req)
-			if declaredMCP {
-				ph.DispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider)
-				return
-			}
-		}
-
-		wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, actualModel)
-		fc := forwarding.NewForwardContext(ctx, provider)
-		streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
-		if cancel != nil {
-			defer cancel()
-		}
-		if err != nil {
-			ph.handlePreStreamFailure(c, err, recorder)
-			return
-		}
-
-		ph.StreamAnthropicBeta(c, req, streamResp, actualModel, responseModel, provider)
-		return
-
-	} else {
-		var anthropicResp *anthropic.BetaMessage
-		var err error
-		declaredMCP := false
-		if ph.mcpEnabled() {
-			declaredMCP = HasDeclaredMCPAnthropicBetaTools(req)
-		}
-		if declaredMCP {
-			var usage *mcp.TokenUsage
-			anthropicResp, usage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
-			if err != nil {
-				ph.failForward(c, err)
-				return
-			}
-			if usage != nil {
-				tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
-				ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
-			}
-		} else {
-			wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, actualModel)
-			fc := forwarding.NewForwardContext(ctx, provider)
-			var cancel context.CancelFunc
-			anthropicResp, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				ph.failForward(c, err)
-				return
-			}
-
-			ph.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
-		}
-
-		ph.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-		anthropicResp.Model = anthropic.Model(responseModel)
-
-		scenario := GetTrackingContextScenario(c)
-		if ph.guardrailsEnabledForScenario(scenario) {
-			ApplyGuardrailsToAnthropicV1BetaNonStreamResponse(c, ph.currentGuardrailsRuntime(), req, actualModel, provider, anthropicResp)
-		}
-
-		if recorder != nil {
-			recorder.SetAssembledResponse(anthropicResp)
-			recorder.RecordResponse(provider, reqCtx.RequestModel)
-		}
-		nonstream.WriteAnthropicMessage(c, anthropicResp)
 	}
 }
 
