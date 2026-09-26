@@ -18,3 +18,10 @@ var WebDistAssets embed.FS
 
 //go:embed all:script
 var ScriptAssets embed.FS
+
+// SkillAssets holds the agent skills Tingly-Box ships (one directory per
+// skill under skills/). The repo's .claude/skills/<name> entries symlink here,
+// so contributors and installed users run the same files.
+//
+//go:embed all:skills
+var SkillAssets embed.FS
