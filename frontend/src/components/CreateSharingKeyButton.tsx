@@ -28,9 +28,9 @@ const CreateSharingKeyButton: React.FC<CreateSharingKeyButtonProps> = ({ team, o
             {t('sharingKeys.createToken')}
         </Button>
     );
-    if (team.enabled) return button;
+    // An empty title renders no tooltip, so enabled Teams get a plain button.
     return (
-        <Tooltip title={t('sharingKeys.createDisabledTeam')}>
+        <Tooltip title={team.enabled ? '' : t('sharingKeys.createDisabledTeam')}>
             {/* span keeps the tooltip working on a disabled button */}
             <span>{button}</span>
         </Tooltip>

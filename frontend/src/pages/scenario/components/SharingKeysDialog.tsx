@@ -12,7 +12,7 @@ import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable
 import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
 import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
 import type { Team } from '@/types/team';
-import TeamKeyScopeAlert from './TeamKeyScopeAlert';
+import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
 
 interface SharingKeysDialogProps {
     open: boolean;

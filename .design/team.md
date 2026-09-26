@@ -168,7 +168,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
     （固定列宽，多组表格列对齐）和 `CreateSharingKeyButton`（停用 Team 禁用并说明原因）。
     新建 Key 后立即显示明文，方便直接复制。
   - 其他选择 Sharing Key 的地方同样按 Team 分组，例如 Dashboard 的 Identity 筛选
-    （`groupSharingKeysByTeam`）。
+    （`utils/team.ts` 的 `groupByTeam`；Team 顺序、Team 路由同在该文件）。
 
 这对应 `.design/ux-principles.md` 的命名统一、展示具体值、合理默认、内嵌教育和降低视觉噪声。
 
@@ -195,7 +195,7 @@ NULL 的 Sharing Key 自动回填为 `DefaultTeamID`，raw token 不轮换。
 | Frontend | `frontend/src/contexts/TeamContext.tsx` | Shared Team state |
 | Frontend | `frontend/src/pages/scenario/UseTeamPage.tsx` | Team workspace |
 | Frontend | `frontend/src/pages/scenario/components/SharingKeysDialog.tsx` | Team Key management |
-| Frontend | `frontend/src/pages/scenario/components/TeamKeyScopeAlert.tsx` | User-visible security contract |
+| Frontend | `frontend/src/components/TeamKeyScopeAlert.tsx` | User-visible security contract |
 
 Primary regression coverage:
 

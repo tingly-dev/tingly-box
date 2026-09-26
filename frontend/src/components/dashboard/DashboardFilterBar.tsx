@@ -19,7 +19,8 @@ import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import type { ProviderOptionGroup, UsageIdentity } from '@/hooks/useDashboardData';
 import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
-import { groupSharingKeysByTeam } from './groupSharingKeysByTeam';
+import { groupByTeam } from '@/utils/team';
+import { useMemo } from 'react';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -85,10 +86,19 @@ export default function DashboardFilterBar({
 }) {
     const { t } = useTranslation();
     const { teams } = useTeamContext();
-    const sharingKeyGroups = groupSharingKeysByTeam(
-        usageIdentities.filter((identity) => identity.type === 'sharing_key'),
-        teams,
-    );
+    // Sharing keys grouped by Team; Teams without keys are skipped, and keys
+    // whose Team isn't known (yet) stay selectable in a trailing group.
+    const sharingKeyGroups = useMemo(() => {
+        const { groups, unmatched } = groupByTeam(
+            usageIdentities.filter((identity) => identity.type === 'sharing_key'),
+            teams,
+            (identity) => identity.teamId,
+        );
+        return [
+            ...groups.filter((group) => group.items.length > 0),
+            ...(unmatched.length > 0 ? [{ team: null, items: unmatched }] : []),
+        ];
+    }, [usageIdentities, teams]);
 
     return (
         <>
@@ -164,7 +174,7 @@ export default function DashboardFilterBar({
                                 ? t('dashboard.overview.sharingKeysForTeam', { team: group.team.name })
                                 : t('dashboard.overview.sharingKeys', { defaultValue: 'Sharing Keys' })}
                         </ListSubheader>,
-                        ...group.identities.map((identity) => (
+                        ...group.items.map((identity) => (
                             <MenuItem key={identity.userId} value={identity.userId}>
                                 <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                     <Typography variant="body2" noWrap>

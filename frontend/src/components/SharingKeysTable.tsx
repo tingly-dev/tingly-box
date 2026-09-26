@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 export interface SharingKey {
     token_id: string;
     user_id: string;
-    team_id?: string;
+    team_id: string;
     display_name: string;
     enabled: boolean;
     last_used_at?: string;
@@ -46,11 +46,7 @@ interface SharingKeysTableProps {
     onCopy: (tokenId: string) => void;
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
-    onMove?: (token: SharingKey) => void;
-    /** Show the user_id column (default: true) */
-    showUserColumn?: boolean;
-    /** Show the last_used_at column (default: true) */
-    showLastUsedColumn?: boolean;
+    onMove: (token: SharingKey) => void;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -62,11 +58,9 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
-    showUserColumn = true,
-    showLastUsedColumn = true,
 }) => {
     const { t } = useTranslation();
-    const colSpan = 5 + (showUserColumn ? 1 : 0) + (showLastUsedColumn ? 1 : 0);
+    const colSpan = 7;
 
     return (
         <TableContainer>
@@ -77,11 +71,11 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
             <Table sx={{ tableLayout: 'fixed', minWidth: 760 }}>
                 <colgroup>
                     <col style={{ width: '20%' }} />
-                    {showUserColumn && <col style={{ width: '10%' }} />}
+                    <col style={{ width: '10%' }} />
                     <col style={{ width: '22%' }} />
                     <col style={{ width: 88 }} />
                     <col style={{ width: '18%' }} />
-                    {showLastUsedColumn && <col style={{ width: '18%' }} />}
+                    <col style={{ width: '18%' }} />
                     <col style={{ width: 96 }} />
                 </colgroup>
                 <TableHead>
@@ -101,11 +95,11 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                         }}
                     >
                         <TableCell>{t('sharingKeys.table.name')}</TableCell>
-                        {showUserColumn && <TableCell>{t('sharingKeys.table.user')}</TableCell>}
+                        <TableCell>{t('sharingKeys.table.user')}</TableCell>
                         <TableCell>{t('sharingKeys.table.token')}</TableCell>
                         <TableCell>{t('sharingKeys.table.status')}</TableCell>
                         <TableCell>{t('sharingKeys.table.created')}</TableCell>
-                        {showLastUsedColumn && <TableCell>{t('sharingKeys.table.lastUsed')}</TableCell>}
+                        <TableCell>{t('sharingKeys.table.lastUsed')}</TableCell>
                         <TableCell align="right">{t('sharingKeys.table.actions')}</TableCell>
                     </TableRow>
                 </TableHead>
@@ -175,25 +169,23 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         </Typography>
                                     </Stack>
                                 </TableCell>
-                                {showUserColumn && (
-                                    <TableCell>
-                                        <Tooltip title={key.user_id} placement="top">
-                                            <Stack
-                                                direction="row"
-                                                spacing={0.5}
-                                                sx={{
-                                                    alignItems: "center",
-                                                    width: 'fit-content',
-                                                    cursor: 'default'
-                                                }}>
-                                                <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                                                    {key.user_id.slice(0, 8)}…
-                                                </Typography>
-                                            </Stack>
-                                        </Tooltip>
-                                    </TableCell>
-                                )}
+                                <TableCell>
+                                    <Tooltip title={key.user_id} placement="top">
+                                        <Stack
+                                            direction="row"
+                                            spacing={0.5}
+                                            sx={{
+                                                alignItems: "center",
+                                                width: 'fit-content',
+                                                cursor: 'default'
+                                            }}>
+                                            <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
+                                            <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                                {key.user_id.slice(0, 8)}…
+                                            </Typography>
+                                        </Stack>
+                                    </Tooltip>
+                                </TableCell>
                                 <TableCell sx={{ maxWidth: 240 }}>
                                     <Box
                                         sx={{
@@ -262,24 +254,20 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         </Typography>
                                     </Stack>
                                 </TableCell>
-                                {showLastUsedColumn && (
-                                    <TableCell>
-                                        <Typography variant="caption" sx={{
-                                            color: "text.secondary"
-                                        }}>
-                                            {formatDate(key.last_used_at)}
-                                        </Typography>
-                                    </TableCell>
-                                )}
+                                <TableCell>
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
+                                        {formatDate(key.last_used_at)}
+                                    </Typography>
+                                </TableCell>
                                 <TableCell align="right">
                                     <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>
-                                        {onMove && (
-                                            <Tooltip title={t('sharingKeys.table.moveTooltip')}>
-                                                <IconButton size="small" onClick={() => onMove(key)}>
-                                                    <IconMove sx={{ fontSize: 16 }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
+                                        <Tooltip title={t('sharingKeys.table.moveTooltip')}>
+                                            <IconButton size="small" onClick={() => onMove(key)}>
+                                                <IconMove sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        </Tooltip>
                                         <Tooltip title={t('sharingKeys.table.deleteTooltip')}>
                                             <IconButton
                                                 size="small"

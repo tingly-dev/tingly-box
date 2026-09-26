@@ -11,9 +11,7 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { useNotify } from '@/hooks/useNotify';
 import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
 import { api } from '@/services/api';
-import type { Team } from '@/types/team';
-
-const teamPath = (team: Team) => (team.is_default ? '/agent/team' : `/agent/team/${team.slug}`);
+import { groupByTeam, teamPath } from '@/utils/team';
 
 /**
  * Every Sharing Key on this instance, grouped by the Team it belongs to.
@@ -26,12 +24,14 @@ const TeamKeysPage = () => {
     const notify = useNotify();
     const { teams, loading: teamsLoading } = useTeamContext();
     const [keys, setKeys] = useState<SharingKey[]>([]);
+    const [totalKeys, setTotalKeys] = useState(0);
     const [keysLoading, setKeysLoading] = useState(true);
 
     const loadKeys = useCallback(async () => {
         const result = await api.listAPITokens({ limit: 500 });
         if (result.success && result.data) {
             setKeys(result.data.tokens || []);
+            setTotalKeys(result.data.total ?? result.data.tokens?.length ?? 0);
         } else {
             notify.error(result.error?.message || t('sharingKeys.loadFailed'));
         }
@@ -42,22 +42,16 @@ const TeamKeysPage = () => {
 
     const { tableProps, openCreate, dialogs } = useSharingKeyActions({ teams, onChanged: loadKeys });
 
-    // Same order as the Team sidebar: default Team first, then the rest.
-    const groups = useMemo(() => {
-        const ordered = [...teams.filter((team) => team.is_default), ...teams.filter((team) => !team.is_default)];
-        const defaultTeamId = ordered.find((team) => team.is_default)?.id;
-        return ordered.map((team) => ({
-            team,
-            keys: keys.filter((key) => (key.team_id || defaultTeamId) === team.id),
-        }));
-    }, [teams, keys]);
+    // Every Team (empty ones too, so each can take a first key). The backend
+    // guarantees every key has an existing Team, so there is no unmatched group.
+    const groups = useMemo(() => groupByTeam(keys, teams, (key) => key.team_id).groups, [teams, keys]);
 
     return (
         <PageLayout loading={teamsLoading || keysLoading}>
             <Stack spacing={2.5}>
                 <PageHeader
                     title={t('sharingKeys.teamKeysTitle')}
-                    subtitle={t('sharingKeys.allSubtitle', { keys: keys.length, teams: teams.length })}
+                    subtitle={t('sharingKeys.allSubtitle', { keys: totalKeys, teams: teams.length })}
                 />
 
                 <Alert
@@ -70,7 +64,7 @@ const TeamKeysPage = () => {
 
                 <Surface padding={{ xs: 2, sm: 2.5 }}>
                     <Stack spacing={3}>
-                        {groups.map(({ team, keys: teamKeys }, index) => (
+                        {groups.map(({ team, items: teamKeys }, index) => (
                             <Fragment key={team.id}>
                                 {index > 0 && <Divider />}
                                 <Box>

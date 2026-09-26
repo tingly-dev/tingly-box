@@ -1704,6 +1704,7 @@ export default {
     "deleteSuccess": "Token deleted successfully",
     "deleteFailed": "Failed to delete token",
     "copiedToClipboard": "Token copied to clipboard",
+    "copyFailed": "Failed to copy token",
     "disabled": "Token disabled",
     "enabled": "Token enabled",
     "updateFailed": "Failed to update token",

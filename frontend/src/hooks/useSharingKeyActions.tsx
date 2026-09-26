@@ -14,10 +14,11 @@ import { useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
+import { writeToClipboard } from '@/utils/clipboard';
 import type SharingKeysTable from '@/components/SharingKeysTable';
 import type { SharingKey } from '@/components/SharingKeysTable';
 import type { Team } from '@/types/team';
-import TeamKeyScopeAlert from '@/pages/scenario/components/TeamKeyScopeAlert';
+import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
 type TableActionProps = Pick<
@@ -114,9 +115,13 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
     const tableProps: TableActionProps = {
         visibleTokens,
         onToggleVisibility: (tokenId) => setVisibleTokens((prev) => ({ ...prev, [tokenId]: !prev[tokenId] })),
-        onCopy: (tokenId) => {
-            navigator.clipboard.writeText(tokenId);
-            notify.success(t('sharingKeys.copiedToClipboard'));
+        onCopy: async (tokenId) => {
+            try {
+                await writeToClipboard(tokenId);
+                notify.success(t('sharingKeys.copiedToClipboard'));
+            } catch {
+                notify.error(t('sharingKeys.copyFailed'));
+            }
         },
         onToggleEnabled: async (key) => {
             const result = await api.setAPITokenEnabled(key.token_id, !key.enabled);

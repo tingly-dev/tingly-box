@@ -1700,6 +1700,7 @@ export default {
     "deleteSuccess": "令牌删除成功",
     "deleteFailed": "删除令牌失败",
     "copiedToClipboard": "令牌已复制到剪贴板",
+    "copyFailed": "复制密钥失败",
     "disabled": "令牌已停用",
     "enabled": "令牌已启用",
     "updateFailed": "更新令牌失败",

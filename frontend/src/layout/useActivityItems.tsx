@@ -39,6 +39,7 @@ import {
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useTeamContext } from '@/contexts/TeamContext';
+import { orderTeams, teamPath } from '@/utils/team';
 import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
@@ -98,18 +99,17 @@ export function useActivityItems(): ActivityItem[] {
             subtitle: `${p.id} - ${p.name}`,
             icon: <Claude size={20} />,
         }));
-        const defaultTeam = teams.find(team => team.is_default);
+        const orderedTeams = orderTeams(teams);
         const teamNavItems: NavItem[] = [
-            {
+            // Before the Team list loads, keep a placeholder row for the default Team.
+            ...(orderedTeams[0]?.is_default ? [] : [{
                 path: '/agent/team',
                 label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
-                subtitle: defaultTeam
-                    ? `${defaultTeam.slug} - ${defaultTeam.name}`
-                    : t('layout.default'),
+                subtitle: t('layout.default'),
                 icon: <IconUsers sx={{fontSize: 20}} />,
-            },
-            ...teams.filter(team => !team.is_default).map(team => ({
-                path: `/agent/team/${team.slug}`,
+            }]),
+            ...orderedTeams.map(team => ({
+                path: teamPath(team),
                 label: t('layout.nav.useTeam', {defaultValue: 'Team'}),
                 subtitle: `${team.slug} - ${team.name}`,
                 icon: <IconUsers sx={{fontSize: 20}} />,

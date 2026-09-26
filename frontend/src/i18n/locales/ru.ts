@@ -1726,6 +1726,7 @@ export default {
     "deleteSuccess": "Токен удалён",
     "deleteFailed": "Не удалось удалить токен",
     "copiedToClipboard": "Токен скопирован в буфер обмена",
+    "copyFailed": "Не удалось скопировать ключ",
     "disabled": "Токен отключён",
     "enabled": "Токен включён",
     "updateFailed": "Не удалось обновить токен",
