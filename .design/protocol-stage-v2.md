@@ -97,6 +97,25 @@ Provider Endpoint         包装 forwarding.Forward*
 每轮用当轮真实历史调用 Gate（修 G5），Gate 负责 alias 还原（修 G4）。没有 MCP 时注册表为空，
 Stage 退化为"透传 + Gate"。跨协议 MCP 不再需要单独的循环（修 G6）——所有源 / 目标都经 Bridge 到 Beta。
 
+### 2.3 Tool Round Stage 的行为决定（P4 落地）
+
+以"切流时客户端可见形态不变，只修 known-gap"为原则：
+
+| 场景 | 行为 | 与旧路径的差异 |
+|---|---|---|
+| 某轮有 tool_use 被 Gate 拦截 | 该轮终止：被拦截的块替换为 block 文本，其余 tool_use（owned / client）都不执行、不外发，`stop_reason=end_turn` | 旧流式只替换被拦截块、保留其他 client tool；旧非流式整段替换且只看第一个 tool_use（G7） |
+| 流式 | text / thinking 实时外发；只有 tool_use 块暂扣到本轮决策完成（首字延迟不变） | 旧路径开 Guardrails 时暂扣到单个块结束；差别只在同一轮多个工具时 |
+| 多轮流式 | 合成一条客户端消息：message_start 一次，块 index 连续，最后一轮的 message_delta / stop | 旧路径不重排 index |
+| 多轮非流式 | 返回最后一轮（同旧路径） | 无 |
+| 轮数上限 | 结束本轮：去掉 owned 调用，`end_turn`（有 client 调用则保留并 `tool_use`） | 旧非流式返回空消息；旧流式保留 `tool_use` stop_reason 但无工具块 |
+| usage | Response / StreamResult 汇总所有轮次；客户端可见的 usage 字段保持每轮原值 | 旧路径只统计最后一轮 |
+| 执行过 server 工具后出错 | `stage.CommittedError`，failover 不得重试 | 新增 |
+| mixed continuation | 无会话不存；只有携带对应 tool_result 的 follow-up 才会取用 | 旧路径无会话时共用一个键，任何同会话请求都会取走 |
+| 工具注入 | 仍由 transform 链的 `MCPToolInjectionTransform` 负责；M3（Responses 目标不注入）在切流时随 transform 修 | 无 |
+| Guardrails 失败 | fail-open，同旧路径 | 无 |
+
+给 P5 的备注：Chat / Responses → Beta bridge 产出的消息没有 RawJSON，直接 `json.Marshal` 会带出 SDK 所有零值字段；HTTP Adapter 需要按 wire 形态序列化。
+
 与旧设计的区别：旧设计是 `Guardrail(ToolLoop(Provider))` 两个 Stage，外层 Guardrail 看不到被
 内部消化的 tool 调用，只能另设 `ToolPolicy`；v2 合成一个 Stage、一个决策点。
 
@@ -191,7 +210,8 @@ known-gap 而非失败。修复分支必须同时删除对应条目。
 | P1 | `claude/lucid-heisenberg-ppa3kj-p1`（**已推送**，叠在 h1 上） | `internal/protocol/stage` 契约 + 单测：Endpoint / Stage / Compose / Bridge / 精确配对 Registry / BuildTopology；链内拒绝 `anthropic_v1`（只在边缘处理）；去掉隐式 identity 回退与反射 nil 检查 | 无 |
 | P2 | `claude/lucid-heisenberg-ppa3kj-p2`（**已推送**，叠在 p1 上） | 6 个 Beta-only Bridge（Beta⇄Chat、Beta⇄Responses、Chat⇄Responses），包装现有 converter，不含 V1 / identity bridge；`TestBridgeMatrix`：每个 bridge × 成功场景 × 流/非流，在内存中复用 HTTP 矩阵的场景 fixture 与断言（错误场景属 HTTP 状态映射，归 P5） | 无 |
 | P3 | `claude/lucid-heisenberg-ppa3kj-p3`（**已推送**，叠在 p2 上） | `stage/upstream` 终端 endpoint：Anthropic（Beta）/ Chat / Responses，只包装 `forwarding.Forward*`，不做请求准备；`AnthropicWireV1` 在 provider 边缘 downgrade 请求、upgrade 响应与流事件；`request.ConvertAnthropicBetaToV1Request` 拒绝（而非丢弃）V1 无法表达的内容。测试：每个 endpoint × 流/非流发往 provider 的 method / path / query / beta 头 / body 与旧路径直接调用 forwarding 逐一相同（V1 覆盖 upgrade → 链 → downgrade 全程）；两种 Anthropic wire 结果一致；6 个 bridge 叠在真实 endpoint 上跑通 | 无 |
-| P4 | `stage/4-tool-round` | Tool Round Stage（Gate + Ownership，Beta），复用 toolengine / guardrails；用 H2 的 fixture 在内存中验证 | 无 |
+| P4a | `claude/lucid-heisenberg-ppa3kj-p4`（**已推送**，叠在 p3 上） | `stage/toolround`：Tool Round Stage（Beta），Gate 接口 + MCP Ownership；`toolengine.AnthropicBetaOwner` 复用 registry / ToolExecutor / continuation store（键格式不变）；`stage.CommittedError`；continuation 限定会话并与 follow-up 关联。内存测试：真实 MCP runtime + servertool pipeline + H1 fixture，经 P2 bridge 覆盖 Beta / Chat / Responses 目标（含 M4、M5） | 无 |
+| P4b | `claude/lucid-heisenberg-ppa3kj-p4b`（**已推送**，叠在 p4 上） | `guardrailspipeline.ToolRoundGate`：复用现有 Guardrails 管线实现 Gate（每请求一份 mask 状态，fail-open）。内存测试覆盖 G2 G3 G4 G5 G7 G8 | 无 |
 | P5 | `stage/5-http-adapter` | 各客户端协议的 HTTP Adapter（JSON / SSE / 首块提交 / model 改写 / usage / affinity） | 无 |
 | C1 | `stage/6-cut-beta` | 第一次切流：Beta→Beta 全部请求（含 MCP / Guardrails）；删除对应 leaf、`AttachGuardrailsHooks`、passthrough 改写分支 | Beta→Beta |
 | C2… | `stage/7-cut-*` | 逐个协议对切流（Beta→Chat/Responses，Chat→*，Responses→*），每对一个分支，删对应 leaf 与跨协议 MCP 循环 | 逐对 |
