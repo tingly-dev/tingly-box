@@ -1928,12 +1928,39 @@ export default {
       "referenceHint": "第一张图上着色的区域是模型可以改的地方 · 通过 images/edits 发送",
       "strandedHint": "只有第一张图的蒙版会被发送"
     },
+    "referenceRole": {
+      "character": "角色",
+      "expression": "表情",
+      "pose": "姿势",
+      "outfit": "服装",
+      "style": "风格",
+      "scene": "场景",
+      "unset": "用途",
+      "none": "不指定",
+      "choose": "参考图 {{number}} 的用途",
+      "hint": {
+        "character": "保持这个人的长相",
+        "expression": "只取面部表情",
+        "pose": "只取姿势",
+        "outfit": "只取服装",
+        "style": "只取画风与色调",
+        "scene": "只取环境背景"
+      }
+    },
     "suggest": {
       "title": "建议",
+      "role": {
+        "label": "{{role}}说明 · 图 {{n}}",
+        "character": "图 {{n}} 是角色参考：保持其中人物的长相、发型和体型一致。",
+        "expression": "图 {{n}} 仅作表情参考：只沿用其中的面部表情，不要沿用人物的长相、发型和服装。",
+        "pose": "图 {{n}} 仅作姿势参考：只沿用人物的姿势和动作，不要沿用其长相、服装和背景。",
+        "outfit": "图 {{n}} 仅作服装参考：只沿用其中的服装和配饰，不要沿用穿着者的长相和姿势。",
+        "style": "图 {{n}} 仅作风格参考：沿用它的画风、色调和光影，不要沿用其中的具体内容。",
+        "scene": "图 {{n}} 仅作场景参考：沿用其中的环境和背景，不要沿用其中的人物。"
+      },
       "pose": {
         "withCamera": "{{pose}}{{camera}}",
-        "label": "姿态说明 · 图 {{n}}",
-        "skeleton": "图 {{n}} 是 OpenPose 姿态骨架：让人物摆出相同的姿势，不要画出骨架本身。",
+        "skeleton": "图 {{n}} 是 OpenPose 姿势骨架：让人物摆出相同的姿势，不要画出骨架本身。",
         "mannequin": "图 {{n}} 中的灰色人偶只是姿势参考：让人物摆出相同的姿势，不要画出人偶本身。"
       },
       "shot": {

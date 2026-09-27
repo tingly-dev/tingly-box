@@ -1932,11 +1932,38 @@ export default {
       "referenceHint": "The tinted area of the first image is what the model may change · sent via images/edits",
       "strandedHint": "only the first image\u2019s mask is sent"
     },
+    "referenceRole": {
+      "character": "Character",
+      "expression": "Expression",
+      "pose": "Pose",
+      "outfit": "Outfit",
+      "style": "Style",
+      "scene": "Scene",
+      "unset": "Use",
+      "none": "No particular use",
+      "choose": "What reference image {{number}} is for",
+      "hint": {
+        "character": "Keep this person's look",
+        "expression": "Take only the facial expression",
+        "pose": "Take only the pose",
+        "outfit": "Take only the clothes",
+        "style": "Take only the look and feel",
+        "scene": "Take only the setting"
+      }
+    },
     "suggest": {
       "title": "Suggestions",
+      "role": {
+        "label": "{{role}} note · image {{n}}",
+        "character": "Image {{n}} is the character reference: keep this person's face, hairstyle and build consistent.",
+        "expression": "Use image {{n}} for the facial expression only — don't take the person's face, hair or clothes from it.",
+        "pose": "Use image {{n}} for the pose only — match the body position and gesture, but don't take the person's face, clothes or background from it.",
+        "outfit": "Use image {{n}} for the outfit only — take the clothes and accessories, not the wearer's face or pose.",
+        "style": "Use image {{n}} for the style only — its rendering, colour palette and lighting, not its content.",
+        "scene": "Use image {{n}} for the setting only — take the environment and background, not the people in it."
+      },
       "pose": {
         "withCamera": "{{pose}} {{camera}}",
-        "label": "Pose note · image {{n}}",
         "skeleton": "Image {{n}} is an OpenPose pose skeleton: give the person the same pose, and don't draw the skeleton itself.",
         "mannequin": "The grey mannequin in image {{n}} is only a pose reference: give the person the same pose, and don't draw the mannequin."
       },

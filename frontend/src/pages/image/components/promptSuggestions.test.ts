@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { CAMERA_ELEVATIONS, cameraTurn, createFigure, LENSES, setFigureLens } from '@tingly/mannequin';
 import { insertSuggestion, promptSuggestionsFor } from './promptSuggestions';
 import type { ReferenceImage } from './ImageGenReferenceImages';
+import { effectiveRole } from './referenceRoles';
 
 // Echoes the key and its values, so the tests read what was asked for rather
 // than any one language's wording.
@@ -25,7 +26,7 @@ describe('promptSuggestionsFor', () => {
         const upload: ReferenceImage = { file, previewUrl: '', source: 'upload' };
         const suggestions = promptSuggestionsFor([upload, sketch('skeleton', []), sketch('skeleton')], t);
         expect(suggestions).toHaveLength(1);
-        expect(suggestions[0].label).toBe('playground.suggest.pose.label(n=3)');
+        expect(suggestions[0].label).toBe('playground.suggest.role.label(role=playground.referenceRole.pose,n=3)');
         expect(suggestions[0].text).toContain('pose=playground.suggest.pose.skeleton(n=3)');
     });
 
@@ -42,6 +43,36 @@ describe('promptSuggestionsFor', () => {
         expect(text).toContain('shot.lens.wide');
         const plain = promptSuggestionsFor([sketch('skeleton')], t)[0].text;
         expect(plain).not.toContain('shot.lens');
+    });
+});
+
+describe('reference roles', () => {
+    const photo = (role?: ReferenceImage['role']): ReferenceImage => ({ file, previewUrl: '', source: 'upload', ...(role !== undefined ? { role } : {}) });
+
+    it('says what to take from an image and what not to, once it has a role', () => {
+        const suggestions = promptSuggestionsFor([photo(), photo('expression')], t);
+        expect(suggestions).toHaveLength(1);
+        expect(suggestions[0].text).toBe('playground.suggest.role.expression(n=2)');
+        expect(suggestions[0].label).toBe('playground.suggest.role.label(role=playground.referenceRole.expression,n=2)');
+    });
+
+    it('treats a posed sketch as a pose reference unless told otherwise', () => {
+        expect(effectiveRole(sketch('skeleton'))).toBe('pose');
+        expect(effectiveRole(sketch('skeleton', []))).toBeNull();
+        expect(effectiveRole({ ...sketch('skeleton'), role: null })).toBeNull();
+        expect(promptSuggestionsFor([{ ...sketch('skeleton'), role: null }], t)).toHaveLength(0);
+        // Re-labelled as something else, it gets that role's note instead.
+        expect(promptSuggestionsFor([{ ...sketch('skeleton'), role: 'style' }], t)[0].text).toBe('playground.suggest.role.style(n=1)');
+    });
+
+    it('gives a pose-tagged photo the plain pose note, not the skeleton one', () => {
+        expect(promptSuggestionsFor([photo('pose')], t)[0].text).toBe('playground.suggest.role.pose(n=1)');
+    });
+
+    it('offers a fresh chip when the role changes', () => {
+        const [a] = promptSuggestionsFor([photo('expression')], t);
+        const [b] = promptSuggestionsFor([photo('outfit')], t);
+        expect(a.id).not.toBe(b.id);
     });
 });
 

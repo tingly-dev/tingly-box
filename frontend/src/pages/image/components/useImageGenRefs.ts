@@ -5,6 +5,7 @@ import { addReferences, reorderReferences } from './imageGenSession';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
+import type { ReferenceRole } from './referenceRoles';
 
 // Decodes an image just far enough to learn its pixel size. Failure is not
 // worth surfacing — the caption simply drops the dimensions.
@@ -90,6 +91,10 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         setReferenceImages((current) => current.filter((_, i) => i !== index));
     }, []);
 
+    const handleSetReferenceRole = useCallback((index: number, role: ReferenceRole | null) => {
+        setReferenceImages((current) => current.map((ref, i) => (i === index ? { ...ref, role } : ref)));
+    }, []);
+
     // Moves one reference to another slot, keeping every other image's relative
     // order — the same result as dragging a card in a list.
     const handleReorderReference = useCallback((from: number, to: number) => {
@@ -173,7 +178,9 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         setReferenceImages((current) => {
             const index = sketchTarget?.index ?? null;
             if (index !== null && index < current.length) {
-                return current.map((ref, i) => (i === index ? sketch : ref));
+                // Redrawing is still the same reference: whatever the user
+                // said it is for stays said.
+                return current.map((ref, i) => (i === index ? { ...sketch, role: ref.role } : ref));
             }
             return [...current, sketch].slice(0, MAX_EDIT_REFERENCE_IMAGES);
         });
@@ -225,6 +232,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         setDragOverReference,
         handleAddReferenceImages,
         handleRemoveReferenceImage,
+        handleSetReferenceRole,
         handleReorderReference,
         handleReferenceKeyDown,
         handleUseAsReference,

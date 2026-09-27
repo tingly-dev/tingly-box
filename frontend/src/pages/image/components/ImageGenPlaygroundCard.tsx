@@ -123,6 +123,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setDragOverReference,
         handleAddReferenceImages,
         handleRemoveReferenceImage,
+        handleSetReferenceRole,
         handleReorderReference,
         handleReferenceKeyDown,
         handleUseAsReference,
@@ -538,6 +539,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onEditSketch={handleOpenSketch}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
+                            onSetReferenceRole={handleSetReferenceRole}
                             onReorder={handleReorderReference}
                             onMoveByKey={handleReferenceKeyDown}
                             draggingReference={draggingReference}

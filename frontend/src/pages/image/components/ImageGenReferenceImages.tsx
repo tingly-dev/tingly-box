@@ -1,10 +1,11 @@
-import { useRef } from 'react';
-import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { useRef, useState } from 'react';
+import { Box, Button, ButtonBase, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
+import { Brush, Check, Close, ContentPaste, Create, ExpandMore, FileUpload, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
+import { effectiveRole, REFERENCE_ROLES, type ReferenceRole } from './referenceRoles';
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
 // .design/imageedit.md) — the common denominator across providers behind
@@ -38,7 +39,73 @@ export interface ReferenceImage {
     // which the row says out loud when one has been dragged off the front.
     // See .design/image-mask.md.
     mask?: ReferenceMask;
+    // What this image is for (character, expression, pose…). See
+    // referenceRoles.ts — `null` means deliberately none.
+    role?: ReferenceRole | null;
 }
+
+// The role, as a word under the thumbnail rather than one more button on it:
+// the thumbnail already carries three, and a role is something to *read* at
+// a glance ("this one is the expression") before it is something to change.
+// Unset it is a faint "Use"; set it is the role's own name.
+const ReferenceRoleLabel: React.FC<{ image: ReferenceImage; index: number; onSetRole: (role: ReferenceRole | null) => void }> = ({ image, index, onSetRole }) => {
+    const { t } = useTranslation();
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const role = effectiveRole(image);
+    const roleName = (key: ReferenceRole) => t(`playground.referenceRole.${key}`);
+    const pick = (next: ReferenceRole | null) => {
+        setAnchor(null);
+        onSetRole(next);
+    };
+    return (
+        <>
+            <ButtonBase
+                onClick={(event) => { event.stopPropagation(); setAnchor(event.currentTarget); }}
+                aria-haspopup="menu"
+                aria-label={t('playground.referenceRole.choose', { number: index + 1 })}
+                sx={{
+                    mt: 0.25,
+                    width: 56,
+                    px: 0.25,
+                    borderRadius: 0.5,
+                    justifyContent: 'center',
+                    gap: 0.125,
+                    fontSize: 11,
+                    lineHeight: '16px',
+                    color: role ? 'text.primary' : 'text.disabled',
+                    '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                }}
+            >
+                <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {role ? roleName(role) : t('playground.referenceRole.unset')}
+                </Box>
+                <ExpandMore sx={{ fontSize: 12, flexShrink: 0 }} />
+            </ButtonBase>
+            <Menu
+                anchorEl={anchor}
+                open={anchor !== null}
+                onClose={() => setAnchor(null)}
+                onClick={(event) => event.stopPropagation()}
+                slotProps={{ list: { dense: true } }}
+            >
+                {REFERENCE_ROLES.map((key) => (
+                    <MenuItem key={key} selected={role === key} onClick={() => pick(key)}>
+                        <ListItemIcon>{role === key ? <Check fontSize="small" /> : null}</ListItemIcon>
+                        <ListItemText
+                            primary={roleName(key)}
+                            secondary={t(`playground.referenceRole.hint.${key}`)}
+                        />
+                    </MenuItem>
+                ))}
+                <Divider />
+                <MenuItem selected={role === null} onClick={() => pick(null)}>
+                    <ListItemIcon>{role === null ? <Check fontSize="small" /> : null}</ListItemIcon>
+                    <ListItemText primary={t('playground.referenceRole.none')} />
+                </MenuItem>
+            </Menu>
+        </>
+    );
+};
 
 interface ReferenceThumbProps {
     image: ReferenceImage;
@@ -50,6 +117,7 @@ interface ReferenceThumbProps {
     onEditSketch: () => void;
     onEditMask: () => void;
     onRemove: () => void;
+    onSetRole: (role: ReferenceRole | null) => void;
     onReorder: (from: number, to: number) => void;
     onMoveByKey: (event: React.KeyboardEvent, index: number) => void;
     // The row owns which thumbnail is moving and which one it is over; this one
@@ -74,6 +142,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
     onEditSketch,
     onEditMask,
     onRemove,
+    onSetRole,
     onReorder,
     onMoveByKey,
     onDragStart,
@@ -87,6 +156,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
     // them as new references.
     const isReorder = (event: React.DragEvent) => event.dataTransfer.types.includes(REFERENCE_DND_TYPE);
     return (
+        <Stack sx={{ alignItems: 'center', flexShrink: 0 }}>
         <Box
             draggable
             onDragStart={(event) => {
@@ -227,6 +297,8 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 <Close sx={{ fontSize: 14 }} />
             </IconButton>
         </Box>
+        <ReferenceRoleLabel image={image} index={index} onSetRole={onSetRole} />
+        </Stack>
     );
 };
 
@@ -243,6 +315,7 @@ interface ReferenceImagesRowProps {
     onEditSketch: (index: number | null) => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
+    onSetReferenceRole: (index: number, role: ReferenceRole | null) => void;
     onReorder: (from: number, to: number) => void;
     onMoveByKey: (event: React.KeyboardEvent, index: number) => void;
     draggingReference: number | null;
@@ -266,6 +339,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     onEditSketch,
     onEditMask,
     onRemoveReference,
+    onSetReferenceRole,
     onReorder,
     onMoveByKey,
     draggingReference,
@@ -329,7 +403,9 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                     borderRadius: 1.5,
                     bgcolor: 'action.hover',
                     minHeight: referenceImages.length === 0 ? 44 : 64,
-                    alignItems: 'center',
+                    // Tops aligned once thumbnails carry their role label
+                    // underneath: the add-buttons line up with the images.
+                    alignItems: referenceImages.length === 0 ? 'center' : 'flex-start',
                     cursor: referenceImages.length < MAX_EDIT_REFERENCE_IMAGES ? 'pointer' : 'default',
                 }}
             >
@@ -367,6 +443,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                 onEditSketch={() => onEditSketch(index)}
                                 onEditMask={() => onEditMask(index)}
                                 onRemove={() => onRemoveReference(index)}
+                                onSetRole={(role) => onSetReferenceRole(index, role)}
                                 onReorder={onReorder}
                                 onMoveByKey={onMoveByKey}
                                 onDragStart={() => onDragStart(index)}
