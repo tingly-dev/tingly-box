@@ -147,6 +147,13 @@ func upstreamURLFor(provider *typ.Provider, target protocol.APIType) string {
 		return base + "/responses"
 	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
 		return base + "/v1/messages"
+	case protocol.TypeDecision:
+		// Decision normalizes the api_base to the native /decisions endpoint
+		// (…/api/v1 and …/api/v1/decisions both land in the same place).
+		if u, err := forwarding.DecisionEndpointURL(base); err == nil {
+			return u
+		}
+		return base
 	default:
 		return base
 	}
