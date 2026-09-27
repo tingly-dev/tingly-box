@@ -38,6 +38,9 @@ type ProviderRecord struct {
 	APIBaseOpenAI    string `gorm:"column:api_base_openai"`
 	APIBaseAnthropic string `gorm:"column:api_base_anthropic"`
 
+	// Decision fork endpoint. Independent of APIBase/APIStyle.
+	APIBaseDecision string `gorm:"column:api_base_decision"`
+
 	// OpenAIEndpointMode declares which OpenAI endpoints this provider exposes
 	// ("", "chat", "responses", "both"). See ai.OpenAIEndpointMode.
 	OpenAIEndpointMode string `gorm:"column:openai_endpoint_mode"`
@@ -136,6 +139,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		APIStyle:           protocol.APIStyle(r.APIStyle),
 		APIBaseOpenAI:      r.APIBaseOpenAI,
 		APIBaseAnthropic:   r.APIBaseAnthropic,
+		APIBaseDecision:    r.APIBaseDecision,
 		AuthType:           typ.AuthType(r.AuthType),
 		Source:             typ.ProviderSource(r.Source),
 		NoKeyRequired:      r.NoKeyRequired,
@@ -182,6 +186,7 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 		APIStyle:           string(p.APIStyle),
 		APIBaseOpenAI:      p.APIBaseOpenAI,
 		APIBaseAnthropic:   p.APIBaseAnthropic,
+		APIBaseDecision:    p.APIBaseDecision,
 		AuthType:           string(p.AuthType),
 		Source:             string(p.Source),
 		NoKeyRequired:      p.NoKeyRequired,
@@ -229,6 +234,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.APIStyle = string(p.APIStyle)
 	record.APIBaseOpenAI = p.APIBaseOpenAI
 	record.APIBaseAnthropic = p.APIBaseAnthropic
+	record.APIBaseDecision = p.APIBaseDecision
 	record.AuthType = string(p.AuthType)
 	record.Source = string(p.Source)
 	record.NoKeyRequired = p.NoKeyRequired

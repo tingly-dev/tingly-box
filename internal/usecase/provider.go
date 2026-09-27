@@ -76,6 +76,9 @@ type CreateProviderRequest struct {
 	Token    string            `json:"token"`
 	APIStyle protocol.APIStyle `json:"api_style"`
 	ProxyURL string            `json:"proxy_url,omitempty"`
+	// APIBaseDecision optionally adds a structured-decision fork endpoint,
+	// giving the provider decision capability without changing its chat style.
+	APIBaseDecision string `json:"api_base_decision,omitempty"`
 }
 
 // CreateProviderResult is the output of Add.
@@ -92,9 +95,10 @@ func (uc *ProviderUseCase) Add(req CreateProviderRequest) (CreateProviderResult,
 		APIBase:  req.APIBase,
 		APIStyle: req.APIStyle,
 		AuthType: typ.AuthTypeAPIKey,
-		Token:    req.Token,
-		ProxyURL: req.ProxyURL,
-		Enabled:  true,
+		Token:           req.Token,
+		ProxyURL:        req.ProxyURL,
+		APIBaseDecision: req.APIBaseDecision,
+		Enabled:         true,
 	}
 	if err := uc.cfg.AddProvider(provider); err != nil {
 		return CreateProviderResult{}, err

@@ -54,6 +54,7 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		APIStyle:         string(p.APIStyle),
 		APIBaseOpenAI:    p.APIBaseOpenAI,
 		APIBaseAnthropic: p.APIBaseAnthropic,
+		APIBaseDecision:  p.APIBaseDecision,
 		NoKeyRequired:    p.NoKeyRequired,
 		Enabled:          p.Enabled,
 		ProxyURL:         p.ProxyURL,
@@ -195,6 +196,15 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		}
 	}
 
+	// Decision fork constraint: the decision client authenticates with a
+	// plain Bearer token, so the fork endpoint is api_key-only. Unlike the
+	// chat dual URLs it is style-agnostic — the whole point is that any
+	// openai/anthropic provider can gain decision capability.
+	if req.APIBaseDecision != "" && req.AuthType != string(typ.AuthTypeAPIKey) {
+		badRequest(c, "api_base_decision is only supported for api_key auth providers")
+		return
+	}
+
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, CreateProviderResponse{
@@ -211,6 +221,7 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		APIStyle:         protocol.APIStyle(req.APIStyle),
 		APIBaseOpenAI:    req.APIBaseOpenAI,
 		APIBaseAnthropic: req.APIBaseAnthropic,
+		APIBaseDecision:  req.APIBaseDecision,
 		Token:            req.Token,
 		NoKeyRequired:    req.NoKeyRequired,
 		Enabled:          true, // always make new provider enabled
@@ -328,6 +339,9 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	if req.APIBaseAnthropic != nil {
 		p.APIBaseAnthropic = *req.APIBaseAnthropic
 	}
+	if req.APIBaseDecision != nil {
+		p.APIBaseDecision = *req.APIBaseDecision
+	}
 	// Multi-field providers authenticate via the credential bundle only; ignore
 	// a stray token so the two credential shapes never coexist on one row.
 	if req.Token != nil && *req.Token != "" && !p.IsMultiFieldCredential() {
@@ -373,6 +387,12 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 			apierr.Failure(c, http.StatusBadRequest, "Dual base URLs are not supported for Google-style providers")
 			return
 		}
+	}
+
+	// Decision fork constraint, post-merge: the fork endpoint is api_key-only.
+	if p.APIBaseDecision != "" && p.AuthType != typ.AuthTypeAPIKey && p.AuthType != "" {
+		badRequest(c, "api_base_decision is only supported for api_key auth providers")
+		return
 	}
 
 	if err = h.config.UpdateProvider(uid, p); err != nil {

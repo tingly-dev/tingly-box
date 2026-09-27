@@ -15,6 +15,7 @@ type ProviderResponse struct {
 	APIStyle         string            `json:"api_style" example:"openai"`
 	APIBaseOpenAI    string            `json:"api_base_openai,omitempty" example:"https://api.example.com/v1"`
 	APIBaseAnthropic string            `json:"api_base_anthropic,omitempty" example:"https://api.example.com"`
+	APIBaseDecision  string            `json:"api_base_decision,omitempty" example:"https://www.jevai.org/api/v1"`
 	Token            string            `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
 	NoKeyRequired    bool              `json:"no_key_required" example:"false"`
 	Enabled          bool              `json:"enabled" example:"true"`
@@ -39,6 +40,7 @@ type CreateProviderRequest struct {
 	APIStyle         string `json:"api_style" description:"API style" example:"openai"`
 	APIBaseOpenAI    string `json:"api_base_openai,omitempty" description:"Dual-mode OpenAI-compatible base URL (optional, api_key auth only)" example:"https://api.example.com/v1"`
 	APIBaseAnthropic string `json:"api_base_anthropic,omitempty" description:"Dual-mode Anthropic-compatible base URL (optional, api_key auth only)" example:"https://api.example.com"`
+	APIBaseDecision  string `json:"api_base_decision,omitempty" description:"Structured-decision fork endpoint base URL (optional); lets any provider serve the decision scenario" example:"https://www.jevai.org/api/v1"`
 	Token            string `json:"token" description:"API token" example:"sk-..."`
 	NoKeyRequired    bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
 	Enabled          bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
@@ -64,6 +66,7 @@ type UpdateProviderRequest struct {
 	APIStyle         *string `json:"api_style,omitempty" description:"New API style"`
 	APIBaseOpenAI    *string `json:"api_base_openai,omitempty" description:"New dual-mode OpenAI-compatible base URL (empty string clears it)"`
 	APIBaseAnthropic *string `json:"api_base_anthropic,omitempty" description:"New dual-mode Anthropic-compatible base URL (empty string clears it)"`
+	APIBaseDecision  *string `json:"api_base_decision,omitempty" description:"New structured-decision fork endpoint base URL (empty string clears it)"`
 	Token            *string `json:"token,omitempty" description:"New API token"`
 	NoKeyRequired    *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
 	Enabled          *bool   `json:"enabled,omitempty" description:"New enabled status"`

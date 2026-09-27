@@ -86,6 +86,7 @@ func providerAdd(cfg *serverconfig.Config) error {
 	styleR, err := Select("API style:", []SelectItem[protocol.APIStyle]{
 		{Title: "OpenAI-compatible", Description: "/v1/chat/completions endpoint", Value: protocol.APIStyleOpenAI},
 		{Title: "Anthropic-compatible", Description: "/v1/messages endpoint", Value: protocol.APIStyleAnthropic},
+		{Title: "Decision (Jev)", Description: "/api/v1/decisions endpoint", Value: protocol.APIStyleDecision},
 	}, SelectOptions{CanGoBack: true})
 	if err != nil || styleR.IsCancel() || styleR.IsBack() {
 		return nil
@@ -94,6 +95,8 @@ func providerAdd(cfg *serverconfig.Config) error {
 	defURL := "https://api.example.com/v1"
 	if styleR.Value == protocol.APIStyleAnthropic {
 		defURL = "https://api.anthropic.com"
+	} else if styleR.Value == protocol.APIStyleDecision {
+		defURL = "https://www.jevai.org/api/v1"
 	}
 	baseR, err := Input("Base URL:", InputOptions{Placeholder: defURL, CanGoBack: true})
 	if err != nil || baseR.IsCancel() || baseR.IsBack() {
@@ -109,6 +112,13 @@ func providerAdd(cfg *serverconfig.Config) error {
 		return nil
 	}
 
+	// Optional decision fork: gives the provider decision capability without
+	// changing its chat style. Leave blank when the model has none.
+	decisionR, err := Input("Decision endpoint URL (optional):", InputOptions{Placeholder: "https://www.jevai.org/api/v1", CanGoBack: true})
+	if err != nil || decisionR.IsCancel() || decisionR.IsBack() {
+		return nil
+	}
+
 	proxyR, err := Input("Proxy URL (optional):", InputOptions{Placeholder: "e.g. http://localhost:7890", CanGoBack: true})
 	if err != nil || proxyR.IsCancel() || proxyR.IsBack() {
 		return nil
@@ -117,6 +127,7 @@ func providerAdd(cfg *serverconfig.Config) error {
 	res, err := usecase.NewProviderUseCase(cfg).Add(usecase.CreateProviderRequest{
 		Name: nameR.Value, APIBase: apiBase, Token: tokenR.Value,
 		APIStyle: styleR.Value, ProxyURL: proxyR.Value,
+		APIBaseDecision: decisionR.Value,
 	})
 	if err != nil {
 		return err
