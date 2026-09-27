@@ -155,10 +155,17 @@ interface SketchCanvasDialogProps {
     // to rebuild an array. A sketch flattened by an older build arrives as a
     // backdrop with no strokes or figures: still drawable, just not posable.
     initial: SketchLayers | null;
+    // Which reference this editor is making. A sketch is a drawing that may
+    // have figures in it; a pose is figures and nothing else, sent as a clean
+    // skeleton map. Same canvas and same figures — the pose editor is the
+    // sketch editor with the drawing tools taken away (.design/sketch-canvas.md §4.11).
+    mode?: SketchMode;
     onClose: () => void;
     onSubmit: (result: SketchResult) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
+
+export type SketchMode = 'sketch' | 'pose';
 
 // How big a handle is drawn, in screen pixels. Picking uses twice this, and
 // the face's dial keeps itself clear of the head's by a multiple of it — one
@@ -176,11 +183,13 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     open,
     size,
     initial,
+    mode = 'sketch',
     onClose,
     onSubmit,
     showNotification,
 }) => {
     const { t } = useTranslation();
+    const poseOnly = mode === 'pose';
     // Element state rather than refs: the Dialog mounts its children through
     // a Portal one tick after `open` flips, so a plain ref is still null when
     // an `[open]` effect runs. Callback refs re-run the effects once the
@@ -256,7 +265,12 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         // rather than replayed at its old coordinates on the new canvas.
         const transform = initial ? fitTransform(initial.size, dims) : IDENTITY_TRANSFORM;
         const strokesToOpen = transformStrokes(initial?.strokes ?? [], transform);
-        const figuresToOpen = transformFigures(initial?.figures ?? [], transform);
+        const reopened = transformFigures(initial?.figures ?? [], transform);
+        // A new pose starts with its figure already standing there: the pose
+        // editor has nothing else to do, so it should not open on an empty
+        // canvas waiting to be told to (principle 2). Not an undo step — it
+        // is where the editor starts, not something the user did.
+        const figuresToOpen = poseOnly && reopened.length === 0 ? [createFigure('standing', dims)] : reopened;
         historyRef.current.clear();
         // Undo is seeded from the strokes themselves: each frame is the list
         // one stroke shorter. That is what lets Ctrl+Z keep peeling marks that
@@ -275,12 +289,14 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         setStrokes(strokesToOpen);
         setBackdrop(null);
         setFigures(figuresToOpen);
-        setPoseAs(initial ? initial.poseAs ?? 'mannequin' : DEFAULT_POSE_OUTPUT);
+        // A sketch saved before the choice existed was sent as the mannequin;
+        // a pose has only ever been sent as a skeleton unless told otherwise.
+        setPoseAs(initial ? initial.poseAs ?? (poseOnly ? 'skeleton' : 'mannequin') : DEFAULT_POSE_OUTPUT);
         // Re-opening a sketch that has one figure lands on the figure tool
         // with that figure selected: the handles are the answer to "is this
         // still posable?", so they should be on screen before the first click.
         setSelectedId(figuresToOpen.length === 1 ? figuresToOpen[0].id : null);
-        setTool(figuresToOpen.length > 0 ? 'pose' : 'pen');
+        setTool(poseOnly || figuresToOpen.length > 0 ? 'pose' : 'pen');
         const dataUrl = initial?.backdrop ?? null;
         if (dataUrl) {
             loadDataUrl(dataUrl)
@@ -290,7 +306,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 .catch(() => undefined);
         }
         return () => { cancelled = true; };
-    }, [open, canvasEl, dims, initial, getContext, paintBackground]);
+    }, [open, canvasEl, dims, initial, poseOnly, getContext, paintBackground]);
 
     // The stroke layer is rebuilt from its list rather than patched, the same
     // way the figure layer is: paint the backdrop, then replay every stroke.
@@ -719,10 +735,12 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
-                <Create fontSize="small" />
+                {poseOnly ? <Accessibility fontSize="small" /> : <Create fontSize="small" />}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
-                        {t('playground.sketch.title', { defaultValue: 'Sketch' })}
+                        {poseOnly
+                            ? t('playground.pose.title', { defaultValue: 'Pose' })
+                            : t('playground.sketch.title', { defaultValue: 'Sketch' })}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
                         {t('playground.sketch.canvasSize', {
@@ -732,7 +750,12 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                         })}
                     </Typography>
                 </Box>
-                <IconButton onClick={onClose} aria-label={t('playground.sketch.close', { defaultValue: 'Close sketch' })}>
+                <IconButton
+                    onClick={onClose}
+                    aria-label={poseOnly
+                        ? t('playground.pose.close', { defaultValue: 'Close pose' })
+                        : t('playground.sketch.close', { defaultValue: 'Close sketch' })}
+                >
                     <Close />
                 </IconButton>
             </DialogTitle>
@@ -744,6 +767,8 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                         useFlexGap
                         sx={{ flexWrap: 'wrap', alignItems: 'center' }}
                     >
+                        {/* One tool in the pose editor, so no tool picker. */}
+                        {!poseOnly && (
                         <ToggleButtonGroup
                             value={tool}
                             exclusive
@@ -761,6 +786,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                 <Tooltip title={toolLabel('pose')}><Accessibility fontSize="small" /></Tooltip>
                             </ToggleButton>
                         </ToggleButtonGroup>
+                        )}
 
                         {tool === 'pose' ? (
                             <>
@@ -1026,10 +1052,14 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 <Button onClick={onClose}>
                     {t('playground.sketch.cancel', { defaultValue: 'Cancel' })}
                 </Button>
-                <Button variant="contained" onClick={handleSubmit} disabled={!dirty} startIcon={<Create />}>
-                    {isEditing
-                        ? t('playground.sketch.update', { defaultValue: 'Update sketch' })
-                        : t('playground.sketch.use', { defaultValue: 'Use sketch' })}
+                <Button variant="contained" onClick={handleSubmit} disabled={!dirty} startIcon={poseOnly ? <Accessibility /> : <Create />}>
+                    {poseOnly
+                        ? (isEditing
+                            ? t('playground.pose.update', { defaultValue: 'Update pose' })
+                            : t('playground.pose.use', { defaultValue: 'Use pose' }))
+                        : (isEditing
+                            ? t('playground.sketch.update', { defaultValue: 'Update sketch' })
+                            : t('playground.sketch.use', { defaultValue: 'Use sketch' }))}
                 </Button>
             </DialogActions>
             <PoseLibraryPopover

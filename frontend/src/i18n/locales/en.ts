@@ -1966,6 +1966,14 @@ export default {
         }
       }
     },
+    "pose": {
+      "action": "Pose",
+      "title": "Pose",
+      "close": "Close pose",
+      "use": "Use pose",
+      "update": "Update pose",
+      "editAction": "Edit pose"
+    },
     "sketch": {
       "action": "Sketch",
       "editAction": "Edit sketch",

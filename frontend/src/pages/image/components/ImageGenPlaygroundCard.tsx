@@ -131,6 +131,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleOpenSketch,
         handleSketchSubmit,
         sketchInitial,
+        sketchMode,
         hasSketchReference,
         maskTarget,
         setMaskTarget,
@@ -159,7 +160,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             kind: 'reference',
             label: ref.source === 'sketch'
                 ? t('playground.sketch.title', { defaultValue: 'Sketch' })
-                : ref.file.name,
+                : ref.source === 'pose'
+                    ? t('playground.pose.title', { defaultValue: 'Pose' })
+                    : ref.file.name,
             caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
             ...(ref.mask ? { maskSrc: ref.mask.previewUrl } : {}),
         };
@@ -919,6 +922,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 open={sketchTarget !== null}
                 size={size}
                 initial={sketchInitial}
+                mode={sketchMode}
                 onClose={() => setSketchTarget(null)}
                 onSubmit={handleSketchSubmit}
                 showNotification={showNotification}

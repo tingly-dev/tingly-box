@@ -24,9 +24,10 @@ export interface PromptSuggestion {
 // them into words — the half of the pose the picture cannot carry.
 const poseSuggestion = (ref: ReferenceImage, index: number, t: TFunction): PromptSuggestion | null => {
     const figures = ref.layers?.figures ?? [];
-    if (ref.source !== 'sketch' || figures.length === 0) return null;
-    // A sketch saved before the choice existed was sent as the mannequin.
-    const poseAs = ref.layers?.poseAs ?? 'mannequin';
+    if ((ref.source !== 'sketch' && ref.source !== 'pose') || figures.length === 0) return null;
+    // A sketch saved before the choice existed was sent as the mannequin; a
+    // pose has always been a skeleton unless told otherwise.
+    const poseAs = ref.layers?.poseAs ?? (ref.source === 'pose' ? 'skeleton' : 'mannequin');
     const shot = describeShot(figures[0]);
     const camera = [
         t(`playground.suggest.shot.height.${shot.height}`),

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchBlob, parseImageSize } from '@tingly/vision';
 import { addReferences, reorderReferences } from './imageGenSession';
 import type { ReferenceMask } from './ImageGenPlayground.types';
-import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
+import type { SketchLayers, SketchMode, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 
 // Decodes an image just far enough to learn its pixel size. Failure is not
@@ -26,8 +26,9 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, rej
 });
 
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
-// a new sketch, otherwise the reference image being redrawn.
-type SketchTarget = { index: number | null } | null;
+// a new one, otherwise the reference image being redrawn. `mode` is which
+// editor it opens as — a drawing, or a pose (figures only).
+type SketchTarget = { index: number | null; mode: SketchMode } | null;
 
 interface UseImageGenRefsParams {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
@@ -49,6 +50,10 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     const [draggingReference, setDraggingReference] = useState<number | null>(null);
     const [dragOverReference, setDragOverReference] = useState<number | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
+    // The editor's mode outlives the target by one close: the dialog fades
+    // out after the target is cleared, and its title must not flip from
+    // "Pose" to "Sketch" on the way out.
+    const [sketchMode, setSketchMode] = useState<SketchMode>('sketch');
     // Which reference image's mask editor is open. An index rather than a
     // boolean: a mask belongs to one specific image, and saying which one is
     // the whole point.
@@ -157,16 +162,23 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     // same list, goes through the same request, and shows up in the run
     // history like any upload. Redrawing replaces the sketch in place so it
     // keeps its position among the other references.
-    const handleOpenSketch = useCallback((index: number | null) => {
+    //
+    // A pose is the same editor with only the figures in it. Re-opening one
+    // opens the editor it was made in: a pose never grows a pen, and a sketch
+    // never loses its strokes.
+    const handleOpenSketch = useCallback((index: number | null, mode: SketchMode = 'sketch') => {
         if (index === null && referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) return;
-        setSketchTarget({ index });
-    }, [referenceImages.length]);
+        const existing = index === null ? undefined : referenceImages[index];
+        const resolved: SketchMode = existing ? (existing.source === 'pose' ? 'pose' : 'sketch') : mode;
+        setSketchTarget({ index, mode: resolved });
+        setSketchMode(resolved);
+    }, [referenceImages]);
 
     const handleSketchSubmit = useCallback(async (result: SketchResult) => {
         const sketch: ReferenceImage = {
             file: result.file,
             previewUrl: result.previewUrl,
-            source: 'sketch',
+            source: sketchTarget?.mode === 'pose' ? 'pose' : 'sketch',
             layers: result.layers,
             ...(await readImageSize(result.previewUrl) ?? {}),
         };
@@ -233,6 +245,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         handleOpenSketch,
         handleSketchSubmit,
         sketchInitial,
+        sketchMode,
         hasSketchReference,
         maskTarget,
         setMaskTarget,

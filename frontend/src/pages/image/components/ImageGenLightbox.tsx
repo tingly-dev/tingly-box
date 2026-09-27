@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { Accessibility, Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
@@ -306,22 +306,29 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     </Tooltip>
                     {/* An image that is already a reference has nowhere to
                         be sent — the one edit it still affords is redrawing
-                        it, and only if it came from the sketch canvas. */}
+                        it, and only if it came from the sketch or pose editor. */}
                     {selectedImage?.kind === 'reference' ? (
-                        referenceImages[selectedImage.index]?.source === 'sketch' && (
-                            <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
-                                <IconButton
-                                    onClick={() => {
-                                        onEditSketch(selectedImage.index);
-                                        onClose();
-                                    }}
-                                    aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
-                                    sx={overlayIconSx}
-                                >
-                                    <Create fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )
+                        (() => {
+                            const source = referenceImages[selectedImage.index]?.source;
+                            if (source !== 'sketch' && source !== 'pose') return null;
+                            const label = source === 'pose'
+                                ? t('playground.pose.editAction', { defaultValue: 'Edit pose' })
+                                : t('playground.sketch.editAction', { defaultValue: 'Edit sketch' });
+                            return (
+                                <Tooltip title={label}>
+                                    <IconButton
+                                        onClick={() => {
+                                            onEditSketch(selectedImage.index);
+                                            onClose();
+                                        }}
+                                        aria-label={label}
+                                        sx={overlayIconSx}
+                                    >
+                                        {source === 'pose' ? <Accessibility fontSize="small" /> : <Create fontSize="small" />}
+                                    </IconButton>
+                                </Tooltip>
+                            );
+                        })()
                     ) : (
                         <Tooltip title={t('playground.useAsReference', { defaultValue: 'Use as reference' })}>
                             <IconButton

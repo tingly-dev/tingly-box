@@ -45,6 +45,21 @@ describe('promptSuggestionsFor', () => {
     });
 });
 
+describe('pose references', () => {
+    it('get the same pose note as a posed sketch', () => {
+        const pose: ReferenceImage = { ...sketch('skeleton'), source: 'pose' };
+        const [s] = promptSuggestionsFor([pose], t);
+        expect(s.label).toBe('playground.suggest.pose.label(n=1)');
+        expect(s.text).toContain('pose=playground.suggest.pose.skeleton(n=1)');
+        expect(s.text).toContain('shot.height');
+    });
+
+    it('were always skeletons, so a missing choice reads as skeleton, not mannequin', () => {
+        const pose: ReferenceImage = { ...sketch(undefined), source: 'pose' };
+        expect(promptSuggestionsFor([pose], t)[0].text).toContain('pose.skeleton');
+    });
+});
+
 describe('insertSuggestion', () => {
     it('adds its own paragraph and never rewrites what is there', () => {
         expect(insertSuggestion('', 'note')).toBe('note');

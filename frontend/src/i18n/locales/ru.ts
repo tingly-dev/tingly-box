@@ -1991,6 +1991,14 @@ export default {
         }
       }
     },
+    "pose": {
+      "action": "Поза",
+      "title": "Поза",
+      "close": "Закрыть позу",
+      "use": "Использовать позу",
+      "update": "Обновить позу",
+      "editAction": "Изменить позу"
+    },
     "sketch": {
       "action": "Эскиз",
       "editAction": "Изменить эскиз",

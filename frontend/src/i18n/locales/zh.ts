@@ -1932,8 +1932,8 @@ export default {
       "title": "建议",
       "pose": {
         "withCamera": "{{pose}}{{camera}}",
-        "label": "姿态说明 · 图 {{n}}",
-        "skeleton": "图 {{n}} 是 OpenPose 姿态骨架：让人物摆出相同的姿势，不要画出骨架本身。",
+        "label": "姿势说明 · 图 {{n}}",
+        "skeleton": "图 {{n}} 是 OpenPose 姿势骨架：让人物摆出相同的姿势，不要画出骨架本身。",
         "mannequin": "图 {{n}} 中的灰色人偶只是姿势参考：让人物摆出相同的姿势，不要画出人偶本身。"
       },
       "shot": {
@@ -1961,6 +1961,14 @@ export default {
           "flat": "超长焦镜头，透视压缩"
         }
       }
+    },
+    "pose": {
+      "action": "姿势",
+      "title": "姿势",
+      "close": "关闭姿势",
+      "use": "使用姿势",
+      "update": "更新姿势",
+      "editAction": "修改姿势"
     },
     "sketch": {
       "action": "手绘",
@@ -1997,7 +2005,7 @@ export default {
       "pose": {
           "tool": "人形",
           "add": "添加人形",
-          "presets": "姿势",
+          "presets": "姿势库",
           "views": "机位",
           "viewValue": "转身 {{yaw}}° · 机位高度 {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",

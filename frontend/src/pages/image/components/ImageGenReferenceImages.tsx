@@ -1,10 +1,10 @@
 import { useRef } from 'react';
 import { Box, Button, ButtonBase, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
+import { Accessibility, Brush, Close, ContentPaste, Create, FileUpload, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
-import type { SketchLayers } from './SketchCanvasDialog';
+import type { SketchLayers, SketchMode } from './SketchCanvasDialog';
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
 // .design/imageedit.md) — the common denominator across providers behind
@@ -20,7 +20,7 @@ export interface ReferenceImage {
     previewUrl: string;
     // Where the image came from. A sketch keeps its canvas re-openable (see
     // handleOpenSketch) — "done" is a state, not a lock.
-    source: 'upload' | 'sketch';
+    source: 'upload' | 'sketch' | 'pose';
     // A sketch also keeps the layers it was flattened from — strokes as the
     // points they were drawn from, figures as joints — so re-opening it gives
     // back an editable canvas rather than a picture of one. The request still
@@ -206,15 +206,20 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     </IconButton>
                 </Tooltip>
             )}
-            {image.source === 'sketch' && (
-                <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
+            {(image.source === 'sketch' || image.source === 'pose') && (
+                <Tooltip title={image.source === 'pose'
+                    ? t('playground.pose.editAction', { defaultValue: 'Edit pose' })
+                    : t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
+                >
                     <IconButton
                         size="small"
                         onClick={(event) => { event.stopPropagation(); onEditSketch(); }}
-                        aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
+                        aria-label={image.source === 'pose'
+                            ? t('playground.pose.editAction', { defaultValue: 'Edit pose' })
+                            : t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
                         sx={{ ...overlayActionSx(20), position: 'absolute', bottom: 2, right: 2 }}
                     >
-                        <Create sx={{ fontSize: 13 }} />
+                        {image.source === 'pose' ? <Accessibility sx={{ fontSize: 13 }} /> : <Create sx={{ fontSize: 13 }} />}
                     </IconButton>
                 </Tooltip>
             )}
@@ -240,7 +245,7 @@ interface ReferenceImagesRowProps {
     // the prompt editor dialog, so its ref stays with the panel.
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
-    onEditSketch: (index: number | null) => void;
+    onEditSketch: (index: number | null, mode?: SketchMode) => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onReorder: (from: number, to: number) => void;
@@ -301,6 +306,12 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             label: t('playground.sketch.action', { defaultValue: 'Sketch' }),
             icon: <Create fontSize="small" />,
             onClick: () => onEditSketch(null),
+        },
+        {
+            key: 'pose',
+            label: t('playground.pose.action', { defaultValue: 'Pose' }),
+            icon: <Accessibility fontSize="small" />,
+            onClick: () => onEditSketch(null, 'pose'),
         },
     ];
     return (
