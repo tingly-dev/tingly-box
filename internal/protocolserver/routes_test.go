@@ -32,3 +32,26 @@ func TestRegisterRoutes_HeadConnectivityProbe(t *testing.T) {
 		}
 	}
 }
+
+func TestRegisterRoutes_DecisionEndpoints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	NewHandler(ProtocolHandlerDeps{}).RegisterRoutes(engine, func(c *gin.Context) { c.Next() })
+
+	want := map[string]bool{
+		"/tingly/:scenario/decisions":    false,
+		"/tingly/:scenario/v1/decisions": false,
+	}
+	for _, route := range engine.Routes() {
+		if route.Method == http.MethodPost {
+			if _, ok := want[route.Path]; ok {
+				want[route.Path] = true
+			}
+		}
+	}
+	for path, found := range want {
+		if !found {
+			t.Errorf("POST %s was not registered", path)
+		}
+	}
+}
