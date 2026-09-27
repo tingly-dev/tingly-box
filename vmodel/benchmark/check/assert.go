@@ -539,3 +539,49 @@ func str(v any) string {
 	s, _ := v.(string)
 	return s
 }
+
+// AssertDecisionAnswerConsistent validates the internal consistency of a
+// structured-decision body: every string choice answer must appear in its
+// question's probability map and be that map's argmax. Score/noul answers
+// have no probability semantics and are skipped. Use it with mock responses
+// that randomize their answers — it pins "the answer is right for the
+// probabilities" without pinning which option wins.
+func AssertDecisionAnswerConsistent() Assertion {
+	return Assertion{
+		Name: "decision_answer_consistent",
+		Check: func(r *RoundTripResult) error {
+			var body struct {
+				Answers map[string]struct {
+					Answer any `json:"answer"`
+				} `json:"answers"`
+				Probabilities map[string]map[string]float64 `json:"probabilities"`
+			}
+			if err := json.Unmarshal(r.RawBody, &body); err != nil {
+				return fmt.Errorf("decision body is not JSON: %w", err)
+			}
+			if len(body.Answers) == 0 {
+				return fmt.Errorf("decision body has no answers")
+			}
+			for question, entry := range body.Answers {
+				answer, ok := entry.Answer.(string)
+				if !ok {
+					continue
+				}
+				probs := body.Probabilities[question]
+				if _, present := probs[answer]; len(probs) > 0 && !present {
+					return fmt.Errorf("answer %q for %q is missing from its probability map", answer, question)
+				}
+				best, bestP := "", -1.0
+				for opt, p := range probs {
+					if p > bestP {
+						best, bestP = opt, p
+					}
+				}
+				if len(probs) > 0 && answer != best {
+					return fmt.Errorf("answer %q for %q is not the argmax of its probabilities (argmax %q=%.2f)", answer, question, best, bestP)
+				}
+			}
+			return nil
+		},
+	}
+}
