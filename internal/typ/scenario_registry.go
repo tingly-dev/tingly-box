@@ -344,12 +344,14 @@ func ProviderSupportsScenario(p *ai.Provider, scenario RuleScenario) bool {
 	if ScenarioRequiresDecisionCapability(scenario) {
 		return p.HasDecisionEndpoint()
 	}
-	allowed := AllowedAPIStylesForScenario(scenario)
-	if allowed == nil {
+	if APIStyleAllowedForScenario(scenario, p.APIStyle) {
 		return true
 	}
+	// Style alone didn't match — a dual-URL provider can still serve its
+	// second chat family (dispatch resolves it via ResolveStyle).
+	allowed := AllowedAPIStylesForScenario(scenario)
 	for _, style := range allowed {
-		if style == p.APIStyle || p.HasDualURL(style) {
+		if p.HasDualURL(style) {
 			return true
 		}
 	}
