@@ -10,24 +10,18 @@ import (
 
 var _ = registerKnownGaps(KnownGap{
 	ID:     "M1",
-	Reason: "Responses source: the server tool is injected upstream but its call is not intercepted, so it leaks to the client",
+	Reason: "Responses client on an Anthropic provider: the server tool is injected upstream but its call is not intercepted, so it leaks to the client",
 },
 	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=false",
 	"TestMCPOwnedToolLoop/openai_responses->anthropic_beta/stream=true",
-	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=false",
-	"TestMCPOwnedToolLoop/openai_responses->openai_chat/stream=true",
 ) && registerKnownGaps(KnownGap{
 	ID:     "M3",
-	Reason: "OpenAI Responses target: server tools are not offered to the model at all",
+	Reason: "Anthropic client on an OpenAI Responses provider: server tools are not offered to the model at all",
 },
 	"TestMCPOwnedToolLoop/anthropic_v1->openai_responses/stream=false",
 	"TestMCPOwnedToolLoop/anthropic_v1->openai_responses/stream=true",
 	"TestMCPOwnedToolLoop/anthropic_beta->openai_responses/stream=false",
 	"TestMCPOwnedToolLoop/anthropic_beta->openai_responses/stream=true",
-	"TestMCPOwnedToolLoop/openai_chat->openai_responses/stream=false",
-	"TestMCPOwnedToolLoop/openai_chat->openai_responses/stream=true",
-	"TestMCPOwnedToolLoop/openai_responses->openai_responses/stream=false",
-	"TestMCPOwnedToolLoop/openai_responses->openai_responses/stream=true",
 )
 
 // TestMCPOwnedToolLoop pins the server-owned tool loop through the real HTTP
@@ -58,6 +52,11 @@ func TestMCPOwnedToolLoop(t *testing.T) {
 				if status != 200 {
 					failures = append(failures, fmt.Sprintf("status = %d", status))
 				}
+				if !mcpSupportedPair(pair.Source, pair.Target) {
+					failures = append(failures, mcpSkippedFailures(t, env, pair.Target, echo, raw)...)
+					checkCase(t, t.Name(), failures, "client response:\n"+raw)
+					return
+				}
 				calls := echo.Calls()
 				if len(calls) != 1 {
 					failures = append(failures, fmt.Sprintf("server tool executed %d times, want 1", len(calls)))
@@ -77,6 +76,40 @@ func TestMCPOwnedToolLoop(t *testing.T) {
 			})
 		}
 	}
+}
+
+// mcpSupportedPair reports whether the gateway runs server tools for a pair.
+// On the other OpenAI pairs (Chat on Responses, Responses on Chat or
+// Responses) there is no tool loop, so MCP is skipped: the request passes
+// through without server tools.
+func mcpSupportedPair(source, target protocol.APIType) bool {
+	openAI := func(api protocol.APIType) bool {
+		return api == protocol.TypeOpenAIChat || api == protocol.TypeOpenAIResponses
+	}
+	if openAI(source) && openAI(target) {
+		return source == protocol.TypeOpenAIChat && target == protocol.TypeOpenAIChat
+	}
+	return true
+}
+
+// mcpSkippedFailures lists how a pair without MCP violates "the server tool
+// is neither offered, executed nor leaked; the provider answers once".
+func mcpSkippedFailures(t *testing.T, env *TestEnv, target protocol.APIType, echo *EchoServertoolProvider, raw string) []string {
+	t.Helper()
+	var failures []string
+	if upstream := string(requireLastRequest(t, env, target, "mcp skipped").Body); strings.Contains(upstream, OwnedToolWireName) {
+		failures = append(failures, "server tool offered upstream on a pair without MCP")
+	}
+	if n := len(echo.Calls()); n != 0 {
+		failures = append(failures, fmt.Sprintf("server tool executed %d times, want 0", n))
+	}
+	if got := env.VirtualCallCount(); got != 1 {
+		failures = append(failures, fmt.Sprintf("upstream calls = %d, want 1", got))
+	}
+	if strings.Contains(raw, OwnedToolWireName) {
+		failures = append(failures, "server tool call leaked to client")
+	}
+	return failures
 }
 
 // TestMCPOwnedToolNotOfferedWhenDisabled pins that without the MCP extension
@@ -102,8 +135,9 @@ func TestMCPOwnedToolNotOfferedWhenDisabled(t *testing.T) {
 	}
 }
 
-// Pairs on which the server-tool loop runs today; Responses on either side is
-// covered by gaps M1/M3 in TestMCPOwnedToolLoop.
+// Pairs on which the server-tool loop runs today, for the error / round-limit /
+// continuation tests; which pairs have one at all is pinned by
+// TestMCPOwnedToolLoop.
 var toolLoopSources = []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat}
 var toolLoopTargets = []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat}
 
