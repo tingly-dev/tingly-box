@@ -345,6 +345,8 @@ export default {
       "anthropicLabel": "Anthropic 兼容",
       "helperOpenAI": "支持来自 OpenAI、Google 和许多其他 OpenAI 兼容提供商的模型",
       "helperAnthropic": "用于 Anthropic 兼容的 AI 提供商，通常与 Claude Code 一起使用",
+      "decisionLabel": "Decision",
+      "helperDecision": "可选的 Decision 分叉端点（例如 Jev 兼容的 /api/v1 基础地址）——在不改变聊天协议的情况下为该提供商增加 Decision 能力",
       "fromTemplate": "来自模板",
       "recommendedBadge": "推荐"
     },
