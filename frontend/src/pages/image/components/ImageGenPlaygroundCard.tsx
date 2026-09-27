@@ -28,7 +28,6 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { AutoAwesome, Close, Description, OpenInFull } from '@/components/icons';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
-import { fontMono } from '@/theme/fonts';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
@@ -48,6 +47,7 @@ import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
+import OutputDirChip from './OutputDirChip';
 import type {
     GenerationRun,
     ImportedImage,
@@ -534,23 +534,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 titleHeadingLevel={1}
                 sx={{ height: { lg: '100%' } }}
                 title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-                subtitle={outputDir ? (
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Box component="span">
-                            {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
-                        </Box>
-                        <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
-                            {outputDir}
-                        </Box>
-                        <CopyIconButton
-                            value={outputDir}
-                            label={t('common.copy', { defaultValue: 'Copy' })}
-                            copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
-                            iconSize={14}
-                            sx={{ p: 0.25 }}
-                        />
-                    </Stack>
-                ) : undefined}
+                // The output folder sits in the header's corner rather than
+                // under the title, so it adds no height above the workbench.
+                rightAction={outputDir ? <OutputDirChip path={outputDir} /> : undefined}
             >
                 <Box
                     onPaste={handlePaste}
