@@ -1,6 +1,10 @@
 package typ
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tingly-dev/tingly-box/ai"
+)
 
 func TestRegisterScenario_AllowsRuleBindingWithoutPathUsage(t *testing.T) {
 	scenario := RuleScenario("test_shared_registry")
@@ -64,6 +68,74 @@ func TestOpenAIScenarioSupportsBothTransports(t *testing.T) {
 	}
 	if !ScenarioSupportsTransport(ScenarioOpenAI, TransportEmbed) {
 		t.Fatalf("openai scenario should also support TransportEmbed (mixin extension)")
+	}
+}
+
+func TestDecisionScenarioSupportsOnlyDecisionTransport(t *testing.T) {
+	if !ScenarioSupportsTransport(ScenarioDecision, TransportDecision) {
+		t.Fatal("decision scenario should support decision transport")
+	}
+	for _, transport := range []ScenarioTransport{TransportOpenAI, TransportAnthropic, TransportEmbed, TransportImageGen} {
+		if ScenarioSupportsTransport(ScenarioDecision, transport) {
+			t.Errorf("decision scenario unexpectedly supports %s", transport)
+		}
+	}
+}
+
+func TestAPIStyleAllowedForScenario(t *testing.T) {
+	// Decision is capability-gated, not style-gated: at the style level every
+	// chat family may bind (what matters is the decision fork URL), which is
+	// what lets users configure providers without caring about O vs A.
+	for _, style := range []ai.APIStyle{ai.APIStyleOpenAI, ai.APIStyleAnthropic, ai.APIStyleGoogle, ai.APIStyleDecision} {
+		if !APIStyleAllowedForScenario(ScenarioDecision, style) {
+			t.Errorf("decision scenario must not style-reject %s providers", style)
+		}
+	}
+	// Chat-family scenarios reject Jev-native providers at the style level:
+	// their APIBase is the decisions endpoint, they cannot serve chat.
+	for _, scenario := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioEmbed, ScenarioImageGen, ScenarioClaudeCode} {
+		if APIStyleAllowedForScenario(scenario, ai.APIStyleDecision) {
+			t.Errorf("%s scenario must not accept decision-style providers", scenario)
+		}
+	}
+	// Chat-family providers bind to chat-family scenarios (conversion span),
+	// but embed/imagegen stay openai-only.
+	if !APIStyleAllowedForScenario(ScenarioOpenAI, ai.APIStyleAnthropic) {
+		t.Error("openai scenario must accept anthropic-style providers (cross-style chat conversion)")
+	}
+	if APIStyleAllowedForScenario(ScenarioEmbed, ai.APIStyleAnthropic) {
+		t.Error("embed scenario must not accept anthropic-style providers")
+	}
+	if !APIStyleAllowedForScenario(ScenarioImageGen, ai.APIStyleOpenAI) {
+		t.Error("imagegen scenario must accept openai-style providers")
+	}
+}
+
+func TestProviderSupportsScenario_DecisionCapability(t *testing.T) {
+	fork := &ai.Provider{Name: "gpt-with-decision", APIStyle: ai.APIStyleOpenAI, APIBaseDecision: "https://example.com/api/v1"}
+	if !ProviderSupportsScenario(fork, ScenarioDecision) {
+		t.Error("an openai-style provider with a decision fork must serve the decision scenario")
+	}
+	native := &ai.Provider{Name: "jev", APIStyle: ai.APIStyleDecision}
+	if !ProviderSupportsScenario(native, ScenarioDecision) {
+		t.Error("a Jev-native provider must serve the decision scenario")
+	}
+	plain := &ai.Provider{Name: "gpt", APIStyle: ai.APIStyleOpenAI}
+	if ProviderSupportsScenario(plain, ScenarioDecision) {
+		t.Error("an openai-style provider without a decision fork must NOT serve the decision scenario")
+	}
+	// The fork does not make a provider decision-only: it stays a chat provider.
+	if !ProviderSupportsScenario(fork, ScenarioOpenAI) {
+		t.Error("a provider with a decision fork keeps serving its chat scenario")
+	}
+	if ProviderSupportsScenario(native, ScenarioOpenAI) {
+		t.Error("a Jev-native provider cannot serve the chat scenario")
+	}
+	if !ScenarioRequiresDecisionCapability(ScenarioDecision) {
+		t.Error("decision scenario must require decision capability")
+	}
+	if ScenarioRequiresDecisionCapability(ScenarioOpenAI) {
+		t.Error("openai scenario must not require decision capability")
 	}
 }
 
