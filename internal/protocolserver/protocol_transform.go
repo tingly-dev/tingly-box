@@ -1,10 +1,12 @@
 package protocolserver
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -97,7 +99,7 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	protocolRecorder := recording.FromGin(c)
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
-	chain, err := ph.buildTransformChain(c, target, scenarioType, preBaseTransforms, preVendorTransforms)
+	chain, err := ph.buildTransformChain(c, src.source, target, scenarioType, preBaseTransforms, preVendorTransforms)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +204,7 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 // the provider and must be the last mutation, so the preVendor transforms are
 // inserted after Consistency but BEFORE Vendor — this also means the StagePost
 // recording captures the truly-final, dispatched request.
-func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
+func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, sourceType, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
 	recorder := recording.FromGin(c)
 
 	var transforms []transform.Transform
@@ -221,7 +223,11 @@ func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, targetType protoc
 	// 2. Base transform (protocol conversion)
 	transforms = append(transforms, baseTransformFor(targetType))
 	if ph.mcpEnabled() {
-		transforms = append(transforms, ph.mcpChainTransforms(ph.mcpStripDisabledToolsEnabled())...)
+		if mcpServesPair(sourceType, targetType) {
+			transforms = append(transforms, ph.mcpChainTransforms(ph.mcpStripDisabledToolsEnabled())...)
+		} else {
+			noteMCPSkipped(c, sourceType, targetType)
+		}
 	}
 	// 3. Consistency transform (cross-provider normalization including message alignment)
 	transforms = append(transforms, consistencyTransformFor(targetType))
@@ -273,4 +279,34 @@ func ExecuteAnthropicPreChain[T *anthropic.MessageNewParams | *anthropic.BetaMes
 	})
 	_, err := chain.Execute(ctx)
 	return err
+}
+
+// mcpServesPair reports whether server tools (MCP) are offered for a client
+// protocol on a provider protocol. They are offered only where their calls
+// are also executed. Among the OpenAI pairs only Chat on Chat has a tool loop;
+// on Chat on Responses, Responses on Chat and Responses on Responses injecting
+// would leak the calls to the client or offer tools nobody runs, so MCP is
+// skipped there and the request passes through untouched.
+func mcpServesPair(source, target protocol.APIType) bool {
+	openAI := func(api protocol.APIType) bool {
+		return api == protocol.TypeOpenAIChat || api == protocol.TypeOpenAIResponses
+	}
+	if openAI(source) && openAI(target) {
+		return source == protocol.TypeOpenAIChat && target == protocol.TypeOpenAIChat
+	}
+	return true
+}
+
+// noteMCPSkipped makes a skipped MCP visible: a debug log line, and for a
+// debug-routing request an X-Tingly-MCP response header with the reason.
+func noteMCPSkipped(c *gin.Context, source, target protocol.APIType) {
+	reason := fmt.Sprintf("skipped: server tools are not supported for %s clients on %s providers", source, target)
+	if c == nil {
+		logrus.Debugf("MCP %s", reason)
+		return
+	}
+	logrus.WithContext(c.Request.Context()).Debugf("MCP %s", reason)
+	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
+		c.Header("X-Tingly-MCP", reason)
+	}
 }

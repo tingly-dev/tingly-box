@@ -1,9 +1,12 @@
 package protocolserver
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +21,7 @@ import (
 func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
 	h := &ProtocolHandler{}
-	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, typ.ScenarioGlobal, preBase, preVendor)
+	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, typ.ScenarioGlobal, preBase, preVendor)
 	require.NoError(t, err)
 
 	var names []string
@@ -76,4 +79,41 @@ func TestBuildTransformChain_PreBaseBeforeBase(t *testing.T) {
 	require.NotEqual(t, -1, base)
 	assert.Equal(t, 0, cursor, "pre-Base rule transform must be first in the chain")
 	assert.Less(t, cursor, base, "pre-Base rule transform must run before base_convert")
+}
+
+func TestMCPServesPair(t *testing.T) {
+	chat, responses := protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses
+	for _, tc := range []struct {
+		source, target protocol.APIType
+		want           bool
+	}{
+		{protocol.TypeAnthropicBeta, responses, true},
+		{protocol.TypeAnthropicV1, chat, true},
+		{chat, protocol.TypeAnthropicBeta, true},
+		{responses, protocol.TypeAnthropicBeta, true},
+		{chat, chat, true}, // the generic tool loop
+		{chat, responses, false},
+		{responses, chat, false},
+		{responses, responses, false},
+	} {
+		assert.Equal(t, tc.want, mcpServesPair(tc.source, tc.target), "%s -> %s", tc.source, tc.target)
+	}
+}
+
+func TestNoteMCPSkippedHeaderOnlyForDebugRouting(t *testing.T) {
+	for _, debug := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		if debug {
+			c.Request.Header.Set("X-Tingly-Debug-Routing", "1")
+		}
+		noteMCPSkipped(c, protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat)
+		got := w.Header().Get("X-Tingly-MCP")
+		if debug {
+			assert.Contains(t, got, "skipped")
+		} else {
+			assert.Empty(t, got)
+		}
+	}
 }
