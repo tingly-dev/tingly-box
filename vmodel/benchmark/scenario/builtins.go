@@ -1,6 +1,8 @@
 package scenario
 
 import (
+	"math"
+	"math/rand/v2"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
@@ -620,10 +622,11 @@ func DecisionScenario() Scenario {
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatus(200),
-			// The gateway rewrites the response model to the requested model
-			// (TestResponseCarriesRequestedModel), so the micro-model's own id
-			// must never reach the client.
-			check.AssertRawBodyContains(`"answer":"option-b"`),
+			// The mock randomizes its answers, so assertions pin shape and
+			// internal consistency, never which option won. Consistency is the
+			// "right" half of random-but-right: the answer must be the argmax
+			// of its own probability map.
+			check.AssertDecisionAnswerConsistent(),
 			check.AssertRawBodyContains(`"probabilities"`),
 			check.AssertUsageNonZero(),
 		},
@@ -634,23 +637,53 @@ func DecisionScenario() Scenario {
 	}
 }
 
+// decisionResponse builds a random-but-right decision answer: the chosen
+// option is picked at random and the probability map is synthesized to agree
+// with it (the chosen option always holds the largest share), with usage
+// varying per call. The gateway must pass whatever a decision upstream says
+// through untouched, so the mock must not be a fixed echo that a buggy
+// passthrough could satisfy by accident.
 func decisionResponse() MockResponseBuilder {
-	body := map[string]interface{}{
-		"model": "jev-micro-1",
-		"answers": map[string]interface{}{
-			"q_route":      map[string]interface{}{"answer": "option-b", "index": 1},
-			"q_confidence": map[string]interface{}{"answer": 0.87},
-		},
-		"probabilities": map[string]interface{}{
-			"q_route": map[string]interface{}{"option-a": 0.32, "option-b": 0.61, "option-c": 0.07},
-		},
-		"usage": map[string]interface{}{
-			"input_tokens":  9,
-			"output_tokens": 4,
-		},
-	}
 	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		NonStream: func() (int, []byte) {
+			options := []string{"option-a", "option-b", "option-c"}
+			pick := rand.IntN(len(options))
+
+			// Random weights for the losing options (each takes a random cut
+			// of what remains); the picked option keeps the rest, which is
+			// guaranteed to stay the largest share.
+			weights := make([]float64, len(options))
+			remaining := 1.0
+			for i := range options {
+				if i == pick {
+					continue
+				}
+				w := remaining * (0.05 + 0.20*rand.Float64())
+				weights[i] = w
+				remaining -= w
+			}
+			weights[pick] = remaining
+
+			probs := make(map[string]interface{}, len(options))
+			for i, o := range options {
+				probs[o] = math.Round(weights[i]*100) / 100
+			}
+			body := map[string]interface{}{
+				"model": "jev-micro-1",
+				"answers": map[string]interface{}{
+					"q_route":      map[string]interface{}{"answer": options[pick], "index": pick},
+					"q_confidence": map[string]interface{}{"answer": math.Round((0.5+0.5*rand.Float64())*100) / 100},
+				},
+				"probabilities": map[string]interface{}{
+					"q_route": probs,
+				},
+				"usage": map[string]interface{}{
+					"input_tokens":  6 + rand.IntN(8),
+					"output_tokens": 3 + rand.IntN(5),
+				},
+			}
+			return 200, mustMarshal(body)
+		},
 	}
 }
 
