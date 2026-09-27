@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -78,11 +80,6 @@ func (ph *ProtocolHandler) HandleDecision(c *gin.Context) {
 // decision is an advisory micro-model call with no retryable stream, so there
 // is no failover gate and no candidate rotation.
 func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Provider, model string, sessionID typ.SessionID, body []byte, requestModel string) {
-	if err := requireDecisionEndpoint(provider); err != nil {
-		SendErrorResponse(c, err, "decision")
-		return
-	}
-
 	rewritten, err := rewriteDecisionModel(body, model)
 	if err != nil {
 		SendErrorResponse(c, fmt.Errorf("failed to encode upstream decision request: %w", err), "decision")
@@ -100,7 +97,7 @@ func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Prov
 			// and body verbatim, so the caller sees the provider's own error
 			// shape and the real status code reaches the access log.
 			ph.trackUsageWithTokenUsage(c, protocol.ZeroTokenUsage(), upstreamErr)
-			decisionWriteResponse(c, upstreamErr.StatusCode, "", upstreamErr.Body)
+			decisionWriteResponse(c, upstreamErr.StatusCode, upstreamErr.ContentType, upstreamErr.Body)
 			return
 		}
 		// Transport-level failure (no upstream response at all).
@@ -152,43 +149,26 @@ func validateDecisionBody(body []byte) (string, error) {
 }
 
 // rewriteDecisionModel replaces the request model with the routed service
-// model, preserving every other field.
+// model. sjson edits in place so every other byte of the upstream request —
+// key order included — survives untouched: the decision protocol is
+// passthrough, not a re-encoding boundary.
 func rewriteDecisionModel(body []byte, model string) ([]byte, error) {
-	var req map[string]json.RawMessage
-	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, err
-	}
-	routed, err := json.Marshal(model)
-	if err != nil {
-		return nil, err
-	}
-	req["model"] = routed
-	return json.Marshal(req)
+	return sjson.SetBytes(body, "model", model)
 }
 
 // decisionRewriteResponseModel keeps the gateway-wide invariant that the
 // client-visible model is the model the request asked for — the upstream
 // service model is routing internals (see TestResponseCarriesRequestedModel).
 // Only the top-level "model" field of a JSON-object body is touched; anything
-// else passes through unchanged.
+// else passes through byte-identically.
 func decisionRewriteResponseModel(body []byte, requestModel string) []byte {
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(body, &payload); err != nil {
+	if !gjson.GetBytes(body, "model").Exists() {
 		return body
 	}
-	if _, ok := payload["model"]; !ok {
-		return body
+	if out, err := sjson.SetBytes(body, "model", requestModel); err == nil {
+		return out
 	}
-	requested, err := json.Marshal(requestModel)
-	if err != nil {
-		return body
-	}
-	payload["model"] = requested
-	out, err := json.Marshal(payload)
-	if err != nil {
-		return body
-	}
-	return out
+	return body
 }
 
 // decisionUsageFromBody extracts the optional usage object the decision

@@ -12,8 +12,9 @@ import (
 // the real status code, and the body so the caller sees the provider's own
 // error JSON instead of a gateway-rewritten envelope.
 type DecisionUpstreamError struct {
-	StatusCode int
-	Body       []byte
+	StatusCode  int
+	ContentType string
+	Body        []byte
 }
 
 func (e *DecisionUpstreamError) Error() string {
@@ -48,7 +49,11 @@ func ForwardDecision(fc *ForwardContext, wrapper client.DecisionClientInterface,
 	}
 
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
-		return result, cancel, &DecisionUpstreamError{StatusCode: result.StatusCode, Body: result.Body}
+		return result, cancel, &DecisionUpstreamError{
+			StatusCode:  result.StatusCode,
+			ContentType: result.ContentType,
+			Body:        result.Body,
+		}
 	}
 	return result, cancel, nil
 }
