@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Box,
@@ -50,6 +50,10 @@ import type {
     Quality,
     SelectedImage,
 } from './ImageGenPlayground.types';
+
+// Lazy: it is the only thing that pulls in three-vrm, and the face model is
+// fetched from inside it — nobody who never opens it pays for either.
+const ExpressionDialog = lazy(() => import('./expression/ExpressionDialog'));
 
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
@@ -133,6 +137,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleSketchSubmit,
         sketchInitial,
         hasSketchReference,
+        expressionTarget,
+        setExpressionTarget,
+        handleOpenExpression,
+        handleExpressionSubmit,
+        expressionInitial,
         maskTarget,
         setMaskTarget,
         handleMaskSubmit,
@@ -160,7 +169,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             kind: 'reference',
             label: ref.source === 'sketch'
                 ? t('playground.sketch.title', { defaultValue: 'Sketch' })
-                : ref.file.name,
+                : ref.source === 'expression'
+                    ? t('playground.expression.title')
+                    : ref.file.name,
             caption: [dimensions, kilobytes].filter(Boolean).join(' · '),
             ...(ref.mask ? { maskSrc: ref.mask.previewUrl } : {}),
         };
@@ -537,6 +548,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             promptFileInputRef={promptFileInputRef}
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
+                            onEditExpression={handleOpenExpression}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
                             onSetReferenceRole={handleSetReferenceRole}
@@ -925,6 +937,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onSubmit={handleSketchSubmit}
                 showNotification={showNotification}
             />
+            {expressionTarget !== null && (
+                <Suspense fallback={null}>
+                    <ExpressionDialog
+                        open
+                        initial={expressionInitial}
+                        onClose={() => setExpressionTarget(null)}
+                        onSubmit={(result) => { void handleExpressionSubmit(result); }}
+                        showNotification={showNotification}
+                    />
+                </Suspense>
+            )}
         </>
     );
 };

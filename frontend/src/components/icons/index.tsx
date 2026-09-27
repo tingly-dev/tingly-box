@@ -162,6 +162,7 @@ import {
     IconCloud,
     IconArrowsSort,
     IconSortAZ,
+    IconMoodSmile,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -320,6 +321,7 @@ export const NearMeOutlined = tablerMui(IconNavigation);
 // --- People / identity -------------------------------------------------------
 export const Person = tablerMui(IconUser);
 export const Accessibility = tablerMui(IconAccessible);
+export const MoodSmile = tablerMui(IconMoodSmile);
 export const AccountCircle = tablerMui(IconUser);
 export const Users = tablerMui(IconUsers);
 

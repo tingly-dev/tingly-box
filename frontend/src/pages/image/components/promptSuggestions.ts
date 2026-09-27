@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import { describeShot } from '@tingly/mannequin';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import { effectiveRole } from './referenceRoles';
+import { describeExpression } from './expression/expressionState';
 
 // A sentence the prompt could use, offered next to it and never written into
 // it. The prompt is the user's: filling it in unasked would mean every run
@@ -42,6 +43,18 @@ const posedSketchText = (ref: ReferenceImage, n: number, t: TFunction): string |
     return t('playground.suggest.pose.withCamera', { pose, camera: t('playground.suggest.shot.camera', { camera }) });
 };
 
+// A face from the expression dialog is a stylised anime face with no hair or
+// body. Said plainly, because the one thing the model must not take from it is
+// the look — and the expression in words, the half a picture can be misread on.
+const expressionFaceText = (ref: ReferenceImage, n: number, t: TFunction): string | null => {
+    if (ref.source !== 'expression' || !ref.expression) return null;
+    const { preset, parts } = describeExpression(ref.expression);
+    const expression = preset || parts.length === 0
+        ? t(`playground.expression.preset.${preset ?? 'neutral'}`)
+        : parts.map((part) => t(`playground.suggest.expressionWord.${part}`)).join(t('playground.suggest.shot.separator'));
+    return t('playground.suggest.role.expressionFace', { n, expression });
+};
+
 // One sentence per image that has a role: what to take from it, and — the
 // half that actually prevents the failure — what *not* to take. "Expression
 // only" without "not the face" is how a reference photo's identity ends up
@@ -50,7 +63,9 @@ const roleSuggestion = (ref: ReferenceImage, index: number, t: TFunction): Promp
     const role = effectiveRole(ref);
     if (!role) return null;
     const n = index + 1;
-    const text = (role === 'pose' ? posedSketchText(ref, n, t) : null) ?? t(`playground.suggest.role.${role}`, { n });
+    const text = (role === 'pose' ? posedSketchText(ref, n, t) : null)
+        ?? (role === 'expression' ? expressionFaceText(ref, n, t) : null)
+        ?? t(`playground.suggest.role.${role}`, { n });
     return {
         // The role is part of the identity: changing it offers a new chip
         // rather than hiding behind the old one having been used.

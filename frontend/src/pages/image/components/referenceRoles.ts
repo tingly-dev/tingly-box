@@ -15,7 +15,7 @@ export type ReferenceRole = 'character' | 'expression' | 'pose' | 'outfit' | 'st
 export const REFERENCE_ROLES: readonly ReferenceRole[] = ['character', 'expression', 'pose', 'outfit', 'style', 'scene'];
 
 interface RoleCarrier {
-    source: 'upload' | 'sketch';
+    source: 'upload' | 'sketch' | 'expression';
     layers?: SketchLayers;
     // `undefined`: never set, so the default applies. `null`: the user took
     // the role off on purpose, and a default must not quietly put it back.
@@ -23,10 +23,12 @@ interface RoleCarrier {
 }
 
 // A posed sketch is a pose reference without anyone having to say so — that
-// is the only thing a mannequin or a skeleton can be. Everything else starts
+// is the only thing a mannequin or a skeleton can be — and a face made in the
+// expression dialog is an expression reference, for the same reason. Everything else starts
 // with no role: guessing "character" for a photo would be wrong as often as
 // right, and a wrong label is worse than none.
 export const effectiveRole = (ref: RoleCarrier): ReferenceRole | null => {
     if (ref.role !== undefined) return ref.role;
+    if (ref.source === 'expression') return 'expression';
     return ref.source === 'sketch' && (ref.layers?.figures.length ?? 0) > 0 ? 'pose' : null;
 };

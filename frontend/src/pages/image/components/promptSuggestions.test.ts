@@ -4,6 +4,7 @@ import { CAMERA_ELEVATIONS, cameraTurn, createFigure, LENSES, setFigureLens } fr
 import { insertSuggestion, promptSuggestionsFor } from './promptSuggestions';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import { effectiveRole } from './referenceRoles';
+import { EXPRESSION_PRESETS } from './expression/expressionState';
 
 // Echoes the key and its values, so the tests read what was asked for rather
 // than any one language's wording.
@@ -73,6 +74,28 @@ describe('reference roles', () => {
         const [a] = promptSuggestionsFor([photo('expression')], t);
         const [b] = promptSuggestionsFor([photo('outfit')], t);
         expect(a.id).not.toBe(b.id);
+    });
+});
+
+describe('expression faces', () => {
+    const face = (expression = EXPRESSION_PRESETS.laugh): ReferenceImage => ({ file, previewUrl: '', source: 'expression', expression });
+
+    it('are expression references by default', () => {
+        expect(effectiveRole(face())).toBe('expression');
+    });
+
+    it('say the face is a style-free chart, and name the expression in words', () => {
+        const [s] = promptSuggestionsFor([face()], t);
+        expect(s.text).toBe('playground.suggest.role.expressionFace(n=1,expression=playground.expression.preset.laugh)');
+    });
+
+    it('describe a hand-tuned face by its parts', () => {
+        const [s] = promptSuggestionsFor([face({ weights: { sad: 0.8, aa: 0.5 }, gaze: { x: 0, y: 0 } })], t);
+        expect(s.text).toContain('expression=playground.suggest.expressionWord.sad');
+    });
+
+    it('fall back to the generic note when re-labelled', () => {
+        expect(promptSuggestionsFor([{ ...face(), role: 'style' }], t)[0].text).toBe('playground.suggest.role.style(n=1)');
     });
 });
 

@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import { Box, Button, ButtonBase, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Brush, Check, Close, ContentPaste, Create, ExpandMore, FileUpload, ZoomIn } from '@/components/icons';
+import { Brush, Check, Close, ContentPaste, Create, ExpandMore, FileUpload, MoodSmile, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
 import { effectiveRole, REFERENCE_ROLES, type ReferenceRole } from './referenceRoles';
+import type { ExpressionState } from './expression/expressionState';
 
 // Matches the Codex-native imagegen tool's reference-image cap (see
 // .design/imageedit.md) — the common denominator across providers behind
@@ -21,7 +22,7 @@ export interface ReferenceImage {
     previewUrl: string;
     // Where the image came from. A sketch keeps its canvas re-openable (see
     // handleOpenSketch) — "done" is a state, not a lock.
-    source: 'upload' | 'sketch';
+    source: 'upload' | 'sketch' | 'expression';
     // A sketch also keeps the layers it was flattened from — strokes as the
     // points they were drawn from, figures as joints — so re-opening it gives
     // back an editable canvas rather than a picture of one. The request still
@@ -42,6 +43,9 @@ export interface ReferenceImage {
     // What this image is for (character, expression, pose…). See
     // referenceRoles.ts — `null` means deliberately none.
     role?: ReferenceRole | null;
+    // An expression made in the expression dialog keeps the expression it was
+    // rendered from, so it re-opens as sliders rather than as a picture.
+    expression?: ExpressionState;
 }
 
 // The role, as a word under the thumbnail rather than one more button on it:
@@ -115,6 +119,7 @@ interface ReferenceThumbProps {
     dragOver: boolean;
     onOpen: () => void;
     onEditSketch: () => void;
+    onEditExpression: () => void;
     onEditMask: () => void;
     onRemove: () => void;
     onSetRole: (role: ReferenceRole | null) => void;
@@ -140,6 +145,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
     dragOver,
     onOpen,
     onEditSketch,
+    onEditExpression,
     onEditMask,
     onRemove,
     onSetRole,
@@ -288,6 +294,18 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     </IconButton>
                 </Tooltip>
             )}
+            {image.source === 'expression' && (
+                <Tooltip title={t('playground.expression.editAction')}>
+                    <IconButton
+                        size="small"
+                        onClick={(event) => { event.stopPropagation(); onEditExpression(); }}
+                        aria-label={t('playground.expression.editAction')}
+                        sx={{ ...overlayActionSx(20), position: 'absolute', bottom: 2, right: 2 }}
+                    >
+                        <MoodSmile sx={{ fontSize: 13 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
             <IconButton
                 size="small"
                 onClick={(event) => { event.stopPropagation(); onRemove(); }}
@@ -313,6 +331,7 @@ interface ReferenceImagesRowProps {
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
     onEditSketch: (index: number | null) => void;
+    onEditExpression: (index: number | null) => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onSetReferenceRole: (index: number, role: ReferenceRole | null) => void;
@@ -337,6 +356,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     promptFileInputRef,
     onOpenReference,
     onEditSketch,
+    onEditExpression,
     onEditMask,
     onRemoveReference,
     onSetReferenceRole,
@@ -375,6 +395,12 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             label: t('playground.sketch.action', { defaultValue: 'Sketch' }),
             icon: <Create fontSize="small" />,
             onClick: () => onEditSketch(null),
+        },
+        {
+            key: 'expression',
+            label: t('playground.expression.action'),
+            icon: <MoodSmile fontSize="small" />,
+            onClick: () => onEditExpression(null),
         },
     ];
     return (
@@ -441,6 +467,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                 dragOver={dragOverReference === index}
                                 onOpen={() => onOpenReference(index)}
                                 onEditSketch={() => onEditSketch(index)}
+                                onEditExpression={() => onEditExpression(index)}
                                 onEditMask={() => onEditMask(index)}
                                 onRemove={() => onRemoveReference(index)}
                                 onSetRole={(role) => onSetReferenceRole(index, role)}

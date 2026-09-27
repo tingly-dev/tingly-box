@@ -6,6 +6,8 @@ import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 import type { ReferenceRole } from './referenceRoles';
+import type { ExpressionResult } from './expression/ExpressionDialog';
+import type { ExpressionState } from './expression/expressionState';
 
 // Decodes an image just far enough to learn its pixel size. Failure is not
 // worth surfacing — the caption simply drops the dimensions.
@@ -50,6 +52,8 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     const [draggingReference, setDraggingReference] = useState<number | null>(null);
     const [dragOverReference, setDragOverReference] = useState<number | null>(null);
     const [sketchTarget, setSketchTarget] = useState<SketchTarget>(null);
+    // Same shape for the expression dialog: `index: null` a new face.
+    const [expressionTarget, setExpressionTarget] = useState<SketchTarget>(null);
     // Which reference image's mask editor is open. An index rather than a
     // boolean: a mask belongs to one specific image, and saying which one is
     // the whole point.
@@ -201,6 +205,38 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     }, [sketchTarget, referenceImages, size]);
     const hasSketchReference = referenceImages.some((ref) => ref.source === 'sketch');
 
+    // The expression dialog is one more way an image gets here, and follows
+    // the sketch's rules: a new face joins the row, a re-edited one replaces
+    // itself in place and keeps the role it was given.
+    const handleOpenExpression = useCallback((index: number | null) => {
+        if (index === null && referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) return;
+        setExpressionTarget({ index });
+    }, [referenceImages.length]);
+
+    const handleExpressionSubmit = useCallback(async (result: ExpressionResult) => {
+        const face: ReferenceImage = {
+            file: result.file,
+            previewUrl: result.previewUrl,
+            source: 'expression',
+            expression: result.expression,
+            ...(await readImageSize(result.previewUrl) ?? {}),
+        };
+        setReferenceImages((current) => {
+            const index = expressionTarget?.index ?? null;
+            if (index !== null && index < current.length) {
+                return current.map((ref, i) => (i === index ? { ...face, role: ref.role } : ref));
+            }
+            return [...current, face].slice(0, MAX_EDIT_REFERENCE_IMAGES);
+        });
+        setExpressionTarget(null);
+    }, [expressionTarget]);
+
+    // Memoised: the dialog resets whenever this changes.
+    const expressionInitial = useMemo<ExpressionState | null>(() => {
+        const index = expressionTarget?.index;
+        return index !== null && index !== undefined ? referenceImages[index]?.expression ?? null : null;
+    }, [expressionTarget, referenceImages]);
+
     const handleMaskSubmit = useCallback((result: ReferenceMask) => {
         setReferenceImages((current) => current.map((ref, i) => (i === maskTarget ? { ...ref, mask: result } : ref)));
         setMaskTarget(null);
@@ -242,6 +278,11 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         handleSketchSubmit,
         sketchInitial,
         hasSketchReference,
+        expressionTarget,
+        setExpressionTarget,
+        handleOpenExpression,
+        handleExpressionSubmit,
+        expressionInitial,
         maskTarget,
         setMaskTarget,
         handleMaskSubmit,

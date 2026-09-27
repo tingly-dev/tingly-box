@@ -27,6 +27,7 @@
     "@lobehub/icons-static-svg": "^1.95.1",
     "@mui/material": "^9.4.0",
     "@mui/x-date-pickers": "^9.14.0",
+    "@pixiv/three-vrm": "3.5.5",
     "@tabler/icons-react": "^3.48.0",
     "@tingly/mannequin": "workspace:*",
     "@tingly/vision": "workspace:*",
@@ -45,6 +46,7 @@
     "react-router-dom": "^7.18.4",
     "react-transition-group": "^4.4.5",
     "recharts": "^3.10.1",
+    "three": "0.170.0",
     "uuid": "^14.0.2"
   },
   "devDependencies": {
@@ -55,6 +57,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/react-transition-group": "^4.4.12",
+    "@types/three": "0.170.0",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -1928,6 +1928,46 @@ export default {
       "referenceHint": "第一张图上着色的区域是模型可以改的地方 · 通过 images/edits 发送",
       "strandedHint": "只有第一张图的蒙版会被发送"
     },
+    "expression": {
+      "action": "表情",
+      "title": "表情",
+      "subtitle": "动漫风格的表情示意 · 只有脸，不含头发和身体",
+      "close": "关闭表情",
+      "loading": "正在加载表情模型…",
+      "loadFailed": "表情模型加载失败，请稍后重试",
+      "failed": "无法导出表情图",
+      "presets": "表情预设",
+      "fineTune": "细调",
+      "hint": "发给模型的就是左边这张图，默认标为「表情」用途",
+      "cancel": "取消",
+      "add": "添加表情",
+      "update": "更新表情",
+      "editAction": "修改表情",
+      "preset": {
+        "neutral": "平静",
+        "smile": "微笑",
+        "happy": "开心",
+        "laugh": "大笑",
+        "surprised": "惊讶",
+        "angry": "生气",
+        "sad": "难过",
+        "pout": "委屈",
+        "wink": "眨眼",
+        "content": "闭眼微笑",
+        "glance": "斜眼看"
+      },
+      "control": {
+        "happy": "开心",
+        "angry": "生气",
+        "sad": "难过",
+        "relaxed": "放松",
+        "surprised": "惊讶",
+        "blink": "闭眼",
+        "aa": "张嘴",
+        "gazeX": "视线左右",
+        "gazeY": "视线上下"
+      }
+    },
     "referenceRole": {
       "character": "角色",
       "expression": "表情",
@@ -1949,10 +1989,24 @@ export default {
     },
     "suggest": {
       "title": "建议",
+      "expressionWord": {
+        "happy": "开心",
+        "angry": "生气",
+        "sad": "难过",
+        "relaxed": "放松",
+        "surprised": "惊讶",
+        "eyesClosed": "闭着眼",
+        "wink": "眨一只眼",
+        "mouthOpen": "张着嘴",
+        "lookingAside": "视线看向一侧",
+        "lookingUp": "向上看",
+        "lookingDown": "向下看"
+      },
       "role": {
         "label": "{{role}}说明 · 图 {{n}}",
         "character": "图 {{n}} 是角色参考：保持其中人物的长相、发型和体型一致。",
         "expression": "图 {{n}} 仅作表情参考：只沿用其中的面部表情，不要沿用人物的长相、发型和服装。",
+        "expressionFace": "图 {{n}} 是一张动漫风格的表情示意（只有脸）：只让人物做出同样的表情——{{expression}}，不要沿用它的画风、脸型和配色。",
         "pose": "图 {{n}} 仅作姿势参考：只沿用人物的姿势和动作，不要沿用其长相、服装和背景。",
         "outfit": "图 {{n}} 仅作服装参考：只沿用其中的服装和配饰，不要沿用穿着者的长相和姿势。",
         "style": "图 {{n}} 仅作风格参考：沿用它的画风、色调和光影，不要沿用其中的具体内容。",

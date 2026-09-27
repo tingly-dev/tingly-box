@@ -1932,6 +1932,46 @@ export default {
       "referenceHint": "The tinted area of the first image is what the model may change · sent via images/edits",
       "strandedHint": "only the first image\u2019s mask is sent"
     },
+    "expression": {
+      "action": "Expression",
+      "title": "Expression",
+      "subtitle": "An anime-style expression chart — the face alone, no hair or body",
+      "close": "Close expression",
+      "loading": "Loading the expression model…",
+      "loadFailed": "Couldn't load the expression model — try again in a moment",
+      "failed": "Couldn't export the expression image",
+      "presets": "Expression presets",
+      "fineTune": "Fine-tune",
+      "hint": "The picture on the left is exactly what the model gets, marked as an expression reference",
+      "cancel": "Cancel",
+      "add": "Add expression",
+      "update": "Update expression",
+      "editAction": "Edit expression",
+      "preset": {
+        "neutral": "Neutral",
+        "smile": "Smile",
+        "happy": "Happy",
+        "laugh": "Laugh",
+        "surprised": "Surprised",
+        "angry": "Angry",
+        "sad": "Sad",
+        "pout": "Sulky",
+        "wink": "Wink",
+        "content": "Content",
+        "glance": "Side glance"
+      },
+      "control": {
+        "happy": "Happy",
+        "angry": "Angry",
+        "sad": "Sad",
+        "relaxed": "Relaxed",
+        "surprised": "Surprised",
+        "blink": "Eyes closed",
+        "aa": "Mouth open",
+        "gazeX": "Look left/right",
+        "gazeY": "Look down/up"
+      }
+    },
     "referenceRole": {
       "character": "Character",
       "expression": "Expression",
@@ -1953,10 +1993,24 @@ export default {
     },
     "suggest": {
       "title": "Suggestions",
+      "expressionWord": {
+        "happy": "happy",
+        "angry": "angry",
+        "sad": "sad",
+        "relaxed": "relaxed",
+        "surprised": "surprised",
+        "eyesClosed": "eyes closed",
+        "wink": "winking",
+        "mouthOpen": "mouth open",
+        "lookingAside": "looking to the side",
+        "lookingUp": "looking up",
+        "lookingDown": "looking down"
+      },
       "role": {
         "label": "{{role}} note · image {{n}}",
         "character": "Image {{n}} is the character reference: keep this person's face, hairstyle and build consistent.",
         "expression": "Use image {{n}} for the facial expression only — don't take the person's face, hair or clothes from it.",
+        "expressionFace": "Image {{n}} is an anime-style expression chart (face only): give the character the same expression — {{expression}} — but don't take its art style, face shape or colours.",
         "pose": "Use image {{n}} for the pose only — match the body position and gesture, but don't take the person's face, clothes or background from it.",
         "outfit": "Use image {{n}} for the outfit only — take the clothes and accessories, not the wearer's face or pose.",
         "style": "Use image {{n}} for the style only — its rendering, colour palette and lighting, not its content.",
