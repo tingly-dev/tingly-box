@@ -37,6 +37,9 @@ func newScenarioResponder(reg *vmodel.GenericRegistry[scenario.Scenario]) http.H
 	sr.mux.HandleFunc("/codex/responses", sr.handleResponses)
 	sr.mux.HandleFunc("/v1/messages", sr.handle(scenario.FormatAnthropic))
 	sr.mux.HandleFunc("/v1beta/models/", sr.handleGoogle)
+	// Native structured-decision protocol; the gateway's decision handler
+	// appends /decisions to the provider api_base.
+	sr.mux.HandleFunc("/decisions", sr.handle(scenario.FormatDecision))
 	return sr
 }
 

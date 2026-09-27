@@ -271,6 +271,22 @@ func AssertErrorMessageContains(substring string) Assertion {
 	}
 }
 
+// AssertRawBodyContains returns an Assertion that the raw response body
+// contains the given substring. Use it for structured protocols whose answers
+// have no chat-shaped equivalent to parse into Content (e.g. the native
+// decision protocol's answers/probabilities).
+func AssertRawBodyContains(substring string) Assertion {
+	return Assertion{
+		Name: fmt.Sprintf("raw_body_contains(%q)", substring),
+		Check: func(r *RoundTripResult) error {
+			if !strings.Contains(string(r.RawBody), substring) {
+				return fmt.Errorf("raw body does not contain %q", substring)
+			}
+			return nil
+		},
+	}
+}
+
 // AssertModelContains returns an Assertion that the model name contains substring.
 func AssertModelContains(substring string) Assertion {
 	return Assertion{

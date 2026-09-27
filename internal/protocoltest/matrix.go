@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
 )
 
 // ProtocolPair is one (source → target) conversion path to validate.
@@ -75,6 +76,13 @@ func DefaultPairs() []ProtocolPair {
 		{protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta},   // Responses → Anthropic Beta
 		{protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat},      // Responses → Chat
 		{protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses}, // Responses passthrough
+
+		// Decision source. Leaf family: native passthrough only, no pairs
+		// into the chat formats — the gateway has no decision↔chat conversion
+		// by design (see .design/decision-protocol.md §8), so a decision pair
+		// with a chat target would test an API that does not exist. Cells run
+		// only for scenarios mocking the decision format (scenarioTargetSkipReason).
+		{protocol.TypeDecision, protocol.TypeDecision},
 	}
 }
 
@@ -418,9 +426,12 @@ func (m *Matrix) newBaseResult(scenarioName string, source, target protocol.APIT
 }
 
 // skipReason chains every skip check that applies to a single-hop
-// combination: known gateway defects, client-driver incompatibilities, and
-// streaming-mode mismatches.
+// combination: scenario/target format mismatches, known gateway defects,
+// client-driver incompatibilities, and streaming-mode mismatches.
 func (m *Matrix) skipReason(scenario Scenario, source, target protocol.APIType, streaming bool) (string, bool) {
+	if reason, skip := scenarioTargetSkipReason(scenario, target); skip {
+		return reason, true
+	}
 	if reason, skip := KnownDefectReason(source, scenario.Name); skip {
 		return reason, true
 	}
@@ -428,6 +439,42 @@ func (m *Matrix) skipReason(scenario Scenario, source, target protocol.APIType, 
 		return reason, true
 	}
 	return streamingSkipReason(scenario, streaming)
+}
+
+// scenarioTargetSkipReason skips (scenario, target) cells whose scenario does
+// not mock the target's protocol family. MockResponses are keyed by the format
+// the mock upstream answers in — the conversion *target* — so a cell without
+// that builder would fail in the responder (a 500 from the mock, not a gateway
+// signal). Decision is the first target family not every scenario mocks: only
+// decision-native scenarios define FormatDecision builders, and the
+// mid-stream-close scenario deliberately has none (single-shot JSON has no
+// stream to truncate).
+func scenarioTargetSkipReason(scenario Scenario, target protocol.APIType) (string, bool) {
+	format, ok := formatForAPIType(target)
+	if !ok {
+		return "", false
+	}
+	if _, has := scenario.MockResponses[format]; !has {
+		return fmt.Sprintf("scenario %q does not mock the %s target format", scenario.Name, format), true
+	}
+	return "", false
+}
+
+// formatForAPIType maps a target protocol to the mock response format its
+// upstream endpoint answers in.
+func formatForAPIType(target protocol.APIType) (scenario.ResponseFormat, bool) {
+	switch target {
+	case protocol.TypeOpenAIChat:
+		return scenario.FormatOpenAIChat, true
+	case protocol.TypeOpenAIResponses:
+		return scenario.FormatOpenAIResponses, true
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		return scenario.FormatAnthropic, true
+	case protocol.TypeDecision:
+		return scenario.FormatDecision, true
+	default:
+		return "", false
+	}
 }
 
 // executeTest executes a single test combination with the given environment,

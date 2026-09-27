@@ -410,6 +410,14 @@ func cacheStateName(cached bool) string {
 func (m *Matrix) ExecuteAllCacheControls() []TestResult {
 	var cases []recorderCase
 	for _, pair := range m.Pairs {
+		// Prompt-cache directives are chat-protocol concepts. Leaf families
+		// without cache semantics (decision: single-shot typed questions, no
+		// conversation prefix to cache) have no cache-control case to run —
+		// skip them here rather than growing cacheControlBody a protocol
+		// branch that can never be meaningful.
+		if pair.Source == protocol.TypeDecision {
+			continue
+		}
 		for _, streaming := range m.Streaming {
 			pair := pair
 			streaming := streaming
