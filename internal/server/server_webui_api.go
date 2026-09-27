@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/imageasset"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
@@ -259,6 +260,14 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	// show the user where generated images are saved (~/.tingly-box/image).
 	imagegenHandler := imagegen.NewHandler()
 	imagegen.RegisterRoutes(apiV1, imagegenHandler)
+
+	// Image assets (authenticated): kept prompt pieces and reference images.
+	// A self-contained package with its own database under the config dir;
+	// see .design/image-assets.md.
+	if s.imageAssets == nil {
+		s.imageAssets = imageasset.NewStore(constant.GetImageAssetsDir(s.config.ConfigDir))
+	}
+	imageasset.RegisterRoutes(apiV1, imageasset.NewHandler(s.imageAssets))
 
 	// Guardrails Management
 	apiV1.GET("/guardrails/config", s.guardrailsHandler.GetGuardrailsConfig,

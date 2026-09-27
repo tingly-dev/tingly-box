@@ -15,8 +15,8 @@ import { Bookmark, BookmarkAdd, Check, PhotoLibrary } from '@/components/icons';
 import { usePieceKindLabel } from './fields';
 import { findPromptByText, pieceLabel, type PromptPiece } from './model';
 
-// How many of each the menu lists; the rest are on the library page, which
-// has search and tags. A menu that scrolls is a worse library.
+// How many of each the menu lists; the rest are on the Assets page, which
+// has search and tags. A menu that scrolls is a worse Assets page.
 const MENU_ITEMS = 6;
 
 interface PromptMenuProps {
@@ -38,7 +38,7 @@ const PromptMenu: React.FC<PromptMenuProps> = ({ prompt, pieces, onSave, onRepla
     const kindLabel = usePieceKindLabel();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const close = () => setAnchor(null);
-    const label = t('imageLibrary.promptMenu', { defaultValue: 'Saved prompts' });
+    const label = t('imageAssets.promptMenu', { defaultValue: 'Saved prompts' });
     const alreadySaved = Boolean(prompt.trim()) && findPromptByText(pieces, prompt) !== undefined;
     const prompts = pieces.filter((piece) => piece.kind === 'prompt');
     const parts = pieces.filter((piece) => piece.kind !== 'prompt');
@@ -78,27 +78,27 @@ const PromptMenu: React.FC<PromptMenuProps> = ({ prompt, pieces, onSave, onRepla
                     <ListItemIcon>{alreadySaved ? <Check fontSize="small" /> : <BookmarkAdd fontSize="small" />}</ListItemIcon>
                     <ListItemText>
                         {alreadySaved
-                            ? t('imageLibrary.promptAlreadySaved', { defaultValue: 'This prompt is in the library' })
-                            : t('imageLibrary.savePrompt', { defaultValue: 'Save this prompt' })}
+                            ? t('imageAssets.promptAlreadySaved', { defaultValue: 'This prompt is in Assets' })
+                            : t('imageAssets.savePrompt', { defaultValue: 'Save this prompt' })}
                     </ListItemText>
                 </MenuItem>
                 <Divider />
                 {pieces.length === 0 && (
                     <MenuItem disabled>
                         <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
-                            {t('imageLibrary.noPrompts', { defaultValue: 'Nothing saved yet' })}
+                            {t('imageAssets.noPrompts', { defaultValue: 'Nothing saved yet' })}
                         </ListItemText>
                     </MenuItem>
                 )}
-                {section(t('imageLibrary.appendHeading', { defaultValue: 'Add to the prompt' }), parts, onAppend)}
-                {section(t('imageLibrary.loadPromptHeading', { defaultValue: 'Replace the prompt with' }), prompts, onReplace)}
+                {section(t('imageAssets.appendHeading', { defaultValue: 'Add to the prompt' }), parts, onAppend)}
+                {section(t('imageAssets.loadPromptHeading', { defaultValue: 'Replace the prompt with' }), prompts, onReplace)}
                 <Divider />
-                <MenuItem onClick={() => { close(); navigate('/image/library'); }}>
+                <MenuItem onClick={() => { close(); navigate('/image/assets'); }}>
                     <ListItemIcon><PhotoLibrary fontSize="small" /></ListItemIcon>
                     <ListItemText>
                         {prompts.length > MENU_ITEMS || parts.length > MENU_ITEMS
-                            ? t('imageLibrary.openLibraryAll', { defaultValue: 'All {{count}} in the library', count: pieces.length })
-                            : t('imageLibrary.openLibrary', { defaultValue: 'Open the library' })}
+                            ? t('imageAssets.openAssetsAll', { defaultValue: 'All {{count}} in Assets', count: pieces.length })
+                            : t('imageAssets.openAssets', { defaultValue: 'Open Assets' })}
                     </ListItemText>
                 </MenuItem>
             </Menu>

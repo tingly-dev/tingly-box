@@ -241,8 +241,8 @@ interface ReferenceImagesRowProps {
     promptFileInputRef: React.RefObject<HTMLInputElement | null>;
     onOpenReference: (index: number) => void;
     onEditSketch: (index: number | null) => void;
-    // Opens the picker over images kept in the Image library.
-    onOpenLibrary: () => void;
+    // Opens the picker over images kept in Image Assets.
+    onOpenAssets: () => void;
     // The Paste button: reads the clipboard directly, where the browser allows.
     onPasteFromClipboard: () => void;
     onEditMask: (index: number) => void;
@@ -268,7 +268,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     promptFileInputRef,
     onOpenReference,
     onEditSketch,
-    onOpenLibrary,
+    onOpenAssets,
     onPasteFromClipboard,
     onEditMask,
     onRemoveReference,
@@ -310,10 +310,10 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             onClick: () => onEditSketch(null),
         },
         {
-            key: 'library',
-            label: t('imageLibrary.referenceSource', { defaultValue: 'Library' }),
+            key: 'assets',
+            label: t('imageAssets.referenceSource', { defaultValue: 'Assets' }),
             icon: <PhotoLibrary fontSize="small" />,
-            onClick: onOpenLibrary,
+            onClick: onOpenAssets,
         },
     ];
     return (

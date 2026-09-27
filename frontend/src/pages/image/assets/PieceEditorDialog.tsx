@@ -28,17 +28,17 @@ const PieceEditorDialog: React.FC<PieceEditorDialogProps> = ({ open, initial, kn
         if (text.trim()) onSave({ id: initial?.id, sourceId: initial?.sourceId, kind, title, text, tags });
     };
     const hint = {
-        prompt: t('imageLibrary.kindHint.prompt', { defaultValue: 'A whole prompt — using it replaces the prompt field.' }),
-        term: t('imageLibrary.kindHint.term', { defaultValue: 'A keyword such as "rim lighting" or "35mm" — using it adds it to the prompt.' }),
-        phrase: t('imageLibrary.kindHint.phrase', { defaultValue: 'A descriptive sentence or clause — using it adds it to the prompt.' }),
+        prompt: t('imageAssets.kindHint.prompt', { defaultValue: 'A whole prompt — using it replaces the prompt field.' }),
+        term: t('imageAssets.kindHint.term', { defaultValue: 'A keyword such as "rim lighting" or "35mm" — using it adds it to the prompt.' }),
+        phrase: t('imageAssets.kindHint.phrase', { defaultValue: 'A descriptive sentence or clause — using it adds it to the prompt.' }),
     }[kind];
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>
                 {initial
-                    ? t('imageLibrary.editTitle', { defaultValue: 'Edit' })
-                    : t('imageLibrary.newTitle', { defaultValue: 'New prompt material' })}
+                    ? t('imageAssets.editTitle', { defaultValue: 'Edit' })
+                    : t('imageAssets.newTitle', { defaultValue: 'New prompt material' })}
             </DialogTitle>
             <DialogContent dividers>
                 <Stack spacing={2}>
@@ -49,7 +49,7 @@ const PieceEditorDialog: React.FC<PieceEditorDialogProps> = ({ open, initial, kn
                     {kind === 'prompt' && (
                         <TextField
                             size="small"
-                            label={t('imageLibrary.titleLabel', { defaultValue: 'Title (optional)' })}
+                            label={t('imageAssets.titleLabel', { defaultValue: 'Title (optional)' })}
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
                         />
@@ -59,7 +59,7 @@ const PieceEditorDialog: React.FC<PieceEditorDialogProps> = ({ open, initial, kn
                         multiline
                         minRows={kind === 'term' ? 1 : 4}
                         maxRows={16}
-                        label={t('imageLibrary.textLabel', { defaultValue: 'Text' })}
+                        label={t('imageAssets.textLabel', { defaultValue: 'Text' })}
                         value={text}
                         onChange={(event) => setText(event.target.value)}
                         onKeyDown={(event) => {
@@ -73,7 +73,7 @@ const PieceEditorDialog: React.FC<PieceEditorDialogProps> = ({ open, initial, kn
                         value={tags}
                         onChange={setTags}
                         options={knownTags}
-                        label={t('imageLibrary.tagsLabel', { defaultValue: 'Tags' })}
+                        label={t('imageAssets.tagsLabel', { defaultValue: 'Tags' })}
                     />
                 </Stack>
             </DialogContent>

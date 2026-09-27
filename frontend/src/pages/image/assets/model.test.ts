@@ -63,7 +63,7 @@ describe('appendPiece', () => {
     });
 });
 
-describe('library helpers', () => {
+describe('asset helpers', () => {
     it('normalizes and counts tags', () => {
         expect(normalizeTags([' Style', 'style', '', 'Light '])).toEqual(['style', 'light']);
         expect(collectTags([piece({ tags: ['b', 'a'] }), piece({ tags: ['a'] })])).toEqual(['a', 'b']);

@@ -22,25 +22,25 @@ import { downloadImage } from '@/utils/download';
 import ThumbImage from '../components/ThumbImage';
 import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
 import { formatBytes } from '../components/imageGenSession';
-import { fileToDataUrl, readImageSize } from '../components/imageFiles';
+import { fileToDataUrl } from '../components/imageFiles';
 import { handoffState } from './handoff';
-import { EmptyState, NoMatches, SearchField } from './LibraryChrome';
-import { matchesQuery, type LibraryImage } from './model';
+import { EmptyState, NoMatches, SearchField } from './AssetsChrome';
+import { matchesQuery, type AssetImage } from './model';
 import { addImages, deleteImage, renameImage } from './store';
 
 // Kept reference images — a character sheet, a style board, a product shot —
 // that outlive the session they were used in. They come in the way images
 // come into the playground (browse, drop, paste) or from its image viewer,
 // and go back out as references.
-const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ images, loaded }) => {
+const ImagesPanel: React.FC<{ images: AssetImage[]; loaded: boolean }> = ({ images, loaded }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { notify } = useNotify();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState('');
-    const [viewing, setViewing] = useState<LibraryImage | null>(null);
-    const [renaming, setRenaming] = useState<{ image: LibraryImage; name: string } | null>(null);
-    const [removing, setRemoving] = useState<LibraryImage | null>(null);
+    const [viewing, setViewing] = useState<AssetImage | null>(null);
+    const [renaming, setRenaming] = useState<{ image: AssetImage; name: string } | null>(null);
+    const [removing, setRemoving] = useState<AssetImage | null>(null);
     const visible = images.filter((image) => matchesQuery([image.name], query));
 
     const handleAddFiles = async (files: FileList | File[]) => {
@@ -48,18 +48,15 @@ const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ im
         if (picked.length === 0) return;
         let saved = null;
         try {
-            saved = await addImages(await Promise.all(picked.map(async (file) => {
-                const src = await fileToDataUrl(file);
-                return { name: file.name, src, bytes: file.size, ...(await readImageSize(src) ?? {}) };
-            })));
+            saved = await addImages(await Promise.all(picked.map(async (file) => ({ name: file.name, src: await fileToDataUrl(file) }))));
         } catch {
             // Reported below, same as a failed write.
         }
-        if (saved) notify('success', t('imageLibrary.imagesAdded', { defaultValue: 'Added {{count}} images', count: saved.length }));
-        else notify('error', t('imageLibrary.saveFailed', { defaultValue: 'Could not save to the library' }));
+        if (saved) notify('success', t('imageAssets.imagesAdded', { defaultValue: 'Added {{count}} images', count: saved.filter((item) => !item.existing).length }));
+        else notify('error', t('imageAssets.saveFailed', { defaultValue: 'Could not save to Assets' }));
     };
-    const use = (image: LibraryImage) => navigate('/image/playground', { state: handoffState({ imageIds: [image.id] }) });
-    const download = (image: LibraryImage) => {
+    const use = (image: AssetImage) => navigate('/image/playground', { state: handoffState({ imageIds: [image.id] }) });
+    const download = (image: AssetImage) => {
         downloadImage(image.src, image.name.replace(/\.[a-z0-9]+$/i, '')).catch(() => {
             notify('error', t('playground.downloadFailed', { defaultValue: 'Could not download this image' }));
         });
@@ -69,8 +66,8 @@ const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ im
         setRenaming(null);
     };
 
-    const useLabel = t('imageLibrary.useAsReference', { defaultValue: 'Use as reference' });
-    const renameLabel = t('imageLibrary.rename', { defaultValue: 'Rename' });
+    const useLabel = t('imageAssets.useAsReference', { defaultValue: 'Use as reference' });
+    const renameLabel = t('imageAssets.rename', { defaultValue: 'Rename' });
     const deleteLabel = t('common.delete', { defaultValue: 'Delete' });
 
     return (
@@ -92,21 +89,21 @@ const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ im
                 <SearchField
                     value={query}
                     onChange={setQuery}
-                    placeholder={t('imageLibrary.searchImages', { defaultValue: 'Search by name' })}
+                    placeholder={t('imageAssets.searchImages', { defaultValue: 'Search by name' })}
                 />
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-                    {t('imageLibrary.dropHint', { defaultValue: 'Drop or paste images anywhere here' })}
+                    {t('imageAssets.dropHint', { defaultValue: 'Drop or paste images anywhere here' })}
                 </Typography>
                 <Button variant="contained" startIcon={<FileUpload />} onClick={() => fileInputRef.current?.click()}>
-                    {t('imageLibrary.addImages', { defaultValue: 'Add images' })}
+                    {t('imageAssets.addImages', { defaultValue: 'Add images' })}
                 </Button>
             </Stack>
 
             {loaded && images.length === 0 && (
                 <EmptyState
-                    title={t('imageLibrary.emptyImagesTitle', { defaultValue: 'Keep the images you generate from again and again' })}
-                    body={t('imageLibrary.emptyImagesBody', {
-                        defaultValue: 'Add a character sheet, a style board or a product shot here, or save any image from the Playground’s image viewer. They show up under Library in the Playground’s reference row.',
+                    title={t('imageAssets.emptyImagesTitle', { defaultValue: 'Keep the images you generate from again and again' })}
+                    body={t('imageAssets.emptyImagesBody', {
+                        defaultValue: 'Add a character sheet, a style board or a product shot here, or save any image from the Playground’s image viewer. They show up under Assets in the Playground’s reference row.',
                     })}
                 />
             )}
@@ -186,7 +183,7 @@ const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ im
                         autoFocus
                         fullWidth
                         size="small"
-                        label={t('imageLibrary.nameLabel', { defaultValue: 'Name' })}
+                        label={t('imageAssets.nameLabel', { defaultValue: 'Name' })}
                         value={renaming?.name ?? ''}
                         onChange={(event) => setRenaming((current) => (current ? { ...current, name: event.target.value } : current))}
                         onKeyDown={(event) => {
@@ -208,8 +205,8 @@ const ImagesPanel: React.FC<{ images: LibraryImage[]; loaded: boolean }> = ({ im
 
             <ConfirmDialog
                 open={removing !== null}
-                title={t('imageLibrary.deleteImageTitle', { defaultValue: 'Delete {{name}}?', name: removing?.name ?? '' })}
-                description={t('imageLibrary.deleteImageBody', { defaultValue: 'Removes it from the library.' })}
+                title={t('imageAssets.deleteImageTitle', { defaultValue: 'Delete {{name}}?', name: removing?.name ?? '' })}
+                description={t('imageAssets.deleteImageBody', { defaultValue: 'Removes it from Assets.' })}
                 confirmLabel={deleteLabel}
                 cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
                 confirmColor="error"

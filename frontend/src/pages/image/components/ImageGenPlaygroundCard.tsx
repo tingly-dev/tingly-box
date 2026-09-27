@@ -36,10 +36,10 @@ import ImageGenLightbox from './ImageGenLightbox';
 import ImageGenResultsPanel from './ImageGenResultsPanel';
 import { MAX_EDIT_REFERENCE_IMAGES, ReferenceImagesRow } from './ImageGenReferenceImages';
 import { useImageGenRefs } from './useImageGenRefs';
-import ImagePickerDialog from '../library/ImagePickerDialog';
-import PromptMenu from '../library/PromptMenu';
-import { appendPiece } from '../library/model';
-import { usePlaygroundLibrary } from '../library/usePlaygroundLibrary';
+import ImagePickerDialog from '../assets/ImagePickerDialog';
+import PromptMenu from '../assets/PromptMenu';
+import { appendPiece } from '../assets/model';
+import { usePlaygroundAssets } from '../assets/usePlaygroundAssets';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
@@ -335,9 +335,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    // The library: prompts and images kept beyond this session, saved to and
-    // loaded from without leaving the panel. See .design/image-library.md.
-    const library = usePlaygroundLibrary({
+    // Assets: prompts and images kept beyond this session, saved to and
+    // loaded from without leaving the panel. See .design/image-assets.md.
+    const imageAssets = usePlaygroundAssets({
         setPrompt,
         addReferences: handleAddImageSources,
         notify: showNotification,
@@ -528,7 +528,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             promptFileInputRef={promptFileInputRef}
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
-                            onOpenLibrary={() => library.setPickerOpen(true)}
+                            onOpenAssets={() => imageAssets.setPickerOpen(true)}
                             onPasteFromClipboard={() => { void handlePasteFromClipboard(); }}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
@@ -611,8 +611,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             </Tooltip>
                                             <PromptMenu
                                                 prompt={prompt}
-                                                pieces={library.pieces}
-                                                onSave={() => { void library.savePrompt(prompt); }}
+                                                pieces={imageAssets.pieces}
+                                                onSave={() => { void imageAssets.savePrompt(prompt); }}
                                                 onReplace={setPrompt}
                                                 onAppend={(text) => setPrompt((current) => appendPiece(current, text))}
                                             />
@@ -790,7 +790,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 }}
                 onSlice={(image) => setSliceTarget(image)}
                 onDownload={(image) => { void handleDownload(image); }}
-                onSaveToLibrary={(image) => { void library.saveImage(image.src, downloadStem(image, slugify)); }}
+                onSaveToAssets={(image) => { void imageAssets.saveImage(image.src, downloadStem(image, slugify)); }}
                 referenceImages={referenceImages}
                 onEditSketch={(index) => {
                     handleOpenSketch(index);
@@ -900,12 +900,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 </DialogActions>
             </Dialog>
             <ImagePickerDialog
-                open={library.pickerOpen}
-                images={library.images}
+                open={imageAssets.pickerOpen}
+                images={imageAssets.images}
                 room={Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length)}
-                onClose={() => library.setPickerOpen(false)}
+                onClose={() => imageAssets.setPickerOpen(false)}
                 onPick={(picked) => {
-                    library.setPickerOpen(false);
+                    imageAssets.setPickerOpen(false);
                     void handleAddImageSources(picked);
                 }}
             />

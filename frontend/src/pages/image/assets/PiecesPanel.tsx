@@ -8,7 +8,7 @@ import { Add, ContentCut, Delete, Edit } from '@/components/icons';
 import { useNotify } from '@/hooks/useNotify';
 import { KindToggle, usePieceKindLabel } from './fields';
 import { handoffState } from './handoff';
-import { EmptyState, NoMatches, SearchField } from './LibraryChrome';
+import { EmptyState, NoMatches, SearchField } from './AssetsChrome';
 import { PIECE_KINDS, collectTags, matchesQuery, pieceLabel, type PieceInput, type PieceKind, type PromptPiece } from './model';
 import PieceEditorDialog from './PieceEditorDialog';
 import SplitDialog from './SplitDialog';
@@ -32,11 +32,11 @@ const PieceCard: React.FC<PieceCardProps> = ({ piece, source, splitCount, onTag,
     const kindLabel = usePieceKindLabel();
     const actions = [
         piece.kind === 'prompt' && {
-            label: t('imageLibrary.split.action', { defaultValue: 'Split into terms and phrases' }),
+            label: t('imageAssets.split.action', { defaultValue: 'Split into terms and phrases' }),
             icon: <ContentCut sx={{ fontSize: 16 }} />,
             onClick: onSplit,
         },
-        { label: t('imageLibrary.editTitle', { defaultValue: 'Edit' }), icon: <Edit sx={{ fontSize: 16 }} />, onClick: onEdit },
+        { label: t('imageAssets.editTitle', { defaultValue: 'Edit' }), icon: <Edit sx={{ fontSize: 16 }} />, onClick: onEdit },
         { label: t('common.delete', { defaultValue: 'Delete' }), icon: <Delete sx={{ fontSize: 16 }} />, onClick: onDelete },
     ].filter((action) => action !== false);
     return (
@@ -63,16 +63,16 @@ const PieceCard: React.FC<PieceCardProps> = ({ piece, source, splitCount, onTag,
                     {piece.tags.map((tag) => <Chip key={tag} size="small" label={tag} onClick={() => onTag(tag)} />)}
                     <Typography variant="caption" color="text.disabled" noWrap sx={{ maxWidth: '100%' }}>
                         {source
-                            ? t('imageLibrary.fromPrompt', { defaultValue: 'from "{{name}}"', name: pieceLabel(source) })
-                            : splitCount > 0 && t('imageLibrary.pieceCount', { defaultValue: '{{count}} pieces kept', count: splitCount })}
+                            ? t('imageAssets.fromPrompt', { defaultValue: 'from "{{name}}"', name: pieceLabel(source) })
+                            : splitCount > 0 && t('imageAssets.pieceCount', { defaultValue: '{{count}} pieces kept', count: splitCount })}
                     </Typography>
                 </Stack>
             )}
             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', mt: 'auto' }}>
                 <Button size="small" onClick={onUse}>
                     {piece.kind === 'prompt'
-                        ? t('imageLibrary.useInPlayground', { defaultValue: 'Use in Playground' })
-                        : t('imageLibrary.addToPrompt', { defaultValue: 'Add to prompt' })}
+                        ? t('imageAssets.useInPlayground', { defaultValue: 'Use in Playground' })
+                        : t('imageAssets.addToPrompt', { defaultValue: 'Add to prompt' })}
                 </Button>
                 <Box sx={{ flex: 1 }} />
                 <CopyIconButton
@@ -123,7 +123,7 @@ const PiecesPanel: React.FC<{ pieces: PromptPiece[]; loaded: boolean }> = ({ pie
 
     const save = async (inputs: PieceInput[], successMessage?: string) => {
         if (!(await savePieces(inputs))) {
-            notify('error', t('imageLibrary.saveFailed', { defaultValue: 'Could not save to the library' }));
+            notify('error', t('imageAssets.saveFailed', { defaultValue: 'Could not save to Assets' }));
             return;
         }
         close();
@@ -142,12 +142,12 @@ const PiecesPanel: React.FC<{ pieces: PromptPiece[]; loaded: boolean }> = ({ pie
                 <SearchField
                     value={query}
                     onChange={setQuery}
-                    placeholder={t('imageLibrary.searchPrompts', { defaultValue: 'Search text and tags' })}
+                    placeholder={t('imageAssets.searchPrompts', { defaultValue: 'Search text and tags' })}
                 />
                 <KindToggle kinds={FILTER_KINDS} value={kind} onChange={setKind} />
                 <Box sx={{ flex: 1 }} />
                 <Button variant="contained" startIcon={<Add />} onClick={() => open('edit', null)}>
-                    {t('imageLibrary.new', { defaultValue: 'New' })}
+                    {t('imageAssets.new', { defaultValue: 'New' })}
                 </Button>
             </Stack>
 
@@ -168,8 +168,8 @@ const PiecesPanel: React.FC<{ pieces: PromptPiece[]; loaded: boolean }> = ({ pie
 
             {loaded && pieces.length === 0 && (
                 <EmptyState
-                    title={t('imageLibrary.emptyPromptsTitle', { defaultValue: 'Keep the prompts that worked — and the parts that made them work' })}
-                    body={t('imageLibrary.emptyPromptsBody', {
+                    title={t('imageAssets.emptyPromptsTitle', { defaultValue: 'Keep the prompts that worked — and the parts that made them work' })}
+                    body={t('imageAssets.emptyPromptsBody', {
                         defaultValue: 'Save a prompt from the bookmark button on the Playground’s prompt field, or create one here. Then split it into terms ("rim lighting") and phrases ("a quiet street after rain") to reuse them in new prompts.',
                     })}
                 />
@@ -208,18 +208,18 @@ const PiecesPanel: React.FC<{ pieces: PromptPiece[]; loaded: boolean }> = ({ pie
                 knownTags={knownTags}
                 onClose={close}
                 onSave={(inputs) => {
-                    void save(inputs, t('imageLibrary.split.saved', { defaultValue: 'Saved {{count}} pieces', count: inputs.length }));
+                    void save(inputs, t('imageAssets.split.saved', { defaultValue: 'Saved {{count}} pieces', count: inputs.length }));
                 }}
             />
             <ConfirmDialog
                 open={showing('delete')}
-                title={t('imageLibrary.deletePromptTitle', {
+                title={t('imageAssets.deletePromptTitle', {
                     defaultValue: 'Delete "{{name}}"?',
                     name: dialog.type === 'delete' && dialog.piece ? pieceLabel(dialog.piece) : '',
                 })}
                 description={dialog.type === 'delete' && dialog.piece && splitCount(dialog.piece.id) > 0
-                    ? t('imageLibrary.deletePromptKeepsPieces', { defaultValue: 'Removes it from the library. The pieces split from it are kept.' })
-                    : t('imageLibrary.deletePromptBody', { defaultValue: 'Removes it from the library.' })}
+                    ? t('imageAssets.deletePromptKeepsPieces', { defaultValue: 'Removes it from Assets. The pieces split from it are kept.' })
+                    : t('imageAssets.deletePromptBody', { defaultValue: 'Removes it from Assets.' })}
                 confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
                 cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
                 confirmColor="error"

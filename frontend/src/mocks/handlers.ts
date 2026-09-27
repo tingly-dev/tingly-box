@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { mockClaudeCodeModels } from './claudeCodeModels'
 import { deskHandlers } from './deskHandlers'
+import { imageAssetsHandlers } from './imageAssetsHandlers'
 
 // ============================================
 // Mock Model Requests (correlated per-request traces)
@@ -3704,4 +3705,5 @@ export const handlers = [
         })
     }),
     ...deskHandlers,
+    ...imageAssetsHandlers,
 ]

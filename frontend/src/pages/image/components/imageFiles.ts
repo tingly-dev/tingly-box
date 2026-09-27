@@ -1,9 +1,9 @@
 // Turning files and URLs into the one image representation the Image pages
 // use everywhere — a base64 data URL — plus the pixel size to caption it
-// with. Shared by the playground (references, imports) and the library.
+// with. Shared by the playground (references, imports) and Assets.
 
-/** Reads a File into a data URL (`data:image/png;base64,...`). */
-export const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+/** Reads a File (or any Blob) into a data URL (`data:image/png;base64,...`). */
+export const fileToDataUrl = (file: Blob): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error);

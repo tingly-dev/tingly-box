@@ -1,4 +1,4 @@
-// What the library page hands the playground when "use" is picked on a
+// What the Assets page hands the playground when "use" is picked on a
 // piece or an image: router state, read once on arrival. Images travel by id
 // (the playground reads them from the store) because router state goes into
 // session history, which is no place for megabytes of base64.
@@ -11,7 +11,7 @@ export interface PlaygroundHandoff {
     imageIds?: string[];
 }
 
-const KEY = 'imageLibraryHandoff';
+const KEY = 'imageAssetsHandoff';
 
 export const handoffState = (handoff: PlaygroundHandoff) => ({ [KEY]: handoff });
 

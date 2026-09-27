@@ -73,6 +73,10 @@ const MemoryDirName = "memory"
 
 const ImageDirName = "image"
 
+// ImageAssetsDirName holds the image assets store (internal/imageasset):
+// its own database and the kept reference images.
+const ImageAssetsDirName = "image-assets"
+
 const RemoteDirName = "remote"
 
 const TranscriptDirName = "transcripts"
@@ -108,6 +112,11 @@ func GetDBFile(baseDir string) string {
 // GetImageDir returns the generated-image persistence directory path
 func GetImageDir(baseDir string) string {
 	return filepath.Join(baseDir, ImageDirName)
+}
+
+// GetImageAssetsDir returns the image assets store's directory.
+func GetImageAssetsDir(baseDir string) string {
+	return filepath.Join(baseDir, ImageAssetsDirName)
 }
 
 // GetRemoteTranscriptDir returns the directory holding one append-only

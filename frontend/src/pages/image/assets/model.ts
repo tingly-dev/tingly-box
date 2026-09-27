@@ -1,6 +1,6 @@
-// The image library's data: what is kept, and the pure logic over it. No
+// The image assets' data: what is kept, and the pure logic over it. No
 // storage and no React here — the store (store.ts) persists these shapes and
-// the UI renders them. See .design/image-library.md.
+// the UI renders them. See .design/image-assets.md.
 //
 // Prompt material is kept as pieces, not only as whole prompts: the reusable
 // asset is usually a term ("rim lighting") or a descriptive phrase ("a quiet
@@ -39,19 +39,21 @@ export interface PieceInput {
     sourceId?: string;
 }
 
-export interface LibraryImage {
+export interface AssetImage {
     id: string;
     name: string;
     // A data URL — what the playground uses for every image, so a kept image
     // goes back into a request without conversion.
     src: string;
+    // Read from the image by the server.
     width?: number;
     height?: number;
     bytes: number;
     createdAt: number;
 }
 
-export type ImageInput = Omit<LibraryImage, 'id' | 'createdAt'>;
+// What a caller sends to keep an image: the server works out the rest.
+export type ImageInput = Pick<AssetImage, 'name' | 'src'>;
 
 /** Lower-cased, trimmed, de-duplicated, in first-seen order. */
 export const normalizeTags = (tags: string[]): string[] => {

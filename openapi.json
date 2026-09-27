@@ -3389,6 +3389,253 @@
         }
       }
     },
+    "/api/v1/image-assets/pieces": {
+      "get": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "List kept prompt pieces (whole prompts, terms, phrases), most recently edited first",
+        "description": "List kept prompt pieces (whole prompts, terms, phrases), most recently edited first",
+        "operationId": "apiV1Image-assetsPiecesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetPiecesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Create prompt pieces, or update the ones whose id is set, in one transaction",
+        "description": "Create prompt pieces, or update the ones whose id is set, in one transaction",
+        "operationId": "apiV1Image-assetsPiecesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageAssetSavePiecesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetPiecesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-assets/pieces/{id}": {
+      "delete": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Delete a prompt piece; pieces split from it are kept",
+        "description": "Delete a prompt piece; pieces split from it are kept",
+        "operationId": "apiV1Image-assetsPiecesIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetDeleteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-assets/references": {
+      "get": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "List kept reference images (metadata only), newest first",
+        "description": "List kept reference images (metadata only), newest first",
+        "operationId": "apiV1Image-assetsReferencesGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetReferencesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Keep reference images sent as data URLs; an image already kept is returned with existing=true",
+        "description": "Keep reference images sent as data URLs; an image already kept is returned with existing=true",
+        "operationId": "apiV1Image-assetsReferencesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageAssetAddReferencesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetAddReferencesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-assets/references/{id}": {
+      "put": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Rename a reference image",
+        "description": "Rename a reference image",
+        "operationId": "apiV1Image-assetsReferencesIdPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageAssetRenameReferenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetReferenceResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Delete a reference image and its file",
+        "description": "Delete a reference image and its file",
+        "operationId": "apiV1Image-assetsReferencesIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAssetDeleteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-assets/references/{id}/content": {
+      "get": {
+        "tags": [
+          "image-assets"
+        ],
+        "summary": "Get a reference image's bytes",
+        "description": "Get a reference image's bytes",
+        "operationId": "apiV1Image-assetsReferencesIdContentGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imagegen/info": {
       "get": {
         "tags": [
@@ -8878,6 +9125,55 @@
           "message"
         ]
       },
+      "AddedReferenceImage": {
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field bytes"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field created_at"
+          },
+          "existing": {
+            "type": "boolean",
+            "description": "Field existing"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field height"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "mime": {
+            "type": "string",
+            "description": "Field mime"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field width"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "bytes",
+          "created_at",
+          "existing"
+        ]
+      },
       "AdvisorConfig": {
         "type": "object",
         "properties": {
@@ -11932,6 +12228,161 @@
           }
         }
       },
+      "ImageAssetAddReferencesRequest": {
+        "type": "object",
+        "properties": {
+          "references": {
+            "type": "array",
+            "description": "Field references",
+            "items": {
+              "$ref": "#/components/schemas/ImageAssetReferenceUpload"
+            }
+          }
+        },
+        "required": [
+          "references"
+        ]
+      },
+      "ImageAssetAddReferencesResponse": {
+        "type": "object",
+        "properties": {
+          "references": {
+            "type": "array",
+            "description": "Field references",
+            "items": {
+              "$ref": "#/components/schemas/AddedReferenceImage"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "references"
+        ]
+      },
+      "ImageAssetDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ImageAssetPiecesResponse": {
+        "type": "object",
+        "properties": {
+          "pieces": {
+            "type": "array",
+            "description": "Field pieces",
+            "items": {
+              "$ref": "#/components/schemas/PromptPiece"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "pieces"
+        ]
+      },
+      "ImageAssetReferenceResponse": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "$ref": "#/components/schemas/ReferenceImage"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "reference"
+        ]
+      },
+      "ImageAssetReferenceUpload": {
+        "type": "object",
+        "properties": {
+          "data_url": {
+            "type": "string",
+            "description": "Field data_url",
+            "example": "data:image/png;base64,iVBORw0..."
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "character-sheet.png"
+          }
+        },
+        "required": [
+          "name",
+          "data_url"
+        ]
+      },
+      "ImageAssetReferencesResponse": {
+        "type": "object",
+        "properties": {
+          "references": {
+            "type": "array",
+            "description": "Field references",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceImage"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "references"
+        ]
+      },
+      "ImageAssetRenameReferenceRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "hero.png"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ImageAssetSavePiecesRequest": {
+        "type": "object",
+        "properties": {
+          "pieces": {
+            "type": "array",
+            "description": "Field pieces",
+            "items": {
+              "$ref": "#/components/schemas/PromptPieceInput"
+            }
+          }
+        },
+        "required": [
+          "pieces"
+        ]
+      },
       "ImageGenInfoResponse": {
         "type": "object",
         "properties": {
@@ -14313,6 +14764,103 @@
           }
         }
       },
+      "PromptPiece": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field created_at"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "prompt",
+              "term",
+              "phrase"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "text",
+          "tags",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PromptPieceInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "prompt",
+              "term",
+              "phrase"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Field source_id"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ]
+      },
       "ProviderCatalog": {
         "type": "object",
         "properties": {
@@ -14949,6 +15497,50 @@
         },
         "required": [
           "folders"
+        ]
+      },
+      "ReferenceImage": {
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field bytes"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field created_at"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field height"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "mime": {
+            "type": "string",
+            "description": "Field mime"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field width"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "bytes",
+          "created_at"
         ]
       },
       "RefreshSkillLocationResponse": {
@@ -18977,6 +19569,10 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "image-assets",
+      "description": "Operations related to image-assets"
     },
     {
       "name": "imagegen",

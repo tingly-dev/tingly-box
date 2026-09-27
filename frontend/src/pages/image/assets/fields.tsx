@@ -7,10 +7,10 @@ import { normalizeTags, type PieceKind } from './model';
 export const usePieceKindLabel = () => {
     const { t } = useTranslation();
     return (kind: PieceKind | 'all'): string => ({
-        all: t('imageLibrary.kind.all', { defaultValue: 'All' }),
-        prompt: t('imageLibrary.kind.prompt', { defaultValue: 'Prompt' }),
-        term: t('imageLibrary.kind.term', { defaultValue: 'Term' }),
-        phrase: t('imageLibrary.kind.phrase', { defaultValue: 'Phrase' }),
+        all: t('imageAssets.kind.all', { defaultValue: 'All' }),
+        prompt: t('imageAssets.kind.prompt', { defaultValue: 'Prompt' }),
+        term: t('imageAssets.kind.term', { defaultValue: 'Term' }),
+        phrase: t('imageAssets.kind.phrase', { defaultValue: 'Phrase' }),
     })[kind];
 };
 
@@ -65,7 +65,7 @@ export const TagInput: React.FC<TagInputProps> = ({ value, onChange, options, la
                     {...params}
                     label={label}
                     placeholder={value.length === 0
-                        ? t('imageLibrary.tagsPlaceholder', { defaultValue: 'style, lighting, subject… (Enter to add)' })
+                        ? t('imageAssets.tagsPlaceholder', { defaultValue: 'style, lighting, subject… (Enter to add)' })
                         : undefined}
                 />
             )}

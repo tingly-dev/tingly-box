@@ -62,14 +62,14 @@ const SplitDialog: React.FC<SplitDialogProps> = ({ open, source, existing, known
 
     return (
         <Dialog open={open && source !== null} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>{t('imageLibrary.split.title', { defaultValue: 'Split into terms and phrases' })}</DialogTitle>
+            <DialogTitle>{t('imageAssets.split.title', { defaultValue: 'Split into terms and phrases' })}</DialogTitle>
             <DialogContent dividers>
                 <Stack spacing={2}>
                     <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover', maxHeight: 140, overflowY: 'auto' }}>
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{source?.text}</Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary">
-                        {t('imageLibrary.split.hint', {
+                        {t('imageAssets.split.hint', {
                             defaultValue: 'A first cut at punctuation. Untick what is not worth keeping, fix the wording so each piece stands on its own, and mark it as a term or a phrase.',
                         })}
                     </Typography>
@@ -114,7 +114,7 @@ const SplitDialog: React.FC<SplitDialogProps> = ({ open, source, existing, known
                                     { key: Math.max(-1, ...current.map((row) => row.key)) + 1, text: '', kind: 'term', keep: true },
                                 ])}
                             >
-                                {t('imageLibrary.split.addRow', { defaultValue: 'Add a piece' })}
+                                {t('imageAssets.split.addRow', { defaultValue: 'Add a piece' })}
                             </Button>
                         </Box>
                     </Stack>
@@ -122,7 +122,7 @@ const SplitDialog: React.FC<SplitDialogProps> = ({ open, source, existing, known
                         value={tags}
                         onChange={setTags}
                         options={knownTags}
-                        label={t('imageLibrary.split.tagsLabel', { defaultValue: 'Tags for every saved piece' })}
+                        label={t('imageAssets.split.tagsLabel', { defaultValue: 'Tags for every saved piece' })}
                     />
                 </Stack>
             </DialogContent>
@@ -133,7 +133,7 @@ const SplitDialog: React.FC<SplitDialogProps> = ({ open, source, existing, known
                     disabled={!source || kept.length === 0}
                     onClick={() => source && onSave(kept.map((row) => ({ kind: row.kind, text: row.text, tags, sourceId: source.id })))}
                 >
-                    {t('imageLibrary.split.save', {
+                    {t('imageAssets.split.save', {
                         defaultValue_one: 'Save {{count}} piece',
                         defaultValue_other: 'Save {{count}} pieces',
                         count: kept.length,

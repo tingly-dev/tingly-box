@@ -323,6 +323,12 @@ func (s *Server) Stop(ctx context.Context) error {
 		log.Println("Configuration watcher stopped")
 	}
 
+	if s.imageAssets != nil {
+		if err := s.imageAssets.Close(); err != nil {
+			logrus.WithError(err).Warn("Failed to close image assets store")
+		}
+	}
+
 	// Close all MCP sessions and terminate subprocesses
 	if s.mcpRuntime != nil {
 		s.mcpRuntime.Close()

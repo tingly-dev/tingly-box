@@ -7,7 +7,7 @@ import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 
-// An image that is already a data URL (an output, an import, a kept library
+// An image that is already a data URL (an output, an import, a kept asset
 // image) as a reference. The src doubles as the preview, so it is never
 // re-encoded.
 const srcToReference = async (src: string, name: string): Promise<ReferenceImage> => {
@@ -140,7 +140,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         }
     }, [notifyLoadFailed, referenceImages.length, showNotification, t]);
 
-    // Several picked images at once (from the library), under their own
+    // Several picked images at once (from Assets), under their own
     // names. Unlike a single "use as reference", nothing is evicted: the
     // ones that do not fit are left out, and the row says how many.
     const handleAddImageSources = useCallback(async (items: Array<{ src: string; name: string }>) => {

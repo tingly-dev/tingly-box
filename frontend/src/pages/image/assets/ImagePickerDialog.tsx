@@ -15,19 +15,19 @@ import { useNavigate } from 'react-router-dom';
 import { Check } from '@/components/icons';
 import ThumbImage from '../components/ThumbImage';
 import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
-import type { LibraryImage } from './model';
+import type { AssetImage } from './model';
 
 interface ImagePickerDialogProps {
     open: boolean;
-    images: LibraryImage[];
+    images: AssetImage[];
     // How many more the request row can take — picking stops there instead
     // of accepting images that would then be dropped.
     room: number;
     onClose: () => void;
-    onPick: (images: LibraryImage[]) => void;
+    onPick: (images: AssetImage[]) => void;
 }
 
-// The reference row's fourth way in: images kept in the library. Several can
+// The reference row's fourth way in: images kept in Assets. Several can
 // be picked at once — a character sheet plus a style board is the usual
 // pair — in the order they are clicked, which is the order they are sent in.
 const ImagePickerDialog: React.FC<ImagePickerDialogProps> = ({
@@ -53,25 +53,25 @@ const ImagePickerDialog: React.FC<ImagePickerDialogProps> = ({
     const confirm = () => {
         onPick(picked
             .map((id) => images.find((image) => image.id === id))
-            .filter((image): image is LibraryImage => image !== undefined));
+            .filter((image): image is AssetImage => image !== undefined));
         setPicked([]);
     };
 
     return (
         <Dialog open={open} onClose={close} maxWidth="md" fullWidth>
             <DialogTitle>
-                {t('imageLibrary.pickReferencesTitle', { defaultValue: 'Add reference images from the library' })}
+                {t('imageAssets.pickReferencesTitle', { defaultValue: 'Add reference images from Assets' })}
             </DialogTitle>
             <DialogContent dividers>
                 {images.length === 0 ? (
                     <Stack spacing={1.5} sx={{ alignItems: 'center', py: 4, textAlign: 'center' }}>
                         <Typography variant="body2" color="text.secondary">
-                            {t('imageLibrary.noReferencesPicker', {
-                                defaultValue: 'No images kept yet. Save one from the image viewer, or add your own on the library page.',
+                            {t('imageAssets.noReferencesPicker', {
+                                defaultValue: 'No images kept yet. Save one from the image viewer, or add your own on the Assets page.',
                             })}
                         </Typography>
-                        <Button variant="outlined" size="small" onClick={() => { close(); navigate('/image/library?tab=references'); }}>
-                            {t('imageLibrary.openLibrary', { defaultValue: 'Open the library' })}
+                        <Button variant="outlined" size="small" onClick={() => { close(); navigate('/image/assets?tab=references'); }}>
+                            {t('imageAssets.openAssets', { defaultValue: 'Open Assets' })}
                         </Button>
                     </Stack>
                 ) : (
@@ -140,13 +140,13 @@ const ImagePickerDialog: React.FC<ImagePickerDialogProps> = ({
                 {images.length > 0 && (
                     <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
                         {room === 0
-                            ? t('imageLibrary.pickNoRoom', { defaultValue: 'The request already has the maximum number of reference images' })
-                            : t('imageLibrary.pickRoom', { defaultValue: '{{picked}} picked · room for {{room}}', picked: picked.length, room })}
+                            ? t('imageAssets.pickNoRoom', { defaultValue: 'The request already has the maximum number of reference images' })
+                            : t('imageAssets.pickRoom', { defaultValue: '{{picked}} picked · room for {{room}}', picked: picked.length, room })}
                     </Typography>
                 )}
                 <Button onClick={close}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
                 <Button variant="contained" disabled={picked.length === 0} onClick={confirm}>
-                    {t('imageLibrary.pickConfirm', {
+                    {t('imageAssets.pickConfirm', {
                         defaultValue_one: 'Add {{count}} image',
                         defaultValue_other: 'Add {{count}} images',
                         count: picked.length,

@@ -2,7 +2,7 @@ import { InputAdornment, Paper, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Search } from '@/components/icons';
 
-// The bits both library tabs are built from, so the two read as one page.
+// The bits both Assets tabs are built from, so the two read as one page.
 
 export const SearchField: React.FC<{ value: string; onChange: (value: string) => void; placeholder: string }> = ({
     value,
@@ -33,7 +33,7 @@ export const NoMatches: React.FC = () => {
     const { t } = useTranslation();
     return (
         <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-            {t('imageLibrary.noMatches', { defaultValue: 'Nothing matches' })}
+            {t('imageAssets.noMatches', { defaultValue: 'Nothing matches' })}
         </Typography>
     );
 };

@@ -39,8 +39,8 @@ interface ImageGenLightboxProps {
     onReuseRun: (run: GenerationRun) => void;
     onSlice: (image: SelectedImage) => void;
     onDownload: (image: SelectedImage) => void;
-    // Keeps the open image in the Image library, beyond this session.
-    onSaveToLibrary: (image: SelectedImage) => void;
+    // Keeps the open image in Image Assets, beyond this session.
+    onSaveToAssets: (image: SelectedImage) => void;
     // The request's reference images, so a `reference` image can tell whether
     // it is a re-openable sketch.
     referenceImages: ReferenceImage[];
@@ -64,7 +64,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onReuseRun,
     onSlice,
     onDownload,
-    onSaveToLibrary,
+    onSaveToAssets,
     referenceImages,
     onEditSketch,
     onUseAsReference,
@@ -307,10 +307,10 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                             <Download fontSize="small" />
                         </IconButton>
                     </Tooltip>
-                    <Tooltip title={t('imageLibrary.saveImage', { defaultValue: 'Save to library' })}>
+                    <Tooltip title={t('imageAssets.saveImage', { defaultValue: 'Save to Assets' })}>
                         <IconButton
-                            onClick={() => { if (selectedImage) onSaveToLibrary(selectedImage); }}
-                            aria-label={t('imageLibrary.saveImage', { defaultValue: 'Save to library' })}
+                            onClick={() => { if (selectedImage) onSaveToAssets(selectedImage); }}
+                            aria-label={t('imageAssets.saveImage', { defaultValue: 'Save to Assets' })}
                             sx={overlayIconSx}
                         >
                             <BookmarkAdd fontSize="small" />

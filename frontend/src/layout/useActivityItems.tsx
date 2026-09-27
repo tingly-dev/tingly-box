@@ -202,7 +202,7 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/image/playground',
                 children: [
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), icon: <IconPalette sx={{ fontSize: 20 }} /> },
-                    { path: '/image/library', label: t('layout.imageLibrary', { defaultValue: 'Library' }), icon: <IconPhotoLibrary sx={{ fontSize: 20 }} /> },
+                    { path: '/image/assets', label: t('layout.imageAssets', { defaultValue: 'Assets' }), icon: <IconPhotoLibrary sx={{ fontSize: 20 }} /> },
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),

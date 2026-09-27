@@ -27,6 +27,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsutils "github.com/tingly-dev/tingly-box/internal/guardrails/utils"
+	"github.com/tingly-dev/tingly-box/internal/imageasset"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
@@ -199,6 +200,9 @@ type Server struct {
 	// handler (internal/server.GuardrailsHandler). Same construction
 	// constraint as webHandler above.
 	guardrailsHandler *GuardrailsHandler
+	// imageAssets is the image assets store; it opens on first use and is
+	// closed on Stop.
+	imageAssets *imageasset.Store
 
 	// aiHandler is the AI Model API's aggregate handler
 	// (internal/server/aimodel.AIHandler), covering MCP-in-gateway dispatch,
