@@ -26,6 +26,7 @@ import {
     Lock as IconLock,
     Vector as IconVector,
     Photo as IconPhoto,
+    Psychology as IconPsychology,
     Palette as IconPalette,
     Cable as IconPlug,
     Users as IconUsers,
@@ -180,6 +181,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
+            { id: 'decision', nav: { path: '/agent/decision', label: t('layout.nav.useDecision', { defaultValue: 'Decision' }), icon: <IconPsychology sx={{ fontSize: 20 }} /> } },
         ]);
 
         const scenarioChildren: NavItem[] = [];

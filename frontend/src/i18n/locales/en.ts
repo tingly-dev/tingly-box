@@ -70,6 +70,7 @@ export default {
       "useVSCode": "VS Code",
       "useCursor": "Cursor",
       "useEmbed": "Embedding",
+      "useDecision": "Decision",
       "useImageGen": "Image API",
       "useTeam": "Team",
       "useCustom": "Custom",
@@ -2229,6 +2230,10 @@ export default {
     "modelRules": "Model Rules",
     "embedModelRules": "Embedding Model Rules",
     "imageGenModelRules": "Image Model Rules",
+    "decisionModelRules": "Decision Model Rules",
+    "decisionQuickStart": "Quick Start",
+    "decisionQuickStartHint": "POST typed questions — choice, score, noul — to the endpoint above; structured answers and probabilities come back as JSON.",
+    "decisionAdvisory": "Decision probabilities are advisory and do not replace permissions or human approval for irreversible actions.",
     "tooltip": {
       "claude_code": "AI-powered CLI development agent for implementation, testing, and git operations",
       "claude_desktop": "Route Claude Desktop's third-party inference through your configured providers",
@@ -2239,7 +2244,8 @@ export default {
       "cursor": "Cursor AI code editor through Tingly Box proxy, with Cursor compatibility handling enabled by default. Cursor calls this URL from its own cloud, so it must be a publicly reachable HTTPS address — not localhost.",
       "pi": "Pi coding agent through Tingly Box proxy",
       "dsh": "DeepSeek Harness (dsh) agent harness through Tingly Box proxy",
-      "imagegen": "AI-powered image generation and editing through Tingly Box proxy with multiple model support"
+      "imagegen": "AI-powered image generation and editing through Tingly Box proxy with multiple model support",
+      "decision": "Route native typed decisions — choices, scores, and calibrated probabilities — through Tingly Box without converting them to chat messages"
     },
     "vscode": {
       "installDescription": "Install the Tingly Box extension from VS Code or the Marketplace.",
@@ -2309,6 +2315,7 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation and editing through Tingly Box.",
+      "decision": "Route structured decision requests — typed choices, scores, and probabilities — through Tingly Box.",
       "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
       "team": "Shared central model deployment for your whole team."
     }
