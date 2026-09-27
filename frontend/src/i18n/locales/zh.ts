@@ -1860,6 +1860,7 @@ export default {
     "openResult": "打开生成的第 {{number}} 张图像",
     "resultAlt": "生成的第 {{number}} 张图像",
     "emptyResult": "未返回图像",
+    "imageFailed": "这张图生成失败",
     "requestFailed": "请求失败",
     "runFailed": "生成失败",
     "interruptedByReload": "页面刷新时被中断",

@@ -486,6 +486,15 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
 - **部分失败返回成功的那几张**:已经出好、已经计费的图不该因为另一次调用被限流而
   一起丢掉;整次请求的超时在后面几波还没跑完时触发,同样保留已完成的。只有全部
   失败才是错误。部分失败在网关打一行 warn,列出每一次的原因。
+- **部分失败的原因回到调用方**:只少几张图、不说为什么,用户分不清是限流、审核拦截
+  还是上游不支持 n。客户端接口是"一个 response + 一个 error",error 表示整次失败,
+  放不下"成功但缺几张"。所以 handler 在请求 context 上挂一个收集器
+  (`client.WithImageCallFailures`),扇出把每次失败记进去;handler 成功返回时若收集
+  器非空,在 body 里 `data` 旁边加 `partial_failures: [{status, message}]`
+  (`writeImagesResponse`,`openai_image.go`)。status 与整次失败时同一套分类
+  (`ClassifyUpstreamFailure`);message 在 SDK 错误上取上游自己的 `error.message`,
+  不带 `POST "REDACTED": 429 ... {raw json}` 那层包装——它要放进一个小槽位里。
+  这是扩展字段,不认识它的 OpenAI SDK 会忽略;没有失败时响应保持原样。
 
 为什么在网关而不是前端扇出:能力差异是网关的事(`imageedit.md` §6),Playground
 以外的调用方也拿到正确的 n 张;而前端拆成 n 个请求,在 OpenAI 这类上游会让参考图的
@@ -500,7 +509,11 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
 - **pending 与完成共用同一个布局**:pending 时每个槽位是虚线框 + 转圈,落地后图片
   填进对应槽位,卡片形状不跳。
 - 没有图的槽位在完成后保持虚线框,写 "No image returned"——缺在哪一格一眼可见,
-  不需要单独的提示行(provider 封顶 n、Codex 扇出部分失败、上游忽略 n,都走这里)。
+  不需要单独的提示行(provider 封顶 n、上游忽略 n,都走这里)。
+- 网关给了 `partial_failures`(§9.1)时,缺图的槽位变成红色虚线框,写
+  "This image failed" + `status: 原因`(三行截断,tooltip 看全)。图是紧凑返回的,
+  所以 `images.length` 之后的空槽按顺序对应各条失败。原因存在 run 的 `failures` 上,
+  重试时随新的 pending run 清掉。
 - 列数 > 2 时去掉角上的放大徽标(小格子放不下,点击和 hover 遮罩本来就能放大)。
 - 元信息行在 n > 1 时写 `· n=4`(原则 5)。
 - 大图预览的缩略图条:原来只在有参考图时出现,现在**同一次有多张输出**也出现,
@@ -517,8 +530,9 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
   显示/隐藏,默认显示,在 filmstrip 里切换时保持。mask 与原图像素尺寸完全一致,两层
   用同样的 `scale-down` 铺满同一个盒子就逐像素对齐,不需要测量。
 
-mock 后端的 prompt 带 `[partial]` 时只返回一半(向上取整),用来验证缺图槽位,
-与已有的 `[fail]` / `[slow]` 同一套约定。
+mock 后端(generations)的 prompt 带 `[partial]` 时只返回一半(向上取整)并附
+`partial_failures`,用来验证失败槽位;带 `[short]` 时同样少一半但不给原因,验证
+"No image returned" 槽位。与已有的 `[fail]` / `[slow]` 同一套约定。
 
 ### 9.3 仍然开着的
 

@@ -1864,6 +1864,7 @@ export default {
     "openResult": "Open generated image {{number}}",
     "resultAlt": "Generated image {{number}}",
     "emptyResult": "No image returned",
+    "imageFailed": "This image failed",
     "requestFailed": "Request failed",
     "runFailed": "Generation failed",
     "interruptedByReload": "Interrupted by a page reload",

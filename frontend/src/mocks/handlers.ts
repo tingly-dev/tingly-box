@@ -2617,14 +2617,22 @@ export const handlers = [
         await new Promise((r) => setTimeout(r, 600))
 
         // A prompt carrying `[partial]` gets back half of what it asked for
-        // (rounded up), the way a provider that caps n — or a Codex fan-out
-        // with a failed call — does, so the card's missing slots are
-        // exercisable too.
-        const returned = /\[partial\]/i.test(promptText) ? Math.ceil(n / 2) : n
+        // (rounded up), the way a Codex fan-out with failed calls does — with
+        // the gateway's `partial_failures` saying why — so the card's failed
+        // slots are exercisable too. `[short]` returns fewer with no reason,
+        // the way a provider that silently caps n does.
+        const partial = /\[partial\]/i.test(promptText)
+        const returned = partial || /\[short\]/i.test(promptText) ? Math.ceil(n / 2) : n
+        const partialFailures = partial
+            ? Array.from({ length: n - returned }, (_, i) => (i % 2 === 0
+                ? { status: 429, message: 'Rate limit reached for image generation' }
+                : { status: 502, message: 'codex returned no image: moderation_blocked: Your request was rejected by the safety system' }))
+            : []
 
         return HttpResponse.json({
             created: Math.floor(Date.now() / 1000),
             data: Array.from({ length: returned }, (_, i) => ({ url: makeSvgDataUrl(i) })),
+            ...(partialFailures.length > 0 ? { partial_failures: partialFailures } : {}),
         })
     }),
 

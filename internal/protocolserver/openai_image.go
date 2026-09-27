@@ -3,6 +3,7 @@ package protocolserver
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,7 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/sjson"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -134,7 +137,10 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	// Collects why individual images of an n > 1 request failed while the
+	// request itself succeeded (writeImagesResponse).
+	fwdCtx, imageFailures := client.WithImageCallFailures(c.Request.Context())
+	fc := forwarding.NewForwardContext(fwdCtx, provider)
 
 	// The OpenAI client wrapper handles vendor fragmentation internally:
 	// OpenAI-compatible providers go straight through the SDK, DashScope and
@@ -159,7 +165,55 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	// Persist generated images under the config image directory (best-effort).
 	ph.persistImageGeneration(&req, resp)
 
-	c.JSON(http.StatusOK, resp)
+	writeImagesResponse(c, resp, imageFailures)
+}
+
+// imagePartialFailure is one image of a multi-image request that did not come
+// back while the others did — the same status and client-safe message a
+// request failing outright would have carried.
+type imagePartialFailure struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+}
+
+// writeImagesResponse answers a successful images request. When some of the
+// images behind it failed (a gateway fan-out such as Codex's n > 1), the body
+// carries a `partial_failures` array next to `data`: without it the caller
+// only sees fewer images than it asked for, with no way to tell a rate limit
+// from a moderation block. It is an extension field, so OpenAI SDKs that do
+// not know it ignore it. See .design/image-mask.md §9.1.
+func writeImagesResponse(c *gin.Context, resp *openai.ImagesResponse, failures *client.ImageCallFailures) {
+	errs := failures.Errors()
+	if len(errs) == 0 {
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	reported := make([]imagePartialFailure, 0, len(errs))
+	for _, err := range errs {
+		failure := protocol.ClassifyUpstreamFailure(err, http.StatusBadGateway)
+		message := failure.Message
+		// The reason is read inside one image slot, next to its status: the
+		// upstream's own message says it; the SDK's "POST <url>: 429 Too Many
+		// Requests {raw json}" repeats the status around it.
+		var oaiErr *openai.Error
+		if errors.As(err, &oaiErr) && oaiErr.Message != "" {
+			message = oaiErr.Message
+		}
+		reported = append(reported, imagePartialFailure{Status: failure.Status, Message: message})
+	}
+
+	body, err := json.Marshal(resp)
+	if err == nil {
+		body, err = sjson.SetBytes(body, "partial_failures", reported)
+	}
+	if err != nil {
+		// The images are the payload; losing the annotation must not lose them.
+		logrus.Errorf("[ImageGen] Failed to attach partial failures to response: %v", err)
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
 }
 
 // persistImageGeneration saves generated images and their prompts under the

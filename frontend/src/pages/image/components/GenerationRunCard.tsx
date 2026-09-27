@@ -56,8 +56,8 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
     // One slot per requested image, from the moment the run starts: the card
     // has its final shape while it is pending, results land in their slots,
     // and a slot that stays empty is a missing image the user can see in
-    // place (a provider capped n, or one of Codex's parallel calls failed)
-    // rather than one that silently isn't there.
+    // place (a provider capped n, or one of Codex's parallel calls failed —
+    // then with the reason in it) rather than one that silently isn't there.
     const slotCount = Math.max(requested, run.images.length);
     const layout = runGridLayout(slotCount);
 
@@ -320,18 +320,28 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                     );
                                 }
                                 // An empty slot: still coming while the run is
-                                // pending, missing once it has landed.
+                                // pending, missing once it has landed — and when
+                                // the gateway said why that image failed, the
+                                // reason sits in the slot it left empty. Images
+                                // come back packed, so the empty slots after them
+                                // line up with the failures in order.
                                 const pending = run.status === 'pending';
+                                const failure = pending ? undefined : run.failures?.[index - run.images.length];
+                                const failureText = failure
+                                    ? `${failure.status ? `${failure.status}: ` : ''}${failure.message}`
+                                    : '';
                                 return (
                                     <Box
                                         key={`${run.id}-${index}`}
-                                        data-testid={pending ? 'imagegen-slot-pending' : 'imagegen-slot-missing'}
+                                        data-testid={pending
+                                            ? 'imagegen-slot-pending'
+                                            : failure ? 'imagegen-slot-failed' : 'imagegen-slot-missing'}
                                         sx={{
                                             minHeight: 0,
                                             borderRadius: 1,
                                             border: 1,
                                             borderStyle: 'dashed',
-                                            borderColor: 'divider',
+                                            borderColor: failure ? 'error.main' : 'divider',
                                             display: 'flex',
                                             flexDirection: 'column',
                                             alignItems: 'center',
@@ -350,6 +360,32 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                                     </Typography>
                                                 )}
                                             </>
+                                        ) : failure ? (
+                                            // The slot can be small (n up to 10), so the
+                                            // reason is clamped here and whole in the tooltip.
+                                            <Tooltip title={failureText}>
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, minWidth: 0, maxWidth: '100%' }}>
+                                                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                                        <ErrorOutline color="error" sx={{ fontSize: 16 }} />
+                                                        <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 500 }}>
+                                                            {t('playground.imageFailed', { defaultValue: 'This image failed' })}
+                                                        </Typography>
+                                                    </Stack>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            wordBreak: 'break-word',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 3,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        {failureText}
+                                                    </Typography>
+                                                </Box>
+                                            </Tooltip>
                                         ) : (
                                             <Typography variant="caption" sx={{ color: 'text.disabled' }}>
                                                 {t('playground.emptyResult', { defaultValue: 'No image returned' })}

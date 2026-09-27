@@ -1886,6 +1886,7 @@ export default {
     "openResult": "Открыть сгенерированное изображение {{number}}",
     "resultAlt": "Сгенерированное изображение {{number}}",
     "emptyResult": "Изображение не получено",
+    "imageFailed": "Это изображение не получилось",
     "requestFailed": "Запрос не выполнен",
     "runFailed": "Генерация не удалась",
     "interruptedByReload": "Прервано перезагрузкой страницы",

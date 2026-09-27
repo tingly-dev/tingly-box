@@ -67,6 +67,34 @@ func TestFanOutCodexImages_PartialFailureKeepsSuccesses(t *testing.T) {
 	assert.Len(t, resp.Data, 2)
 }
 
+// The failures a partial success swallowed reach the collector on the context,
+// so the server can tell the caller why images are missing.
+func TestFanOutCodexImages_PartialFailureRecordsReasons(t *testing.T) {
+	ctx, failures := WithImageCallFailures(context.Background())
+	var n atomic.Int64
+	resp, err := fanOutCodexImages(ctx, 3, func(ctx context.Context) (*openai.ImagesResponse, error) {
+		if n.Add(1) == 2 {
+			return nil, errors.New("rate limited")
+		}
+		return oneImage("ok", 1), nil
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Data, 2)
+	require.Len(t, failures.Errors(), 1)
+	assert.EqualError(t, failures.Errors()[0], "rate limited")
+}
+
+// A request that fails outright reports that as its error; nothing is left in
+// the collector to be mistaken for a partial success.
+func TestFanOutCodexImages_AllFailRecordsNothing(t *testing.T) {
+	ctx, failures := WithImageCallFailures(context.Background())
+	_, err := fanOutCodexImages(ctx, 2, func(ctx context.Context) (*openai.ImagesResponse, error) {
+		return nil, errors.New("upstream down")
+	})
+	require.Error(t, err)
+	assert.Empty(t, failures.Errors())
+}
+
 func TestFanOutCodexImages_AllFailReturnsError(t *testing.T) {
 	boom := errors.New("upstream down")
 	_, err := fanOutCodexImages(context.Background(), 3, func(ctx context.Context) (*openai.ImagesResponse, error) {

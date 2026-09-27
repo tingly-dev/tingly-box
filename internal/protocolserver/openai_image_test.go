@@ -1,15 +1,23 @@
 package protocolserver
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
@@ -100,5 +108,44 @@ func TestPersistImageGeneration(t *testing.T) {
 
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err))
+	})
+}
+
+// A response whose images partly failed carries why, next to the images that
+// did come back; one with no failures stays the plain OpenAI shape.
+func TestWriteImagesResponse_PartialFailures(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	resp := &openai.ImagesResponse{Created: 1, Data: []openai.Image{{B64JSON: "aGk="}}}
+
+	t.Run("no failures", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		_, failures := client.WithImageCallFailures(context.Background())
+		writeImagesResponse(c, resp, failures)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.False(t, gjson.GetBytes(w.Body.Bytes(), "partial_failures").Exists())
+		assert.Equal(t, "aGk=", gjson.GetBytes(w.Body.Bytes(), "data.0.b64_json").String())
+	})
+
+	t.Run("partial failures", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		_, failures := client.WithImageCallFailures(context.Background())
+		failures.Add(
+			fmt.Errorf("codex image edit failed: %w", &openai.Error{StatusCode: http.StatusTooManyRequests, Message: "Rate limit reached for image generation", Response: &http.Response{StatusCode: http.StatusTooManyRequests}}),
+			errors.New("codex returned no image: moderation_blocked: rejected by the safety system"),
+		)
+		writeImagesResponse(c, resp, failures)
+
+		body := w.Body.Bytes()
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "aGk=", gjson.GetBytes(body, "data.0.b64_json").String())
+		got := gjson.GetBytes(body, "partial_failures").Array()
+		require.Len(t, got, 2)
+		assert.EqualValues(t, http.StatusTooManyRequests, got[0].Get("status").Int())
+		assert.Equal(t, "Rate limit reached for image generation", got[0].Get("message").String())
+		assert.EqualValues(t, http.StatusBadGateway, got[1].Get("status").Int())
+		assert.Contains(t, got[1].Get("message").String(), "rejected by the safety system")
 	})
 }

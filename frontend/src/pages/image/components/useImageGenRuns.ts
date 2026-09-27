@@ -5,7 +5,7 @@ import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImageFailure, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 
@@ -35,6 +35,21 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, rej
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
 });
+
+// The gateway's `partial_failures` extension on an images response: why some
+// of the requested images failed while the rest came back. Not part of the
+// OpenAI schema, so it is read defensively off the raw body.
+const readPartialFailures = (response: unknown): ImageFailure[] | undefined => {
+    const raw = (response as { partial_failures?: unknown })?.partial_failures;
+    if (!Array.isArray(raw)) return undefined;
+    const failures = raw
+        .filter((item): item is { status?: unknown; message?: unknown } => !!item && typeof item === 'object')
+        .map((item) => ({
+            status: typeof item.status === 'number' ? item.status : undefined,
+            message: typeof item.message === 'string' ? item.message : '',
+        }));
+    return failures.length > 0 ? failures : undefined;
+};
 
 type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 
@@ -160,8 +175,9 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                     quality: request.quality,
                 }, { signal: controller.signal });
             const images = response.data ?? [];
+            const failures = readPartialFailures(response);
             updateRuns((currentRuns) => currentRuns.map((run) => (
-                run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
+                run.id === runId ? { ...run, images, failures, status: 'completed', error: undefined } : run
             )));
         } catch (error: any) {
             if (controller.signal.aborted) {

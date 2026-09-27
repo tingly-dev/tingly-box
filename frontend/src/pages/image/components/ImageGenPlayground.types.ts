@@ -68,6 +68,17 @@ export interface GenerationRun {
     // strip: silently removing it leaves the user with a toast that has already
     // gone and no record of what was asked.
     error?: string;
+    // Why some of the requested images did not come back when the run itself
+    // succeeded (the gateway's `partial_failures`, e.g. one of Codex's parallel
+    // calls was rate-limited). Each one is shown in a missing slot, so a short
+    // run says why rather than just showing empty frames.
+    failures?: ImageFailure[];
+}
+
+// One image of a run that failed while the others landed.
+export interface ImageFailure {
+    status?: number;
+    message: string;
 }
 
 export interface SelectedImage {

@@ -37,14 +37,61 @@ func codexImageCount(n param.Opt[int64]) int {
 	return int(n.Value)
 }
 
+// ImageCallFailures collects why individual calls of a multi-image request
+// failed when the request as a whole still succeeded. The client interface
+// returns one *openai.ImagesResponse and one error, and "error" means the
+// request failed — so a partial failure has no place in that shape. The server
+// layer installs a collector on the request context instead, and after a
+// successful call reads it to tell the caller why some images are missing
+// (see .design/image-mask.md §9.1).
+type ImageCallFailures struct {
+	mu   sync.Mutex
+	errs []error
+}
+
+type imageCallFailuresKey struct{}
+
+// WithImageCallFailures returns ctx carrying a fresh collector, and the
+// collector to read after the call returns.
+func WithImageCallFailures(ctx context.Context) (context.Context, *ImageCallFailures) {
+	f := &ImageCallFailures{}
+	return context.WithValue(ctx, imageCallFailuresKey{}, f), f
+}
+
+// Errors returns the recorded per-call failures, in call order.
+func (f *ImageCallFailures) Errors() []error {
+	if f == nil {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]error(nil), f.errs...)
+}
+
+// Add records failed calls. Safe for concurrent use and on a nil collector.
+func (f *ImageCallFailures) Add(errs ...error) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.errs = append(f.errs, errs...)
+}
+
+func imageCallFailuresFrom(ctx context.Context) *ImageCallFailures {
+	f, _ := ctx.Value(imageCallFailuresKey{}).(*ImageCallFailures)
+	return f
+}
+
 // fanOutCodexImages runs `one` n times (at most codexMaxParallelImageCalls at
 // once) and merges the results in call order.
 //
-// Partial failure returns what succeeded: the caller can see it got fewer
-// images than it asked for, and throwing away finished generations that were
-// already paid for would be the worse outcome. That includes the request
-// deadline firing while a later wave is still running — the finished waves
-// are kept. Only when every call fails is the request an error.
+// Partial failure returns what succeeded: throwing away finished generations
+// that were already paid for would be the worse outcome. That includes the
+// request deadline firing while a later wave is still running — the finished
+// waves are kept. Why the other calls failed goes to the context's
+// ImageCallFailures collector, so the caller is told, not just shown fewer
+// images. Only when every call fails is the request an error.
 func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context) (*openai.ImagesResponse, error)) (*openai.ImagesResponse, error) {
 	if n <= 1 {
 		return one(ctx)
@@ -71,10 +118,11 @@ func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context)
 	wg.Wait()
 
 	merged := &openai.ImagesResponse{}
-	var failures []error
+	var failures, callErrs []error
 	for i := 0; i < n; i++ {
 		if errs[i] != nil {
 			failures = append(failures, fmt.Errorf("image %d/%d: %w", i+1, n, errs[i]))
+			callErrs = append(callErrs, errs[i])
 			continue
 		}
 		mergeCodexImagesResponse(merged, results[i])
@@ -90,6 +138,7 @@ func fanOutCodexImages(ctx context.Context, n int, one func(ctx context.Context)
 		return nil, failures[0]
 	}
 	if len(failures) > 0 {
+		imageCallFailuresFrom(ctx).Add(callErrs...)
 		logrus.WithContext(ctx).Warnf("[Codex] %d of %d parallel image calls failed, returning %d images: %v",
 			len(failures), n, len(merged.Data), errors.Join(failures...))
 	} else {

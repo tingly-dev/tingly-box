@@ -224,3 +224,41 @@ func TestRewriteCodexPath_ResponsesProtocol(t *testing.T) {
 	assert.Equal(t, "/backend-api/codex/responses", path)
 	assert.Equal(t, codexProtocolResponsesSSE, protocol)
 }
+
+// n > 1 on the native edit endpoint, with one of the parallel calls rejected:
+// the other images still come back, and the rejection — with the upstream's
+// own status and message — lands in the context's collector for the server to
+// report, instead of only a log line.
+func TestCodexImagesEdit_FanOutPartialFailureIsReported(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if atomic.AddInt32(&hits, 1) == 2 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"Your request was rejected by the safety system","code":"moderation_blocked"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"created":1,"data":[{"b64_json":"aGk="}]}`))
+	}))
+	defer srv.Close()
+
+	oc := openai.NewClient(
+		option.WithBaseURL(srv.URL+"/backend-api/"),
+		option.WithAPIKey("test"),
+		option.WithHTTPClient(&http.Client{Transport: &codexRoundTripper{RoundTripper: http.DefaultTransport}}),
+	)
+	c := &CodexClient{OpenAIClient: &OpenAIClient{client: oc}}
+
+	req := openai.ImageEditParams{Prompt: "x", Model: "gpt-image-2", N: param.NewOpt[int64](3)}
+	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
+	ctx, failures := WithImageCallFailures(context.Background())
+	resp, err := c.ImagesEdit(ctx, req)
+	require.NoError(t, err)
+	assert.Len(t, resp.Data, 2)
+
+	require.Len(t, failures.Errors(), 1)
+	var oaiErr *openai.Error
+	require.ErrorAs(t, failures.Errors()[0], &oaiErr)
+	assert.Equal(t, http.StatusBadRequest, oaiErr.StatusCode)
+	assert.Equal(t, "Your request was rejected by the safety system", oaiErr.Message)
+}
