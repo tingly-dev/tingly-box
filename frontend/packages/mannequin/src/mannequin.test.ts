@@ -18,6 +18,12 @@ import {
     CAMERA_ELEVATIONS,
     cameraCellOf,
     cameraTurn,
+    DEFAULT_LENS_DISTANCE,
+    figureCenter,
+    figureLens,
+    LENSES,
+    lensOf,
+    setFigureLens,
     createFigure,
     distanceToSegment,
     figureBounds,
@@ -892,7 +898,7 @@ describe('the camera', () => {
         // Every row must fit inside the pitch clamp, or clicking it would land
         // the figure somewhere the grid does not highlight.
         for (const elevation of CAMERA_ELEVATIONS) {
-            expect(Math.abs(elevation.pitch)).toBeLessThanOrEqual(MAX_VIEW_PITCH);
+            expect(Math.abs(elevation.height)).toBeLessThanOrEqual(MAX_VIEW_PITCH);
             for (const azimuth of CAMERA_AZIMUTHS) {
                 const figure = setFigureTurn(createFigure('standing', DIMS), cameraTurn(elevation, azimuth));
                 expect(cameraCellOf(figure)).toEqual({ elevation: elevation.key, azimuth });
@@ -915,6 +921,65 @@ describe('the camera', () => {
         const span = Math.abs(joints.shoulderL.x - joints.shoulderR.x);
         const front = projectFigure(createFigure('standing', DIMS, undefined, 0, cameraTurn(eye, 0)));
         expect(span).toBeLessThan(Math.abs(front.shoulderL.x - front.shoulderR.x) * 0.15);
+    });
+
+    it('puts a high-angle camera above the figure', () => {
+        // Seen from above, the head is nearer the lens than the feet — and from
+        // below, the other way round. The sign is the whole meaning of the row.
+        const at = (key: string) => {
+            const row = CAMERA_ELEVATIONS.find((r) => r.key === key)!;
+            return projectFigure(createFigure('standing', DIMS, undefined, 0, cameraTurn(row, 0)));
+        };
+        const high = at('high');
+        expect(high.head.scale).toBeGreaterThan(high.ankleL.scale);
+        const low = at('low');
+        expect(low.head.scale).toBeLessThan(low.ankleL.scale);
+        const above = projectFigure(createFigure('standing', DIMS, undefined, 0, VIEW_PRESETS.above));
+        expect(above.head.scale).toBeGreaterThan(above.ankleL.scale);
+    });
+
+    it('opens a sketch saved before lenses with the camera it was drawn with', () => {
+        const figure = createFigure('standing', DIMS);
+        expect(figure.lens).toBeUndefined();
+        expect(figureLens(figure)).toBe(DEFAULT_LENS_DISTANCE);
+        expect(lensOf(figure)).toBe('standard');
+        expect(projectionOf(figure).distance).toBeCloseTo(figureUnit(figure) * DEFAULT_LENS_DISTANCE);
+    });
+
+    it('changes lens without moving or resizing the figure', () => {
+        // A dolly-zoom: the torso stays the size it was, only perspective moves.
+        const figure = createFigure('reaching', DIMS);
+        for (const lens of LENSES) {
+            const next = setFigureLens(figure, lens.distance);
+            expect(lensOf(next)).toBe(lens.key);
+            expect(figureCenter(next).x).toBeCloseTo(figureCenter(figure).x, 6);
+            expect(figureCenter(next).y).toBeCloseTo(figureCenter(figure).y, 6);
+            expect(figureUnit(next)).toBeCloseTo(figureUnit(figure), 6);
+        }
+        expect(figureLens(setFigureLens(figure, 0.1))).toBe(LENSES[0].distance);
+        expect(figureLens(setFigureLens(figure, 999))).toBe(LENSES[LENSES.length - 1].distance);
+    });
+
+    it('exaggerates perspective at a wide lens and flattens it at a long one', () => {
+        // Seen from a worm's eye the feet are the nearest thing to the lens:
+        // how much bigger than the torso they get is the whole point of a lens.
+        const worm = CAMERA_ELEVATIONS.find((row) => row.key === 'worm')!;
+        const base = createFigure('standing', DIMS, undefined, 0, cameraTurn(worm, 0));
+        // Near-to-far size ratio: how much bigger the feet are drawn than the
+        // head. The torso itself stays at scale 1 whatever the lens.
+        const spread = (distance: number) => {
+            const scales = Object.values(projectFigure(setFigureLens(base, distance))).map((p) => p.scale);
+            return Math.max(...scales) / Math.min(...scales);
+        };
+        const spreads = LENSES.map((lens) => spread(lens.distance));
+        for (let i = 1; i < spreads.length; i += 1) expect(spreads[i]).toBeLessThan(spreads[i - 1]);
+        expect(spreads[0]).toBeGreaterThan(1.6);
+        expect(spreads[spreads.length - 1]).toBeLessThan(1.1);
+    });
+
+    it('keeps the lens when the pose is swapped', () => {
+        const figure = setFigureLens(createFigure('standing', DIMS), LENSES[0].distance);
+        expect(figureLens(applyPreset(figure, 'sitting', DIMS))).toBe(LENSES[0].distance);
     });
 
     it('mirrors the view along with the body', () => {

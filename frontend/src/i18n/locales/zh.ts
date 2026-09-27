@@ -1958,7 +1958,7 @@ export default {
           "add": "添加人形",
           "presets": "姿势",
           "views": "机位",
-          "viewValue": "转身 {{yaw}}° · 机位 {{pitch}}°",
+          "viewValue": "转身 {{yaw}}° · 机位高度 {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",
           "group": {
             "standing": "站姿",
@@ -2018,7 +2018,17 @@ export default {
               "side": "侧面",
               "back": "背面"
             },
-            "cell": "{{elevation}} · 转身 {{yaw}}°"
+            "cell": "{{elevation}} · 转身 {{yaw}}°",
+            "lensTitle": "镜头",
+            "lensHint": "近 → 远",
+            "lensDistance": "{{distance}} 倍身高",
+            "lens": {
+              "ultraWide": "超广角",
+              "wide": "广角",
+              "standard": "标准",
+              "tele": "长焦",
+              "flat": "超长焦"
+            }
           },
                     "flip": "镜像翻转",
           "remove": "删除人形",

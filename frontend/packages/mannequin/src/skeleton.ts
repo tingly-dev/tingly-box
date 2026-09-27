@@ -45,6 +45,10 @@ export interface PoseFigure {
     shade?: number;
     // Optional for the same reason: a sketch saved flat opens facing front.
     turn?: FigureTurn;
+    // How far the camera stands, in body heights (`figureUnit`). Optional so a
+    // sketch saved before lenses existed opens with the camera it was drawn
+    // with — see DEFAULT_LENS_DISTANCE in camera.ts.
+    lens?: number;
 }
 
 export interface Rect { x: number; y: number; width: number; height: number }

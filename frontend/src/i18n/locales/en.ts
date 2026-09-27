@@ -1962,7 +1962,7 @@ export default {
           "add": "Add figure",
           "presets": "Poses",
           "views": "Camera",
-          "viewValue": "Turned {{yaw}}° · camera {{pitch}}°",
+          "viewValue": "Turned {{yaw}}° · camera height {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",
           "group": {
             "standing": "Standing",
@@ -2022,7 +2022,17 @@ export default {
               "side": "Profile",
               "back": "Back"
             },
-            "cell": "{{elevation}} · turned {{yaw}}°"
+            "cell": "{{elevation}} · turned {{yaw}}°",
+            "lensTitle": "Lens",
+            "lensHint": "near → far",
+            "lensDistance": "{{distance}}× height",
+            "lens": {
+              "ultraWide": "Ultra-wide",
+              "wide": "Wide",
+              "standard": "Standard",
+              "tele": "Telephoto",
+              "flat": "Flat"
+            }
           },
                     "flip": "Mirror figure",
           "remove": "Remove figure",

@@ -46,6 +46,11 @@ import {
     figureTurn,
     flipFigure,
     isTurnHandleHit,
+    setFigureLens,
+    cameraHeightOf,
+    figureLens,
+    lensOf,
+    DEFAULT_LENS_DISTANCE,
     setFigureTurn,
     turnFigure,
     TURN_DEGREES_PER_PIXEL,
@@ -396,6 +401,15 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         updateFigure(selectedFigure.id, (figure) => setFigureTurn(figure, turn));
     }, [selectedFigure, snapshot, updateFigure]);
 
+    // The popover stays open on a lens pick: lens and position are chosen
+    // together, and the grid re-renders at the new lens so the next pick is
+    // made looking at what it will give.
+    const handleLens = useCallback((distance: number) => {
+        if (!selectedFigure) return;
+        snapshot();
+        updateFigure(selectedFigure.id, (figure) => setFigureLens(figure, distance));
+    }, [selectedFigure, snapshot, updateFigure]);
+
     const handleToolChange = useCallback((next: Tool) => {
         setTool(next);
         if (next !== 'pose') return;
@@ -744,8 +758,14 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                             {t('playground.sketch.pose.viewShort', {
                                                 defaultValue: '{{yaw}}° / {{pitch}}°',
                                                 yaw: Math.round(figureTurn(selectedFigure).yaw),
-                                                pitch: Math.round(figureTurn(selectedFigure).pitch),
+                                                pitch: Math.round(cameraHeightOf(figureTurn(selectedFigure))),
                                             })}
+                                            {/* The lens only when it is not the default:
+                                                most figures never change it, and a
+                                                third number on every button is noise. */}
+                                            {figureLens(selectedFigure) !== DEFAULT_LENS_DISTANCE
+                                                ? ` · ${t(`playground.sketch.pose.camera.lens.${lensOf(selectedFigure) ?? 'standard'}`, { defaultValue: 'Lens' })}`
+                                                : null}
                                         </Button>
                                         <Tooltip title={t('playground.sketch.pose.flip', { defaultValue: 'Mirror figure' })}>
                                             <IconButton
@@ -945,6 +965,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             <PoseLibraryPopover
                 anchorEl={libraryAnchor}
                 turn={selectedFigure ? figureTurn(selectedFigure) : { yaw: 0, pitch: 0 }}
+                lens={selectedFigure ? figureLens(selectedFigure) : DEFAULT_LENS_DISTANCE}
                 onClose={() => setLibraryAnchor(null)}
                 onPick={handlePreset}
             />
@@ -953,6 +974,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 figure={selectedFigure}
                 onClose={() => setViewAnchor(null)}
                 onPick={handleView}
+                onPickLens={handleLens}
             />
         </Dialog>
     );

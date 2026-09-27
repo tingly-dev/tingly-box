@@ -1,4 +1,4 @@
-import { projectionOf, rotateView } from './camera';
+import { MAX_LENS_DISTANCE, MIN_LENS_DISTANCE, projectionOf, rotateView } from './camera';
 import { JOINT_KEYS, figureBounds, figureCenter, centerFigureAt, figureTurn, mapJoints, type FigureTurn, type JointKey, type PoseFigure } from './internal';
 import { add3, rad, sub3, zOf, type Vec3 } from './vec3';
 
@@ -13,8 +13,10 @@ export const VIEW_PRESETS: Record<ViewPresetKey, FigureTurn> = {
     threeQuarter: { yaw: 35, pitch: 8 },
     side: { yaw: 82, pitch: 4 },
     back: { yaw: 180, pitch: 0 },
-    above: { yaw: 28, pitch: 34 },
-    below: { yaw: 28, pitch: -30 },
+    // Pitch tips the body's top toward the camera when negative, so "above"
+    // is a negative pitch — see cameraHeightOf.
+    above: { yaw: 28, pitch: -34 },
+    below: { yaw: 28, pitch: 30 },
 };
 
 export const VIEW_PRESET_KEYS: readonly ViewPresetKey[] = [
@@ -111,19 +113,27 @@ export const viewPresetOf = (figure: PoseFigure): ViewPresetKey | null => {
 // photographer thinks "low angle, from the side", not "preset #7", and the
 // grid answers both questions at once instead of hiding them in one list.
 //
-// The elevation rows are the standard shot heights. Their pitch stays inside
-// MAX_VIEW_PITCH: straight down the body's axis there is nothing to read.
+// The elevation rows are the standard shot heights, stated as how high the
+// camera stands (+ above the figure, − below), because that is what a
+// photographer means by "high angle". The turn's pitch is the other way round
+// — a negative pitch tips the head toward the lens, which is the camera
+// looking down — and `cameraHeightOf` is the one place that converts. Every
+// height stays inside MAX_VIEW_PITCH: straight down the body's axis there is
+// nothing to read.
 export type CameraElevationKey = 'overhead' | 'high' | 'eye' | 'low' | 'worm';
 
-export interface CameraElevation { key: CameraElevationKey; pitch: number }
+export interface CameraElevation { key: CameraElevationKey; height: number }
 
 export const CAMERA_ELEVATIONS: readonly CameraElevation[] = [
-    { key: 'overhead', pitch: 70 },
-    { key: 'high', pitch: 35 },
-    { key: 'eye', pitch: 0 },
-    { key: 'low', pitch: -30 },
-    { key: 'worm', pitch: -60 },
+    { key: 'overhead', height: 70 },
+    { key: 'high', height: 35 },
+    { key: 'eye', height: 0 },
+    { key: 'low', height: -30 },
+    { key: 'worm', height: -60 },
 ];
+
+// Camera height in degrees, + above the figure. What every readout shows.
+export const cameraHeightOf = (turn: FigureTurn): number => (turn.pitch === 0 ? 0 : -turn.pitch);
 
 // All the way round in 45° steps. Both sides, not one side plus the mirror
 // button: mirroring flips the pose too, and a figure raising its right arm
@@ -133,17 +143,26 @@ export const CAMERA_AZIMUTHS: readonly number[] = [-135, -90, -45, 0, 45, 90, 13
 
 export const cameraTurn = (elevation: CameraElevation, azimuth: number): FigureTurn => ({
     yaw: azimuth,
-    pitch: elevation.pitch,
+    pitch: elevation.height === 0 ? 0 : -elevation.height,
 });
 
 // Which grid cell a figure is at, or null once it has been turned by hand —
 // same rule as viewPresetOf: never round an arbitrary angle to a name.
 export const cameraCellOf = (figure: PoseFigure): { elevation: CameraElevationKey; azimuth: number } | null => {
     const turn = figureTurn(figure);
-    const elevation = CAMERA_ELEVATIONS.find((row) => Math.abs(turn.pitch - row.pitch) < 0.5);
+    const elevation = CAMERA_ELEVATIONS.find((row) => Math.abs(cameraHeightOf(turn) - row.height) < 0.5);
     if (!elevation) return null;
     const azimuth = CAMERA_AZIMUTHS.find((yaw) => Math.abs(wrapYaw(turn.yaw - yaw)) < 0.5);
     return azimuth === undefined ? null : { elevation: elevation.key, azimuth };
+};
+
+
+// Moving the camera in or out. The joints do not change — only the projection
+// does — but the projected silhouette does, so, like a turn, it is re-centred
+// where it was: changing lens must not walk the figure across the canvas.
+export const setFigureLens = (figure: PoseFigure, distance: number): PoseFigure => {
+    const lens = Math.max(MIN_LENS_DISTANCE, Math.min(MAX_LENS_DISTANCE, distance));
+    return centerFigureAt({ ...figure, lens }, figureCenter(figure));
 };
 
 

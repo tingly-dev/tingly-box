@@ -1987,7 +1987,7 @@ export default {
           "add": "Добавить фигуру",
           "presets": "Позы",
           "views": "Ракурс",
-          "viewValue": "Поворот {{yaw}}° · камера {{pitch}}°",
+          "viewValue": "Поворот {{yaw}}° · высота камеры {{pitch}}°",
           "viewShort": "{{yaw}}° / {{pitch}}°",
           "group": {
             "standing": "Стоя",
@@ -2047,7 +2047,17 @@ export default {
               "side": "Профиль",
               "back": "Сзади"
             },
-            "cell": "{{elevation}} · поворот {{yaw}}°"
+            "cell": "{{elevation}} · поворот {{yaw}}°",
+            "lensTitle": "Объектив",
+            "lensHint": "близко → далеко",
+            "lensDistance": "{{distance}}× роста",
+            "lens": {
+              "ultraWide": "Сверхширокий",
+              "wide": "Широкий",
+              "standard": "Стандартный",
+              "tele": "Телевик",
+              "flat": "Плоский"
+            }
           },
                     "flip": "Отразить фигуру",
           "remove": "Удалить фигуру",

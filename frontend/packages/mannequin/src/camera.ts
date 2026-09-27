@@ -22,11 +22,44 @@ export const rotateView = (point: Vec3, turn: FigureTurn): Vec3 => {
 };
 
 
-// How far the eye sits from the figure, in figure units. Low enough that a
-// limb reaching toward the camera visibly grows and a turned torso visibly
-// foreshortens; high enough that a mannequin never goes fish-eye. Perspective
-// is the whole point: an orthographic projection of a 3D pose still reads flat.
-const VIEW_DISTANCE_RATIO = 3.4;
+// How far the eye sits from the figure, in figure units (body heights). This
+// is the lens: perspective comes from distance, not from focal length, and the
+// projection keeps the torso's depth at scale 1 whatever the distance — so
+// moving the camera in is a dolly-zoom. The figure stays the size it was on the
+// canvas and only the perspective changes: near limbs balloon and far ones
+// shrink at a wide angle, everything flattens toward a silhouette at a long
+// one. That is exactly the choice a photographer is making with a lens, and
+// the part of it that matters for a pose reference.
+//
+// The default is the distance every figure was drawn at before lenses
+// existed: low enough that a limb reaching toward the camera visibly grows,
+// high enough that a mannequin never goes fish-eye.
+export const DEFAULT_LENS_DISTANCE = 3.4;
+
+export type LensKey = 'ultraWide' | 'wide' | 'standard' | 'tele' | 'flat';
+
+export interface Lens { key: LensKey; distance: number }
+
+// Ordered near → far. The near end stops where `MAX_NEAR_RATIO` would start
+// clamping a hand held out at arm's length; the far end is as good as
+// orthographic — past it nothing changes that anyone could see.
+export const LENSES: readonly Lens[] = [
+    { key: 'ultraWide', distance: 1.3 },
+    { key: 'wide', distance: 2.1 },
+    { key: 'standard', distance: DEFAULT_LENS_DISTANCE },
+    { key: 'tele', distance: 6 },
+    { key: 'flat', distance: 14 },
+];
+
+export const MIN_LENS_DISTANCE = LENSES[0].distance;
+export const MAX_LENS_DISTANCE = LENSES[LENSES.length - 1].distance;
+
+export const figureLens = (figure: PoseFigure): number => figure.lens ?? DEFAULT_LENS_DISTANCE;
+
+// Which named lens a figure has, or null for a distance set some other way.
+export const lensOf = (figure: PoseFigure): LensKey | null =>
+    LENSES.find((lens) => Math.abs(lens.distance - figureLens(figure)) < 1e-6)?.key ?? null;
+
 // A joint dragged almost into the lens would project to infinity. Clamped well
 // before that: the figure stays on the canvas whatever the pose.
 const MAX_NEAR_RATIO = 0.55;
@@ -51,7 +84,7 @@ export const projectionOf = (figure: PoseFigure): Projection => {
             y: (neck.y + hip.y) / 2,
             z: (zOf(neck) + zOf(hip)) / 2,
         },
-        distance: figureUnit(figure) * VIEW_DISTANCE_RATIO,
+        distance: figureUnit(figure) * figureLens(figure),
     };
 };
 

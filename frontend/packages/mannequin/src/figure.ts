@@ -72,7 +72,9 @@ export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Siz
     // Matched on `figureUnit`, the body, not on the bounding box: box height
     // changes with the pose (a crouch is shorter than a stand), so matching
     // boxes would resize the person every time the pose changed.
-    return { ...scaleFigure(fresh, figureUnit(figure) / figureUnit(fresh)), id: figure.id };
+    // The lens is camera too, and rides along with the turn.
+    const scaled = scaleFigure({ ...fresh, lens: figure.lens }, figureUnit(figure) / figureUnit(fresh));
+    return { ...centerFigureAt(scaled, figureCenter(figure)), id: figure.id };
 };
 
 
@@ -84,7 +86,8 @@ export const applyPreset = (figure: PoseFigure, preset: PosePresetKey, dims: Siz
 // as one person in thirty poses.
 export const fitFigureIntoTile = (figure: PoseFigure, box: Size, pad = 0): PoseFigure => {
     const fitted = fitFigureInto(figure, box, pad);
-    const cap = figureUnit(fitFigureInto(createFigure('standing', box, undefined, 0, figureTurn(figure)), box, pad));
+    const standing = { ...createFigure('standing', box, undefined, 0, figureTurn(figure)), lens: figure.lens };
+    const cap = figureUnit(fitFigureInto(standing, box, pad));
     const unit = figureUnit(fitted);
     if (unit <= cap) return fitted;
     const center = figureCenter(fitted);
