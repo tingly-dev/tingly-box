@@ -1928,6 +1928,40 @@ export default {
       "referenceHint": "第一张图上着色的区域是模型可以改的地方 · 通过 images/edits 发送",
       "strandedHint": "只有第一张图的蒙版会被发送"
     },
+    "suggest": {
+      "title": "建议",
+      "pose": {
+        "withCamera": "{{pose}}{{camera}}",
+        "label": "姿态说明 · 图 {{n}}",
+        "skeleton": "图 {{n}} 是 OpenPose 姿态骨架：让人物摆出相同的姿势，不要画出骨架本身。",
+        "mannequin": "图 {{n}} 中的灰色人偶只是姿势参考：让人物摆出相同的姿势，不要画出人偶本身。"
+      },
+      "shot": {
+        "camera": "机位：{{camera}}。",
+        "separator": "、",
+        "height": {
+          "overhead": "顶视俯拍",
+          "high": "俯拍",
+          "eye": "平视",
+          "low": "仰拍",
+          "worm": "极低角度仰拍"
+        },
+        "side": {
+          "front": "正面",
+          "threeQuarter": "四分之三侧面",
+          "side": "侧面",
+          "threeQuarterBack": "四分之三背面",
+          "back": "背面"
+        },
+        "lens": {
+          "ultraWide": "超广角镜头",
+          "wide": "广角镜头",
+          "standard": "标准镜头",
+          "tele": "长焦镜头",
+          "flat": "超长焦镜头，透视压缩"
+        }
+      }
+    },
     "sketch": {
       "action": "手绘",
       "editAction": "修改草图",
@@ -1953,6 +1987,13 @@ export default {
       "update": "更新草图",
       "failed": "无法导出草图",
       "promptPlaceholder": "描述这张草图应该变成什么…",
+      "poseAs": {
+        "label": "人形发送为",
+        "skeleton": "骨架",
+        "mannequin": "人偶",
+        "skeletonHint": "OpenPose 骨架——图像模型学过的姿态图，会被当作姿势来读，而不是一个要画出来的人",
+        "mannequinHint": "你看到的灰色人偶——有些模型会把它原样画进结果"
+      },
       "pose": {
           "tool": "人形",
           "add": "添加人形",

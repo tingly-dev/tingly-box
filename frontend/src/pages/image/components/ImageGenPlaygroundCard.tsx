@@ -42,6 +42,8 @@ import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
+import PromptSuggestionRow from './PromptSuggestionRow';
+import { insertSuggestion, promptSuggestionsFor } from './promptSuggestions';
 import type {
     GenerationRun,
     ImportedImage,
@@ -162,6 +164,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             ...(ref.mask ? { maskSrc: ref.mask.previewUrl } : {}),
         };
     }, [referenceImages, t]);
+
+    // What the panel knows about the references that the model cannot see —
+    // offered beside the prompt, never written into it.
+    const promptSuggestions = useMemo(() => promptSuggestionsFor(referenceImages, t), [referenceImages, t]);
+
     const lightboxReferences = useMemo(() => ({
         srcs: referenceImages.map((ref) => ref.previewUrl),
         select: referenceSelection,
@@ -647,6 +654,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     scrollbarWidth: 'thin',
                                 },
                             }}
+                        />
+
+                        <PromptSuggestionRow
+                            suggestions={promptSuggestions}
+                            prompt={prompt}
+                            onInsert={(suggestion) => setPrompt((current) => insertSuggestion(current, suggestion.text))}
                         />
 
                         <Box

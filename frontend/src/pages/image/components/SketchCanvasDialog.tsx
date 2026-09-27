@@ -70,6 +70,8 @@ import {
     type PosePresetKey,
     type FigureTurn,
     drawFigure,
+    drawOpenpose,
+    OPENPOSE_BACKGROUND,
 } from '@tingly/mannequin';
 
 type Tool = 'pen' | 'eraser' | 'pose';
@@ -83,7 +85,23 @@ export interface SketchLayers {
     // Pixels the sketch was opened on top of and cannot re-derive: a sketch
     // flattened by an older build. Normally null.
     backdrop: string | null;
+    // How the figures are drawn into the picture the model gets. Optional: a
+    // sketch saved before the choice existed was sent as the mannequin, and
+    // re-opening it must not quietly change what it sends.
+    poseAs?: PoseOutput;
 }
+
+// Two readers, two pictures of one pose. The mannequin is for the person
+// posing it; the skeleton (OpenPose) is what image models have learned to
+// read as "a pose", where the shaded mannequin reads as a body to keep. The
+// choice stays open for comparing models — see .design/sketch-canvas.md §4.10.
+export type PoseOutput = 'skeleton' | 'mannequin';
+export const DEFAULT_POSE_OUTPUT: PoseOutput = 'skeleton';
+
+// How visible the mannequin stays under the skeleton while editing: enough to
+// read the body (which way it faces, what is in front), faint enough that the
+// skeleton reads as the thing being sent.
+const MANNEQUIN_GHOST_ALPHA = 0.35;
 
 // Everything the canvas holds. Both layers are lists and the backdrop is one
 // reference, so a whole-state undo frame costs a few bytes — no reason for the
@@ -186,6 +204,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
     const [strokes, setStrokes] = useState<Stroke[]>([]);
     const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
     const [figures, setFigures] = useState<PoseFigure[]>([]);
+    const [poseAs, setPoseAs] = useState<PoseOutput>(DEFAULT_POSE_OUTPUT);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [libraryAnchor, setLibraryAnchor] = useState<HTMLElement | null>(null);
     const [viewAnchor, setViewAnchor] = useState<HTMLElement | null>(null);
@@ -256,6 +275,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         setStrokes(strokesToOpen);
         setBackdrop(null);
         setFigures(figuresToOpen);
+        setPoseAs(initial ? initial.poseAs ?? 'mannequin' : DEFAULT_POSE_OUTPUT);
         // Re-opening a sketch that has one figure lands on the figure tool
         // with that figure selected: the handles are the answer to "is this
         // still posable?", so they should be on screen before the first click.
@@ -320,13 +340,22 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
         const ctx = overlayEl?.getContext('2d');
         if (!ctx) return;
         ctx.clearRect(0, 0, dims.width, dims.height);
+        // Sending the skeleton, the mannequin stays as a ghost beneath it: the
+        // skeleton alone is hard for a person to read (which way is it facing,
+        // which arm is in front), and the ghost is what makes it posable. What
+        // is drawn at full strength is what the model gets.
+        const skeleton = poseAs === 'skeleton';
         for (const figure of figures) {
+            ctx.save();
+            if (skeleton) ctx.globalAlpha = MANNEQUIN_GHOST_ALPHA;
             drawFigure(ctx, figure, { selected: tool === 'pose' && figure.id === selectedId });
+            ctx.restore();
+            if (skeleton) drawOpenpose(ctx, figure);
         }
         if (tool === 'pose' && selectedFigure) {
             drawFigureHandles(ctx, selectedFigure, toCanvasPx(HANDLE_RADIUS_PX));
         }
-    }, [open, overlayEl, dims, figures, selectedId, selectedFigure, tool, toCanvasPx]);
+    }, [open, overlayEl, dims, figures, poseAs, selectedId, selectedFigure, tool, toCanvasPx]);
 
     // Whatever the next action is about to change, the frame is the whole
     // state as it stands now.
@@ -649,8 +678,21 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             showNotification(t('playground.sketch.failed', { defaultValue: 'Could not export the sketch' }), 'error');
             return;
         }
-        ctx.drawImage(canvas, 0, 0);
-        for (const figure of figures) drawFigure(ctx, figure);
+        const skeleton = poseAs === 'skeleton' && figures.length > 0;
+        if (skeleton && strokes.length === 0 && !backdrop) {
+            // Nothing but figures: a plain OpenPose map, black ground and all,
+            // exactly the picture a model has seen as a pose control. With
+            // strokes the skeleton goes over the drawing instead — the
+            // drawing is the other half of what is being asked for.
+            ctx.fillStyle = OPENPOSE_BACKGROUND;
+            ctx.fillRect(0, 0, dims.width, dims.height);
+        } else {
+            ctx.drawImage(canvas, 0, 0);
+        }
+        for (const figure of figures) {
+            if (skeleton) drawOpenpose(ctx, figure);
+            else drawFigure(ctx, figure);
+        }
         output.toBlob((blob) => {
             if (!blob) {
                 showNotification(t('playground.sketch.failed', { defaultValue: 'Could not export the sketch' }), 'error');
@@ -661,10 +703,10 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 previewUrl: output.toDataURL('image/png'),
                 // The layers travel with the result, as data rather than
                 // pixels: this is what makes a saved sketch re-editable.
-                layers: { size: dims, strokes, figures, backdrop: backdrop?.dataUrl ?? null },
+                layers: { size: dims, strokes, figures, backdrop: backdrop?.dataUrl ?? null, poseAs },
             });
         }, 'image/png');
-    }, [backdrop, canvasEl, dims, figures, onSubmit, showNotification, strokes, t]);
+    }, [backdrop, canvasEl, dims, figures, onSubmit, poseAs, showNotification, strokes, t]);
 
     const toolLabel = (key: Tool) => {
         if (key === 'pen') return t('playground.sketch.pen', { defaultValue: 'Pen' });
@@ -953,6 +995,34 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                 </Stack>
             </DialogContent>
             <DialogActions sx={{ px: 2, py: 1.5 }}>
+                {/* What the figures become in the picture that is sent. It sits
+                    next to the button that sends it because that is the only
+                    moment it matters, and only when there is a figure. */}
+                {figures.length > 0 && (
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mr: 'auto' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {t('playground.sketch.poseAs.label', { defaultValue: 'Send figures as' })}
+                        </Typography>
+                        <ToggleButtonGroup
+                            size="small"
+                            exclusive
+                            value={poseAs}
+                            onChange={(_, next: PoseOutput | null) => { if (next) setPoseAs(next); }}
+                            aria-label={t('playground.sketch.poseAs.label', { defaultValue: 'Send figures as' })}
+                        >
+                            <Tooltip title={t('playground.sketch.poseAs.skeletonHint', { defaultValue: 'An OpenPose skeleton — the pose picture image models are trained to read as a pose, not as a person to draw' })}>
+                                <ToggleButton value="skeleton" sx={{ textTransform: 'none', py: 0.25, px: 1.25 }}>
+                                    {t('playground.sketch.poseAs.skeleton', { defaultValue: 'Skeleton' })}
+                                </ToggleButton>
+                            </Tooltip>
+                            <Tooltip title={t('playground.sketch.poseAs.mannequinHint', { defaultValue: 'The grey mannequin as you see it — some models copy it into the picture' })}>
+                                <ToggleButton value="mannequin" sx={{ textTransform: 'none', py: 0.25, px: 1.25 }}>
+                                    {t('playground.sketch.poseAs.mannequin', { defaultValue: 'Mannequin' })}
+                                </ToggleButton>
+                            </Tooltip>
+                        </ToggleButtonGroup>
+                    </Stack>
+                )}
                 <Button onClick={onClose}>
                     {t('playground.sketch.cancel', { defaultValue: 'Cancel' })}
                 </Button>

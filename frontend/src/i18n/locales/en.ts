@@ -1932,6 +1932,40 @@ export default {
       "referenceHint": "The tinted area of the first image is what the model may change · sent via images/edits",
       "strandedHint": "only the first image\u2019s mask is sent"
     },
+    "suggest": {
+      "title": "Suggestions",
+      "pose": {
+        "withCamera": "{{pose}} {{camera}}",
+        "label": "Pose note · image {{n}}",
+        "skeleton": "Image {{n}} is an OpenPose pose skeleton: give the person the same pose, and don't draw the skeleton itself.",
+        "mannequin": "The grey mannequin in image {{n}} is only a pose reference: give the person the same pose, and don't draw the mannequin."
+      },
+      "shot": {
+        "camera": "Camera: {{camera}}.",
+        "separator": ", ",
+        "height": {
+          "overhead": "top-down shot",
+          "high": "high-angle shot",
+          "eye": "eye-level shot",
+          "low": "low-angle shot",
+          "worm": "worm's-eye view"
+        },
+        "side": {
+          "front": "front view",
+          "threeQuarter": "three-quarter view",
+          "side": "side profile",
+          "threeQuarterBack": "three-quarter back view",
+          "back": "seen from behind"
+        },
+        "lens": {
+          "ultraWide": "ultra-wide-angle lens",
+          "wide": "wide-angle lens",
+          "standard": "standard lens",
+          "tele": "telephoto lens",
+          "flat": "long telephoto lens, flattened perspective"
+        }
+      }
+    },
     "sketch": {
       "action": "Sketch",
       "editAction": "Edit sketch",
@@ -1957,6 +1991,13 @@ export default {
       "update": "Update sketch",
       "failed": "Could not export the sketch",
       "promptPlaceholder": "Describe what this sketch should become…",
+      "poseAs": {
+        "label": "Send figures as",
+        "skeleton": "Skeleton",
+        "mannequin": "Mannequin",
+        "skeletonHint": "An OpenPose skeleton — the pose picture image models are trained to read as a pose, not as a person to draw",
+        "mannequinHint": "The grey mannequin as you see it — some models copy it into the picture"
+      },
       "pose": {
           "tool": "Figure",
           "add": "Add figure",
