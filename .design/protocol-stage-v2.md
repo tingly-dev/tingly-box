@@ -149,9 +149,11 @@ Guardrails 与 MCP 只在"经 IR 往返能稳定作用"的协议对上支持。�
 |---|---|---|
 | Beta / V1 → 任意目标 | 支持 | 源协议即 IR（V1 边缘升降级无损，已验证） |
 | Chat / Responses → Anthropic | 支持 | 转换本来就要做，Stage 不增加往返 |
-| Chat→Chat、Responses→Responses、Chat→Responses、Responses→Chat | **不支持**，直到该协议对的 H3 known-gap 清零 | 往返有损（§2.4.1） |
+| Chat→Chat | MCP 保留在旧 toolengine OpenAI Chat 循环上（今天可用，全部 harness 通过）；无 Guardrails | 不移除可用功能；进 Stage 前 H3 需清零 |
+| Responses→Responses、Chat→Responses、Responses→Chat | **不支持**：MCP 跳过（不注入），无 Guardrails，原协议直通 | 往返有损（§2.4.1）且无工具循环 |
 
-注意：旧路径今天 Chat→Chat 的 MCP 是可用的（toolengine OpenAI Chat 循环）。该协议对切流时若 H3 仍未清零，MCP 会随之关闭——这是按本策略接受的变化，届时在切流 PR 中列明。
+实现（`claude/lucid-heisenberg-ppa3kj-mcp-scope`，已推送）：`mcpServesPair` 决定是否挂 MCP transforms；跳过时打 debug 日志，
+debug routing 请求带 `X-Tingly-MCP` 响应头说明原因。`TestMCPOwnedToolLoop` 对三个跳过的协议对断言"不注入、不执行、不泄漏、上游只调一次"，M1/M3 从 known-gap 移除。
 
 录制不在本重构范围内（C3）：新路径不做逐轮录制，旧 MCP 循环的逐轮录制随切流消失，另行解决。
 
