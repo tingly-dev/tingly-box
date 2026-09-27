@@ -319,7 +319,8 @@ OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"`
 | `respondMCPError` | `internal/protocolserver/error_response.go:61` | 硬编码 500 | MCP 工具调用失败 |
 | `FailAttemptSetup` | `internal/protocolserver/failover_dispatch.go:64` | 硬编码 500 | attempt 建立阶段失败（failover 会重试下一档） |
 | `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:84,97` | `ClassifyUpstreamFailure` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
-| 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | `ClassifyUpstreamFailure` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
+| "Failed to forward request" | `openai_embeddings.go` | `ClassifyUpstreamFailure` | embeddings 的直接转发失败 |
+| `sendImageForwardingError` / `partial_failures` | `openai_image.go`(生成与编辑共用) | `ClassifyUpstreamFailure` | 图片生成 / 编辑的整次失败与 n 张里的单张失败;SDK 错误取上游自己的 message/code/type,不带转发前缀与 `POST "REDACTED": ... {raw json}` 包装(`image-mask.md` §9.1) |
 | `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_assembly.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
 | ~9 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `anthropic_passthrough.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
 

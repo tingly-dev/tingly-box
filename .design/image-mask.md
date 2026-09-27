@@ -495,6 +495,10 @@ Codex 的三条出图面都是一次一张:Responses 的 `image_generation` 工�
   (`ClassifyUpstreamFailure`);message 在 SDK 错误上取上游自己的 `error.message`,
   不带 `POST "REDACTED": 429 ... {raw json}` 那层包装——它要放进一个小槽位里。
   这是扩展字段,不认识它的 OpenAI SDK 会忽略;没有失败时响应保持原样。
+- **整次失败用同一套措辞**:图片的两个 handler 不再走全局的 `SendForwardingError`
+  (`Failed to forward request: POST "REDACTED": 400 ... {raw json}`),而是
+  `sendImageForwardingError`——状态码不变,message/code/type 取上游自己的,
+  和单张失败槽位里的文字一致。只作用于图片端点,chat 等其他出口不受影响。
 
 为什么在网关而不是前端扇出:能力差异是网关的事(`imageedit.md` §6),Playground
 以外的调用方也拿到正确的 n 张;而前端拆成 n 个请求,在 OpenAI 这类上游会让参考图的

@@ -149,3 +149,40 @@ func TestWriteImagesResponse_PartialFailures(t *testing.T) {
 		assert.Contains(t, got[1].Get("message").String(), "rejected by the safety system")
 	})
 }
+
+// A request that failed outright answers with the upstream's own reason and
+// code under its status — the same wording a partially failed image gets —
+// not the SDK's `POST "REDACTED": ... {raw json}` behind a forwarding prefix.
+func TestSendImageForwardingError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("sdk error", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		sendImageForwardingError(c, fmt.Errorf("image 1/2: codex image edit failed: %w", &openai.Error{
+			StatusCode: http.StatusBadRequest,
+			Message:    "Your request was rejected by the safety system",
+			Code:       "moderation_blocked",
+			Type:       "invalid_request_error",
+			Response:   &http.Response{StatusCode: http.StatusBadRequest},
+		}))
+
+		body := w.Body.Bytes()
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "Your request was rejected by the safety system", gjson.GetBytes(body, "error.message").String())
+		assert.Equal(t, "moderation_blocked", gjson.GetBytes(body, "error.code").String())
+		assert.Equal(t, "invalid_request_error", gjson.GetBytes(body, "error.type").String())
+	})
+
+	t.Run("gateway error", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		sendImageForwardingError(c, errors.New("codex returned no image: incomplete: max_output_tokens"))
+
+		body := w.Body.Bytes()
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, "codex returned no image: incomplete: max_output_tokens", gjson.GetBytes(body, "error.message").String())
+		assert.Equal(t, "api_error", gjson.GetBytes(body, "error.type").String())
+		assert.False(t, gjson.GetBytes(body, "error.code").Exists())
+	})
+}

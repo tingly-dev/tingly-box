@@ -20,7 +20,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -155,7 +154,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward image generation request: %v", err)
-		stream.SendForwardingError(c, err)
+		sendImageForwardingError(c, err)
 		return
 	}
 
@@ -168,12 +167,50 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	writeImagesResponse(c, resp, imageFailures)
 }
 
-// imagePartialFailure is one image of a multi-image request that did not come
-// back while the others did — the same status and client-safe message a
-// request failing outright would have carried.
-type imagePartialFailure struct {
+// imageFailure is why an image call failed, as the caller is told it: the
+// status and code say what kind of failure, the message says it in the
+// upstream's own words. The same shape serves a request that failed outright
+// (sendImageForwardingError) and one image of a request that otherwise
+// succeeded (writeImagesResponse), so the Playground reads both the same way.
+type imageFailure struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+	Type    string `json:"-"`
+}
+
+// classifyImageFailure uses the same status rules as every other forwarding
+// error (ClassifyUpstreamFailure), but for an SDK error takes the upstream's
+// own message, code and type rather than the SDK's `POST "REDACTED": 429 Too
+// Many Requests {raw json}` — which repeats the status around the reason and
+// is what the Playground used to show verbatim.
+func classifyImageFailure(err error, fallbackStatus int) imageFailure {
+	failure := protocol.ClassifyUpstreamFailure(err, fallbackStatus)
+	f := imageFailure{Status: failure.Status, Message: failure.Message}
+	var oaiErr *openai.Error
+	if errors.As(err, &oaiErr) && oaiErr.Message != "" {
+		f.Message = oaiErr.Message
+		f.Code = oaiErr.Code
+		f.Type = oaiErr.Type
+	}
+	return f
+}
+
+// sendImageForwardingError answers an images request that failed outright.
+// It is stream.SendForwardingError scoped to the image surface: same status,
+// same OpenAI error envelope, but the message is the upstream's reason
+// (classifyImageFailure) without the "Failed to forward request: " prefix and
+// SDK wrapping, and the upstream code rides along.
+func sendImageForwardingError(c *gin.Context, err error) {
+	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
+	f := classifyImageFailure(err, http.StatusInternalServerError)
+	errType := f.Type
+	if errType == "" {
+		errType = "api_error"
+	}
+	c.JSON(f.Status, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{Message: f.Message, Type: errType, Code: f.Code},
+	})
 }
 
 // writeImagesResponse answers a successful images request. When some of the
@@ -189,18 +226,9 @@ func writeImagesResponse(c *gin.Context, resp *openai.ImagesResponse, failures *
 		return
 	}
 
-	reported := make([]imagePartialFailure, 0, len(errs))
+	reported := make([]imageFailure, 0, len(errs))
 	for _, err := range errs {
-		failure := protocol.ClassifyUpstreamFailure(err, http.StatusBadGateway)
-		message := failure.Message
-		// The reason is read inside one image slot, next to its status: the
-		// upstream's own message says it; the SDK's "POST <url>: 429 Too Many
-		// Requests {raw json}" repeats the status around it.
-		var oaiErr *openai.Error
-		if errors.As(err, &oaiErr) && oaiErr.Message != "" {
-			message = oaiErr.Message
-		}
-		reported = append(reported, imagePartialFailure{Status: failure.Status, Message: message})
+		reported = append(reported, classifyImageFailure(err, http.StatusBadGateway))
 	}
 
 	body, err := json.Marshal(resp)

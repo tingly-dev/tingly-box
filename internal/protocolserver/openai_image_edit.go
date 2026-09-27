@@ -19,7 +19,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -130,7 +129,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		ph.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward image edit request: %v", err)
-		stream.SendForwardingError(c, err)
+		sendImageForwardingError(c, err)
 		return
 	}
 
