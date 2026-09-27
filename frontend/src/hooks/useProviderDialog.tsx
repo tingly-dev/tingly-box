@@ -262,6 +262,7 @@ export const useProviderDialog = (
         api_style: fd.apiStyle,
         api_base_openai: fd.apiBaseOpenAI || undefined,
         api_base_anthropic: fd.apiBaseAnthropic || undefined,
+        api_base_decision: fd.apiBaseDecision || undefined,
         token: fd.token,
         no_key_required: fd.noKeyRequired,
         proxy_url: fd.proxyUrl,

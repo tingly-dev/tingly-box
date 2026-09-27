@@ -343,8 +343,10 @@ export default {
       "label": "Протоколы",
       "openAILabel": "Совместимый с OpenAI",
       "anthropicLabel": "Совместимый с Anthropic",
+      "decisionLabel": "Решения",
       "helperOpenAI": "Поддерживает модели OpenAI, Google и многих других OpenAI-совместимых провайдеров",
       "helperAnthropic": "Для Anthropic-совместимых провайдеров, обычно используется с Claude Code",
+      "helperDecision": "Необязательный эндпоинт ветки решений (например, Jev-совместимая база /api/v1) — добавляет возможность решений, не меняя стиль чата",
       "fromTemplate": "из шаблона",
       "recommendedBadge": "Рекомендуется"
     },

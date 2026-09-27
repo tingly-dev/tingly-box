@@ -59,6 +59,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
             proxy_url: fd.proxyUrl ?? '',
             api_base_openai: fd.apiBaseOpenAI ?? '',
             api_base_anthropic: fd.apiBaseAnthropic ?? '',
+            api_base_decision: fd.apiBaseDecision ?? '',
         };
     }, [providerFormData]);
 
@@ -98,6 +99,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                     apiStyle: provider.api_style || 'openai',
                     apiBaseOpenAI: provider.api_base_openai || '',
                     apiBaseAnthropic: provider.api_base_anthropic || '',
+                    apiBaseDecision: provider.api_base_decision || '',
                     token: provider.token || '',
                     enabled: provider.enabled,
                     noKeyRequired: provider.no_key_required || false,
