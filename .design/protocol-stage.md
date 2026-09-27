@@ -9,6 +9,8 @@
 |---|---|
 | `internal/protocol/stage` | 契约：`Endpoint`、`EventStream`、`Stage`、`Compose`、`Bridge`、`Adapt` |
 | `internal/protocol/stage/anthropicbridge` | Anthropic Beta → OpenAI Chat / Responses 的 Bridge |
+| `internal/protocol/stage/openaibridge` | OpenAI Chat → Anthropic Beta / OpenAI Responses 的 Bridge |
+| `internal/protocol/stage/responsesbridge` | OpenAI Responses → Anthropic Beta / OpenAI Chat 的 Bridge |
 | `internal/protocol/stage/upstream` | 终端 Endpoint：Anthropic（Beta 或 V1 wire）、OpenAI Chat、OpenAI Responses |
 | `internal/protocol/stage/toolround` | Tool Round Stage：Guardrails 与 MCP 对工具调用的统一决策 |
 
