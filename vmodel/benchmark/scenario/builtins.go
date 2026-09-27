@@ -603,6 +603,57 @@ func openAIResponsesIncompleteSSE() []string {
 	}
 }
 
+// ─── Decision ─────────────────────────────────────────────────────────────────
+
+// DecisionScenario is the native structured-decision family: typed questions
+// in, calibrated answers back (.design/decision-protocol.md). Decision is
+// request/response JSON only, so just the NonStream builder is defined — the
+// matrix skips streaming modes for it. Because the decision response has no
+// assistant message, assertions run on RawBody rather than parsed Content.
+func DecisionScenario() Scenario {
+	return Scenario{
+		Name:        "decision",
+		Description: "Native decision protocol: typed questions answered with choices and calibrated probabilities",
+		Tags:        []string{"decision"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatDecision: decisionResponse(),
+		},
+		Assertions: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			// The gateway rewrites the response model to the requested model
+			// (TestResponseCarriesRequestedModel), so the micro-model's own id
+			// must never reach the client.
+			check.AssertRawBodyContains(`"answer":"option-b"`),
+			check.AssertRawBodyContains(`"probabilities"`),
+			check.AssertUsageNonZero(),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertRawBodyContains(`"answers"`),
+		},
+	}
+}
+
+func decisionResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"model": "jev-micro-1",
+		"answers": map[string]interface{}{
+			"q_route":      map[string]interface{}{"answer": "option-b", "index": 1},
+			"q_confidence": map[string]interface{}{"answer": 0.87},
+		},
+		"probabilities": map[string]interface{}{
+			"q_route": map[string]interface{}{"option-a": 0.32, "option-b": 0.61, "option-c": 0.07},
+		},
+		"usage": map[string]interface{}{
+			"input_tokens":  9,
+			"output_tokens": 4,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+	}
+}
+
 // ─── Error ────────────────────────────────────────────────────────────────────
 
 // ErrorScenario tests that provider error responses are forwarded to the client.
@@ -618,6 +669,7 @@ func ErrorScenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec429),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec429),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec429),
+			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec429),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatusAtLeast(400),
@@ -642,6 +694,7 @@ func Error500Scenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec500),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec500),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec500),
+			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec500),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatusAtLeast(400),
@@ -666,6 +719,7 @@ func ErrorAuth401Scenario() Scenario {
 			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec401),
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec401),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec401),
+			FormatDecision:        BuildErrorFromSpec(FormatDecision, spec401),
 		},
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatus(401),

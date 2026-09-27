@@ -32,6 +32,7 @@ const (
 	EndpointResponses = benchmark.EndpointResponses
 	EndpointAnthropic = benchmark.EndpointAnthropic
 	EndpointGoogle    = benchmark.EndpointGoogle
+	EndpointDecision  = benchmark.EndpointDecision
 )
 
 // CapturedRequest is the request the gateway forwarded to a provider endpoint.

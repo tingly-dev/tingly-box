@@ -375,7 +375,7 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 	apiStyle := targetToAPIStyle(target)
 
 	providerAPIBase := virtualURL
-	if apiStyle == protocol.APIStyleOpenAI {
+	if apiStyle == protocol.APIStyleOpenAI || apiStyle == protocol.APIStyleDecision {
 		providerAPIBase = virtualURL + "/v1"
 	}
 
@@ -388,6 +388,14 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 		Token:              "virtual-token",
 		Enabled:            true,
 		Timeout:            int64(constant.DefaultRequestTimeout),
+	}
+	if apiStyle == protocol.APIStyleDecision {
+		// Exercise the primary UX path: a chat-style provider that gained a
+		// decision fork URL — not a Jev-native provider. Users configure
+		// providers by model fit; the fork endpoint is what adds decision
+		// capability (.design/decision-protocol.md §2).
+		provider.APIStyle = protocol.APIStyleOpenAI
+		provider.APIBaseDecision = virtualURL
 	}
 	if providerFn != nil {
 		providerFn(provider)
@@ -600,6 +608,17 @@ func buildRequest(source protocol.APIType, model string, streaming bool) (path s
 			},
 			"stream": streaming,
 		})
+	case protocol.TypeDecision:
+		// Native structured-decision protocol (.design/decision-protocol.md).
+		// Single-shot JSON: no streaming variant, questions stay opaque.
+		return "/tingly/decision/v1/decisions", mustMarshal(map[string]any{
+			"model": model,
+			"state": map[string]any{"location": "Paris"},
+			"questions": map[string]any{
+				"q_route":      map[string]any{"type": "choice", "options": []string{"option-a", "option-b", "option-c"}},
+				"q_confidence": map[string]any{"type": "score"},
+			},
+		})
 	default:
 		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]any{
 			"model":    model,
@@ -617,6 +636,8 @@ func targetToAPIStyle(target protocol.APIType) protocol.APIStyle {
 		return protocol.APIStyleGoogle
 	case protocol.TypeOpenAIResponses:
 		return protocol.APIStyleOpenAI // Responses API uses OpenAI style
+	case protocol.TypeDecision:
+		return protocol.APIStyleDecision
 	default:
 		return protocol.APIStyleOpenAI
 	}
@@ -643,6 +664,8 @@ func sourceToRuleScenario(source protocol.APIType) typ.RuleScenario {
 	switch source {
 	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
 		return typ.ScenarioAnthropic
+	case protocol.TypeDecision:
+		return typ.ScenarioDecision
 	default:
 		return typ.ScenarioOpenAI
 	}
@@ -654,6 +677,8 @@ func sourceToStyle(source protocol.APIType) protocol.APIStyle {
 		return protocol.APIStyleAnthropic
 	case protocol.TypeOpenAIResponses:
 		return protocol.APIStyleOpenAI // Responses API uses OpenAI style
+	case protocol.TypeDecision:
+		return protocol.APIStyleDecision
 	default:
 		return protocol.APIStyleOpenAI
 	}
@@ -677,6 +702,8 @@ func parseFromJSON(raw []byte, style protocol.APIStyle) sse.ParsedResult {
 		r = sse.ParseAnthropicResult(m)
 	case protocol.APIStyleGoogle:
 		r = sse.ParseGoogleResult(m)
+	case protocol.APIStyleDecision:
+		r = sse.ParseDecisionResult(m)
 	}
 	if r == nil {
 		return sse.ParsedResult{}
@@ -702,6 +729,10 @@ func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResu
 		r = sse.AssembleAnthropicStream(events)
 	case protocol.APIStyleGoogle:
 		r = sse.AssembleGoogleStream(events)
+	case protocol.APIStyleDecision:
+		// Decision is single-shot JSON with no SSE variant; a "streaming"
+		// decision cell just returns the JSON body, which stays in RawBody.
+		r = &sse.ParsedResult{}
 	}
 	if r == nil {
 		return sse.ParsedResult{}

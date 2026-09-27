@@ -207,6 +207,33 @@ func ParseGoogleResult(m map[string]interface{}) *ParsedResult {
 	return r
 }
 
+// ParseDecisionResult extracts fields from a native structured-decision
+// response (.design/decision-protocol.md). A decision answer has no assistant
+// message: the structured answers/probabilities stay in RoundTripResult.RawBody,
+// and only the model and the optional usage object (Anthropic- or OpenAI-style
+// token spellings) are lifted into the parsed result.
+func ParseDecisionResult(m map[string]interface{}) *ParsedResult {
+	r := &ParsedResult{}
+	if model, ok := m["model"].(string); ok {
+		r.Model = model
+	}
+	if usage, ok := m["usage"].(map[string]interface{}); ok {
+		input := usage["input_tokens"]
+		if input == nil {
+			input = usage["prompt_tokens"]
+		}
+		output := usage["output_tokens"]
+		if output == nil {
+			output = usage["completion_tokens"]
+		}
+		r.Usage = &ParsedTokenUsage{
+			InputTokens:  parsedToInt(input),
+			OutputTokens: parsedToInt(output),
+		}
+	}
+	return r
+}
+
 // ─── Streaming assemblers ─────────────────────────────────────────────────────
 
 // AssembleOpenAIChatStream assembles a ParsedResult from OpenAI Chat SSE event lines.
