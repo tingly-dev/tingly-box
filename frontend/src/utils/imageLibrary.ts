@@ -178,8 +178,12 @@ const LIST_MARKER = /^(?:[-*•]|\d+[.)])\s+/;
 const TERM_MAX_WORDS = 4;
 const TERM_MAX_CJK = 8;
 
+// Judged on the words alone: a short fragment that happens to close a
+// sentence ("电影感光影。") is still a term. Its full stop is dropped with it,
+// since a term is added into the middle of other prompts.
+const SENTENCE_END = /[.!?。！？]+$/;
+
 const looksLikeTerm = (text: string): boolean => {
-    if (/[.!?。！？]$/.test(text)) return false;
     const cjk = (text.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g) ?? []).length;
     if (cjk > 0) return cjk <= TERM_MAX_CJK && text.replace(/\s/g, '').length <= TERM_MAX_CJK + 4;
     return text.split(/\s+/).length <= TERM_MAX_WORDS;
@@ -198,7 +202,8 @@ export const suggestPromptPieces = (text: string): PromptPieceCandidate[] => {
         const piece = (raw ?? '').trim();
         if (!piece || seen.has(piece.toLowerCase())) continue;
         seen.add(piece.toLowerCase());
-        pieces.push({ text: piece, kind: looksLikeTerm(piece) ? 'term' : 'phrase' });
+        const bare = piece.replace(SENTENCE_END, '').trim();
+        pieces.push(bare && looksLikeTerm(bare) ? { text: bare, kind: 'term' } : { text: piece, kind: 'phrase' });
     }
     return pieces;
 };

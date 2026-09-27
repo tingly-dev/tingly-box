@@ -243,6 +243,8 @@ interface ReferenceImagesRowProps {
     onEditSketch: (index: number | null) => void;
     // Opens the picker over images kept in the Image library.
     onOpenLibrary: () => void;
+    // The Paste button: reads the clipboard directly, where the browser allows.
+    onPasteFromClipboard: () => void;
     onEditMask: (index: number) => void;
     onRemoveReference: (index: number) => void;
     onReorder: (from: number, to: number) => void;
@@ -267,6 +269,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
     onOpenReference,
     onEditSketch,
     onOpenLibrary,
+    onPasteFromClipboard,
     onEditMask,
     onRemoveReference,
     onReorder,
@@ -298,6 +301,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
             key: 'paste',
             label: t('playground.referencePaste', { defaultValue: 'Paste' }),
             icon: <ContentPaste fontSize="small" />,
+            onClick: onPasteFromClipboard,
         },
         {
             key: 'sketch',
@@ -384,25 +388,42 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                 onDragLeave={() => onDragLeave(index)}
                             />
                         ))}
-                        {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && referenceSources.map((source) => (
-                            <Tooltip key={source.key} title={source.label}>
-                                <ButtonBase
-                                    onClick={(event) => { event.stopPropagation(); source.onClick?.(); }}
-                                    aria-label={source.label}
-                                    sx={{
-                                        width: 56,
-                                        height: 56,
-                                        borderRadius: 1,
-                                        color: 'text.secondary',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
-                                    }}
-                                >
-                                    {source.icon}
-                                </ButtonBase>
-                            </Tooltip>
-                        ))}
+                        {/* With images in the row, the ways in shrink into one
+                            thumbnail-sized tile (a 2×2 of small buttons), so a
+                            row of references stays one row instead of wrapping
+                            the last source onto a line of its own. */}
+                        {referenceImages.length < MAX_EDIT_REFERENCE_IMAGES && (
+                            <Box
+                                sx={{
+                                    width: 56,
+                                    height: 56,
+                                    flexShrink: 0,
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(2, 1fr)',
+                                    gridTemplateRows: 'repeat(2, 1fr)',
+                                    gap: '2px',
+                                }}
+                            >
+                                {referenceSources.map((source) => (
+                                    <Tooltip key={source.key} title={source.label}>
+                                        <ButtonBase
+                                            onClick={(event) => { event.stopPropagation(); source.onClick?.(); }}
+                                            aria-label={source.label}
+                                            sx={{
+                                                borderRadius: 0.75,
+                                                color: 'text.secondary',
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                '& svg': { fontSize: 15 },
+                                                '&:hover': { color: 'primary.main', borderColor: 'primary.main' },
+                                            }}
+                                        >
+                                            {source.icon}
+                                        </ButtonBase>
+                                    </Tooltip>
+                                ))}
+                            </Box>
+                        )}
                     </>
                 )}
             </Box>

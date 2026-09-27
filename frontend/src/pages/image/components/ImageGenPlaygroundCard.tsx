@@ -605,6 +605,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
                             onOpenLibrary={() => setLibraryPickerOpen(true)}
+                            onPasteFromClipboard={() => { void handlePasteFromClipboard(); }}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
                             onReorder={handleReorderReference}

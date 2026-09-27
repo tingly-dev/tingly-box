@@ -32,7 +32,16 @@ describe('suggestPromptPieces', () => {
     it('splits sentences but not decimals, and keeps "3D"', () => {
         expect(suggestPromptPieces('3D render at 1.5x scale. Soft light.').map((p) => p.text)).toEqual([
             '3D render at 1.5x scale.',
-            'Soft light.',
+            'Soft light',
+        ]);
+    });
+
+    it('treats a short fragment that ends a sentence as a term, without its full stop', () => {
+        expect(suggestPromptPieces('广角镜头，电影感光影。Soft light. A lone figure walks through the fog.')).toEqual([
+            { text: '广角镜头', kind: 'term' },
+            { text: '电影感光影', kind: 'term' },
+            { text: 'Soft light', kind: 'term' },
+            { text: 'A lone figure walks through the fog.', kind: 'phrase' },
         ]);
     });
 
