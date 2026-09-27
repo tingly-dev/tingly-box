@@ -20,8 +20,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { fetchBlob } from '@tingly/vision';
+import { useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -31,17 +30,16 @@ import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
-import { appendPromptPiece, loadLibraryReferences, saveLibraryPrompt, saveLibraryReferences } from '@/utils/imageLibrary';
 import ImageSliceDialog from './ImageSliceDialog';
 import ImageGenGalleryDialog from './ImageGenGalleryDialog';
 import ImageGenLightbox from './ImageGenLightbox';
 import ImageGenResultsPanel from './ImageGenResultsPanel';
 import { MAX_EDIT_REFERENCE_IMAGES, ReferenceImagesRow } from './ImageGenReferenceImages';
-import { readImageSize, useImageGenRefs } from './useImageGenRefs';
-import { useImageLibrary } from './useImageLibrary';
-import { readPlaygroundHandoff } from './libraryHandoff';
-import LibraryPromptMenu from './LibraryPromptMenu';
-import LibraryReferencePickerDialog from './LibraryReferencePickerDialog';
+import { useImageGenRefs } from './useImageGenRefs';
+import ImagePickerDialog from '../library/ImagePickerDialog';
+import PromptMenu from '../library/PromptMenu';
+import { appendPiece } from '../library/model';
+import { usePlaygroundLibrary } from '../library/usePlaygroundLibrary';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
@@ -130,7 +128,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         handleReorderReference,
         handleReferenceKeyDown,
         handleUseAsReference,
-        handleAddLibraryReferences,
+        handleAddImageSources,
         sketchTarget,
         setSketchTarget,
         handleOpenSketch,
@@ -337,73 +335,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    // The library: prompts and images kept beyond this session. The panel
-    // saves into it and loads from it without leaving the page; the library
-    // page is where it is browsed and tidied. See .design/image-library.md.
-    const { prompts: libraryPrompts, references: libraryReferences } = useImageLibrary();
-    const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
-
-    const handleSavePrompt = useCallback(async () => {
-        const saved = await saveLibraryPrompt({ text: prompt.trim() });
-        showNotification(
-            saved
-                ? t('imageLibrary.promptSaved', { defaultValue: 'Prompt saved to the library' })
-                : t('imageLibrary.saveFailed', { defaultValue: 'Could not save to the library' }),
-            saved ? 'success' : 'error',
-        );
-    }, [prompt, showNotification, t]);
-
-    const handleSaveImageToLibrary = useCallback(async (image: SelectedImage) => {
-        if (libraryReferences.some((reference) => reference.src === image.src)) {
-            showNotification(t('imageLibrary.imageAlreadySaved', { defaultValue: 'This image is already in the library' }), 'info');
-            return;
-        }
-        try {
-            const blob = await fetchBlob(image.src);
-            const extension = (blob.type.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
-            const stem = downloadStem(image, slugify) || 'image';
-            const saved = await saveLibraryReferences([{
-                name: `${stem}.${extension}`,
-                src: image.src,
-                bytes: blob.size,
-                ...(await readImageSize(image.src) ?? {}),
-            }]);
-            showNotification(
-                saved
-                    ? t('imageLibrary.imageSaved', { defaultValue: 'Image saved to the library' })
-                    : t('imageLibrary.saveFailed', { defaultValue: 'Could not save to the library' }),
-                saved ? 'success' : 'error',
-            );
-        } catch {
-            showNotification(t('imageLibrary.saveFailed', { defaultValue: 'Could not save to the library' }), 'error');
-        }
-    }, [libraryReferences, showNotification, t]);
-
-    // Arriving from the library page with something to use: its prompt goes
-    // into the field, its images into the reference row. The router state is
-    // consumed once and cleared, so a reload or Back does not apply it again.
-    const location = useLocation();
-    const handledHandoffRef = useRef<string | null>(null);
-    useEffect(() => {
-        const handoff = readPlaygroundHandoff(location.state);
-        if (!handoff || handledHandoffRef.current === location.key) return;
-        handledHandoffRef.current = location.key;
-        navigate(location.pathname, { replace: true, state: null });
-        if (handoff.prompt !== undefined) {
-            setPrompt(handoff.prompt);
-            showNotification(t('imageLibrary.promptLoaded', { defaultValue: 'Prompt loaded from the library' }), 'success');
-        }
-        if (handoff.piece !== undefined) {
-            setPrompt((current) => appendPromptPiece(current, handoff.piece ?? ''));
-        }
-        if (handoff.referenceIds?.length) {
-            const ids = handoff.referenceIds;
-            void loadLibraryReferences().then((all) => {
-                const byId = new Map(all.map((reference) => [reference.id, reference]));
-                return handleAddLibraryReferences(ids.map((id) => byId.get(id)).filter((reference) => reference !== undefined));
-            });
-        }
-    }, [handleAddLibraryReferences, location.key, location.pathname, location.state, navigate, showNotification, t]);
+    // The library: prompts and images kept beyond this session, saved to and
+    // loaded from without leaving the panel. See .design/image-library.md.
+    const library = usePlaygroundLibrary({
+        setPrompt,
+        addReferences: handleAddImageSources,
+        notify: showNotification,
+    });
 
     const canSubmit = Boolean(prompt.trim()) && Boolean(model);
 
@@ -590,7 +528,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             promptFileInputRef={promptFileInputRef}
                             onOpenReference={handleOpenReference}
                             onEditSketch={handleOpenSketch}
-                            onOpenLibrary={() => setLibraryPickerOpen(true)}
+                            onOpenLibrary={() => library.setPickerOpen(true)}
                             onPasteFromClipboard={() => { void handlePasteFromClipboard(); }}
                             onEditMask={setMaskTarget}
                             onRemoveReference={handleRemoveReferenceImage}
@@ -671,12 +609,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     <Description sx={{ fontSize: 16 }} />
                                                 </IconButton>
                                             </Tooltip>
-                                            <LibraryPromptMenu
+                                            <PromptMenu
                                                 prompt={prompt}
-                                                prompts={libraryPrompts}
-                                                onSave={() => { void handleSavePrompt(); }}
-                                                onLoad={(item) => setPrompt(item.text)}
-                                                onAppend={(item) => setPrompt((current) => appendPromptPiece(current, item.text))}
+                                                pieces={library.pieces}
+                                                onSave={() => { void library.savePrompt(prompt); }}
+                                                onReplace={setPrompt}
+                                                onAppend={(text) => setPrompt((current) => appendPiece(current, text))}
                                             />
                                             <Tooltip title={t('playground.expandPrompt', { defaultValue: 'Open the prompt in a larger editor' })}>
                                                 <IconButton
@@ -852,7 +790,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 }}
                 onSlice={(image) => setSliceTarget(image)}
                 onDownload={(image) => { void handleDownload(image); }}
-                onSaveToLibrary={(image) => { void handleSaveImageToLibrary(image); }}
+                onSaveToLibrary={(image) => { void library.saveImage(image.src, downloadStem(image, slugify)); }}
                 referenceImages={referenceImages}
                 onEditSketch={(index) => {
                     handleOpenSketch(index);
@@ -961,14 +899,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     </Button>
                 </DialogActions>
             </Dialog>
-            <LibraryReferencePickerDialog
-                open={libraryPickerOpen}
-                references={libraryReferences}
+            <ImagePickerDialog
+                open={library.pickerOpen}
+                images={library.images}
                 room={Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length)}
-                onClose={() => setLibraryPickerOpen(false)}
+                onClose={() => library.setPickerOpen(false)}
                 onPick={(picked) => {
-                    setLibraryPickerOpen(false);
-                    void handleAddLibraryReferences(picked);
+                    library.setPickerOpen(false);
+                    void handleAddImageSources(picked);
                 }}
             />
             <MaskEditorDialog

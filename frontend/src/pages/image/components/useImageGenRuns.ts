@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
-import { readImageSize } from './useImageGenRefs';
+import { fileToDataUrl, readImageSize } from './imageFiles';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
 
@@ -25,16 +25,6 @@ export interface GenerationRequest {
     // instead of a second card appearing.
     runId?: string;
 }
-
-// Reads a File into a base64 data URL, the same representation already used
-// for generated images (`data:image/png;base64,...`) so reference thumbnails
-// and outputs render through one code path.
-const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-});
 
 type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 

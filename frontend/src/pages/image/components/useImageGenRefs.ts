@@ -2,29 +2,23 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob, parseImageSize } from '@tingly/vision';
 import { addReferences, reorderReferences } from './imageGenSession';
-import type { LibraryReference } from '@/utils/imageLibrary';
+import { fileToDataUrl, readImageSize } from './imageFiles';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 
-// Decodes an image just far enough to learn its pixel size. Failure is not
-// worth surfacing — the caption simply drops the dimensions.
-export const readImageSize = (src: string): Promise<{ width: number; height: number } | null> => new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    image.onerror = () => resolve(null);
-    image.src = src;
-});
-
-// Reads a File into a base64 data URL, the same representation already used
-// for generated images (`data:image/png;base64,...`) so reference thumbnails
-// and outputs render through one code path.
-const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-});
+// An image that is already a data URL (an output, an import, a kept library
+// image) as a reference. The src doubles as the preview, so it is never
+// re-encoded.
+const srcToReference = async (src: string, name: string): Promise<ReferenceImage> => {
+    const blob = await fetchBlob(src);
+    return {
+        file: new File([blob], name, { type: blob.type || 'image/png' }),
+        previewUrl: src,
+        source: 'upload',
+        ...(await readImageSize(src) ?? {}),
+    };
+};
 
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
 // a new sketch, otherwise the reference image being redrawn.
@@ -55,6 +49,15 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
     // the whole point.
     const [maskTarget, setMaskTarget] = useState<number | null>(null);
 
+    const notifyCapReached = useCallback((ignored: number) => showNotification(
+        t('playground.referenceCapReached', {
+            defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
+            max: MAX_EDIT_REFERENCE_IMAGES,
+            ignored,
+        }),
+        'warning',
+    ), [showNotification, t]);
+
     // Appends newly picked/dropped files (image/* only) up to the reference
     // cap, converting each to a data URL up front so thumbnails and the
     // eventual run history render through the same representation.
@@ -69,23 +72,14 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         );
         // Dropping images on the floor without saying so leaves the user
         // believing a request carries pictures it does not.
-        if (ignored > 0) {
-            showNotification(
-                t('playground.referenceCapReached', {
-                    defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
-                    max: MAX_EDIT_REFERENCE_IMAGES,
-                    ignored,
-                }),
-                'warning',
-            );
-        }
+        if (ignored > 0) notifyCapReached(ignored);
         if (accepted.length === 0) return;
         const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => {
             const previewUrl = await fileToDataUrl(file);
             return { file, previewUrl, source: 'upload', ...(await readImageSize(previewUrl) ?? {}) };
         }));
         setReferenceImages((current) => addReferences(current, withPreviews, MAX_EDIT_REFERENCE_IMAGES, 'ignore').next);
-    }, [referenceImages.length, showNotification, t]);
+    }, [notifyCapReached, referenceImages.length]);
 
     const handleRemoveReferenceImage = useCallback((index: number) => {
         setReferenceImages((current) => current.filter((_, i) => i !== index));
@@ -114,28 +108,23 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         });
     }, [handleReorderReference, referenceImages.length]);
 
+    const notifyLoadFailed = useCallback(() => showNotification(
+        t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
+        'error',
+    ), [showNotification, t]);
+
     // Hands a completed output straight back in as the next run's reference —
     // the artifact for the next action, not just a notification that one
-    // exists. Reuses the already-rendered src as the preview (it's already a
-    // data URL/data-equivalent), so this never re-encodes the image.
+    // exists.
     //
     // It joins the references rather than replacing them: the row holds up
     // to five, and "use this one too" is the common case. At the cap the
-    // oldest makes room.
+    // oldest makes room — said out loud, because a reference vanishing from
+    // the row unannounced is the request quietly changing behind the user's
+    // back.
     const handleUseAsReference = useCallback(async (src: string) => {
         try {
-            const blob = await fetchBlob(src);
-            const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
-            const next: ReferenceImage = {
-                file,
-                previewUrl: src,
-                source: 'upload',
-                ...(await readImageSize(src) ?? {}),
-            };
-            // The user pointed at this image, so it goes in; at the cap the
-            // oldest makes room — and that is said out loud, because a reference
-            // vanishing from the row unannounced is the request quietly changing
-            // behind the user's back.
+            const next = await srcToReference(src, `reference-${Date.now()}.png`);
             if (referenceImages.length >= MAX_EDIT_REFERENCE_IMAGES) {
                 showNotification(
                     t('playground.referenceEvicted', {
@@ -147,50 +136,28 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
             }
             setReferenceImages((current) => addReferences(current, [next], MAX_EDIT_REFERENCE_IMAGES, 'evict').next);
         } catch {
-            showNotification(
-                t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
-                'error',
-            );
+            notifyLoadFailed();
         }
-    }, [referenceImages.length, showNotification, t]);
+    }, [notifyLoadFailed, referenceImages.length, showNotification, t]);
 
-    // Images kept in the library go into the row like any other upload, under
-    // the name they were kept as. Unlike "use as reference" on a single image,
-    // nothing is evicted: the user picked these, so the ones that do not fit
-    // are left out and the row says how many.
-    const handleAddLibraryReferences = useCallback(async (items: LibraryReference[]) => {
-        if (items.length === 0) return;
-        const room = Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length);
-        const { next: accepted, ignored } = addReferences([] as LibraryReference[], items, room, 'ignore');
-        if (ignored > 0) {
-            showNotification(
-                t('playground.referenceCapReached', {
-                    defaultValue: 'Only {{max}} reference images fit — {{ignored}} were left out',
-                    max: MAX_EDIT_REFERENCE_IMAGES,
-                    ignored,
-                }),
-                'warning',
-            );
-        }
+    // Several picked images at once (from the library), under their own
+    // names. Unlike a single "use as reference", nothing is evicted: the
+    // ones that do not fit are left out, and the row says how many.
+    const handleAddImageSources = useCallback(async (items: Array<{ src: string; name: string }>) => {
+        const { next: accepted, ignored } = addReferences(
+            [] as typeof items,
+            items,
+            Math.max(0, MAX_EDIT_REFERENCE_IMAGES - referenceImages.length),
+            'ignore',
+        );
+        if (ignored > 0) notifyCapReached(ignored);
         try {
-            const next = await Promise.all(accepted.map(async (item): Promise<ReferenceImage> => {
-                const blob = await fetchBlob(item.src);
-                const type = blob.type || 'image/png';
-                return {
-                    file: new File([blob], item.name, { type }),
-                    previewUrl: item.src,
-                    source: 'upload',
-                    ...(item.width && item.height ? { width: item.width, height: item.height } : {}),
-                };
-            }));
+            const next = await Promise.all(accepted.map((item) => srcToReference(item.src, item.name)));
             setReferenceImages((current) => addReferences(current, next, MAX_EDIT_REFERENCE_IMAGES, 'ignore').next);
         } catch {
-            showNotification(
-                t('playground.referenceLoadFailed', { defaultValue: 'Could not use this image as a reference' }),
-                'error',
-            );
+            notifyLoadFailed();
         }
-    }, [referenceImages.length, showNotification, t]);
+    }, [notifyCapReached, notifyLoadFailed, referenceImages.length]);
 
     // A sketch is just another way to get a reference image: it lands in the
     // same list, goes through the same request, and shows up in the run
@@ -267,7 +234,7 @@ export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParam
         handleReorderReference,
         handleReferenceKeyDown,
         handleUseAsReference,
-        handleAddLibraryReferences,
+        handleAddImageSources,
         sketchTarget,
         setSketchTarget,
         handleOpenSketch,

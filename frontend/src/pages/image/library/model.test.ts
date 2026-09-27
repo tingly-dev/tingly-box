@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-    appendPromptPiece,
+    appendPiece,
     collectTags,
     findPromptByText,
     normalizeTags,
-    promptLabel,
-    suggestPromptPieces,
-    type LibraryPrompt,
-} from './imageLibrary';
+    pieceLabel,
+    suggestPieces,
+    type PromptPiece,
+} from './model';
 
-const piece = (overrides: Partial<LibraryPrompt>): LibraryPrompt => ({
+const piece = (overrides: Partial<PromptPiece>): PromptPiece => ({
     id: 'x',
     kind: 'prompt',
     title: '',
@@ -20,9 +20,9 @@ const piece = (overrides: Partial<LibraryPrompt>): LibraryPrompt => ({
     ...overrides,
 });
 
-describe('suggestPromptPieces', () => {
+describe('suggestPieces', () => {
     it('cuts a comma list into terms and longer clauses into phrases', () => {
-        expect(suggestPromptPieces('a red fox sleeping in the snow under a pine tree, cinematic lighting, 35mm')).toEqual([
+        expect(suggestPieces('a red fox sleeping in the snow under a pine tree, cinematic lighting, 35mm')).toEqual([
             { text: 'a red fox sleeping in the snow under a pine tree', kind: 'phrase' },
             { text: 'cinematic lighting', kind: 'term' },
             { text: '35mm', kind: 'term' },
@@ -30,14 +30,14 @@ describe('suggestPromptPieces', () => {
     });
 
     it('splits sentences but not decimals, and keeps "3D"', () => {
-        expect(suggestPromptPieces('3D render at 1.5x scale. Soft light.').map((p) => p.text)).toEqual([
+        expect(suggestPieces('3D render at 1.5x scale. Soft light.').map((p) => p.text)).toEqual([
             '3D render at 1.5x scale.',
             'Soft light',
         ]);
     });
 
     it('treats a short fragment that ends a sentence as a term, without its full stop', () => {
-        expect(suggestPromptPieces('广角镜头，电影感光影。Soft light. A lone figure walks through the fog.')).toEqual([
+        expect(suggestPieces('广角镜头，电影感光影。Soft light. A lone figure walks through the fog.')).toEqual([
             { text: '广角镜头', kind: 'term' },
             { text: '电影感光影', kind: 'term' },
             { text: 'Soft light', kind: 'term' },
@@ -46,7 +46,7 @@ describe('suggestPromptPieces', () => {
     });
 
     it('handles CJK punctuation and drops list markers and duplicates', () => {
-        expect(suggestPromptPieces('- 赛博朋克，霓虹灯、霓虹灯\n1. 雨后的街道上倒映着城市的灯光。')).toEqual([
+        expect(suggestPieces('- 赛博朋克，霓虹灯、霓虹灯\n1. 雨后的街道上倒映着城市的灯光。')).toEqual([
             { text: '赛博朋克', kind: 'term' },
             { text: '霓虹灯', kind: 'term' },
             { text: '雨后的街道上倒映着城市的灯光。', kind: 'phrase' },
@@ -54,12 +54,12 @@ describe('suggestPromptPieces', () => {
     });
 });
 
-describe('appendPromptPiece', () => {
+describe('appendPiece', () => {
     it('joins by what the prompt ends with', () => {
-        expect(appendPromptPiece('', 'rim light')).toBe('rim light');
-        expect(appendPromptPiece('a fox', 'rim light')).toBe('a fox, rim light');
-        expect(appendPromptPiece('a fox,', 'rim light')).toBe('a fox, rim light');
-        expect(appendPromptPiece('A fox.  ', 'Rim light.')).toBe('A fox. Rim light.');
+        expect(appendPiece('', 'rim light')).toBe('rim light');
+        expect(appendPiece('a fox', 'rim light')).toBe('a fox, rim light');
+        expect(appendPiece('a fox,', 'rim light')).toBe('a fox, rim light');
+        expect(appendPiece('A fox.  ', 'Rim light.')).toBe('A fox. Rim light.');
     });
 });
 
@@ -70,11 +70,12 @@ describe('library helpers', () => {
     });
 
     it('labels by title, else first line', () => {
-        expect(promptLabel({ title: '', text: '  line one\nline two' })).toBe('line one');
-        expect(promptLabel({ title: 'Fox', text: 'x' })).toBe('Fox');
+        expect(pieceLabel({ title: '', text: '  line one\nline two' })).toBe('line one');
+        expect(pieceLabel({ title: 'Fox', text: 'x' })).toBe('Fox');
     });
 
-    it('finds an identical prompt ignoring surrounding space', () => {
+    it('finds an identical whole prompt ignoring surrounding space, not a piece', () => {
         expect(findPromptByText([piece({ id: 'a', text: 'fox' })], ' fox ')?.id).toBe('a');
+        expect(findPromptByText([piece({ id: 'b', kind: 'term', text: 'fox' })], 'fox')).toBeUndefined();
     });
 });

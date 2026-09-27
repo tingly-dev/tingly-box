@@ -13,26 +13,26 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Check } from '@/components/icons';
-import type { LibraryReference } from '@/utils/imageLibrary';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_TILE } from './imageThumbnails';
+import ThumbImage from '../components/ThumbImage';
+import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
+import type { LibraryImage } from './model';
 
-interface LibraryReferencePickerDialogProps {
+interface ImagePickerDialogProps {
     open: boolean;
-    references: LibraryReference[];
+    images: LibraryImage[];
     // How many more the request row can take — picking stops there instead
     // of accepting images that would then be dropped.
     room: number;
     onClose: () => void;
-    onPick: (references: LibraryReference[]) => void;
+    onPick: (images: LibraryImage[]) => void;
 }
 
 // The reference row's fourth way in: images kept in the library. Several can
 // be picked at once — a character sheet plus a style board is the usual
 // pair — in the order they are clicked, which is the order they are sent in.
-const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> = ({
+const ImagePickerDialog: React.FC<ImagePickerDialogProps> = ({
     open,
-    references,
+    images,
     room,
     onClose,
     onPick,
@@ -51,8 +51,9 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
         });
     };
     const confirm = () => {
-        const byId = new Map(references.map((reference) => [reference.id, reference]));
-        onPick(picked.map((id) => byId.get(id)).filter((reference): reference is LibraryReference => reference !== undefined));
+        onPick(picked
+            .map((id) => images.find((image) => image.id === id))
+            .filter((image): image is LibraryImage => image !== undefined));
         setPicked([]);
     };
 
@@ -62,7 +63,7 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
                 {t('imageLibrary.pickReferencesTitle', { defaultValue: 'Add reference images from the library' })}
             </DialogTitle>
             <DialogContent dividers>
-                {references.length === 0 ? (
+                {images.length === 0 ? (
                     <Stack spacing={1.5} sx={{ alignItems: 'center', py: 4, textAlign: 'center' }}>
                         <Typography variant="body2" color="text.secondary">
                             {t('imageLibrary.noReferencesPicker', {
@@ -81,17 +82,17 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
                             gap: 1.5,
                         }}
                     >
-                        {references.map((reference) => {
-                            const order = picked.indexOf(reference.id);
+                        {images.map((image) => {
+                            const order = picked.indexOf(image.id);
                             const selected = order >= 0;
                             const full = !selected && picked.length >= room;
                             return (
                                 <ButtonBase
-                                    key={reference.id}
-                                    onClick={() => toggle(reference.id)}
+                                    key={image.id}
+                                    onClick={() => toggle(image.id)}
                                     disabled={full}
                                     aria-pressed={selected}
-                                    aria-label={reference.name}
+                                    aria-label={image.name}
                                     sx={{
                                         display: 'block',
                                         textAlign: 'left',
@@ -103,7 +104,7 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
                                     }}
                                 >
                                     <Box sx={{ position: 'relative', aspectRatio: '1 / 1', bgcolor: 'action.hover' }}>
-                                        <ThumbImage src={reference.src} alt={reference.name} edge={THUMB_EDGE_TILE} />
+                                        <ThumbImage src={image.src} alt={image.name} edge={THUMB_EDGE_TILE} />
                                         {selected && (
                                             <Box
                                                 sx={{
@@ -127,7 +128,7 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
                                         )}
                                     </Box>
                                     <Typography variant="caption" noWrap sx={{ display: 'block', px: 1, py: 0.5 }}>
-                                        {reference.name}
+                                        {image.name}
                                     </Typography>
                                 </ButtonBase>
                             );
@@ -136,7 +137,7 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
                 )}
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 1.5 }}>
-                {references.length > 0 && (
+                {images.length > 0 && (
                     <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
                         {room === 0
                             ? t('imageLibrary.pickNoRoom', { defaultValue: 'The request already has the maximum number of reference images' })
@@ -156,4 +157,4 @@ const LibraryReferencePickerDialog: React.FC<LibraryReferencePickerDialogProps> 
     );
 };
 
-export default LibraryReferencePickerDialog;
+export default ImagePickerDialog;

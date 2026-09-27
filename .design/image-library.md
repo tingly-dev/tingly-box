@@ -22,12 +22,12 @@ Playground 的会话(`utils/playgroundSession.ts`)记录的是"发生过的一�
 ## 2. 关键判断:存的是"片段",不只是整段 Prompt
 
 真正可复用的往往不是一整段 Prompt,而是从里面拆出来的关键词条和描述语句。因此
-Prompt 素材统一为一种记录,按**用途**分三种 kind(`utils/imageLibrary.ts`):
+Prompt 素材统一为一种记录 `PromptPiece`,按**用途**分三种 kind(`library/model.ts`):
 
 | kind | 例子 | 在 Playground 里的动作 |
 |---|---|---|
 | `prompt` | 整段 Prompt | **替换**输入框 |
-| `term` | `rim lighting`、`35mm`、`赛博朋克` | **追加**到 Prompt(`appendPromptPiece`) |
+| `term` | `rim lighting`、`35mm`、`赛博朋克` | **追加**到 Prompt(`appendPiece`) |
 | `phrase` | `a quiet street after rain` | **追加**到 Prompt |
 
 kind 是同一种东西的一个轴,而不是三种东西(原则 4):新建时在表单里切换,事后
@@ -38,28 +38,28 @@ kind 是同一种东西的一个轴,而不是三种东西(原则 4):新建时在
 
 ## 3. 拆解:现在由人来做,接口为 AI 留好
 
-`PromptSplitDialog` 流程:
+`SplitDialog` 流程:
 
 1. `suggestPromptPieces(text)` 按标点(中英文逗号、分号、顿号、句末标点、换行、
    列表符号)做**机械初切**,并按长度猜 term / phrase。它只是起点,不判断什么重要。
 2. 人来审:取消勾选不值得留的、改写措辞让每条能独立使用、切换 term/phrase、
    补一条、统一打标签。已经在库里的片段默认不勾选。
-3. 一次事务写入(`saveLibraryPrompts`),每条带 `sourceId`。
+3. 一次事务写入(`savePieces`),每条带 `sourceId`。
 
-**演进位点**:`suggestPromptPieces` 的输入(一段文本)与输出
-(`PromptPieceCandidate[]`:text + kind)就是 AI 拆解器要替换的接口。换成 AI 后,
+**演进位点**:`suggestPieces` 的输入(一段文本)与输出
+(`PieceCandidate[]`:text + kind)就是 AI 拆解器要替换的接口。换成 AI 后,
 审阅这一步保留——AI 给候选,人确认。
 
 ## 4. 组装:现在是手工拼装,未来是 Agent 选取
 
-现在的组装:Playground Prompt 输入框上的书签按钮(`LibraryPromptMenu`)——
+现在的组装:Playground Prompt 输入框上的书签按钮(`PromptMenu`)——
 "追加到 Prompt"列出词条/语句,"替换 Prompt 为"列出整段 Prompt。
 
 更远的方向:Agent 根据需求,按 kind + tag 选取片段,拼装出符合要求的 Prompt,
 把 Prompt 素材当作资产来用。当前数据模型为此准备了:
 
 - 片段是原子的、有类型的(kind)、可检索的(tags)、可溯源的(sourceId)。
-- 所有读写只经过 `utils/imageLibrary.ts` 一个模块。
+- 所有读写只经过 `library/store.ts` 一个模块,接口按资源 API 的形状设计(每个集合 list / save / delete)。
 
 **已知限制**:素材库存在浏览器 IndexedDB 里,只在当前浏览器可见,服务端(以及
 将来的 Agent)读不到。走到 Agent 组装那一步时,需要把存储换成后端 API;因为只有
@@ -84,14 +84,20 @@ Library 页负责浏览、拆解、整理。页上的"在 Playground 中使用 /
 
 ## 6. 代码位置
 
-| 路径 | 内容 |
+Library 的代码都在 `frontend/src/pages/image/library/`,和 Playground 的组件分开。
+Playground 只通过 `usePlaygroundLibrary`、`PromptMenu`、`ImagePickerDialog` 三个入口
+接入;Library 反过来只用到 Playground 的几个通用小件(`ThumbImage`、`imageFiles`)。
+
+| 文件 | 内容 |
 |---|---|
-| `frontend/src/utils/imageLibrary.ts` | IndexedDB 存储、kind/tags 模型、拆解与追加的纯函数 |
-| `frontend/src/pages/image/ImageLibraryPage.tsx` | 页面:Prompts / 参考图两个 tab(`?tab=references`) |
-| `frontend/src/pages/image/components/LibraryPromptsPanel.tsx` | Prompt 素材列表、kind 与标签筛选 |
-| `frontend/src/pages/image/components/PromptSplitDialog.tsx` | 拆解对话框 |
-| `frontend/src/pages/image/components/LibraryPromptEditorDialog.tsx` | 新建/编辑 |
-| `frontend/src/pages/image/components/LibraryReferencesPanel.tsx` | 参考图网格、上传/拖入/粘贴 |
-| `frontend/src/pages/image/components/LibraryPromptMenu.tsx` | Playground Prompt 输入框上的菜单 |
-| `frontend/src/pages/image/components/LibraryReferencePickerDialog.tsx` | Playground 参考图选择器 |
-| `frontend/src/pages/image/components/libraryHandoff.ts` | Library → Playground 的 router state |
+| `model.ts` | 类型(`PromptPiece`、`LibraryImage`)与纯函数:拆解、追加、标签、搜索 |
+| `store.ts` | 存储契约(当前 IndexedDB):`listPieces` / `savePieces` / `deletePiece`、`listImages` / `addImages` / `renameImage` / `deleteImage`、`subscribeLibrary` |
+| `useLibrary.ts` | 读取并订阅变更的 hook |
+| `handoff.ts` | Library 页 → Playground 的 router state |
+| `usePlaygroundLibrary.ts` | Playground 侧:存 Prompt、存图、接收 handoff、选择器开关 |
+| `PromptMenu.tsx` / `ImagePickerDialog.tsx` | Playground 里的书签菜单与参考图选择器 |
+| `PiecesPanel.tsx` / `ImagesPanel.tsx` | Library 页的两个 tab |
+| `PieceEditorDialog.tsx` / `SplitDialog.tsx` | 新建编辑、拆解 |
+| `fields.tsx` / `LibraryChrome.tsx` | 共用的类型切换、标签输入、搜索框、空状态 |
+
+页面入口:`frontend/src/pages/image/ImageLibraryPage.tsx`(`?tab=references` 打开参考图 tab)。

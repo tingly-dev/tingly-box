@@ -2,9 +2,9 @@ import { Box, Tab, Tabs } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
-import LibraryPromptsPanel from './components/LibraryPromptsPanel';
-import LibraryReferencesPanel from './components/LibraryReferencesPanel';
-import { useImageLibrary } from './components/useImageLibrary';
+import ImagesPanel from './library/ImagesPanel';
+import PiecesPanel from './library/PiecesPanel';
+import { useLibrary } from './library/useLibrary';
 
 type LibraryTab = 'prompts' | 'references';
 
@@ -14,7 +14,7 @@ type LibraryTab = 'prompts' | 'references';
 // is where it is browsed, split and tidied. See .design/image-library.md.
 const ImageLibraryPage: React.FC = () => {
     const { t } = useTranslation();
-    const { prompts, references, loaded } = useImageLibrary();
+    const { pieces, images, loaded } = useLibrary();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab: LibraryTab = searchParams.get('tab') === 'references' ? 'references' : 'prompts';
 
@@ -34,17 +34,17 @@ const ImageLibraryPage: React.FC = () => {
                 >
                     <Tab
                         value="prompts"
-                        label={t('imageLibrary.tabPrompts', { defaultValue: 'Prompts · {{count}}', count: prompts.length })}
+                        label={t('imageLibrary.tabPrompts', { defaultValue: 'Prompts · {{count}}', count: pieces.length })}
                     />
                     <Tab
                         value="references"
-                        label={t('imageLibrary.tabImages', { defaultValue: 'Reference images · {{count}}', count: references.length })}
+                        label={t('imageLibrary.tabImages', { defaultValue: 'Reference images · {{count}}', count: images.length })}
                     />
                 </Tabs>
             </Box>
             {tab === 'prompts'
-                ? <LibraryPromptsPanel prompts={prompts} loaded={loaded} />
-                : <LibraryReferencesPanel references={references} loaded={loaded} />}
+                ? <PiecesPanel pieces={pieces} loaded={loaded} />
+                : <ImagesPanel images={images} loaded={loaded} />}
         </UnifiedCard>
     );
 };
