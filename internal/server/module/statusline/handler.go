@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 
@@ -129,7 +129,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	}
 
 	// Build status line as two rows, split by the question each answers:
-	//   row 1 (where am I):             📁 repo/sub  🌿 branch  💬 "title"  ~$0.05
+	//   row 1 (where am I):             📁 proj/sub  🌿 branch  💬 "title"  ~$0.05
 	//   row 2 (how is it routed, left): rule → p1:work → realModel @ provider | ▓▓░░░░░░ 7% | Cache: 87% | Quota: 60% left | Balance: $12.40
 	// Cost is Claude Code's estimate at Anthropic prices, not what the routed
 	// provider charges, so it stays on row 1 (marked ~) away from Balance.
@@ -171,12 +171,10 @@ func (i iconSet) bar(usedPct int) string {
 // Empty parts are dropped rather than shown as placeholders.
 func locationParts(input *StatusInput, icons iconSet) []string {
 	dir := cmp.Or(input.Workspace.CurrentDir, input.CWD)
-	root, branch := gitInfo(dir)
-	// Claude Code reports the branch itself only for worktree sessions.
-	branch = cmp.Or(input.Worktree.Branch, branch)
-
-	parts := []string{icons.dir + locationLabel(dir, root)}
-	if branch != "" {
+	parts := []string{icons.dir + locationLabel(dir, input.Workspace.ProjectDir)}
+	// Claude Code reports a branch only in worktree sessions; we don't read
+	// git ourselves, so other sessions show none.
+	if branch := input.Worktree.Branch; branch != "" {
 		parts = append(parts, icons.branch+branch)
 	}
 	if session := sessionLabel(input.SessionName, input.SessionID); session != "" {
@@ -308,72 +306,30 @@ func sessionLabel(name, id string) string {
 	return ""
 }
 
-// gitInfo finds the git repository containing dir and its checked-out branch.
-// It reads .git/HEAD instead of running git: no process per status poll (which
-// would also flash a console window from the Windows GUI build). That works
-// because the status line script and tingly-box share a machine; when they
-// don't, dir doesn't exist here and both results are empty. Not cached:
-// branches change mid-session. The branch is "" on a detached HEAD.
-func gitInfo(dir string) (root, branch string) {
-	if dir == "" {
-		return "", ""
-	}
-	for d := filepath.Clean(dir); ; {
-		dotGit := filepath.Join(d, ".git")
-		if fi, err := os.Stat(dotGit); err == nil {
-			return d, headBranch(d, dotGit, fi.IsDir())
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			return "", ""
-		}
-		d = parent
-	}
-}
-
-// headBranch reads the branch from HEAD. In linked worktrees and submodules
-// .git is a file pointing at the real git dir ("gitdir: <path>").
-func headBranch(root, dotGit string, isDir bool) string {
-	gitDir := dotGit
-	if !isDir {
-		content, err := os.ReadFile(dotGit)
-		if err != nil {
-			return ""
-		}
-		gitDir = strings.TrimSpace(strings.TrimPrefix(string(content), "gitdir:"))
-		if !filepath.IsAbs(gitDir) {
-			gitDir = filepath.Join(root, gitDir)
-		}
-	}
-	head, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
-	if err != nil {
-		return ""
-	}
-	ref, ok := strings.CutPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
-	if !ok {
-		return ""
-	}
-	return ref
-}
-
-// locationLabel names the working directory by its repository: "repo" at the
-// root, "repo/a/b" up to two levels below it, "repo/.../leaf" when deeper. The parent path of a
-// repo rarely matters, so it is dropped. Outside a repo it falls back to
-// shortenPath.
-func locationLabel(dir, root string) string {
-	if root == "" {
+// locationLabel names the working directory by its project: "proj" at the
+// project root, "proj/a/b" up to two levels below it, "proj/.../leaf" when
+// deeper. It is pure string work on the paths Claude Code reports — the
+// endpoint is unauthenticated, so it must never touch the filesystem. Outside
+// the project (or with no project dir) it falls back to shortenPath.
+func locationLabel(dir, projectDir string) string {
+	dir = strings.TrimRight(strings.ReplaceAll(dir, `\`, "/"), "/")
+	projectDir = strings.TrimRight(strings.ReplaceAll(projectDir, `\`, "/"), "/")
+	if projectDir == "" {
 		return shortenPath(dir)
 	}
-	name := filepath.Base(root)
-	rel, err := filepath.Rel(root, filepath.Clean(dir))
-	if err != nil || rel == "." {
+	name := path.Base(projectDir)
+	if dir == "" || dir == projectDir {
 		return name
 	}
-	segments := strings.Split(filepath.ToSlash(rel), "/")
+	rel, ok := strings.CutPrefix(dir, projectDir+"/")
+	if !ok {
+		return shortenPath(dir)
+	}
+	segments := strings.Split(rel, "/")
 	if len(segments) > 2 {
 		return name + "/.../" + segments[len(segments)-1]
 	}
-	return name + "/" + strings.Join(segments, "/")
+	return name + "/" + rel
 }
 
 // tbModelMappingResult contains the result of model mapping lookup

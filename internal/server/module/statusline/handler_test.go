@@ -1,11 +1,9 @@
 package statusline
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -598,18 +596,15 @@ func TestGetClaudeCodeStatusLine_PlainIcons(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
-	dir := t.TempDir()
-	assert.NoError(t, os.MkdirAll(filepath.Join(dir, ".git"), 0o755))
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644))
-
-	body := fmt.Sprintf(`{"model": {"id": "cc"}, "cwd": %q, "session_name": "t", "context_window": {"used_percentage": 50}}`, dir)
+	body := `{"model": {"id": "cc"}, "workspace": {"current_dir": "/x/repo", "project_dir": "/x/repo"},
+		"worktree": {"branch": "main"}, "session_name": "t", "context_window": {"used_percentage": 50}}`
 	req, _ := http.NewRequest("POST", "/statusline/claude_code?icons=plain", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	lines := strings.Split(w.Body.String(), "\n")
-	assert.Equal(t, filepath.Base(dir)+`  git:main  session:"t"`, lines[0])
+	assert.Equal(t, `repo  git:main  session:"t"`, lines[0])
 	assert.Contains(t, lines[1], "[####----] 50%")
 	for _, r := range w.Body.String() {
 		assert.True(t, r < 0x2000 || r == '→', "plain output must avoid emoji/blocks, got %q", r)
@@ -731,56 +726,17 @@ func TestFirstN(t *testing.T) {
 	assert.Equal(t, "", firstN("", 5))
 }
 
-func TestGitInfo(t *testing.T) {
-	writeFile := func(path, content string) {
-		assert.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-		assert.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-	}
-
-	t.Run("branch from subdirectory", func(t *testing.T) {
-		repo := t.TempDir()
-		writeFile(filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/feat/status\n")
-		sub := filepath.Join(repo, "a", "b")
-		assert.NoError(t, os.MkdirAll(sub, 0o755))
-
-		root, branch := gitInfo(sub)
-		assert.Equal(t, repo, root)
-		assert.Equal(t, "feat/status", branch)
-	})
-
-	t.Run("linked worktree .git file", func(t *testing.T) {
-		base := t.TempDir()
-		writeFile(filepath.Join(base, "main", ".git", "worktrees", "wt", "HEAD"), "ref: refs/heads/wt-branch\n")
-		wt := filepath.Join(base, "wt")
-		writeFile(filepath.Join(wt, ".git"), "gitdir: ../main/.git/worktrees/wt\n")
-
-		root, branch := gitInfo(wt)
-		assert.Equal(t, wt, root)
-		assert.Equal(t, "wt-branch", branch)
-	})
-
-	t.Run("detached HEAD has no branch", func(t *testing.T) {
-		repo := t.TempDir()
-		writeFile(filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
-		root, branch := gitInfo(repo)
-		assert.Equal(t, repo, root)
-		assert.Empty(t, branch)
-	})
-
-	t.Run("missing dir or empty", func(t *testing.T) {
-		root, branch := gitInfo("/nonexistent/dir")
-		assert.Empty(t, root+branch)
-		root, branch = gitInfo("")
-		assert.Empty(t, root+branch)
-	})
-}
-
 func TestLocationLabel(t *testing.T) {
-	repo := filepath.Join("x", "tingly-box")
-	assert.Equal(t, "tingly-box", locationLabel(repo, repo))
-	assert.Equal(t, "tingly-box/internal", locationLabel(filepath.Join(repo, "internal"), repo))
-	assert.Equal(t, "tingly-box/internal/server", locationLabel(filepath.Join(repo, "internal", "server"), repo))
-	assert.Equal(t, "tingly-box/.../statusline", locationLabel(filepath.Join(repo, "internal", "server", "statusline"), repo))
+	proj := "/x/tingly-box"
+	assert.Equal(t, "tingly-box", locationLabel(proj, proj))
+	assert.Equal(t, "tingly-box", locationLabel("", proj))
+	assert.Equal(t, "tingly-box/internal", locationLabel(proj+"/internal", proj))
+	assert.Equal(t, "tingly-box/internal/server", locationLabel(proj+"/internal/server", proj))
+	assert.Equal(t, "tingly-box/.../statusline", locationLabel(proj+"/internal/server/statusline", proj))
+	assert.Equal(t, "tingly-box/sub", locationLabel(`C:\x\tingly-box\sub`, `C:\x\tingly-box`))
+	// Not under the project, or a sibling sharing the prefix: plain path.
+	assert.Equal(t, "~/tmp/repo", locationLabel("/tmp/repo", proj))
+	assert.Equal(t, "~/x/tingly-box-2", locationLabel("/x/tingly-box-2", proj))
 	assert.Equal(t, "~/tmp/repo", locationLabel("/tmp/repo", ""))
 }
 
