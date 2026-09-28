@@ -2,8 +2,9 @@ name: Docker Source Image Build and Push
 
 # Builds the image from the checked-out source via
 # build/docker/docker.build.Dockerfile, rather than repackaging a published
-# npm release the way npm.yml's build-docker-npm job does. Dispatch this against the ref you
-# want built, so a branch's own changes actually reach the image.
+# npm release the way npm.yml's build-docker-npm job does. Dispatch this
+# against the ref you want built, so a branch's own changes actually reach
+# the image.
 
 on:
   workflow_dispatch:

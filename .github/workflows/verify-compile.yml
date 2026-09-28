@@ -11,14 +11,33 @@ name: Verify Compile
 # builds (and the release-asset checks) live in release.yml / verify-release.yml.
 on:
   pull_request:
+    # Everything except areas no build here reads (docs, CI config, the
+    # non-Go tooling trees). Go-side assets are kept on purpose: packages
+    # go:embed JSON/YAML/templates/icons/dist, so they can break a compile.
     paths:
-      - '**.go'
-      - '**/go.mod'
-      - '**/go.sum'
-      - 'go.work*'
-      - 'libs/**'
+      - '**'
+      - '!**/*_test.go'
+      - '!frontend/**'
+      - '!homepage/**'
+      - '!docs/**'
+      - '!.design/**'
+      - '!.claude/**'
+      - '!.agents/**'
+      - '!.github/**'
+      - '!tests/**'
+      - '!sdk/**'
+      - '!build/**'
+      - '!deploy/**'
+      - '!scripts/**'
+      - '!*.md'
+      - '!**/README.md'
+      - '!**/CLAUDE.md'
+      - '!Taskfile*.yml'
+      - '!LICENSE*'
+      - '!NOTICE'
+      - '!.gitignore'
       - 'frontend/**'
-      - 'openapi.json'
+      - '!frontend/**/*.md'
       - '.github/workflows/verify-compile.yml'
   workflow_dispatch:
 
@@ -35,29 +54,75 @@ jobs:
     name: Detect changed surfaces
     runs-on: ubuntu-latest
     outputs:
-      cli: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.cli }}
-      gui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.gui }}
-      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend }}
+      cli: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' }}
+      gui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.gui == 'true' }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.frontend == 'true' || steps.filter.outputs.openapi == 'true' }}
     steps:
       - name: Filter paths
         id: filter
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@v3
         with:
-          # Shared Go = any non-test Go source outside the other surface's
-          # own directory, plus module/workspace files and the SDK submodules.
+          # Go surfaces = every file outside the non-Go areas (Go packages
+          # go:embed non-Go assets, so those count), minus the other
+          # surface's own directory. `every`: a file must match all patterns.
           predicate-quantifier: every
           filters: |
+            self:
+              - '.github/workflows/verify-compile.yml'
             cli:
-              - '{**/*.go,go.mod,go.sum,**/go.mod,**/go.sum,go.work*,libs/**,.github/workflows/verify-compile.yml}'
-              - '!**/*_test.go'
+              - '**'
               - '!gui/**'
-            gui:
-              - '{**/*.go,go.mod,go.sum,**/go.mod,**/go.sum,go.work*,libs/**,.github/workflows/verify-compile.yml}'
               - '!**/*_test.go'
+              - '!frontend/**'
+              - '!homepage/**'
+              - '!docs/**'
+              - '!.design/**'
+              - '!.claude/**'
+              - '!.agents/**'
+              - '!.github/**'
+              - '!tests/**'
+              - '!sdk/**'
+              - '!build/**'
+              - '!deploy/**'
+              - '!scripts/**'
+              - '!*.md'
+              - '!**/README.md'
+              - '!**/CLAUDE.md'
+              - '!Taskfile*.yml'
+              - '!openapi.json'
+              - '!LICENSE*'
+              - '!NOTICE'
+              - '!.gitignore'
+            gui:
+              - '**'
               - '!cli/**'
+              - '!**/*_test.go'
+              - '!frontend/**'
+              - '!homepage/**'
+              - '!docs/**'
+              - '!.design/**'
+              - '!.claude/**'
+              - '!.agents/**'
+              - '!.github/**'
+              - '!tests/**'
+              - '!sdk/**'
+              - '!build/**'
+              - '!deploy/**'
+              - '!scripts/**'
+              - '!*.md'
+              - '!**/README.md'
+              - '!**/CLAUDE.md'
+              - '!Taskfile*.yml'
+              - '!openapi.json'
+              - '!LICENSE*'
+              - '!NOTICE'
+              - '!.gitignore'
             frontend:
-              - '{frontend/**,openapi.json,.github/workflows/verify-compile.yml}'
+              - 'frontend/**'
+              - '!frontend/**/*.md'
+            openapi:
+              - 'openapi.json'
 
   compile-cli:
     name: Compile cli (Linux)
