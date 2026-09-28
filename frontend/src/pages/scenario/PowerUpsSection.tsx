@@ -26,7 +26,7 @@ import type { ExperimentalFeature } from '@/components/ExperimentalFeatureGate';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { isFullEdition } from '@/utils/edition';
-import SectionHeader from './SectionHeader';
+import UnifiedCard from '@/components/UnifiedCard';
 
 interface PowerUp {
     feature: ExperimentalFeature;
@@ -131,12 +131,11 @@ const PowerUpsSection: React.FC = () => {
     };
 
     return (
-        <Box sx={{ mt: 4 }}>
-            <SectionHeader
-                component="h2"
-                title={t('scenarioOverview.powerUps.title', { defaultValue: 'Power-ups' })}
-                subtitle={t('scenarioOverview.powerUps.subtitle', { defaultValue: 'Optional capabilities that extend your agents. Turn one on to add it to the sidebar.' })}
-            />
+        <UnifiedCard
+            size="full"
+            title={t('scenarioOverview.powerUps.title', { defaultValue: 'Power-ups' })}
+            subtitle={t('scenarioOverview.powerUps.subtitle', { defaultValue: 'Optional capabilities that extend your agents. Turn one on to add it to the sidebar.' })}
+        >
 
             {failed && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -220,7 +219,7 @@ const PowerUpsSection: React.FC = () => {
                     </Grid>
                 ))}
             </Grid>
-        </Box>
+        </UnifiedCard>
     );
 };
 

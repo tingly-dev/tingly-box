@@ -21,7 +21,7 @@ import { api } from '@/services/api';
 import PageLayout from '@/components/PageLayout';
 import { SCENARIOS, useHiddenScenarios } from './scenarioRegistry';
 import PowerUpsSection from './PowerUpsSection';
-import SectionHeader from './SectionHeader';
+import UnifiedCard from '@/components/UnifiedCard';
 
 const scenarioIconSize = 28;
 
@@ -72,124 +72,126 @@ const AgentOverviewPage: React.FC = () => {
 
     return (
         <PageLayout loading={false}>
-            <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-                <SectionHeader
-                    component="h1"
+            <Stack spacing={3}>
+                <UnifiedCard
+                    size="full"
+                    titleHeadingLevel={1}
                     title={t('scenarioOverview.title')}
                     subtitle={t('scenarioOverview.subtitle')}
-                />
+                >
 
-                <Grid container spacing={2}>
-                    {scenarios.map((s) => {
-                        const hidden = s.hideable && isHidden(s.id);
-                        const count = ruleCounts[s.id];
-                        return (
-                            <Grid key={s.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-                                <Card
-                                    variant="outlined"
-                                    sx={{
-                                        position: 'relative',
-                                        opacity: hidden ? 0.55 : 1,
-                                        boxShadow: 'none',
-                                        transition: 'opacity 0.15s, border-color 0.15s, background-color 0.15s',
-                                        // Reveal the visibility toggle on hover/focus so it stays
-                                        // available (principle #10) without competing with the
-                                        // scenario name for attention (principle #9).
-                                        '&:hover .scenario-visibility-toggle, &:focus-within .scenario-visibility-toggle': {
-                                            opacity: 1,
-                                        },
-                                        '&:hover': {
-                                            borderColor: 'primary.main',
-                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
-                                        },
-                                    }}
-                                >
-                                    {s.hideable && (
-                                        <Tooltip
-                                            title={hidden ? t('scenarioOverview.showInSidebar') : t('scenarioOverview.hideFromSidebar', { defaultValue: 'Hide from sidebar' })}
-                                            arrow
-                                        >
-                                            <IconButton
-                                                className="scenario-visibility-toggle"
-                                                size="small"
-                                                onClick={(e) => { e.stopPropagation(); toggleHidden(s.id); }}
-                                                sx={{
-                                                    position: 'absolute',
-                                                    top: 6,
-                                                    right: 6,
-                                                    zIndex: 1,
-                                                    color: 'text.disabled',
-                                                    // Hover-revealed in both states: the card's dimming
-                                                    // alone signals "hidden" — a chip plus a standing
-                                                    // eye icon on top of it tripled the noise.
-                                                    opacity: 0,
-                                                }}
-                                            >
-                                                {hidden ? <IconVisibilityOff fontSize="small" /> : <IconVisibility fontSize="small" />}
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                    <CardActionArea
-                                        onClick={() => navigate(s.path)}
-                                        sx={{ p: 1.5 }}
+                    <Grid container spacing={2}>
+                        {scenarios.map((s) => {
+                            const hidden = s.hideable && isHidden(s.id);
+                            const count = ruleCounts[s.id];
+                            return (
+                                <Grid key={s.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                                    <Card
+                                        variant="outlined"
+                                        sx={{
+                                            position: 'relative',
+                                            opacity: hidden ? 0.55 : 1,
+                                            boxShadow: 'none',
+                                            transition: 'opacity 0.15s, border-color 0.15s, background-color 0.15s',
+                                            // Reveal the visibility toggle on hover/focus so it stays
+                                            // available (principle #10) without competing with the
+                                            // scenario name for attention (principle #9).
+                                            '&:hover .scenario-visibility-toggle, &:focus-within .scenario-visibility-toggle': {
+                                                opacity: 1,
+                                            },
+                                            '&:hover': {
+                                                borderColor: 'primary.main',
+                                                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                                            },
+                                        }}
                                     >
-                                        {/* Rule count sits under the name, beside the icon,
-                                            instead of on its own footer row — one row less
-                                            per card. */}
-                                        <Stack
-                                            direction="row"
-                                            spacing={1.25}
-                                            sx={{
-                                                alignItems: "center",
-                                                mb: 0.75
-                                            }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
-                                                {s.icon(scenarioIconSize)}
-                                            </Box>
-                                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                                    {t(s.labelKey)}
-                                                </Typography>
-                                                <Box sx={{ minHeight: 18, display: 'flex', alignItems: 'center' }}>
-                                                    {!countsLoaded ? (
-                                                        <Skeleton variant="text" width={56} />
-                                                    ) : count === undefined ? null : count > 0 ? (
-                                                        <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
-                                                            {count === 1
-                                                                ? t('scenarioOverview.ruleCountOne', { defaultValue: '1 rule' })
-                                                                : t('scenarioOverview.ruleCount', { count, defaultValue: '{{count}} rules' })}
-                                                        </Typography>
-                                                    ) : (
-                                                        <Typography variant="caption" sx={{
-                                                            color: "text.disabled"
-                                                        }}>
-                                                            {t('scenarioOverview.notConfigured', { defaultValue: 'Not configured yet' })}
-                                                        </Typography>
-                                                    )}
+                                        {s.hideable && (
+                                            <Tooltip
+                                                title={hidden ? t('scenarioOverview.showInSidebar') : t('scenarioOverview.hideFromSidebar', { defaultValue: 'Hide from sidebar' })}
+                                                arrow
+                                            >
+                                                <IconButton
+                                                    className="scenario-visibility-toggle"
+                                                    size="small"
+                                                    onClick={(e) => { e.stopPropagation(); toggleHidden(s.id); }}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        top: 6,
+                                                        right: 6,
+                                                        zIndex: 1,
+                                                        color: 'text.disabled',
+                                                        // Hover-revealed in both states: the card's dimming
+                                                        // alone signals "hidden" — a chip plus a standing
+                                                        // eye icon on top of it tripled the noise.
+                                                        opacity: 0,
+                                                    }}
+                                                >
+                                                    {hidden ? <IconVisibilityOff fontSize="small" /> : <IconVisibility fontSize="small" />}
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        <CardActionArea
+                                            onClick={() => navigate(s.path)}
+                                            sx={{ p: 1.5 }}
+                                        >
+                                            {/* Rule count sits under the name, beside the icon,
+                                                instead of on its own footer row — one row less
+                                                per card. */}
+                                            <Stack
+                                                direction="row"
+                                                spacing={1.25}
+                                                sx={{
+                                                    alignItems: "center",
+                                                    mb: 0.75
+                                                }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
+                                                    {s.icon(scenarioIconSize)}
                                                 </Box>
-                                            </Box>
-                                        </Stack>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                color: "text.secondary",
-                                                minHeight: 40,
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical',
-                                                overflow: 'hidden'
-                                            }}>
-                                            {t(s.descKey)}
-                                        </Typography>
-                                    </CardActionArea>
-                                </Card>
-                            </Grid>
-                        );
-                    })}
-                </Grid>
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                                        {t(s.labelKey)}
+                                                    </Typography>
+                                                    <Box sx={{ minHeight: 18, display: 'flex', alignItems: 'center' }}>
+                                                        {!countsLoaded ? (
+                                                            <Skeleton variant="text" width={56} />
+                                                        ) : count === undefined ? null : count > 0 ? (
+                                                            <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
+                                                                {count === 1
+                                                                    ? t('scenarioOverview.ruleCountOne', { defaultValue: '1 rule' })
+                                                                    : t('scenarioOverview.ruleCount', { count, defaultValue: '{{count}} rules' })}
+                                                            </Typography>
+                                                        ) : (
+                                                            <Typography variant="caption" sx={{
+                                                                color: "text.disabled"
+                                                            }}>
+                                                                {t('scenarioOverview.notConfigured', { defaultValue: 'Not configured yet' })}
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                </Box>
+                                            </Stack>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    minHeight: 40,
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                {t(s.descKey)}
+                                            </Typography>
+                                        </CardActionArea>
+                                    </Card>
+                                </Grid>
+                            );
+                        })}
+                    </Grid>
+                </UnifiedCard>
 
                 <PowerUpsSection />
-            </Box>
+            </Stack>
         </PageLayout>
     );
 };
