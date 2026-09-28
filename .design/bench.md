@@ -485,7 +485,8 @@ Scope / Routing 也始终挂载，它们是传输配置，和 body 怎么拼出�
 
 - 一级 activity rail 项：`key: 'bench'`，`path: '/bench'`，icon 走
   `@/components/icons`（tabler `IconTestPipe` 经 `tablerMui()` 适配；`IconFlask` 已被
-  VModel 用掉，避免视觉撞车）。位置放 Usage 之后——它与 Dashboard 同属"观察与验证"域。
+  VModel 用掉，避免视觉撞车）。位置放在各 power-up（Remote/Prompt/Tools/Guardrails）之后、
+  Credentials 之前——Dashboard 已移到 rail 顶部，Bench 作为可选实验工具不应紧跟其后把 Agent 挤下去。
 - 页面 `React.lazy(() => import('./pages/bench/BenchPage'))`（frontend/CLAUDE.md
   的 code-splitting 铁律）；**不从 page 文件导出任何共享状态**——picker 数据、共享轴原语
   都放独立模块。
@@ -538,7 +539,7 @@ Scope / Routing 也始终挂载，它们是传输配置，和 body 怎么拼出�
 | 3 | `pages/bench/contentOptions.ts` | Content 菜单的协议作用域目录：`templatesForProtocol`（Blank + 该协议的 Templates）、`matchTemplateId`（body 反查属于哪个模板，驱动 Content 按钮文案与协议切换时的"同类内容延续"，见 §6.3） |
 | 4 | `components/probe/AxisPrimitives.tsx` / `ResultSections.tsx` | 从 ProbeControls / ProbeDialog 提炼的共享原语（Axis、`AxisGroup`、ExclusiveToggle、ThinkingSlider；StatusBar、Journey、CollapsibleSection、CopyBlock）。`ProbeControls` 与 `BenchAxes` 都用 `AxisGroup` 按"四种归类"（§1）分组 |
 | 5 | `pages/bench/` 内部组件 | `TargetPicker`（`ModelSelectDialog` 卡片选择器）、`BenchAxes`（Content 菜单 + 全展开的 Parameters/Presets，见 §6.3）、Plugins 直接用 `components/rule-card/RulePluginsCard` + `FlagCatalogDialog`、`RequestEditor`（Message 视图 + JSON 视图，JSON 视图头部只有一个"Copy the preset request"按钮）、`PayloadPanel`（只读 body + Edit→切到 JSON 视图、header 覆盖）、`RunHistory` |
-| 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（Usage 之后）、`TestPipe` 图标 |
+| 6 | `App.tsx` / `layout/useActivityItems.tsx` / `components/icons` | lazy route、rail 项（power-ups 之后、Credentials 之前）、`TestPipe` 图标 |
 | 7 | `services/api.ts` | `useTargetCatalog` 只拉 providers |
 | 8 | i18n | `bench.*` en/zh；`layout.bench` |
 | 9 | 测试 | `pages/bench/bench.test.ts`（请求构造 + raw 请求解析与互斥） |

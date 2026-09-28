@@ -180,7 +180,31 @@ export function useActivityItems(): ActivityItem[] {
         pushGroup(codingTools);
         pushGroup(sdkTools);
 
+        // Rail order, top to bottom: overview → use → power-ups → verify →
+        // configuration. Dashboard leads as the "what's happening" glance,
+        // but it is not the landing page — OnboardingGate still opens /agent,
+        // and Layout falls back to the 'scenario' activity, independent of
+        // this order.
         const items: ActivityItem[] = [
+            {
+                key: 'dashboard',
+                icon: <IconChartBar sx={{ fontSize: 22 }} />,
+                label: t('layout.dashboard', { defaultValue: 'Dashboard' }),
+                path: '/dashboard/today',
+                defaultPath: '/dashboard/today',
+                children: [
+                    { path: '/dashboard/users', label: t('layout.userUsage', { defaultValue: 'Team usage' }), icon: <IconUsers sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/quota-history', label: t('layout.quotaHistory', { defaultValue: 'Quota history' }), icon: <IconHistory sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
+                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                ],
+            },
+            // ── Use: agent ⇄ model, team, image ──
             {
                 key: 'scenario',
                 icon: <IconAiAgents sx={{ fontSize: 22 }} />,
@@ -204,43 +228,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
-            {
-                key: 'dashboard',
-                icon: <IconChartBar sx={{ fontSize: 22 }} />,
-                label: t('layout.dashboard', { defaultValue: 'Dashboard' }),
-                path: '/dashboard/today',
-                defaultPath: '/dashboard/today',
-                children: [
-                    { path: '/dashboard/users', label: t('layout.userUsage', { defaultValue: 'Team usage' }), icon: <IconUsers sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/quota-history', label: t('layout.quotaHistory', { defaultValue: 'Quota history' }), icon: <IconHistory sx={{ fontSize: 20 }} /> },
-                    { type: 'divider' },
-                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
-                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
-                ],
-            },
-            // Bench — the customizable end-to-end test workbench
-            // (.design/bench.md). Sits with Usage in the "observe &
-            // verify" domain; a single page, so no sidebar children.
-            // Experimental, off by default (system.experimental "bench"
-            // flag) — same gating as Guardrails/MCP below.
-            ...(enableBench ? [{
-                key: 'bench' as const,
-                icon: <IconTestPipe sx={{ fontSize: 22 }} />,
-                label: t('layout.bench', { defaultValue: 'Bench' }),
-                path: '/bench',
-                defaultPath: '/bench',
-            }] as ActivityItem[] : []),
-            ...(isFullEdition && promptMenuItems.length > 0 ? [{
-                key: 'prompt' as const,
-                icon: <IconBrain sx={{ fontSize: 22 }} />,
-                label: t('common.prompt', { defaultValue: 'Prompt' }),
-                defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
-                children: promptMenuItems,
-            }] as ActivityItem[] : []),
+            // ── Power-ups: what extends an agent beyond plain model routing ──
             // Remote — one rail icon for the whole domain, named after the
             // product pillar (remote control) rather than the implementation
             // ("Bots"). Bot is the front door (every connected bot, every
@@ -261,6 +249,23 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
+            ...(isFullEdition && promptMenuItems.length > 0 ? [{
+                key: 'prompt' as const,
+                icon: <IconBrain sx={{ fontSize: 22 }} />,
+                label: t('common.prompt', { defaultValue: 'Prompt' }),
+                defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
+                children: promptMenuItems,
+            }] as ActivityItem[] : []),
+            ...(enableMCP ? [{
+                key: 'tools' as const,
+                icon: <IconTools sx={{ fontSize: 22 }} />,
+                label: t('layout.tools', { defaultValue: 'Tools' }),
+                defaultPath: '/mcp/sources',
+                children: [
+                    { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/tools/servertool', label: t('layout.servertool', { defaultValue: 'Servertool' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
+                ],
+            }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
                 icon: <IconShield sx={{ fontSize: 22 }} />,
@@ -274,16 +279,20 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/guardrails/history', label: t('layout.guardrailsHistory'), icon: <IconHistory sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
-            ...(enableMCP ? [{
-                key: 'tools' as const,
-                icon: <IconTools sx={{ fontSize: 22 }} />,
-                label: t('layout.tools', { defaultValue: 'Tools' }),
-                defaultPath: '/mcp/sources',
-                children: [
-                    { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/tools/servertool', label: t('layout.servertool', { defaultValue: 'Servertool' }), icon: <IconServer sx={{ fontSize: 20 }} /> },
-                ],
+            // Bench — the customizable end-to-end test workbench
+            // (.design/bench.md); a single page, so no sidebar children.
+            // Experimental, off by default (system.experimental "bench"
+            // flag) — same gating as Guardrails/MCP above. Sits after the
+            // power-ups it verifies rather than next to Dashboard, so an
+            // opt-in lab tool never pushes Agent down the rail.
+            ...(enableBench ? [{
+                key: 'bench' as const,
+                icon: <IconTestPipe sx={{ fontSize: 22 }} />,
+                label: t('layout.bench', { defaultValue: 'Bench' }),
+                path: '/bench',
+                defaultPath: '/bench',
             }] as ActivityItem[] : []),
+            // ── Configuration: set once, rarely revisited ──
             {
                 key: 'credential',
                 icon: <IconLock sx={{ fontSize: 22 }} />,
