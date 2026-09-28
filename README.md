@@ -27,7 +27,6 @@ Tingly Box **connects any agent to any model** and **puts your whole team on one
   * Profiles for Claude Code — switch between profiles with different models under different scenarios
   * Both API keys and OAuth - use your existing quotas anywhere
   * Smart Routing — Intelligently route requests across models and tokens based on cost, speed, or custom policies
-  * Image API — Route image generation and editing through the same gateway, with a built-in playground
 * **Team AI Management**
   * One team endpoint — model rules are managed centrally, deciding which models the team can call and which providers serve them
   * Sharing keys — a dedicated API token per member; revoke or rotate one without touching anyone else
@@ -37,6 +36,7 @@ Tingly Box **connects any agent to any model** and **puts your whole team on one
   * Guardrails — Policy checks on requests and responses, built-in protections, and masking for protected credentials
   * MCP Gateway — Register MCP servers once and share them with every agent, with built-in `web_search` and `web_fetch`
   * Remote Control — Control AI agents remotely through Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
+  * Image API — Route image generation and editing through the same gateway, with a built-in playground
   * Usage Analytics — Track token consumption, latency, cost estimates, and model selection per request
 * **Production-Ready**
   * UX-First — Visual management of providers, routes, models, team, and remote bots, with intuitive workflows for complex operations
