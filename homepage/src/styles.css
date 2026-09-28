@@ -391,15 +391,6 @@ h3 { font-size: 1.02rem; font-weight: 600; }
 .flow-scroll[data-static="false"] .flow-step[data-state="active"] { border-color: var(--accent); }
 .flow-scroll[data-static="false"] .flow-step[data-state="active"] .step-kicker { color: var(--accent); }
 .flow-scroll[data-static="false"] .flow-step:not([data-state="active"]):hover { opacity: 0.85; }
-/* Only the active step shows its description, so the list fits short viewports. */
-.flow-scroll[data-static="false"] .flow-steps { gap: 16px; }
-.flow-scroll[data-static="false"] .flow-step h3 + p {
-  max-height: 0; opacity: 0; overflow: hidden;
-  transition: max-height 0.35s ease, opacity 0.35s ease;
-}
-.flow-scroll[data-static="false"] .flow-step h3 { margin-bottom: 0; transition: margin-bottom 0.35s ease; }
-.flow-scroll[data-static="false"] .flow-step[data-state="active"] h3 { margin-bottom: 6px; }
-.flow-scroll[data-static="false"] .flow-step[data-state="active"] h3 + p { max-height: 10em; opacity: 1; }
 @media (max-width: 991px) { .flow-inner { grid-template-columns: 1fr; gap: 32px; } }
 
 /* svg stage pieces */
