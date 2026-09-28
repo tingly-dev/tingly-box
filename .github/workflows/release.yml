@@ -593,15 +593,15 @@ jobs:
             echo "The run waits for approval of the \`production\` environment before publishing."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Verify the release we just published. verify-build.yml's own
+  # Verify the release we just published. verify-release.yml's own
   # `release: published` trigger never fires for it (same GITHUB_TOKEN rule
   # as above), so call it directly. Non-blocking for the npm dispatch.
-  verify-build:
+  verify-release:
     needs: [setup, github-release]
     if: >-
       always() &&
       needs.setup.result == 'success' &&
       needs.github-release.result == 'success'
-    uses: ./.github/workflows/verify-build.yml
+    uses: ./.github/workflows/verify-release.yml
     with:
       tag: ${{ needs.setup.outputs.release_tag }}

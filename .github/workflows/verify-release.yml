@@ -1,14 +1,17 @@
-name: Verify Build
+name: Verify Release
 
 run-name: >-
-  🔍 Verify build ${{ inputs.tag || github.event.release.tag_name }}
+  🔍 Verify release ${{ inputs.tag || github.event.release.tag_name }}
 
-# Standalone release verification. Three independent jobs:
+# Post-release verification of what a tag actually ships. Three independent
+# jobs:
 #   - verify-release-assets: checks the already-built release assets
 #     (zip integrity, checksums, binary formats) — no rebuild.
-#   - verify-gui-build: builds the Wails GUI from source on Linux, so GUI
-#     regressions (bindings, frontend, cgo/webview) surface here even when a
-#     release was cut without GUI artifacts (build_gui=false).
+#   - verify-gui-package: runs the full production GUI packaging on Linux
+#     (wails bindings codegen, wails frontend build, version ldflags, launch
+#     smoke test). verify-compile.yml's gui job only type-checks the Go side
+#     at PR time; this catches packaging regressions even when a release was
+#     cut without GUI artifacts (build_gui=false).
 #   - verify-npx-shim: runs build/npx/test-shim.sh against the release.
 # Called by release.yml right after it publishes a release (non-blocking, in
 # parallel with the NPX publish workflow) — that release is created with
@@ -89,7 +92,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "## 🔍 Verify Build — ${{ steps.tag.outputs.tag }}"
+            echo "## 🔍 Verify Release Assets — ${{ steps.tag.outputs.tag }}"
             echo ""
             echo "Checked release assets: zip integrity, sha256 checksums, and"
             echo "binary format/architecture per platform."
@@ -147,8 +150,8 @@ jobs:
             echo "\`version\` run of the release binary."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  verify-gui-build:
-    name: Verify GUI Build (Linux)
+  verify-gui-package:
+    name: Verify GUI Package (Linux)
     runs-on: ubuntu-latest
     env:
       GO_VERSION: '1.26'
@@ -244,7 +247,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "## 🖥️ Verify GUI Build — ${{ steps.tag.outputs.tag }}"
+            echo "## 🖥️ Verify GUI Package — ${{ steps.tag.outputs.tag }}"
             echo ""
             echo "Built the Wails GUI from source on Linux (bindings, frontend,"
             echo "cgo/webview) with version ldflags, and smoke-tested the binary."

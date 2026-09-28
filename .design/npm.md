@@ -86,7 +86,7 @@ the path to re-enable global installs.
   It also esbuild-bundles the gui shim and parse-checks it, so a broken
   `shared/` import fails the harness for every package. Run it before
   touching the shims or the publish workflow. CI runs it too: the
-  `verify-npx-shim` job in `verify-build.yml` executes it on every release
+  `verify-npx-shim` job in `verify-release.yml` executes it on every release
   (and on manual runs against any tag).
 
 ### The failure, precisely

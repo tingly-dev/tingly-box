@@ -8,7 +8,7 @@ name: Verify Compile
 #   - compile-frontend : pnpm build of frontend/
 # The three jobs are independent: the Go builds embed the committed
 # PLACEHOLDER dist, so they never wait on the frontend build. Full release
-# builds (and the release-asset checks) live in release.yml / verify-build.yml.
+# builds (and the release-asset checks) live in release.yml / verify-release.yml.
 on:
   pull_request:
     paths:
