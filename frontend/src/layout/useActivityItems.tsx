@@ -236,7 +236,9 @@ export function useActivityItems(): ActivityItem[] {
             // the purposes mounted onto those bots. New purposes append here
             // as new rows — the rail icon never grows. See bot-arch.md §10.
             // (key stays 'bots' — internal id, not user-visible.)
-            ...(isFullEdition ? [{
+            // Hidden via the Remote power-up switch on /agent (same hidden set as
+            // Team/Image) — hides the rail item only, bots keep running.
+            ...(isFullEdition && !hiddenScenarios.has('remote') ? [{
                 key: 'bots' as const,
                 icon: <IconDeviceRemote sx={{ fontSize: 22 }} />,
                 label: t('layout.remote'),

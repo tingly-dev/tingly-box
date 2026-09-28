@@ -28,12 +28,15 @@ import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { isFullEdition } from '@/utils/edition';
 import { useBotPlatformSummary } from '@/layout/useBotPlatformSummary';
+import { useHiddenScenarios } from './scenarioRegistry';
 import UnifiedCard from '@/components/UnifiedCard';
 
 interface PowerUp {
     key: string;
-    // The `_global` flag behind the switch. Absent = always on (no switch).
+    // The `_global` flag behind the switch. Absent = the switch only shows/hides
+    // the rail item (onToggle) and the feature itself keeps running.
     feature?: ExperimentalFeature;
+    onToggle?: () => void;
     icon: React.ReactNode;
     name: string;
     description: string;
@@ -60,6 +63,7 @@ const PowerUpsSection: React.FC = () => {
     const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
+    const { isHidden, toggleHidden } = useHiddenScenarios();
     const botSummary = useBotPlatformSummary(isFullEdition);
     const botTotals = Object.values(botSummary).reduce(
         (acc, b) => ({ active: acc.active + b.active, total: acc.total + b.total }),
@@ -68,15 +72,17 @@ const PowerUpsSection: React.FC = () => {
 
     const iconSx = { fontSize: 24, color: 'text.secondary' };
     const powerUps: PowerUp[] = [
-        // Remote leads: the established power-up (drive agents from IM), not
-        // flag-gated — full edition only, same as its rail item.
+        // Remote leads: the established power-up (drive agents from IM). Not
+        // flag-gated (full edition only) — its switch hides/shows the rail item
+        // via the same hidden set as Team/Image; connected bots keep running.
         ...(isFullEdition ? [{
             key: 'remote',
             icon: <IconDeviceRemote sx={iconSx} />,
             name: t('layout.remote'),
             description: t('scenarioOverview.powerUps.remoteDesc', { defaultValue: 'Drive your agents from IM — connect bots for remote control and notifications.' }),
             path: '/bots/overview',
-            enabled: true,
+            enabled: !isHidden('remote'),
+            onToggle: () => toggleHidden('remote'),
             status: botTotals.total > 0
                 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
                 : undefined,
@@ -146,6 +152,7 @@ const PowerUpsSection: React.FC = () => {
     ];
 
     const toggle = async (p: PowerUp) => {
+        if (p.onToggle) return p.onToggle();
         if (!p.feature) return;
         setFailed(false);
         setUpdating(p.feature);
@@ -192,7 +199,7 @@ const PowerUpsSection: React.FC = () => {
                         >
                             {/* The switch stays visible (not hover-revealed like the
                                 scenario visibility toggle): on/off is this card's state. */}
-                            {p.feature && (
+                            {(p.feature || p.onToggle) && (
                                 <Switch
                                     size="small"
                                     checked={p.enabled}
