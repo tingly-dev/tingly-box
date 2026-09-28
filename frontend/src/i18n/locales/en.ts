@@ -2222,6 +2222,8 @@ export default {
       "subtitle": "Optional capabilities that extend your agents. Turn one on to add it to the sidebar.",
       "experimental": "Exp.",
       "experimentalTooltip": "Experimental feature",
+      "beta": "Beta",
+      "betaTooltip": "Beta — usable, still evolving",
       "remoteDesc": "Drive your agents from IM — connect bots for remote control and notifications."
     },
     // Full product names for overview cards where the short nav label is ambiguous.

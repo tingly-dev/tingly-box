@@ -47,9 +47,9 @@ interface PowerUp {
     enabledNotice?: string;
     // Live status line under the name (e.g. bot count), like the agent cards' rule count.
     status?: string;
-    // Still experimental (vs. the other power-ups, which are just opt-in) —
-    // badged so users know what they're turning on.
-    experimental?: boolean;
+    // Maturity tag beside the name so users know what they're turning on:
+    // 'exp' = experimental, 'beta' = usable but still evolving. Absent = stable.
+    stage?: 'exp' | 'beta';
 }
 
 // Power-ups — opt-in features that extend an agent, controlled in
@@ -94,6 +94,7 @@ const PowerUpsSection: React.FC = () => {
             name: t('system.experimentalFeatures.bench'),
             description: t('system.experimentalFeatures.enableBench'),
             path: '/bench',
+            stage: 'beta' as const,
             enabled: enableBench,
         },
         // Desk lives under Remote in the rail, which is full-edition only.
@@ -104,6 +105,7 @@ const PowerUpsSection: React.FC = () => {
             name: t('system.experimentalFeatures.desk', { defaultValue: 'Desk' }),
             description: t('system.experimentalFeatures.enableDesk', { defaultValue: 'Run Claude Code on this machine from a browser tab, in a folder you choose.' }),
             path: '/desk',
+            stage: 'beta' as const,
             enabled: enableDesk,
             enabledNotice: t('system.experimentalFeatures.deskEnabledInfo', { defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.' }),
         }] : []),
@@ -115,7 +117,7 @@ const PowerUpsSection: React.FC = () => {
             description: t('system.experimentalFeatures.enableMCP'),
             path: '/mcp/sources',
             enabled: enableMCP,
-            experimental: true,
+            stage: 'exp' as const,
         },
         {
             key: 'guardrails',
@@ -125,7 +127,7 @@ const PowerUpsSection: React.FC = () => {
             description: t('system.experimentalFeatures.enableGuardrails'),
             path: '/guardrails',
             enabled: enableGuardrails,
-            experimental: true,
+            stage: 'exp' as const,
         },
         ...(isFullEdition ? [
             {
@@ -136,7 +138,7 @@ const PowerUpsSection: React.FC = () => {
                 description: t('system.experimentalFeatures.enableUserPrompts'),
                 path: '/prompt/user',
                 enabled: skillUser,
-                experimental: true,
+                stage: 'exp' as const,
             },
             {
                 key: 'skill_ide',
@@ -146,7 +148,7 @@ const PowerUpsSection: React.FC = () => {
                 description: t('system.experimentalFeatures.enableIdeSkills'),
                 path: '/prompt/skill',
                 enabled: skillIde,
-                experimental: true,
+                stage: 'exp' as const,
             },
         ] : []),
     ];
@@ -227,15 +229,22 @@ const PowerUpsSection: React.FC = () => {
                                             <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                                 {p.name}
                                             </Typography>
-                                            {p.experimental && (
+                                            {p.stage && (
                                                 // Abbreviated so name + tag + switch fit one row;
                                                 // the tooltip spells it out.
-                                                <Tooltip title={t('scenarioOverview.powerUps.experimentalTooltip', { defaultValue: 'Experimental feature' })} arrow>
+                                                <Tooltip
+                                                    title={p.stage === 'exp'
+                                                        ? t('scenarioOverview.powerUps.experimentalTooltip', { defaultValue: 'Experimental feature' })
+                                                        : t('scenarioOverview.powerUps.betaTooltip', { defaultValue: 'Beta — usable, still evolving' })}
+                                                    arrow
+                                                >
                                                     <Chip
                                                         size="small"
-                                                        color="warning"
+                                                        color={p.stage === 'exp' ? 'warning' : 'info'}
                                                         variant="outlined"
-                                                        label={t('scenarioOverview.powerUps.experimental', { defaultValue: 'Exp.' })}
+                                                        label={p.stage === 'exp'
+                                                            ? t('scenarioOverview.powerUps.experimental', { defaultValue: 'Exp.' })
+                                                            : t('scenarioOverview.powerUps.beta', { defaultValue: 'Beta' })}
                                                         sx={{ height: 18, fontSize: '0.6875rem', flexShrink: 0 }}
                                                     />
                                                 </Tooltip>
