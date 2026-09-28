@@ -2213,6 +2213,11 @@ export default {
     "ruleCountOne": "1 条规则",
     "ruleCount": "{{count}} 条规则",
     "editTooltip": "管理可见的智能应用",
+    "powerUps": {
+      "title": "增强能力",
+      "subtitle": "扩展智能应用的可选能力。开启后会出现在侧边栏中。",
+      "experimental": "实验性"
+    },
     // Scenario descriptions intentionally omitted — falls back to English. Do not add Chinese translations here.
     "descriptions": {}
   },

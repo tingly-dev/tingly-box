@@ -12,7 +12,6 @@ import {
     alpha,
 } from '@mui/material';
 import {
-    AiAgents as IconAiAgents,
     Visibility as IconVisibility,
     VisibilityOff as IconVisibilityOff,
 } from '@/components/icons';
@@ -21,8 +20,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
 import { SCENARIOS, useHiddenScenarios } from './scenarioRegistry';
+import PowerUpsSection from './PowerUpsSection';
+import SectionHeader from './SectionHeader';
 
 const scenarioIconSize = 32;
 
@@ -68,11 +68,10 @@ const AgentOverviewPage: React.FC = () => {
     return (
         <PageLayout loading={false}>
             <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-                <PageHeader
+                <SectionHeader
+                    component="h1"
                     title={t('scenarioOverview.title')}
                     subtitle={t('scenarioOverview.subtitle')}
-                    icon={<IconAiAgents sx={{ fontSize: 28 }} />}
-                    sx={{ mb: 3 }}
                 />
 
                 <Grid container spacing={2}>
@@ -190,6 +189,8 @@ const AgentOverviewPage: React.FC = () => {
                         );
                     })}
                 </Grid>
+
+                <PowerUpsSection />
             </Box>
         </PageLayout>
     );

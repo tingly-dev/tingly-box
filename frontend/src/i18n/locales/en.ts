@@ -2217,6 +2217,11 @@ export default {
     "ruleCountOne": "1 rule",
     "ruleCount": "{{count}} rules",
     "editTooltip": "Manage visible agents",
+    "powerUps": {
+      "title": "Power-ups",
+      "subtitle": "Optional capabilities that extend your agents. Turn one on to add it to the sidebar.",
+      "experimental": "Experimental"
+    },
     // Full product names for overview cards where the short nav label is ambiguous.
     "titles": {
       "dsh": "DeepSeek Harness",
