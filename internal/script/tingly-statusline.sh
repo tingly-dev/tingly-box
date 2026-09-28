@@ -22,6 +22,24 @@ set -e
 TINGLY_API_URL="${TINGLY_API_URL:-http://localhost:12580}"
 TINGLY_SCENARIO="${TINGLY_SCENARIO:-claude_code}"
 
+# Emoji need a terminal that can draw them. Fall back to plain text on the
+# Linux VT console and the legacy Windows console (Git Bash outside Windows
+# Terminal / VS Code). TINGLY_STATUSLINE_ICONS=emoji|plain overrides.
+ICONS="${TINGLY_STATUSLINE_ICONS:-}"
+if [ -z "$ICONS" ]; then
+	ICONS=emoji
+	if [ "$TERM" = "linux" ]; then
+		ICONS=plain
+	fi
+	case "$OSTYPE" in
+	msys* | cygwin*)
+		if [ -z "$WT_SESSION" ] && [ "$TERM_PROGRAM" != "vscode" ]; then
+			ICONS=plain
+		fi
+		;;
+	esac
+fi
+
 # Read Claude Code JSON from stdin
 CC_INPUT=$(cat)
 
@@ -30,7 +48,7 @@ CC_INPUT=$(cat)
 echo "$CC_INPUT" | curl -s -X POST \
 	-H "Content-Type: application/json" \
 	-d @- \
-	"${TINGLY_API_URL}/tingly/${TINGLY_SCENARIO}/statusline" 2>/dev/null || echo "⚠ Tingly Box service stopped"
+	"${TINGLY_API_URL}/tingly/${TINGLY_SCENARIO}/statusline?icons=${ICONS}" 2>/dev/null || echo "Tingly Box service stopped"
 
 # We may config more like below
 # echo -e

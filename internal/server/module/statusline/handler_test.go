@@ -1,9 +1,11 @@
 package statusline
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -565,18 +567,53 @@ func TestGetClaudeCodeStatusLine_TwoRowsWithTitle(t *testing.T) {
 	lines := strings.Split(out, "\n")
 	assert.Len(t, lines, 2, "statusline should be exactly two rows; got: %q", out)
 
-	// Row 1: requested routing FIRST (ruleModel @ default), then cwd + title.
-	assert.True(t, strings.HasPrefix(lines[0], "cc[1m] @ default"),
-		"row 1 should start with the routing block; got: %q", lines[0])
+	// Row 1: where am I — location, session title, estimated cost.
+	assert.True(t, strings.HasPrefix(lines[0], "📁 "), "row 1 starts with the location; got: %q", lines[0])
 	assert.Contains(t, lines[0], "tingly-box")
-	assert.Contains(t, lines[0], `"fix-login-bug"`)
-	// No wrapping [...] around the routing block, no consumption % on row 1.
-	assert.NotContains(t, lines[0], "7%", "consumption % belongs on row 2")
+	assert.Contains(t, lines[0], `💬 "fix-login-bug"`)
+	assert.Contains(t, lines[0], "~$0.05", "cost is an estimate and lives on row 1")
+	assert.NotContains(t, lines[0], "7%", "context usage belongs on row 2")
 
-	// Row 2: consumption only (no routing block on this row when no mapping
-	// resolves in the test config — just bar, %, cost).
-	assert.Contains(t, lines[1], "7%")
-	assert.Contains(t, lines[1], "$0.05")
+	// Row 2: route chain (no rule in the test config, default profile hop
+	// omitted), then context usage. No cost next to quota/balance.
+	assert.True(t, strings.HasPrefix(lines[1], "cc[1m] → (no rule) | "), "got: %q", lines[1])
+	assert.Contains(t, lines[1], "░░░░░░░░ 7%")
+	assert.NotContains(t, lines[1], "$")
+}
+
+func TestGetClaudeCodeStatusLine_ProfileHop(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	req, _ := http.NewRequest("POST", "/statusline/claude_code:p1", strings.NewReader(`{"model": {"id": "cc"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	row2 := strings.Split(w.Body.String(), "\n")[1]
+	assert.True(t, strings.HasPrefix(row2, "cc → p1 → (no rule) | "), "got: %q", row2)
+}
+
+func TestGetClaudeCodeStatusLine_PlainIcons(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	dir := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(dir, ".git"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644))
+
+	body := fmt.Sprintf(`{"model": {"id": "cc"}, "cwd": %q, "session_name": "t", "context_window": {"used_percentage": 50}}`, dir)
+	req, _ := http.NewRequest("POST", "/statusline/claude_code?icons=plain", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	lines := strings.Split(w.Body.String(), "\n")
+	assert.Equal(t, filepath.Base(dir)+`  git:main  session:"t"`, lines[0])
+	assert.Contains(t, lines[1], "[####----] 50%")
+	for _, r := range w.Body.String() {
+		assert.True(t, r < 0x2000 || r == '→', "plain output must avoid emoji/blocks, got %q", r)
+	}
 }
 
 func TestGetClaudeCodeStatusLine_FallbackToShortID(t *testing.T) {
@@ -597,7 +634,7 @@ func TestGetClaudeCodeStatusLine_FallbackToShortID(t *testing.T) {
 
 	out := w.Body.String()
 	row1 := strings.Split(out, "\n")[0]
-	assert.Contains(t, row1, "#a3f9b2c1")
+	assert.Contains(t, row1, "💬 #a3f9b2c1")
 	assert.NotContains(t, row1, "#a3f9b2c1-") // only first 8 chars
 	assert.NotContains(t, row1, `"`, "no quoted title when session_name absent")
 }
@@ -674,11 +711,11 @@ func TestSessionLabel(t *testing.T) {
 		n, i string
 		want string
 	}{
-		{"title wins", "fix-login-bug", "a3f9b2c1-dead", ` "fix-login-bug"`},
-		{"id fallback", "", "a3f9b2c1-dead", " #a3f9b2c1"},
+		{"title wins", "fix-login-bug", "a3f9b2c1-dead", `"fix-login-bug"`},
+		{"id fallback", "", "a3f9b2c1-dead", "#a3f9b2c1"},
 		{"both empty", "", "", ""},
-		{"id truncated to 8", "", "1234567890abcdef", " #12345678"},
-		{"short id kept whole", "", "abc", " #abc"},
+		{"id truncated to 8", "", "1234567890abcdef", "#12345678"},
+		{"short id kept whole", "", "abc", "#abc"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -692,4 +729,66 @@ func TestFirstN(t *testing.T) {
 	assert.Equal(t, "abcdef", firstN("abcdef", 10))
 	assert.Equal(t, "", firstN("abcdef", 0))
 	assert.Equal(t, "", firstN("", 5))
+}
+
+func TestGitInfo(t *testing.T) {
+	writeFile := func(path, content string) {
+		assert.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		assert.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+
+	t.Run("branch from subdirectory", func(t *testing.T) {
+		repo := t.TempDir()
+		writeFile(filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/feat/status\n")
+		sub := filepath.Join(repo, "a", "b")
+		assert.NoError(t, os.MkdirAll(sub, 0o755))
+
+		root, branch := gitInfo(sub)
+		assert.Equal(t, repo, root)
+		assert.Equal(t, "feat/status", branch)
+	})
+
+	t.Run("linked worktree .git file", func(t *testing.T) {
+		base := t.TempDir()
+		writeFile(filepath.Join(base, "main", ".git", "worktrees", "wt", "HEAD"), "ref: refs/heads/wt-branch\n")
+		wt := filepath.Join(base, "wt")
+		writeFile(filepath.Join(wt, ".git"), "gitdir: ../main/.git/worktrees/wt\n")
+
+		root, branch := gitInfo(wt)
+		assert.Equal(t, wt, root)
+		assert.Equal(t, "wt-branch", branch)
+	})
+
+	t.Run("detached HEAD has no branch", func(t *testing.T) {
+		repo := t.TempDir()
+		writeFile(filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
+		root, branch := gitInfo(repo)
+		assert.Equal(t, repo, root)
+		assert.Empty(t, branch)
+	})
+
+	t.Run("missing dir or empty", func(t *testing.T) {
+		root, branch := gitInfo("/nonexistent/dir")
+		assert.Empty(t, root+branch)
+		root, branch = gitInfo("")
+		assert.Empty(t, root+branch)
+	})
+}
+
+func TestLocationLabel(t *testing.T) {
+	repo := filepath.Join("x", "tingly-box")
+	assert.Equal(t, "tingly-box", locationLabel(repo, repo))
+	assert.Equal(t, "tingly-box/internal", locationLabel(filepath.Join(repo, "internal"), repo))
+	assert.Equal(t, "tingly-box/internal/server", locationLabel(filepath.Join(repo, "internal", "server"), repo))
+	assert.Equal(t, "tingly-box/.../statusline", locationLabel(filepath.Join(repo, "internal", "server", "statusline"), repo))
+	assert.Equal(t, "~/tmp/repo", locationLabel("/tmp/repo", ""))
+}
+
+func TestLocationPartsWorktreeBranchWins(t *testing.T) {
+	parts := locationParts(&StatusInput{CWD: "/nonexistent", Worktree: Worktree{Branch: "worktree-x"}}, plainIcons)
+	assert.Equal(t, []string{"~/nonexistent", "git:worktree-x"}, parts)
+}
+
+func TestShortenPathWindows(t *testing.T) {
+	assert.Equal(t, "~/.../b/repo", shortenPath(`C:\a\b\repo`))
 }

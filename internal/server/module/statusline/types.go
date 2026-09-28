@@ -21,6 +21,14 @@ type StatusInput struct {
 	OutputStyle       OutputStyle `json:"output_style"`
 	Vim               Vim         `json:"vim"`
 	Agent             Agent       `json:"agent"`
+	Worktree          Worktree    `json:"worktree"` // present only in a Claude Code worktree session
+}
+
+// Worktree represents an active Claude Code worktree session
+type Worktree struct {
+	Name   string `json:"name" example:"my-feature"`
+	Path   string `json:"path" example:"/path/to/.claude/worktrees/my-feature"`
+	Branch string `json:"branch" example:"worktree-my-feature"`
 }
 
 // Model represents model information from Claude Code
