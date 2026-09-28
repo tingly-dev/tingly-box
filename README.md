@@ -39,8 +39,10 @@ Tingly Box **connects any agent to any model** and **puts your whole team on one
   * Image API — Route image generation and editing through the same gateway, with a built-in playground
   * Usage Analytics — Track token consumption, latency, cost estimates, and model selection per request
 * **Production-Ready**
-  * UX-First — Visual management of providers, routes, models, team, and remote bots, with intuitive workflows for complex operations
-  * Harness-Driven — VModel (Virtual Model) for testing, validation, and benchmarking; robust across protocols, routing, load balancing, and clients
+  * VModel (Virtual Model) — for testing, validation, benchmarking, and harness-driven evaluation
+  * Harness-Driven — for robustness across protocols, routing, load balancing, clients, and more
+  * UX-First — Visual management of providers, routes, aliases, models, team, and remote bots
+  * Intuitive Workflows — make complex operations easy to understand and control
   * Blazing Fast Performance — Typically adds **< 1ms** of overhead
 
 ## Preview
