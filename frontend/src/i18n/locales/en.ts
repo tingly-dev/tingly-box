@@ -191,6 +191,17 @@ export default {
     "copy": "Copy",
     "copied": "Copied!",
     "error": "Failed to check for updates",
+    "selfUpdate": {
+      "title": "Update Now",
+      "button": "Update to {{version}}",
+      "installing": "Installing update...",
+      "restarting": "Restarting into the new version...",
+      "supervisedHint": "Tingly Box runs under a service manager: the update is installed, then you restart the service.",
+      "restartRequired": "Installed {{version}}. Restart the Tingly Box service to apply it (e.g. sudo systemctl restart tingly-box).",
+      "timedOut": "Installed {{version}}, but the server has not come back yet. Refresh this page in a moment.",
+      "failed": "Update failed: {{message}}",
+      "unavailable": "One-click update is not available: {{reason}}. Use a command below."
+    },
     "methods": {
       "npx": {
         "title": "Quick Update (npx)",

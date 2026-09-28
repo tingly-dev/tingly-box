@@ -1900,6 +1900,13 @@ export const handlers = [
         },
     })),
 
+    // One-click update: mock mode never restarts, so report a service-managed
+    // install that needs a manual restart.
+    http.post('/api/v1/info/version/update', () => HttpResponse.json({
+        success: true,
+        data: { version: 'mock-dev', restarting: false, restart_required: true },
+    })),
+
     // Probe V2 (E2E) — used by the quick test button and the Probe dialog.
     // Alternates success/failure so both pill states are previewable.
     http.post('/api/v2/probe', async ({ request }) => {

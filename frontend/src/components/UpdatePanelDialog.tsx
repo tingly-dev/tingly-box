@@ -1,10 +1,11 @@
 import { GitHub, AppRegistration as NPM, Refresh } from '@/components/icons';
-import { Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { fontMono } from '@/theme/fonts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVersion } from '@/contexts/VersionContext';
+import { useSelfUpdate } from '@/hooks/useSelfUpdate';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Paper } from '@mui/material';
 
@@ -40,7 +41,9 @@ const updateMethodForSource = (source: string | null): 'npx' | 'npm' | null => {
 export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onClose }) => {
     const { t } = useTranslation();
     const theme = useTheme();
-    const { currentVersion, latestVersion, checking, releaseURL, checkForUpdates, hasUpdate, launchSource } = useVersion();
+    const { currentVersion, latestVersion, checking, releaseURL, checkForUpdates, hasUpdate, launchSource, selfUpdate } = useVersion();
+    const { state: updateState, start: startUpdate } = useSelfUpdate();
+    const updateBusy = updateState.phase === 'installing' || updateState.phase === 'restarting';
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('npx');
     // Once the launch source arrives, adopt its matching method — but only
@@ -223,6 +226,52 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                             {checking ? t('update.checking') : t('update.check')}
                         </Button>
                     </Box>
+
+                    {/* One-click update — only when the server can apply the update itself */}
+                    {hasVersionUpdate && selfUpdate && (
+                        <Box sx={{ p: 2.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.primary' }}>
+                                {t('update.selfUpdate.title')}
+                            </Typography>
+                            {selfUpdate.supported ? (
+                                <Stack spacing={1.5}>
+                                    <Button
+                                        variant="contained"
+                                        color="warning"
+                                        onClick={startUpdate}
+                                        disabled={updateBusy || updateState.phase === 'restartRequired'}
+                                        startIcon={<Refresh sx={updateBusy ? { animation: 'spin 1s linear infinite' } : undefined} />}
+                                        fullWidth
+                                        sx={{ height: 48 }}
+                                    >
+                                        {updateState.phase === 'installing'
+                                            ? t('update.selfUpdate.installing')
+                                            : updateState.phase === 'restarting'
+                                                ? t('update.selfUpdate.restarting')
+                                                : t('update.selfUpdate.button', { version: displayLatestVersion })}
+                                    </Button>
+                                    {selfUpdate.supervised && updateState.phase === 'idle' && (
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                            {t('update.selfUpdate.supervisedHint')}
+                                        </Typography>
+                                    )}
+                                    {updateState.phase === 'restartRequired' && (
+                                        <Alert severity="info">{t('update.selfUpdate.restartRequired', { version: updateState.version })}</Alert>
+                                    )}
+                                    {updateState.phase === 'timedOut' && (
+                                        <Alert severity="warning">{t('update.selfUpdate.timedOut', { version: updateState.version })}</Alert>
+                                    )}
+                                    {updateState.phase === 'error' && (
+                                        <Alert severity="error">{t('update.selfUpdate.failed', { message: updateState.message })}</Alert>
+                                    )}
+                                </Stack>
+                            ) : (
+                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    {t('update.selfUpdate.unavailable', { reason: selfUpdate.reason })}
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
 
                     {/* Update Methods Section */}
                     <Box sx={{ p: 2.5 }}>

@@ -192,6 +192,17 @@ export default {
     "copy": "复制",
     "copied": "已复制！",
     "error": "检查更新失败",
+    "selfUpdate": {
+      "title": "立即更新",
+      "button": "更新到 {{version}}",
+      "installing": "正在安装更新...",
+      "restarting": "正在重启到新版本...",
+      "supervisedHint": "Tingly Box 由服务管理器运行：安装更新后，请重启该服务。",
+      "restartRequired": "已安装 {{version}}。请重启 Tingly Box 服务以生效（例如 sudo systemctl restart tingly-box）。",
+      "timedOut": "已安装 {{version}}，但服务器尚未恢复。请稍后刷新此页面。",
+      "failed": "更新失败：{{message}}",
+      "unavailable": "无法一键更新：{{reason}}。请使用下方命令。"
+    },
     "methods": {
       "npx": {
         "title": "快速更新（npx）",
