@@ -12,7 +12,7 @@
 // Idea adapted from the recursive hero on anthropic.com/institute; the
 // implementation here is independent.
 import { type Camera, camTarget, foldCam, follow, startCam, wideCam } from './camera';
-import { DWELL, FADE, FOLD, HOLD, POP, ROUNDS, SPAN, TICK, TILE, VARIANTS } from './config';
+import { DWELL, FADE, FOLD, HOLD, PAUSE, POP, ROUNDS, SPAN, TICK, TILE, VARIANTS } from './config';
 import { ALL_TILES, layouts } from './layouts';
 import { clamp01, easeInOut, rng } from './math';
 import { type Round, newRound, step } from './round';
@@ -212,9 +212,13 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
     const dt = Math.min(100, now - (lastFrame || now));
     lastFrame = now;
     step(round, now, random);
-    if (round.doneAt && now - round.doneAt > HOLD + FOLD) {
-      // folded back into the icon: grow again, or rest there once out of rounds
-      if (!roundsLeft) { rest(); return; }
+    if (round.doneAt && !roundsLeft && now - round.doneAt > HOLD + FOLD) {
+      // folded back into the icon and out of rounds: rest there
+      rest();
+      return;
+    }
+    if (round.doneAt && now - round.doneAt > HOLD + FOLD + PAUSE) {
+      // the icon has paused for a beat: grow the next round from it
       roundsLeft--;
       round = newRound((round.variant + 1) % VARIANTS, now);
       setCaption(round.variant);
