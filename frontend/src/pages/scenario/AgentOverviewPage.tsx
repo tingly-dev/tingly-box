@@ -2,6 +2,7 @@ import {
     Box,
     Card,
     CardActionArea,
+    Chip,
     Grid,
     IconButton,
     Skeleton,
@@ -30,13 +31,11 @@ const AgentOverviewPage: React.FC = () => {
     const navigate = useNavigate();
     const { isHidden, toggleHidden } = useHiddenScenarios();
 
-    // Visible agents first, hidden ones after — so the dimmed cards don't
-    // interleave with the ones in use. Ordered once at load (not on every
-    // toggle) so a card never jumps out from under the cursor mid-click.
-    const [scenarios] = useState(() => [
-        ...SCENARIOS.filter(s => !(s.hideable && isHidden(s.id))),
-        ...SCENARIOS.filter(s => s.hideable && isHidden(s.id)),
-    ]);
+    // Hidden agents leave the card grid for a compact chip row below it — a
+    // different shape, not just a dimmer card, so "in use" vs "hidden" reads
+    // at a glance. Hiding/showing moves the agent between the two on purpose.
+    const visibleScenarios = SCENARIOS.filter(s => !(s.hideable && isHidden(s.id)));
+    const hiddenScenarios = SCENARIOS.filter(s => s.hideable && isHidden(s.id));
 
     // Per-scenario rule counts drive the card status line ("3 rules" /
     // "Not configured yet"), so this overview answers the user's real question
@@ -79,10 +78,8 @@ const AgentOverviewPage: React.FC = () => {
                     title={t('scenarioOverview.title')}
                     subtitle={t('scenarioOverview.subtitle')}
                 >
-
                     <Grid container spacing={2}>
-                        {scenarios.map((s) => {
-                            const hidden = s.hideable && isHidden(s.id);
+                        {visibleScenarios.map((s) => {
                             const count = ruleCounts[s.id];
                             return (
                                 <Grid key={s.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
@@ -90,9 +87,8 @@ const AgentOverviewPage: React.FC = () => {
                                         variant="outlined"
                                         sx={{
                                             position: 'relative',
-                                            opacity: hidden ? 0.55 : 1,
                                             boxShadow: 'none',
-                                            transition: 'opacity 0.15s, border-color 0.15s, background-color 0.15s',
+                                            transition: 'border-color 0.15s, background-color 0.15s',
                                             // Reveal the visibility toggle on hover/focus so it stays
                                             // available (principle #10) without competing with the
                                             // scenario name for attention (principle #9).
@@ -107,7 +103,7 @@ const AgentOverviewPage: React.FC = () => {
                                     >
                                         {s.hideable && (
                                             <Tooltip
-                                                title={hidden ? t('scenarioOverview.showInSidebar') : t('scenarioOverview.hideFromSidebar', { defaultValue: 'Hide from sidebar' })}
+                                                title={t('scenarioOverview.hideFromSidebar', { defaultValue: 'Hide from sidebar' })}
                                                 arrow
                                             >
                                                 <IconButton
@@ -120,13 +116,10 @@ const AgentOverviewPage: React.FC = () => {
                                                         right: 6,
                                                         zIndex: 1,
                                                         color: 'text.disabled',
-                                                        // Hover-revealed in both states: the card's dimming
-                                                        // alone signals "hidden" — a chip plus a standing
-                                                        // eye icon on top of it tripled the noise.
                                                         opacity: 0,
                                                     }}
                                                 >
-                                                    {hidden ? <IconVisibilityOff fontSize="small" /> : <IconVisibility fontSize="small" />}
+                                                    <IconVisibility fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                         )}
@@ -188,6 +181,32 @@ const AgentOverviewPage: React.FC = () => {
                             );
                         })}
                     </Grid>
+
+                    {hiddenScenarios.length > 0 && (
+                        <Box sx={{ mt: 3 }}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                                {t('scenarioOverview.hidden')} · {hiddenScenarios.length}
+                            </Typography>
+                            <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                                {hiddenScenarios.map((s) => (
+                                    <Chip
+                                        key={s.id}
+                                        variant="outlined"
+                                        icon={<Box sx={{ display: 'flex', ml: 1 }}>{s.icon(16)}</Box>}
+                                        label={t(s.labelKey)}
+                                        onClick={() => navigate(s.path)}
+                                        onDelete={() => toggleHidden(s.id)}
+                                        deleteIcon={
+                                            <Tooltip title={t('scenarioOverview.showInSidebar')} arrow>
+                                                <IconVisibilityOff />
+                                            </Tooltip>
+                                        }
+                                        sx={{ color: 'text.secondary' }}
+                                    />
+                                ))}
+                            </Stack>
+                        </Box>
+                    )}
                 </UnifiedCard>
 
                 <PowerUpsSection />
