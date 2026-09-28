@@ -4,9 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - 'ci/**'
-      - 'main'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -44,12 +41,8 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "release_tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
             echo "build_gui=${{ github.event.inputs.build_gui }}" >> $GITHUB_OUTPUT
-          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-            echo "build_gui=false" >> $GITHUB_OUTPUT
           else
-            # CI push to branch - use a dev version
-            echo "release_tag=dev-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
             echo "build_gui=false" >> $GITHUB_OUTPUT
           fi
 
@@ -155,13 +148,9 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
             echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
-          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          else
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "TAG_EXISTS=1" >> $GITHUB_ENV
-          else
-            # CI push to branch
-            echo "RELEASE_TAG=${{ needs.setup.outputs.release_tag }}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=0" >> $GITHUB_ENV
           fi
 
       - name: Setup Go
@@ -335,13 +324,9 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
             echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
-          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          else
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "TAG_EXISTS=1" >> $GITHUB_ENV
-          else
-            # CI push to branch
-            echo "RELEASE_TAG=${{ needs.setup.outputs.release_tag }}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=0" >> $GITHUB_ENV
           fi
 
       - name: Setup Node.js
@@ -438,13 +423,11 @@ jobs:
           path: ./dist/
           retention-days: 7
 
-  # Gate actual releases on a green harness. Branch pushes are validated by
-  # harness-matrix.yml directly and do not call the same matrix a second time.
-  # We call the shared template directly (same definition the CI wrapper uses)
-  # and run the full matrix (focus=all).
+  # Gate releases on a green harness. We call the shared template directly
+  # (same definition harness-matrix.yml uses) and run the full matrix
+  # (focus=all).
   harness:
     needs: setup
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/harness-template.yml
     with:
       focus: all
@@ -454,7 +437,6 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       always() &&
-      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') &&
       needs.build-cli.result == 'success' &&
       needs.harness.result == 'success' &&
       needs.setup.result == 'success' &&
@@ -554,7 +536,6 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       always() &&
-      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') &&
       needs.setup.result == 'success' &&
       needs.github-release.result == 'success'
     permissions:
@@ -611,3 +592,16 @@ jobs:
             echo ""
             echo "The run waits for approval of the \`production\` environment before publishing."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Verify the release we just published. verify-build.yml's own
+  # `release: published` trigger never fires for it (same GITHUB_TOKEN rule
+  # as above), so call it directly. Non-blocking for the npm dispatch.
+  verify-build:
+    needs: [setup, github-release]
+    if: >-
+      always() &&
+      needs.setup.result == 'success' &&
+      needs.github-release.result == 'success'
+    uses: ./.github/workflows/verify-build.yml
+    with:
+      tag: ${{ needs.setup.outputs.release_tag }}

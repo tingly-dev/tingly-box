@@ -1,0 +1,150 @@
+name: Verify Compile
+
+# PR-time compile check, split by surface so each one only runs when
+# something it builds from changed:
+#   - compile-cli      : go build/vet of ./cli/... (the tingly-box binary)
+#   - compile-gui      : go build/vet of the Wails3 GUI (Linux, GTK4 +
+#                        WebKitGTK via cgo)
+#   - compile-frontend : pnpm build of frontend/
+# The three jobs are independent: the Go builds embed the committed
+# PLACEHOLDER dist, so they never wait on the frontend build. Full release
+# builds (and the release-asset checks) live in release.yml / verify-build.yml.
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'go.work*'
+      - 'libs/**'
+      - 'frontend/**'
+      - 'openapi.json'
+      - '.github/workflows/verify-compile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: verify-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changed surfaces
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.cli }}
+      gui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.gui }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend }}
+    steps:
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          # Shared Go = any non-test Go source outside the other surface's
+          # own directory, plus module/workspace files and the SDK submodules.
+          predicate-quantifier: every
+          filters: |
+            cli:
+              - '{**/*.go,go.mod,go.sum,**/go.mod,**/go.sum,go.work*,libs/**,.github/workflows/verify-compile.yml}'
+              - '!**/*_test.go'
+              - '!gui/**'
+            gui:
+              - '{**/*.go,go.mod,go.sum,**/go.mod,**/go.sum,go.work*,libs/**,.github/workflows/verify-compile.yml}'
+              - '!**/*_test.go'
+              - '!cli/**'
+            frontend:
+              - '{frontend/**,openapi.json,.github/workflows/verify-compile.yml}'
+
+  compile-cli:
+    name: Compile cli (Linux)
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Build CLI
+        run: go build ./cli/...
+
+      - name: Vet CLI
+        run: go vet ./cli/...
+
+  compile-gui:
+    name: Compile gui/wails3 (Linux)
+    needs: changes
+    if: needs.changes.outputs.gui == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      # The wails3 Linux backend links against GTK4 + WebKitGTK 6.0 via cgo.
+      - name: Install webview build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Build GUI package
+        run: go build ./gui/wails3/...
+
+      - name: Vet GUI package
+        run: go vet ./gui/wails3/...
+
+  compile-frontend:
+    name: Compile frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install pnpm
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        run: |
+          pnpm approve-builds --all
+          pnpm install --frozen-lockfile
+
+      - name: Run codegen
+        run: pnpm gen:api
+
+      # Same policy as release.yml: legacy type errors exist, so report them
+      # without failing the check.
+      - name: Type check (non-blocking)
+        continue-on-error: true
+        run: |
+          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+
+      - name: Build frontend
+        run: pnpm build

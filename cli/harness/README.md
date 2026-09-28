@@ -83,7 +83,9 @@ so it silently drifts (see `cache_controls` / `cache_prefix` / `vendor`,
 which shipped without a CI leg for weeks).
 
 Open policy question: the workflow triggers on `ci/**` pushes, PR-merge to
-the default branch, and manual dispatch — not on every PR. Whether the fast
+the default branch, and manual dispatch — not on every PR. The two automatic
+triggers only fire when the protocol data plane or the harness itself changed
+(see the `paths` list in the workflow). Whether the fast
 legs (matrix http + replay, ~seconds) should also gate PRs directly, leaving
 the toolchain-heavy client-driver legs on the current triggers, is still
 undecided.

@@ -11,10 +11,15 @@ run-name: >-
 # definition), which this calls and which release.yml also calls directly.
 #
 # Triggers:
-#   - push ci/**             : validate every CI branch change.
-#   - pull_request merged to main : validate after every PR merge (not on
+#   - push ci/**             : validate CI branch changes.
+#   - pull_request merged to main : validate after a PR merge (not on
 #     plain closes; see the gate job).
 #   - workflow_dispatch      : manual run, optionally focused on one axis.
+#
+# Both automatic triggers are scoped to the harness's own paths (see the
+# `paths` lists below): the protocol data plane it guards, plus the harness
+# itself. Changes elsewhere (frontend, homepage, docs, management APIs …)
+# don't run the matrix; use workflow_dispatch if one should.
 #
 # Release tags are deliberately NOT triggered here — they run the harness
 # only through release.yml's workflow_call, so the matrix is never scheduled
@@ -25,6 +30,28 @@ on:
   push:
     branches:
       - 'ci/**'
+    paths:
+      # Protocol data plane
+      - 'internal/protocol/**'
+      - 'internal/protocolserver/**'
+      - 'internal/protocoltest/**'
+      - 'internal/routing/**'
+      - 'internal/loadbalance/**'
+      - 'internal/forwarding/**'
+      - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
+      - 'vmodel/**'
+      - 'ai/*.go'
+      - 'ai/go.mod'
+      - 'ai/go.sum'
+      - 'libs/**'
+      - 'go.mod'
+      - 'go.sum'
+      # The harness itself
+      - 'cli/harness/**'
+      - 'tests/clients/**'
+      - 'scripts/harness-baseline.sh'
+      - '.github/workflows/harness-matrix.yml'
+      - '.github/workflows/harness-template.yml'
   # Run after every merge to main. We react to PR-close events instead of a
   # raw `push: main` so direct pushes (e.g. bot bump commits) don't re-trigger
   # the full matrix — only genuine PR merges do.
@@ -33,6 +60,29 @@ on:
       - closed
     branches:
       - 'main'
+    # Keep in sync with the push paths above.
+    paths:
+      # Protocol data plane
+      - 'internal/protocol/**'
+      - 'internal/protocolserver/**'
+      - 'internal/protocoltest/**'
+      - 'internal/routing/**'
+      - 'internal/loadbalance/**'
+      - 'internal/forwarding/**'
+      - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
+      - 'vmodel/**'
+      - 'ai/*.go'
+      - 'ai/go.mod'
+      - 'ai/go.sum'
+      - 'libs/**'
+      - 'go.mod'
+      - 'go.sum'
+      # The harness itself
+      - 'cli/harness/**'
+      - 'tests/clients/**'
+      - 'scripts/harness-baseline.sh'
+      - '.github/workflows/harness-matrix.yml'
+      - '.github/workflows/harness-template.yml'
   workflow_dispatch:
     inputs:
       focus:
