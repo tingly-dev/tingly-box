@@ -2,6 +2,7 @@
 // and pushes in again while the T folds back into the icon.
 
 import { CAM_EASE, SPAN, TILE, ZOOM } from './config';
+import { easeInOut } from './math';
 import type { Round } from './round';
 import { CENTER, START, col, row } from './shape';
 
@@ -14,8 +15,7 @@ export const startCam = (): Camera => ({ x: col(START) - CENTER, y: row(START) -
 export const wideCam = (): Camera => ({ x: 0, y: 0, z: 1 });
 
 /** Where the camera wants to be: framing what has grown so far, with room to grow. */
-export function camTarget(round: Round, fold: number): Camera {
-  if (fold > 0) return startCam();
+export function camTarget(round: Round): Camera {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   const grow = (i: number): void => {
     x0 = Math.min(x0, col(i)); x1 = Math.max(x1, col(i));
@@ -31,8 +31,16 @@ export function camTarget(round: Round, fold: number): Camera {
 }
 
 /** Eases `cam` toward `target` over `dt` ms. */
-export function follow(cam: Camera, target: Camera, dt: number, fold: number): Camera {
-  // during the fold push in a little faster, so the zoom lands with the last tile
-  const f = 1 - Math.exp(-dt / (fold > 0 ? CAM_EASE * 0.6 : CAM_EASE));
+export function follow(cam: Camera, target: Camera, dt: number): Camera {
+  const f = 1 - Math.exp(-dt / CAM_EASE);
   return { x: cam.x + (target.x - cam.x) * f, y: cam.y + (target.y - cam.y) * f, z: cam.z + (target.z - cam.z) * f };
+}
+
+/**
+ * During the fold the camera glides from the whole T back to the icon, tied to
+ * the fold's progress so it settles exactly as the last tile lands.
+ */
+export function foldCam(t: number): Camera {
+  const from = wideCam(), to = startCam(), e = easeInOut(t);
+  return { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, z: from.z + (to.z - from.z) * e };
 }

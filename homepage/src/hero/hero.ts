@@ -6,12 +6,12 @@
 // starts close on the icon and pulls back as the T grows; once the T is
 // complete it folds back into the icon while the camera pushes in again, and
 // assembly restarts from there with a different mix. After a few rounds the
-// hero rests on the finished T and stops drawing until it is clicked or
-// hovered for a long while.
+// hero rests on the icon and stops drawing until it is clicked or hovered for
+// a long while.
 //
 // Idea adapted from the recursive hero on anthropic.com/institute; the
 // implementation here is independent.
-import { type Camera, camTarget, follow, startCam, wideCam } from './camera';
+import { type Camera, camTarget, foldCam, follow, startCam, wideCam } from './camera';
 import { DWELL, FADE, FOLD, HOLD, POP, ROUNDS, SPAN, TICK, TILE, VARIANTS } from './config';
 import { ALL_TILES, layouts } from './layouts';
 import { clamp01, easeInOut, rng } from './math';
@@ -50,8 +50,8 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
 
   let round: Round = newRound(0, 0);
   const random = rng(0xc0ffee);
-  // `finished`: resting on the complete T with the loop stopped
-  let running = false, finished = false, visible = false, raf = 0, lastFrame = 0;
+  // `resting`: the loop is stopped on the icon (or on the whole T, for reduced motion)
+  let running = false, resting = false, visible = false, raf = 0, lastFrame = 0;
   let roundsLeft = ROUNDS - 1;       // rounds still to start after the current one
   let cam: Camera = startCam();
 
@@ -204,7 +204,7 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
   // ---------- loop ----------
   /** Fold progress 0..1 of the current round (0 while growing, holding or resting). */
   function foldAt(now: number): number {
-    return round.doneAt && !finished ? clamp01((now - round.doneAt - HOLD) / FOLD) : 0;
+    return round.doneAt && !resting ? clamp01((now - round.doneAt - HOLD) / FOLD) : 0;
   }
 
   function frame(now: number): void {
@@ -212,18 +212,15 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
     const dt = Math.min(100, now - (lastFrame || now));
     lastFrame = now;
     step(round, now, random);
-    if (round.doneAt && !roundsLeft && now - round.doneAt > HOLD) {
-      // out of rounds: rest on the finished T and stop drawing until woken
-      rest();
-      return;
-    }
     if (round.doneAt && now - round.doneAt > HOLD + FOLD) {
+      // folded back into the icon: grow again, or rest there once out of rounds
+      if (!roundsLeft) { rest(); return; }
       roundsLeft--;
       round = newRound((round.variant + 1) % VARIANTS, now);
       setCaption(round.variant);
     }
     const fold = foldAt(now);
-    cam = follow(cam, finished ? wideCam() : camTarget(round, fold), dt, fold);
+    cam = fold > 0 ? foldCam(fold) : follow(cam, camTarget(round), dt);
     draw(now);
     raf = requestAnimationFrame(frame);
   }
@@ -234,7 +231,7 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
   }
 
   function resume(): void {
-    if (finished || !visible) return;
+    if (resting || !visible) return;
     cancelAnimationFrame(raf);
     running = true;
     lastFrame = 0;
@@ -246,41 +243,44 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
     caption?.closest('.hero-level')?.classList.toggle('is-idle', idle);
   }
 
+  /** Stops on the Tingly Box icon, which the next round (on wake) grows from. */
   function rest(): void {
     pause();
-    finished = true;
+    resting = true;
+    round = newRound((round.variant + 1) % VARIANTS, -1e6);
     round.walkers = [];
-    cam = wideCam();
+    cam = startCam();
     setIdle(true);
-    draw(performance.now() + 1e6);
-    armDwell();   // the pointer may already be resting on the T
+    draw(performance.now());
+    armDwell();   // the pointer may already be resting on the icon
   }
 
-  // a long hover also wakes the resting T; short ones are left alone for reading tile names
+  // a long hover also wakes the resting icon; a passing pointer does not
   let hovering = false, dwell = 0;
   function armDwell(): void {
     window.clearTimeout(dwell);
-    if (hovering && finished) dwell = window.setTimeout(wake, DWELL);
+    if (hovering && resting) dwell = window.setTimeout(wake, DWELL);
   }
 
-  /** Clicking the resting T folds it and plays one more round. */
+  /** Clicking the resting icon plays one more round. */
   function wake(): void {
-    if (!finished || reducedMotion) return;
-    finished = false;
-    roundsLeft = 1;
-    round.doneAt = performance.now() - HOLD;   // start folding right away
+    if (!resting || reducedMotion) return;
+    resting = false;
+    roundsLeft = 0;
+    round = newRound(round.variant, performance.now());
+    setCaption(round.variant);
     if (tooltip) tooltip.hidden = true;
     setIdle(false);
     resume();
   }
 
-  /** The finished T, without animation (reduced motion). */
+  /** The resting T, without animation (reduced motion). */
   function showFinal(): void {
     round = newRound(0, -1e6);
     for (const i of shapeCells) round.cells.set(i, -1e6);
     round.walkers = [];
     round.doneAt = -1e6;
-    finished = true;
+    resting = true;
     cam = wideCam();
     setCaption(0);
     draw(0);
@@ -324,7 +324,7 @@ export function startHero(canvas: HTMLCanvasElement, { caption, textColumn, tool
       palette = next;
       brand = tTile(next.brandBg, next.brandFg);
     }
-    if (!running) draw(performance.now() + (finished ? 1e6 : 0));
+    if (!running) draw(performance.now() + (resting ? 1e6 : 0));
   }
 
   // ---------- boot ----------
