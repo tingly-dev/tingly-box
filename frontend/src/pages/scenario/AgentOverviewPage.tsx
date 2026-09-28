@@ -14,7 +14,7 @@ import {
     Visibility as IconVisibility,
     VisibilityOff as IconVisibilityOff,
 } from '@/components/icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
@@ -30,7 +30,13 @@ const AgentOverviewPage: React.FC = () => {
     const navigate = useNavigate();
     const { isHidden, toggleHidden } = useHiddenScenarios();
 
-    const scenarios = useMemo(() => SCENARIOS, []);
+    // Visible agents first, hidden ones after — so the dimmed cards don't
+    // interleave with the ones in use. Ordered once at load (not on every
+    // toggle) so a card never jumps out from under the cursor mid-click.
+    const [scenarios] = useState(() => [
+        ...SCENARIOS.filter(s => !(s.hideable && isHidden(s.id))),
+        ...SCENARIOS.filter(s => s.hideable && isHidden(s.id)),
+    ]);
 
     // Per-scenario rule counts drive the card status line ("3 rules" /
     // "Not configured yet"), so this overview answers the user's real question
