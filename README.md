@@ -494,7 +494,7 @@ This project is available under:
 - **MPL-2.0 · © Tingly Dev** – See [LICENSE.txt](./LICENSE.txt)
 - **Commercial License · © Tingly Dev** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
 
-For commercial licensing inquiries, contact [biz@tingly.dev](mailto:biz@tingly.dev).
+For commercial licensing inquiries, contact [box@tingly.dev](mailto:box@tingly.dev).
 
 ---
 
