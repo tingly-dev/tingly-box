@@ -31,7 +31,8 @@ Tingly Box **connects any agent to any model** — for you and your whole team, 
   * Dedicated keys per member, with data isolated per user
   * Per-member usage tracking
 * **Power-ups**
-  * Guardrails, MCP Gateway, Image API, and Usage Analytics
+  * Guardrails, MCP Gateway, and Usage Analytics
+  * Image API — image generation and editing through the same gateway, with a built-in playground
   * Remote Control — drive agents via Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
 * **Production-Ready**
   * VModel (Virtual Model) — for testing, validation, and benchmarking
