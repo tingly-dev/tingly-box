@@ -40,7 +40,7 @@ Although we currently collect no personal data, should our product functionality
 
 If you have any questions, concerns, or requests regarding this Privacy Policy, please contact us at:
 
-**Email:** yzffeng@tingly.dev  
+**Email:** box@tingly.dev  
 *(Please replace with your actual contact email)*
 
 ---
