@@ -16,34 +16,28 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box **connects any agent to any model** and **puts your whole team on one box** — with built-in **power-ups** like guardrails, MCP tools, remote control and usage analytics.
+Tingly Box **connects any agent to any model** — for you and your whole team, with built-in power-ups.
 
 ## Key Features
 
 * **Any Agent ⇄ Any Model**
-  * Unified endpoint for AI — seamlessly bridge any providers, cloud or self-hosted
-  * One-click config for Agents - Claude Code, OpenCode, Codex, Xcode, and more
-  * Protocol translation — Anthropic, OpenAI and Gemini formats converted both ways, so Claude Code can run on DeepSeek and Codex on Claude
-  * Profiles for Claude Code — switch between profiles with different models under different scenarios
-  * Both API keys and OAuth - use your existing quotas anywhere
-  * Smart Routing — Intelligently route requests across models and tokens based on cost, speed, or custom policies
+  * Unified endpoint for AI — bridge any providers, with protocols translated both ways
+  * One-click config for Agents — Claude Code, OpenCode, Codex, Xcode, and more
+  * Profiles for Claude Code — switch models for different scenarios
+  * Both API keys and OAuth — use your existing quotas anywhere
+  * Smart Routing — route across models and tokens by cost, speed, or custom policies
 * **Team AI Management**
-  * One team endpoint — model rules are managed centrally, deciding which models the team can call and which providers serve them
-  * Sharing keys — a dedicated API token per member; revoke or rotate one without touching anyone else
-  * Isolation — data, usage, provider access, and configuration stay isolated per user
-  * Team usage — track tokens, latency, and cost estimates per member and per model
+  * Shared team endpoint with centrally managed model rules
+  * Dedicated keys per member, with data isolated per user
+  * Per-member usage tracking
 * **Power-ups**
-  * Guardrails — Policy checks on requests and responses, built-in protections, and masking for protected credentials
-  * MCP Gateway — Register MCP servers once and share them with every agent, with built-in `web_search` and `web_fetch`
-  * Remote Control — Control AI agents remotely through Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
-  * Image API — Route image generation and editing through the same gateway, with a built-in playground
-  * Usage Analytics — Track token consumption, latency, cost estimates, and model selection per request
+  * Guardrails, MCP Gateway, Image API, and Usage Analytics
+  * Remote Control — drive agents via Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
 * **Production-Ready**
-  * VModel (Virtual Model) — for testing, validation, benchmarking, and harness-driven evaluation
-  * Harness-Driven — for robustness across protocols, routing, load balancing, clients, and more
-  * UX-First — Visual management of providers, routes, aliases, models, team, and remote bots
-  * Intuitive Workflows — make complex operations easy to understand and control
-  * Blazing Fast Performance — Typically adds **< 1ms** of overhead
+  * VModel (Virtual Model) — for testing, validation, and benchmarking
+  * Harness-driven for robustness across protocols, routing, and clients
+  * UX-first visual management of providers, models, team, and remote bots
+  * Blazing fast — typically adds **< 1ms** of overhead
 
 ## Preview
 
