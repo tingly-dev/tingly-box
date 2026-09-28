@@ -2,7 +2,6 @@ package protocolserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -105,8 +104,7 @@ func appendAnthropicBetaToolContinuation(req *anthropic.BetaMessageNewParams, ca
 	}
 	assistantBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(calls))
 	for _, call := range calls {
-		input := map[string]any{}
-		_ = json.Unmarshal([]byte(call.Arguments), &input)
+		input, _ := protocol.ToolUseInput(call.Arguments)
 		assistantBlocks = append(assistantBlocks, anthropic.NewBetaToolUseBlock(call.ID, input, call.Name))
 	}
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
