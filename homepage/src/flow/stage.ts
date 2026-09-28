@@ -13,6 +13,9 @@ const NS = 'http://www.w3.org/2000/svg';
 const STEPS = 5;
 const STEP_GAP = 0.9;
 const STEP_ANIM = 0.7;
+// Scroll progress 0..1 maps to animation time T0..T0+T_SPAN.
+const T0 = 0.5;
+const T_SPAN = (STEPS - 1) * STEP_GAP + STEP_ANIM - 0.3;
 
 // camera stop per step: x, y, w, h in viewBox units
 const CAMERA: number[][] = [
@@ -201,8 +204,23 @@ export function mountFlow(svg: SVGSVGElement, scroller: HTMLElement): void {
     const rect = scroller.getBoundingClientRect();
     const span = rect.height - window.innerHeight;
     const p = span > 0 ? clamp01(-rect.top / span) : 1;
-    target = 0.5 + p * ((STEPS - 1) * STEP_GAP + STEP_ANIM - 0.3);
+    target = T0 + p * T_SPAN;
   }
+  // Click a step to jump to it: scroll to the position whose progress lands
+  // just after that step finishes animating, so scroll and click stay in sync.
+  function goTo(k: number): void {
+    if (!dynamic) return;
+    const t = Math.min(T0 + T_SPAN, k * STEP_GAP + STEP_ANIM);
+    const span = scroller.offsetHeight - window.innerHeight;
+    const top = scroller.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: top + clamp01((t - T0) / T_SPAN) * span, behavior: 'smooth' });
+  }
+  steps.forEach((s, k) => {
+    s.addEventListener('click', () => goTo(k));
+    s.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goTo(k); }
+    });
+  });
   function loop(): void {
     raf = 0;
     const d = target - current;
@@ -218,6 +236,10 @@ export function mountFlow(svg: SVGSVGElement, scroller: HTMLElement): void {
   function setMode(): void {
     dynamic = wide.matches && !reduced.matches;
     scroller.dataset.static = String(!dynamic);
+    steps.forEach((s) => {
+      if (dynamic) { s.tabIndex = 0; s.setAttribute('role', 'button'); }
+      else { s.removeAttribute('tabindex'); s.removeAttribute('role'); }
+    });
     if (dynamic) { measure(); current = target; render(current, true); } else render(0, false);
   }
 

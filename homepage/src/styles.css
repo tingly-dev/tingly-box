@@ -364,7 +364,7 @@ h3 { font-size: 1.02rem; font-weight: 600; }
 .flow { padding-bottom: 32px; }
 .flow .section-head { margin-bottom: 0; }
 .flow-scroll { position: relative; }
-.flow-scroll[data-static="false"] { height: 420vh; }
+.flow-scroll[data-static="false"] { height: 280vh; }
 .flow-scroll[data-static="true"] .flow-sticky { padding-top: 40px; }
 .flow-scroll[data-static="false"] .flow-sticky {
   position: sticky; top: 60px; height: calc(100vh - 60px);
@@ -384,10 +384,13 @@ h3 { font-size: 1.02rem; font-weight: 600; }
   font: 500 0.72rem/1 var(--mono); color: var(--ink-3);
   text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;
 }
+.flow-scroll[data-static="false"] .flow-step { cursor: pointer; }
+.flow-scroll[data-static="false"] .flow-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .flow-scroll[data-static="false"] .flow-step[data-state="upcoming"] { opacity: 0.3; }
 .flow-scroll[data-static="false"] .flow-step[data-state="done"] { opacity: 0.55; }
 .flow-scroll[data-static="false"] .flow-step[data-state="active"] { border-color: var(--accent); }
 .flow-scroll[data-static="false"] .flow-step[data-state="active"] .step-kicker { color: var(--accent); }
+.flow-scroll[data-static="false"] .flow-step:not([data-state="active"]):hover { opacity: 0.85; }
 @media (max-width: 991px) { .flow-inner { grid-template-columns: 1fr; gap: 32px; } }
 
 /* svg stage pieces */
