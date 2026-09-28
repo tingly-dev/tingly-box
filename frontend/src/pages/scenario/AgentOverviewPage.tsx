@@ -2,7 +2,6 @@ import {
     Box,
     Card,
     CardActionArea,
-    Chip,
     Grid,
     IconButton,
     Skeleton,
@@ -31,7 +30,7 @@ const AgentOverviewPage: React.FC = () => {
     const navigate = useNavigate();
     const { isHidden, toggleHidden } = useHiddenScenarios();
 
-    // Hidden agents leave the card grid for a compact chip row below it — a
+    // Hidden agents leave the card grid for a compact one-line row below it — a
     // different shape, not just a dimmer card, so "in use" vs "hidden" reads
     // at a glance. Hiding/showing moves the agent between the two on purpose.
     const visibleScenarios = SCENARIOS.filter(s => !(s.hideable && isHidden(s.id)));
@@ -187,24 +186,36 @@ const AgentOverviewPage: React.FC = () => {
                             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                                 {t('scenarioOverview.hidden')} · {hiddenScenarios.length}
                             </Typography>
-                            <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                            {/* Same column grid as the cards above so the hidden row
+                                lines up with them — just one line tall instead of a card. */}
+                            <Grid container spacing={2} sx={{ mt: 0.5 }}>
                                 {hiddenScenarios.map((s) => (
-                                    <Chip
-                                        key={s.id}
-                                        variant="outlined"
-                                        icon={<Box sx={{ display: 'flex', ml: 1 }}>{s.icon(16)}</Box>}
-                                        label={t(s.labelKey)}
-                                        onClick={() => navigate(s.path)}
-                                        onDelete={() => toggleHidden(s.id)}
-                                        deleteIcon={
+                                    <Grid key={s.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                                        <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', boxShadow: 'none' }}>
+                                            <CardActionArea
+                                                onClick={() => navigate(s.path)}
+                                                sx={{ display: 'flex', justifyContent: 'flex-start', gap: 1.25, px: 1.5, py: 0.75, minWidth: 0 }}
+                                            >
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0 }}>
+                                                    {s.icon(18)}
+                                                </Box>
+                                                <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>
+                                                    {t(s.labelKey)}
+                                                </Typography>
+                                            </CardActionArea>
                                             <Tooltip title={t('scenarioOverview.showInSidebar')} arrow>
-                                                <IconVisibilityOff />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => toggleHidden(s.id)}
+                                                    sx={{ color: 'text.disabled', mr: 0.5 }}
+                                                >
+                                                    <IconVisibilityOff fontSize="small" />
+                                                </IconButton>
                                             </Tooltip>
-                                        }
-                                        sx={{ color: 'text.secondary' }}
-                                    />
+                                        </Card>
+                                    </Grid>
                                 ))}
-                            </Stack>
+                            </Grid>
                         </Box>
                     )}
                 </UnifiedCard>
