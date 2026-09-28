@@ -36,7 +36,7 @@ export function iconTile(img: HTMLImageElement | null): HTMLCanvasElement {
   g.strokeStyle = 'rgba(20, 24, 33, 0.10)';
   g.stroke();
   if (img) {
-    const s = S * 0.54;
+    const s = S * 0.6;
     g.drawImage(img, (S - s) / 2, (S - s) / 2, s, s);
   }
   return c;

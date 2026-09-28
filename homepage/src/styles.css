@@ -215,6 +215,9 @@ h3 { font-size: 1.02rem; font-weight: 600; }
   border: 2px solid var(--accent); opacity: 0; animation: pulse 2.4s ease-out infinite;
 }
 @keyframes pulse { 0% { transform: scale(0.5); opacity: 0.6; } 100% { transform: scale(1.8); opacity: 0; } }
+/* the hero rests after a few rounds: stop the pulse too, and invite a click to replay */
+.hero-level.is-idle .pulse::after { animation: none; }
+.hero-canvas.is-idle { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } }
 .hero-tip {
   position: absolute; z-index: 2; pointer-events: none;
