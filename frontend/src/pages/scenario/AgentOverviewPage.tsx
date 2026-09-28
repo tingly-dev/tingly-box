@@ -23,7 +23,7 @@ import { SCENARIOS, useHiddenScenarios } from './scenarioRegistry';
 import PowerUpsSection from './PowerUpsSection';
 import SectionHeader from './SectionHeader';
 
-const scenarioIconSize = 32;
+const scenarioIconSize = 28;
 
 const AgentOverviewPage: React.FC = () => {
     const { t } = useTranslation();
@@ -131,26 +131,42 @@ const AgentOverviewPage: React.FC = () => {
                                     )}
                                     <CardActionArea
                                         onClick={() => navigate(s.path)}
-                                        sx={{ p: 2 }}
+                                        sx={{ p: 1.5 }}
                                     >
+                                        {/* Rule count sits under the name, beside the icon,
+                                            instead of on its own footer row — one row less
+                                            per card. */}
                                         <Stack
                                             direction="row"
-                                            spacing={1.5}
+                                            spacing={1.25}
                                             sx={{
                                                 alignItems: "center",
-                                                mb: 1
+                                                mb: 0.75
                                             }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
                                                 {s.icon(scenarioIconSize)}
                                             </Box>
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Stack direction="row" spacing={1} sx={{
-                                                    alignItems: "center"
-                                                }}>
-                                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                                        {t(s.labelKey)}
-                                                    </Typography>
-                                                </Stack>
+                                                <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                                    {t(s.labelKey)}
+                                                </Typography>
+                                                <Box sx={{ minHeight: 18, display: 'flex', alignItems: 'center' }}>
+                                                    {!countsLoaded ? (
+                                                        <Skeleton variant="text" width={56} />
+                                                    ) : count === undefined ? null : count > 0 ? (
+                                                        <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
+                                                            {count === 1
+                                                                ? t('scenarioOverview.ruleCountOne', { defaultValue: '1 rule' })
+                                                                : t('scenarioOverview.ruleCount', { count, defaultValue: '{{count}} rules' })}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography variant="caption" sx={{
+                                                            color: "text.disabled"
+                                                        }}>
+                                                            {t('scenarioOverview.notConfigured', { defaultValue: 'Not configured yet' })}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
                                             </Box>
                                         </Stack>
                                         <Typography
@@ -165,23 +181,6 @@ const AgentOverviewPage: React.FC = () => {
                                             }}>
                                             {t(s.descKey)}
                                         </Typography>
-                                        <Box sx={{ mt: 1, minHeight: 20, display: 'flex', alignItems: 'center' }}>
-                                            {!countsLoaded ? (
-                                                <Skeleton variant="text" width={72} />
-                                            ) : count === undefined ? null : count > 0 ? (
-                                                <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
-                                                    {count === 1
-                                                        ? t('scenarioOverview.ruleCountOne', { defaultValue: '1 rule' })
-                                                        : t('scenarioOverview.ruleCount', { count, defaultValue: '{{count}} rules' })}
-                                                </Typography>
-                                            ) : (
-                                                <Typography variant="caption" sx={{
-                                                    color: "text.disabled"
-                                                }}>
-                                                    {t('scenarioOverview.notConfigured', { defaultValue: 'Not configured yet' })}
-                                                </Typography>
-                                            )}
-                                        </Box>
                                     </CardActionArea>
                                 </Card>
                             </Grid>

@@ -54,7 +54,7 @@ const PowerUpsSection: React.FC = () => {
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
 
-    const iconSx = { fontSize: 28, color: 'text.secondary' };
+    const iconSx = { fontSize: 24, color: 'text.secondary' };
     const powerUps: PowerUp[] = [
         {
             feature: 'bench',
@@ -172,10 +172,10 @@ const PowerUpsSection: React.FC = () => {
                             <CardActionArea
                                 disabled={!p.enabled}
                                 onClick={() => navigate(p.path)}
-                                sx={{ p: 2, height: '100%', alignItems: 'flex-start' }}
+                                sx={{ p: 1.5, height: '100%', alignItems: 'flex-start' }}
                             >
-                                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1, pr: 5 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
+                                <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 0.75, pr: 5 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
                                         {p.icon}
                                     </Box>
                                     <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
