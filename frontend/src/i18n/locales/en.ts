@@ -2208,7 +2208,7 @@ export default {
     }
   },
   "scenarioOverview": {
-    "title": "Agents",
+    "title": "Agent",
     "subtitle": "Pick a scenario to configure. Hide the ones you don't use to keep the sidebar tidy.",
     "showInSidebar": "Show in sidebar",
     "hideFromSidebar": "Hide from sidebar",
