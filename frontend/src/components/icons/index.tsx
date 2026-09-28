@@ -155,7 +155,7 @@ import {
     IconCalendarClock,
     IconCalendarEvent,
     IconFileText,
-    IconDeviceRemote,
+    IconDeviceMobileMessage,
     IconRobot,
     IconBell,
     IconZoomIn,
@@ -373,7 +373,8 @@ export const Event = tablerMui(IconCalendarEvent);
 export const TextSnippet = tablerMui(IconFileText);
 
 // --- Devices -----------------------------------------------------------------
-export const SettingsRemote = tablerMui(IconDeviceRemote);
+// Remote = drive agents from your phone over IM (not a TV remote).
+export const RemoteControl = tablerMui(IconDeviceMobileMessage);
 export const Robot = tablerMui(IconRobot);
 export const Bell = tablerMui(IconBell);
 

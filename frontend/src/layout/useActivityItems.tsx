@@ -11,7 +11,7 @@ import {
     Add as IconPlus,
     TextSnippet as IconFileText,
     Psychology as IconBrain,
-    SettingsRemote as IconDeviceRemote,
+    RemoteControl as IconRemote,
     Robot as IconRobot,
     Terminal as IconTerminal,
     Bell as IconBell,
@@ -240,7 +240,7 @@ export function useActivityItems(): ActivityItem[] {
             // Team/Image) — hides the rail item only, bots keep running.
             ...(isFullEdition && !hiddenScenarios.has('remote') ? [{
                 key: 'bots' as const,
-                icon: <IconDeviceRemote sx={{ fontSize: 22 }} />,
+                icon: <IconRemote sx={{ fontSize: 22 }} />,
                 label: t('layout.remote'),
                 defaultPath: '/bots/overview',
                 children: [

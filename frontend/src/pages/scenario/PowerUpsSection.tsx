@@ -15,7 +15,7 @@ import {
     Bolt as IconBolt,
     Code as IconCode,
     Send as IconSend,
-    SettingsRemote as IconDeviceRemote,
+    RemoteControl as IconRemote,
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
@@ -77,7 +77,7 @@ const PowerUpsSection: React.FC = () => {
         // via the same hidden set as Team/Image; connected bots keep running.
         ...(isFullEdition ? [{
             key: 'remote',
-            icon: <IconDeviceRemote sx={iconSx} />,
+            icon: <IconRemote sx={iconSx} />,
             name: t('layout.remote'),
             description: t('scenarioOverview.powerUps.remoteDesc', { defaultValue: 'Drive your agents from IM — connect bots for remote control and notifications.' }),
             path: '/bots/overview',
