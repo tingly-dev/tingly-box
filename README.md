@@ -16,27 +16,31 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box **serves agents, coordinates AI models, optimizes context, and routes requests** for maximum efficiency — with built-in **remote control and secure, customizable integrations**.
+Tingly Box **connects any agent to any model** and **puts your whole team on one box** — with built-in **power-ups** like guardrails, MCP tools, remote control and usage analytics.
 
 ## Key Features
 
-* **Agent-First Model Gateway**
-  * Unified endpoint for AI — seamlessly bridge any providers
-  * One-click config for Agents - Claude Code, OpenCode, Codex, Xcode, and more 
+* **Any Agent ⇄ Any Model**
+  * Unified endpoint for AI — seamlessly bridge any providers, cloud or self-hosted
+  * One-click config for Agents - Claude Code, OpenCode, Codex, Xcode, and more
+  * Protocol translation — Anthropic, OpenAI and Gemini formats converted both ways, so Claude Code can run on DeepSeek and Codex on Claude
   * Profiles for Claude Code — switch between profiles with different models under different scenarios
   * Both API keys and OAuth - use your existing quotas anywhere
-* **Harness-Driven Infra**
-  * VModel (Virtual Model) - for testing, validation, benchmarking, and harness-driven evaluation
-  * Harness-driven - for robustness across protocols, routing, load balancing, clients, and more
-* **UX-First**
-  * Visual management of providers, routes, aliases, models, and remote bots
-  * Intuitive workflows that make complex operations easy to understand and control
-* **Production-Ready**
   * Smart Routing — Intelligently route requests across models and tokens based on cost, speed, or custom policies
-  * Remote Control — Control AI agents remotely through Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
   * Image API — Route image generation and editing through the same gateway, with a built-in playground
-  * Team Management — Isolate data per user with dedicated API tokens, usage tracking, provider access, and configuration
+* **Team AI Management**
+  * One team endpoint — model rules are managed centrally, deciding which models the team can call and which providers serve them
+  * Sharing keys — a dedicated API token per member; revoke or rotate one without touching anyone else
+  * Isolation — data, usage, provider access, and configuration stay isolated per user
+  * Team usage — track tokens, latency, and cost estimates per member and per model
+* **Power-ups**
+  * Guardrails — Policy checks on requests and responses, built-in protections, and masking for protected credentials
+  * MCP Gateway — Register MCP servers once and share them with every agent, with built-in `web_search` and `web_fetch`
+  * Remote Control — Control AI agents remotely through Telegram, Weixin, WeCom, Feishu, Lark, and DingTalk
   * Usage Analytics — Track token consumption, latency, cost estimates, and model selection per request
+* **Production-Ready**
+  * UX-First — Visual management of providers, routes, models, team, and remote bots, with intuitive workflows for complex operations
+  * Harness-Driven — VModel (Virtual Model) for testing, validation, and benchmarking; robust across protocols, routing, load balancing, and clients
   * Blazing Fast Performance — Typically adds **< 1ms** of overhead
 
 ## Preview
