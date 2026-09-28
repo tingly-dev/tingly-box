@@ -15,6 +15,7 @@ import {
     Bolt as IconBolt,
     Code as IconCode,
     Send as IconSend,
+    SettingsRemote as IconDeviceRemote,
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
@@ -26,10 +27,13 @@ import type { ExperimentalFeature } from '@/components/ExperimentalFeatureGate';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { isFullEdition } from '@/utils/edition';
+import { useBotPlatformSummary } from '@/layout/useBotPlatformSummary';
 import UnifiedCard from '@/components/UnifiedCard';
 
 interface PowerUp {
-    feature: ExperimentalFeature;
+    key: string;
+    // The `_global` flag behind the switch. Absent = always on (no switch).
+    feature?: ExperimentalFeature;
     icon: React.ReactNode;
     name: string;
     description: string;
@@ -38,6 +42,8 @@ interface PowerUp {
     // Shown under the description while the power-up is on — only for ones
     // whose "on" state widens who can do what on this machine.
     enabledNotice?: string;
+    // Live status line (e.g. bot count), shown like the agent cards' rule count.
+    status?: string;
     // Still experimental (vs. the other power-ups, which are just opt-in) —
     // badged so users know what they're turning on.
     experimental?: boolean;
@@ -54,10 +60,29 @@ const PowerUpsSection: React.FC = () => {
     const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
+    const botSummary = useBotPlatformSummary(isFullEdition);
+    const botTotals = Object.values(botSummary).reduce(
+        (acc, b) => ({ active: acc.active + b.active, total: acc.total + b.total }),
+        { active: 0, total: 0 },
+    );
 
     const iconSx = { fontSize: 24, color: 'text.secondary' };
     const powerUps: PowerUp[] = [
+        // Remote leads: the established power-up (drive agents from IM), not
+        // flag-gated — full edition only, same as its rail item.
+        ...(isFullEdition ? [{
+            key: 'remote',
+            icon: <IconDeviceRemote sx={iconSx} />,
+            name: t('layout.remote'),
+            description: t('scenarioOverview.powerUps.remoteDesc', { defaultValue: 'Drive your agents from IM — connect bots for remote control and notifications.' }),
+            path: '/bots/overview',
+            enabled: true,
+            status: botTotals.total > 0
+                ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
+                : undefined,
+        }] : []),
         {
+            key: 'bench',
             feature: 'bench',
             icon: <IconTestPipe sx={iconSx} />,
             name: t('system.experimentalFeatures.bench'),
@@ -67,6 +92,7 @@ const PowerUpsSection: React.FC = () => {
         },
         // Desk lives under Remote in the rail, which is full-edition only.
         ...(isFullEdition ? [{
+            key: 'desk',
             feature: 'desk' as const,
             icon: <IconCode sx={iconSx} />,
             name: t('system.experimentalFeatures.desk', { defaultValue: 'Desk' }),
@@ -76,6 +102,7 @@ const PowerUpsSection: React.FC = () => {
             enabledNotice: t('system.experimentalFeatures.deskEnabledInfo', { defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.' }),
         }] : []),
         {
+            key: 'mcp',
             feature: 'mcp',
             icon: <IconTools sx={iconSx} />,
             name: `${t('system.experimentalFeatures.mcp')} Tools`,
@@ -85,6 +112,7 @@ const PowerUpsSection: React.FC = () => {
             experimental: true,
         },
         {
+            key: 'guardrails',
             feature: 'guardrails',
             icon: <IconShield sx={iconSx} />,
             name: t('system.experimentalFeatures.guardrails'),
@@ -95,7 +123,8 @@ const PowerUpsSection: React.FC = () => {
         },
         ...(isFullEdition ? [
             {
-                feature: 'skill_user' as const,
+                key: 'skill_user',
+            feature: 'skill_user' as const,
                 icon: <IconSend sx={iconSx} />,
                 name: t('system.experimentalFeatures.userPrompts'),
                 description: t('system.experimentalFeatures.enableUserPrompts'),
@@ -104,7 +133,8 @@ const PowerUpsSection: React.FC = () => {
                 experimental: true,
             },
             {
-                feature: 'skill_ide' as const,
+                key: 'skill_ide',
+            feature: 'skill_ide' as const,
                 icon: <IconBolt sx={iconSx} />,
                 name: t('system.experimentalFeatures.skills'),
                 description: t('system.experimentalFeatures.enableIdeSkills'),
@@ -116,6 +146,7 @@ const PowerUpsSection: React.FC = () => {
     ];
 
     const toggle = async (p: PowerUp) => {
+        if (!p.feature) return;
         setFailed(false);
         setUpdating(p.feature);
         try {
@@ -145,7 +176,7 @@ const PowerUpsSection: React.FC = () => {
 
             <Grid container spacing={2}>
                 {powerUps.map((p) => (
-                    <Grid key={p.feature} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                    <Grid key={p.key} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                         <Card
                             variant="outlined"
                             sx={{
@@ -161,15 +192,17 @@ const PowerUpsSection: React.FC = () => {
                         >
                             {/* The switch stays visible (not hover-revealed like the
                                 scenario visibility toggle): on/off is this card's state. */}
-                            <Switch
-                                size="small"
-                                checked={p.enabled}
-                                disabled={loading || updating !== undefined}
-                                onChange={() => toggle(p)}
-                                slotProps={{ input: { 'aria-label': p.name } }}
-                                // Vertically centred on the 36px title row (12px padding + 18 − 12).
-                                sx={{ position: 'absolute', top: 18, right: 8, zIndex: 1 }}
-                            />
+                            {p.feature && (
+                                <Switch
+                                    size="small"
+                                    checked={p.enabled}
+                                    disabled={loading || updating !== undefined}
+                                    onChange={() => toggle(p)}
+                                    slotProps={{ input: { 'aria-label': p.name } }}
+                                    // Vertically centred on the 36px title row (12px padding + 18 − 12).
+                                    sx={{ position: 'absolute', top: 18, right: 8, zIndex: 1 }}
+                                />
+                            )}
                             <CardActionArea
                                 disabled={!p.enabled}
                                 onClick={() => navigate(p.path)}
@@ -209,6 +242,11 @@ const PowerUpsSection: React.FC = () => {
                                 >
                                     {p.description}
                                 </Typography>
+                                {p.status && (
+                                    <Typography variant="caption" component="p" sx={{ color: 'success.main', fontWeight: 500, mt: 0.5 }}>
+                                        {p.status}
+                                    </Typography>
+                                )}
                                 {p.enabled && p.enabledNotice && (
                                     <Typography variant="caption" component="p" sx={{ color: 'warning.main', mt: 1 }}>
                                         {p.enabledNotice}

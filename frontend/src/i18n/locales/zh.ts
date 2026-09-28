@@ -2217,7 +2217,8 @@ export default {
       "title": "增强能力",
       "subtitle": "扩展智能应用的可选能力。开启后会出现在侧边栏中。",
       "experimental": "实验",
-      "experimentalTooltip": "实验性功能"
+      "experimentalTooltip": "实验性功能",
+      "remoteDesc": "在 IM 里驱动你的智能应用——连接机器人，用于远程控制和消息通知。"
     },
     // Scenario descriptions intentionally omitted — falls back to English. Do not add Chinese translations here.
     "descriptions": {}
