@@ -2220,7 +2220,8 @@ export default {
     "powerUps": {
       "title": "Power-ups",
       "subtitle": "Optional capabilities that extend your agents. Turn one on to add it to the sidebar.",
-      "experimental": "Experimental"
+      "experimental": "Exp.",
+      "experimentalTooltip": "Experimental feature"
     },
     // Full product names for overview cards where the short nav label is ambiguous.
     "titles": {

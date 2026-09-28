@@ -2216,7 +2216,8 @@ export default {
     "powerUps": {
       "title": "增强能力",
       "subtitle": "扩展智能应用的可选能力。开启后会出现在侧边栏中。",
-      "experimental": "实验性"
+      "experimental": "实验",
+      "experimentalTooltip": "实验性功能"
     },
     // Scenario descriptions intentionally omitted — falls back to English. Do not add Chinese translations here.
     "descriptions": {}

@@ -7,6 +7,7 @@ import {
     Grid,
     Stack,
     Switch,
+    Tooltip,
     Typography,
     alpha,
 } from '@mui/material';
@@ -167,7 +168,8 @@ const PowerUpsSection: React.FC = () => {
                                 disabled={loading || updating !== undefined}
                                 onChange={() => toggle(p)}
                                 slotProps={{ input: { 'aria-label': p.name } }}
-                                sx={{ position: 'absolute', top: 10, right: 8, zIndex: 1 }}
+                                // Vertically centred on the 36px title row (12px padding + 18 − 12).
+                                sx={{ position: 'absolute', top: 18, right: 8, zIndex: 1 }}
                             />
                             <CardActionArea
                                 disabled={!p.enabled}
@@ -182,13 +184,17 @@ const PowerUpsSection: React.FC = () => {
                                         {p.name}
                                     </Typography>
                                     {p.experimental && (
-                                        <Chip
-                                            size="small"
-                                            color="warning"
-                                            variant="outlined"
-                                            label={t('scenarioOverview.powerUps.experimental', { defaultValue: 'Experimental' })}
-                                            sx={{ height: 18, fontSize: '0.6875rem' }}
-                                        />
+                                        // Abbreviated so name + tag + switch fit one row;
+                                        // the tooltip spells it out.
+                                        <Tooltip title={t('scenarioOverview.powerUps.experimentalTooltip', { defaultValue: 'Experimental feature' })} arrow>
+                                            <Chip
+                                                size="small"
+                                                color="warning"
+                                                variant="outlined"
+                                                label={t('scenarioOverview.powerUps.experimental', { defaultValue: 'Exp.' })}
+                                                sx={{ height: 18, fontSize: '0.6875rem', flexShrink: 0 }}
+                                            />
+                                        </Tooltip>
                                     )}
                                 </Stack>
                                 <Typography
