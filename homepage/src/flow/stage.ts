@@ -193,6 +193,8 @@ export function mountFlow(svg: SVGSVGElement, scroller: HTMLElement): void {
     for (let k = 0; k < STEPS; k++) if (t >= k * STEP_GAP) active = k;
     steps.forEach((s, k) => {
       s.dataset.state = !dynamic ? 'static' : k === active ? 'active' : k < active ? 'done' : 'upcoming';
+      if (dynamic && k === active) s.setAttribute('aria-current', 'step');
+      else s.removeAttribute('aria-current');
     });
   }
 
