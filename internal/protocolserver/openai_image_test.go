@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"context"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ func TestPersistImageGeneration(t *testing.T) {
 		}
 		resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}}}
 
-		h.persistImageGeneration(req, resp)
+		h.persistImageGeneration(context.Background(), req, resp)
 
 		imageRoot := constant.GetImageDir(tmp)
 		dirs, err := os.ReadDir(imageRoot)
@@ -64,7 +65,7 @@ func TestPersistImageGeneration(t *testing.T) {
 		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}, {B64JSON: b64}}}
-		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
+		h.persistImageGeneration(context.Background(), &openai.ImageGenerateParams{Prompt: "x"}, resp)
 
 		dirs, err := os.ReadDir(constant.GetImageDir(tmp))
 		require.NoError(t, err)
@@ -86,7 +87,7 @@ func TestPersistImageGeneration(t *testing.T) {
 		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{URL: "https://example.com/x.png"}}}
-		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
+		h.persistImageGeneration(context.Background(), &openai.ImageGenerateParams{Prompt: "x"}, resp)
 
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err), "no image directory should be created")
@@ -96,7 +97,7 @@ func TestPersistImageGeneration(t *testing.T) {
 		tmp := t.TempDir()
 		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
-		h.persistImageGeneration(&openai.ImageGenerateParams{}, &openai.ImagesResponse{})
+		h.persistImageGeneration(context.Background(), &openai.ImageGenerateParams{}, &openai.ImagesResponse{})
 
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err))

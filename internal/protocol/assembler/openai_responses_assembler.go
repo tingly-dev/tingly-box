@@ -227,6 +227,14 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 	case "error":
 		a.status = "error"
 		a.finished = true
+		a.response = &responses.Response{
+			ID:     a.GetOrCreateResponseID(),
+			Status: responses.ResponseStatus(a.status),
+			Error: responses.ResponseError{
+				Code:    responses.ResponseErrorCode(event.Code),
+				Message: event.Message,
+			},
+		}
 		return true
 
 	// Unsupported events - can be extended as needed:

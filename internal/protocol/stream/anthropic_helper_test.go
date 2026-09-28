@@ -10,7 +10,49 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
+
+// TestSendForwardingErrorIncludesRequestID guards against a client-facing
+// upstream-failure body (e.g. the "network_error: a network error occurred
+// while contacting the upstream provider" catch-all, which by design strips
+// the raw dial/DNS text) leaving the caller with zero way to correlate it
+// back to the full server-side trace. request_id is the intentionally
+// opaque handle for that: it doesn't leak host/route detail on its own.
+func TestSendForwardingErrorIncludesRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(constant.CtxKeyRequestID, "req-abc123")
+
+	SendForwardingError(c, errors.New("boom"))
+
+	var resp struct {
+		Error struct {
+			RequestID string `json:"request_id"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "req-abc123", resp.Error.RequestID)
+}
+
+func TestSendStreamingErrorIncludesRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(constant.CtxKeyRequestID, "req-def456")
+
+	SendStreamingError(c, errors.New("boom"))
+
+	var resp struct {
+		Error struct {
+			RequestID string `json:"request_id"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "req-def456", resp.Error.RequestID)
+}
 
 // TestBuildErrorEvent verifies the event shape and that the "type" field is
 // always "stream_error" (no longer a parameter — every call site across the

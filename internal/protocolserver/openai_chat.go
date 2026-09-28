@@ -2,6 +2,7 @@ package protocolserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -23,46 +24,26 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 	// Read raw body
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to read request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Failed to read request body: %w", err))
 		return
 	}
 
 	// Parse OpenAI-style request
 	var req = &protocol.OpenAIChatCompletionRequest{}
 	if err := json.Unmarshal(bodyBytes, req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", fmt.Errorf("Invalid request body: %w", err))
 		return
 	}
 
 	// Validate
 	responseModel := req.Model
 	if req.Model == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", "", errors.New("Model is required"))
 		return
 	}
 
 	if len(req.Messages) == 0 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "At least one message is required",
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", req.Model, errors.New("At least one message is required"))
 		return
 	}
 
@@ -76,12 +57,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 	// Convert string to RuleScenario and validate
 	scenarioType := typ.RuleScenario(scenario)
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "inbound", req.Model, fmt.Errorf("invalid scenario: %s", scenario))
 		return
 	}
 
@@ -98,12 +74,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 	// Check if this is the request model name first
 	rule, err = ph.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", req.Model, err)
 		return
 	}
 
@@ -112,12 +83,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = ph.selectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		rejectRequest(c, "routing", req.Model, err)
 		return
 	}
 

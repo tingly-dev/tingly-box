@@ -75,7 +75,7 @@ func handleOpenAIToAnthropicBetaStream(
 			logrus.WithContext(c.Request.Context()).Debug("OpenAI to Anthropic beta stream canceled by client")
 			return conv.Usage(), nil
 		}
-		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
+		LogRequestError(c, err, "OpenAI stream error")
 		hc.DispatchStreamError(err)
 		if !conv.MessageStarted() {
 			SendStreamingError(c, err)
@@ -89,7 +89,7 @@ func handleOpenAIToAnthropicBetaStream(
 			logrus.WithContext(c.Request.Context()).Debug("OpenAI to Anthropic beta stream canceled by client")
 			return conv.Usage(), nil
 		}
-		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", streamErr)
+		LogRequestError(c, streamErr, "OpenAI stream error")
 		hc.DispatchStreamError(streamErr)
 		if !conv.MessageStarted() {
 			SendStreamingError(c, streamErr)

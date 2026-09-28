@@ -76,6 +76,11 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		// fields below and stage_smart_routing's emitTrace.
 		c.Set(constant.CtxKeyRequestID, requestID)
 
+		// Echo it back so a caller can correlate a response (success or
+		// error) with this request's server-side trace without needing it
+		// parsed out of a JSON error body.
+		c.Header("X-Request-Id", requestID)
+
 		// Also carry the id on the Go request context so code that only has
 		// context.Context (protocol converters, upstream client calls) can log
 		// via logrus.WithContext(ctx). The MultiLogger hook reads it back with

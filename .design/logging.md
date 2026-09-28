@@ -346,6 +346,35 @@ error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两�
    `errors.New(...)` 是无害的直通,但语义上这类错误压根不是"upstream 失败",
    保持 `err.Error()` 更直接。
 
+### 6.1 失败出口必须落到请求时间线上
+
+**原则:AI 请求的日志一律挂在请求上。** 这是 AI 请求和普通 APP 请求的差异——
+一次 AI 请求要经过路由、转换、上游、流式、failover 多个阶段,排障问的永远是
+"**这一个**请求发生了什么",而不是"系统此刻在干什么"。所以 AI 请求路径上的
+日志(`/tingly/:scenario/...` 下所有端点:chat、responses、messages、
+count_tokens、embeddings、images,以及它们调用的 protocol / client / vision /
+forwarding 代码)一律用 `logrus.WithContext(ctx)`,ctx 取请求的 context(或由它
+派生)。不带 context 的 `logrus.X(...)` 只留给真正与单个请求无关的地方:共享
+transport/client 池、健康监控、配置刷新、finalizer 等。
+
+分类只解决"给下游看什么",另一半是**服务端能不能在 Logs 页按请求找到这条失败**。
+Requests 视图只收挂了 `request_id` 的条目(`logrus.WithContext(ctx)`),而且时间线
+有 stage 行时会隐藏 access log 那一行——所以 `c.Error` 写进 access log 的错误
+经常看不到。约定:
+
+- **上游/转发失败**:上表的共享出口(`SendForwardingError` / `SendStreamingError`
+  / `SendErrorResponse` / `FailAttemptSetup` / `respondMCPError` /
+  `MarshalAndSendErrorEvent`)都会调 `stream.LogRequestError(c, err, msg)`,带
+  provider/model 和完整 err 记到请求时间线。同一请求里同一个 err(或包装了它的
+  err)只记一次,所以转换器先记 `"... stream error"` 再交给 `SendStreamingError`
+  不会出两行。新增出口直接用 `LogRequestError`,不要用不带 context 的
+  `logrus.Errorf`——那会进 System 日志,和请求脱节。
+- **路由前拒绝**(scenario 不支持、body 解析失败、缺字段、模型没有 rule/service):
+  用 `rejectRequest` / `rejectRequestWithStatus`(`error_response.go`)。这时
+  tracking context 还没设置,裸 `c.JSON` 会让请求在 Requests 视图里整条消失;
+  这个 helper 补上 scenario/request_model、记一条请求级事件、`c.Error`,并在
+  body 里带 `request_id`。
+
 ## 7. 真正想看 upstream URL 时怎么办
 
 `UpstreamMessage`/`ClassifyUpstreamFailure` 默认策略是"藏住 URL"。如果需要
@@ -367,9 +396,12 @@ error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两�
 
 ## 8. 有意不做的事
 
-- **`count_tokens` 端点、纯请求体/参数校验失败**没有接这套分类——它们从不
-  经过任何 upstream SDK 调用,谈不上"泄漏 upstream URL",套上去只是给普通
-  `errors.New(...)` 多绕一层无意义的分类判断。只有真正调用了 vendor SDK 的
-  路径才需要这层处理。
+- **纯请求体/参数校验失败**没有接这套分类——它们从不经过任何 upstream SDK
+  调用,谈不上"泄漏 upstream URL",套上去只是给普通 `errors.New(...)` 多绕一层
+  无意义的分类判断(它们走 `rejectRequest`,见 6.1,只负责进时间线)。
+  `count_tokens` 以前也列在这里,但它在 Anthropic 风格 provider 上**确实**调用
+  上游(`BetaMessagesCountTokens`),上游失败原来被当成 400 "Invalid request
+  body" 并原样回显 SDK 错误(含 upstream URL);现在和其他转发一样走
+  `SendForwardingError`。
 - **没有把 `BuildErrorEvent` 挪进 `protocol` 包**——见第 5 节,这是 wire-format
   归属问题,不是效率或分类问题。

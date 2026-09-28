@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -62,10 +63,12 @@ func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, rec
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
 func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
+	stream.LogRequestError(c, err, "attempt setup failed")
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Message: protocol.UpstreamMessage(err),
-			Type:    "api_error",
+			Message:   protocol.UpstreamMessage(err),
+			Type:      "api_error",
+			RequestID: c.GetString(constant.CtxKeyRequestID),
 		},
 	})
 }

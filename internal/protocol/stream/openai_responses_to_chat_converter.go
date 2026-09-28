@@ -205,6 +205,25 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		c.pending = append(c.pending, c.finalChunk(finishReason))
 		c.completed = true
 
+	case "response.failed":
+		// A terminal Responses API failure (content policy, rate limit, etc.)
+		// carries the real reason in evt.Response.Error. Without this case the
+		// event was silently dropped and Next() fell through to a generic
+		// "responses stream ended without a terminal event" error once the
+		// stream closed, discarding the upstream's actual message/code.
+		message := evt.Response.Error.Message
+		if message == "" {
+			message = fmt.Sprintf("response failed (status: %s)", evt.Response.Status)
+		}
+		c.pending = append(c.pending, wire.ChatStreamErrorChunk{
+			Error: wire.ChatStreamError{
+				Message: message,
+				Type:    "error",
+				Code:    string(evt.Response.Error.Code),
+			},
+		})
+		c.completed = true
+
 	case "error":
 		c.pending = append(c.pending, wire.ChatStreamErrorChunk{
 			Error: wire.ChatStreamError{
@@ -213,6 +232,7 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 				Code:    evt.Param,
 			},
 		})
+		c.completed = true
 	}
 }
 

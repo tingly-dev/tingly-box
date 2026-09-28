@@ -64,7 +64,7 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClien
 
 	ctx, cancel := fc.PrepareContext(req)
 
-	logrus.Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
+	logrus.WithContext(ctx).Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ImagesGenerate(ctx, *req)
 	fc.Complete(ctx, resp, err)
@@ -84,7 +84,7 @@ func ForwardOpenAIImageEdit(fc *ForwardContext, wrapper client.OpenAIClientInter
 
 	ctx, cancel := fc.PrepareContext(req)
 
-	logrus.Infof("provider: %s, model: %s (image edit)", fc.Provider.Name, req.Model)
+	logrus.WithContext(ctx).Infof("provider: %s, model: %s (image edit)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ImagesEdit(ctx, *req)
 	fc.Complete(ctx, resp, err)

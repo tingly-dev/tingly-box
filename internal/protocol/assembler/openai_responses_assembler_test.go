@@ -183,7 +183,9 @@ func TestResponsesAssembler_ErrorEvent(t *testing.T) {
 	assembler := NewResponsesAssembler()
 
 	event := responses.ResponseStreamEventUnion{
-		Type: "error",
+		Type:    "error",
+		Code:    "rate_limit_exceeded",
+		Message: "Too many requests.",
 	}
 
 	assembler.Accumulate(event)
@@ -198,6 +200,20 @@ func TestResponsesAssembler_ErrorEvent(t *testing.T) {
 
 	if !assembler.IsFinished() {
 		t.Error("IsFinished should return true for error status")
+	}
+
+	// A top-level "error" event must not be discarded: Finish() should
+	// surface the upstream code/message rather than returning nil (which
+	// forces callers to fall back to a generic "assembly failed" error).
+	resp := assembler.Finish()
+	if resp == nil {
+		t.Fatal("Finish() should not be nil when the error event carries a code/message")
+	}
+	if string(resp.Error.Code) != "rate_limit_exceeded" {
+		t.Errorf("expected error code 'rate_limit_exceeded', got '%s'", resp.Error.Code)
+	}
+	if resp.Error.Message != "Too many requests." {
+		t.Errorf("expected error message 'Too many requests.', got '%s'", resp.Error.Message)
 	}
 }
 
