@@ -45,7 +45,7 @@ interface PowerUp {
     // Shown under the description while the power-up is on — only for ones
     // whose "on" state widens who can do what on this machine.
     enabledNotice?: string;
-    // Live status line (e.g. bot count), shown like the agent cards' rule count.
+    // Live status line under the name (e.g. bot count), like the agent cards' rule count.
     status?: string;
     // Still experimental (vs. the other power-ups, which are just opt-in) —
     // badged so users know what they're turning on.
@@ -219,22 +219,35 @@ const PowerUpsSection: React.FC = () => {
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
                                         {p.icon}
                                     </Box>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                        {p.name}
-                                    </Typography>
-                                    {p.experimental && (
-                                        // Abbreviated so name + tag + switch fit one row;
-                                        // the tooltip spells it out.
-                                        <Tooltip title={t('scenarioOverview.powerUps.experimentalTooltip', { defaultValue: 'Experimental feature' })} arrow>
-                                            <Chip
-                                                size="small"
-                                                color="warning"
-                                                variant="outlined"
-                                                label={t('scenarioOverview.powerUps.experimental', { defaultValue: 'Exp.' })}
-                                                sx={{ height: 18, fontSize: '0.6875rem', flexShrink: 0 }}
-                                            />
-                                        </Tooltip>
-                                    )}
+                                    {/* Same structure as the agent cards: name on top, status
+                                        line under it (reserved even when empty so names align). */}
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                            <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                                {p.name}
+                                            </Typography>
+                                            {p.experimental && (
+                                                // Abbreviated so name + tag + switch fit one row;
+                                                // the tooltip spells it out.
+                                                <Tooltip title={t('scenarioOverview.powerUps.experimentalTooltip', { defaultValue: 'Experimental feature' })} arrow>
+                                                    <Chip
+                                                        size="small"
+                                                        color="warning"
+                                                        variant="outlined"
+                                                        label={t('scenarioOverview.powerUps.experimental', { defaultValue: 'Exp.' })}
+                                                        sx={{ height: 18, fontSize: '0.6875rem', flexShrink: 0 }}
+                                                    />
+                                                </Tooltip>
+                                            )}
+                                        </Stack>
+                                        <Box sx={{ minHeight: 18, display: 'flex', alignItems: 'center' }}>
+                                            {p.status && (
+                                                <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
+                                                    {p.status}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </Box>
                                 </Stack>
                                 <Typography
                                     variant="body2"
@@ -249,11 +262,6 @@ const PowerUpsSection: React.FC = () => {
                                 >
                                     {p.description}
                                 </Typography>
-                                {p.status && (
-                                    <Typography variant="caption" component="p" sx={{ color: 'success.main', fontWeight: 500, mt: 0.5 }}>
-                                        {p.status}
-                                    </Typography>
-                                )}
                                 {p.enabled && p.enabledNotice && (
                                     <Typography variant="caption" component="p" sx={{ color: 'warning.main', mt: 1 }}>
                                         {p.enabledNotice}
