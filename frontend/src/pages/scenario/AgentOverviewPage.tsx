@@ -2,7 +2,6 @@ import {
     Box,
     Card,
     CardActionArea,
-    Chip,
     Grid,
     IconButton,
     Skeleton,
@@ -114,9 +113,10 @@ const AgentOverviewPage: React.FC = () => {
                                                     right: 6,
                                                     zIndex: 1,
                                                     color: 'text.disabled',
-                                                    // Keep it visible when hidden (so the state is
-                                                    // discoverable), otherwise fade until hover.
-                                                    opacity: hidden ? 1 : 0,
+                                                    // Hover-revealed in both states: the card's dimming
+                                                    // alone signals "hidden" — a chip plus a standing
+                                                    // eye icon on top of it tripled the noise.
+                                                    opacity: 0,
                                                 }}
                                             >
                                                 {hidden ? <IconVisibilityOff fontSize="small" /> : <IconVisibility fontSize="small" />}
@@ -144,13 +144,6 @@ const AgentOverviewPage: React.FC = () => {
                                                     <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                                         {t(s.labelKey)}
                                                     </Typography>
-                                                    {hidden && (
-                                                        <Chip
-                                                            size="small"
-                                                            label={t('scenarioOverview.hidden')}
-                                                            sx={{ height: 18, fontSize: '0.6875rem' }}
-                                                        />
-                                                    )}
                                                 </Stack>
                                             </Box>
                                         </Stack>
