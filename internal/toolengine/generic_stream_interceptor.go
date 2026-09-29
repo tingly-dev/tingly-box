@@ -15,6 +15,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -49,6 +50,10 @@ type GenericStreamInterceptor struct {
 	// exactly what the loop exists to hide. Every round after the first
 	// therefore drops its own message_start.
 	sentMessageStart bool
+
+	// toolRan is set once a server tool has been executed; a later error
+	// is marked committed so failover does not run the tool again.
+	toolRan bool
 
 	// Mutable request for multi-round loop
 	currentReq any
@@ -110,8 +115,13 @@ func NewGenericStreamInterceptor(
 	}
 }
 
-// Run executes the streaming interceptor loop
+// Run executes the streaming interceptor loop. An error raised after a
+// server tool ran is a stage.CommittedError.
 func (i *GenericStreamInterceptor) Run(req any) error {
+	return stage.WrapCommitted(i.run(req), i.toolRan)
+}
+
+func (i *GenericStreamInterceptor) run(req any) error {
 	// Setup SSE headers
 	i.adapter.SetupSSEHeaders(i.c)
 	defer i.reportUsage()
@@ -675,6 +685,7 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 	messages := i.extractMessages(req)
 
 	if i.toolExecutor != nil {
+		i.toolRan = true
 		nextCtx, result, err := i.toolExecutor.ExecuteToolWithContext(i.c.Request.Context(), tool, messages)
 		if nextCtx != nil {
 			i.c.Request = i.c.Request.WithContext(nextCtx)

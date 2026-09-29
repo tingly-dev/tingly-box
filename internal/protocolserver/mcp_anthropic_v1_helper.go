@@ -174,6 +174,7 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 	response, usage, err := ph.RunGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
 		ph.handlePreStreamFailure(c, err, recorder)
+		holdAfterSideEffects(c, err)
 		return
 	}
 
@@ -245,5 +246,6 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 
 	if err := interceptor.Run(req); err != nil {
 		ph.handlePreStreamFailure(c, err, recorder)
+		holdAfterSideEffects(c, err)
 	}
 }

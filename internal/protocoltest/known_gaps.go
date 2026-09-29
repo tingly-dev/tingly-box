@@ -80,10 +80,5 @@ func checkCase(t *testing.T, key string, failures []string, detail string) {
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 
-var _ = registerKnownGaps(KnownGap{
-	ID:     "T3",
-	Reason: "a retryable failure after a server tool ran fails over to the next service, which replays the whole request: the tool runs again and the client gets a 200",
-},
-	"TestMCPNoFailoverAfterServerTool/openai_chat->openai_chat/stream=false",
-	"TestMCPNoFailoverAfterServerTool/openai_chat->openai_chat/stream=true",
-)
+// No server-tool gaps are open. Register one with registerKnownGaps next to
+// the case that pins it (see ir_roundtrip_gaps.go).

@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -23,6 +24,10 @@ type GenericLoopProcessor struct {
 	forwarder       Forwarder
 	toolExecutor    ToolExecutor
 	config          InterceptorConfig
+
+	// toolRan is set once a server tool has been executed; a later error
+	// is marked committed so failover does not run the tool again.
+	toolRan bool
 
 	// Usage tracking
 	totalInputTokens  int64
@@ -61,8 +66,14 @@ func NewGenericLoopProcessor(
 	}
 }
 
-// Run executes the non-streaming processor loop
+// Run executes the non-streaming processor loop. An error raised after a
+// server tool ran is a stage.CommittedError.
 func (p *GenericLoopProcessor) Run(req any) (any, error) {
+	response, err := p.run(req)
+	return response, stage.WrapCommitted(err, p.toolRan)
+}
+
+func (p *GenericLoopProcessor) run(req any) (any, error) {
 	currentReq := p.applyStoredContinuation(req)
 
 	for round := 0; round < p.config.MaxRounds; round++ {
@@ -244,6 +255,7 @@ func (p *GenericLoopProcessor) executeTool(tool Tool, req any) (ToolExecutionRes
 	messages := p.extractMessages(req)
 
 	if p.toolExecutor != nil {
+		p.toolRan = true
 		nextCtx, result, err := p.toolExecutor.ExecuteToolWithContext(p.ctx, tool, messages)
 		if nextCtx != nil {
 			p.ctx = nextCtx

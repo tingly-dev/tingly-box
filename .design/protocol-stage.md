@@ -146,7 +146,7 @@ provider 返回的错误是 SDK 的类型化错误，携带 HTTP 状态；客户
 - 达到轮数上限（执行过 `DefaultMaxRounds` 轮 server tool）后，再请求模型一次，让它基于已有结果作答；若它仍调用 server tool，则以 `end_turn` 结束且不暴露这些调用。现有工具循环在上限处返回空或失败的回答。
 - 上游流在 `message_stop` 之前结束（截断）且本轮有暂扣的 tool_use 时，本轮不执行也不下发任何工具调用，流以错误结束。
 - 用量覆盖所有轮。
-- server tool 执行之后再出的错误标记为**已提交**（`stage.CommittedError`）：客户端边缘不会因此 failover 到另一个服务，避免工具被重复执行。
+- server tool 执行之后再出的错误标记为**已提交**（`stage.CommittedError`）：客户端边缘不会因此 failover 到另一个服务，避免工具被重复执行。OpenAI Chat → Chat 仍由现有工具循环处理，它对 server tool 之后的错误做同样的标记。
 
 混合轮的续接只在有会话时进行，并且只由"回答了该轮某个客户端调用"的请求消费（`continuationStore.popAnswered`），因此既不会串到别的对话，也不会被无关请求提前取走。
 
