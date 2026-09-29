@@ -3321,12 +3321,18 @@
       "website": "https://platform.stepfun.com",
       "description": "Stepfun Step series LLMs (China site)",
       "type": "official",
-      "api_doc": "https://platform.stepfun.com/docs/overview/quickstart",
-      "model_doc": "https://platform.stepfun.com/docs/llm/text",
-      "pricing_doc": "https://platform.stepfun.com/docs/pricing/modelprice",
+      "api_doc": "https://platform.stepfun.com/docs/zh/quickstart/overview",
+      "model_doc": "https://platform.stepfun.com/docs/zh/welcome",
+      "pricing_doc": "https://platform.stepfun.com/docs/zh/guides/pricing/details",
       "base_url_openai": "https://api.stepfun.com/v1",
-      "base_url_anthropic": "https://api.stepfun.com/v1/anthropic",
+      "base_url_anthropic": "https://api.stepfun.com",
       "models": [
+        {
+          "id": "step-5-preview",
+          "context": 1000000,
+          "max_output": 64000,
+          "sources": ["https://platform.stepfun.com/docs/zh/guides/models/step-5-preview"]
+        },
         {
           "id": "step-3.7-flash",
           "context": 256000,
@@ -3338,15 +3344,22 @@
           "context": 256000,
           "max_output": 256000,
           "created": "2026-01"
+        },
+        {
+          "id": "step-3.5-flash-2603",
+          "sources": ["https://platform.stepfun.com/docs/zh/guides/pricing/details"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "stepfun",
-      "last_updated": "2026-08-19",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://models.dev/labs/stepfun/",
         "https://cloud.tencent.com/developer/news/3993306",
-        "https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code"
+        "https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code",
+        "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview",
+        "https://platform.stepfun.com/docs/zh/guides/pricing/details",
+        "https://platform.stepfun.com/docs/zh/api-reference/chat/messages-create"
       ]
     },
     "stepfun-com-coding": {
@@ -3362,12 +3375,21 @@
       "website": "https://platform.stepfun.com",
       "description": "Stepfun Step Plan dedicated endpoints for coding agents (China site)",
       "type": "official",
-      "api_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
-      "model_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
-      "pricing_doc": "https://platform.stepfun.com/docs/zh/step-plan/",
-      "base_url_openai": "https://api.stepfun.com/step-plan/v1",
-      "base_url_anthropic": "https://api.stepfun.com/step-plan/anthropic",
+      "api_doc": "https://platform.stepfun.com/docs/zh/step-plan/overview",
+      "model_doc": "https://platform.stepfun.com/docs/zh/step-plan/overview",
+      "pricing_doc": "https://platform.stepfun.com/docs/zh/step-plan/overview",
+      "base_url_openai": "https://api.stepfun.com/step_plan/v1",
+      "base_url_anthropic": "https://api.stepfun.com/step_plan",
       "models": [
+        {
+          "id": "step-5-preview",
+          "context": 1000000,
+          "max_output": 64000,
+          "sources": [
+            "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview",
+            "https://platform.stepfun.com/docs/zh/step-plan/overview"
+          ]
+        },
         {
           "id": "step-3.7-flash",
           "context": 256000,
@@ -3377,13 +3399,27 @@
           "id": "step-3.5-flash",
           "context": 256000,
           "max_output": 256000
+        },
+        {
+          "id": "step-3.5-flash-2603",
+          "sources": ["https://platform.stepfun.com/docs/zh/step-plan/overview"]
+        },
+        {
+          "id": "step-router-v1",
+          "max_output": 250000,
+          "sources": [
+            "https://platform.stepfun.com/docs/zh/guides/models/step-router",
+            "https://platform.stepfun.com/docs/zh/api-reference/chat/messages-create"
+          ]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "stepfun",
-      "last_updated": "2026-09-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code"
+        "https://platform.stepfun.com/docs/zh/step-plan/overview",
+        "https://platform.stepfun.com/docs/zh/step-plan/integrations/reasoning-api",
+        "https://platform.stepfun.com/docs/zh/api-reference/chat/messages-create"
       ]
     },
     "stepfun-ai": {
@@ -3398,12 +3434,18 @@
       "website": "https://platform.stepfun.ai",
       "description": "Stepfun Step series LLMs (International)",
       "type": "official",
-      "api_doc": "https://platform.stepfun.ai/docs/overview/quickstart",
-      "model_doc": "https://platform.stepfun.ai/docs/llm/text",
-      "pricing_doc": "https://platform.stepfun.ai/docs/pricing/modelprice",
+      "api_doc": "https://platform.stepfun.ai/docs/en/quickstart/overview",
+      "model_doc": "https://platform.stepfun.ai/docs/en/welcome",
+      "pricing_doc": "https://platform.stepfun.ai/docs/en/guides/pricing/details",
       "base_url_openai": "https://api.stepfun.ai/v1",
-      "base_url_anthropic": "https://api.stepfun.ai/v1/anthropic",
+      "base_url_anthropic": "https://api.stepfun.ai",
       "models": [
+        {
+          "id": "step-5-preview",
+          "context": 1000000,
+          "max_output": 64000,
+          "sources": ["https://platform.stepfun.ai/docs/en/guides/models/step-5-preview"]
+        },
         {
           "id": "step-3.7-flash",
           "context": 256000,
@@ -3415,14 +3457,21 @@
           "context": 256000,
           "max_output": 256000,
           "created": "2026-01"
+        },
+        {
+          "id": "step-3.5-flash-2603",
+          "sources": ["https://platform.stepfun.ai/docs/en/guides/pricing/details"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "stepfun",
-      "last_updated": "2026-08-19",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://models.dev/labs/stepfun/",
-        "https://platform.stepfun.ai/docs/en/step-plan/integrations/claude-code"
+        "https://platform.stepfun.ai/docs/en/step-plan/integrations/claude-code",
+        "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+        "https://platform.stepfun.ai/docs/en/guides/pricing/details",
+        "https://platform.stepfun.ai/docs/en/api-reference/chat/messages-create"
       ]
     },
     "stepfun-ai-coding": {
@@ -3437,12 +3486,21 @@
       "website": "https://platform.stepfun.ai",
       "description": "Stepfun Step Plan dedicated endpoints for coding agents (International)",
       "type": "official",
-      "api_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
-      "model_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
-      "pricing_doc": "https://platform.stepfun.ai/docs/en/step-plan/",
-      "base_url_openai": "https://api.stepfun.ai/step-plan/v1",
-      "base_url_anthropic": "https://api.stepfun.ai/step-plan/anthropic",
+      "api_doc": "https://platform.stepfun.ai/docs/en/step-plan/overview",
+      "model_doc": "https://platform.stepfun.ai/docs/en/step-plan/overview",
+      "pricing_doc": "https://platform.stepfun.ai/docs/en/step-plan/overview",
+      "base_url_openai": "https://api.stepfun.ai/step_plan/v1",
+      "base_url_anthropic": "https://api.stepfun.ai/step_plan",
       "models": [
+        {
+          "id": "step-5-preview",
+          "context": 1000000,
+          "max_output": 64000,
+          "sources": [
+            "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+            "https://platform.stepfun.ai/docs/en/step-plan/overview"
+          ]
+        },
         {
           "id": "step-3.7-flash",
           "context": 256000,
@@ -3452,13 +3510,27 @@
           "id": "step-3.5-flash",
           "context": 256000,
           "max_output": 256000
+        },
+        {
+          "id": "step-3.5-flash-2603",
+          "sources": ["https://platform.stepfun.ai/docs/en/step-plan/overview"]
+        },
+        {
+          "id": "step-router-v1",
+          "max_output": 250000,
+          "sources": [
+            "https://platform.stepfun.com/docs/zh/guides/models/step-router",
+            "https://platform.stepfun.com/docs/zh/api-reference/chat/messages-create"
+          ]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "stepfun",
-      "last_updated": "2026-09-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://platform.stepfun.ai/docs/en/step-plan/integrations/claude-code"
+        "https://platform.stepfun.ai/docs/en/step-plan/overview",
+        "https://platform.stepfun.ai/docs/en/step-plan/integrations/reasoning-api",
+        "https://platform.stepfun.ai/docs/en/api-reference/chat/messages-create"
       ]
     },
     "siliconflow-cn": {
@@ -4320,27 +4392,79 @@
       "base_url_openai": "https://opencode.ai/zen/v1",
       "base_url_anthropic": "https://opencode.ai/zen",
       "models": [
+        {
+          "id": "qwen3.8-max",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
+        {
+          "id": "qwen3.8-flash",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
         { "id": "qwen3.7-max" },
         { "id": "qwen3.7-plus" },
         { "id": "qwen3.6-plus" },
         { "id": "qwen3.5-plus" },
+        {
+          "id": "deepseek-v4.1-flash",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
         { "id": "deepseek-v4-pro" },
         { "id": "deepseek-v4-flash" },
+        {
+          "id": "glm-5.3",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
         { "id": "glm-5.2" },
         { "id": "glm-5.1" },
-        { "id": "glm-5" },
+        {
+          "id": "glm-5",
+          "deprecated": "retired 2026-05-14",
+          "note": "listed in the Zen deprecation table; still returned by /zen/v1/models as of 2026-09-29",
+          "sources": [
+            "https://opencode.ai/docs/zen/",
+            "https://opencode.ai/zen/v1/models"
+          ]
+        },
+        {
+          "id": "kimi-k3",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
         { "id": "kimi-k2.7-code" },
         { "id": "kimi-k2.6" },
-        { "id": "kimi-k2.5" },
+        {
+          "id": "kimi-k2.5",
+          "deprecated": "retired 2026-08-05",
+          "note": "listed in the Zen deprecation table; still returned by /zen/v1/models as of 2026-09-29",
+          "sources": [
+            "https://opencode.ai/docs/zen/",
+            "https://opencode.ai/zen/v1/models"
+          ]
+        },
         { "id": "minimax-m3" },
-        { "id": "minimax-m2.5" }
+        {
+          "id": "minimax-m2.7",
+          "sources": ["https://opencode.ai/docs/zen/"]
+        },
+        {
+          "id": "minimax-m2.5",
+          "deprecated": "retired 2026-08-05",
+          "note": "listed in the Zen deprecation table; still returned by /zen/v1/models as of 2026-09-29",
+          "sources": [
+            "https://opencode.ai/docs/zen/",
+            "https://opencode.ai/zen/v1/models"
+          ]
+        }
       ],
       "supports_models_endpoint": true,
       "icon": "opencode",
-      "last_updated": "2026-08-19",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://opencode.ai/docs/zen/",
-        "https://github.com/mudrii/opencode-docs/blob/main/docs/official/zen.md"
+        "https://opencode.ai/zen/v1/models"
       ]
     },
     "opencode-go": {
@@ -4364,16 +4488,53 @@
         { "id": "kimi-k3" },
         { "id": "kimi-k2.7-code" },
         { "id": "kimi-k2.6" },
+        {
+          "id": "glm-5.3",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
         { "id": "glm-5.2" },
         { "id": "glm-5.1" },
+        {
+          "id": "deepseek-v4.1-flash",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
         { "id": "deepseek-v4-pro" },
         { "id": "deepseek-v4-flash" },
+        {
+          "id": "qwen3.8-max",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "qwen3.8-flash",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
         { "id": "qwen3.7-max" },
         { "id": "qwen3.7-plus" },
         { "id": "qwen3.6-plus" },
         { "id": "minimax-m3" },
+        {
+          "id": "minimax-m2.7",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
         { "id": "mimo-v2.5" },
         { "id": "mimo-v2.5-pro" },
+        {
+          "id": "grok-4.7",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
         {
           "id": "grok-4.5",
           "openai_endpoints": ["responses"]
@@ -4383,16 +4544,33 @@
           "openai_endpoints": ["responses"]
         },
         {
+          "id": "gpt-6-luna",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
           "id": "gpt-5.6-luna",
           "openai_endpoints": ["responses"]
+        },
+        {
+          "id": "longcat-2.0",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "hy4-preview",
+          "sources": ["https://opencode.ai/docs/go/"]
+        },
+        {
+          "id": "hy3",
+          "sources": ["https://opencode.ai/docs/go/"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "opencode",
-      "last_updated": "2026-08-19",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://opencode.ai/docs/go/",
-        "https://titancode.pl/en/blog/opencode-go-claude-code-permanent-config"
+        "https://opencode.ai/zen/go/v1/models"
       ]
     },
     "ollama": {
