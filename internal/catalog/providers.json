@@ -3157,13 +3157,21 @@
         { "id": "ernie-4.5-turbo-20260402" },
         { "id": "deepseek-v3.2" },
         { "id": "deepseek-v4-flash" },
+        {
+          "id": "deepseek-v4-pro",
+          "sources": ["https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"]
+        },
         { "id": "glm-5" },
         { "id": "glm-5.1" },
         {
           "id": "kimi-k2.5",
           "context": 262144
         },
-        { "id": "minimax-m2.5" },
+        {
+          "id": "minimax-m2.5",
+          "note": "being phased out per Coding Plan doc (no date given)",
+          "sources": ["https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"]
+        },
         {
           "id": "glm-5.2",
           "context": 1000000,
@@ -3172,9 +3180,9 @@
       ],
       "supports_models_endpoint": false,
       "icon": "baidu",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://mofcloud.cn/llm-price/llm/ernie-5-0-thinking-preview/"
+        "https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"
       ]
     },
     "tencent-com": {
@@ -3242,14 +3250,16 @@
       "models": [
         {
           "id": "spark-x",
+          "context": 64000,
           "max_output": 131072,
           "created": "2026-02",
-          "note": "Spark X2, 293B MoE, replaces 4.0Ultra"
+          "note": "Spark X2, 293B MoE, replaces 4.0Ultra",
+          "sources": ["https://www.xfyun.cn/doc/spark/X1http.html"]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "iflytek",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://www.xfyun.cn/doc/spark/X1http.html"
       ]
