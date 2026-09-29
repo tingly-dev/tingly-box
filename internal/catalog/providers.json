@@ -2410,7 +2410,6 @@
         },
         {
           "id": "glm-4.7",
-          "description": "hi",
           "context": 200000,
           "max_output": 128000
         },
