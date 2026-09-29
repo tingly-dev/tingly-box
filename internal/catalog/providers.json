@@ -2783,27 +2783,88 @@
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/v3",
       "models": [
         {
+          "id": "doubao-seed-evolving",
+          "context": 1024000,
+          "max_output": 256000,
+          "note": "rolling alias, weekly upgrades; official migration target for retired seed/glm/kimi models",
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1330310",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ]
+        },
+        {
+          "id": "doubao-seed-2-1-pro-260915",
+          "context": 1024000,
+          "max_output": 256000,
+          "created": "2026-09",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
+          "id": "doubao-seed-2-1-lite-260915",
+          "context": 1024000,
+          "max_output": 256000,
+          "created": "2026-09",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
           "id": "doubao-seed-2-1-pro-260628",
           "context": 256000,
-          "created": "2026-06"
+          "max_output": 256000,
+          "created": "2026-06",
+          "legacy": true,
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
         },
         {
           "id": "doubao-seed-2-1-turbo-260628",
           "context": 256000,
-          "created": "2026-06"
+          "max_output": 256000,
+          "created": "2026-06",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
         },
         {
           "id": "doubao-seed-2-0-lite-260428",
           "context": 256000,
-          "created": "2026-04"
+          "max_output": 128000,
+          "created": "2026-04",
+          "legacy": true,
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
+          "id": "doubao-seed-2-0-mini-260428",
+          "context": 256000,
+          "max_output": 128000,
+          "created": "2026-04",
+          "legacy": true,
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
+          "id": "glm-5-3-flash-260828",
+          "context": 1024000,
+          "max_output": 128000,
+          "created": "2026-08",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
+          "id": "deepseek-v4-1-flash-260910",
+          "context": 1024000,
+          "max_output": 384000,
+          "created": "2026-09",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
+        },
+        {
+          "id": "deepseek-v4-pro-ga-260813",
+          "context": 1024000,
+          "max_output": 384000,
+          "created": "2026-08",
+          "sources": ["https://www.volcengine.com/docs/82379/1330310"]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "doubao",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://wcode.net/model/doubao-seed-2.1-pro",
-        "https://ai-bot.cn/doubao-seed-2-1/"
+        "https://www.volcengine.com/docs/82379/1330310",
+        "https://www.volcengine.com/docs/82379/1350667"
       ]
     },
     "volces-com-coding": {
@@ -2826,42 +2887,218 @@
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/coding",
       "models": [
         { "id": "ark-code-latest" },
-        { "id": "doubao-seed-code" },
-        { "id": "doubao-seed-2.0-code" },
+        {
+          "id": "doubao-seed-evolving",
+          "context": 1024000,
+          "max_output": 256000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "doubao-seed-2.1-pro",
+          "context": 1024000,
+          "max_output": 256000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "doubao-seed-2.1-lite",
+          "context": 1024000,
+          "max_output": 256000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "doubao-seed-2.0-mini",
+          "context": 256000,
+          "max_output": 128000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "minimax-m3",
+          "context": 1024000,
+          "max_output": 128000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1024000,
+          "max_output": 128000,
+          "note": "glm-latest is an alias; thinking always on",
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "context": 1024000,
+          "max_output": 128000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1024000,
+          "max_output": 384000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "context": 1024000,
+          "max_output": 384000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1024000,
+          "max_output": 384000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 256000,
+          "max_output": 32000,
+          "note": "max output includes chain of thought",
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "kimi-k2.8-preview",
+          "context": 1024000,
+          "max_output": 1024000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1024000,
+          "max_output": 128000,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261"
+          ]
+        },
+        {
+          "id": "doubao-seed-code",
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
+        },
+        {
+          "id": "doubao-seed-2.0-code",
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
+        },
         {
           "id": "doubao-seed-2.0-pro",
-          "context": 262144
+          "context": 262144,
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
         },
-        { "id": "doubao-seed-2.0-lite" },
+        {
+          "id": "doubao-seed-2.0-lite",
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1925114",
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29; overview page marks it 即将下线 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
+        },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_output": 128000,
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
         },
-        { "id": "deepseek-v3.2" },
-        { "id": "deepseek-v4-pro" },
-        { "id": "deepseek-v4-flash" },
+        {
+          "id": "deepseek-v3.2",
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
+        },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_output": 65535,
+          "legacy": true,
+          "sources": [
+            "https://www.volcengine.com/docs/82379/1928261",
+            "https://www.volcengine.com/docs/82379/1350667"
+          ],
+          "note": "not in Coding Plan supported model-name list as of 2026-09-29 (Coding Plan doc); base-model EOS dates on the pay-go side are on the model-deprecation notice, mapping to this Coding Plan name not confirmed"
         },
         {
           "id": "minimax-m2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "note": "not in current Coding Plan model-name list (superseded by minimax-m3 / glm-5.3); no EOS notice found",
+          "sources": ["https://www.volcengine.com/docs/82379/1928261"]
         },
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072
+          "max_output": 131072,
+          "legacy": true,
+          "note": "not in current Coding Plan model-name list (superseded by minimax-m3 / glm-5.3); no EOS notice found",
+          "sources": ["https://www.volcengine.com/docs/82379/1928261"]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "doubao",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://www.163.com/tech/article/L2A9LPUD00097U7T.html"
+        "https://www.volcengine.com/docs/82379/1925114",
+        "https://www.volcengine.com/docs/82379/1928261",
+        "https://www.volcengine.com/docs/82379/1350667"
       ]
     },
     "baidubce-com": {
