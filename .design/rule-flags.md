@@ -54,7 +54,8 @@
                                     │ rule resolved at request time
                                     ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │  每个 failover attempt（internal/protocolserver）              │
+   │  planAttempt（internal/protocolserver/attempt_plan.go，四个    │
+   │    入口的 run*Attempt 共用，每个 failover attempt 一次）       │
    │                                                                │
    │   flags := ResolveRuleFlagsWithScenario(c, rule, …)            │
    │   ├─ WithRuleFlags(ctx, flags) — 解析结果整包挂 ctx            │  Type 2
@@ -162,13 +163,13 @@ Type 2   Per-request context flags
          例：custom_user_agent。
 
 Type 3   Response post-processing
-         handler 把 flag 写进 ctx.Extra；protocol_dispatch.go 的派发分支
+         transformRequest 把 flag 写进 ctx.Extra；protocol_dispatch.go 的派发分支
          与 Stage 路径（stage_openai_route.go）用 ShouldStripUsage 这类
          统一判定来决定剥/改字段。
          例：skip_usage。
 
 Type 4   Routing-decision input
-         handler 把 flag 解析后传给 ResolveOpenAIEndpoint；路由层在
+         planAttempt 把 flag 解析后传给 ResolveOpenAIEndpoint；路由层在
          Transform chain 构造**之前**就决定走哪条出口。Provider 声明
          的 OpenAIEndpointMode 优先于 rule flag 冲突时（详见
          .design/openai-endpoint-routing.md）。不进 ExtraFields、不进
@@ -438,7 +439,7 @@ Plugins Card 操作。
    │      claude_org_id）。                                        │
    │                                                              │
    │ Type 3 (response 后置加工)                                    │
-   │   ① handler 把 flag 值写进 ctx.Extra。                       │
+   │   ① transformRequest 把 flag 值写进 ctx.Extra。              │
    │   ② protocolserver/protocol_dispatch.go（及 Stage 路径）：    │
    │      在派发处调用 ShouldStripUsage(...) 这类聚合判定。        │
    └─────────────────────────────────────────────────────────────┘

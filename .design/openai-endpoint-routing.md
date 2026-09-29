@@ -143,7 +143,7 @@ Endpoint 路由相关的状态/决策被刻意拆成两层，每层承担一个 
 
 ## 4. Resolver 行为
 
-`ResolveOpenAIEndpoint(provider, ruleFlags, incoming) → (protocol.APIType, error)` 定义在 `internal/server/endpoint_resolution.go`。**纯函数**：不读 Server 状态、不发 I/O。
+`ResolveOpenAIEndpoint(provider, ruleFlags, incoming, modelOverride) → (protocol.APIType, error)` 定义在 `internal/protocolserver/protocol_endpoint.go`。**纯函数**：不读 Server 状态、不发 I/O。
 
 ### 4.1 precedence（高 → 低）
 
@@ -226,7 +226,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 - `internal/catalog/provider_catalog.go` —— `ProviderCatalog.OpenAIEndpointMode`（provider 级）；`ModelInfo.OpenAIEndpoints` + `GetOpenAIEndpointOverrideForModel`（模型级，§10）
 - `internal/catalog/providers.json` —— 出厂 template 的 mode 声明，以及 §10 的按模型 override 表
 - `internal/protocolserver/protocol_endpoint.go` —— `ResolveOpenAIEndpoint` 纯函数、`EndpointOverride` 枚举与 `ParseEndpointOverride`
-- `internal/protocolserver/openai_chat.go`、`openai_responses.go`、`anthropic_message.go` —— 三处入站路径的路由调用点，各自查表后传入 `ResolveOpenAIEndpoint`
+- `internal/protocolserver/attempt_plan.go` —— 唯一的路由调用点：`resolveAttemptTarget` 按 provider 风格查表、查模型级 override，再调 `ResolveOpenAIEndpoint`（Chat 客户端传 `IncomingAPIChat`，其余客户端传 `IncomingAPIResponses`）；四个入站路径的 `run*Attempt` 都经 `planAttempt` 调到这里
 - `internal/server/module/oauth/handler.go`、`internal/command/oauth.go` —— Codex OAuth 实例化打 mode
 - `internal/server/config/migration.go` —— 存量 Codex backfill 迁移（`normalizeCodexEndpointMode`）
 

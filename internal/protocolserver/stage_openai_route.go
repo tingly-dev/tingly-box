@@ -8,7 +8,6 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/toolround"
@@ -27,7 +26,8 @@ import (
 // chain. It is converted to Beta at this edge, as BaseTransform does, and the
 // adapter converts the Beta answer back, so Beta - the provider's own
 // protocol - is the only one the pipeline works in.
-func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, source *transform.TransformContext, preVendor []transform.Transform, rule *typ.Rule, provider *typ.Provider, requestModel, responseModel string, isStreaming bool) {
+func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptPlan, source *transform.TransformContext, rule *typ.Rule, responseModel string, isStreaming bool) {
+	provider, requestModel := plan.Provider, plan.Model
 	req, err := openAIBetaRequest(source)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
@@ -46,12 +46,12 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, source *transf
 		ph.FailAttemptSetup(c, err)
 		return
 	}
-	target := protocol.TypeAnthropicBeta
+	target := plan.Target
 	// OpenAI clients get no request guardrails before the chain, so the gate
 	// screens the converted request itself.
 	endpoint, err := stage.Compose(terminal,
 		toolround.New(ph.toolRoundConfig(c, provider, requestModel, false)),
-		newTargetTransformStage(target, source, ph.targetTransforms(c, source.SourceAPI, target, preVendor)),
+		newTargetTransformStage(target, source, ph.targetTransforms(c, source.SourceAPI, target, plan.PreVendor)),
 	)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)

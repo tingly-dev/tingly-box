@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -154,7 +153,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 //
 // It runs the provider-independent prologue once, then drives the failover loop
 // whose per-attempt callback re-runs the whole provider-dependent pipeline
-// (pre-chain → guardrails → target resolution → transform → dispatch) against
+// (plan → pre-chain → guardrails → transform → dispatch) against
 // the candidate selected for that attempt. Because the transform is re-run per
 // attempt, failover can rotate across heterogeneous API styles.
 func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, requestModel string, responseModel string, rule *typ.Rule, provider *typ.Provider) {
@@ -219,45 +218,22 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 }
 
 // runAnthropicV1Attempt executes the provider-dependent half of an Anthropic v1
-// request for one failover attempt: resolve the dual endpoint, run the
-// pre-transform chain and guardrails, resolve the target API for this provider's
-// style, transform, and dispatch. Setup failures route through failAttemptSetup
-// so the orchestrator can advance to the next candidate.
+// request for one failover attempt: plan the attempt (dual endpoint, target,
+// rule flags), run the pre-transform chain and guardrails, transform, and
+// dispatch. Setup failures route through failAttemptSetup so the orchestrator
+// can advance to the next candidate.
 func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
-	// Resolve dual endpoint: when the provider has an Anthropic-compatible
-	// dual URL configured, route there natively to avoid a transform.
-	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
-	c.Set(ContextKeyProvider, provider)
-	if provider.Timeout <= 0 {
-		provider.Timeout = constant.DefaultRequestTimeout
+	plan, err := ph.planAttempt(c, rule, provider, requestModel, protocol.TypeAnthropicV1, scenarioType, scenarioConfig)
+	if err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
 	}
-
 	req.Model = anthropic.Model(requestModel)
 
-	// Determine target API type for protocol transformation detection. Resolved
-	// before the pre-chain: its thinking-budget clamp depends on whether the
-	// target speaks budgets at all (#1897).
-	target := protocol.TypeAnthropicV1
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		target = protocol.TypeAnthropicV1
-	case protocol.APIStyleGoogle:
-		target = protocol.TypeGoogle
-	case protocol.APIStyleOpenAI:
-		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
-		if routeErr != nil {
-			ph.FailAttemptSetup(c, routeErr)
-			return
-		}
-		target = resolvedTarget
-	}
-
 	// Build and run server-side pre-transform chain (scenario-driven flags)
-	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
 	if err := ExecuteAnthropicPreChain(
 		req.MessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming, target,
+		ph.deps.Config.GetDefaultMaxTokens(), plan.MaxAllowed, isStreaming, plan.Target,
 	); err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
@@ -265,39 +241,25 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 
 	scenario := GetTrackingContextScenario(c)
 	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, provider)
+		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, plan.Provider)
 	}
 
-	// Resolve flags with scenario injection and auto-apply for CleanHeader.
-	// (This also applies the custom User-Agent to the request context.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider)
-
-	if target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses {
-		source, err := transformRequest(ph, c, req.MessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
-			source:               protocol.TypeAnthropicV1,
-			defaultScenarioFlags: true,
-			sourceOnly:           true,
-		})
-		if err != nil {
-			ph.FailAttemptSetup(c, err)
-			return
-		}
-		defer source.Release()
-		ph.serveAnthropicOnOpenAI(c, target, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
-		return
-	}
-
-	reqCtx, err := ph.TransformAnthropicV1(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ph.TransformAnthropicV1(c, req, plan, isStreaming, scenarioType)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
 	}
 	defer reqCtx.Release()
 
+	if plan.servedByStage() {
+		ph.serveAnthropicOnOpenAI(c, plan, reqCtx, rule, responseModel, isStreaming)
+		return
+	}
+
 	reqCtx.RequestModel = requestModel
 	reqCtx.ResponseModel = responseModel
 
-	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
+	ph.DispatchChainResult(c, reqCtx, rule, plan.Provider, isStreaming)
 }
 
 // AnthropicMessagesV1Beta implements beta messages API.
@@ -366,40 +328,17 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 // runAnthropicBetaAttempt executes the provider-dependent half of an Anthropic
 // beta request for one failover attempt. See runAnthropicV1Attempt.
 func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
-	// Resolve dual endpoint: when the provider has an Anthropic-compatible
-	// dual URL configured, route there natively to avoid a transform.
-	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
-	c.Set(ContextKeyProvider, provider)
-	if provider.Timeout <= 0 {
-		provider.Timeout = constant.DefaultRequestTimeout
+	plan, err := ph.planAttempt(c, rule, provider, requestModel, protocol.TypeAnthropicBeta, scenarioType, scenarioConfig)
+	if err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
 	}
-
 	req.Model = anthropic.Model(requestModel)
 
-	// Determine target API type for protocol transformation detection. Resolved
-	// before the pre-chain: its thinking-budget clamp depends on whether the
-	// target speaks budgets at all (#1897).
-	target := protocol.TypeAnthropicBeta
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		target = protocol.TypeAnthropicBeta
-	case protocol.APIStyleGoogle:
-		target = protocol.TypeGoogle
-	case protocol.APIStyleOpenAI:
-		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, requestModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses, modelOverride)
-		if routeErr != nil {
-			ph.FailAttemptSetup(c, routeErr)
-			return
-		}
-		target = resolvedTarget
-	}
-
 	// Build and run server-side pre-transform chain (scenario-driven flags)
-	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
 	if err := ExecuteAnthropicPreChain(
 		req.BetaMessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming, target,
+		ph.deps.Config.GetDefaultMaxTokens(), plan.MaxAllowed, isStreaming, plan.Target,
 	); err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
@@ -408,39 +347,23 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	// request guardrails
 	scenario := GetTrackingContextScenario(c)
 	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, provider)
+		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, plan.Provider)
 	}
 
-	// Resolve flags with scenario injection and auto-apply for CleanHeader.
-	// (This also applies the custom User-Agent to the request context.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
-
-	if target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses {
-		source, err := transformRequest(ph, c, req.BetaMessageNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
-			source:               protocol.TypeAnthropicBeta,
-			defaultScenarioFlags: true,
-			hasNativeAdvisor:     HasNativeAdvisorBeta(req),
-			extraOpts:            []transform.TransformOption{transform.WithContext(c.Request.Context())},
-			sourceOnly:           true,
-		})
-		if err != nil {
-			ph.FailAttemptSetup(c, err)
-			return
-		}
-		defer source.Release()
-		ph.serveAnthropicOnOpenAI(c, target, source, RulePreVendorTransforms(ruleFlags), rule, provider, requestModel, responseModel, isStreaming)
-		return
-	}
-
-	reqCtx, err := ph.TransformAnthropicBeta(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ph.TransformAnthropicBeta(c, req, plan, isStreaming, scenarioType)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
 	}
 	defer reqCtx.Release()
 
+	if plan.servedByStage() {
+		ph.serveAnthropicOnOpenAI(c, plan, reqCtx, rule, responseModel, isStreaming)
+		return
+	}
+
 	reqCtx.RequestModel = requestModel
 	reqCtx.ResponseModel = responseModel
 
-	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
+	ph.DispatchChainResult(c, reqCtx, rule, plan.Provider, isStreaming)
 }

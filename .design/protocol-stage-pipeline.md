@@ -89,20 +89,21 @@ Source 侧把意图归一，Target 侧按线路约束落地。
 > 图：`protocol-stage-pipeline.pencil.md`「装配」
 
 ```
-run*Attempt（每个 failover attempt）      transformRequest                       执行
-  │                                          │                                      │
-  │ target := provider 风格 → 解析           │                                      │
-  │ flags  := ResolveRuleFlagsWithScenario(…)│                                      │
-  │ preBase   := RulePreBaseTransforms(flags)│                                      │
-  │ preVendor := RulePreVendorTransforms(…)  │                                      │
-  ├─────── preBase, preVendor ──────────────►│                                      │
-  │                                          │ 旧整链：buildTransformChain(          │
-  │                                          │   preBase, preVendor) → Execute     ─┤ 一次
-  │                                          │ Stage：sourceOnly → 只跑             │
-  │                                          │   sourceTransforms(preBase)         ─┤ 一次
-  │ Stage 路径：serve*(…, preVendor)         │                                      │
-  │   → targetTransformStage(                │                                      │
-  │       targetTransforms(preVendor))      ─┼──────────────────────────────────────┤ 每轮
+run*Attempt（每个 failover attempt）
+  │
+  │ plan := planAttempt(c, rule, provider, model, source, …)      attempt_plan.go
+  │   ├─ target    := resolveAttemptTarget(…)       provider 风格 + endpoint 路由
+  │   ├─ flags     := ResolveRuleFlagsWithScenario(…)
+  │   ├─ preBase   := RulePreBaseTransforms(flags)
+  │   └─ preVendor := RulePreVendorTransforms(flags)
+  │
+  │ ctx := Transform<Source>(c, req, plan, …)  →  transformRequest
+  │   ├─ 旧整链：buildTransformChain(preBase, preVendor) → Execute          一次
+  │   └─ Stage（plan.servedByStage()）：只跑 sourceTransforms(preBase)      一次
+  │
+  │ Stage 路径：serve*(c, plan, ctx, …)
+  │   → targetTransformStage(targetTransforms(plan.PreVendor))              每轮
+  │ 旧整链：DispatchChainResult(c, ctx, …)
 ```
 
 - `sourceTransforms` / `targetTransforms`（`internal/protocolserver/protocol_transform.go`）是 chain
@@ -110,12 +111,12 @@ run*Attempt（每个 failover attempt）      transformRequest                  
   （`serveAnthropicOnOpenAI` / `serveOpenAIOnAnthropic`）只在 source 侧跑前半段，后半段包成
   `targetTransformStage`（`stage_transform.go`），放在终端 Endpoint 外面，每轮 provider 调用前各跑一次。
   preBase / preVendor 在两条路径上落在同一位置，handler 不自行 prepend / append。
-- 4 个入口（Anthropic V1 / Beta、OpenAI Chat / Responses）都经 `transformRequest` 进入 chain，
-  preBase / preVendor 以参数透传。（`smart_compact` 由 `transformRequest` 在 Anthropic 入口按
-  scenario 默认 flag 单独 prepend 到最前。）
+- 4 个入口（Anthropic V1 / Beta、OpenAI Chat / Responses）都先经 `planAttempt` 得到同一份
+  attempt plan（target、flags、preBase / preVendor），再经 `transformRequest` 进入 chain；
+  Stage 路径的 `serve*` 从 plan 取 preVendor，不再单独传参。（`smart_compact` 由 `transformRequest`
+  在 Anthropic 入口按 scenario 默认 flag 单独 prepend 到最前。）
 - chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。
-- target 解析、flag 解析目前仍由四个 `run*Attempt` 各写一份，Anthropic 入口另有一段在 chain 之外执行的
-  `ExecuteAnthropicPreChain`（输出上限），见下方偏差 1、2。
+- Anthropic 入口另有一段在 chain 之外执行的 `ExecuteAnthropicPreChain`（输出上限），见下方偏差 2。
 
 ## 现状偏差与迁移
 
@@ -123,7 +124,7 @@ run*Attempt（每个 failover attempt）      transformRequest                  
 
 | # | 偏差 | 目标 | 状态 |
 |---|---|---|---|
-| 1 | 四个 `run*Attempt` 各自解析 target（三份 provider 风格 switch，Chat 另有一次 `tempFlags`）；preVendor 列表同时传给 `transformRequest` 与 `serve*`；`skip_usage` / `cursor_compat` 提示只在 OpenAI 入口写入 `Extra` | 共用的 attempt plan（规则 3） | 计划中（#1901） |
+| 1 | 四个 `run*Attempt` 各自解析 target（三份 provider 风格 switch，Chat 另有一次 `tempFlags`）；preVendor 列表同时传给 `transformRequest` 与 `serve*`；`skip_usage` / `cursor_compat` 提示只在 OpenAI 入口写入 `Extra` | 共用的 attempt plan（规则 3）：`internal/protocolserver/attempt_plan.go` 的 `planAttempt` 解析 provider、target、flags、preBase / preVendor 与输出上限；`transformRequest` 按 `servedByStage()` 决定跑整链还是只跑 source 半段，并统一写入用量提示 | 已完成（#1901） |
 | 2 | 输出上限分散在三处且各不相同：Anthropic 入口的 `ExecuteAnthropicPreChain`（Source 侧，补齐 + 上限 + budget 截断）、Chat 入口 handler 内联截断 `max_tokens`、Responses 入口不截断 | Source 侧只补齐 Anthropic 必填的 `max_tokens`；上限与 budget 截断移到 Target 半段，按形态生效（规则 1、2）。删除 `KeepThinkingBudget` | 计划中（#1902） |
 | 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low` | 见下 | 待定 |
 

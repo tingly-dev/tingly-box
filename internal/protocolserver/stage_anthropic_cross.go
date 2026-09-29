@@ -25,7 +25,8 @@ import (
 // source is the client's request after the source half of the transform
 // chain; the bridge converts it as BaseTransform does, and the target half
 // runs on every request sent upstream.
-func (ph *ProtocolHandler) serveAnthropicOnOpenAI(c *gin.Context, target protocol.APIType, source *transform.TransformContext, preVendor []transform.Transform, rule *typ.Rule, provider *typ.Provider, requestModel, responseModel string, isStreaming bool) {
+func (ph *ProtocolHandler) serveAnthropicOnOpenAI(c *gin.Context, plan *attemptPlan, source *transform.TransformContext, rule *typ.Rule, responseModel string, isStreaming bool) {
+	target, provider, requestModel := plan.Target, plan.Provider, plan.Model
 	req, client, err := anthropicBetaRequest(source)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
@@ -62,7 +63,7 @@ func (ph *ProtocolHandler) serveAnthropicOnOpenAI(c *gin.Context, target protoco
 		ph.FailAttemptSetup(c, err)
 		return
 	}
-	providerSide, err := stage.Compose(terminal, newTargetTransformStage(target, source, ph.targetTransforms(c, client, target, preVendor)))
+	providerSide, err := stage.Compose(terminal, newTargetTransformStage(target, source, ph.targetTransforms(c, client, target, plan.PreVendor)))
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return

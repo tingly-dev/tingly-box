@@ -381,7 +381,7 @@ v2's pre-stream failover was pinned to one API style because the request body wa
 
 What changed:
 
-- **One-time prologue vs per-attempt pipeline.** Each protocol entrypoint splits into a provider-independent prologue (parse, rule, vision proxy, context-1m, initial `SelectService`, session, recorder, a pristine-request snapshot) and a provider-dependent per-attempt pipeline (resolve dual endpoint, pre-chain, guardrails, target/endpoint resolution, **transform**, dispatch). The failover loop drives the per-attempt pipeline.
+- **One-time prologue vs per-attempt pipeline.** Each protocol entrypoint splits into a provider-independent prologue (parse, rule, vision proxy, context-1m, initial `SelectService`, session, recorder, a pristine-request snapshot) and a provider-dependent per-attempt pipeline (plan — dual endpoint, target/endpoint resolution, rule flags — then pre-chain, guardrails, **transform**, dispatch; see `.design/protocol-stage-pipeline.md`). The failover loop drives the per-attempt pipeline.
 - **No style filter.** `selectFallbackService` is called with `requireAPIStyle = ""`, so the candidate pool spans all styles; tier/breaker ordering is unchanged.
 - **Pristine request per attempt.** Pre-chain, guardrails, and transform mutate the request in place, so each attempt clones a fresh request from the snapshot template (`internal/server/request_clone.go`); single-service requests reuse the original with no clone.
 - **Setup errors advance.** In-attempt setup failures (target resolution, pre-chain, transform) route through `failAttemptSetup`, which buffers a retryable 500 so the loop tries the next candidate instead of terminating on one misconfigured provider.

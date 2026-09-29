@@ -81,11 +81,6 @@ type transformSourceOptions struct {
 
 	hasNativeAdvisor bool
 
-	// sourceOnly runs only the source half of the chain (sourceTransforms):
-	// the request keeps the client's protocol, and the pipeline converts it
-	// and runs the target half per provider call (targetTransformStage).
-	sourceOnly bool
-
 	// extraOpts are appended after the shared options: WithMaxTokens for the
 	// Responses path, and WithContext for the Beta path. The latter is
 	// preserved drift, not design — historically only the Beta entry point
@@ -99,16 +94,22 @@ type transformSourceOptions struct {
 // TransformContext, execute, and mirror steps/errors into the recorder.
 // Generic (free function — Go methods cannot have type parameters) so the
 // compile-time RequestUnionConstraint on NewTransformContext is preserved.
-func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c *gin.Context, req T, target protocol.APIType, provider *typ.Provider, isStreaming bool, scenarioType typ.RuleScenario, preBaseTransforms, preVendorTransforms []transform.Transform, src transformSourceOptions) (*transform.TransformContext, error) {
+//
+// When the plan is served by the Stage pipeline only the source half of the
+// chain runs here: the request keeps the client's protocol, and the pipeline
+// converts it and runs the target half per provider call
+// (targetTransformStage).
+func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c *gin.Context, req T, plan *attemptPlan, isStreaming bool, scenarioType typ.RuleScenario, src transformSourceOptions) (*transform.TransformContext, error) {
 	protocolRecorder := recording.FromGin(c)
+	target, provider := plan.Target, plan.Provider
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
-	chain, err := ph.buildTransformChain(c, src.source, target, scenarioType, preBaseTransforms, preVendorTransforms)
+	chain, err := ph.buildTransformChain(c, src.source, target, scenarioType, plan.PreBase, plan.PreVendor)
 	if err != nil {
 		return nil, err
 	}
-	if src.sourceOnly {
-		chain = transform.NewTransformChain(ph.sourceTransforms(c, preBaseTransforms))
+	if plan.servedByStage() {
+		chain = transform.NewTransformChain(ph.sourceTransforms(c, plan.PreBase))
 	}
 
 	var scenarioFlags *typ.ScenarioFlags
@@ -156,11 +157,15 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	if execErr != nil {
 		return nil, execErr
 	}
+	// Response-shaping hints for the dispatch layer (ShouldStripUsage). Only
+	// the OpenAI-client paths read them today.
+	finalCtx.Extra["cursor_compat"] = plan.Flags.CursorCompat
+	finalCtx.Extra["skip_usage"] = plan.Flags.SkipUsage
 	return finalCtx, nil
 }
 
-func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
-	return transformRequest(ph, c, req.BetaMessageNewParams, target, provider, isStreaming, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
+func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, plan *attemptPlan, isStreaming bool, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	return transformRequest(ph, c, req.BetaMessageNewParams, plan, isStreaming, scenarioType, transformSourceOptions{
 		source:               protocol.TypeAnthropicBeta,
 		defaultScenarioFlags: true,
 		hasNativeAdvisor:     HasNativeAdvisorBeta(req),
@@ -168,23 +173,23 @@ func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.
 	})
 }
 
-func (ph *ProtocolHandler) TransformAnthropicV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
-	return transformRequest(ph, c, req.MessageNewParams, target, provider, isStreaming, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
+func (ph *ProtocolHandler) TransformAnthropicV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, plan *attemptPlan, isStreaming bool, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	return transformRequest(ph, c, req.MessageNewParams, plan, isStreaming, scenarioType, transformSourceOptions{
 		source:               protocol.TypeAnthropicV1,
 		defaultScenarioFlags: true,
 	})
 }
 
-func (ph *ProtocolHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
-	return transformRequest(ph, c, req.ChatCompletionNewParams, target, provider, isStreaming, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
+func (ph *ProtocolHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, plan *attemptPlan, isStreaming bool, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	return transformRequest(ph, c, req.ChatCompletionNewParams, plan, isStreaming, scenarioType, transformSourceOptions{
 		source: protocol.TypeOpenAIChat,
 	})
 }
 
-func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, scenarioType typ.RuleScenario, maxAllowed int, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
-	return transformRequest(ph, c, req.ResponseNewParams, target, provider, isStreaming, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
+func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protocol.ResponseCreateRequest, plan *attemptPlan, isStreaming bool, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+	return transformRequest(ph, c, req.ResponseNewParams, plan, isStreaming, scenarioType, transformSourceOptions{
 		source:    protocol.TypeOpenAIResponses,
-		extraOpts: []transform.TransformOption{transform.WithMaxTokens(int64(maxAllowed))},
+		extraOpts: []transform.TransformOption{transform.WithMaxTokens(int64(plan.MaxAllowed))},
 	})
 }
 

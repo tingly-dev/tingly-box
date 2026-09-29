@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -197,81 +196,34 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 // request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
 func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
-	// Resolve dual endpoint: when the provider has an OpenAI-compatible
-	// dual URL configured, route there natively to avoid a transform.
-	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
-	c.Set(ContextKeyProvider, provider)
-	if provider.Timeout <= 0 {
-		provider.Timeout = constant.DefaultRequestTimeout
+	plan, err := ph.planAttempt(c, rule, provider, actualModel, protocol.TypeOpenAIChat, scenarioType, scenarioConfig)
+	if err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
 	}
-
 	req.Model = actualModel
-	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
 
 	// === Cap max_tokens at model's maximum ===
-	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
-		req.MaxTokens.Value = int64(maxAllowed)
+	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(plan.MaxAllowed) {
+		req.MaxTokens.Value = int64(plan.MaxAllowed)
 	}
 
-	// === Determine target API type ===
-	apiStyle := provider.APIStyle
-	target := protocol.TypeOpenAIChat
-	switch apiStyle {
-	case protocol.APIStyleAnthropic:
-		target = protocol.TypeAnthropicBeta
-	case protocol.APIStyleGoogle:
-		target = protocol.TypeGoogle
-	case protocol.APIStyleOpenAI:
-		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
-		tempFlags := ResolveRuleFlags(c, rule)
-		modelOverride := ph.deps.TemplateManager.GetOpenAIEndpointOverrideForModel(provider, actualModel)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat, modelOverride)
-		if routeErr != nil {
-			ph.FailAttemptSetup(c, routeErr)
-			return
-		}
-		target = resolvedTarget
-	default:
-		ph.FailAttemptSetup(c, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
-		return
-	}
-
-	// === Resolve flags with scenario injection ===
-	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
-	// request context, so no separate call is needed here.)
-	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
-
-	if target == protocol.TypeAnthropicBeta {
-		source, err := transformRequest(ph, c, req.ChatCompletionNewParams, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags), transformSourceOptions{
-			source:     protocol.TypeOpenAIChat,
-			sourceOnly: true,
-		})
-		if err != nil {
-			ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
-			return
-		}
-		defer source.Release()
-		source.Extra["cursor_compat"] = ruleFlags.CursorCompat
-		source.Extra["skip_usage"] = ruleFlags.SkipUsage
-		ph.serveOpenAIOnAnthropic(c, source, RulePreVendorTransforms(ruleFlags), rule, provider, actualModel, responseModel, isStreaming)
-		return
-	}
-
-	// === Transform via pipeline ===
-	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ph.TransformOpenAIChat(c, req, plan, isStreaming, scenarioType)
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	defer reqCtx.Release()
 
-	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
-	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
+	if plan.servedByStage() {
+		ph.serveOpenAIOnAnthropic(c, plan, reqCtx, rule, responseModel, isStreaming)
+		return
+	}
 
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
-	ph.DispatchChainResult(c, reqCtx, rule, provider, isStreaming)
+	ph.DispatchChainResult(c, reqCtx, rule, plan.Provider, isStreaming)
 }
