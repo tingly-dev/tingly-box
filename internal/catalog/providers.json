@@ -2945,7 +2945,10 @@
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro",
-          "context": 512000
+          "context": 512000,
+          "deprecated": "removed from serverless 2026-08-27",
+          "note": "replaced by DeepSeek-V4-Pro-0813",
+          "sources": ["https://docs.together.ai/docs/deprecations"]
         },
         {
           "id": "Qwen/Qwen3.6-Plus",
@@ -2953,18 +2956,48 @@
         },
         {
           "id": "zai-org/GLM-5.2",
-          "context": 262144
+          "context": 1048575,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
         },
         {
           "id": "moonshotai/Kimi-K2.6",
-          "context": 262144
+          "context": 262144,
+          "deprecated": "removed from serverless 2026-08-19",
+          "note": "replaced by Kimi-K3",
+          "sources": ["https://docs.together.ai/docs/deprecations"]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "context": 1048576,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "context": 1000000,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
+        },
+        {
+          "id": "moonshotai/Kimi-K3",
+          "context": 1048576,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
+        },
+        {
+          "id": "zai-org/GLM-5.3",
+          "context": 1048575,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
+        },
+        {
+          "id": "openai/gpt-oss-120b",
+          "context": 131072,
+          "sources": ["https://docs.together.ai/docs/serverless/models"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "together",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.together.ai/docs/serverless/models"
+        "https://docs.together.ai/docs/serverless/models",
+        "https://docs.together.ai/docs/deprecations"
       ]
     },
     "fireworks-ai": {
@@ -2987,7 +3020,10 @@
       "models": [
         {
           "id": "deepseek-v4-pro",
-          "context": 1048576
+          "context": 1048576,
+          "deprecated": "removed from serverless 2026-08-27",
+          "note": "replaced by deepseek-v4-pro-0813 (itself removed from serverless 2026-09-25); use deepseek-v4p1-flash",
+          "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "deepseek-v4-flash",
@@ -2996,24 +3032,46 @@
         {
           "id": "glm-5p2",
           "context": 1048576,
-          "note": "GLM-5.2"
+          "note": "GLM-5.2; replaced by glm-5p3",
+          "deprecated": "removed from serverless 2026-09-25",
+          "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "kimi-k2p7-code",
           "context": 262144,
-          "note": "Kimi K2.7 Code"
+          "note": "Kimi K2.7 Code; replaced by glm-5p3 or kimi-k3",
+          "deprecated": "removed from serverless 2026-09-25",
+          "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "gpt-oss-120b",
           "context": 131072
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1048576,
+          "note": "Kimi K3",
+          "sources": ["https://fireworks.ai/models/fireworks/kimi-k3"]
+        },
+        {
+          "id": "glm-5p3",
+          "note": "GLM-5.3",
+          "sources": ["https://fireworks.ai/models/fireworks/glm-5p3"]
+        },
+        {
+          "id": "deepseek-v4p1-flash",
+          "max_output": 131072,
+          "note": "DeepSeek V4.1 Flash",
+          "sources": ["https://app.fireworks.ai/models/fireworks/deepseek-v4p1-flash"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "fireworks",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://fireworks.ai/models",
-        "https://fireworks.ai/kimi"
+        "https://docs.fireworks.ai/updates/changelog",
+        "https://docs.fireworks.ai/guides/recommended-models"
       ]
     },
     "cerebras-ai": {
@@ -3243,19 +3301,47 @@
         {
           "id": "deepseek-ai/deepseek-v4-pro",
           "context": 1048576,
-          "max_output": 393216
+          "max_output": 393216,
+          "deprecated": "free endpoint deprecated; no longer listed in /v1/models as of 2026-09-29",
+          "note": "superseded by DeepSeek-V4-Pro-0813 modelcard (context shown as 262K); replaced in catalog by deepseek-v4.1-flash",
+          "sources": [
+            "https://build.nvidia.com/deepseek-ai/deepseek-v4-pro/modelcard",
+            "https://integrate.api.nvidia.com/v1/models"
+          ]
         },
         {
           "id": "deepseek-ai/deepseek-v4-flash",
-          "context": 1048576
+          "context": 1048576,
+          "sources": ["https://integrate.api.nvidia.com/v1/models"],
+          "note": "absent from NVIDIA /v1/models as of 2026-09-29; no shutdown announcement found"
+        },
+        {
+          "id": "deepseek-ai/deepseek-v4.1-flash",
+          "context": 1048576,
+          "sources": [
+            "https://build.nvidia.com/deepseek-ai/deepseek-v4.1-flash/modelcard",
+            "https://integrate.api.nvidia.com/v1/models"
+          ]
+        },
+        {
+          "id": "moonshotai/kimi-k3",
+          "context": 1048576,
+          "sources": [
+            "https://build.nvidia.com/moonshotai/kimi-k3/modelcard",
+            "https://integrate.api.nvidia.com/v1/models"
+          ]
+        },
+        {
+          "id": "z-ai/glm-5.3",
+          "sources": ["https://integrate.api.nvidia.com/v1/models"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "nvidia",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://build.nvidia.com/models",
-        "https://build.nvidia.com/deepseek-ai/deepseek-v4-pro/modelcard"
+        "https://integrate.api.nvidia.com/v1/models"
       ]
     },
     "novita-ai": {
