@@ -54,26 +54,28 @@
                                     │ rule resolved at request time
                                     ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │  inbound handler (openai.go / openai_responses.go /            │
-   │                   anthropic_v1.go / anthropic_beta.go)         │
+   │  per-attempt handler (internal/protocolserver:                 │
+   │    openai_chat.go / openai_responses.go / anthropic_message.go)│
    │                                                                │
-   │   flags := resolveRuleFlags(c, rule)                           │
+   │   flags := ResolveRuleFlagsWithScenario(c, rule, …)            │
    │   ├─ WithRuleFlags(ctx, flags) — 解析结果整包挂 ctx            │  Type 2
-   │   ├─ reqCtx.Extra["skip_usage"] = flags.SkipUsage              │  Type 3
-   │   ├─ preBase   := rulePreBaseTransforms(flags)                 │  Type 1b-pre
+   │   ├─ ctx.Extra["skip_usage"] = flags.SkipUsage                 │  Type 3
+   │   ├─ preBase   := RulePreBaseTransforms(flags)                 │  Type 1b-pre
    │   │   → [transform.OpenAICursorCompatTransform{}]              │
-   │   └─ preVendor := rulePreVendorTransforms(flags)              │  Type 1b-post
+   │   └─ preVendor := RulePreVendorTransforms(flags)               │  Type 1b-post
    │       → [transform.OpenAIMaxTokensRewriteTransform{...}]       │
    └───────────────────────────┬───────────────────────────────────┘
                                │
                                ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │   transformXxxx(..., preBase, preVendor...) :                  │
-   │     chain := BuildTransformChain(..., preBase, preVendor)      │
-   │     chain.Execute(ctx)                                         │
+   │   sourceTransforms:  preBase → ▸StagePre 录制                  │
+   │   转换:              BaseTransform（旧整链）| Bridge（Stage）  │
+   │   targetTransforms:  MCP → Consistency → preVendor → Vendor    │
+   │                      → ▸StagePost 录制                         │
    │                                                                │
-   │   preBase → Base → MCP → Consistency → preVendor → Vendor → ▸rec│
-   │   └ preBase slot                       └ preVendor slot        │
+   │   旧整链：buildTransformChain 把三段串成一条 chain 执行一次    │
+   │   Stage：source 段先跑一次；target 段由 targetTransformStage   │
+   │          在每轮 provider 调用前各跑一次                        │
    │                              Vendor + 录制 = 不可逾越的尾段     │
    └───────────────────────────┬───────────────────────────────────┘
                                ▼
@@ -81,7 +83,9 @@
 ```
 
 两个动态插入位置本质都是"在某步之前"：**preBase**（Base 之前，看见入站形态）
-与 **preVendor**（Vendor 之前，看见目标形态）。
+与 **preVendor**（Vendor 之前，看见目标形态）。两个 slot 在管线中各属于哪一半、
+非 flag 的步骤（输出上限、target 解析等）应该放在哪，见
+`.design/protocol-pipeline-placement.md`。
 
 **不变式：除录制外，没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
 provider、做最终且不可逆的改写（model alias、metadata、billing header、
@@ -139,15 +143,15 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `use_max_completion_tokens` | bool | request | — | — | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b-post）|
 | `use_max_tokens` | bool | request | — | — | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b-post）|
 | `block_tools` | string (逗号分隔) | request | — | — | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre）|
-| `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
-| `thinking_effort` | enum，UI 可选 `""`/`off`/`low`/`medium`/`high`/`max`（内部 `thinking.Level` 仍含 `minimal`/`xhigh`，见下方 UX 取舍）| reasoning | **yes** | override | 统一控制 extended thinking。effort 是主轴：OpenAI 侧原样下发 reasoning_effort（SDK 六级全部原生支持），Anthropic 侧下发 output_config.effort（Claude 4.5+ 原生）并附 budget_tokens 兜底（low 4K / medium 10K / high 20K / max 32K；内部值 minimal 1K / xhigh 24K 仍参与该映射），vendor 阶段按模型能力对 adaptive/budget/effort 三种方言互转（见 `request_anthropic_model.go`）；Gemini 目标同样吃这张表：Gemini 3 统一映射为 thinking_level（minimal/low/medium/high，xhigh/max 收敛到 high），Gemini 2.5 映射为 thinking_budget（flash 系列钳到 24576，见 `request_openai_gemini.go`）。空 = "By Client"（透传客户端参数）。| `ThinkingModeTransform`（Type 1b，server-domain Transform）|
+| `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `ShouldStripUsage(ctx.Extra)`（Type 3）|
+| `thinking_effort` | enum，UI 可选 `""`/`off`/`low`/`medium`/`high`/`max`（内部 `thinking.Level` 仍含 `minimal`/`xhigh`，见下方 UX 取舍）| reasoning | **yes** | override | 统一控制 extended thinking。effort 是主轴：OpenAI 侧原样下发 reasoning_effort（SDK 六级全部原生支持），Anthropic 侧下发 output_config.effort（Claude 4.5+ 原生）并附 budget_tokens 兜底（low 4K / medium 10K / high 20K / max 32K；内部值 minimal 1K / xhigh 24K 仍参与该映射），vendor 阶段按模型能力对 adaptive/budget/effort 三种方言互转（见 `request_anthropic_model.go`）；Gemini 目标同样吃这张表：Gemini 3 统一映射为 thinking_level（minimal/low/medium/high，xhigh/max 收敛到 high），Gemini 2.5 映射为 thinking_budget（flash 系列钳到 24576，见 `request_openai_gemini.go`）。空 = "By Client"（透传客户端参数）。| `transform.RuleThinkingTransform` → `ops.ApplyThinkingEffort`（Type 1b-post）|
 | `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
 | `recording` | multi_enum（采集点多选） | observability | **yes** | override | 按选中的采集点录制该 rule 的流量：`client_request`（入站请求）/ `upstream_request`（出站请求）。响应侧点位（`upstream_response` 服务返回、`final_response` 最终返回）在值域内但**暂停**——无采集实现 / 质量不达标，选项与 emit 已注释（见 `.design/recording.md` §3.5）。逗号分隔存储；旧三档枚举值解析层兼容。rule 值覆盖 scenario 级 `recording_v2` 默认。| handler prologue 读 `typ.EffectiveRecording(rule, scenario)` 建 recorder；chain 的 StagePre/StagePost 按点位挂载；emit 按 `Has(point)` 过滤（详见 `.design/recording.md`）|
 | `session_affinity` | int (seconds) | routing | — | — | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。**rule-only**（已从 scenario plugin 移除——无 scenario 级继承）。**built-in CC / Desktop / Codex rule 默认 1800s**（`init.go` 种子 + `migrate20260610` 存量），其余 rule 不设即禁用，可在 Plugins 卡片按 rule 调整。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5，仅读 `rule.Flags.SessionAffinity`）|
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
-| `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
+| `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `ResolveRuleFlags(c, rule)` 在解析 flag 时合并 |
 | `claude_code_compat` | bool | app | **yes** | or | 归一化 Claude Code 的会话中段 `role == "system"` 消息。Claude Code 在 messages 中写入 system role（非标准扩展，对应 Anthropic `mid-conversation-system` beta）；三方 Anthropic-compatible provider 拒绝该 role。**位置感知**：把每条 system 消息**就地并入相邻 user turn**，方向由左右邻居唯一决定（不是自由选择）——前邻是 user 则**向后并**入它；前邻是 assistant/开头则**向前并**入下一条 user；两侧都不是 user 才独立成一个 user turn。决策需先知道 next 的角色，故实现用 pending 缓冲，到下一条非 system 消息（或数组末尾）才落位。这样既保住位置、又避免产生连续 user 消息（严格 provider 同样会以 "roles must alternate" 拒绝）。**不做 hoist**：messages 里的 system 按 beta 契约必是中段消息（不能是 `messages[0]`），全局 system prompt 已在顶层 `system` 字段；hoist 会把"截至第 N 轮"的指令重排为全局、并击穿 prompt cache。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可在 Plugins 卡片按 rule 关闭以保真原生 Anthropic。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
-| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `resolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
+| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `ResolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
 
 ---
 
@@ -159,7 +163,7 @@ Type 1b-pre  Request body, preBase slot（pre-Base Transform）
          之前）运行；type-switch 决定是否对 inbound request 形态生效。
          例：OpenAICursorCompatTransform —— 在 Base 把 OpenAI Chat 转
          成其他形态之前 flatten 富文本内容。聚合点：
-         `internal/server/rule_flags.go::rulePreBaseTransforms`。
+         `internal/protocolserver/rule_flags.go::RulePreBaseTransforms`。
 
 Type 1b-post Request body, preVendor slot（post-Base Transform，推荐用于跨协议 rewrite）
          作为 Transform 接口的实现装在 `Consistency` 之后、`Vendor`
@@ -167,7 +171,7 @@ Type 1b-post Request body, preVendor slot（post-Base Transform，推荐用于�
          决定是否对目标 request 形态生效。**绝不在 Vendor 之后**——Vendor
          是直面 provider 的最终步骤，不可逾越。例：
          OpenAIMaxTokensRewriteTransform、RuleThinkingTransform。聚合点：
-         `internal/server/rule_flags.go::rulePreVendorTransforms`。
+         `internal/protocolserver/rule_flags.go::RulePreVendorTransforms`。
 
 Type 2   Per-request context flags
          ResolveRuleFlagsWithScenario 把解析后的整个 RuleFlags 一次性挂进
@@ -179,8 +183,9 @@ Type 2   Per-request context flags
          例：custom_user_agent。
 
 Type 3   Response post-processing
-         handler 把 flag 写进 reqCtx.Extra；protocol_dispatch.go 的派
-         发分支用 shouldStripUsage 这类统一判定来决定剥/改字段。
+         handler 把 flag 写进 ctx.Extra；protocol_dispatch.go 的派发分支
+         与 Stage 路径（stage_openai_route.go）用 ShouldStripUsage 这类
+         统一判定来决定剥/改字段。
          例：skip_usage。
 
 Type 4   Routing-decision input
@@ -201,9 +206,10 @@ Type 5   Routing behavior (service selection)
 个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 装在 preBase slot
 （BaseTransform 之前，看见 inbound 形态），post 装在 preVendor slot
 （Consistency 之后、Vendor 之前，看见目标形态）。聚合点
-`rulePreBaseTransforms` / `rulePreVendorTransforms` 决定 flag 装哪边。两个 slot
+`RulePreBaseTransforms` / `RulePreVendorTransforms` 决定 flag 装哪边。两个 slot
 之外，chain 的骨架（StagePre 录制 → Base → MCP → Consistency → Vendor →
-StagePost 录制）由 `BuildTransformChain` 固定，**Vendor + 录制是不可逾越的
+StagePost 录制）由 `sourceTransforms` / `targetTransforms` 固定（旧整链由
+`buildTransformChain` 串起来，Stage 路径分两段执行），**Vendor + 录制是不可逾越的
 尾段**。
 
 ---
@@ -214,9 +220,9 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 
 | 层 | 位置 | 职责 | 例子 |
 |----|------|------|------|
-| **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
-| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`rulePreBaseTransforms` / `rulePreVendorTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform` |
-| **Transform（链路阶段，server-domain）** | `internal/server/transform_*.go` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）。 | `ThinkingModeTransform`、`MaxTokensTransform`（Anthropic 上限）、`CleanHeaderTransform` |
+| **op（操作原语）** | `internal/protocol/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyThinkingEffort`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
+| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`RulePreBaseTransforms` / `RulePreVendorTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform`、`transform.RuleThinkingTransform` |
+| **Transform（链路阶段，server-domain）** | `internal/protocolserver/transform/` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）或运行时依赖（MCP runtime）。 | `MaxTokensTransform`（输出上限）、`CleanHeaderTransform`、`ThinkingCompactTransform`、MCP 注入 |
 
 **为什么必须分两层？**
 
@@ -239,52 +245,49 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 - 协议层 Transform 只依赖 SDK 类型，可以放在 `protocol/transform/`，与
   `BaseTransform`、`ConsistencyTransform`、`VendorTransform` 同包。
 - 一旦 Transform 需要读 `*typ.ScenarioConfig`、`*typ.Rule` 等 server
-  类型，就放到 `internal/server/transform_*.go`，避免反向依赖。
+  类型，就放到 `internal/protocolserver/transform/`，避免反向依赖。
 
 ---
 
 ## 7. 链路 wiring
 
 ```
-handler                            transformXxxx                       chain
-  │                                     │                                │
-  │ flags  := resolveRuleFlags(c, rule) │                                │
-  │ preBase  := rulePreBaseTransforms(  │                                │
-  │              flags)                 │                                │
-  │  (e.g. [OpenAICursorCompat])        │                                │
-  │ preVendor:= rulePreVendorTransforms(│                                │
-  │              flags)                 │                                │
-  │  (e.g. [OpenAIMaxTokensRewrite])    │                                │
-  ├─────── preBase, preVendor... ──────►│                                │
-  │                                     │  chain := BuildTransformChain( │
-  │                                     │      ..., preBase, preVendor)   │
-  │                                     ├──────────────────────────────►│
-  │                                     │  chain.Execute(ctx)            │
-  │                                     ├──────────────────────────────►│
+run*Attempt（每个 failover attempt）      transformRequest                       执行
+  │                                          │                                      │
+  │ target := provider 风格 → 解析           │                                      │
+  │ flags  := ResolveRuleFlagsWithScenario(…)│                                      │
+  │ preBase   := RulePreBaseTransforms(flags)│                                      │
+  │ preVendor := RulePreVendorTransforms(…)  │                                      │
+  ├─────── preBase, preVendor ──────────────►│                                      │
+  │                                          │ 旧整链：buildTransformChain(          │
+  │                                          │   preBase, preVendor) → Execute     ─┤ 一次
+  │                                          │ Stage：sourceOnly → 只跑             │
+  │                                          │   sourceTransforms(preBase)         ─┤ 一次
+  │ Stage 路径：serve*(…, preVendor)         │                                      │
+  │   → targetTransformStage(                │                                      │
+  │       targetTransforms(preVendor))      ─┼──────────────────────────────────────┤ 每轮
 ```
 
 关键约束：
 
-- `BuildTransformChain` 是唯一的 chain 装配点。它接受 scenario / provider
-  / recording，外加 `preBase []transform.Transform` 与
-  `preVendor []transform.Transform` 两个 slot 入参，把它们插进固定骨架的对应
-  位置（preBase 在最前的 preBase slot，preVendor 在 Consistency 之后、Vendor
-  之前的 preVendor slot）。它自身不解析 rule flag——具体装哪些 Transform 仍由
-  handler 通过聚合点决定，但**插哪个位置由 builder 统一保证**，handler 不再
-  各自 prepend / append。
-- 所有 4 个 `transformXxxx`（`transformAnthropicV1`、
-  `transformAnthropicBeta`、`transformOpenAIChat`、
-  `transformOpenAIResponses`）都接受一个 `preBaseTransforms []transform.Transform`
-  位置参数 + 一个 `preVendorTransforms []transform.Transform`，直接透传给
-  `BuildTransformChain`。（`smart_compact` 仍在 Anthropic V1 / Beta 两条
-  handler 内单独 prepend 到最前，行为不变。）
-- `rulePreBaseTransforms(flags)` 和 `rulePreVendorTransforms(flags)`
-  （`internal/server/rule_flags.go`）是 rule→Transform 的两个聚合点。
+- `sourceTransforms` / `targetTransforms`（`internal/protocolserver/protocol_transform.go`）是 chain
+  两半的唯一装配点。`buildTransformChain` 把它们与 `BaseTransform` 串成旧整链；Stage 路径
+  （`serveAnthropicOnOpenAI` / `serveOpenAIOnAnthropic`）只在 source 侧跑前半段，后半段由
+  `targetTransformStage` 在每轮 provider 调用前执行。preBase / preVendor 在两条路径上落在同一位置，
+  handler 不自行 prepend / append。
+- 4 个入口（Anthropic V1 / Beta、OpenAI Chat / Responses）都经 `transformRequest` 进入 chain，
+  preBase / preVendor 以参数透传。（`smart_compact` 由 `transformRequest` 在 Anthropic 入口按
+  scenario 默认 flag 单独 prepend 到最前，行为不变。）
+- `RulePreBaseTransforms(flags)` 和 `RulePreVendorTransforms(flags)`
+  （`internal/protocolserver/rule_flags.go`）是 rule→Transform 的两个聚合点。
   新增 rule-driven Transform 时，按"作用于 inbound 形态" / "作用于目标
   形态"二选一，往对应聚合点追加 case；handler 端不需要改动。
 - chain 顺序的回归护栏在
-  `internal/server/protocol_chain_builder_test.go`：`preVendor` 必须落在
+  `internal/protocolserver/protocol_transform_test.go`：`preVendor` 必须落在
   `consistency_normalize` 之后、`vendor_adjust` 之前。
+- target 解析、flag 解析目前仍由四个 `run*Attempt` 各写一份，Anthropic 入口另有一段在 chain 之外执行的
+  `ExecuteAnthropicPreChain`（输出上限）。这两处是已知偏差，收敛方案见
+  `.design/protocol-pipeline-placement.md`"现状偏差与迁移"。
 
 ---
 
@@ -458,20 +461,20 @@ Plugins Card 操作。
 
    ┌─────────────────────────────────────────────────────────────┐
    │ Type 1b (Transform — 推荐)                                   │
-   │   ① internal/protocol/transform/ops/<xxx>.go：写 op 原语，    │
+   │   ① internal/protocol/ops/<xxx>.go：写 op 原语，              │
    │      签名形如 ApplyXxx(*openai.ChatCompletionNewParams) 或    │
    │      其他具体 request 类型。op 必须纯函数、无 rule 感知。     │
    │   ② internal/protocol/transform/<xxx>.go：写 Transform，      │
    │      构造期接受配置，Apply() 里 type-switch ctx.Request，     │
    │      匹配目标类型时调 op。如需 server-domain 类型才放到       │
-   │      internal/server/ 下。                                    │
+   │      internal/protocolserver/transform/ 下。                  │
    │   ③ pre-Base / post-Base 二选一：                             │
    │      • 作用于 inbound 形态（cursor_compat 类）→               │
-   │        internal/server/rule_flags.go::rulePreBaseTransforms   │
+   │        protocolserver/rule_flags.go::RulePreBaseTransforms    │
    │      • 作用于目标形态（max_tokens 类）→                       │
-   │        internal/server/rule_flags.go::rulePreVendorTransforms │
+   │        protocolserver/rule_flags.go::RulePreVendorTransforms  │
    │   ④ handler 端无需改动——4 个 handler 都已调                  │
-   │      rulePreBaseTransforms(flags) / rulePreVendorTransforms(flags)│
+   │      RulePreBaseTransforms(flags) / RulePreVendorTransforms(flags)│
    │                                                              │
    │ Type 2 (context-passed rule flag)                            │
    │   ① 无需新 ctx key：整个 RuleFlags 已由 applyRuleFlags        │
@@ -486,13 +489,13 @@ Plugins Card 操作。
    │      claude_org_id）。                                        │
    │                                                              │
    │ Type 3 (response 后置加工)                                    │
-   │   ① handler 把 flag 值写进 reqCtx.Extra。                    │
-   │   ② internal/server/protocol_dispatch.go：在派发分支调用      │
-   │      shouldStripUsage(...) 这类聚合判定。                     │
+   │   ① handler 把 flag 值写进 ctx.Extra。                       │
+   │   ② protocolserver/protocol_dispatch.go（及 Stage 路径）：    │
+   │      在派发处调用 ShouldStripUsage(...) 这类聚合判定。        │
    └─────────────────────────────────────────────────────────────┘
 
 4. 测试位置随注入类型走：
-   ├─ op 单元测试 → 与 op 同包 (`internal/protocol/transform/ops/`)
+   ├─ op 单元测试 → 与 op 同包 (`internal/protocol/ops/`)
    ├─ Transform 行为测试 → 与 Transform 同包
    │     必备 case：在目标 request 类型上启用 / 在其他类型上 no-op /
    │              chain 中配合 stub BaseTransform 验证位置正确：
@@ -531,8 +534,8 @@ Plugins Card 操作。
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
 | preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
-| Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/server/`。避免反向依赖 |
-| `BuildTransformChain` 是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `preVendor` 两个 slot 入参并保证插入位置（preBase / preVendor slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 preVendor transforms 误落在 Vendor 之后 |
+| Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/protocolserver/transform/`。避免反向依赖 |
+| chain 装配（`sourceTransforms` / `targetTransforms` / `buildTransformChain`）是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `preVendor` 两个 slot 入参并保证插入位置（preBase / preVendor slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 preVendor transforms 误落在 Vendor 之后 |
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
 | `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |
@@ -543,7 +546,7 @@ Plugins Card 操作。
 ## 12. Scenario-level Flags（场景级 Flag）
 
 ScenarioFlags 是 RuleFlags 的特殊子集：Scenario flag 设置场景级默认值，
-rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`internal/server/rule_flags.go`）
+rule flag 在请求级覆盖或继承它。`ResolveRuleFlagsWithScenario`（`internal/protocolserver/rule_flags.go`）
 是这条继承链的唯一落地点。
 
 | Flag | Rule级 | Scenario级 | 继承行为 |
@@ -558,23 +561,23 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 
 | Flag | 作用 |
 |------|------|
-| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/server/transform.ThinkingCompactTransform`） |
+| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/protocolserver/transform.ThinkingCompactTransform`） |
 | ~~`recording_v2`~~ | 已升级为 shared flag `recording` 的 scenario 侧（见上方共享表与 `.design/recording.md` §3.5），值为采集点多选集合 |
 | `unified` / `separate` / `smart` | 路由模式开关 |
 
 **Rule-only flags（曾是 scenario 级、已下放为纯 rule 级）**：
 
-- `clean_header` 原本是 scenario-shared（OR 继承），现已从 scenario plugin 移除——`ScenarioFlags.CleanHeader` 字段、`GetScenarioFlag`/`SetScenarioFlag` 的 `clean_header` 分支、`FlagCleanHeader` 常量、以及 `resolveRuleFlagsWithScenario` 里的 OR 注入全部删除。改为 built-in CC rule 默认开（见上方主表与 §built-in 默认），UI 上只在 Plugins 卡片按 rule 呈现真实值，不再有 scenario 级开关。
-- `session_affinity` 原本是 scenario-shared（`>0` override 继承），现已下放为纯 rule 级（参考 `clean_header`）——`ScenarioFlags.SessionAffinity` 字段、`GetScenarioIntFlag`/`SetScenarioIntFlag` 的 `session_affinity` 分支、`FlagSessionAffinity` 常量、`GetEffectiveAffinity` 的 scenario fallback、以及 `resolveRuleFlagsWithScenario` 里的注入全部删除。改为 built-in **Claude Code / Claude Desktop / Codex** rule 默认 1800s（`init.go` 种子 + `migrate20260610` 存量回填），其余 rule 不设即禁用，UI 上只在 Plugins 卡片按 rule 调整。`GetScenarioIntFlag`/`SetScenarioIntFlag` 与其 HTTP int-flag endpoint 当前无任何注册 key，但作为**通用 infra 保留**（scenario 级 int flag 的读写骨架）——未来新增 scenario int flag 只需在 `flag_keys.go` 加 key 常量 + 在 `config.go` 的 switch 里加一个 case。`migrate20260606` 不再种 scenario 级 affinity，仅保留 Xcode `SkipUsage` 默认。
+- `clean_header` 原本是 scenario-shared（OR 继承），现已从 scenario plugin 移除——`ScenarioFlags.CleanHeader` 字段、`GetScenarioFlag`/`SetScenarioFlag` 的 `clean_header` 分支、`FlagCleanHeader` 常量、以及 `ResolveRuleFlagsWithScenario` 里的 OR 注入全部删除。改为 built-in CC rule 默认开（见上方主表与 §built-in 默认），UI 上只在 Plugins 卡片按 rule 呈现真实值，不再有 scenario 级开关。
+- `session_affinity` 原本是 scenario-shared（`>0` override 继承），现已下放为纯 rule 级（参考 `clean_header`）——`ScenarioFlags.SessionAffinity` 字段、`GetScenarioIntFlag`/`SetScenarioIntFlag` 的 `session_affinity` 分支、`FlagSessionAffinity` 常量、`GetEffectiveAffinity` 的 scenario fallback、以及 `ResolveRuleFlagsWithScenario` 里的注入全部删除。改为 built-in **Claude Code / Claude Desktop / Codex** rule 默认 1800s（`init.go` 种子 + `migrate20260610` 存量回填），其余 rule 不设即禁用，UI 上只在 Plugins 卡片按 rule 调整。`GetScenarioIntFlag`/`SetScenarioIntFlag` 与其 HTTP int-flag endpoint 当前无任何注册 key，但作为**通用 infra 保留**（scenario 级 int flag 的读写骨架）——未来新增 scenario int flag 只需在 `flag_keys.go` 加 key 常量 + 在 `config.go` 的 switch 里加一个 case。`migrate20260606` 不再种 scenario 级 affinity，仅保留 Xcode `SkipUsage` 默认。
 
 > **Migration 整合**：上述 `claude_code_compat` / `clean_header` / `session_affinity` 三个 rule 级默认值，曾分散在 `migrate20260608`/`_2`/`_3`/`_4` 与 `migrate20260609`/`_2`/`_3` 共 7 个 migration 中，现已统一重组为单个 **`migrate20260610`**（一次性 marker 门控，按 rule scenario 分支：CC / Desktop → 三个 flag 全开，Codex → 仅 affinity），与 `init.go` 的内建 rule 种子一一对应。
 
 **继承逻辑实现**：
 
 ```go
-// resolveRuleFlagsWithScenario 的继承顺序（internal/server/rule_flags.go）
-func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
-    flags := resolveRuleFlags(c, rule) // 含 cursor_compat_auto 折叠
+// ResolveRuleFlagsWithScenario 的继承顺序（internal/protocolserver/rule_flags.go）
+func ResolveRuleFlagsWithScenario(...) typ.RuleFlags {
+    flags := ResolveRuleFlags(c, rule) // 含 cursor_compat_auto 折叠
 
     if scenarioConfig != nil {
         // ThinkingEffort：rule 未设置时继承 scenario 值
@@ -637,13 +640,13 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 - ~~**后端**：`cursor_compat` 内容归一化目前是 Type 1a（pre-chain）~~。
   **已完成**：cursor_compat 现在是 Type 1b-pre（pre-Base Transform，
   `transform.OpenAICursorCompatTransform`），通过
-  `rulePreBaseTransforms` prepend 到 chain 最前；handler 入口的 pre-chain
+  `RulePreBaseTransforms` prepend 到 chain 最前；handler 入口的 pre-chain
   mutation 已移除。
 - ~~**后端**：部分 ScenarioFlags 可下沉成 rule flag（`disable_stream_usage`
   与 `skip_usage` 高度重叠）~~。**已完成**：`ScenarioFlags.DisableStreamUsage`
   已移除并统一为 `SkipUsage`（json: `skip_usage`）。Xcode 场景的默认值
   通过 migration 改为 `SkipUsage: true`；继承逻辑在
-  `resolveRuleFlagsWithScenario` 中 OR 合并。`ScenarioFlags` 与 `RuleFlags`
+  `ResolveRuleFlagsWithScenario` 中 OR 合并。`ScenarioFlags` 与 `RuleFlags`
   共享 flag 时统一通过该函数注入，不再双轨维护。
 - ~~**前端**：`PluginFeatures.tsx` 混合了多个 flag 的状态管理+渲染~~。
   **已完成**：拆分为独立子组件（`ThinkingEffortControl`、`RecordingV2Control`、

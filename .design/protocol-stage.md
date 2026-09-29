@@ -48,7 +48,7 @@ Stage（Beta）          ← 横切逻辑：只在工作协议上实现一次
    │
 Adapt(Bridge)          ← 需要时：Beta ⇄ OpenAI Chat / Responses，逐次调用转换
    │
-Stage（目标协议）      ← 例如 provider 侧的请求整形
+Stage（目标协议）      ← provider 侧的请求整形（targetTransformStage，见下方"与 Transform 链的衔接"）
    │
 终端 Endpoint          ← upstream：Beta / V1 wire、Chat、Responses
    ▼
@@ -100,7 +100,7 @@ provider 返回的错误是 SDK 的类型化错误，携带 HTTP 状态；客户
 
 | 事实 | 生产方 | 消费方 |
 |---|---|---|
-| `State.OpenAIChat`（`*protocol.OpenAIConfig`） | Beta → Chat Bridge 转换请求时 | Chat 侧的 vendor 整形（thinking / reasoning 相关） |
+| `State.OpenAIChat`（`*protocol.OpenAIConfig`） | Beta → Chat、Responses → Chat Bridge 转换请求时；与 `BaseTransform` 调用同一个产出函数（`ConvertAnthropicBetaToOpenAIRequest` 的返回值、`request.OpenAIConfigFromResponses`） | Chat 侧的 vendor 整形（thinking / reasoning 相关） |
 | `Response.Usage` / `StreamResult.Usage` | 终端 Endpoint、Bridge | 用量统计；Bridge 自身未报告用量时沿用 target 的 |
 
 刻意**没有**开放式属性包，也没有"以后可能有用"的字段：新增一项必须同时说明谁写、谁读。
@@ -171,8 +171,22 @@ Bridge 返回方向（完整消息与逐事件的流）在路由切换前曾与�
 
 ---
 
+## 与 Transform 链的衔接
+
+Stage 管线复用旧整链的两半，而不是另起一套 Transform：
+
+- **source 半段**（`sourceTransforms`：preBase 规则、StagePre 录制）在客户端协议上先跑一次，
+  之后才由边缘或 Bridge 转换协议；
+- **target 半段**（`targetTransforms`：MCP、Consistency、preVendor 规则、Vendor、StagePost 录制）
+  包成 `targetTransformStage`（`internal/protocolserver/stage_transform.go`），放在终端 Endpoint 外面，
+  每轮 provider 调用前各跑一次。
+
+某个 flag、限额或 vendor 规则应放在哪一半、哪些事情必须在进入管线之前定下来（target、flags），
+由 `.design/protocol-pipeline-placement.md` 规定。
+
 ## 扩展指引
 
 - **新增 provider 协议**：实现一个终端 Endpoint（复用 `forwarding`），以及一对与 Beta 互转的 Bridge；再为二者各补一组差分测试。横切 Stage 无需改动。
 - **新增横切能力**：实现一个 Beta Stage，用 `Compose` 放到合适的位置。不要在 Bridge 或终端 Endpoint 里加业务逻辑。
 - **新增跨协议事实**：先确认它确实需要跨越协议边界，再在 `ProtocolState` 里加一个有类型、有注释、有明确生产方和消费方的字段。
+- **新增请求整形步骤（flag、限额、vendor 规则）**：不要写进 Bridge 或 handler，按 `.design/protocol-pipeline-placement.md` 的放置规则放进 source 或 target 半段。
