@@ -2139,14 +2139,45 @@
           "max_output": 131072,
           "created": "2026-06",
           "note": "753B MoE, DSA+IndexShare sparse attention"
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "note": "same base model as GLM-5.2, post-training improvements",
+          "sources": [
+            "https://docs.z.ai/guides/llm/glm-5.3",
+            "https://docs.z.ai/release-notes/new-released"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "note": "native multimodal input (image/video/file), text output",
+          "sources": [
+            "https://docs.z.ai/guides/llm/glm-5.3-flash",
+            "https://docs.z.ai/release-notes/new-released"
+          ]
+        },
+        {
+          "id": "glm-5.3-flashx",
+          "context": 1000000,
+          "max_output": 131072,
+          "sources": ["https://docs.z.ai/guides/llm/glm-5.3-flash"]
         }
       ],
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.z.ai/guides/llm/glm-5.2"
+        "https://docs.z.ai/guides/llm/glm-5.3",
+        "https://docs.z.ai/guides/llm/glm-5.3-flash",
+        "https://docs.z.ai/release-notes/new-released",
+        "https://docs.z.ai/guides/overview/pricing"
       ]
     },
     "z-ai-coding": {
@@ -2168,28 +2199,55 @@
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [
         {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "sources": [
+            "https://docs.z.ai/devpack/overview",
+            "https://docs.z.ai/guides/llm/glm-5.3"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "sources": [
+            "https://docs.z.ai/devpack/overview",
+            "https://docs.z.ai/guides/llm/glm-5.3-flash"
+          ]
+        },
+        {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072
+          "max_output": 131072,
+          "note": "Coding Plan auto-routes glm-5.2/glm-5.1 to glm-5.3 (per official supported-models page)",
+          "sources": ["https://docs.z.ai/devpack/overview"]
         },
         {
           "id": "glm-5-turbo",
           "context": 202752,
-          "max_output": 131072
+          "max_output": 131072,
+          "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
+          "sources": ["https://docs.z.ai/devpack/overview"]
         },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_output": 128000,
+          "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
+          "sources": ["https://docs.z.ai/devpack/overview"]
         }
       ],
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.z.ai/guides/llm/glm-5.2",
-        "https://z.ai/subscribe"
+        "https://docs.z.ai/devpack/overview",
+        "https://docs.z.ai/guides/llm/glm-5.3",
+        "https://docs.z.ai/guides/llm/glm-5.3-flash"
       ]
     },
     "bigmodel-cn": {
@@ -2238,14 +2296,40 @@
           "max_output": 131072,
           "created": "2026-06",
           "note": "753B MoE, DSA+IndexShare sparse attention"
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "note": "same base model as GLM-5.2, post-training improvements",
+          "sources": [
+            "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3",
+            "https://docs.bigmodel.cn/cn/guide/start/model-overview"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "note": "native multimodal input",
+          "sources": ["https://docs.bigmodel.cn/cn/guide/start/model-overview"]
+        },
+        {
+          "id": "glm-5.3-flashx",
+          "context": 1000000,
+          "max_output": 131072,
+          "sources": ["https://docs.bigmodel.cn/cn/guide/start/model-overview"]
         }
       ],
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.bigmodel.cn/cn/guide/start/model-overview"
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview",
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3"
       ]
     },
     "bigmodel-cn-coding": {
@@ -2268,27 +2352,55 @@
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [
         {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "sources": [
+            "https://docs.bigmodel.cn/cn/coding-plan/overview",
+            "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "context": 1000000,
+          "max_output": 131072,
+          "created": "2026-08",
+          "sources": [
+            "https://docs.bigmodel.cn/cn/coding-plan/overview",
+            "https://docs.bigmodel.cn/cn/guide/start/model-overview"
+          ]
+        },
+        {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072
+          "max_output": 131072,
+          "note": "Coding Plan auto-routes glm-5.2/glm-5.1 to glm-5.3 (per official supported-models page)",
+          "sources": ["https://docs.bigmodel.cn/cn/coding-plan/overview"]
         },
         {
           "id": "glm-5-turbo",
           "context": 202752,
-          "max_output": 131072
+          "max_output": 131072,
+          "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
+          "sources": ["https://docs.bigmodel.cn/cn/coding-plan/overview"]
         },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_output": 128000,
+          "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
+          "sources": ["https://docs.bigmodel.cn/cn/coding-plan/overview"]
         }
       ],
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.bigmodel.cn/cn/coding-plan/overview"
+        "https://docs.bigmodel.cn/cn/coding-plan/overview",
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview"
       ]
     },
     "moonshot-ai": {
