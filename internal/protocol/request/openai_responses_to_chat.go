@@ -8,6 +8,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
@@ -49,6 +51,11 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 		result.TopP = openai.Opt(params.TopP.Value)
 	}
 
+	// reasoning.effort is Chat's reasoning_effort; the same enum on both APIs.
+	if params.Reasoning.Effort != "" {
+		result.ReasoningEffort = params.Reasoning.Effort
+	}
+
 	// Convert tools if present
 	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
 		result.Tools = ConvertResponsesToolsToChatTools(params.Tools)
@@ -67,6 +74,19 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 	result.PromptCacheRetention = openai.ChatCompletionNewParamsPromptCacheRetention(params.PromptCacheRetention)
 
 	return result
+}
+
+// OpenAIConfigFromResponses is the OpenAIConfig for a Responses request
+// converted to Chat by ConvertOpenAIResponsesToChat: a reasoning.effort other
+// than "none" marks thinking on at that effort, so the Chat vendor transforms
+// tier it (genericEffortTiers etc.) instead of forwarding it verbatim or
+// dropping it (#1897).
+func OpenAIConfigFromResponses(params *responses.ResponseNewParams) *protocol.OpenAIConfig {
+	effort := params.Reasoning.Effort
+	if effort == "" || effort == shared.ReasoningEffortNone {
+		return &protocol.OpenAIConfig{HasThinking: false, ReasoningEffort: "none"}
+	}
+	return &protocol.OpenAIConfig{HasThinking: true, ReasoningEffort: effort}
 }
 
 // pendingToolCall holds a single tool call during input-to-message conversion.

@@ -50,10 +50,7 @@ func (b *openAIChatBridge) Open(_ context.Context, call stage.Call, operation st
 	}
 	targetCall := call
 	targetCall.Request = targetRequest
-	targetCall.State.OpenAIChat = &protocol.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "none",
-	}
+	targetCall.State.OpenAIChat = request.OpenAIConfigFromResponses(responsesRequest)
 	sourceModel := string(responsesRequest.Model)
 	if b.options.ResponseModel != "" {
 		sourceModel = b.options.ResponseModel

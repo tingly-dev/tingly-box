@@ -102,11 +102,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 		// OpenAI Responses API request - convert to Chat format
 		chatReq := request.ConvertOpenAIResponsesToChat(req, ctx.Config.MaxTokens)
 		ctx.Request = chatReq
-		// Create a default config for consistency
-		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{
-			HasThinking:     false,
-			ReasoningEffort: "none",
-		}
+		ctx.Config.OpenAIConfig = request.OpenAIConfigFromResponses(req)
 
 	default:
 		return fmt.Errorf("unsupported request type for OpenAI Chat conversion: %T", ctx.Request)

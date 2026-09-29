@@ -1,6 +1,7 @@
 package protocoltest
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -135,6 +136,13 @@ func responsesMessageContent(body map[string]any, role string) (string, bool) {
 func responsesReasoningEffort(body map[string]any) (string, bool) {
 	reasoning, _ := body["reasoning"].(map[string]any)
 	effort, ok := reasoning["effort"].(string)
+	return effort, ok
+}
+
+// chatReasoningEffort returns the "reasoning_effort" string in a captured
+// OpenAI Chat request body.
+func chatReasoningEffort(body map[string]any) (string, bool) {
+	effort, ok := body["reasoning_effort"].(string)
 	return effort, ok
 }
 
@@ -586,7 +594,7 @@ func contentShapeCases() []contentShapeCase {
 	}
 	anthropicAssistantText := func(body map[string]any) (string, bool) { return anthropicMessageText(body, "assistant") }
 
-	return []contentShapeCase{
+	cases := []contentShapeCase{
 		// ── Chat → Responses ────────────────────────────────────────────
 		{name: "chat_to_responses/tool_array_content", run: func(t flagTB, env *TestEnv) {
 			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, EndpointResponses,
@@ -706,6 +714,65 @@ func contentShapeCases() []contentShapeCase {
 				anthropicToolResultImageBody(), responsesFunctionCallOutputImageURL, imgDataURL)
 		}},
 	}
+	return append(cases, reasoningEffortToChatCases()...)
+}
+
+// reasoningEffortToChatCases pins how a client's thinking setting reaches an
+// OpenAI Chat provider as reasoning_effort (issue #1897): an Anthropic
+// thinking.budget_tokens is tiered onto the effort ladder
+// (thinking.EffortFromBudget) and a Responses reasoning.effort is carried
+// over, then both collapse through genericEffortTiers — the test provider is
+// not api.openai.com, so minimal/xhigh/max are not forwarded verbatim.
+func reasoningEffortToChatCases() []contentShapeCase {
+	var cases []contentShapeCase
+	budgets := []struct {
+		budget int64
+		want   string
+	}{
+		{1024, "low"},     // minimal
+		{4096, "low"},     // low
+		{10240, "medium"}, // medium
+		{20480, "high"},   // high
+		{24576, "high"},   // xhigh
+		{31999, "high"},   // max
+	}
+	for _, b := range budgets {
+		for _, source := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
+			cases = append(cases, contentShapeCase{
+				name: fmt.Sprintf("%s_to_chat/thinking_budget_%d_effort", source, b.budget),
+				run: func(t flagTB, env *TestEnv) {
+					body := map[string]any{
+						"max_tokens": 40000,
+						"thinking":   map[string]any{"type": "enabled", "budget_tokens": b.budget},
+						"messages":   []map[string]any{{"role": "user", "content": "Hello"}},
+					}
+					assertUpstreamText(t, env, source, protocol.TypeOpenAIChat, EndpointChat,
+						body, chatReasoningEffort, b.want)
+				},
+			})
+		}
+	}
+	efforts := []struct{ effort, want string }{
+		{"minimal", "low"},
+		{"low", "low"},
+		{"medium", "medium"},
+		{"high", "high"},
+		{"xhigh", "high"},
+	}
+	for _, e := range efforts {
+		cases = append(cases, contentShapeCase{
+			name: "responses_to_chat/reasoning_effort_" + e.effort,
+			run: func(t flagTB, env *TestEnv) {
+				body := map[string]any{
+					"input":     "Hello",
+					"reasoning": map[string]any{"effort": e.effort},
+				}
+				assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat, EndpointChat,
+					body, chatReasoningEffort, e.want)
+			},
+		})
+	}
+	return cases
 }
 
 // ─── CLI execution (harness matrix --mode=content_shapes) ────────────────

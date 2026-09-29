@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -664,4 +665,35 @@ func getToolCallID(t *testing.T, msg openai.ChatCompletionMessageParamUnion) str
 	require.NoError(t, json.Unmarshal(raw, &m))
 	id, _ := m["tool_call_id"].(string)
 	return id
+}
+
+// TestConvertOpenAIResponsesToChat_ReasoningEffort pins that reasoning.effort
+// reaches Chat's reasoning_effort and marks thinking on in the config the
+// vendor transforms read (#1897).
+func TestConvertOpenAIResponsesToChat_ReasoningEffort(t *testing.T) {
+	for _, tc := range []struct {
+		effort       shared.ReasoningEffort
+		wantThinking bool
+	}{
+		{"", false},
+		{shared.ReasoningEffortNone, false},
+		{shared.ReasoningEffortMinimal, true},
+		{shared.ReasoningEffortMedium, true},
+		{shared.ReasoningEffortXhigh, true},
+	} {
+		t.Run(string(tc.effort), func(t *testing.T) {
+			params := &responses.ResponseNewParams{
+				Model:     "gpt-5",
+				Reasoning: shared.ReasoningParam{Effort: tc.effort},
+			}
+			chat := ConvertOpenAIResponsesToChat(params, 0)
+			assert.Equal(t, tc.effort, chat.ReasoningEffort)
+
+			config := OpenAIConfigFromResponses(params)
+			assert.Equal(t, tc.wantThinking, config.HasThinking)
+			if tc.wantThinking {
+				assert.Equal(t, tc.effort, config.ReasoningEffort)
+			}
+		})
+	}
 }

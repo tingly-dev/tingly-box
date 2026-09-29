@@ -273,3 +273,45 @@ func TestMaxTokensTransform_NewMaxTokensTransform(t *testing.T) {
 		t.Errorf("MaxAllowed = %v, want %v", transform.MaxAllowed, 8192)
 	}
 }
+
+// TestMaxTokensTransform_ThinkingBudget pins the budget clamp for Anthropic
+// targets, and that KeepThinkingBudget (set for OpenAI Chat / Responses
+// targets, where the budget only picks the effort tier) leaves the budget
+// alone while still capping max_tokens (#1897).
+func TestMaxTokensTransform_ThinkingBudget(t *testing.T) {
+	tests := []struct {
+		name       string
+		keep       bool
+		budget     int64
+		wantBudget int64
+	}{
+		{name: "budget over maxAllowed shrinks", budget: 10240, wantBudget: 1024},
+		{name: "budget within limits unchanged", budget: 4096, wantBudget: 4096},
+		{name: "keep: budget over maxAllowed unchanged", keep: true, budget: 10240, wantBudget: 10240},
+		{name: "keep: max budget unchanged", keep: true, budget: 31999, wantBudget: 31999},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := NewMaxTokensTransform(4096, 8192)
+			tr.KeepThinkingBudget = tt.keep
+
+			v1 := &anthropic.MessageNewParams{MaxTokens: 40000, Thinking: anthropic.ThinkingConfigParamOfEnabled(tt.budget)}
+			beta := &anthropic.BetaMessageNewParams{MaxTokens: 40000, Thinking: anthropic.BetaThinkingConfigParamOfEnabled(tt.budget)}
+			for _, req := range []any{v1, beta} {
+				if err := tr.Apply(&protocoltransform.TransformContext{Request: req}); err != nil {
+					t.Fatalf("Apply() error = %v", err)
+				}
+			}
+
+			if v1.MaxTokens != 8192 || beta.MaxTokens != 8192 {
+				t.Errorf("MaxTokens = %d / %d, want 8192", v1.MaxTokens, beta.MaxTokens)
+			}
+			if got := *v1.Thinking.GetBudgetTokens(); got != tt.wantBudget {
+				t.Errorf("V1 budget = %d, want %d", got, tt.wantBudget)
+			}
+			if got := *beta.Thinking.GetBudgetTokens(); got != tt.wantBudget {
+				t.Errorf("Beta budget = %d, want %d", got, tt.wantBudget)
+			}
+		})
+	}
+}

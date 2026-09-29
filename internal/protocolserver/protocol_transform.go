@@ -285,21 +285,27 @@ func scenarioFlagsOrNil(scenarioConfig *typ.ScenarioConfig) *typ.ScenarioFlags {
 // Currently only MaxTokens validation remains at scenario level; other
 // scenario-level transforms (ThinkingEffort, CleanHeader) are handled via rule
 // flags injection in resolveRuleFlagsWithScenario.
+//
+// target is the provider protocol this attempt is sent in. An OpenAI Chat or
+// Responses provider never receives budget_tokens — the budget only picks the
+// reasoning-effort tier — so the thinking-budget clamp is skipped for them
+// (#1897); max_tokens is still capped.
 // Returns an error that should be mapped to HTTP 400.
 func ExecuteAnthropicPreChain[T *anthropic.MessageNewParams | *anthropic.BetaMessageNewParams](
 	req T,
 	scenarioConfig *typ.ScenarioConfig,
 	defaultMaxTokens, maxAllowed int,
 	isStreaming bool,
+	target protocol.APIType,
 ) error {
 	ctx := transform.NewTransformContext(
 		req,
 		transform.WithScenarioFlags(scenarioFlagsOrNil(scenarioConfig)),
 		transform.WithStreaming(isStreaming),
 	)
-	chain := transform.NewTransformChain([]transform.Transform{
-		servertransform.NewMaxTokensTransform(defaultMaxTokens, maxAllowed),
-	})
+	maxTokens := servertransform.NewMaxTokensTransform(defaultMaxTokens, maxAllowed)
+	maxTokens.KeepThinkingBudget = target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses
+	chain := transform.NewTransformChain([]transform.Transform{maxTokens})
 	_, err := chain.Execute(ctx)
 	return err
 }

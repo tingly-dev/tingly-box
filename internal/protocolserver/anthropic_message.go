@@ -234,22 +234,9 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 
 	req.Model = anthropic.Model(requestModel)
 
-	// Build and run server-side pre-transform chain (scenario-driven flags)
-	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
-	if err := ExecuteAnthropicPreChain(
-		req.MessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
-	); err != nil {
-		ph.FailAttemptSetup(c, err)
-		return
-	}
-
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, provider)
-	}
-
-	// Determine target API type for protocol transformation detection
+	// Determine target API type for protocol transformation detection. Resolved
+	// before the pre-chain: its thinking-budget clamp depends on whether the
+	// target speaks budgets at all (#1897).
 	target := protocol.TypeAnthropicV1
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
@@ -264,6 +251,21 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 			return
 		}
 		target = resolvedTarget
+	}
+
+	// Build and run server-side pre-transform chain (scenario-driven flags)
+	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
+	if err := ExecuteAnthropicPreChain(
+		req.MessageNewParams, scenarioConfig,
+		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming, target,
+	); err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
+	}
+
+	scenario := GetTrackingContextScenario(c)
+	if ph.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, provider)
 	}
 
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
@@ -374,23 +376,9 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 
 	req.Model = anthropic.Model(requestModel)
 
-	// Build and run server-side pre-transform chain (scenario-driven flags)
-	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
-	if err := ExecuteAnthropicPreChain(
-		req.BetaMessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
-	); err != nil {
-		ph.FailAttemptSetup(c, err)
-		return
-	}
-
-	// request guardrails
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, provider)
-	}
-
-	// Determine target API type for protocol transformation detection
+	// Determine target API type for protocol transformation detection. Resolved
+	// before the pre-chain: its thinking-budget clamp depends on whether the
+	// target speaks budgets at all (#1897).
 	target := protocol.TypeAnthropicBeta
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
@@ -405,6 +393,22 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 			return
 		}
 		target = resolvedTarget
+	}
+
+	// Build and run server-side pre-transform chain (scenario-driven flags)
+	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
+	if err := ExecuteAnthropicPreChain(
+		req.BetaMessageNewParams, scenarioConfig,
+		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming, target,
+	); err != nil {
+		ph.FailAttemptSetup(c, err)
+		return
+	}
+
+	// request guardrails
+	scenario := GetTrackingContextScenario(c)
+	if ph.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, provider)
 	}
 
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
