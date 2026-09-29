@@ -134,35 +134,13 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	defer c.mu.Unlock()
 
 	base := string(baseScenario)
-
-	// Constrain the name to a URL-friendly alias up front, so the profile is
-	// always addressable as "/tingly/<base>:<name>" — not just by its ID.
-	if err := typ.ValidateProfileName(name); err != nil {
+	id, err := c.nextProfileIDLocked(baseScenario, name)
+	if err != nil {
 		return typ.ProfileMeta{}, err
 	}
 
-	if c.Profiles == nil {
-		c.Profiles = make(map[string][]typ.ProfileMeta)
-	}
-
-	profiles := c.Profiles[base]
-
-	// Validate name uniqueness within this scenario
-	for _, p := range profiles {
-		if p.Name == name {
-			return typ.ProfileMeta{}, fmt.Errorf("profile name '%s' already exists in scenario '%s'", name, base)
-		}
-	}
-
-	// Generate next profile ID: find the first unused ID starting from 1.
-	// This reuses IDs from deleted profiles instead of always incrementing the max.
-	existingIDs := make([]string, len(profiles))
-	for i, p := range profiles {
-		existingIDs[i] = p.ID
-	}
-
 	meta := typ.ProfileMeta{
-		ID:      typ.NextFreeNumberedID("p", existingIDs),
+		ID:      id,
 		Name:    name,
 		Unified: unified,
 	}
@@ -179,6 +157,39 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	}
 
 	return meta, c.Save()
+}
+
+// nextProfileIDLocked validates a new profile name for baseScenario and returns
+// the ID the profile will get. Callers must hold c.mu.
+func (c *Config) nextProfileIDLocked(baseScenario typ.RuleScenario, name string) (string, error) {
+	base := string(baseScenario)
+
+	// Constrain the name to a URL-friendly alias up front, so the profile is
+	// always addressable as "/tingly/<base>:<name>" — not just by its ID.
+	if err := typ.ValidateProfileName(name); err != nil {
+		return "", err
+	}
+
+	if c.Profiles == nil {
+		c.Profiles = make(map[string][]typ.ProfileMeta)
+	}
+
+	profiles := c.Profiles[base]
+
+	// Validate name uniqueness within this scenario
+	for _, p := range profiles {
+		if p.Name == name {
+			return "", fmt.Errorf("profile name '%s' already exists in scenario '%s'", name, base)
+		}
+	}
+
+	// Generate next profile ID: find the first unused ID starting from 1.
+	// This reuses IDs from deleted profiles instead of always incrementing the max.
+	existingIDs := make([]string, len(profiles))
+	for i, p := range profiles {
+		existingIDs[i] = p.ID
+	}
+	return typ.NextFreeNumberedID("p", existingIDs), nil
 }
 
 // UpdateProfile updates the name of an existing profile.

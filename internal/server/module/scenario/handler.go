@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -476,16 +477,43 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 		return
 	}
 
-	// Auto-generate the Claude Code settings file for the new profile so it is
-	// immediately usable without manual configuration.
+	h.materializeNewProfileSettings(c, scenario, meta)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
+}
+
+// Duplicate creates a new team ("team") or profile (e.g. "claude_code") as a
+// copy of :id, or of the main scope when :id is "default".
+func (h *Handler) Duplicate(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	var req DuplicateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	result, err := h.config.Duplicate(scenario, c.Param("id"), req.Name)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.As(err, new(config.ErrDuplicateSourceNotFound)) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if meta, ok := h.config.GetProfile(scenario, result.ID); ok {
+		h.materializeNewProfileSettings(c, scenario, meta)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+// materializeNewProfileSettings writes a new profile's Claude Code settings
+// file so it is usable right away; a failure is only logged.
+func (h *Handler) materializeNewProfileSettings(c *gin.Context, scenario typ.RuleScenario, meta typ.ProfileMeta) {
 	profiledScenario := string(typ.ProfiledScenarioName(scenario, meta.ID))
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	apiKey := h.config.GetModelToken()
-	if _, settingsErr := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); settingsErr != nil {
-		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
+	if _, err := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); err != nil {
+		logrus.WithError(err).Warn("failed to create Claude Code settings for new profile")
 	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
 }
 
 // UpdateProfile updates a profile's name and/or mode

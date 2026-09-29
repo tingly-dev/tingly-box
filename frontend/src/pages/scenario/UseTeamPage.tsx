@@ -7,7 +7,7 @@ import {
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip, Typography,
 } from '@mui/material';
-import {Delete, Edit, HelpOutline, Info as IconInfo, Key as IconKey} from '@/components/icons';
+import {ContentCopy, Delete, Edit, HelpOutline, Info as IconInfo, Key as IconKey} from '@/components/icons';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -17,11 +17,14 @@ import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioPage';
 import TemplatePage from './components/TemplatePage.tsx';
 import SharingKeysDialog from './components/SharingKeysDialog.tsx';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
+import DuplicateDialog from '@/components/DuplicateDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
+import {teamPath} from '@/utils/team';
+import {nextFreeName} from '@/utils/duplicateName';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
@@ -42,6 +45,7 @@ const UseTeamPageContent: React.FC = () => {
     const [teamName, setTeamName] = useState('');
     const [saving, setSaving] = useState(false);
     const [toggling, setToggling] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
 
     useEffect(() => {
         if (!teamsLoading && teamSlug && !currentTeam) navigate('/agent/team', {replace: true});
@@ -154,6 +158,9 @@ const UseTeamPageContent: React.FC = () => {
                                     <Tooltip title={t('teams.editTeam')}>
                                         <IconButton size="small" onClick={openEditor}><Edit fontSize="small" /></IconButton>
                                     </Tooltip>
+                                    <Tooltip title={t('teams.duplicateTeam')}>
+                                        <IconButton size="small" onClick={() => setDuplicateOpen(true)}><ContentCopy fontSize="small" /></IconButton>
+                                    </Tooltip>
                                     {!currentTeam.is_default && (
                                         <Tooltip title={t('teams.deleteTeam')}>
                                             <IconButton size="small" color="error" onClick={() => setDeleteOpen(true)}>
@@ -247,6 +254,26 @@ const UseTeamPageContent: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {currentTeam && (
+                <DuplicateDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    scenario="team"
+                    sourceId={currentTeam.id}
+                    defaultName={nextFreeName(currentTeam.name, teams.map((team) => team.name))}
+                    title={t('teams.duplicateTeam')}
+                    hint={t('teams.duplicateHint')}
+                    nameLabel={t('teams.name')}
+                    onDuplicated={async ({id}) => {
+                        // Team pages are addressed by slug; the result names the team by id.
+                        const listed = await api.listTeams();
+                        await refresh();
+                        const created = listed.data?.teams?.find((team: {id: string}) => team.id === id);
+                        if (created) navigate(teamPath(created));
+                    }}
+                />
+            )}
 
             <ConfirmDialog
                 open={deleteOpen}

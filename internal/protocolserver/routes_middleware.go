@@ -196,7 +196,7 @@ func (ph *ProtocolHandler) teamScopeMiddleware(c *gin.Context) {
 	if teamID != db.DefaultTeamID {
 		for i := range c.Params {
 			if c.Params[i].Key == "scenario" {
-				c.Params[i].Value = string(typ.ProfiledScenarioName(typ.ScenarioTeam, teamID))
+				c.Params[i].Value = string(db.TeamScenario(teamID))
 				break
 			}
 		}

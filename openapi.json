@@ -6330,6 +6330,59 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/{id}/duplicate": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Duplicate a team or profile (:id \"default\" = the main scope) into a new one",
+        "description": "Duplicate a team or profile (:id \"default\" = the main scope) into a new one",
+        "operationId": "apiV1ScenarioScenarioIdDuplicatePost",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenarios": {
       "get": {
         "tags": [
@@ -10861,6 +10914,19 @@
             "description": "Field protocol"
           }
         }
+      },
+      "DuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "work-copy"
+          }
+        },
+        "required": [
+          "name"
+        ]
       },
       "E2ERequest": {
         "type": "object",

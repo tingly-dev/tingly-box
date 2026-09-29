@@ -14,7 +14,8 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
-import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
+import { ContentCopy as ContentCopyIcon, Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
+import DuplicateProfileDialog from './components/DuplicateProfileDialog';
 import {
     Box,
     Button,
@@ -61,6 +62,7 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
     const [configMode, setConfigMode] = useState<ConfigMode>('unified');
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [pendingMode, setPendingMode] = useState<ConfigMode | null>(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
@@ -232,6 +234,11 @@ const UseClaudeCodePageContent: React.FC = () => {
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
                             </Tooltip>
+                            <Tooltip title={t('claudeCode.profile.duplicateMain')}>
+                                <IconButton size="small" onClick={() => setDuplicateOpen(true)}>
+                                    <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
                         </Box>
                     }
                     size="full"
@@ -349,6 +356,12 @@ const UseClaudeCodePageContent: React.FC = () => {
 
                 <ConnectAIDialogs flow={connectAI}/>
 
+                <DuplicateProfileDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    sourceId="default"
+                    sourceName="default"
+                />
             </CardGrid>
         </PageLayout>
     );

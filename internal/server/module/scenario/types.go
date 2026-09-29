@@ -32,6 +32,11 @@ type ProfileCreateRequest struct {
 	Unified bool   `json:"unified,omitempty"` // Optional, defaults to false (separate mode)
 }
 
+// DuplicateRequest names the team or profile created by a duplicate.
+type DuplicateRequest struct {
+	Name string `json:"name" binding:"required" example:"work-copy"`
+}
+
 // ProfileUpdateRequest represents the request to update a profile
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`

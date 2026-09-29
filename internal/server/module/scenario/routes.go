@@ -78,6 +78,13 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
 
+	// POST /scenario/:scenario/:id/duplicate - Duplicate a team or profile
+	router.POST("/scenario/:scenario/:id/duplicate", handler.Duplicate,
+		swagger.WithDescription("Duplicate a team or profile (:id \"default\" = the main scope) into a new one"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(DuplicateRequest{}),
+	)
+
 	// --- Profile endpoints ---
 
 	// GET /scenario/:scenario/profiles - List profiles for a scenario

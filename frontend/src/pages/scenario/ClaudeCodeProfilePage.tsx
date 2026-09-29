@@ -38,6 +38,7 @@ import TemplatePage from './components/TemplatePage.tsx';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import DuplicateProfileDialog from './components/DuplicateProfileDialog';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -84,6 +85,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
     const [renameName, setRenameName] = useState('');
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
@@ -204,6 +206,11 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                 <Tooltip title={t('claudeCode.profile.renameProfile')}>
                                     <IconButton size="small" onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
                                         <EditIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('claudeCode.profile.duplicateProfile')}>
+                                    <IconButton size="small" onClick={() => setDuplicateOpen(true)}>
+                                        <ContentCopyIcon fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip title={t('claudeCode.profile.deleteProfile')}>
@@ -436,6 +443,13 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                <DuplicateProfileDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    sourceId={profileId || ''}
+                    sourceName={currentProfile?.name || profileId || ''}
+                />
 
                 <ConfirmDialog
                     open={deleteProfileOpen}
