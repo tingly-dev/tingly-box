@@ -22,7 +22,10 @@ export interface ProbeAxes {
 export const DEFAULT_AXES: ProbeAxes = {
     stream: true, // Stream default — closest to production traffic
     tool: false,
-    thinking: 'none',
+    // Medium, not none: a growing share of models reject thinking=none, so a
+    // default of none would make the default probe fail on them. Medium is
+    // accepted everywhere thinking is, and 'none' stays one click away.
+    thinking: 'medium',
     vision: 'none',
     protocol: '',
     direct: false,
@@ -33,7 +36,7 @@ export const DEFAULT_AXES: ProbeAxes = {
 //   2. the pre-computed initialResult — the visible state must match the
 //      result the user is looking at; the backend echoes the request axes
 //      (stream/tool/direct/protocol/thinking) so every axis is restorable
-//   3. defaults (Stream / no tool / no thinking / provider's primary protocol / Through TB)
+//   3. defaults (Stream / no tool / medium thinking / provider's primary protocol / Through TB)
 export function resolveInitialAxes(opts: {
     targetType: ProbeTargetType;
     thinkingLevel?: ProbeThinking;

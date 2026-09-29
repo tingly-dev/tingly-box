@@ -49,7 +49,7 @@ The request shape is described by orthogonal fields; the legacy `test_mode` enum
 |------|-------|-------|
 | Shape (stream) | `stream bool` | SSE vs single response |
 | Tool | `tool bool` | attaches probe tools; composes with both stream values (non-stream lifts structured `tool_calls`; stream keeps raw chunks) |
-| Thinking | `thinking` | `none`/`low`/`medium`/`high`, unchanged |
+| Thinking | `thinking` | `none`/`low`/`medium`/`high`/`max`. The API default (empty) is still `none`, but the UI (dialog, quick test, Bench) defaults to `medium` and shows the axis above the fold: a growing share of models reject `thinking=none`, so a `none` default would make the default probe fail on them. |
 | Vision | `vision` | `none`/`user`/`tool` — attaches the canonical image fixture (`internal/protocol/vision`, a 256×256 red PNG + "what color?" prompt) in the user message or as a synthetic tool-result turn: the two channels of issue #1606. A vision-capable route answers "red"; anything else reveals a drop or corruption. Drops the echo instruction (it would echo the prompt instead of answering). Not supported for Google targets. |
 | Protocol | `protocol` | `openai_chat` / `openai_responses` / `anthropic_v1` — no "auto"; empty = target's primary (provider APIStyle, Codex OAuth → Responses). Replaces the OpenAI-only legacy `endpoint` field (still accepted; `protocol` wins). Rule targets accept any protocol too: the scenario only sets the default (`ScenarioEndpoint`); the probe sends what a real client choosing that protocol would send, and TB's answer is the result (today TB's Responses handler still rejects scenarios without the OpenAI transport, e.g. `claude_code`, with a 400 — the probe surfaces that rather than hiding the option). Provider targets are reduced to what the provider's own config can speak. |
 | Scope | `direct bool` | unchanged |
@@ -238,7 +238,7 @@ frontend/src/components/probe/
   probeConfig.ts    — ProbeAxes model, open-time association chain (props →
                       initialResult.stream → persisted per-target-type config →
                       defaults), per-target protocol availability
-  ProbeControls.tsx — control rail (primary axes + Advanced expander)
+  ProbeControls.tsx — control rail (primary axes Protocol/Shape/Thinking/Scope + Advanced expander for Content)
   ProbeDialog.tsx   — rail + results + full-width cURL section, CopyBlock
   runProbe.ts       — runProbe / buildProbeCurl envelopes
 ```

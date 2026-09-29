@@ -124,9 +124,10 @@ export function ExclusiveToggle<T extends string>({
 }
 
 
-// ThinkingSlider: the effort ladder as one stepped control bar. End-mark
-// labels center on their ticks and would stick out of the rail, so the
-// slider is inset and the wrapper clips the rest.
+// ThinkingSlider: the effort ladder as one stepped control bar. Mark labels
+// center on their ticks, which would push the end labels past the rail (and
+// get them clipped — "None" rendered as "one"), so the first label is
+// left-anchored and the last right-anchored to their ticks instead.
 export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: ProbeThinking) => void; disabled?: boolean }> = ({ value, onChange, disabled }) => {
     const { t } = useTranslation();
     return (
@@ -145,6 +146,8 @@ export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: Prob
                 onChange={(_, v) => onChange(THINKING_LADDER[v as number])}
                 sx={{
                     '& .MuiSlider-markLabel': { fontSize: '0.7rem' },
+                    '& .MuiSlider-markLabel[data-index="0"]': { transform: 'translateX(0%)' },
+                    [`& .MuiSlider-markLabel[data-index="${THINKING_LADDER.length - 1}"]`]: { transform: 'translateX(-100%)' },
                 }}
             />
         </Box>

@@ -174,7 +174,7 @@ export function runLabel(state: BenchState): string {
     else {
         if (state.axes.tool) parts.push('tool');
         if (state.axes.vision !== 'none') parts.push('vision');
-        if (state.axes.thinking !== 'none') parts.push(`think=${state.axes.thinking}`);
+        if (state.axes.thinking !== DEFAULT_AXES.thinking) parts.push(`think=${state.axes.thinking}`);
     }
     const n = isDirect(state) ? 0 : overlayCount(state);
     if (n) parts.push(`${n} flag${n > 1 ? 's' : ''}`);

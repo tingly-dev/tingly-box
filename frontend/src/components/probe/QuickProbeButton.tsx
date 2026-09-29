@@ -11,6 +11,7 @@ import {
 import type { ProbeResult } from '@/types/probe';
 import { formatLatency, runProbe } from './runProbe';
 import { ProbeDialog } from './ProbeDialog';
+import { DEFAULT_AXES } from './probeConfig';
 import { fontMono } from '@/theme/fonts';
 
 interface QuickProbeButtonProps {
@@ -44,13 +45,15 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
     const run = useCallback(async () => {
         setRunning(true);
         setResult(null);
-        // Stream by default — closest to production traffic. Message defaults
-        // server-side.
+        // The dialog's defaults (stream, medium thinking) — closest to
+        // production traffic, and what the pill's details dialog restores.
+        // Message defaults server-side.
         const res = await runProbe({
             target_type: 'rule',
             scenario: scenario || 'openai',
             rule_uuid: ruleUuid,
-            stream: true,
+            stream: DEFAULT_AXES.stream,
+            thinking: DEFAULT_AXES.thinking,
         });
         if (!mounted.current) return;
         setResult(res);

@@ -15,7 +15,7 @@ describe('buildProbeRequest', () => {
 
     it('fixture mode sends the knobs and the message', () => {
         const { request } = buildProbeRequest(base({ message: 'hello', axes: { ...DEFAULT_STATE.axes, tool: true } }));
-        expect(request).toEqual({ target_type: 'provider', provider_uuid: 'p1', model: 'm', direct: false, stream: true, tool: true, thinking: 'none', message: 'hello' });
+        expect(request).toEqual({ target_type: 'provider', provider_uuid: 'p1', model: 'm', direct: false, stream: true, tool: true, thinking: 'medium', message: 'hello' });
     });
 
     it('raw mode sends the request on its own protocol and drops the fixture knobs', () => {

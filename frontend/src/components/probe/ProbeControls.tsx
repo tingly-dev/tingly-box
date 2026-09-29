@@ -10,14 +10,13 @@ import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from 
 // one label + control pair per row. Groups fill the rail width and every
 // option button is equal-width, so the rail reads as an aligned instrument
 // panel instead of ragged inline chips. Adding a future axis = one more row
-// here (and a field on ProbeAxes) — in the Parameters AxisGroup if it's a
-// real, independently-valued field, in Content if it's a fixed blob toggled
-// on/off (.design/bench.md §1). Protocol / Shape / Scope stay ungrouped
-// above the fold, but for two different reasons: Protocol leads because
-// it's the coordinate system, not because it's frequently touched (most
-// probes never change it); Shape/Scope are there because they're the two
-// axes 80% of probes touch — they're actually one of each kind (Stream is
-// a parameter, Scope is transport, not even part of the request body).
+// here (and a field on ProbeAxes) — above the fold if most probes need to
+// see or set it, in the Advanced Content group if it's a fixed blob toggled
+// on/off (.design/bench.md §1). Protocol / Shape / Thinking / Scope stay
+// above the fold: Protocol leads because it's the coordinate system, not
+// because it's frequently touched (most probes never change it); Shape and
+// Scope are the axes 80% of probes touch; Thinking is there because many
+// models reject thinking=none, so it decides whether a probe succeeds.
 
 interface ProbeControlsProps {
     axes: ProbeAxes;
@@ -105,6 +104,14 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
                 />
             </Axis>
 
+            {/* Thinking is a primary axis too: many models require it on, so
+                its value decides whether the default probe even succeeds —
+                it can't hide behind Advanced. A stepped slider reads as one
+                knob on the effort ladder. */}
+            <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
+                <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
+            </Axis>
+
             <Axis label={t('probe.scope')} hint={scopeHint}>
                 <ExclusiveToggle
                     value={axes.direct ? 'direct' : 'tb'}
@@ -138,21 +145,6 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
                 </Box>
                 <Collapse in={advancedOpen}>
                     <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-                        {/* Parameters: real, independently-valued request fields. Turning
-                            one doesn't inject or remove content — it configures how the
-                            request already being sent gets built (.design/bench.md §1).
-                            Protocol lives above the fold now, not here — it's the
-                            coordinate system, not a peer parameter. */}
-                        <AxisGroup label={t('probe.groupParameters', { defaultValue: 'Parameters' })}>
-                            {/* Thinking as a stepped control bar: the effort is a ladder, and a
-                                marked slider reads as one knob instead of four buttons. End-mark
-                                labels center on their ticks and would stick out of the rail, so
-                                the slider is inset and the wrapper clips the rest. */}
-                            <Axis label={t('probe.thinking')} hint={t('probe.thinkingHint')}>
-                                <ThinkingSlider value={axes.thinking} onChange={(v) => set({ thinking: v })} />
-                            </Axis>
-                        </AxisGroup>
-
                         {/* Content: a fixed, unparametrized blob toggled on/off. There's no
                             "which tool" or "which image" dial — the same canned content
                             Bench's Templates menu offers, just body-fragment-sized instead
