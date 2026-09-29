@@ -46,14 +46,11 @@ export const defaultMessage = (tool: boolean): string => (tool ? defaultToolMess
 
 // ruleProtocolForScenario derives the default protocol a rule target is
 // probed on, mirroring the backend's ScenarioEndpoint scenario→api-style
-// mapping. It is only the default: every rule is reachable on every client
-// protocol through TB (RULE_PROTOCOLS), and the user may pick another.
+// mapping. It is only the default — the user may pick any RULE_PROTOCOLS.
 export function ruleProtocolForScenario(scenario?: string): ProbeProtocol {
     const base = (scenario || 'openai').split(':')[0];
     return ['anthropic', 'claude_code', 'opencode'].includes(base) ? 'anthropic_v1' : 'openai_chat';
 }
-
-export const RULE_PROTOCOLS: ProbeProtocol[] = ['openai_chat', 'openai_responses', 'anthropic_v1'];
 
 // extractText pulls the assistant's text out of the raw (JSON-marshaled) SDK
 // response so the user sees plain words instead of a serialized object. Returns

@@ -93,6 +93,11 @@ export function scopeAvailable(targetType: ProbeTargetType): boolean {
     return targetType === 'provider';
 }
 
+// RULE_PROTOCOLS is the Protocol axis for rule targets: every protocol is
+// offered and the scenario only sets the default (ruleProtocolForScenario).
+// Whether TB serves a given one for the scenario is the probe's answer.
+export const RULE_PROTOCOLS: ProbeProtocol[] = ['openai_chat', 'openai_responses', 'anthropic_v1'];
+
 export interface ProtocolAvailability {
     // Options offered on the Protocol axis, in display order.
     options: ProbeProtocol[];

@@ -67,8 +67,8 @@ func TestValidateE2ERequest_NewAxes(t *testing.T) {
 	})
 
 	t.Run("any protocol accepted for rule targets", func(t *testing.T) {
-		// The scenario only picks the default; every rule is reachable on
-		// every client protocol through TB.
+		// The scenario only picks the default; whether TB serves the
+		// protocol is the probe's answer, not a validation error.
 		for _, scenario := range []string{"openai", "claude_code:p1", "team"} {
 			for _, p := range []ProbeProtocol{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
 				assert.NoError(t, ValidateE2ERequest(&E2ERequest{

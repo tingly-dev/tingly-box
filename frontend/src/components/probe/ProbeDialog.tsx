@@ -27,6 +27,7 @@ import {
     protocolAvailability,
     visionAvailable,
     scopeAvailable,
+    RULE_PROTOCOLS,
 } from './probeConfig';
 import { ProbeControls } from './ProbeControls';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
@@ -40,7 +41,6 @@ import {
     extractText,
     defaultMessage,
     ruleProtocolForScenario,
-    RULE_PROTOCOLS,
 } from './ResultSections';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -154,9 +154,9 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     // scenario's.
     const protocolControl = useMemo(() => {
         if (targetType === 'rule') {
-            // Any protocol reaches a rule through TB; the scenario only sets the default.
+            // Every protocol is offered; the scenario only sets the default.
             const value = axes.protocol || ruleProtocolForScenario(scenario);
-            return { value, options: RULE_PROTOCOLS, locked: false, disabled: false, lockHint: '' };
+            return { value, options: RULE_PROTOCOLS, locked: false, disabled: false };
         }
         if (providerInfo?.api_style === 'google') {
             return { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') };

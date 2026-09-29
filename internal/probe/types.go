@@ -270,9 +270,10 @@ type E2ERequest struct {
 	// providers the matching dual URL is selected; for through-TB probes the
 	// loopback speaks the requested protocol and TB's transform pipeline
 	// handles the upstream exactly as production traffic does.
-	// Rule targets accept any protocol too — every rule is reachable on every
-	// client protocol through TB; empty keeps the scenario's default
-	// (ScenarioEndpoint).
+	// Rule targets accept any protocol too: the probe sends what a real client
+	// choosing it would send to /tingly/{scenario}, and TB's answer is the
+	// result (e.g. TB's Responses handler rejects scenarios without the
+	// OpenAI transport). Empty keeps the scenario's default (ScenarioEndpoint).
 	Protocol ProbeProtocol `json:"protocol,omitempty" example:"openai_responses"`
 
 	// Thinking sets the extended-thinking effort for the probe. Orthogonal to
@@ -448,9 +449,9 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		return &ValidationError{Field: "protocol", Message: "protocol must be 'openai_chat', 'openai_responses', or 'anthropic_v1'"}
 	}
 
-	// Rule targets accept any protocol: every rule is reachable on every
-	// client protocol through TB, and the scenario only picks the default
-	// (ScenarioEndpoint). An empty protocol keeps that default.
+	// Rule targets accept any protocol: the scenario only picks the default
+	// (ScenarioEndpoint). Whether TB serves that protocol for the scenario is
+	// answered by the probe itself, on the real path — not pre-judged here.
 
 	// Thinking is optional; empty normalizes to "none". Only the probe-facing
 	// subset of the ladder is accepted (minimal/xhigh are intentionally
