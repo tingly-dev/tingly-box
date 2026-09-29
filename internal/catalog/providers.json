@@ -143,11 +143,130 @@
       "api_style": "openai",
       "icon": "azure",
       "models": [
-        { "id": "gpt-5" },
-        { "id": "gpt-5-mini" },
-        { "id": "gpt-4o" },
-        { "id": "o4-mini" },
-        { "id": "o3" }
+        {
+          "id": "gpt-6-astra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-03",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-6-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-6-luna",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.5",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-04-24",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.4",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-03-05",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "context": 400000,
+          "max_output": 128000,
+          "created": "2026-03-17",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-5",
+          "context": 400000,
+          "max_output": 128000,
+          "created": "2025-08-07",
+          "note": "version 2025-08-07 retires 2027-02-09 (GA)",
+          "sources": [
+            "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+            "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule"
+          ]
+        },
+        {
+          "id": "gpt-5-mini",
+          "context": 400000,
+          "max_output": 128000,
+          "created": "2025-08-07",
+          "note": "version 2025-08-07 retires 2027-02-09 (GA)",
+          "sources": [
+            "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+            "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule"
+          ]
+        },
+        {
+          "id": "gpt-4o",
+          "context": 128000,
+          "max_output": 16384,
+          "legacy": true,
+          "note": "per-version lifecycle: 2024-05-13 deprecated (retires 2026-12-09, auto-upgrade to gpt-5.6-sol); 2024-08-06 deprecated (retires 2027-04-14); 2024-11-20 legacy (retires 2027-04-14); suggested replacement gpt-5.1",
+          "sources": [
+            "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+            "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule"
+          ]
+        },
+        {
+          "id": "o4-mini",
+          "context": 200000,
+          "max_output": 100000,
+          "deprecated": "version 2025-04-16 deprecated, retires 2026-11-19",
+          "note": "replaced by gpt-5.6-terra",
+          "sources": [
+            "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+            "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule"
+          ]
+        },
+        {
+          "id": "o3",
+          "context": 200000,
+          "max_output": 100000,
+          "deprecated": "version 2025-04-16 deprecated, retires 2026-11-19",
+          "note": "replaced by gpt-5.6-sol",
+          "sources": [
+            "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+            "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule"
+          ]
+        }
+      ],
+      "last_updated": "2026-09-29",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
+        "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+        "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirements"
       ]
     },
     "openai-com": {
@@ -263,8 +382,9 @@
           "context": 1047576,
           "max_output": 32768,
           "created": "2025-04",
-          "deprecated": "shutdown scheduled 2026-07-23",
-          "note": "replaced by gpt-5.4-nano"
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.6-luna",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "gpt-4o",
@@ -286,7 +406,8 @@
           "max_output": 8192,
           "created": "2023-03",
           "deprecated": "shutdown scheduled 2026-10-23",
-          "note": "replaced by gpt-5.5"
+          "note": "replaced by gpt-5.6-sol",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "gpt-4-turbo",
@@ -294,7 +415,8 @@
           "max_output": 4096,
           "created": "2024-04",
           "deprecated": "shutdown scheduled 2026-10-23",
-          "note": "replaced by gpt-5.5"
+          "note": "replaced by gpt-5.6-sol",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "gpt-3.5-turbo",
@@ -302,33 +424,46 @@
           "max_output": 4096,
           "created": "2023-11",
           "deprecated": "shutdown scheduled 2026-10-23",
-          "note": "replaced by gpt-5.4-mini"
+          "note": "replaced by gpt-5.6-terra",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "o3",
           "context": 200000,
-          "max_output": 100000
+          "max_output": 100000,
+          "deprecated": "o3-2025-04-16 snapshot shutdown scheduled 2026-12-11",
+          "note": "replaced by gpt-5.6-sol",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "o3-mini",
           "context": 200000,
-          "max_output": 100000
+          "max_output": 100000,
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.6-sol",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "o1",
           "context": 200000,
-          "max_output": 100000
+          "max_output": 100000,
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.6-sol",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         },
         {
           "id": "o1-mini",
           "context": 128000,
-          "max_output": 65536
+          "max_output": 65536,
+          "deprecated": "shut down 2025-10-27",
+          "note": "replaced by o4-mini",
+          "sources": ["https://developers.openai.com/api/docs/deprecations"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "openai",
       "openai_endpoint_mode": "both",
-      "last_updated": "2026-09-23",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://developers.openai.com/api/docs/models/gpt-6-astra",
         "https://developers.openai.com/api/docs/models/gpt-6-sol",
@@ -668,8 +803,18 @@
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
-            "https://learn.chatgpt.com/docs/changelog?type=codex-cli"
+            "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
           ]
+        },
+        {
+          "id": "gpt-6-sol:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "note": "日常主力模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 1.5x speed）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
         {
           "id": "gpt-6-luna",
@@ -680,30 +825,53 @@
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
-            "https://learn.chatgpt.com/docs/changelog?type=codex-cli"
+            "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
           ]
+        },
+        {
+          "id": "gpt-6-luna:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "note": "高效轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 1.5x speed）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
         {
           "id": "gpt-6-astra",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-09-03",
-          "note": "最新旗舰模型，代码/应用/研究综合能力最强；截至 2026-09-18 Codex CLI 的 /model 选择器仍不默认展示该模型（企业版需管理员在后台开启，Plus/Pro 按节奏灰度），需在 config.toml 显式设置 model = \"gpt-6-astra\" 才能使用，但配置后可直接生效",
+          "note": "最新旗舰模型，代码/应用/研究综合能力最强；Codex 仓库模型目录（models.json）中已为 visibility=list、最低客户端版本 0.153.0，按账户套餐、灰度进度和工作区设置开放（企业版需管理员在后台开启）；旧版客户端或未展示时可在 config.toml 显式设置 model = \"gpt-6-astra\"",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
             "https://openai.com/index/gpt-6-astra/",
-            "https://github.com/openai/codex/issues/43342"
+            "https://github.com/openai/codex/issues/43342",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
           ]
+        },
+        {
+          "id": "gpt-6-astra:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-09-03",
+          "note": "最新旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 2x speed, increased usage）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
         {
           "id": "gpt-5.6-sol",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理",
+          "note": "上一代旗舰模型，适合复杂编码、长程 Agent 和高难度推理；Codex 模型目录已将其标为旧模型并指向 gpt-6-sol",
           "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/models"]
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
+          ]
         },
         {
           "id": "gpt-5.6-sol:fast",
@@ -718,9 +886,12 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "平衡能力与成本，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4",
+          "note": "上一代平衡模型，适合常规开发任务；已取代于 2026-08-31 退役的 gpt-5.4，Codex 模型目录已指向 gpt-6-sol",
           "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/models"]
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
+          ]
         },
         {
           "id": "gpt-5.6-terra:fast",
@@ -735,9 +906,12 @@
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
-          "note": "延迟和成本最低，适合高频、相对简单的任务；已取代于 2026-08-31 退役的 gpt-5.4-mini",
+          "note": "上一代轻量模型，延迟和成本最低；已取代于 2026-08-31 退役的 gpt-5.4-mini，Codex 模型目录已指向 gpt-6-luna",
           "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/models"]
+          "sources": [
+            "https://learn.chatgpt.com/docs/models",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
+          ]
         },
         {
           "id": "gpt-5.6-luna:fast",
@@ -750,10 +924,13 @@
         {
           "id": "gpt-5.5",
           "context": 272000,
-          "note": "上一代旗舰模型，ChatGPT 登录会话默认模型",
-          "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans; switch to gpt-5.6-sol",
+          "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans (does not apply to the OpenAI API); switch to gpt-6-sol or gpt-5.6-sol",
+          "note": "旧版编码模型（Codex 模型目录标注 Legacy）；ChatGPT/Codex 内将于 2026-10-14 退役，不影响 OpenAI API",
           "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
+          "sources": [
+            "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
+          ]
         },
         {
           "id": "gpt-5.3-codex-spark",
@@ -768,11 +945,12 @@
       "oauth_provider": "codex",
       "icon": "opencode",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-09-23",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
-        "https://openai.com/index/gpt-6-astra/"
+        "https://openai.com/index/gpt-6-astra/",
+        "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
       ]
     },
     "googleapis-com": {
