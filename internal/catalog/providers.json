@@ -2763,6 +2763,60 @@
         "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
       ]
     },
+    "kimi-ai-coding": {
+      "id": "kimi-ai-coding",
+      "name": "Kimi Code (Global)",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.kimi.ai",
+      "vendor_family": "moonshot",
+      "region": "intl",
+      "plan": "coding",
+      "website": "https://www.kimi.ai/code",
+      "description": "Kimi Code API service for coding scenarios (overseas)",
+      "type": "official",
+      "api_doc": "https://www.kimi.com/code/docs/en/",
+      "model_doc": "https://www.kimi.com/code/docs/en/kimi-code/models",
+      "pricing_doc": "https://www.kimi.com/code/docs/en/kimi-code/membership",
+      "base_url_openai": "https://api.kimi.ai/coding/v1",
+      "base_url_anthropic": "https://api.kimi.ai/coding/",
+      "models": [
+        {
+          "id": "kimi-for-coding",
+          "context": 1024000,
+          "max_output": 64000,
+          "note": "alias upgraded in place to Kimi K2.8 Preview (2026-09-11); up to 1M context, low/high/max thinking",
+          "sources": [
+            "https://www.kimi.com/code/docs/en/kimi-code/models",
+            "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
+          ]
+        },
+        {
+          "id": "k3",
+          "context": 1024000,
+          "note": "Kimi K3 via Kimi Code; 1M context only on higher-tier plans (Pro/Allegretto+), 256K otherwise",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
+        },
+        {
+          "id": "k3-256k",
+          "context": 256000,
+          "note": "K3 256K-context version; image input only (no video)",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
+        },
+        {
+          "id": "kimi-for-coding-highspeed",
+          "context": 256000,
+          "note": "K2.7 Code HighSpeed; ~5-6x output speed for ~3x quota usage",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "kimi",
+      "last_updated": "2026-09-29",
+      "sources": [
+        "https://www.kimi.com/code/docs/en/kimi-code/models"
+      ]
+    },
     "volces-com": {
       "id": "volces-com",
       "name": "Volcengine Ark (CN)",
