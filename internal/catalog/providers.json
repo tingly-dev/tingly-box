@@ -972,38 +972,77 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gemini-3.5-flash",
-          "context": 1000000,
+          "id": "gemini-3.8-flash",
+          "context": 1048576,
           "max_output": 65536,
-          "created": "2026-05"
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash"]
+        },
+        {
+          "id": "gemini-3.7-flash",
+          "context": 1048576,
+          "max_output": 65536,
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash"]
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "context": 1048576,
+          "max_output": 65536,
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash"]
+        },
+        {
+          "id": "gemini-3.5-flash-lite",
+          "context": 1048576,
+          "max_output": 65536,
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite"]
+        },
+        {
+          "id": "gemini-3.5-flash",
+          "context": 1048576,
+          "max_output": 65536,
+          "created": "2026-05",
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash"]
         },
         {
           "id": "gemini-3.1-flash-lite",
-          "context": 1000000,
+          "context": 1048576,
           "max_output": 65536,
-          "created": "2026-02"
+          "created": "2026-02",
+          "deprecated": "shutdown scheduled 2027-05-07",
+          "note": "replaced by gemini-3.5-flash-lite",
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite",
+            "https://ai.google.dev/gemini-api/docs/deprecations"
+          ]
         },
         {
           "id": "gemini-3.1-pro-preview",
-          "context": 1000000,
+          "context": 1048576,
           "max_output": 65536,
           "created": "2026-01",
-          "note": "preview; highest current Pro-tier id, no non-preview GA id published yet"
+          "note": "preview; highest current Pro-tier id, no non-preview GA id published yet",
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview"]
         },
         {
           "id": "gemini-3-flash-preview",
-          "context": 1000000,
+          "context": 1048576,
           "max_output": 65536,
-          "note": "preview"
+          "note": "preview; no shutdown announced, deprecations page lists gemini-3.6-flash as replacement",
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview",
+            "https://ai.google.dev/gemini-api/docs/deprecations"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "gemini",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://ai.google.dev/gemini-api/docs/models",
         "https://ai.google.dev/gemini-api/docs/deprecations",
-        "https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.5"
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash",
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite"
       ]
     },
     "gemini-cli": {
@@ -1027,36 +1066,54 @@
         {
           "id": "gemini-2.5-pro",
           "context": 1048576,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
+            "https://ai.google.dev/gemini-api/docs/deprecations"
+          ]
         },
         {
           "id": "gemini-2.5-flash",
           "context": 1048576,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
+            "https://ai.google.dev/gemini-api/docs/deprecations"
+          ]
         },
         {
           "id": "gemini-2.5-flash-lite",
           "context": 1048576,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
+            "https://ai.google.dev/gemini-api/docs/deprecations"
+          ]
         },
         {
           "id": "gemini-3.1-pro-preview",
-          "context": 1000000,
-          "max_output": 65536
+          "context": 1048576,
+          "max_output": 65536,
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview"]
         },
         {
           "id": "gemini-3.5-flash",
-          "context": 1000000,
-          "max_output": 65536
+          "context": 1048576,
+          "max_output": 65536,
+          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash"]
         }
       ],
       "supports_models_endpoint": true,
       "oauth_provider": "gemini",
       "icon": "gemini",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://github.com/google-gemini/gemini-cli/discussions/27274",
-        "https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/"
+        "https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/",
+        "https://ai.google.dev/gemini-api/docs/deprecations"
       ]
     },
     "antigravity": {
