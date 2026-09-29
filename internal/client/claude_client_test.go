@@ -283,15 +283,6 @@ func TestGuard_UsesAdaptiveThinkingForModelsRejectingDisabled(t *testing.T) {
 	}
 }
 
-func TestRejectsDisabledThinking_FollowsCatalog(t *testing.T) {
-	for _, m := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "us.anthropic.claude-sonnet-5-5-v1:0"} {
-		assert.True(t, rejectsDisabledThinking(m), m)
-	}
-	for _, m := range []string{"claude-sonnet-5", "claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "gpt-5", ""} {
-		assert.False(t, rejectsDisabledThinking(m), m)
-	}
-}
-
 func TestGuard_KeepsClientAdaptiveConfigForModelsRejectingDisabled(t *testing.T) {
 	provider := newOAuthProvider()
 	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})

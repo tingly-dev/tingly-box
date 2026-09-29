@@ -63,8 +63,11 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 			assert.True(t, caps.ThinkingAdaptive, m)
 			assert.False(t, caps.ThinkingEnabled, m)
 		}
+		caps, ok := LookupClaudeThinkingCaps("us.anthropic.claude-sonnet-5-5-v1:0")
+		require.True(t, ok)
+		assert.True(t, caps.ThinkingMandatory, "cloud-provider decoration")
 		// "claude-sonnet-5-5" must not be shadowed by the "claude-sonnet-5" family key.
-		caps, _ := LookupClaudeThinkingCaps("claude-sonnet-5")
+		caps, _ = LookupClaudeThinkingCaps("claude-sonnet-5")
 		assert.False(t, caps.ThinkingMandatory)
 		caps, _ = LookupClaudeThinkingCaps("claude-opus-4-8")
 		assert.False(t, caps.ThinkingMandatory)

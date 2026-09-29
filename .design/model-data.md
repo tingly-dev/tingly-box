@@ -31,7 +31,7 @@
   `mandatory`(OpenRouter 同名字段)= 该模型拒绝 `thinking.type=disabled`(400 要求改用
   adaptive),即"thinking 不可关闭"。这是**模型属性,只在 catalog 里声明**:目前为
   fable-5 / fable-5-1 / opus-5-5 / sonnet-5-5。消费方读 `ClaudeThinkingCaps.ThinkingMandatory`,
-  不再各处硬编码模型名白名单(原 `client.rejectsDisabledThinking` 的字符串白名单已删除):
+  不再各处硬编码模型名白名单(原 client 里的字符串白名单及其包装函数已删除,Guard 直接读 catalog):
   vendor 阶段 `ApplyAnthropic{V1,Beta}ModelTransform` 把 disabled 改写为 adaptive(覆盖客户端
   显式 off 与 `thinking_effort=off` 规则),OAuth `Guard/GuardBeta` 另外在 thinking 未设置时
   也补 adaptive。新增强制 thinking 的模型只需在 JSON 里加 `"mandatory": true`。

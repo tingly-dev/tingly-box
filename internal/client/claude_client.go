@@ -163,11 +163,11 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
-	// Adaptive-only models reject thinking.type.disabled (see rejectsDisabledThinking).
+	// Adaptive-only models reject thinking.type.disabled (catalog `mandatory`, see catalog.ClaudeThinkingCaps).
 	model := req.Model
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
 
-	if rejectsDisabledThinking(model) {
+	if caps, _ := catalog.LookupClaudeThinkingCaps(model); caps.ThinkingMandatory {
 		// Keep a client-supplied adaptive config (e.g. its display setting).
 		if req.Thinking.OfAdaptive == nil {
 			req.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
@@ -216,12 +216,12 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
-	// Adaptive-only models reject thinking.type.disabled (see rejectsDisabledThinking).
+	// Adaptive-only models reject thinking.type.disabled (catalog `mandatory`, see catalog.ClaudeThinkingCaps).
 	model := string(req.Model)
 	effortSet := req.OutputConfig.Effort != ""
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
 
-	if rejectsDisabledThinking(model) {
+	if caps, _ := catalog.LookupClaudeThinkingCaps(model); caps.ThinkingMandatory {
 		// Keep a client-supplied adaptive config (e.g. its display setting).
 		if req.Thinking.OfAdaptive == nil {
 			req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
@@ -367,15 +367,6 @@ func (c *ClaudeClient) APIStyle() protocol.APIStyle {
 // Client returns the underlying Anthropic SDK client.
 func (c *ClaudeClient) Client() *anthropic.Client {
 	return c.AnthropicClient.Client()
-}
-
-// rejectsDisabledThinking reports whether the upstream API rejects
-// thinking.type.disabled for model with a 400 asking for thinking.type.adaptive.
-// Guard sends adaptive thinking for these instead of forcing thinking off.
-// The answer comes from the model catalog's `mandatory` flag, not a list here.
-func rejectsDisabledThinking(model string) bool {
-	caps, ok := catalog.LookupClaudeThinkingCaps(model)
-	return ok && caps.ThinkingMandatory
 }
 
 // stripBetaClearThinkingEdit removes any clear_thinking_20251015 context-management
