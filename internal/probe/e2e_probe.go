@@ -338,9 +338,9 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 		scenario = typ.ScenarioOpenAI
 	}
 
-	// The client protocol defaults to the scenario's primary style; a
-	// multi-transport scenario (team) may be probed on another protocol it
-	// serves — validation has already checked the scenario speaks it.
+	// The scenario only picks the default client protocol; an explicit
+	// protocol (or a raw request's) wins, exactly as a real client that
+	// calls /tingly/{scenario} with that protocol would.
 	apiBase, scenarioStyle := loopbackAPIBase(port, scenario)
 	apiStyle := req.ResolveClientStyle(scenarioStyle)
 

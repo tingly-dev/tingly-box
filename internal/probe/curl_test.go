@@ -66,38 +66,19 @@ func TestValidateE2ERequest_NewAxes(t *testing.T) {
 		assert.Contains(t, err.Error(), "protocol")
 	})
 
-	t.Run("protocol rejected for rule targets", func(t *testing.T) {
-		err := ValidateE2ERequest(&E2ERequest{
-			TargetType: E2ETargetRule,
-			Scenario:   "openai",
-			RuleUUID:   "r-1",
-			Protocol:   ProtocolAnthropic,
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "rule")
-	})
-
-	t.Run("rule protocol accepted when the scenario serves it", func(t *testing.T) {
-		for _, p := range []ProbeProtocol{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
-			assert.NoError(t, ValidateE2ERequest(&E2ERequest{
-				TargetType: E2ETargetRule,
-				Scenario:   "team",
-				RuleUUID:   "r-1",
-				Protocol:   p,
-			}), "team speaks %s", p)
+	t.Run("any protocol accepted for rule targets", func(t *testing.T) {
+		// The scenario only picks the default; every rule is reachable on
+		// every client protocol through TB.
+		for _, scenario := range []string{"openai", "claude_code:p1", "team"} {
+			for _, p := range []ProbeProtocol{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
+				assert.NoError(t, ValidateE2ERequest(&E2ERequest{
+					TargetType: E2ETargetRule,
+					Scenario:   scenario,
+					RuleUUID:   "r-1",
+					Protocol:   p,
+				}), "scenario %s protocol %s", scenario, p)
+			}
 		}
-		assert.NoError(t, ValidateE2ERequest(&E2ERequest{
-			TargetType: E2ETargetRule,
-			Scenario:   "openai",
-			RuleUUID:   "r-1",
-			Protocol:   ProtocolOpenAIResponses,
-		}))
-		assert.Error(t, ValidateE2ERequest(&E2ERequest{
-			TargetType: E2ETargetRule,
-			Scenario:   "claude_code:p1",
-			RuleUUID:   "r-1",
-			Protocol:   ProtocolOpenAIChat,
-		}))
 	})
 
 	t.Run("all protocol values valid for provider targets", func(t *testing.T) {
@@ -343,8 +324,8 @@ func TestBuildCurl_RuleTarget_ThroughTB_AnthropicScenario(t *testing.T) {
 	assert.Equal(t, "$TB_API_KEY", curl.KeyEnvVar)
 }
 
-// A multi-transport scenario (team) is probed on the protocol the caller
-// picks, not only its primary OpenAI Chat surface.
+// A rule is probed on the protocol the caller picks; without one it keeps
+// its scenario's default (Chat for team, Anthropic for claude_code).
 func TestBuildCurl_RuleTarget_TeamProtocolOverride(t *testing.T) {
 	svc := newCurlTestProber(t)
 	require.NoError(t, svc.config.AddRule(typ.Rule{
@@ -369,4 +350,23 @@ func TestBuildCurl_RuleTarget_TeamProtocolOverride(t *testing.T) {
 		require.NoError(t, err, "protocol %q", p)
 		assert.Equal(t, wantURL, curl.URL, "protocol %q", p)
 	}
+}
+
+func TestBuildCurl_RuleTarget_AnthropicScenarioOnOpenAI(t *testing.T) {
+	svc := newCurlTestProber(t)
+	require.NoError(t, svc.config.AddRule(typ.Rule{
+		UUID:         "r-cc",
+		Scenario:     "anthropic",
+		RequestModel: "claude-x",
+	}))
+
+	curl, err := svc.BuildCurl(context.Background(), &E2ERequest{
+		TargetType: E2ETargetRule,
+		Scenario:   "anthropic",
+		RuleUUID:   "r-cc",
+		Protocol:   ProtocolOpenAIChat,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "http://localhost:18080/tingly/anthropic/chat/completions", curl.URL)
+	assert.Equal(t, "Bearer $TB_API_KEY", curl.Headers["Authorization"])
 }

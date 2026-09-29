@@ -40,7 +40,7 @@ import {
     extractText,
     defaultMessage,
     ruleProtocolForScenario,
-    ruleProtocolOptions,
+    RULE_PROTOCOLS,
 } from './ResultSections';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -149,13 +149,14 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
         });
     }, [protoAvail, visionOk, targetType]);
 
-    // Protocol axis per target type: providers reduce to what they can speak;
-    // rule targets are locked to their scenario's protocol.
+    // Protocol axis per target type: providers reduce to what their config
+    // can speak; rule targets offer every protocol, defaulting to the
+    // scenario's.
     const protocolControl = useMemo(() => {
         if (targetType === 'rule') {
-            const options = ruleProtocolOptions(scenario);
-            const value = axes.protocol && options.includes(axes.protocol) ? axes.protocol : ruleProtocolForScenario(scenario);
-            return { value, options, locked: options.length === 1, disabled: false, lockHint: t('probe.protocolLockedRule') };
+            // Any protocol reaches a rule through TB; the scenario only sets the default.
+            const value = axes.protocol || ruleProtocolForScenario(scenario);
+            return { value, options: RULE_PROTOCOLS, locked: false, disabled: false, lockHint: '' };
         }
         if (providerInfo?.api_style === 'google') {
             return { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') };

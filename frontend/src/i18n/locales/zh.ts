@@ -518,7 +518,6 @@ export default {
     "scopeRuleLocked": "规则测试必须经过 TB 中间件——这正是它要验证的链路。",
     "protocol": "协议",
     "protocolHint": "客户端侧的通信协议。经过 TB 时由 loopback 按该协议接收、再按生产路径转换到上游。",
-    "protocolLockedRule": "由规则所属 scenario 固定。",
     "protocolLockedProvider": "该 provider 只支持单一协议。",
     "protocolGoogle": "Google provider 使用自有 SDK，无协议选择。",
     "vision": "视觉",

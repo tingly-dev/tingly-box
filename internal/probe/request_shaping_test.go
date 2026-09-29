@@ -89,15 +89,20 @@ func TestValidateE2ERequest_RawRequest(t *testing.T) {
 		req.Stream = boolPtr(true)
 		assert.NoError(t, ValidateE2ERequest(req), "stream still applies")
 	})
-	t.Run("provider: protocol must agree; rule: scenario family must match", func(t *testing.T) {
+	t.Run("protocol must agree with the raw request; rules take any protocol", func(t *testing.T) {
 		req := rawReq(ProtocolOpenAIChat, rawChat)
 		req.Protocol = ProtocolAnthropic
 		assert.Equal(t, "protocol", validationField(t, ValidateE2ERequest(req)))
 		req.Protocol = ProtocolOpenAIChat
 		assert.NoError(t, ValidateE2ERequest(req))
 
+		// The scenario only picks a rule's default protocol; a raw request on
+		// another protocol still reaches it through TB.
 		rule := &E2ERequest{TargetType: E2ETargetRule, Scenario: "claude_code", RuleUUID: "r", Request: json.RawMessage(rawChat), RequestProtocol: ProtocolOpenAIChat}
-		assert.Equal(t, "request_protocol", validationField(t, ValidateE2ERequest(rule)))
+		assert.NoError(t, ValidateE2ERequest(rule))
+		rule.Protocol = ProtocolAnthropic
+		assert.Equal(t, "protocol", validationField(t, ValidateE2ERequest(rule)))
+		rule.Protocol = ""
 		rule.Request, rule.RequestProtocol = json.RawMessage(rawAnthropic), ProtocolAnthropic
 		assert.NoError(t, ValidateE2ERequest(rule))
 		codex := &E2ERequest{TargetType: E2ETargetRule, Scenario: "codex", RuleUUID: "r", Request: json.RawMessage(rawResponses), RequestProtocol: ProtocolOpenAIResponses}

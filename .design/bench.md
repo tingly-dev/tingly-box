@@ -405,8 +405,8 @@ body 由谁写：
 选项按 **Protocol 收窄**（`pages/bench/contentOptions.ts` 的 `templatesForProtocol`）——
 Tool round-trip / Mid-conversation system 这些模板的字段形状是协议私有的，不能跨协议
 复用。这也是为什么 Protocol 下拉在两种作者下读写不同的字段：Message 时读写
-`axes.protocol`（沿用 Probe 的归约逻辑：rule target 锁定到 scenario 家族，provider
-target 按能力收窄）；非 Message 时读写 `raw.protocol`，切换协议会把 body 换成新协议
+`axes.protocol`（沿用 Probe 的归约逻辑：rule target 任意协议、scenario 只给默认值，provider
+target 按自身配置的能力收窄）；非 Message 时读写 `raw.protocol`，切换协议会把 body 换成新协议
 的起始内容——协议决定的是 body 的语法，换协议换的是语法，不是内容。若当前内容在新
 协议下有对应模板（如 Multi-turn 三个协议都有）就原样带过去，没有就退回 Blank（如
 Mid-conversation system 只有 Anthropic 有）——保留"这是哪种内容"这个用户意图，而不

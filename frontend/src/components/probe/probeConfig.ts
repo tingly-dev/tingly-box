@@ -61,7 +61,7 @@ export function resolveInitialAxes(opts: {
     // is fine, but a result-echoed anthropic protocol must not stick onto a
     // provider that can't speak it).
     // Rule targets have no provider record; their protocol options come from
-    // the scenario and are clamped by the dialog (ruleProtocolOptions).
+    // the dialog (any protocol, defaulting to the scenario's).
     const avail = protocolAvailability(opts.provider ?? null);
     if (opts.targetType === 'rule') {
         // keep the result-echoed protocol as-is

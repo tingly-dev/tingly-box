@@ -270,7 +270,9 @@ type E2ERequest struct {
 	// providers the matching dual URL is selected; for through-TB probes the
 	// loopback speaks the requested protocol and TB's transform pipeline
 	// handles the upstream exactly as production traffic does.
-	// Not supported for rule targets (the rule's scenario fixes the protocol).
+	// Rule targets accept any protocol too — every rule is reachable on every
+	// client protocol through TB; empty keeps the scenario's default
+	// (ScenarioEndpoint).
 	Protocol ProbeProtocol `json:"protocol,omitempty" example:"openai_responses"`
 
 	// Thinking sets the extended-thinking effort for the probe. Orthogonal to
@@ -300,9 +302,8 @@ type E2ERequest struct {
 	// chain converts it to the upstream exactly as for production traffic.
 	// A raw request replaces the fixture: Message and the Tool / Vision /
 	// Thinking knobs (which only shape the fixture) are rejected alongside
-	// it; Stream still applies. Provider targets speak RequestProtocol on
-	// the wire (Protocol, if given, must agree); rule targets require the
-	// scenario's protocol family.
+	// it; Stream still applies. The probe speaks RequestProtocol on the wire
+	// for every target (Protocol, if given, must agree).
 	Request         json.RawMessage `json:"request,omitempty" swaggertype:"object"`
 	RequestProtocol ProbeProtocol   `json:"request_protocol,omitempty" example:"anthropic_v1"`
 
@@ -447,12 +448,9 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		return &ValidationError{Field: "protocol", Message: "protocol must be 'openai_chat', 'openai_responses', or 'anthropic_v1'"}
 	}
 
-	// A rule is reachable only on the protocols its scenario serves: most
-	// scenarios speak exactly one family, multi-transport ones (team, dsh)
-	// speak several. An override outside that set cannot reach the rule.
-	if req.TargetType == E2ETargetRule && req.Protocol != "" && !ScenarioSpeaks(req.Scenario, req.Protocol) {
-		return &ValidationError{Field: "protocol", Message: fmt.Sprintf("rule scenario %s does not serve the %s protocol", req.Scenario, req.Protocol)}
-	}
+	// Rule targets accept any protocol: every rule is reachable on every
+	// client protocol through TB, and the scenario only picks the default
+	// (ScenarioEndpoint). An empty protocol keeps that default.
 
 	// Thinking is optional; empty normalizes to "none". Only the probe-facing
 	// subset of the ladder is accepted (minimal/xhigh are intentionally
@@ -512,20 +510,8 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		if _, err := req.parseRawRequest(); err != nil {
 			return &ValidationError{Field: "request", Message: err.Error()}
 		}
-		switch req.TargetType {
-		case E2ETargetProvider, E2ETargetProviderConfig:
-			if req.Protocol != "" && req.Protocol != req.RequestProtocol {
-				return &ValidationError{Field: "protocol", Message: "protocol and request_protocol disagree; a raw request is sent on its own protocol"}
-			}
-		case E2ETargetRule:
-			scenario := req.Scenario
-			if scenario == "" {
-				scenario = string(typ.ScenarioOpenAI)
-			}
-			if !ScenarioSpeaks(scenario, req.RequestProtocol) {
-				_, style := ScenarioEndpoint(scenario)
-				return &ValidationError{Field: "request_protocol", Message: fmt.Sprintf("scenario %s speaks the %s protocol; the raw request is %s", scenario, style, req.RequestProtocol)}
-			}
+		if req.Protocol != "" && req.Protocol != req.RequestProtocol {
+			return &ValidationError{Field: "protocol", Message: "protocol and request_protocol disagree; a raw request is sent on its own protocol"}
 		}
 	}
 
@@ -578,24 +564,6 @@ func E2EMessage(tool bool, customMsg string) string {
 		return "Please use the bash tool to list the current directory contents with 'ls -la'."
 	}
 	return "Hello, this is a test message. Please respond with a short greeting."
-}
-
-// ScenarioSpeaks reports whether a rule under scenario is reachable on
-// protocol p: its primary style always is; a scenario whose descriptor
-// declares both the OpenAI and Anthropic transports (team, dsh) serves
-// either family on one path, so it accepts both.
-func ScenarioSpeaks(scenario string, p ProbeProtocol) bool {
-	if scenario == "" {
-		scenario = string(typ.ScenarioOpenAI)
-	}
-	family := p.Family()
-	if _, style := ScenarioEndpoint(scenario); style == family {
-		return true
-	}
-	base := typ.RuleScenario(scenario).Base()
-	multi := typ.ScenarioSupportsTransport(base, typ.TransportOpenAI) &&
-		typ.ScenarioSupportsTransport(base, typ.TransportAnthropic)
-	return multi && family != ""
 }
 
 // ScenarioEndpoint returns the API endpoint and api-style for a scenario name.

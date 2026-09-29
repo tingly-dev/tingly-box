@@ -51,7 +51,7 @@ The request shape is described by orthogonal fields; the legacy `test_mode` enum
 | Tool | `tool bool` | attaches probe tools; composes with both stream values (non-stream lifts structured `tool_calls`; stream keeps raw chunks) |
 | Thinking | `thinking` | `none`/`low`/`medium`/`high`, unchanged |
 | Vision | `vision` | `none`/`user`/`tool` — attaches the canonical image fixture (`internal/protocol/vision`, a 256×256 red PNG + "what color?" prompt) in the user message or as a synthetic tool-result turn: the two channels of issue #1606. A vision-capable route answers "red"; anything else reveals a drop or corruption. Drops the echo instruction (it would echo the prompt instead of answering). Not supported for Google targets. |
-| Protocol | `protocol` | `openai_chat` / `openai_responses` / `anthropic_v1` — no "auto"; empty = target's primary (provider APIStyle, Codex OAuth → Responses). Replaces the OpenAI-only legacy `endpoint` field (still accepted; `protocol` wins). Not allowed for rule targets (scenario fixes it). |
+| Protocol | `protocol` | `openai_chat` / `openai_responses` / `anthropic_v1` — no "auto"; empty = target's primary (provider APIStyle, Codex OAuth → Responses). Replaces the OpenAI-only legacy `endpoint` field (still accepted; `protocol` wins). Rule targets accept any protocol too: the scenario only sets the default (`ScenarioEndpoint`), and every rule is reachable on every client protocol through TB — what a real client choosing that protocol would hit. Provider targets are reduced to what the provider's own config can speak. |
 | Scope | `direct bool` | unchanged |
 
 Resolution helpers live on `E2ERequest` (`ResolveAxes`, `ResolveClientStyle`, `ResolveOpenAIEndpointOverride`); the SDK helpers read flat `probeParams{Stream, Tool, Thinking}` booleans and never branch on the wire enum.
@@ -133,8 +133,8 @@ client would send TB. It is parsed with the same SDK decoders the inbound handle
 `responses.ResponseNewParams`), so text, images, tools and tool results, cache breakpoints
 and thinking all travel as-is. The probe fills only what the target decides — the model,
 and Anthropic `max_tokens` when absent — and sends it on that protocol's wire: a provider
-target speaks `request_protocol` (the `protocol` axis, if given, must agree), a rule target
-requires the scenario's protocol family. Through TB the transform chain then converts it
+target and a rule target alike speak `request_protocol` (the `protocol` axis, if given, must
+agree) — for a rule the scenario only sets the default. Through TB the transform chain then converts it
 to the upstream exactly as for production traffic. A raw request replaces the fixture, so
 `message` and the Tool / Vision / Thinking knobs are rejected alongside it; Stream still
 applies. `BuildCurl` renders it through the same builders.

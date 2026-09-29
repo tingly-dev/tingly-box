@@ -44,27 +44,16 @@ export const defaultToolMessage = "Please use the bash tool to list the current 
 export const defaultPlainMessage = 'Hello, this is a test message. Please respond with a short greeting.';
 export const defaultMessage = (tool: boolean): string => (tool ? defaultToolMessage : defaultPlainMessage);
 
-// ruleProtocolForScenario derives the primary protocol a rule target speaks,
-// mirroring the backend's ScenarioEndpoint scenario→api-style mapping.
+// ruleProtocolForScenario derives the default protocol a rule target is
+// probed on, mirroring the backend's ScenarioEndpoint scenario→api-style
+// mapping. It is only the default: every rule is reachable on every client
+// protocol through TB (RULE_PROTOCOLS), and the user may pick another.
 export function ruleProtocolForScenario(scenario?: string): ProbeProtocol {
     const base = (scenario || 'openai').split(':')[0];
     return ['anthropic', 'claude_code', 'opencode'].includes(base) ? 'anthropic_v1' : 'openai_chat';
 }
 
-// Scenarios whose descriptor serves both the OpenAI and Anthropic transports
-// on one path (mirrors the backend's ScenarioSpeaks).
-const MULTI_PROTOCOL_SCENARIOS = ['team', 'dsh'];
-
-// ruleProtocolOptions lists every protocol a rule under this scenario is
-// reachable on: the primary family (both OpenAI endpoints for OpenAI-style
-// scenarios), plus Anthropic/OpenAI for multi-transport scenarios like team.
-export function ruleProtocolOptions(scenario?: string): ProbeProtocol[] {
-    const base = (scenario || 'openai').split(':')[0];
-    if (MULTI_PROTOCOL_SCENARIOS.includes(base)) return ['openai_chat', 'openai_responses', 'anthropic_v1'];
-    return ruleProtocolForScenario(scenario) === 'anthropic_v1'
-        ? ['anthropic_v1']
-        : ['openai_chat', 'openai_responses'];
-}
+export const RULE_PROTOCOLS: ProbeProtocol[] = ['openai_chat', 'openai_responses', 'anthropic_v1'];
 
 // extractText pulls the assistant's text out of the raw (JSON-marshaled) SDK
 // response so the user sees plain words instead of a serialized object. Returns
