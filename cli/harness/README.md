@@ -83,13 +83,28 @@ New matrix sections must add a leg here too — nothing enforces the mapping,
 so it silently drifts (see `cache_controls` / `cache_prefix` / `vendor`,
 which shipped without a CI leg for weeks).
 
-Open policy question: the workflow triggers on `ci/**` pushes, PR-merge to
-the default branch, and manual dispatch — not on every PR. The two automatic
-triggers only fire when the protocol data plane or the harness itself changed
-(see the `paths` list in the workflow). Whether the fast
-legs (matrix http + replay, ~seconds) should also gate PRs directly, leaving
-the toolchain-heavy client-driver legs on the current triggers, is still
-undecided.
+Triggers: `harness-matrix.yml` runs on `ci/**` pushes, PR-merge to the
+default branch, and manual dispatch, only when the protocol data plane or the
+harness itself changed (see the `paths` list in the workflow). Open PRs that
+touch those paths also get
+[`harness-pr.yml`](../../.github/workflows/harness-pr.yml): the in-process
+sections only (`matrix --mode=all`, which includes `servertool`), so a
+regression shows before merge; the toolchain-heavy client-driver legs stay
+on the triggers above.
+
+### Checking a change locally
+
+- Per change: `harness matrix --mode=all` (all in-process sections, ~15 s once
+  built) plus `go test` on the packages you changed. For
+  `internal/protocoltest` itself, `go test -short` skips the time-based duo
+  cases.
+- Once before merge: `go test -race ./internal/...`. A `-race` build is slow
+  (minutes for `protocoltest`), so don't run it per commit.
+- Compare against the base branch by case, not by totals: build the harness on
+  both, run `--mode=all --json` on each, and diff the per-case status.
+- Keep one checkout and a warm build cache. When the disk fills, remove stale
+  worktrees and built binaries; `go clean -cache` makes the next build start
+  from scratch.
 
 ---
 

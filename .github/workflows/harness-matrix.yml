@@ -14,6 +14,7 @@ run-name: >-
 #   - push ci/**             : validate CI branch changes.
 #   - pull_request merged to main : validate after a PR merge (not on
 #     plain closes; see the gate job).
+#   (Open PRs get the in-process sections only, via harness-pr.yml.)
 #   - workflow_dispatch      : manual run, optionally focused on one axis.
 #
 # Both automatic triggers are scoped to the harness's own paths (see the
@@ -38,6 +39,8 @@ on:
       - 'internal/routing/**'
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
+      - 'internal/toolengine/**'
+      - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
       - 'ai/*.go'
@@ -69,6 +72,8 @@ on:
       - 'internal/routing/**'
       - 'internal/loadbalance/**'
       - 'internal/forwarding/**'
+      - 'internal/toolengine/**'
+      - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
       - 'ai/*.go'

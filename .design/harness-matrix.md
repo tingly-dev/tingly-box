@@ -117,7 +117,7 @@ lifecycle, setup-failure fan-out, and `testing.T` scaffolding live once in
 | Driver | Used by | Purpose |
 |--------|---------|---------|
 | `Matrix.executePerScenario(skip, combosFor)` | `ExecuteAll` / `ExecuteAllTransitive` / `ExecuteAllIdempotent` | CLI-side: one env per scenario, scenarios run concurrently (§3.1), combos within a scenario run sequentially against the shared env |
-| `Matrix.runPerScenario(t, skip, run)` | `RunTransitive` / `RunIdempotent` | `testing.T` counterpart: one env per scenario subtest, `t.Parallel()` scenarios, combos sequential |
+| `Matrix.runPerScenario(t, skip, run)` | `Run` / `RunTransitive` / `RunIdempotent` | `testing.T` counterpart: one env per scenario subtest, `t.Parallel()` scenarios, combos sequential |
 | `Matrix.runRecorderCases(cases)` | `ExecuteAllFlags` / `ExecuteAllContentShapes` / `ExecuteAllCacheControls` | CLI-side: one env per case, cases run concurrently (§3.1) |
 | `runRecorderCase(case)` | `runRecorderCases` | Runs one `flagTB`-style case body under the recording shim (`flagRecorder`), returns its `TestResult` |
 | `setupFailureResult(base, err)` | `executeScenarioCombos` / `runRecorderCase` | Shared "env failed to boot" `TestResult` construction |
@@ -127,9 +127,9 @@ A `scenarioCombo` is `{meta TestResult, run func(*TestEnv) TestResult}` — the
 created. A `recorderCase` is the equivalent for the
 flags/content_shapes/cache_controls suites: it carries result metadata plus
 `run func(flagTB, *TestEnv)`. (Single-hop
-`Matrix.Run(t)` keeps its own deeper subtest nesting —
-`scenario/source/target/mode` with one env per leaf — because its test-name
-contract and per-leaf parallelism differ from the per-scenario sections.)
+`Matrix.Run(t)` keeps its deeper subtest names —
+`scenario/source/target/mode` — nested inside the scenario subtest, and runs
+them against that scenario's env.)
 
 ---
 

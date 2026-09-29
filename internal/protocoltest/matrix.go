@@ -290,37 +290,28 @@ func (m *Matrix) RunFull(t *testing.T) {
 	})
 }
 
-// Run executes all matrix combinations as subtests under t. Each combination
-// runs the same executeTest implementation the CLI path uses — the testing.T
-// layer only provisions an env per subtest and reports the TestResult, so the
-// skip logic and assertion loop exist exactly once.
+// Run executes all matrix combinations as subtests under t, named
+// scenario/source/target/mode. Each combination runs the same executeTest
+// implementation the CLI path uses; like the CLI, one env serves every
+// combination of a scenario (routes are keyed by source, target and
+// scenario, so they cannot interfere), and scenarios run in parallel.
 func (m *Matrix) Run(t *testing.T) {
 	t.Helper()
 
-	for _, scenario := range m.Scenarios {
-		t.Run(scenario.Name, func(t *testing.T) {
-			for _, pair := range m.Pairs {
-				t.Run(string(pair.Source), func(t *testing.T) {
-					t.Run(string(pair.Target), func(t *testing.T) {
-						for _, streaming := range m.Streaming {
-							t.Run(streamMode(streaming), func(t *testing.T) {
-								t.Parallel()
-
-								env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-								if err != nil {
-									t.Fatalf("create test env: %v", err)
-								}
-								defer env.Close()
-
-								result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming)
-								reportTestResult(t, &result)
-							})
-						}
-					})
+	m.runPerScenario(t, nil, func(t *testing.T, env *TestEnv, scenario Scenario) {
+		for _, pair := range m.Pairs {
+			t.Run(string(pair.Source), func(t *testing.T) {
+				t.Run(string(pair.Target), func(t *testing.T) {
+					for _, streaming := range m.Streaming {
+						t.Run(streamMode(streaming), func(t *testing.T) {
+							result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming)
+							reportTestResult(t, &result)
+						})
+					}
 				})
-			}
-		})
-	}
+			})
+		}
+	})
 }
 
 // reportTestResult surfaces a CLI-shaped TestResult under t — the bridge that

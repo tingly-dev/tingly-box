@@ -1,0 +1,92 @@
+name: Harness PR
+
+# In-process harness check on open PRs that touch the protocol data plane.
+# Runs `matrix --mode=all`: every in-process section (single-hop, transitive,
+# idempotent, flags, content shapes, cache controls/prefix, vendor transforms
+# and server tools), ~1.2k cases in well under a minute once built. A
+# registered known gap does not fail the run; a registered gap that starts
+# passing does, so the registry stays current.
+#
+# The full matrix (SDK clients, replay, load balancing, duo, routing) keeps its
+# own triggers in harness-matrix.yml: push ci/**, merged PRs, manual dispatch.
+#
+# See cli/harness/README.md for the modes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Keep in sync with the paths in harness-matrix.yml.
+    paths:
+      # Protocol data plane
+      - 'internal/protocol/**'
+      - 'internal/protocolserver/**'
+      - 'internal/protocoltest/**'
+      - 'internal/routing/**'
+      - 'internal/loadbalance/**'
+      - 'internal/forwarding/**'
+      - 'internal/toolengine/**'
+      - 'internal/guardrails/**'
+      - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
+      - 'vmodel/**'
+      - 'ai/*.go'
+      - 'ai/go.mod'
+      - 'ai/go.sum'
+      - 'libs/**'
+      - 'go.mod'
+      - 'go.sum'
+      # The harness itself
+      - 'cli/harness/**'
+      - '.github/workflows/harness-pr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same PR.
+concurrency:
+  group: harness-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26'
+
+jobs:
+  harness:
+    name: Harness (in-process sections)
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build harness
+        run: go build -o harness ./cli/harness
+
+      - name: Run harness — matrix --mode=all
+        run: |
+          set -o pipefail
+          ./harness matrix --mode=all | tee harness-all.log
+
+      - name: Upload harness log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-pr-log
+          path: harness-all.log
+          if-no-files-found: ignore
