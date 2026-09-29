@@ -3668,18 +3668,18 @@
       "alias": "Mimo Coding Plan | 小米 Mimo Coding Plan",
       "status": "active",
       "valid": true,
-      "canonical_domain": "api.xiaomimimo.com",
+      "canonical_domain": "token-plan-cn.xiaomimimo.com",
       "vendor_family": "xiaomi",
       "region": "global",
       "plan": "coding",
       "website": "https://platform.xiaomimimo.com",
-      "description": "Xiaomi Mimo Coding Plan dedicated endpoints for coding agents (OpenAI + Anthropic compatible)",
+      "description": "Xiaomi Mimo Token/Coding Plan endpoints for coding agents (OpenAI + Anthropic compatible). China cluster; Singapore (token-plan-sgp) and Europe (token-plan-ams) clusters use the same paths",
       "type": "official",
-      "api_doc": "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
+      "api_doc": "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
       "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
       "pricing_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
-      "base_url_openai": "https://api.xiaomimimo.com/coding/v1",
-      "base_url_anthropic": "https://api.xiaomimimo.com/coding/anthropic",
+      "base_url_openai": "https://token-plan-cn.xiaomimimo.com/v1",
+      "base_url_anthropic": "https://token-plan-cn.xiaomimimo.com/anthropic",
       "models": [
         {
           "id": "mimo-v2.5",
@@ -3741,7 +3741,8 @@
         "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
         "https://mimo.mi.com/static/docs/updates/model.md",
         "https://mimo.mi.com/static/docs/updates/deprecate.md",
-        "https://mimo.mi.com/static/docs/price/token-plan.md"
+        "https://mimo.mi.com/static/docs/price/token-plan.md",
+        "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access"
       ]
     },
     "groq-com": {
