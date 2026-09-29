@@ -3719,16 +3719,16 @@
     },
     "xiaomimimo-com-coding": {
       "id": "xiaomimimo-com-coding",
-      "name": "Mimo Coding Plan",
-      "alias": "Mimo Coding Plan | 小米 Mimo Coding Plan",
+      "name": "Mimo Coding Plan (CN)",
+      "alias": "Mimo Coding Plan | 小米 Mimo Coding Plan (中国)",
       "status": "active",
       "valid": true,
       "canonical_domain": "token-plan-cn.xiaomimimo.com",
       "vendor_family": "xiaomi",
-      "region": "global",
+      "region": "cn",
       "plan": "coding",
       "website": "https://platform.xiaomimimo.com",
-      "description": "Xiaomi Mimo Token/Coding Plan endpoints for coding agents (OpenAI + Anthropic compatible). China cluster; Singapore (token-plan-sgp) and Europe (token-plan-ams) clusters use the same paths",
+      "description": "Xiaomi Mimo Token Plan (Coding Plan) endpoint for coding agents, OpenAI + Anthropic compatible. Plan keys (tp-/ttp-) are separate from pay-as-you-go sk- keys, and the Base URL + key returned for an account depend on its region and are not interoperable across clusters; this is the China cluster",
       "type": "official",
       "api_doc": "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
       "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
@@ -3791,13 +3791,162 @@
       "icon": "xiaomi",
       "last_updated": "2026-09-29",
       "sources": [
-        "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
-        "https://mimo.mi.com/docs/zh-CN/updates/model",
-        "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
-        "https://mimo.mi.com/static/docs/updates/model.md",
-        "https://mimo.mi.com/static/docs/updates/deprecate.md",
-        "https://mimo.mi.com/static/docs/price/token-plan.md",
-        "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access"
+        "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
+        "https://mimo.mi.com/static/docs/quick-start/faq/account.md"
+      ]
+    },
+    "xiaomimimo-sgp-coding": {
+      "id": "xiaomimimo-sgp-coding",
+      "name": "Mimo Coding Plan (Singapore)",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "token-plan-sgp.xiaomimimo.com",
+      "vendor_family": "xiaomi",
+      "region": "intl",
+      "plan": "coding",
+      "website": "https://platform.xiaomimimo.com",
+      "description": "Xiaomi Mimo Token Plan (Coding Plan) endpoint for coding agents, OpenAI + Anthropic compatible. Plan keys (tp-/ttp-) are separate from pay-as-you-go sk- keys, and the Base URL + key returned for an account depend on its region and are not interoperable across clusters; this is the Singapore cluster",
+      "type": "official",
+      "api_doc": "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
+      "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "pricing_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "base_url_openai": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "base_url_anthropic": "https://token-plan-sgp.xiaomimimo.com/anthropic",
+      "models": [
+        {
+          "id": "mimo-v2.5",
+          "context": 1024000,
+          "max_output": 128000,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.5-pro",
+          "context": 1024000,
+          "max_output": 128000,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "context": 1024000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "context": 1024000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "xiaomi",
+      "last_updated": "2026-09-29",
+      "sources": [
+        "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
+        "https://mimo.mi.com/static/docs/quick-start/faq/account.md"
+      ]
+    },
+    "xiaomimimo-ams-coding": {
+      "id": "xiaomimimo-ams-coding",
+      "name": "Mimo Coding Plan (Europe)",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "token-plan-ams.xiaomimimo.com",
+      "vendor_family": "xiaomi",
+      "region": "intl",
+      "plan": "coding",
+      "website": "https://platform.xiaomimimo.com",
+      "description": "Xiaomi Mimo Token Plan (Coding Plan) endpoint for coding agents, OpenAI + Anthropic compatible. Plan keys (tp-/ttp-) are separate from pay-as-you-go sk- keys, and the Base URL + key returned for an account depend on its region and are not interoperable across clusters; this is the European cluster",
+      "type": "official",
+      "api_doc": "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
+      "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "pricing_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "base_url_openai": "https://token-plan-ams.xiaomimimo.com/v1",
+      "base_url_anthropic": "https://token-plan-ams.xiaomimimo.com/anthropic",
+      "models": [
+        {
+          "id": "mimo-v2.5",
+          "context": 1024000,
+          "max_output": 128000,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.5-pro",
+          "context": 1024000,
+          "max_output": 128000,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "context": 1024000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "context": 1024000,
+          "max_output": 128000,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "xiaomi",
+      "last_updated": "2026-09-29",
+      "sources": [
+        "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access",
+        "https://mimo.mi.com/static/docs/quick-start/faq/account.md"
       ]
     },
     "groq-com": {
