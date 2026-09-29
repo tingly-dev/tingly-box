@@ -163,7 +163,7 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
-	// Adaptive-only models reject thinking.type.disabled (catalog `mandatory`, see catalog.ClaudeThinkingCaps).
+	// Mandatory-thinking models (catalog `mandatory`) reject thinking.type.disabled.
 	model := req.Model
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
 
@@ -216,7 +216,7 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
-	// Adaptive-only models reject thinking.type.disabled (catalog `mandatory`, see catalog.ClaudeThinkingCaps).
+	// Mandatory-thinking models (catalog `mandatory`) reject thinking.type.disabled.
 	model := string(req.Model)
 	effortSet := req.OutputConfig.Effort != ""
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
