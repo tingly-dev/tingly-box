@@ -53,6 +53,16 @@
 - 不在 catalog 中的模型(第三方代理模型、比快照新的发布)由消费方给保守兜底
   (thinking 场景:budget-only、剥离 effort,见 `ops.anthropicModelThinkingCaps`)。
 
+## 数值单位
+
+供给注册表里的 `context` / `max_output` 一律写**十进制整数**:K=1000、M=1000000
+(`1M`=1000000、`256K`=256000、`128K`=128000、`64K`=64000),不写 2 的幂
+(1048576 / 262144 / 131072 / 65536)。原因是官方文档几乎都写 "1M / 256K / 128K",
+用十进制既能与来源逐字对上,也避免同一模型在不同 provider 下出现两种写法。
+官方给出的**精确非整数值**(如 gpt-3.5-turbo 的 16385、Perplexity Sonar 的 127072)保持原样。
+`TestEmbeddedTokenLimitsAreDecimal` 会拦住新写入的 2 的幂;规则也写在 providers.json
+`_naming_rules.token_limit_units`。
+
 ## 消费方
 
 - `internal/protocol/ops/request_anthropic_model.go`:按模型能力对 thinking 三方言

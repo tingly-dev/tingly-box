@@ -14,7 +14,8 @@
     },
     "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空",
     "provider_meta_fields": "可选字段：last_updated（YYYY-MM-DD，该 provider 数据最近一次校验/更新的日期）与 sources（string[]，支撑本次更新的官方参考链接）——仅在确实有验证依据时添加，只需覆盖发生变更的字段，不需要为未改动的 provider 补齐历史。",
-    "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。"
+    "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。",
+    "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
   "version": "2.4.0",
   "last_updated": "2026-09-23T00:00:00Z",
@@ -231,7 +232,7 @@
         {
           "id": "gpt-4o",
           "context": 128000,
-          "max_output": 16384,
+          "max_output": 16000,
           "legacy": true,
           "note": "per-version lifecycle: 2024-05-13 deprecated (retires 2026-12-09, auto-upgrade to gpt-5.6-sol); 2024-08-06 deprecated (retires 2027-04-14); 2024-11-20 legacy (retires 2027-04-14); suggested replacement gpt-5.1",
           "sources": [
@@ -365,22 +366,22 @@
         },
         {
           "id": "gpt-4.1",
-          "context": 1047576,
-          "max_output": 32768,
+          "context": 1000000,
+          "max_output": 32000,
           "created": "2025-04",
           "legacy": true
         },
         {
           "id": "gpt-4.1-mini",
-          "context": 1047576,
-          "max_output": 32768,
+          "context": 1000000,
+          "max_output": 32000,
           "created": "2025-04",
           "legacy": true
         },
         {
           "id": "gpt-4.1-nano",
-          "context": 1047576,
-          "max_output": 32768,
+          "context": 1000000,
+          "max_output": 32000,
           "created": "2025-04",
           "deprecated": "shutdown scheduled 2026-10-23",
           "note": "replaced by gpt-5.6-luna",
@@ -389,21 +390,21 @@
         {
           "id": "gpt-4o",
           "context": 128000,
-          "max_output": 16384,
+          "max_output": 16000,
           "created": "2024-05",
           "legacy": true
         },
         {
           "id": "gpt-4o-mini",
           "context": 128000,
-          "max_output": 16384,
+          "max_output": 16000,
           "created": "2024-07",
           "legacy": true
         },
         {
           "id": "gpt-4",
-          "context": 8192,
-          "max_output": 8192,
+          "context": 8000,
+          "max_output": 8000,
           "created": "2023-03",
           "deprecated": "shutdown scheduled 2026-10-23",
           "note": "replaced by gpt-5.6-sol",
@@ -412,7 +413,7 @@
         {
           "id": "gpt-4-turbo",
           "context": 128000,
-          "max_output": 4096,
+          "max_output": 4000,
           "created": "2024-04",
           "deprecated": "shutdown scheduled 2026-10-23",
           "note": "replaced by gpt-5.6-sol",
@@ -421,7 +422,7 @@
         {
           "id": "gpt-3.5-turbo",
           "context": 16385,
-          "max_output": 4096,
+          "max_output": 4000,
           "created": "2023-11",
           "deprecated": "shutdown scheduled 2026-10-23",
           "note": "replaced by gpt-5.6-terra",
@@ -454,7 +455,7 @@
         {
           "id": "o1-mini",
           "context": 128000,
-          "max_output": 65536,
+          "max_output": 64000,
           "deprecated": "shut down 2025-10-27",
           "note": "replaced by o4-mini",
           "sources": ["https://developers.openai.com/api/docs/deprecations"]
@@ -513,7 +514,7 @@
         {
           "id": "claude-3-haiku-20240307",
           "context": 200000,
-          "max_output": 4096,
+          "max_output": 4000,
           "deprecated": "retired 2026-04-20",
           "note": "replaced by claude-haiku-4-5-20251001",
           "sources": ["https://platform.claude.com/docs/en/about-claude/model-deprecations"]
@@ -521,7 +522,7 @@
         {
           "id": "claude-3-sonnet-20240229",
           "context": 200000,
-          "max_output": 4096,
+          "max_output": 4000,
           "deprecated": "retired 2025-07-21",
           "note": "replaced by claude-sonnet-4-6",
           "sources": ["https://platform.claude.com/docs/en/about-claude/model-deprecations"]
@@ -529,7 +530,7 @@
         {
           "id": "claude-3-opus-20240229",
           "context": 200000,
-          "max_output": 4096,
+          "max_output": 4000,
           "deprecated": "retired 2026-01-05",
           "note": "replaced by claude-opus-4-8",
           "sources": ["https://platform.claude.com/docs/en/about-claude/model-deprecations"]
@@ -537,7 +538,7 @@
         {
           "id": "claude-3-5-haiku-20241022",
           "context": 200000,
-          "max_output": 8192,
+          "max_output": 8000,
           "deprecated": "retired 2026-02-19",
           "note": "replaced by claude-haiku-4-5-20251001",
           "sources": ["https://platform.claude.com/docs/en/about-claude/model-deprecations"]
@@ -545,7 +546,7 @@
         {
           "id": "claude-3-5-sonnet-20241022",
           "context": 200000,
-          "max_output": 8192,
+          "max_output": 8000,
           "deprecated": "retired 2025-10-28",
           "note": "replaced by claude-sonnet-4-6",
           "sources": ["https://platform.claude.com/docs/en/about-claude/model-deprecations"]
@@ -973,39 +974,39 @@
       "models": [
         {
           "id": "gemini-3.8-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash"]
         },
         {
           "id": "gemini-3.7-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash"]
         },
         {
           "id": "gemini-3.6-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash"]
         },
         {
           "id": "gemini-3.5-flash-lite",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite"]
         },
         {
           "id": "gemini-3.5-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "created": "2026-05",
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash"]
         },
         {
           "id": "gemini-3.1-flash-lite",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "created": "2026-02",
           "deprecated": "shutdown scheduled 2027-05-07",
           "note": "replaced by gemini-3.5-flash-lite",
@@ -1016,16 +1017,16 @@
         },
         {
           "id": "gemini-3.1-pro-preview",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "created": "2026-01",
           "note": "preview; highest current Pro-tier id, no non-preview GA id published yet",
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview"]
         },
         {
           "id": "gemini-3-flash-preview",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "note": "preview; no shutdown announced, deprecations page lists gemini-3.6-flash as replacement",
           "sources": [
             "https://ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview",
@@ -1065,8 +1066,8 @@
       "models": [
         {
           "id": "gemini-2.5-pro",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
@@ -1075,8 +1076,8 @@
         },
         {
           "id": "gemini-2.5-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
@@ -1085,8 +1086,8 @@
         },
         {
           "id": "gemini-2.5-flash-lite",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro",
@@ -1095,14 +1096,14 @@
         },
         {
           "id": "gemini-3.1-pro-preview",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview"]
         },
         {
           "id": "gemini-3.5-flash",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash"]
         }
       ],
@@ -1164,14 +1165,14 @@
       "models": [
         {
           "id": "grok-3",
-          "context": 131072,
+          "context": 128000,
           "legacy": true,
           "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (none reasoning effort)",
           "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-3-mini",
-          "context": 131072,
+          "context": 128000,
           "legacy": true
         },
         {
@@ -1305,14 +1306,14 @@
         {
           "id": "deepseek-chat",
           "context": 128000,
-          "max_output": 8192,
+          "max_output": 8000,
           "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
           "sources": ["https://api-docs.deepseek.com/updates"]
         },
         {
           "id": "deepseek-reasoner",
           "context": 128000,
-          "max_output": 65536,
+          "max_output": 64000,
           "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
           "sources": ["https://api-docs.deepseek.com/updates"]
         },
@@ -1482,22 +1483,22 @@
       "models": [
         {
           "id": "qwen-max",
-          "context": 32768,
-          "max_output": 8192,
+          "context": 32000,
+          "max_output": 8000,
           "legacy": true,
           "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-plus",
           "context": 1000000,
-          "max_output": 8192,
+          "max_output": 8000,
           "legacy": true,
           "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-turbo",
-          "context": 131072,
-          "max_output": 8192,
+          "context": 128000,
+          "max_output": 8000,
           "deprecated": "shutdown scheduled 2026-10-10",
           "sources": [
             "https://help.aliyun.com/zh/model-studio/text-generation-model",
@@ -1592,22 +1593,22 @@
       "models": [
         {
           "id": "qwen-max",
-          "context": 131072,
-          "max_output": 8192,
+          "context": 128000,
+          "max_output": 8000,
           "legacy": true,
           "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-plus",
           "context": 1000000,
-          "max_output": 8192,
+          "max_output": 8000,
           "legacy": true,
           "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-turbo",
           "context": 1000000,
-          "max_output": 8192,
+          "max_output": 8000,
           "deprecated": "shutdown scheduled 2026-10-10",
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
@@ -1703,18 +1704,18 @@
       "models": [
         {
           "id": "qwen3-coder-plus",
-          "context": 1048576,
-          "max_output": 65536
+          "context": 1024000,
+          "max_output": 64000
         },
         {
           "id": "qwen3.5-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_output": 64000
         },
         {
           "id": "qwen3-max-2026-01-23",
-          "context": 262144,
-          "max_output": 65536,
+          "context": 256000,
+          "max_output": 64000,
           "sources": [
             "https://help.aliyun.com/zh/model-studio/coding-plan",
             "https://help.aliyun.com/zh/model-studio/text-generation-model"
@@ -1722,23 +1723,23 @@
         },
         {
           "id": "qwen3-coder-next",
-          "context": 262144,
-          "max_output": 65536
+          "context": 256000,
+          "max_output": 64000
         },
         {
           "id": "glm-5",
-          "context": 202752,
-          "max_output": 16384
+          "context": 200000,
+          "max_output": 16000
         },
         {
           "id": "glm-4.7",
-          "context": 202752,
-          "max_output": 16384
+          "context": 200000,
+          "max_output": 16000
         },
         {
           "id": "MiniMax-M2.5",
-          "context": 196608,
-          "max_output": 32768,
+          "context": 192000,
+          "max_output": 32000,
           "sources": [
             "https://help.aliyun.com/zh/model-studio/coding-plan",
             "https://help.aliyun.com/zh/model-studio/text-generation-model"
@@ -1746,8 +1747,8 @@
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
-          "max_output": 32768
+          "context": 256000,
+          "max_output": 32000
         },
         {
           "id": "qwen3.7-plus",
@@ -1791,18 +1792,18 @@
       "models": [
         {
           "id": "qwen3-coder-plus",
-          "context": 1048576,
-          "max_output": 65536
+          "context": 1024000,
+          "max_output": 64000
         },
         {
           "id": "qwen3.5-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_output": 64000
         },
         {
           "id": "qwen3-max-2026-01-23",
-          "context": 262144,
-          "max_output": 65536,
+          "context": 256000,
+          "max_output": 64000,
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
@@ -1810,23 +1811,23 @@
         },
         {
           "id": "qwen3-coder-next",
-          "context": 262144,
-          "max_output": 65536
+          "context": 256000,
+          "max_output": 64000
         },
         {
           "id": "glm-5",
-          "context": 202752,
-          "max_output": 16384
+          "context": 200000,
+          "max_output": 16000
         },
         {
           "id": "glm-4.7",
-          "context": 202752,
-          "max_output": 16384
+          "context": 200000,
+          "max_output": 16000
         },
         {
           "id": "MiniMax-M2.5",
-          "context": 196608,
-          "max_output": 32768,
+          "context": 192000,
+          "max_output": 32000,
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
@@ -1834,8 +1835,8 @@
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
-          "max_output": 32768
+          "context": 256000,
+          "max_output": 32000
         },
         {
           "id": "qwen3.7-plus",
@@ -1880,7 +1881,7 @@
         {
           "id": "qwen3-coder-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_output": 64000
         },
         { "id": "qwen3-coder-flash" }
       ],
@@ -1914,8 +1915,8 @@
       "models": [
         {
           "id": "kimi-for-coding",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "note": "alias upgraded in place to Kimi K2.8 Preview (2026-09-11); up to 1M context, low/high/max thinking",
           "sources": [
             "https://www.kimi.com/code/docs/en/kimi-code/models",
@@ -1924,33 +1925,33 @@
         },
         {
           "id": "kimi-k2.6",
-          "context": 262144,
-          "max_output": 65536,
+          "context": 256000,
+          "max_output": 64000,
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"],
           "note": "not listed in Kimi Code docs as of 2026-09-29 (docs list only k3, k3-256k, kimi-for-coding, kimi-for-coding-highspeed); no shutdown announcement found"
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
-          "max_output": 65536,
+          "context": 256000,
+          "max_output": 64000,
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"],
           "note": "not listed in Kimi Code docs as of 2026-09-29 (docs list only k3, k3-256k, kimi-for-coding, kimi-for-coding-highspeed); no shutdown announcement found"
         },
         {
           "id": "k3",
-          "context": 1048576,
+          "context": 1024000,
           "note": "Kimi K3 via Kimi Code; 1M context only on higher-tier plans (Pro/Allegretto+), 256K otherwise",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "k3-256k",
-          "context": 262144,
+          "context": 256000,
           "note": "K3 256K-context version; image input only (no video)",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "kimi-for-coding-highspeed",
-          "context": 262144,
+          "context": 256000,
           "note": "K2.7 Code HighSpeed; ~5-6x output speed for ~3x quota usage",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         }
@@ -2007,8 +2008,8 @@
       "models": [
         {
           "id": "MiniMax-M2",
-          "context": 204800,
-          "max_output": 131072,
+          "context": 200000,
+          "max_output": 128000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.cn/docs/guides/models-intro",
@@ -2017,8 +2018,8 @@
         },
         {
           "id": "MiniMax-M2.1",
-          "context": 204800,
-          "max_output": 65536,
+          "context": 200000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.cn/docs/guides/models-intro",
@@ -2027,13 +2028,13 @@
         },
         {
           "id": "MiniMax-M2.1-lightning",
-          "context": 204800,
-          "max_output": 65536
+          "context": 200000,
+          "max_output": 64000
         },
         {
           "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536,
+          "context": 200000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.cn/docs/guides/models-intro",
@@ -2043,7 +2044,7 @@
         {
           "id": "MiniMax-M3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-06",
           "note": "428B MoE, MSA architecture, native multimodal",
           "sources": [
@@ -2053,7 +2054,7 @@
         },
         {
           "id": "MiniMax-M2.1-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2025-12",
           "legacy": true,
           "sources": [
@@ -2063,7 +2064,7 @@
         },
         {
           "id": "MiniMax-M2.5-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-02",
           "legacy": true,
           "sources": [
@@ -2073,7 +2074,7 @@
         },
         {
           "id": "MiniMax-M2.7",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-03",
           "sources": [
             "https://platform.minimax.cn/docs/guides/models-intro",
@@ -2083,7 +2084,7 @@
         },
         {
           "id": "MiniMax-M2.7-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-03",
           "sources": [
             "https://platform.minimax.cn/docs/guides/models-intro",
@@ -2123,8 +2124,8 @@
       "models": [
         {
           "id": "MiniMax-M2",
-          "context": 204800,
-          "max_output": 131072,
+          "context": 200000,
+          "max_output": 128000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.io/docs/guides/models-intro",
@@ -2133,8 +2134,8 @@
         },
         {
           "id": "MiniMax-M2.1",
-          "context": 204800,
-          "max_output": 65536,
+          "context": 200000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.io/docs/guides/models-intro",
@@ -2143,13 +2144,13 @@
         },
         {
           "id": "MiniMax-M2.1-lightning",
-          "context": 204800,
-          "max_output": 65536
+          "context": 200000,
+          "max_output": 64000
         },
         {
           "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536,
+          "context": 200000,
+          "max_output": 64000,
           "legacy": true,
           "sources": [
             "https://platform.minimax.io/docs/guides/models-intro",
@@ -2159,7 +2160,7 @@
         {
           "id": "MiniMax-M3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-06",
           "note": "428B MoE, MSA architecture, native multimodal",
           "sources": [
@@ -2169,7 +2170,7 @@
         },
         {
           "id": "MiniMax-M2.1-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2025-12",
           "legacy": true,
           "sources": [
@@ -2179,7 +2180,7 @@
         },
         {
           "id": "MiniMax-M2.5-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-02",
           "legacy": true,
           "sources": [
@@ -2189,7 +2190,7 @@
         },
         {
           "id": "MiniMax-M2.7",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-03",
           "sources": [
             "https://platform.minimax.io/docs/guides/models-intro",
@@ -2199,7 +2200,7 @@
         },
         {
           "id": "MiniMax-M2.7-highspeed",
-          "context": 204800,
+          "context": 200000,
           "created": "2026-03",
           "sources": [
             "https://platform.minimax.io/docs/guides/models-intro",
@@ -2260,14 +2261,14 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-06",
           "note": "753B MoE, DSA+IndexShare sparse attention"
         },
         {
           "id": "glm-5.3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "note": "same base model as GLM-5.2, post-training improvements",
           "sources": [
@@ -2278,7 +2279,7 @@
         {
           "id": "glm-5.3-flash",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "note": "native multimodal input (image/video/file), text output",
           "sources": [
@@ -2289,7 +2290,7 @@
         {
           "id": "glm-5.3-flashx",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "sources": ["https://docs.z.ai/guides/llm/glm-5.3-flash"]
         }
       ],
@@ -2325,7 +2326,7 @@
         {
           "id": "glm-5.3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://docs.z.ai/devpack/overview",
@@ -2335,7 +2336,7 @@
         {
           "id": "glm-5.3-flash",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://docs.z.ai/devpack/overview",
@@ -2345,14 +2346,14 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "note": "Coding Plan auto-routes glm-5.2/glm-5.1 to glm-5.3 (per official supported-models page)",
           "sources": ["https://docs.z.ai/devpack/overview"]
         },
         {
           "id": "glm-5-turbo",
-          "context": 202752,
-          "max_output": 131072,
+          "context": 200000,
+          "max_output": 128000,
           "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
           "sources": ["https://docs.z.ai/devpack/overview"]
         },
@@ -2416,14 +2417,14 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-06",
           "note": "753B MoE, DSA+IndexShare sparse attention"
         },
         {
           "id": "glm-5.3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "note": "same base model as GLM-5.2, post-training improvements",
           "sources": [
@@ -2434,7 +2435,7 @@
         {
           "id": "glm-5.3-flash",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "note": "native multimodal input",
           "sources": ["https://docs.bigmodel.cn/cn/guide/start/model-overview"]
@@ -2442,7 +2443,7 @@
         {
           "id": "glm-5.3-flashx",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "sources": ["https://docs.bigmodel.cn/cn/guide/start/model-overview"]
         }
       ],
@@ -2477,7 +2478,7 @@
         {
           "id": "glm-5.3",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://docs.bigmodel.cn/cn/coding-plan/overview",
@@ -2487,7 +2488,7 @@
         {
           "id": "glm-5.3-flash",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://docs.bigmodel.cn/cn/coding-plan/overview",
@@ -2497,14 +2498,14 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "note": "Coding Plan auto-routes glm-5.2/glm-5.1 to glm-5.3 (per official supported-models page)",
           "sources": ["https://docs.bigmodel.cn/cn/coding-plan/overview"]
         },
         {
           "id": "glm-5-turbo",
-          "context": 202752,
-          "max_output": 131072,
+          "context": 200000,
+          "max_output": 128000,
           "note": "Coding Plan auto-routes this model to glm-5.3-flash (per official supported-models page)",
           "sources": ["https://docs.bigmodel.cn/cn/coding-plan/overview"]
         },
@@ -2546,7 +2547,7 @@
       "models": [
         {
           "id": "moonshot-v1-8k",
-          "context": 8192,
+          "context": 8000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.ai/docs/models",
@@ -2555,7 +2556,7 @@
         },
         {
           "id": "moonshot-v1-32k",
-          "context": 32768,
+          "context": 32000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.ai/docs/models",
@@ -2564,7 +2565,7 @@
         },
         {
           "id": "moonshot-v1-128k",
-          "context": 131072,
+          "context": 128000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.ai/docs/models",
@@ -2573,35 +2574,35 @@
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
+          "context": 256000,
           "max_output": 65535,
           "deprecated": "discontinued 2026-08-31",
           "sources": ["https://platform.kimi.ai/docs/models"]
         },
         {
           "id": "kimi-k3",
-          "context": 1048576,
+          "context": 1024000,
           "created": "2026-07",
           "note": "2.8T param flagship, native vision",
           "sources": ["https://platform.kimi.ai/docs/models"]
         },
         {
           "id": "kimi-k2.6",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-04",
           "note": "256K context per platform docs; multimodal, thinking and non-thinking",
           "sources": ["https://platform.kimi.ai/docs/models"]
         },
         {
           "id": "kimi-k2.7-code",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-06",
           "note": "dedicated coding model; 256K context per platform docs",
           "sources": ["https://platform.kimi.ai/docs/models"]
         },
         {
           "id": "kimi-k2.7-code-highspeed",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-06",
           "note": "high-speed K2.7 Code, ~180 tokens/s",
           "sources": ["https://platform.kimi.ai/docs/models"]
@@ -2637,7 +2638,7 @@
       "models": [
         {
           "id": "moonshot-v1-8k",
-          "context": 8192,
+          "context": 8000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.com/docs/models",
@@ -2646,7 +2647,7 @@
         },
         {
           "id": "moonshot-v1-32k",
-          "context": 32768,
+          "context": 32000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.com/docs/models",
@@ -2655,7 +2656,7 @@
         },
         {
           "id": "moonshot-v1-128k",
-          "context": 131072,
+          "context": 128000,
           "deprecated": "discontinued 2026-08-31",
           "sources": [
             "https://platform.kimi.com/docs/models",
@@ -2664,35 +2665,35 @@
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
+          "context": 256000,
           "max_output": 65535,
           "deprecated": "discontinued 2026-08-31",
           "sources": ["https://platform.kimi.com/docs/models"]
         },
         {
           "id": "kimi-k3",
-          "context": 1048576,
+          "context": 1024000,
           "created": "2026-07",
           "note": "2.8T param flagship, native vision",
           "sources": ["https://platform.kimi.com/docs/models"]
         },
         {
           "id": "kimi-k2.6",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-04",
           "note": "256K context per platform docs; multimodal, thinking and non-thinking",
           "sources": ["https://platform.kimi.com/docs/models"]
         },
         {
           "id": "kimi-k2.7-code",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-06",
           "note": "dedicated coding model; 256K context per platform docs",
           "sources": ["https://platform.kimi.com/docs/models"]
         },
         {
           "id": "kimi-k2.7-code-highspeed",
-          "context": 262144,
+          "context": 256000,
           "created": "2026-06",
           "note": "high-speed K2.7 Code, ~180 tokens/s",
           "sources": ["https://platform.kimi.com/docs/models"]
@@ -2727,8 +2728,8 @@
       "models": [
         {
           "id": "kimi-for-coding",
-          "context": 1048576,
-          "max_output": 65536,
+          "context": 1024000,
+          "max_output": 64000,
           "note": "alias upgraded in place to Kimi K2.8 Preview (2026-09-11); up to 1M context, low/high/max thinking",
           "sources": [
             "https://www.kimi.com/code/docs/en/kimi-code/models",
@@ -2737,19 +2738,19 @@
         },
         {
           "id": "k3",
-          "context": 1048576,
+          "context": 1024000,
           "note": "Kimi K3 via Kimi Code; 1M context only on higher-tier plans (Pro/Allegretto+), 256K otherwise",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "k3-256k",
-          "context": 262144,
+          "context": 256000,
           "note": "K3 256K-context version; image input only (no video)",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "kimi-for-coding-highspeed",
-          "context": 262144,
+          "context": 256000,
           "note": "K2.7 Code HighSpeed; ~5-6x output speed for ~3x quota usage",
           "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         }
@@ -3025,7 +3026,7 @@
         },
         {
           "id": "doubao-seed-2.0-pro",
-          "context": 262144,
+          "context": 256000,
           "legacy": true,
           "sources": [
             "https://www.volcengine.com/docs/82379/1928261",
@@ -3065,7 +3066,7 @@
         },
         {
           "id": "kimi-k2.5",
-          "context": 262144,
+          "context": 256000,
           "max_output": 65535,
           "legacy": true,
           "sources": [
@@ -3076,8 +3077,8 @@
         },
         {
           "id": "minimax-m2.5",
-          "context": 204800,
-          "max_output": 65536,
+          "context": 200000,
+          "max_output": 64000,
           "legacy": true,
           "note": "not in current Coding Plan model-name list (superseded by minimax-m3 / glm-5.3); no EOS notice found",
           "sources": ["https://www.volcengine.com/docs/82379/1928261"]
@@ -3085,7 +3086,7 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072,
+          "max_output": 128000,
           "legacy": true,
           "note": "not in current Coding Plan model-name list (superseded by minimax-m3 / glm-5.3); no EOS notice found",
           "sources": ["https://www.volcengine.com/docs/82379/1928261"]
@@ -3122,7 +3123,7 @@
         {
           "id": "ernie-5.0-thinking-latest",
           "context": 128000,
-          "max_output": 8192,
+          "max_output": 8000,
           "note": "native reasoning model"
         }
       ],
@@ -3164,7 +3165,7 @@
         { "id": "glm-5.1" },
         {
           "id": "kimi-k2.5",
-          "context": 262144
+          "context": 256000
         },
         {
           "id": "minimax-m2.5",
@@ -3174,7 +3175,7 @@
         {
           "id": "glm-5.2",
           "context": 1000000,
-          "max_output": 131072
+          "max_output": 128000
         }
       ],
       "supports_models_endpoint": false,
@@ -3250,7 +3251,7 @@
         {
           "id": "spark-x",
           "context": 64000,
-          "max_output": 131072,
+          "max_output": 128000,
           "created": "2026-02",
           "note": "Spark X2, 293B MoE, replaces 4.0Ultra",
           "sources": ["https://www.xfyun.cn/doc/spark/X1http.html"]
@@ -3595,8 +3596,8 @@
       "models": [
         {
           "id": "mimo-v2.5",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "deprecated": "shutdown scheduled 2026-10-21",
           "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
           "sources": [
@@ -3607,8 +3608,8 @@
         },
         {
           "id": "mimo-v2.5-pro",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "deprecated": "shutdown scheduled 2026-10-21",
           "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
           "sources": [
@@ -3619,8 +3620,8 @@
         },
         {
           "id": "mimo-v2.6-pro",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "created": "2026-09-22",
           "sources": [
             "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
@@ -3630,8 +3631,8 @@
         },
         {
           "id": "mimo-v2.6-flash",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "created": "2026-09-22",
           "sources": [
             "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
@@ -3641,8 +3642,8 @@
         },
         {
           "id": "mimo-v2.6-pro-ultraspeed",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "created": "2026-09-22",
           "note": "flagship V2.6-Pro performance, up to 20x faster; customized service via contact, no default RPM/TPM quota",
           "sources": [
@@ -3683,8 +3684,8 @@
       "models": [
         {
           "id": "mimo-v2.5",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "deprecated": "shutdown scheduled 2026-10-21",
           "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
           "sources": [
@@ -3696,8 +3697,8 @@
         },
         {
           "id": "mimo-v2.5-pro",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "deprecated": "shutdown scheduled 2026-10-21",
           "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
           "sources": [
@@ -3709,8 +3710,8 @@
         },
         {
           "id": "mimo-v2.6-pro",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "created": "2026-09-22",
           "sources": [
             "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
@@ -3721,8 +3722,8 @@
         },
         {
           "id": "mimo-v2.6-flash",
-          "context": 1048576,
-          "max_output": 131072,
+          "context": 1024000,
+          "max_output": 128000,
           "created": "2026-09-22",
           "sources": [
             "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
@@ -3766,12 +3767,12 @@
         {
           "id": "claude-haiku-4-5-20251001",
           "context": 200000,
-          "max_output": 8192
+          "max_output": 8000
         },
         {
           "id": "llama-3.3-70b-versatile",
-          "context": 131072,
-          "max_output": 32768,
+          "context": 128000,
+          "max_output": 32000,
           "sources": [
             "https://console.groq.com/docs/deprecations",
             "https://console.groq.com/docs/models",
@@ -3781,8 +3782,8 @@
         },
         {
           "id": "openai/gpt-oss-120b",
-          "context": 131072,
-          "max_output": 65536,
+          "context": 128000,
+          "max_output": 64000,
           "sources": [
             "https://console.groq.com/docs/models",
             "https://console.groq.com/docs/model/openai/gpt-oss-120b"
@@ -3790,8 +3791,8 @@
         },
         {
           "id": "openai/gpt-oss-20b",
-          "context": 131072,
-          "max_output": 65536,
+          "context": 128000,
+          "max_output": 64000,
           "sources": [
             "https://console.groq.com/docs/models",
             "https://console.groq.com/docs/model/openai/gpt-oss-20b"
@@ -3799,8 +3800,8 @@
         },
         {
           "id": "qwen/qwen3.8-27b",
-          "context": 131072,
-          "max_output": 16384,
+          "context": 128000,
+          "max_output": 16000,
           "sources": [
             "https://console.groq.com/docs/model/qwen/qwen3.8-27b",
             "https://console.groq.com/docs/deprecations"
@@ -3836,7 +3837,7 @@
       "models": [
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-          "context": 131072
+          "context": 128000
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro",
@@ -3851,19 +3852,19 @@
         },
         {
           "id": "zai-org/GLM-5.2",
-          "context": 1048575,
+          "context": 1000000,
           "sources": ["https://docs.together.ai/docs/serverless/models"]
         },
         {
           "id": "moonshotai/Kimi-K2.6",
-          "context": 262144,
+          "context": 256000,
           "deprecated": "removed from serverless 2026-08-19",
           "note": "replaced by Kimi-K3",
           "sources": ["https://docs.together.ai/docs/deprecations"]
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
-          "context": 1048576,
+          "context": 1024000,
           "sources": ["https://docs.together.ai/docs/serverless/models"]
         },
         {
@@ -3873,17 +3874,17 @@
         },
         {
           "id": "moonshotai/Kimi-K3",
-          "context": 1048576,
+          "context": 1024000,
           "sources": ["https://docs.together.ai/docs/serverless/models"]
         },
         {
           "id": "zai-org/GLM-5.3",
-          "context": 1048575,
+          "context": 1000000,
           "sources": ["https://docs.together.ai/docs/serverless/models"]
         },
         {
           "id": "openai/gpt-oss-120b",
-          "context": 131072,
+          "context": 128000,
           "sources": ["https://docs.together.ai/docs/serverless/models"]
         }
       ],
@@ -3915,36 +3916,36 @@
       "models": [
         {
           "id": "deepseek-v4-pro",
-          "context": 1048576,
+          "context": 1024000,
           "deprecated": "removed from serverless 2026-08-27",
           "note": "replaced by deepseek-v4-pro-0813 (itself removed from serverless 2026-09-25); use deepseek-v4p1-flash",
           "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "deepseek-v4-flash",
-          "context": 1048576
+          "context": 1024000
         },
         {
           "id": "glm-5p2",
-          "context": 1048576,
+          "context": 1024000,
           "note": "GLM-5.2; replaced by glm-5p3",
           "deprecated": "removed from serverless 2026-09-25",
           "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "kimi-k2p7-code",
-          "context": 262144,
+          "context": 256000,
           "note": "Kimi K2.7 Code; replaced by glm-5p3 or kimi-k3",
           "deprecated": "removed from serverless 2026-09-25",
           "sources": ["https://docs.fireworks.ai/updates/changelog"]
         },
         {
           "id": "gpt-oss-120b",
-          "context": 131072
+          "context": 128000
         },
         {
           "id": "kimi-k3",
-          "context": 1048576,
+          "context": 1024000,
           "note": "Kimi K3",
           "sources": ["https://fireworks.ai/models/fireworks/kimi-k3"]
         },
@@ -3955,7 +3956,7 @@
         },
         {
           "id": "deepseek-v4p1-flash",
-          "max_output": 131072,
+          "max_output": 128000,
           "note": "DeepSeek V4.1 Flash",
           "sources": ["https://app.fireworks.ai/models/fireworks/deepseek-v4p1-flash"]
         }
@@ -4195,8 +4196,8 @@
       "models": [
         {
           "id": "deepseek-ai/deepseek-v4-pro",
-          "context": 1048576,
-          "max_output": 393216,
+          "context": 1024000,
+          "max_output": 384000,
           "deprecated": "free endpoint deprecated; no longer listed in /v1/models as of 2026-09-29",
           "note": "superseded by DeepSeek-V4-Pro-0813 modelcard (context shown as 262K); replaced in catalog by deepseek-v4.1-flash",
           "sources": [
@@ -4206,13 +4207,13 @@
         },
         {
           "id": "deepseek-ai/deepseek-v4-flash",
-          "context": 1048576,
+          "context": 1024000,
           "sources": ["https://integrate.api.nvidia.com/v1/models"],
           "note": "absent from NVIDIA /v1/models as of 2026-09-29; no shutdown announcement found"
         },
         {
           "id": "deepseek-ai/deepseek-v4.1-flash",
-          "context": 1048576,
+          "context": 1024000,
           "sources": [
             "https://build.nvidia.com/deepseek-ai/deepseek-v4.1-flash/modelcard",
             "https://integrate.api.nvidia.com/v1/models"
@@ -4220,7 +4221,7 @@
         },
         {
           "id": "moonshotai/kimi-k3",
-          "context": 1048576,
+          "context": 1024000,
           "sources": [
             "https://build.nvidia.com/moonshotai/kimi-k3/modelcard",
             "https://integrate.api.nvidia.com/v1/models"

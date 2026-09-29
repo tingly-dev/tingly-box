@@ -644,6 +644,33 @@ func TestEmbeddedTemplatesLastUpdatedSourcesPaired(t *testing.T) {
 	}
 }
 
+// TestEmbeddedTokenLimitsAreDecimal enforces the unit convention in
+// providers.json _naming_rules.token_limit_units: context / max_output use
+// decimal K/M (1M = 1000000, 256K = 256000), never powers of two.
+func TestEmbeddedTokenLimitsAreDecimal(t *testing.T) {
+	var raw struct {
+		Providers map[string]struct {
+			Models []struct {
+				ID        string `json:"id"`
+				Context   int    `json:"context"`
+				MaxOutput int    `json:"max_output"`
+			} `json:"models"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(embeddedTemplatesJSON, &raw); err != nil {
+		t.Fatalf("failed to parse embedded templates as raw JSON: %v", err)
+	}
+	for id, p := range raw.Providers {
+		for _, m := range p.Models {
+			for field, v := range map[string]int{"context": m.Context, "max_output": m.MaxOutput} {
+				if v != 0 && v%1024 == 0 && v%1000 != 0 {
+					t.Errorf("provider %q model %q %s=%d looks binary; write it as decimal K/M (e.g. %d)", id, m.ID, field, v, v/1024*1000)
+				}
+			}
+		}
+	}
+}
+
 // TestTemplateManagerHTTPTimeout tests HTTP client timeout
 func TestTemplateManagerHTTPTimeout(t *testing.T) {
 	// Create a server that delays response
