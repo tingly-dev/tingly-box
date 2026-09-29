@@ -149,10 +149,11 @@ func runCC(appManager *app.AppManager, profile string, portOverride int, claudeA
 	return nil
 }
 
-// selectProfileInteractive shows a numbered list of profiles and prompts the
-// user to select one. notFoundName is the profile name/ID the user originally
-// requested (used in the error message when profiles is empty).
-// Returns the selected profile ID, or an error if no selection can be made.
+// selectProfileInteractive lists the profiles and prompts the user to pick one
+// (see matchProfileInput for accepted input; "0"/empty skips, re-prompts up to
+// 3 times on bad input). notFoundName is the profile name/ID the user
+// originally requested, used only in messaging.
+// Returns the selected profile ID, "" to skip, or an error.
 func selectProfileInteractive(profiles []typ.ProfileMeta, notFoundName string) (string, error) {
 	if len(profiles) == 0 {
 		if notFoundName != "" {
@@ -166,27 +167,81 @@ func selectProfileInteractive(profiles []typ.ProfileMeta, notFoundName string) (
 	} else {
 		fmt.Fprintln(os.Stderr, "Available profiles:")
 	}
-	for i, p := range profiles {
+	for _, p := range profiles {
 		mode := "separate"
 		if p.Unified {
 			mode = "unified"
 		}
-		fmt.Fprintf(os.Stderr, "  [%d] %s (%s, %s)\n", i+1, p.Name, p.ID, mode)
+		fmt.Fprintf(os.Stderr, "  [%s] %s (%s)\n", p.ID, p.Name, mode)
 	}
 	fmt.Fprintf(os.Stderr, "  [0] Continue without profile\n")
-	fmt.Fprintf(os.Stderr, "Select profile [1-%d, 0 to skip]: ", len(profiles))
 
 	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		return "", fmt.Errorf("no input")
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		fmt.Fprintf(os.Stderr, "Select profile (ID, number or name; 0 to skip): ")
+		if !scanner.Scan() {
+			return "", fmt.Errorf("no input")
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || line == "0" {
+			return "", nil
+		}
+		id, err := matchProfileInput(profiles, line)
+		if err == nil {
+			return id, nil
+		}
+		lastErr = err
+		fmt.Fprintf(os.Stderr, "  %v\n", err)
 	}
-	line := strings.TrimSpace(scanner.Text())
-	if line == "" || line == "0" {
-		return "", nil
+	return "", lastErr
+}
+
+// matchProfileInput resolves free-form input to a profile ID, in order:
+//  1. exact ID or name (case-insensitive);
+//  2. pure digits N -> ID "pN", strictly (not a list position, so it stays
+//     stable when profiles are deleted, and never falls back to fuzzy);
+//  3. a unique ID/name prefix, then a unique substring.
+func matchProfileInput(profiles []typ.ProfileMeta, input string) (string, error) {
+	for _, p := range profiles {
+		if strings.EqualFold(p.ID, input) || strings.EqualFold(p.Name, input) {
+			return p.ID, nil
+		}
 	}
-	n, err := strconv.Atoi(line)
-	if err != nil || n < 1 || n > len(profiles) {
-		return "", fmt.Errorf("invalid selection '%s'", line)
+	if n, err := strconv.Atoi(input); err == nil {
+		id := fmt.Sprintf("p%d", n)
+		for _, p := range profiles {
+			if p.ID == id {
+				return p.ID, nil
+			}
+		}
+		return "", fmt.Errorf("no profile with ID %s", id)
 	}
-	return profiles[n-1].ID, nil
+
+	lower := strings.ToLower(input)
+	for _, match := range []func(s string) bool{
+		func(s string) bool { return strings.HasPrefix(s, lower) },
+		func(s string) bool { return strings.Contains(s, lower) },
+	} {
+		var hits []typ.ProfileMeta
+		for _, p := range profiles {
+			if match(strings.ToLower(p.ID)) || match(strings.ToLower(p.Name)) {
+				hits = append(hits, p)
+			}
+		}
+		switch len(hits) {
+		case 0:
+			continue
+		case 1:
+			return hits[0].ID, nil
+		default:
+			names := make([]string, len(hits))
+			for i, h := range hits {
+				names[i] = h.Name
+			}
+			return "", fmt.Errorf("'%s' is ambiguous: matches %s", input, strings.Join(names, ", "))
+		}
+	}
+	return "", fmt.Errorf("no profile matches '%s'", input)
 }
