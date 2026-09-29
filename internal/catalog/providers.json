@@ -1483,17 +1483,27 @@
         {
           "id": "qwen-max",
           "context": 32768,
-          "max_output": 8192
+          "max_output": 8192,
+          "legacy": true,
+          "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-plus",
-          "context": 131072,
-          "max_output": 8192
+          "context": 1000000,
+          "max_output": 8192,
+          "legacy": true,
+          "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-turbo",
-          "context": 1000000,
-          "max_output": 8192
+          "context": 131072,
+          "max_output": 8192,
+          "deprecated": "shutdown scheduled 2026-10-10",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/text-generation-model",
+            "https://help.aliyun.com/zh/model-studio/model-depreciation",
+            "https://www.alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0"
+          ]
         },
         {
           "id": "qwen-long",
@@ -1502,21 +1512,64 @@
         {
           "id": "qwen3.7-max",
           "context": 1000000,
-          "created": "2026-05"
+          "created": "2026-05",
+          "legacy": true,
+          "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
         },
         {
           "id": "qwen3.7-plus",
           "context": 1000000,
           "created": "2026-05",
           "note": "multimodal, vision+video, GUI-agent grounding"
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "created": "2026-07",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/text-generation-model",
+            "https://help.aliyun.com/zh/model-studio/newly-released-models"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "created": "2026-08",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/text-generation-model",
+            "https://help.aliyun.com/zh/model-studio/newly-released-models"
+          ]
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "created": "2026-08",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/text-generation-model",
+            "https://help.aliyun.com/zh/model-studio/newly-released-models"
+          ]
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "created": "2026-09",
+          "note": "snapshot of qwen3.8-max (alias qwen3.8-max-2026-09-02)",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/text-generation-model",
+            "https://help.aliyun.com/zh/model-studio/newly-released-models"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "qwen",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://www.alibabacloud.com/help/en/model-studio/models",
-        "https://help.aliyun.com/zh/model-studio/models"
+        "https://help.aliyun.com/zh/model-studio/models",
+        "https://help.aliyun.com/zh/model-studio/text-generation-model",
+        "https://help.aliyun.com/zh/model-studio/newly-released-models",
+        "https://help.aliyun.com/zh/model-studio/model-depreciation",
+        "https://www.alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0"
       ]
     },
     "dashscope-intl": {
@@ -1539,18 +1592,28 @@
       "models": [
         {
           "id": "qwen-max",
-          "context": 32768,
-          "max_output": 8192
+          "context": 131072,
+          "max_output": 8192,
+          "legacy": true,
+          "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-plus",
-          "context": 131072,
-          "max_output": 8192
+          "context": 1000000,
+          "max_output": 8192,
+          "legacy": true,
+          "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
         },
         {
           "id": "qwen-turbo",
           "context": 1000000,
-          "max_output": 8192
+          "max_output": 8192,
+          "deprecated": "shutdown scheduled 2026-10-10",
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+            "https://www.alibabacloud.com/help/en/model-studio/model-depreciation",
+            "https://www.alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0"
+          ]
         },
         {
           "id": "qwen-long",
@@ -1559,21 +1622,64 @@
         {
           "id": "qwen3.7-max",
           "context": 1000000,
-          "created": "2026-05"
+          "created": "2026-05",
+          "legacy": true,
+          "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
         },
         {
           "id": "qwen3.7-plus",
           "context": 1000000,
           "created": "2026-05",
           "note": "multimodal, vision+video, GUI-agent grounding"
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "created": "2026-07",
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+            "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "created": "2026-08",
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+            "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
+          ]
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "created": "2026-08",
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+            "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
+          ]
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "created": "2026-09",
+          "note": "snapshot of qwen3.8-max (alias qwen3.8-max-2026-09-02)",
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+            "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "qwen",
-      "last_updated": "2026-08-19",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://www.alibabacloud.com/help/en/model-studio/models",
-        "https://www.alibabacloud.com/help/en/model-studio/anthropic-api-messages"
+        "https://www.alibabacloud.com/help/en/model-studio/anthropic-api-messages",
+        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+        "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+        "https://www.alibabacloud.com/help/en/model-studio/model-depreciation",
+        "https://www.alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0"
       ]
     },
     "dashscope-cn-coding": {
@@ -1606,9 +1712,13 @@
           "max_output": 65536
         },
         {
-          "id": "qwen3-max",
+          "id": "qwen3-max-2026-01-23",
           "context": 262144,
-          "max_output": 65536
+          "max_output": 65536,
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/coding-plan",
+            "https://help.aliyun.com/zh/model-studio/text-generation-model"
+          ]
         },
         {
           "id": "qwen3-coder-next",
@@ -1626,9 +1736,13 @@
           "max_output": 16384
         },
         {
-          "id": "minimax-m2.5",
-          "context": 1048576,
-          "max_output": 32768
+          "id": "MiniMax-M2.5",
+          "context": 196608,
+          "max_output": 32768,
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/coding-plan",
+            "https://help.aliyun.com/zh/model-studio/text-generation-model"
+          ]
         },
         {
           "id": "kimi-k2.5",
@@ -1639,13 +1753,22 @@
           "id": "qwen3.7-plus",
           "context": 1000000
         },
-        { "id": "qwen3.6-plus" }
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/coding-plan",
+            "https://help.aliyun.com/zh/model-studio/text-generation-model"
+          ]
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.qwencloud.com/coding-plan/overview"
+        "https://docs.qwencloud.com/coding-plan/overview",
+        "https://help.aliyun.com/zh/model-studio/coding-plan",
+        "https://help.aliyun.com/zh/model-studio/text-generation-model"
       ]
     },
     "dashscope-intl-coding": {
@@ -1677,9 +1800,13 @@
           "max_output": 65536
         },
         {
-          "id": "qwen3-max",
+          "id": "qwen3-max-2026-01-23",
           "context": 262144,
-          "max_output": 65536
+          "max_output": 65536,
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
+          ]
         },
         {
           "id": "qwen3-coder-next",
@@ -1697,9 +1824,13 @@
           "max_output": 16384
         },
         {
-          "id": "minimax-m2.5",
-          "context": 1048576,
-          "max_output": 32768
+          "id": "MiniMax-M2.5",
+          "context": 196608,
+          "max_output": 32768,
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
+          ]
         },
         {
           "id": "kimi-k2.5",
@@ -1710,13 +1841,22 @@
           "id": "qwen3.7-plus",
           "context": 1000000
         },
-        { "id": "qwen3.6-plus" }
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "sources": [
+            "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+            "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
+          ]
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.qwencloud.com/coding-plan/overview"
+        "https://docs.qwencloud.com/coding-plan/overview",
+        "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
       ]
     },
     "qwen-code": {
@@ -1747,10 +1887,11 @@
       "supports_models_endpoint": false,
       "oauth_provider": "qwen_code",
       "icon": "qwen",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://github.com/QwenLM/Qwen3/discussions/1868",
-        "https://inventivehq.com/blog/qwen-code-still-free-2026-shutdown"
+        "https://inventivehq.com/blog/qwen-code-still-free-2026-shutdown",
+        "https://github.com/QwenLM/qwen-code/blob/main/docs/users/configuration/auth.md"
       ]
     },
     "kimi-code": {
