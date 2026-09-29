@@ -1914,37 +1914,54 @@
       "models": [
         {
           "id": "kimi-for-coding",
-          "context": 262144,
+          "context": 1048576,
           "max_output": 65536,
-          "note": "alias now backed by Kimi K2.7 Code (upgraded from K2.5/K2.6 lineage)"
+          "note": "alias upgraded in place to Kimi K2.8 Preview (2026-09-11); up to 1M context, low/high/max thinking",
+          "sources": [
+            "https://www.kimi.com/code/docs/en/kimi-code/models",
+            "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
+          ]
         },
         {
           "id": "kimi-k2.6",
           "context": 262144,
-          "max_output": 65536
+          "max_output": 65536,
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"],
+          "note": "not listed in Kimi Code docs as of 2026-09-29 (docs list only k3, k3-256k, kimi-for-coding, kimi-for-coding-highspeed); no shutdown announcement found"
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65536
+          "max_output": 65536,
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"],
+          "note": "not listed in Kimi Code docs as of 2026-09-29 (docs list only k3, k3-256k, kimi-for-coding, kimi-for-coding-highspeed); no shutdown announcement found"
         },
         {
           "id": "k3",
           "context": 1048576,
-          "note": "Kimi K3 via Kimi Code"
+          "note": "Kimi K3 via Kimi Code; 1M context only on higher-tier plans (Pro/Allegretto+), 256K otherwise",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
+        },
+        {
+          "id": "k3-256k",
+          "context": 262144,
+          "note": "K3 256K-context version; image input only (no video)",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "kimi-for-coding-highspeed",
           "context": 262144,
-          "note": "fast variant, ~3x token cost for ~5-6x speed"
+          "note": "K2.7 Code HighSpeed; ~5-6x output speed for ~3x quota usage",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "kimi_code",
       "icon": "kimi",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://www.kimi.com/code/docs/kimi-code/models"
+        "https://www.kimi.com/code/docs/en/kimi-code/models",
+        "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
       ]
     },
     "modelscope-cn": {
@@ -2295,37 +2312,74 @@
         {
           "id": "moonshot-v1-8k",
           "context": 8192,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.ai/docs/models",
+            "https://platform.kimi.ai/docs/platform-changelog"
+          ]
         },
         {
           "id": "moonshot-v1-32k",
           "context": 32768,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.ai/docs/models",
+            "https://platform.kimi.ai/docs/platform-changelog"
+          ]
         },
         {
           "id": "moonshot-v1-128k",
           "context": 131072,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.ai/docs/models",
+            "https://platform.kimi.ai/docs/platform-changelog"
+          ]
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_output": 65535,
+          "deprecated": "discontinued 2026-08-31",
+          "sources": ["https://platform.kimi.ai/docs/models"]
         },
         {
           "id": "kimi-k3",
           "context": 1048576,
           "created": "2026-07",
-          "note": "2.8T param flagship, native vision"
+          "note": "2.8T param flagship, native vision",
+          "sources": ["https://platform.kimi.ai/docs/models"]
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 262144,
+          "created": "2026-04",
+          "note": "256K context per platform docs; multimodal, thinking and non-thinking",
+          "sources": ["https://platform.kimi.ai/docs/models"]
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 262144,
+          "created": "2026-06",
+          "note": "dedicated coding model; 256K context per platform docs",
+          "sources": ["https://platform.kimi.ai/docs/models"]
+        },
+        {
+          "id": "kimi-k2.7-code-highspeed",
+          "context": 262144,
+          "created": "2026-06",
+          "note": "high-speed K2.7 Code, ~180 tokens/s",
+          "sources": ["https://platform.kimi.ai/docs/models"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "kimi",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
+        "https://platform.kimi.ai/docs/models",
+        "https://platform.kimi.ai/docs/platform-changelog",
         "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
-        "https://platform.kimi.ai/docs/pricing",
-        "https://www.bloomberg.com/news/articles/2026-07-17/china-s-powerful-new-moonshot-ai-model-closes-gap-with-us-rivals"
+        "https://platform.kimi.ai/docs/guide/kimi-k2-7-code-quickstart"
       ]
     },
     "moonshot-cn": {
@@ -2349,36 +2403,73 @@
         {
           "id": "moonshot-v1-8k",
           "context": 8192,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.com/docs/models",
+            "https://platform.kimi.com/docs/models"
+          ]
         },
         {
           "id": "moonshot-v1-32k",
           "context": 32768,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.com/docs/models",
+            "https://platform.kimi.com/docs/models"
+          ]
         },
         {
           "id": "moonshot-v1-128k",
           "context": 131072,
-          "deprecated": "shutdown scheduled 2026-08-31"
+          "deprecated": "discontinued 2026-08-31",
+          "sources": [
+            "https://platform.kimi.com/docs/models",
+            "https://platform.kimi.com/docs/models"
+          ]
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_output": 65535,
+          "deprecated": "discontinued 2026-08-31",
+          "sources": ["https://platform.kimi.com/docs/models"]
         },
         {
           "id": "kimi-k3",
           "context": 1048576,
           "created": "2026-07",
-          "note": "2.8T param flagship, native vision"
+          "note": "2.8T param flagship, native vision",
+          "sources": ["https://platform.kimi.com/docs/models"]
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 262144,
+          "created": "2026-04",
+          "note": "256K context per platform docs; multimodal, thinking and non-thinking",
+          "sources": ["https://platform.kimi.com/docs/models"]
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 262144,
+          "created": "2026-06",
+          "note": "dedicated coding model; 256K context per platform docs",
+          "sources": ["https://platform.kimi.com/docs/models"]
+        },
+        {
+          "id": "kimi-k2.7-code-highspeed",
+          "context": 262144,
+          "created": "2026-06",
+          "note": "high-speed K2.7 Code, ~180 tokens/s",
+          "sources": ["https://platform.kimi.com/docs/models"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "kimi",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
-        "https://platform.kimi.ai/docs/pricing"
+        "https://platform.kimi.com/docs/models",
+        "https://platform.kimi.com/docs/pricing/chat",
+        "https://platform.kimi.ai/docs/platform-changelog"
       ]
     },
     "kimi-com-coding": {
@@ -2401,26 +2492,39 @@
       "models": [
         {
           "id": "kimi-for-coding",
-          "context": 262144,
+          "context": 1048576,
           "max_output": 65536,
-          "note": "alias now backed by Kimi K2.7 Code (upgraded from K2.5/K2.6 lineage)"
+          "note": "alias upgraded in place to Kimi K2.8 Preview (2026-09-11); up to 1M context, low/high/max thinking",
+          "sources": [
+            "https://www.kimi.com/code/docs/en/kimi-code/models",
+            "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
+          ]
         },
         {
           "id": "k3",
           "context": 1048576,
-          "note": "Kimi K3 via Kimi Code"
+          "note": "Kimi K3 via Kimi Code; 1M context only on higher-tier plans (Pro/Allegretto+), 256K otherwise",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
+        },
+        {
+          "id": "k3-256k",
+          "context": 262144,
+          "note": "K3 256K-context version; image input only (no video)",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         },
         {
           "id": "kimi-for-coding-highspeed",
           "context": 262144,
-          "note": "fast variant, ~3x token cost for ~5-6x speed"
+          "note": "K2.7 Code HighSpeed; ~5-6x output speed for ~3x quota usage",
+          "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "kimi",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://www.kimi.com/code/docs/kimi-code/models"
+        "https://www.kimi.com/code/docs/en/kimi-code/models",
+        "https://www.kimi.com/code/docs/en/kimi-code/whats-new"
       ]
     },
     "volces-com": {
