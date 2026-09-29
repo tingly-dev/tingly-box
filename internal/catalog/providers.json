@@ -1166,7 +1166,9 @@
         {
           "id": "grok-3",
           "context": 131072,
-          "legacy": true
+          "legacy": true,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (none reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-3-mini",
@@ -1175,31 +1177,46 @@
         },
         {
           "id": "grok-code-fast-1",
-          "context": 256000
+          "context": 256000,
+          "deprecated": "retired 2026-05-15; requests redirected to grok-build-0.1 (its alias)",
+          "sources": [
+            "https://docs.x.ai/developers/migration/may-15-retirement",
+            "https://docs.x.ai/developers/models/grok-build-0.1"
+          ]
         },
         {
           "id": "grok-4-0709",
-          "context": 256000
+          "context": 256000,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (low reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-4-fast-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_output": 30000,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (low reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-4-fast-non-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_output": 30000,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (none reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-4-1-fast-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_output": 30000,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (low reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-4-1-fast-non-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_output": 30000,
+          "deprecated": "retired 2026-05-15; requests to this slug are redirected to grok-4.3 (none reasoning effort)",
+          "sources": ["https://docs.x.ai/developers/migration/may-15-retirement"]
         },
         {
           "id": "grok-4.20-0309-reasoning",
@@ -1226,21 +1243,45 @@
           "id": "grok-4.5",
           "context": 500000,
           "created": "2026-07",
-          "note": "flagship, Opus-class per xAI, V9 arch"
+          "note": "Opus-class per xAI, V9 arch",
+          "sources": ["https://docs.x.ai/developers/models/grok-4.5"]
+        },
+        {
+          "id": "grok-4.6",
+          "context": 500000,
+          "created": "2026-08",
+          "note": "frontier model for coding/agentic tasks; no text output limit per xAI",
+          "sources": [
+            "https://docs.x.ai/developers/models/grok-4.6",
+            "https://docs.x.ai/developers/release-notes"
+          ]
+        },
+        {
+          "id": "grok-4.7",
+          "context": 500000,
+          "created": "2026-09",
+          "note": "current flagship per xAI; no text output limit",
+          "sources": [
+            "https://docs.x.ai/developers/models/grok-4.7",
+            "https://docs.x.ai/developers/release-notes"
+          ]
         },
         {
           "id": "grok-build-0.1",
           "context": 256000,
-          "note": "coding-agent model behind Grok Build CLI"
+          "note": "coding-agent model behind Grok Build CLI",
+          "sources": ["https://docs.x.ai/developers/models/grok-build-0.1"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "xai",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://docs.x.ai/developers/models",
-        "https://x.ai/news/grok-4-5",
-        "https://techcrunch.com/2026/07/08/spacexai-releases-grok-4-5-which-elon-describes-as-an-opus-class-model/"
+        "https://docs.x.ai/developers/release-notes",
+        "https://docs.x.ai/developers/migration/may-15-retirement",
+        "https://docs.x.ai/developers/models/grok-4.7",
+        "https://docs.x.ai/developers/models/grok-4.6"
       ]
     },
     "deepseek-com": {
@@ -1321,29 +1362,75 @@
           "id": "mistral-large-2512",
           "context": 256000,
           "created": "2025-12",
-          "note": "Mistral Large 3, 675B MoE"
+          "note": "Mistral Large 3, 675B MoE",
+          "sources": ["https://docs.mistral.ai/models/mistral-large-3-25-12"]
         },
         {
-          "id": "mistral-medium-3-5-26-04",
+          "id": "mistral-medium-3-5",
           "context": 256000,
-          "created": "2026-04"
+          "created": "2026-04",
+          "note": "Mistral Medium 3.5 (v26.04); aliases mistral-medium-3, mistral-medium-latest",
+          "sources": ["https://docs.mistral.ai/models/mistral-medium-3-5-26-04"]
         },
         {
           "id": "mistral-small-2603",
           "context": 256000,
-          "created": "2026-03"
+          "created": "2026-03",
+          "sources": ["https://docs.mistral.ai/models/mistral-small-4-0-26-03"]
         },
         {
-          "id": "codestral",
-          "context": 256000
+          "id": "ministral-14b-2512",
+          "context": 256000,
+          "created": "2025-12",
+          "note": "Ministral 3 14B",
+          "sources": ["https://docs.mistral.ai/models/ministral-3-14b-25-12"]
+        },
+        {
+          "id": "ministral-8b-2512",
+          "context": 256000,
+          "created": "2025-12",
+          "note": "Ministral 3 8B",
+          "sources": ["https://docs.mistral.ai/models/ministral-3-8b-25-12"]
+        },
+        {
+          "id": "ministral-3b-2512",
+          "context": 256000,
+          "created": "2025-12",
+          "note": "Ministral 3 3B",
+          "sources": ["https://docs.mistral.ai/models/ministral-3-3b-25-12"]
+        },
+        {
+          "id": "codestral-2508",
+          "context": 128000,
+          "created": "2025-07",
+          "note": "alias codestral-latest",
+          "sources": ["https://docs.mistral.ai/models/codestral-25-08"]
+        },
+        {
+          "id": "zai-glm-5-2",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-08",
+          "note": "third-party Z.ai GLM 5.2 hosted by Mistral, public preview",
+          "sources": ["https://docs.mistral.ai/models/zai-glm-5-2"]
+        },
+        {
+          "id": "zai-glm-5-3",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-09",
+          "note": "third-party Z.ai GLM 5.3 hosted by Mistral, public preview; aliases zai-glm-5, zai-glm-latest",
+          "sources": ["https://docs.mistral.ai/models/zai-glm-5-3"]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "mistral",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://docs.mistral.ai/models/overview",
-        "https://docs.mistral.ai/models/model-cards/mistral-medium-3-5-26-04"
+        "https://docs.mistral.ai/models/mistral-medium-3-5-26-04",
+        "https://docs.mistral.ai/models/codestral-25-08",
+        "https://docs.mistral.ai/models/zai-glm-5-3"
       ]
     },
     "dashscope-cn": {
@@ -2925,24 +3012,42 @@
       "models": [
         {
           "id": "sonar",
-          "context": 127072
+          "context": 127072,
+          "deprecated": "Sonar Chat Completions support ended 2026-09-27; requests still served but reformulated as Agent API requests (rolling out by model); migrate to the Agent API",
+          "sources": ["https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview"]
         },
         {
           "id": "sonar-pro",
-          "context": 200000
+          "context": 200000,
+          "deprecated": "Sonar Chat Completions support ended 2026-09-27; requests still served but reformulated as Agent API requests (rolling out by model); migrate to the Agent API",
+          "sources": ["https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview"]
         },
         {
           "id": "sonar-reasoning",
-          "context": 127072
+          "context": 127072,
+          "deprecated": "removed from the API 2025-12-15; migrate to sonar-reasoning-pro",
+          "sources": ["https://docs.perplexity.ai/docs/resources/changelog"]
         },
         {
           "id": "sonar-reasoning-pro",
-          "context": 128000
+          "context": 128000,
+          "deprecated": "Sonar Chat Completions support ended 2026-09-27; requests still served but reformulated as Agent API requests (rolling out by model); migrate to the Agent API",
+          "sources": ["https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview"]
         },
-        { "id": "sonar-deep-research" }
+        {
+          "id": "sonar-deep-research",
+          "deprecated": "Sonar Chat Completions support ended 2026-09-27; requests still served but reformulated as Agent API requests (rolling out by model); migrate to the Agent API",
+          "sources": ["https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview"]
+        }
       ],
       "supports_models_endpoint": false,
-      "icon": "perplexity"
+      "icon": "perplexity",
+      "last_updated": "2026-09-29",
+      "sources": [
+        "https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview",
+        "https://docs.perplexity.ai/docs/resources/changelog",
+        "https://docs.perplexity.ai/models/model-cards"
+      ]
     },
     "cohere-com": {
       "id": "cohere-com",
@@ -2988,6 +3093,34 @@
           "created": "2025-07"
         },
         {
+          "id": "command-a-translate-08-2025",
+          "context": 8000,
+          "max_output": 8000,
+          "created": "2025-08",
+          "note": "machine translation, 23 languages",
+          "sources": ["https://docs.cohere.com/docs/models"]
+        },
+        {
+          "id": "north-mini-code-1-0",
+          "context": 256000,
+          "max_output": 64000,
+          "note": "30B/3B-active MoE agentic coding model (Apache 2.0)",
+          "sources": [
+            "https://docs.cohere.com/docs/models",
+            "https://docs.cohere.com/docs/north-mini-code-1.0"
+          ]
+        },
+        {
+          "id": "north-small-translate-1-0",
+          "context": 16000,
+          "max_output": 16000,
+          "note": "218B/25B-active MoE translation model, free tier, non-commercial open weights",
+          "sources": [
+            "https://docs.cohere.com/docs/models",
+            "https://docs.cohere.com/docs/north-small-translate-1.0"
+          ]
+        },
+        {
           "id": "command-r7b-12-2024",
           "context": 128000,
           "max_output": 4000,
@@ -3011,11 +3144,12 @@
       ],
       "supports_models_endpoint": true,
       "icon": "cohere",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://docs.cohere.com/docs/command-a",
-        "https://docs.cohere.com/docs/command-a-plus",
         "https://docs.cohere.com/docs/models",
+        "https://docs.cohere.com/docs/deprecations",
+        "https://docs.cohere.com/changelog",
+        "https://docs.cohere.com/docs/command-a-plus",
         "https://docs.cohere.com/docs/compatibility-api"
       ]
     },
