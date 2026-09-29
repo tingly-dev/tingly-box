@@ -42,8 +42,12 @@ interface PowerUp {
     description: string;
     path: string;
     enabled: boolean;
-    // Shown under the description while the power-up is on — only for ones
-    // whose "on" state widens who can do what on this machine.
+    // Shown as a warning line under the grid while the power-up is on — only
+    // for ones whose "on" state widens who can do what on this machine. It sits
+    // outside the card on purpose: a third text block inside one card made that
+    // card taller than its row, and since CardActionArea vertically centres its
+    // content, every neighbour's name/status/description then floated off the
+    // shared baseline. Cards stay content-identical, so the grid never reflows.
     enabledNotice?: string;
     // Live status line under the name (e.g. bot count), like the agent cards' rule count.
     status?: string;
@@ -270,16 +274,19 @@ const PowerUpsSection: React.FC = () => {
                                 >
                                     {p.description}
                                 </Typography>
-                                {p.enabled && p.enabledNotice && (
-                                    <Typography variant="caption" component="p" sx={{ color: 'warning.main', mt: 1 }}>
-                                        {p.enabledNotice}
-                                    </Typography>
-                                )}
                             </CardActionArea>
                         </Card>
                     </Grid>
                 ))}
             </Grid>
+
+            {/* Consequence warnings for what is currently on. They name their
+                power-up, so the association survives leaving the card. */}
+            {powerUps.filter((p) => p.enabled && p.enabledNotice).map((p) => (
+                <Alert key={p.key} severity="warning" sx={{ mt: 2 }}>
+                    <strong>{p.name}</strong> — {p.enabledNotice}
+                </Alert>
+            ))}
         </UnifiedCard>
     );
 };
