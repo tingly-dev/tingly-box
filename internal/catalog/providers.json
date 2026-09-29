@@ -18,7 +18,7 @@
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
   "version": "2.4.0",
-  "last_updated": "2026-09-23T00:00:00Z",
+  "last_updated": "2026-09-29T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -1907,9 +1907,9 @@
       "website": "https://www.kimi.com/code",
       "description": "Kimi Code API via OAuth device-code flow",
       "auth_type": "oauth",
-      "api_doc": "https://www.kimi.com/code",
-      "model_doc": "https://www.kimi.com/code",
-      "pricing_doc": "https://www.kimi.com/code",
+      "api_doc": "https://www.kimi.com/code/docs/en/",
+      "model_doc": "https://www.kimi.com/code/docs/en/kimi-code/models",
+      "pricing_doc": "https://www.kimi.com/code/docs/en/kimi-code/membership",
       "base_url_openai": "https://api.kimi.com/coding/v1",
       "base_url_anthropic": "https://api.kimi.com/coding/",
       "models": [
@@ -2539,9 +2539,9 @@
       "plan": "standard",
       "website": "https://www.moonshot.ai/",
       "type": "official",
-      "api_doc": "https://platform.moonshot.ai/docs/api/chat#single-turn-chat",
-      "model_doc": "https://platform.moonshot.ai/docs/pricing/chat#generation-model-kimi-k2",
-      "pricing_doc": "https://platform.moonshot.ai/docs/pricing/chat#generation-model-kimi-k2",
+      "api_doc": "https://platform.kimi.ai/docs/api/chat",
+      "model_doc": "https://platform.kimi.ai/docs/models",
+      "pricing_doc": "https://platform.kimi.ai/docs/pricing/chat",
       "base_url_openai": "https://api.moonshot.ai/v1",
       "base_url_anthropic": "https://api.moonshot.ai/anthropic",
       "models": [
@@ -2630,9 +2630,9 @@
       "plan": "standard",
       "website": "https://www.moonshot.cn/",
       "type": "official",
-      "api_doc": "https://platform.moonshot.cn/docs/api/chat#single-turn-chat",
-      "model_doc": "https://platform.moonshot.cn/docs/pricing/chat#generation-model-kimi-k2",
-      "pricing_doc": "https://platform.moonshot.cn/docs/pricing/chat#generation-model-kimi-k2",
+      "api_doc": "https://platform.kimi.com/docs/api/chat",
+      "model_doc": "https://platform.kimi.com/docs/models",
+      "pricing_doc": "https://platform.kimi.com/docs/pricing/chat",
       "base_url_openai": "https://api.moonshot.cn/v1",
       "base_url_anthropic": "https://api.moonshot.cn/anthropic",
       "models": [
@@ -2720,9 +2720,9 @@
       "website": "https://www.kimi.com/code",
       "description": "Kimi Code API service for coding scenarios",
       "type": "official",
-      "api_doc": "https://www.kimi.com/code",
-      "model_doc": "https://www.kimi.com/code",
-      "pricing_doc": "https://www.kimi.com/code",
+      "api_doc": "https://www.kimi.com/code/docs/en/",
+      "model_doc": "https://www.kimi.com/code/docs/en/kimi-code/models",
+      "pricing_doc": "https://www.kimi.com/code/docs/en/kimi-code/membership",
       "base_url_openai": "https://api.kimi.com/coding/v1",
       "base_url_anthropic": "https://api.kimi.com/coding/",
       "models": [
