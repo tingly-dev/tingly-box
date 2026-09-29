@@ -1306,13 +1306,29 @@
           "id": "deepseek-chat",
           "context": 128000,
           "max_output": 8192,
-          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)"
+          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
+          "sources": ["https://api-docs.deepseek.com/updates"]
         },
         {
           "id": "deepseek-reasoner",
           "context": 128000,
           "max_output": 65536,
-          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)"
+          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
+          "sources": ["https://api-docs.deepseek.com/updates"]
+        },
+        {
+          "id": "deepseek-flash",
+          "context": 1000000,
+          "max_output": 384000,
+          "created": "2026-09-10",
+          "openai_endpoints": [
+            "chat",
+            "responses"
+          ],
+          "sources": [
+            "https://api-docs.deepseek.com/quick_start/pricing",
+            "https://api-docs.deepseek.com/updates"
+          ]
         },
         {
           "id": "deepseek-v4-flash",
@@ -1321,6 +1337,13 @@
           "openai_endpoints": [
             "chat",
             "responses"
+          ],
+          "deprecated": "retired 2026-09-10; name temporarily routed to deepseek-flash (DeepSeek-V4.1-Flash), billed at Flash price",
+          "note": "legacy alias of deepseek-flash",
+          "legacy": true,
+          "sources": [
+            "https://api-docs.deepseek.com/quick_start/pricing",
+            "https://api-docs.deepseek.com/updates"
           ]
         },
         {
@@ -1330,14 +1353,19 @@
           "openai_endpoints": [
             "chat",
             "responses"
+          ],
+          "sources": [
+            "https://api-docs.deepseek.com/quick_start/pricing",
+            "https://api-docs.deepseek.com/updates"
           ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "deepseek",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://api-docs.deepseek.com/quick_start/pricing"
+        "https://api-docs.deepseek.com/quick_start/pricing",
+        "https://api-docs.deepseek.com/updates"
       ]
     },
     "mistral-ai": {
@@ -2847,22 +2875,49 @@
         },
         {
           "id": "llama-3.3-70b-versatile",
-          "context": 131072
+          "context": 131072,
+          "max_output": 32768,
+          "sources": [
+            "https://console.groq.com/docs/deprecations",
+            "https://console.groq.com/docs/models",
+            "https://console.groq.com/docs/model/llama-3.3-70b-versatile"
+          ],
+          "note": "Groq deprecations page lists 2026-08-16 shutdown with enterprise-only retention; applicability to free/developer tiers not stated explicitly, replacement openai/gpt-oss-120b"
         },
         {
           "id": "openai/gpt-oss-120b",
-          "context": 131072
+          "context": 131072,
+          "max_output": 65536,
+          "sources": [
+            "https://console.groq.com/docs/models",
+            "https://console.groq.com/docs/model/openai/gpt-oss-120b"
+          ]
         },
         {
           "id": "openai/gpt-oss-20b",
-          "context": 131072
+          "context": 131072,
+          "max_output": 65536,
+          "sources": [
+            "https://console.groq.com/docs/models",
+            "https://console.groq.com/docs/model/openai/gpt-oss-20b"
+          ]
+        },
+        {
+          "id": "qwen/qwen3.8-27b",
+          "context": 131072,
+          "max_output": 16384,
+          "sources": [
+            "https://console.groq.com/docs/model/qwen/qwen3.8-27b",
+            "https://console.groq.com/docs/deprecations"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "groq",
-      "last_updated": "2026-09-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://console.groq.com/docs/models",
+        "https://console.groq.com/docs/deprecations",
         "https://console.groq.com/docs/anthropic"
       ]
     },
@@ -2981,14 +3036,28 @@
       "models": [
         {
           "id": "gpt-oss-120b",
-          "note": "public rate-card tier; Llama/Qwen3 moved to dedicated-endpoint-only"
+          "note": "public rate-card tier; Llama/Qwen3 moved to dedicated-endpoint-only",
+          "sources": [
+            "https://inference-docs.cerebras.ai/models/overview",
+            "https://inference-docs.cerebras.ai/models/openai-oss"
+          ]
+        },
+        {
+          "id": "qwen-3.8-27b",
+          "note": "public shared inference; replaces gemma-4-31b (removed 2026-09-03)",
+          "sources": [
+            "https://inference-docs.cerebras.ai/models/overview",
+            "https://inference-docs.cerebras.ai/models/qwen-3.8-27b",
+            "https://inference-docs.cerebras.ai/support/deprecation"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "cerebras",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://inference-docs.cerebras.ai/models/overview",
+        "https://inference-docs.cerebras.ai/support/deprecation",
         "https://www.cerebras.ai/pricing"
       ]
     },
