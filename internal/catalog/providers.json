@@ -2008,12 +2008,22 @@
         {
           "id": "MiniMax-M2",
           "context": 204800,
-          "max_output": 131072
+          "max_output": 131072,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M2.1",
           "context": 204800,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M2.1-lightning",
@@ -2023,22 +2033,74 @@
         {
           "id": "MiniMax-M2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M3",
           "context": 1000000,
           "max_output": 131072,
           "created": "2026-06",
-          "note": "428B MoE, MSA architecture, native multimodal"
+          "note": "428B MoE, MSA architecture, native multimodal",
+          "sources": [
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.cn/docs/release-notes/models"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.1-highspeed",
+          "context": 204800,
+          "created": "2025-12",
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.5-highspeed",
+          "context": 204800,
+          "created": "2026-02",
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.7",
+          "context": 204800,
+          "created": "2026-03",
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.cn/docs/release-notes/models"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.7-highspeed",
+          "context": 204800,
+          "created": "2026-03",
+          "sources": [
+            "https://platform.minimax.cn/docs/guides/models-intro",
+            "https://platform.minimax.cn/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.cn/docs/release-notes/models"
+          ]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "minimax",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://www.minimax.io/blog/minimax-m3",
-        "https://www.minimax.io/models/text/m3"
+        "https://www.minimax.io/models/text/m3",
+        "https://platform.minimax.cn/docs/guides/models-intro",
+        "https://platform.minimax.cn/docs/api-reference/text-anthropic-api",
+        "https://platform.minimax.cn/docs/release-notes/models"
       ]
     },
     "minimax-io": {
@@ -2062,12 +2124,22 @@
         {
           "id": "MiniMax-M2",
           "context": 204800,
-          "max_output": 131072
+          "max_output": 131072,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M2.1",
           "context": 204800,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M2.1-lightning",
@@ -2077,22 +2149,74 @@
         {
           "id": "MiniMax-M2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_output": 65536,
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api"
+          ]
         },
         {
           "id": "MiniMax-M3",
           "context": 1000000,
           "max_output": 131072,
           "created": "2026-06",
-          "note": "428B MoE, MSA architecture, native multimodal"
+          "note": "428B MoE, MSA architecture, native multimodal",
+          "sources": [
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.io/docs/release-notes/models"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.1-highspeed",
+          "context": 204800,
+          "created": "2025-12",
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.5-highspeed",
+          "context": 204800,
+          "created": "2026-02",
+          "legacy": true,
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.7",
+          "context": 204800,
+          "created": "2026-03",
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.io/docs/release-notes/models"
+          ]
+        },
+        {
+          "id": "MiniMax-M2.7-highspeed",
+          "context": 204800,
+          "created": "2026-03",
+          "sources": [
+            "https://platform.minimax.io/docs/guides/models-intro",
+            "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
+            "https://platform.minimax.io/docs/release-notes/models"
+          ]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "minimax",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://www.minimax.io/blog/minimax-m3",
-        "https://www.minimax.io/models/text/m3"
+        "https://www.minimax.io/models/text/m3",
+        "https://platform.minimax.io/docs/guides/models-intro",
+        "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
+        "https://platform.minimax.io/docs/release-notes/models"
       ]
     },
     "z-ai": {
@@ -3154,19 +3278,70 @@
         {
           "id": "mimo-v2.5",
           "context": 1048576,
-          "max_output": 131072
+          "max_output": 131072,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md"
+          ]
         },
         {
           "id": "mimo-v2.5-pro",
           "context": 1048576,
-          "max_output": 16384
+          "max_output": 131072,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "context": 1048576,
+          "max_output": 131072,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "context": 1048576,
+          "max_output": 131072,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-pro-ultraspeed",
+          "context": 1048576,
+          "max_output": 131072,
+          "created": "2026-09-22",
+          "note": "flagship V2.6-Pro performance, up to 20x faster; customized service via contact, no default RPM/TPM quota",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md"
+          ]
         }
       ],
       "supports_models_endpoint": true,
       "icon": "xiaomi",
-      "last_updated": "2026-07-20",
+      "last_updated": "2026-09-29",
       "sources": [
-        "https://mimo.mi.com/docs/zh-CN/updates/model"
+        "https://mimo.mi.com/docs/zh-CN/updates/model",
+        "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+        "https://mimo.mi.com/static/docs/updates/model.md",
+        "https://mimo.mi.com/static/docs/updates/deprecate.md"
       ]
     },
     "xiaomimimo-com-coding": {
@@ -3191,20 +3366,64 @@
         {
           "id": "mimo-v2.5",
           "context": 1048576,
-          "max_output": 131072
+          "max_output": 131072,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
         },
         {
           "id": "mimo-v2.5-pro",
           "context": 1048576,
-          "max_output": 16384
+          "max_output": 131072,
+          "deprecated": "shutdown scheduled 2026-10-21",
+          "note": "no replacement model; requests error after shutdown (10:00 Beijing time)",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/deprecate.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "context": 1048576,
+          "max_output": 131072,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "context": 1048576,
+          "max_output": 131072,
+          "created": "2026-09-22",
+          "sources": [
+            "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+            "https://mimo.mi.com/static/docs/updates/model.md",
+            "https://mimo.mi.com/static/docs/api/chat/openai-api.md",
+            "https://mimo.mi.com/static/docs/price/token-plan.md"
+          ]
         }
       ],
       "supports_models_endpoint": false,
       "icon": "xiaomi",
-      "last_updated": "2026-09-20",
+      "last_updated": "2026-09-29",
       "sources": [
         "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
-        "https://mimo.mi.com/docs/zh-CN/updates/model"
+        "https://mimo.mi.com/docs/zh-CN/updates/model",
+        "https://mimo.mi.com/static/docs/quick-start/summary/model.md",
+        "https://mimo.mi.com/static/docs/updates/model.md",
+        "https://mimo.mi.com/static/docs/updates/deprecate.md",
+        "https://mimo.mi.com/static/docs/price/token-plan.md"
       ]
     },
     "groq-com": {
