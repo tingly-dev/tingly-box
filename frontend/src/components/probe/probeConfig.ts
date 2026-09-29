@@ -60,8 +60,12 @@ export function resolveInitialAxes(opts: {
     // Protocol/scope availability clamp (e.g. '' protocol for google targets
     // is fine, but a result-echoed anthropic protocol must not stick onto a
     // provider that can't speak it).
+    // Rule targets have no provider record; their protocol options come from
+    // the scenario and are clamped by the dialog (ruleProtocolOptions).
     const avail = protocolAvailability(opts.provider ?? null);
-    if (avail.locked) {
+    if (opts.targetType === 'rule') {
+        // keep the result-echoed protocol as-is
+    } else if (avail.locked) {
         axes.protocol = avail.default;
     } else if (axes.protocol && !avail.options.includes(axes.protocol)) {
         axes.protocol = '';

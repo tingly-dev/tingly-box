@@ -338,7 +338,11 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 		scenario = typ.ScenarioOpenAI
 	}
 
-	apiBase, apiStyle := loopbackAPIBase(port, scenario)
+	// The client protocol defaults to the scenario's primary style; a
+	// multi-transport scenario (team) may be probed on another protocol it
+	// serves — validation has already checked the scenario speaks it.
+	apiBase, scenarioStyle := loopbackAPIBase(port, scenario)
+	apiStyle := req.ResolveClientStyle(scenarioStyle)
 
 	logrus.Debugf("[probe-e2e] rule %s -> TB loopback %s (model=%s)", rule.UUID, apiBase, rule.RequestModel)
 

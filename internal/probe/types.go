@@ -447,10 +447,11 @@ func ValidateE2ERequest(req *E2ERequest) error {
 		return &ValidationError{Field: "protocol", Message: "protocol must be 'openai_chat', 'openai_responses', or 'anthropic_v1'"}
 	}
 
-	// A rule's scenario already fixes the wire protocol; an override there
-	// would be silently ignored, so reject it instead.
-	if req.TargetType == E2ETargetRule && req.Protocol != "" {
-		return &ValidationError{Field: "protocol", Message: "protocol override is not supported for rule targets (fixed by the rule's scenario)"}
+	// A rule is reachable only on the protocols its scenario serves: most
+	// scenarios speak exactly one family, multi-transport ones (team, dsh)
+	// speak several. An override outside that set cannot reach the rule.
+	if req.TargetType == E2ETargetRule && req.Protocol != "" && !ScenarioSpeaks(req.Scenario, req.Protocol) {
+		return &ValidationError{Field: "protocol", Message: fmt.Sprintf("rule scenario %s does not serve the %s protocol", req.Scenario, req.Protocol)}
 	}
 
 	// Thinking is optional; empty normalizes to "none". Only the probe-facing
@@ -521,7 +522,8 @@ func ValidateE2ERequest(req *E2ERequest) error {
 			if scenario == "" {
 				scenario = string(typ.ScenarioOpenAI)
 			}
-			if _, style := ScenarioEndpoint(scenario); req.RequestProtocol.Family() != style {
+			if !ScenarioSpeaks(scenario, req.RequestProtocol) {
+				_, style := ScenarioEndpoint(scenario)
 				return &ValidationError{Field: "request_protocol", Message: fmt.Sprintf("scenario %s speaks the %s protocol; the raw request is %s", scenario, style, req.RequestProtocol)}
 			}
 		}
@@ -576,6 +578,24 @@ func E2EMessage(tool bool, customMsg string) string {
 		return "Please use the bash tool to list the current directory contents with 'ls -la'."
 	}
 	return "Hello, this is a test message. Please respond with a short greeting."
+}
+
+// ScenarioSpeaks reports whether a rule under scenario is reachable on
+// protocol p: its primary style always is; a scenario whose descriptor
+// declares both the OpenAI and Anthropic transports (team, dsh) serves
+// either family on one path, so it accepts both.
+func ScenarioSpeaks(scenario string, p ProbeProtocol) bool {
+	if scenario == "" {
+		scenario = string(typ.ScenarioOpenAI)
+	}
+	family := p.Family()
+	if _, style := ScenarioEndpoint(scenario); style == family {
+		return true
+	}
+	base := typ.RuleScenario(scenario).Base()
+	multi := typ.ScenarioSupportsTransport(base, typ.TransportOpenAI) &&
+		typ.ScenarioSupportsTransport(base, typ.TransportAnthropic)
+	return multi && family != ""
 }
 
 // ScenarioEndpoint returns the API endpoint and api-style for a scenario name.

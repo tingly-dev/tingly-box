@@ -40,6 +40,7 @@ import {
     extractText,
     defaultMessage,
     ruleProtocolForScenario,
+    ruleProtocolOptions,
 } from './ResultSections';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -132,6 +133,8 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             if (!visionOk && prev.vision !== 'none') {
                 return { ...prev, vision: 'none' };
             }
+            // Rule protocol options come from the scenario, not a provider.
+            if (targetType === 'rule') return prev;
             if (protoAvail.locked && prev.protocol !== protoAvail.default) {
                 return { ...prev, protocol: protoAvail.default };
             }
@@ -144,14 +147,15 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             }
             return prev;
         });
-    }, [protoAvail, visionOk]);
+    }, [protoAvail, visionOk, targetType]);
 
     // Protocol axis per target type: providers reduce to what they can speak;
     // rule targets are locked to their scenario's protocol.
     const protocolControl = useMemo(() => {
         if (targetType === 'rule') {
-            const value = ruleProtocolForScenario(scenario);
-            return { value, options: [value], locked: true, disabled: false, lockHint: t('probe.protocolLockedRule') };
+            const options = ruleProtocolOptions(scenario);
+            const value = axes.protocol && options.includes(axes.protocol) ? axes.protocol : ruleProtocolForScenario(scenario);
+            return { value, options, locked: options.length === 1, disabled: false, lockHint: t('probe.protocolLockedRule') };
         }
         if (providerInfo?.api_style === 'google') {
             return { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') };
@@ -178,7 +182,14 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
         () => ({
             target_type: targetType,
             ...(targetType === 'rule'
-                ? { scenario: scenario || 'openai', rule_uuid: targetId }
+                ? {
+                      scenario: scenario || 'openai',
+                      rule_uuid: targetId,
+                      // Only send a non-primary pick; the primary is the backend default.
+                      ...(protocolControl.value && protocolControl.value !== ruleProtocolForScenario(scenario)
+                          ? { protocol: protocolControl.value }
+                          : {}),
+                  }
                 : {
                       provider_uuid: targetId,
                       model: model || '',
@@ -192,7 +203,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             ...(axes.vision !== 'none' ? { vision: axes.vision } : {}),
             ...(message ? { message } : {}),
         }),
-        [targetType, scenario, targetId, model, axes, message],
+        [targetType, scenario, targetId, model, axes, message, protocolControl.value],
     );
 
     const runTest = useCallback(async () => {

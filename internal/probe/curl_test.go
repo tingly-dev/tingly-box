@@ -77,6 +77,29 @@ func TestValidateE2ERequest_NewAxes(t *testing.T) {
 		assert.Contains(t, err.Error(), "rule")
 	})
 
+	t.Run("rule protocol accepted when the scenario serves it", func(t *testing.T) {
+		for _, p := range []ProbeProtocol{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
+			assert.NoError(t, ValidateE2ERequest(&E2ERequest{
+				TargetType: E2ETargetRule,
+				Scenario:   "team",
+				RuleUUID:   "r-1",
+				Protocol:   p,
+			}), "team speaks %s", p)
+		}
+		assert.NoError(t, ValidateE2ERequest(&E2ERequest{
+			TargetType: E2ETargetRule,
+			Scenario:   "openai",
+			RuleUUID:   "r-1",
+			Protocol:   ProtocolOpenAIResponses,
+		}))
+		assert.Error(t, ValidateE2ERequest(&E2ERequest{
+			TargetType: E2ETargetRule,
+			Scenario:   "claude_code:p1",
+			RuleUUID:   "r-1",
+			Protocol:   ProtocolOpenAIChat,
+		}))
+	})
+
 	t.Run("all protocol values valid for provider targets", func(t *testing.T) {
 		for _, p := range []ProbeProtocol{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
 			req := base()
@@ -318,4 +341,32 @@ func TestBuildCurl_RuleTarget_ThroughTB_AnthropicScenario(t *testing.T) {
 
 	assert.Equal(t, "http://localhost:18080/tingly/anthropic/v1/messages", curl.URL)
 	assert.Equal(t, "$TB_API_KEY", curl.KeyEnvVar)
+}
+
+// A multi-transport scenario (team) is probed on the protocol the caller
+// picks, not only its primary OpenAI Chat surface.
+func TestBuildCurl_RuleTarget_TeamProtocolOverride(t *testing.T) {
+	svc := newCurlTestProber(t)
+	require.NoError(t, svc.config.AddRule(typ.Rule{
+		UUID:         "r-team",
+		Scenario:     "team",
+		RequestModel: "shared-model",
+	}))
+
+	cases := map[ProbeProtocol]string{
+		"":                      "http://localhost:18080/tingly/team/chat/completions",
+		ProtocolOpenAIChat:      "http://localhost:18080/tingly/team/chat/completions",
+		ProtocolOpenAIResponses: "http://localhost:18080/tingly/team/responses",
+		ProtocolAnthropic:       "http://localhost:18080/tingly/team/v1/messages",
+	}
+	for p, wantURL := range cases {
+		curl, err := svc.BuildCurl(context.Background(), &E2ERequest{
+			TargetType: E2ETargetRule,
+			Scenario:   "team",
+			RuleUUID:   "r-team",
+			Protocol:   p,
+		})
+		require.NoError(t, err, "protocol %q", p)
+		assert.Equal(t, wantURL, curl.URL, "protocol %q", p)
+	}
 }
