@@ -1157,11 +1157,10 @@
       "website": "https://xai.com",
       "description": "xAI Grok API service",
       "type": "official",
-      "api_doc": "https://docs.x.ai/docs/guides/responses-api",
+      "api_doc": "https://docs.x.ai/developers/model-capabilities/text/comparison",
       "model_doc": "https://docs.x.ai/docs/models",
       "pricing_doc": "https://docs.x.ai/docs/models?cluster=us-east-1#models-and-pricing",
       "base_url_openai": "https://api.x.ai/v1/",
-      "base_url_anthropic": "https://api.x.ai/v1",
       "models": [
         {
           "id": "grok-3",
@@ -1281,7 +1280,8 @@
         "https://docs.x.ai/developers/release-notes",
         "https://docs.x.ai/developers/migration/may-15-retirement",
         "https://docs.x.ai/developers/models/grok-4.7",
-        "https://docs.x.ai/developers/models/grok-4.6"
+        "https://docs.x.ai/developers/models/grok-4.6",
+        "https://docs.x.ai/developers/rest-api-reference/inference/legacy"
       ]
     },
     "deepseek-com": {
