@@ -153,7 +153,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 //
 // It runs the provider-independent prologue once, then drives the failover loop
 // whose per-attempt callback re-runs the whole provider-dependent pipeline
-// (plan → pre-chain → guardrails → transform → dispatch) against
+// (plan → guardrails → transform → dispatch) against
 // the candidate selected for that attempt. Because the transform is re-run per
 // attempt, failover can rotate across heterogeneous API styles.
 func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, requestModel string, responseModel string, rule *typ.Rule, provider *typ.Provider) {
@@ -219,7 +219,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 
 // runAnthropicV1Attempt executes the provider-dependent half of an Anthropic v1
 // request for one failover attempt: plan the attempt (dual endpoint, target,
-// rule flags), run the pre-transform chain and guardrails, transform, and
+// rule flags, output limits), run request guardrails, transform, and
 // dispatch. Setup failures route through failAttemptSetup so the orchestrator
 // can advance to the next candidate.
 func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
@@ -229,15 +229,6 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 		return
 	}
 	req.Model = anthropic.Model(requestModel)
-
-	// Build and run server-side pre-transform chain (scenario-driven flags)
-	if err := ExecuteAnthropicPreChain(
-		req.MessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), plan.MaxAllowed, isStreaming, plan.Target,
-	); err != nil {
-		ph.FailAttemptSetup(c, err)
-		return
-	}
 
 	scenario := GetTrackingContextScenario(c)
 	if ph.guardrailsEnabledForScenario(scenario) {
@@ -334,15 +325,6 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 		return
 	}
 	req.Model = anthropic.Model(requestModel)
-
-	// Build and run server-side pre-transform chain (scenario-driven flags)
-	if err := ExecuteAnthropicPreChain(
-		req.BetaMessageNewParams, scenarioConfig,
-		ph.deps.Config.GetDefaultMaxTokens(), plan.MaxAllowed, isStreaming, plan.Target,
-	); err != nil {
-		ph.FailAttemptSetup(c, err)
-		return
-	}
 
 	// request guardrails
 	scenario := GetTrackingContextScenario(c)

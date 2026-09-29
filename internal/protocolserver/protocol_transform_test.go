@@ -20,9 +20,15 @@ import (
 // leaving the canonical base order plus whatever rule transforms are slotted in.
 func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
+	return planChainNames(&attemptPlan{
+		Source: protocol.TypeOpenAIChat, Target: protocol.TypeOpenAIChat,
+		PreBase: preBase, PreVendor: preVendor,
+	})
+}
+
+func planChainNames(plan *attemptPlan) []string {
 	h := &ProtocolHandler{}
-	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, typ.ScenarioGlobal, preBase, preVendor)
-	require.NoError(t, err)
+	chain := h.buildTransformChain(nil, plan)
 
 	var names []string
 	for _, tr := range chain.GetTransforms() {
@@ -79,6 +85,24 @@ func TestBuildTransformChain_PreBaseBeforeBase(t *testing.T) {
 	require.NotEqual(t, -1, base)
 	assert.Equal(t, 0, cursor, "pre-Base rule transform must be first in the chain")
 	assert.Less(t, cursor, base, "pre-Base rule transform must run before base_convert")
+}
+
+// TestBuildTransformChain_OutputLimitPlacement pins where the plan's token
+// limits land (.design/protocol-stage-pipeline.md): the Anthropic
+// max_tokens fill acts on the client shape, first in the chain; the model's
+// output limit acts on the upstream-bound shape, right after conversion and
+// before Consistency validates it.
+func TestBuildTransformChain_OutputLimitPlacement(t *testing.T) {
+	names := planChainNames(&attemptPlan{
+		Source: protocol.TypeAnthropicBeta, Target: protocol.TypeAnthropicBeta,
+		PreBase:          []transform.Transform{transform.NewOpenAICursorCompatTransform()},
+		MaxAllowed:       8192,
+		DefaultMaxTokens: 4096,
+	})
+	assert.Equal(t, []string{
+		"max_tokens_default", "openai_cursor_compat", "base_convert",
+		"output_limit", "consistency_normalize", "vendor_adjust",
+	}, names)
 }
 
 func TestMCPServesPair(t *testing.T) {

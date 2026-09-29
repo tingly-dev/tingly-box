@@ -36,11 +36,11 @@ handler 前段（每个请求一次，与 provider 无关）
 每个 attempt（failover 的每个候选一次，见 tier-routing.md）
   ① Plan        解析 provider 风格 → target、rule flags、preBase / preVendor、模型输出上限
                  只读，不改请求
-  ② Source 半段  客户端协议形态上运行：客户端协议的必填补齐 → preBase 规则 → StagePre 录制
+  ② Source 半段  客户端协议形态上运行：客户端协议的必填补齐（max_tokens_default）→ preBase 规则 → StagePre 录制
                  （Anthropic 客户端的请求 guardrails 也在这一侧）
   ③ 协议转换    跨协议 Stage 路径：Bridge（逐次调用）；其余路径：BaseTransform
   ④ Target 半段  provider 协议形态上运行，Stage 路径每轮 provider 调用各跑一次：
-                 输出上限 → MCP → Consistency → preVendor 规则 → Vendor → StagePost 录制
+                 输出上限（output_limit）→ MCP → Consistency → preVendor 规则 → Vendor → StagePost 录制
   ⑤ 发送 / 回写
 ```
 
@@ -72,7 +72,7 @@ Source 半段与 Target 半段在两条路径上是**同一组** Transform（`so
    需要迁就 target 的，放到 Target 半段，在 target 形态上改。#1897 的 budget 截断就是反例。
 2. **Target 约束靠形态命中，不靠开关。** Target 半段的 Transform 对 `ctx.Request` 做 type-switch：
    只有 Anthropic 形态才有 budget，所以 budget 截断天然只作用于 Anthropic target。
-   不要给 Source 侧的步骤加"target 是什么"的参数（#1899 修 #1897 时给 Anthropic pre-chain 加的 `KeepThinkingBudget` 开关即是此类，#1902 迁移输出上限时删除）。
+   不要给 Source 侧的步骤加"target 是什么"的参数（#1899 修 #1897 时给 Anthropic pre-chain 加的 `KeepThinkingBudget` 开关即是此类，已在 #1902 迁移输出上限时删除）。
 3. **Plan 每个 attempt 只做一次，四个入口共用。** Handler 不再各写一份 provider 风格的 switch，
    也不再把同一个 preVendor 列表传两遍。
 4. **跨协议事实在转换处产出一次。** Bridge 与 `BaseTransform` 必须调用同一个产出函数
@@ -116,7 +116,9 @@ run*Attempt（每个 failover attempt）
   Stage 路径的 `serve*` 从 plan 取 preVendor，不再单独传参。（`smart_compact` 由 `transformRequest`
   在 Anthropic 入口按 scenario 默认 flag 单独 prepend 到最前。）
 - chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。
-- Anthropic 入口另有一段在 chain 之外执行的 `ExecuteAnthropicPreChain`（输出上限），见下方偏差 2。
+- 非 flag 的请求整形也装在这两半里：Anthropic `max_tokens` 缺省补齐在 source 半段最前
+  （`MaxTokensDefaultTransform`），模型输出上限在 target 半段最前（`OutputLimitTransform`）。
+  没有 handler 在 chain 之外改请求（原 `ExecuteAnthropicPreChain` 已删除）。
 
 ## 现状偏差与迁移
 
@@ -125,7 +127,7 @@ run*Attempt（每个 failover attempt）
 | # | 偏差 | 目标 | 状态 |
 |---|---|---|---|
 | 1 | 四个 `run*Attempt` 各自解析 target（三份 provider 风格 switch，Chat 另有一次 `tempFlags`）；preVendor 列表同时传给 `transformRequest` 与 `serve*`；`skip_usage` / `cursor_compat` 提示只在 OpenAI 入口写入 `Extra` | 共用的 attempt plan（规则 3）：`internal/protocolserver/attempt_plan.go` 的 `planAttempt` 解析 provider、target、flags、preBase / preVendor 与输出上限；`transformRequest` 按 `servedByStage()` 决定跑整链还是只跑 source 半段，并统一写入用量提示 | 已完成（#1901） |
-| 2 | 输出上限分散在三处且各不相同：Anthropic 入口的 `ExecuteAnthropicPreChain`（Source 侧，补齐 + 上限 + budget 截断）、Chat 入口 handler 内联截断 `max_tokens`、Responses 入口不截断 | Source 侧只补齐 Anthropic 必填的 `max_tokens`；上限与 budget 截断移到 Target 半段，按形态生效（规则 1、2）。删除 `KeepThinkingBudget` | 计划中（#1902） |
+| 2 | 输出上限分散在三处且各不相同：Anthropic 入口的 `ExecuteAnthropicPreChain`（Source 侧，补齐 + 上限 + budget 截断）、Chat 入口 handler 内联截断 `max_tokens`、Responses 入口不截断 | Source 侧只补齐 Anthropic 必填的 `max_tokens`（`MaxTokensDefaultTransform`）；上限与 budget 截断移到 Target 半段的 `OutputLimitTransform`，按形态生效（规则 1、2）。删除 `ExecuteAnthropicPreChain`、handler 内联截断与 `KeepThinkingBudget`。统一后 Chat 的 `max_completion_tokens` 与 Responses 的 `max_output_tokens` 也按模型上限截断（此前不截） | 已完成（#1902） |
 | 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low` | 见下 | 待定 |
 
 偏差 3 需要先定语义再动代码，目前的开放问题：

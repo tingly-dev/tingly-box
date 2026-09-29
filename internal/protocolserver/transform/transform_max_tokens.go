@@ -5,40 +5,72 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// MaxTokensTransform ensures max_tokens is set and properly bounded for Anthropic requests.
-//
-// It applies three rules:
-//  1. Fill defaultMaxTokens when the client sends 0.
-//  2. Cap max_tokens at maxAllowed.
-//  3. If the thinking budget exceeds maxAllowed, shrink it to max(maxAllowed/10, 1024).
-//
-// Rule 3 (and the budget <= max_tokens cap) is skipped when KeepThinkingBudget
-// is set.
-type MaxTokensTransform struct {
+// MaxTokensDefaultTransform fills max_tokens on an Anthropic request that
+// arrived without one. max_tokens is required by the Anthropic protocol, so
+// this normalizes the client's own request: it runs in the source half of the
+// chain and leaves every other shape alone (see
+// .design/protocol-stage-pipeline.md).
+type MaxTokensDefaultTransform struct {
 	DefaultMaxTokens int
-	MaxAllowed       int
-	// KeepThinkingBudget leaves the Anthropic thinking budget untouched. Set it
-	// when the request is converted for a target that has no budget on the
-	// wire (OpenAI Chat / Responses): there the budget is only tiered onto a
-	// reasoning effort, and shrinking it to fit an Anthropic max_tokens
-	// constraint would collapse every budget to the lowest tier (#1897).
-	KeepThinkingBudget bool
 }
 
-// NewMaxTokensTransform creates a MaxTokensTransform.
-func NewMaxTokensTransform(defaultMaxTokens, maxAllowed int) *MaxTokensTransform {
-	return &MaxTokensTransform{
-		DefaultMaxTokens: defaultMaxTokens,
-		MaxAllowed:       maxAllowed,
+// NewMaxTokensDefaultTransform creates a MaxTokensDefaultTransform.
+func NewMaxTokensDefaultTransform(defaultMaxTokens int) *MaxTokensDefaultTransform {
+	return &MaxTokensDefaultTransform{DefaultMaxTokens: defaultMaxTokens}
+}
+
+func (t *MaxTokensDefaultTransform) Name() string { return "max_tokens_default" }
+
+func (t *MaxTokensDefaultTransform) Apply(ctx *protocoltransform.TransformContext) error {
+	switch req := ctx.Request.(type) {
+	case *anthropic.MessageNewParams:
+		if req.MaxTokens == 0 {
+			req.MaxTokens = int64(t.DefaultMaxTokens)
+		}
+	case *anthropic.BetaMessageNewParams:
+		if req.MaxTokens == 0 {
+			req.MaxTokens = int64(t.DefaultMaxTokens)
+		}
 	}
+	return nil
 }
 
-func (t *MaxTokensTransform) Name() string { return "max_tokens" }
+// OutputLimitTransform bounds the upstream-bound request by the model's
+// output-token limit on the provider. It runs in the target half of the
+// chain, so it sees the provider's own shape and each rule applies only where
+// that shape has the field:
+//
+//   - Every shape: cap the output-token field(s) at MaxAllowed.
+//   - Anthropic: a thinking budget over MaxAllowed shrinks to
+//     max(MaxAllowed/10, 1024), and a budget over max_tokens is capped to it
+//     (Anthropic requires budget_tokens <= max_tokens; max_tokens is the hard
+//     operator limit, so the budget yields rather than the limit).
+//
+// OpenAI Chat / Responses have no budget: an Anthropic client's budget was
+// already tiered onto reasoning_effort by the conversion, so it is never
+// shrunk to fit a limit it does not travel under (#1897).
+//
+// MaxAllowed <= 0 disables the transform.
+type OutputLimitTransform struct {
+	MaxAllowed int
+}
 
-func (t *MaxTokensTransform) Apply(ctx *protocoltransform.TransformContext) error {
+// NewOutputLimitTransform creates an OutputLimitTransform.
+func NewOutputLimitTransform(maxAllowed int) *OutputLimitTransform {
+	return &OutputLimitTransform{MaxAllowed: maxAllowed}
+}
+
+func (t *OutputLimitTransform) Name() string { return "output_limit" }
+
+func (t *OutputLimitTransform) Apply(ctx *protocoltransform.TransformContext) error {
+	if t.MaxAllowed <= 0 {
+		return nil
+	}
 	switch req := ctx.Request.(type) {
 	case *anthropic.MessageNewParams:
 		t.applyAnthropicV1(req)
@@ -48,84 +80,64 @@ func (t *MaxTokensTransform) Apply(ctx *protocoltransform.TransformContext) erro
 		t.applyOpenAIChat(req)
 	case *responses.ResponseNewParams:
 		t.applyOpenAIResponses(req)
+	case *protocol.GoogleRequest:
+		t.applyGoogle(req)
 	}
 	return nil
 }
 
-func (t *MaxTokensTransform) applyAnthropicV1(req *anthropic.MessageNewParams) {
-	if req.MaxTokens == 0 {
-		req.MaxTokens = int64(t.DefaultMaxTokens)
+func (t *OutputLimitTransform) applyAnthropicV1(req *anthropic.MessageNewParams) {
+	maxAllowed := int64(t.MaxAllowed)
+	if req.MaxTokens > maxAllowed {
+		req.MaxTokens = maxAllowed
 	}
-	if t.MaxAllowed > 0 {
-		maxAllowed := int64(t.MaxAllowed)
-		if req.MaxTokens > maxAllowed {
-			req.MaxTokens = maxAllowed
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+		if *thinkBudget > maxAllowed {
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, maxAllowed/10))
 		}
-		if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && !t.KeepThinkingBudget {
-			if *thinkBudget > maxAllowed {
-				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
-			}
-			// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
-			// operator limit — cap the budget rather than raising the limit.
-			if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
-			}
+		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
 		}
 	}
 }
 
-func (t *MaxTokensTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewParams) {
-	if req.MaxTokens == 0 {
-		req.MaxTokens = int64(t.DefaultMaxTokens)
+func (t *OutputLimitTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewParams) {
+	maxAllowed := int64(t.MaxAllowed)
+	if req.MaxTokens > maxAllowed {
+		req.MaxTokens = maxAllowed
 	}
-	if t.MaxAllowed > 0 {
-		maxAllowed := int64(t.MaxAllowed)
-		if req.MaxTokens > maxAllowed {
-			req.MaxTokens = maxAllowed
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+		if *thinkBudget > maxAllowed {
+			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, maxAllowed/10))
 		}
-		if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && !t.KeepThinkingBudget {
-			if *thinkBudget > maxAllowed {
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
-			}
-			// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
-			// operator limit — cap the budget rather than raising the limit.
-			if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
-			}
+		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
 		}
 	}
 }
 
-// applyOpenAIChat mirrors the Anthropic rules for Chat Completions' two
-// competing fields: max_completion_tokens is the modern replacement for the
-// deprecated max_tokens, so when the caller already set max_completion_tokens
-// we cap it and leave max_tokens alone rather than also auto-filling it.
-func (t *MaxTokensTransform) applyOpenAIChat(req *openai.ChatCompletionNewParams) {
-	if req.MaxCompletionTokens.Valid() {
-		if t.MaxAllowed > 0 && req.MaxCompletionTokens.Value > int64(t.MaxAllowed) {
-			req.MaxCompletionTokens = param.NewOpt(int64(t.MaxAllowed))
-		}
-		return
+// applyOpenAIChat caps both of Chat Completions' competing limit fields:
+// max_completion_tokens (the modern one) and the deprecated max_tokens. An
+// absent field stays absent — Chat has no required limit to fill.
+func (t *OutputLimitTransform) applyOpenAIChat(req *openai.ChatCompletionNewParams) {
+	maxAllowed := int64(t.MaxAllowed)
+	if req.MaxCompletionTokens.Valid() && req.MaxCompletionTokens.Value > maxAllowed {
+		req.MaxCompletionTokens = param.NewOpt(maxAllowed)
 	}
-	if !req.MaxTokens.Valid() {
-		if t.DefaultMaxTokens > 0 {
-			req.MaxTokens = param.NewOpt(int64(t.DefaultMaxTokens))
-		}
-		return
-	}
-	if t.MaxAllowed > 0 && req.MaxTokens.Value > int64(t.MaxAllowed) {
-		req.MaxTokens = param.NewOpt(int64(t.MaxAllowed))
+	if req.MaxTokens.Valid() && req.MaxTokens.Value > maxAllowed {
+		req.MaxTokens = param.NewOpt(maxAllowed)
 	}
 }
 
-func (t *MaxTokensTransform) applyOpenAIResponses(req *responses.ResponseNewParams) {
-	if !req.MaxOutputTokens.Valid() {
-		if t.DefaultMaxTokens > 0 {
-			req.MaxOutputTokens = param.NewOpt(int64(t.DefaultMaxTokens))
-		}
-		return
+func (t *OutputLimitTransform) applyOpenAIResponses(req *responses.ResponseNewParams) {
+	maxAllowed := int64(t.MaxAllowed)
+	if req.MaxOutputTokens.Valid() && req.MaxOutputTokens.Value > maxAllowed {
+		req.MaxOutputTokens = param.NewOpt(maxAllowed)
 	}
-	if t.MaxAllowed > 0 && req.MaxOutputTokens.Value > int64(t.MaxAllowed) {
-		req.MaxOutputTokens = param.NewOpt(int64(t.MaxAllowed))
+}
+
+func (t *OutputLimitTransform) applyGoogle(req *protocol.GoogleRequest) {
+	if req.Config != nil && int64(req.Config.MaxOutputTokens) > int64(t.MaxAllowed) {
+		req.Config.MaxOutputTokens = int32(t.MaxAllowed)
 	}
 }

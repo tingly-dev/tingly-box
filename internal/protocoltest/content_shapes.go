@@ -714,7 +714,8 @@ func contentShapeCases() []contentShapeCase {
 				anthropicToolResultImageBody(), responsesFunctionCallOutputImageURL, imgDataURL)
 		}},
 	}
-	return append(cases, reasoningEffortToChatCases()...)
+	cases = append(cases, reasoningEffortToChatCases()...)
+	return append(cases, outputLimitCases()...)
 }
 
 // reasoningEffortToChatCases pins how a client's thinking setting reaches an
@@ -787,4 +788,73 @@ func (m *Matrix) ExecuteAllContentShapes() []TestResult {
 		cases = append(cases, recorderCase{name: "content_shapes/" + c.name, scenario: c.name, run: c.run})
 	}
 	return m.runRecorderCases(cases)
+}
+
+// outputLimitCases pin the model output limit on the upstream-bound request
+// (OutputLimitTransform, .design/protocol-stage-pipeline.md). The test
+// model is not in the catalog, so its limit is the 8192 fallback.
+func outputLimitCases() []contentShapeCase {
+	const limit = "8192"
+	number := func(path ...string) func(map[string]any) (string, bool) {
+		return func(body map[string]any) (string, bool) {
+			var v any = body
+			for _, key := range path {
+				m, ok := v.(map[string]any)
+				if !ok {
+					return "", false
+				}
+				v = m[key]
+			}
+			n, ok := v.(float64)
+			return fmt.Sprintf("%.0f", n), ok
+		}
+	}
+	return []contentShapeCase{
+		{name: "anthropic_to_anthropic/max_tokens_capped_and_budget_shrunk", run: func(t flagTB, env *TestEnv) {
+			body := func() map[string]any {
+				return map[string]any{
+					"max_tokens": 40000,
+					"thinking":   map[string]any{"type": "enabled", "budget_tokens": 10240},
+					"messages":   []map[string]any{{"role": "user", "content": "Hello"}},
+				}
+			}
+			assertUpstreamText(t, env, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				body(), number("max_tokens"), limit)
+			// Over the limit: max(8192/10, 1024) — Anthropic needs budget <= max_tokens.
+			assertUpstreamText(t, env, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				body(), number("thinking", "budget_tokens"), "1024")
+		}},
+		{name: "chat_to_chat/max_tokens_capped", run: func(t flagTB, env *TestEnv) {
+			body := map[string]any{
+				"max_tokens": 100000,
+				"messages":   []map[string]any{{"role": "user", "content": "Hello"}},
+			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, EndpointChat,
+				body, number("max_tokens"), limit)
+		}},
+		{name: "chat_to_chat/max_completion_tokens_capped", run: func(t flagTB, env *TestEnv) {
+			body := map[string]any{
+				"max_completion_tokens": 100000,
+				"messages":              []map[string]any{{"role": "user", "content": "Hello"}},
+			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, EndpointChat,
+				body, number("max_completion_tokens"), limit)
+		}},
+		{name: "chat_to_anthropic/max_tokens_capped", run: func(t flagTB, env *TestEnv) {
+			body := map[string]any{
+				"max_tokens": 100000,
+				"messages":   []map[string]any{{"role": "user", "content": "Hello"}},
+			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				body, number("max_tokens"), limit)
+		}},
+		{name: "responses_to_responses/max_output_tokens_capped", run: func(t flagTB, env *TestEnv) {
+			body := map[string]any{
+				"max_output_tokens": 100000,
+				"input":             "Hello",
+			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses, EndpointResponses,
+				body, number("max_output_tokens"), limit)
+		}},
+	}
 }

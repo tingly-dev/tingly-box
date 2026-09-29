@@ -199,7 +199,7 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 |----|------|------|------|
 | **op（操作原语）** | `internal/protocol/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyThinkingEffort`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
 | **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`RulePreBaseTransforms` / `RulePreVendorTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform`、`transform.RuleThinkingTransform` |
-| **Transform（链路阶段，server-domain）** | `internal/protocolserver/transform/` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）或运行时依赖（MCP runtime）。 | `MaxTokensTransform`（输出上限）、`CleanHeaderTransform`、`ThinkingCompactTransform`、MCP 注入 |
+| **Transform（链路阶段，server-domain）** | `internal/protocolserver/transform/` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）或运行时依赖（MCP runtime）。 | `MaxTokensDefaultTransform` / `OutputLimitTransform`（输出上限）、`CleanHeaderTransform`、`ThinkingCompactTransform`、MCP 注入 |
 
 **为什么必须分两层？**
 

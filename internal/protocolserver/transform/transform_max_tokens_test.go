@@ -7,171 +7,148 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"google.golang.org/genai"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-func TestMaxTokensTransform_ApplyAnthropicV1(t *testing.T) {
-	tests := []struct {
-		name             string
-		transform        *MaxTokensTransform
-		initialMaxTokens int64
-		wantMaxTokens    int64
-	}{
-		{
-			name:             "Zero max_tokens filled with default",
-			transform:        NewMaxTokensTransform(4096, 8192),
-			initialMaxTokens: 0,
-			wantMaxTokens:    4096,
-		},
-		{
-			name:             "Max tokens capped at maxAllowed",
-			transform:        NewMaxTokensTransform(4096, 8192),
-			initialMaxTokens: 10000,
-			wantMaxTokens:    8192,
-		},
-		{
-			name:             "Valid max tokens unchanged",
-			transform:        NewMaxTokensTransform(4096, 8192),
-			initialMaxTokens: 5000,
-			wantMaxTokens:    5000,
-		},
-		{
-			name:             "No default set - zero stays zero",
-			transform:        NewMaxTokensTransform(0, 8192),
-			initialMaxTokens: 0,
-			wantMaxTokens:    0,
-		},
-		{
-			name:             "MaxAllowed=0 means no cap - value preserved",
-			transform:        NewMaxTokensTransform(4096, 0),
-			initialMaxTokens: 8000,
-			wantMaxTokens:    8000,
-		},
-		{
-			name:             "Both zero - zero stays zero",
-			transform:        NewMaxTokensTransform(0, 0),
-			initialMaxTokens: 0,
-			wantMaxTokens:    0,
-		},
+func apply(t *testing.T, tr protocoltransform.Transform, req any) {
+	t.Helper()
+	if err := tr.Apply(&protocoltransform.TransformContext{Request: req}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+}
+
+// TestMaxTokensDefaultTransform pins the source-side fill: only an Anthropic
+// request's missing max_tokens (a required field of that protocol) is filled.
+func TestMaxTokensDefaultTransform(t *testing.T) {
+	tr := NewMaxTokensDefaultTransform(4096)
+
+	v1 := &anthropic.MessageNewParams{}
+	beta := &anthropic.BetaMessageNewParams{}
+	apply(t, tr, v1)
+	apply(t, tr, beta)
+	if v1.MaxTokens != 4096 || beta.MaxTokens != 4096 {
+		t.Errorf("Anthropic MaxTokens = %d / %d, want 4096", v1.MaxTokens, beta.MaxTokens)
 	}
 
+	set := &anthropic.BetaMessageNewParams{MaxTokens: 100000}
+	apply(t, tr, set)
+	if set.MaxTokens != 100000 {
+		t.Errorf("client max_tokens = %d, want it untouched (capping is the target side's job)", set.MaxTokens)
+	}
+
+	// Chat and Responses have no required limit: a client that omits it keeps
+	// the provider's own default.
+	chat := &openai.ChatCompletionNewParams{}
+	resp := &responses.ResponseNewParams{}
+	apply(t, tr, chat)
+	apply(t, tr, resp)
+	if chat.MaxTokens.Valid() || chat.MaxCompletionTokens.Valid() || resp.MaxOutputTokens.Valid() {
+		t.Errorf("OpenAI shapes must stay unset: chat=%v/%v responses=%v", chat.MaxTokens, chat.MaxCompletionTokens, resp.MaxOutputTokens)
+	}
+
+	if tr.Name() != "max_tokens_default" {
+		t.Errorf("Name() = %q", tr.Name())
+	}
+}
+
+func TestOutputLimitTransform_Anthropic(t *testing.T) {
+	tests := []struct {
+		name          string
+		maxAllowed    int
+		maxTokens     int64
+		wantMaxTokens int64
+	}{
+		{"over limit capped", 8192, 10000, 8192},
+		{"within limit unchanged", 8192, 5000, 5000},
+		{"MaxAllowed=0 disables", 0, 50000, 50000},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &anthropic.MessageNewParams{
-				MaxTokens: tt.initialMaxTokens,
-			}
-
-			ctx := &protocoltransform.TransformContext{Request: req}
-			if err := tt.transform.Apply(ctx); err != nil {
-				t.Fatalf("Apply() error = %v", err)
-			}
-
-			if req.MaxTokens != tt.wantMaxTokens {
-				t.Errorf("MaxTokens = %v, want %v", req.MaxTokens, tt.wantMaxTokens)
+			tr := NewOutputLimitTransform(tt.maxAllowed)
+			v1 := &anthropic.MessageNewParams{MaxTokens: tt.maxTokens}
+			beta := &anthropic.BetaMessageNewParams{MaxTokens: tt.maxTokens}
+			apply(t, tr, v1)
+			apply(t, tr, beta)
+			if v1.MaxTokens != tt.wantMaxTokens || beta.MaxTokens != tt.wantMaxTokens {
+				t.Errorf("MaxTokens = %d / %d, want %d", v1.MaxTokens, beta.MaxTokens, tt.wantMaxTokens)
 			}
 		})
 	}
 }
 
-func TestMaxTokensTransform_ApplyAnthropicBeta(t *testing.T) {
+// TestOutputLimitTransform_ThinkingBudget pins the budget rules. They only
+// exist on the Anthropic shape: the transform runs on the upstream-bound
+// request, so a budget is only ever shrunk for an Anthropic provider (#1897).
+func TestOutputLimitTransform_ThinkingBudget(t *testing.T) {
 	tests := []struct {
-		name             string
-		transform        *MaxTokensTransform
-		initialMaxTokens int64
-		wantMaxTokens    int64
+		name       string
+		maxTokens  int64
+		budget     int64
+		wantBudget int64
 	}{
-		{
-			name:             "Zero max_tokens filled with default",
-			transform:        NewMaxTokensTransform(4096, 8192),
-			initialMaxTokens: 0,
-			wantMaxTokens:    4096,
-		},
-		{
-			name:             "Max tokens capped at maxAllowed",
-			transform:        NewMaxTokensTransform(4096, 8192),
-			initialMaxTokens: 10000,
-			wantMaxTokens:    8192,
-		},
-		{
-			name:             "No default set - zero stays zero",
-			transform:        NewMaxTokensTransform(0, 8192),
-			initialMaxTokens: 0,
-			wantMaxTokens:    0,
-		},
-		{
-			name:             "MaxAllowed=0 means no cap - value preserved",
-			transform:        NewMaxTokensTransform(4096, 0),
-			initialMaxTokens: 8000,
-			wantMaxTokens:    8000,
-		},
+		{name: "budget over maxAllowed shrinks", maxTokens: 40000, budget: 10240, wantBudget: 1024},
+		{name: "budget within limits unchanged", maxTokens: 40000, budget: 4096, wantBudget: 4096},
+		{name: "budget over max_tokens capped to it", maxTokens: 2048, budget: 4096, wantBudget: 2048},
+		{name: "cap never goes below Anthropic's 1024 minimum", maxTokens: 512, budget: 4096, wantBudget: 1024},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &anthropic.BetaMessageNewParams{
-				MaxTokens: tt.initialMaxTokens,
+			tr := NewOutputLimitTransform(8192)
+			v1 := &anthropic.MessageNewParams{MaxTokens: tt.maxTokens, Thinking: anthropic.ThinkingConfigParamOfEnabled(tt.budget)}
+			beta := &anthropic.BetaMessageNewParams{MaxTokens: tt.maxTokens, Thinking: anthropic.BetaThinkingConfigParamOfEnabled(tt.budget)}
+			apply(t, tr, v1)
+			apply(t, tr, beta)
+			if got := *v1.Thinking.GetBudgetTokens(); got != tt.wantBudget {
+				t.Errorf("V1 budget = %d, want %d", got, tt.wantBudget)
 			}
-
-			ctx := &protocoltransform.TransformContext{Request: req}
-			if err := tt.transform.Apply(ctx); err != nil {
-				t.Fatalf("Apply() error = %v", err)
-			}
-
-			if req.MaxTokens != tt.wantMaxTokens {
-				t.Errorf("MaxTokens = %v, want %v", req.MaxTokens, tt.wantMaxTokens)
+			if got := *beta.Thinking.GetBudgetTokens(); got != tt.wantBudget {
+				t.Errorf("Beta budget = %d, want %d", got, tt.wantBudget)
 			}
 		})
 	}
 }
 
-func TestMaxTokensTransform_ApplyOpenAIChat(t *testing.T) {
+func TestOutputLimitTransform_OpenAIChat(t *testing.T) {
 	tests := []struct {
 		name                    string
-		transform               *MaxTokensTransform
+		maxAllowed              int
 		initMaxTokens           param.Opt[int64] // absent = zero value
 		initMaxCompletionTokens param.Opt[int64]
 		wantMaxTokens           param.Opt[int64]
 		wantMaxCompletionTokens param.Opt[int64]
 	}{
 		{
-			name:          "Both absent: max_tokens filled with default",
-			transform:     NewMaxTokensTransform(4096, 8192),
-			wantMaxTokens: param.NewOpt[int64](4096),
+			name:       "both absent: stay absent",
+			maxAllowed: 8192,
 		},
 		{
-			name:          "max_tokens present: capped at maxAllowed",
-			transform:     NewMaxTokensTransform(4096, 8192),
+			name:          "max_tokens over limit: capped",
+			maxAllowed:    8192,
 			initMaxTokens: param.NewOpt[int64](10000),
 			wantMaxTokens: param.NewOpt[int64](8192),
 		},
 		{
-			name:          "max_tokens present and within limit: unchanged",
-			transform:     NewMaxTokensTransform(4096, 8192),
+			name:          "max_tokens within limit: unchanged",
+			maxAllowed:    8192,
 			initMaxTokens: param.NewOpt[int64](5000),
 			wantMaxTokens: param.NewOpt[int64](5000),
 		},
 		{
-			name:                    "max_completion_tokens present: max_tokens NOT auto-filled",
-			transform:               NewMaxTokensTransform(4096, 8192),
-			initMaxCompletionTokens: param.NewOpt[int64](6000),
-			wantMaxTokens:           param.Opt[int64]{}, // absent
-			wantMaxCompletionTokens: param.NewOpt[int64](6000),
-		},
-		{
 			name:                    "max_completion_tokens over limit: capped",
-			transform:               NewMaxTokensTransform(4096, 8192),
+			maxAllowed:              8192,
 			initMaxCompletionTokens: param.NewOpt[int64](20000),
-			wantMaxTokens:           param.Opt[int64]{}, // absent
 			wantMaxCompletionTokens: param.NewOpt[int64](8192),
 		},
 		{
 			name:          "MaxAllowed=0: no cap applied",
-			transform:     NewMaxTokensTransform(4096, 0),
+			maxAllowed:    0,
 			initMaxTokens: param.NewOpt[int64](50000),
 			wantMaxTokens: param.NewOpt[int64](50000),
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := &openai.ChatCompletionNewParams{
@@ -179,10 +156,7 @@ func TestMaxTokensTransform_ApplyOpenAIChat(t *testing.T) {
 				MaxCompletionTokens: tt.initMaxCompletionTokens,
 				Model:               openai.ChatModelGPT4o,
 			}
-			ctx := &protocoltransform.TransformContext{Request: req}
-			if err := tt.transform.Apply(ctx); err != nil {
-				t.Fatalf("Apply() error = %v", err)
-			}
+			apply(t, NewOutputLimitTransform(tt.maxAllowed), req)
 			if req.MaxTokens != tt.wantMaxTokens {
 				t.Errorf("MaxTokens = %v, want %v", req.MaxTokens, tt.wantMaxTokens)
 			}
@@ -193,52 +167,22 @@ func TestMaxTokensTransform_ApplyOpenAIChat(t *testing.T) {
 	}
 }
 
-func TestMaxTokensTransform_ApplyOpenAIResponses(t *testing.T) {
+func TestOutputLimitTransform_OpenAIResponses(t *testing.T) {
 	tests := []struct {
 		name                string
-		transform           *MaxTokensTransform
+		maxAllowed          int
 		initMaxOutputTokens param.Opt[int64]
 		wantMaxOutputTokens param.Opt[int64]
 	}{
-		{
-			name:                "Absent: filled with default",
-			transform:           NewMaxTokensTransform(4096, 8192),
-			wantMaxOutputTokens: param.NewOpt[int64](4096),
-		},
-		{
-			name:                "Over limit: capped",
-			transform:           NewMaxTokensTransform(4096, 8192),
-			initMaxOutputTokens: param.NewOpt[int64](10000),
-			wantMaxOutputTokens: param.NewOpt[int64](8192),
-		},
-		{
-			name:                "Within limit: unchanged",
-			transform:           NewMaxTokensTransform(4096, 8192),
-			initMaxOutputTokens: param.NewOpt[int64](5000),
-			wantMaxOutputTokens: param.NewOpt[int64](5000),
-		},
-		{
-			name:                "MaxAllowed=0: no cap applied",
-			transform:           NewMaxTokensTransform(4096, 0),
-			initMaxOutputTokens: param.NewOpt[int64](50000),
-			wantMaxOutputTokens: param.NewOpt[int64](50000),
-		},
-		{
-			name:                "No default, absent: stays absent",
-			transform:           NewMaxTokensTransform(0, 8192),
-			wantMaxOutputTokens: param.Opt[int64]{},
-		},
+		{name: "absent: stays absent", maxAllowed: 8192},
+		{name: "over limit: capped", maxAllowed: 8192, initMaxOutputTokens: param.NewOpt[int64](10000), wantMaxOutputTokens: param.NewOpt[int64](8192)},
+		{name: "within limit: unchanged", maxAllowed: 8192, initMaxOutputTokens: param.NewOpt[int64](5000), wantMaxOutputTokens: param.NewOpt[int64](5000)},
+		{name: "MaxAllowed=0: no cap applied", maxAllowed: 0, initMaxOutputTokens: param.NewOpt[int64](50000), wantMaxOutputTokens: param.NewOpt[int64](50000)},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := &responses.ResponseNewParams{
-				MaxOutputTokens: tt.initMaxOutputTokens,
-			}
-			ctx := &protocoltransform.TransformContext{Request: req}
-			if err := tt.transform.Apply(ctx); err != nil {
-				t.Fatalf("Apply() error = %v", err)
-			}
+			req := &responses.ResponseNewParams{MaxOutputTokens: tt.initMaxOutputTokens}
+			apply(t, NewOutputLimitTransform(tt.maxAllowed), req)
 			if req.MaxOutputTokens != tt.wantMaxOutputTokens {
 				t.Errorf("MaxOutputTokens = %v, want %v", req.MaxOutputTokens, tt.wantMaxOutputTokens)
 			}
@@ -246,72 +190,18 @@ func TestMaxTokensTransform_ApplyOpenAIResponses(t *testing.T) {
 	}
 }
 
-func TestMaxTokensTransform_ApplyUnsupportedProtocol(t *testing.T) { // Test that unsupported protocols don't crash
-	transform := NewMaxTokensTransform(4096, 8192)
-	ctx := &protocoltransform.TransformContext{Request: "some unsupported type"}
-
-	if err := transform.Apply(ctx); err != nil {
-		t.Fatalf("Apply() should not error for unsupported protocols, got: %v", err)
+func TestOutputLimitTransform_Google(t *testing.T) {
+	req := &protocol.GoogleRequest{Config: &genai.GenerateContentConfig{MaxOutputTokens: 10000}}
+	apply(t, NewOutputLimitTransform(8192), req)
+	if req.Config.MaxOutputTokens != 8192 {
+		t.Errorf("MaxOutputTokens = %d, want 8192", req.Config.MaxOutputTokens)
 	}
+	apply(t, NewOutputLimitTransform(8192), &protocol.GoogleRequest{}) // nil config must not panic
 }
 
-func TestMaxTokensTransform_Name(t *testing.T) {
-	transform := NewMaxTokensTransform(4096, 8192)
-	if transform.Name() != "max_tokens" {
-		t.Errorf("Name() = %v, want %v", transform.Name(), "max_tokens")
-	}
-}
-
-func TestMaxTokensTransform_NewMaxTokensTransform(t *testing.T) {
-	transform := NewMaxTokensTransform(4096, 8192)
-
-	if transform.DefaultMaxTokens != 4096 {
-		t.Errorf("DefaultMaxTokens = %v, want %v", transform.DefaultMaxTokens, 4096)
-	}
-
-	if transform.MaxAllowed != 8192 {
-		t.Errorf("MaxAllowed = %v, want %v", transform.MaxAllowed, 8192)
-	}
-}
-
-// TestMaxTokensTransform_ThinkingBudget pins the budget clamp for Anthropic
-// targets, and that KeepThinkingBudget (set for OpenAI Chat / Responses
-// targets, where the budget only picks the effort tier) leaves the budget
-// alone while still capping max_tokens (#1897).
-func TestMaxTokensTransform_ThinkingBudget(t *testing.T) {
-	tests := []struct {
-		name       string
-		keep       bool
-		budget     int64
-		wantBudget int64
-	}{
-		{name: "budget over maxAllowed shrinks", budget: 10240, wantBudget: 1024},
-		{name: "budget within limits unchanged", budget: 4096, wantBudget: 4096},
-		{name: "keep: budget over maxAllowed unchanged", keep: true, budget: 10240, wantBudget: 10240},
-		{name: "keep: max budget unchanged", keep: true, budget: 31999, wantBudget: 31999},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tr := NewMaxTokensTransform(4096, 8192)
-			tr.KeepThinkingBudget = tt.keep
-
-			v1 := &anthropic.MessageNewParams{MaxTokens: 40000, Thinking: anthropic.ThinkingConfigParamOfEnabled(tt.budget)}
-			beta := &anthropic.BetaMessageNewParams{MaxTokens: 40000, Thinking: anthropic.BetaThinkingConfigParamOfEnabled(tt.budget)}
-			for _, req := range []any{v1, beta} {
-				if err := tr.Apply(&protocoltransform.TransformContext{Request: req}); err != nil {
-					t.Fatalf("Apply() error = %v", err)
-				}
-			}
-
-			if v1.MaxTokens != 8192 || beta.MaxTokens != 8192 {
-				t.Errorf("MaxTokens = %d / %d, want 8192", v1.MaxTokens, beta.MaxTokens)
-			}
-			if got := *v1.Thinking.GetBudgetTokens(); got != tt.wantBudget {
-				t.Errorf("V1 budget = %d, want %d", got, tt.wantBudget)
-			}
-			if got := *beta.Thinking.GetBudgetTokens(); got != tt.wantBudget {
-				t.Errorf("Beta budget = %d, want %d", got, tt.wantBudget)
-			}
-		})
+func TestOutputLimitTransform_UnsupportedShape(t *testing.T) {
+	apply(t, NewOutputLimitTransform(8192), "some unsupported type")
+	if name := NewOutputLimitTransform(8192).Name(); name != "output_limit" {
+		t.Errorf("Name() = %q", name)
 	}
 }

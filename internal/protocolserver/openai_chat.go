@@ -205,11 +205,6 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 
 	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
 
-	// === Cap max_tokens at model's maximum ===
-	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(plan.MaxAllowed) {
-		req.MaxTokens.Value = int64(plan.MaxAllowed)
-	}
-
 	reqCtx, err := ph.TransformOpenAIChat(c, req, plan, isStreaming, scenarioType)
 	if err != nil {
 		ph.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))

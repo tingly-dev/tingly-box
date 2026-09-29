@@ -51,7 +51,7 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 	// screens the converted request itself.
 	endpoint, err := stage.Compose(terminal,
 		toolround.New(ph.toolRoundConfig(c, provider, requestModel, false)),
-		newTargetTransformStage(target, source, ph.targetTransforms(c, source.SourceAPI, target, plan.PreVendor)),
+		newTargetTransformStage(target, source, ph.targetTransforms(c, plan)),
 	)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)

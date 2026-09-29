@@ -31,8 +31,12 @@ type attemptPlan struct {
 	PreBase   []transform.Transform
 	PreVendor []transform.Transform
 
-	// MaxAllowed is the model's output-token limit on this provider.
+	// MaxAllowed is the model's output-token limit on this provider, applied
+	// to the upstream-bound request (OutputLimitTransform).
 	MaxAllowed int
+	// DefaultMaxTokens fills an Anthropic client's missing max_tokens
+	// (MaxTokensDefaultTransform).
+	DefaultMaxTokens int
 }
 
 // planAttempt resolves the attempt plan for one candidate. It stores the
@@ -54,14 +58,15 @@ func (ph *ProtocolHandler) planAttempt(c *gin.Context, rule *typ.Rule, provider 
 	}
 	flags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, source, target, provider)
 	return &attemptPlan{
-		Source:     source,
-		Target:     target,
-		Provider:   provider,
-		Model:      model,
-		Flags:      flags,
-		PreBase:    RulePreBaseTransforms(flags),
-		PreVendor:  RulePreVendorTransforms(flags),
-		MaxAllowed: ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, model),
+		Source:           source,
+		Target:           target,
+		Provider:         provider,
+		Model:            model,
+		Flags:            flags,
+		PreBase:          RulePreBaseTransforms(flags),
+		PreVendor:        RulePreVendorTransforms(flags),
+		MaxAllowed:       ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, model),
+		DefaultMaxTokens: ph.deps.Config.GetDefaultMaxTokens(),
 	}, nil
 }
 

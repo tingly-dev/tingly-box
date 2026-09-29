@@ -63,7 +63,7 @@ func (ph *ProtocolHandler) serveAnthropicOnOpenAI(c *gin.Context, plan *attemptP
 		ph.FailAttemptSetup(c, err)
 		return
 	}
-	providerSide, err := stage.Compose(terminal, newTargetTransformStage(target, source, ph.targetTransforms(c, client, target, plan.PreVendor)))
+	providerSide, err := stage.Compose(terminal, newTargetTransformStage(target, source, ph.targetTransforms(c, plan)))
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return

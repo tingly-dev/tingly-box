@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/recording"
@@ -104,12 +103,9 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	target, provider := plan.Target, plan.Provider
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
-	chain, err := ph.buildTransformChain(c, src.source, target, scenarioType, plan.PreBase, plan.PreVendor)
-	if err != nil {
-		return nil, err
-	}
+	chain := ph.buildTransformChain(c, plan)
 	if plan.servedByStage() {
-		chain = transform.NewTransformChain(ph.sourceTransforms(c, plan.PreBase))
+		chain = transform.NewTransformChain(ph.sourceTransforms(c, plan))
 	}
 
 	var scenarioFlags *typ.ScenarioFlags
@@ -197,40 +193,49 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 // slotting the rule-driven transforms into the two named positions — preBase and
 // preVendor — that bracket the protocol conversion and the vendor finalize:
 //
-//	preBase slot   : preBase rule transforms (act on the client's original shape)
-//	StagePre-record (if enabled)
-//	Base           (protocol conversion)
-//	MCP            (inject / native-websearch-strip / strip-guard) [if mcpEnabled]
-//	Consistency    (cross-provider normalization, param clamping)
-//	preVendor slot : preVendor rule transforms (act on the converted, upstream-bound shape)
-//	Vendor         (provider-specific finalize)
-//	StagePost-record (if enabled)
+//	max_tokens_default : fill Anthropic's required max_tokens (client shape)
+//	preBase slot       : preBase rule transforms (act on the client's original shape)
+//	StagePre-record    (if enabled)
+//	Base               (protocol conversion)
+//	output_limit       : model output limit on the upstream-bound shape
+//	MCP                (inject / native-websearch-strip / strip-guard) [if mcpEnabled]
+//	Consistency        (cross-provider normalization, param clamping)
+//	preVendor slot     : preVendor rule transforms (act on the converted, upstream-bound shape)
+//	Vendor             (provider-specific finalize)
+//	StagePost-record   (if enabled)
 //
 // Invariant: nothing runs after Vendor except recording. Vendor directly faces
 // the provider and must be the last mutation, so the preVendor transforms are
 // inserted after Consistency but BEFORE Vendor — this also means the StagePost
 // recording captures the truly-final, dispatched request.
-func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, sourceType, targetType protocol.APIType, scenarioType typ.RuleScenario, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
-	transforms := ph.sourceTransforms(c, preBase)
-	// 2. Base transform (protocol conversion)
-	transforms = append(transforms, baseTransformFor(targetType))
-	transforms = append(transforms, ph.targetTransforms(c, sourceType, targetType, preVendor)...)
-	return transform.NewTransformChain(transforms), nil
+//
+// Which half a step belongs to is set by .design/protocol-stage-pipeline.md.
+func (ph *ProtocolHandler) buildTransformChain(c *gin.Context, plan *attemptPlan) *transform.TransformChain {
+	transforms := ph.sourceTransforms(c, plan)
+	// Base transform (protocol conversion)
+	transforms = append(transforms, baseTransformFor(plan.Target))
+	transforms = append(transforms, ph.targetTransforms(c, plan)...)
+	return transform.NewTransformChain(transforms)
 }
 
 // sourceTransforms is the part of the chain that acts on the client's own
 // request shape, before any protocol conversion.
-func (ph *ProtocolHandler) sourceTransforms(c *gin.Context, preBase []transform.Transform) []transform.Transform {
+func (ph *ProtocolHandler) sourceTransforms(c *gin.Context, plan *attemptPlan) []transform.Transform {
 	recorder := recording.FromGin(c)
 
 	var transforms []transform.Transform
 
+	// Anthropic requires max_tokens; fill it before anything reads the request.
+	if plan.DefaultMaxTokens > 0 {
+		transforms = append(transforms, servertransform.NewMaxTokensDefaultTransform(plan.DefaultMaxTokens))
+	}
+
 	// preBase slot: rule transforms that act on the inbound request shape, before
 	// any protocol conversion (and before recording, so the type-switch in each
 	// transform sees what the client actually sent).
-	transforms = append(transforms, preBase...)
+	transforms = append(transforms, plan.PreBase...)
 
-	// 1. Pre-transform recording — snapshots the inbound (client) request.
+	// Pre-transform recording — snapshots the inbound (client) request.
 	// Gated on the recorder's own capture-point selection (nil-safe).
 	if recorder.Wants(typ.RecordClientRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePre))
@@ -239,73 +244,41 @@ func (ph *ProtocolHandler) sourceTransforms(c *gin.Context, preBase []transform.
 }
 
 // targetTransforms is the part of the chain that acts on the converted,
-// upstream-bound request, after protocol conversion.
-func (ph *ProtocolHandler) targetTransforms(c *gin.Context, sourceType, targetType protocol.APIType, preVendor []transform.Transform) []transform.Transform {
+// upstream-bound request, after protocol conversion. The Stage pipeline runs it
+// per provider call (targetTransformStage).
+func (ph *ProtocolHandler) targetTransforms(c *gin.Context, plan *attemptPlan) []transform.Transform {
 	recorder := recording.FromGin(c)
 
 	var transforms []transform.Transform
+
+	// Model output limit, first so Consistency validates the bounded request.
+	if plan.MaxAllowed > 0 {
+		transforms = append(transforms, servertransform.NewOutputLimitTransform(plan.MaxAllowed))
+	}
+
 	if ph.mcpEnabled() {
-		if mcpServesPair(sourceType, targetType) {
+		if mcpServesPair(plan.Source, plan.Target) {
 			transforms = append(transforms, ph.mcpChainTransforms(ph.mcpStripDisabledToolsEnabled())...)
 		} else {
-			noteMCPSkipped(c, sourceType, targetType)
+			noteMCPSkipped(c, plan.Source, plan.Target)
 		}
 	}
-	// 3. Consistency transform (cross-provider normalization including message alignment)
-	transforms = append(transforms, consistencyTransformFor(targetType))
+	// Consistency transform (cross-provider normalization including message alignment)
+	transforms = append(transforms, consistencyTransformFor(plan.Target))
 
 	// preVendor slot: rule transforms that act on the converted, upstream-bound
 	// shape. Placed after Consistency (so its param clamping still applies) and
 	// before Vendor (so Vendor remains the final, immutable step).
-	transforms = append(transforms, preVendor...)
+	transforms = append(transforms, plan.PreVendor...)
 
 	transforms = append(transforms, vendorTransformShared)
 
-	// 4. Post-transform recording — snapshots the outbound (upstream) request.
+	// Post-transform recording — snapshots the outbound (upstream) request.
 	// Runs last so it captures the truly-final request dispatched to the provider.
 	if recorder.Wants(typ.RecordUpstreamRequest) {
 		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePost))
 	}
 	return transforms
-}
-
-// scenarioFlagsOrNil returns the scenario flags or nil.
-func scenarioFlagsOrNil(scenarioConfig *typ.ScenarioConfig) *typ.ScenarioFlags {
-	if scenarioConfig != nil {
-		return &scenarioConfig.Flags
-	}
-	return nil
-}
-
-// ExecuteAnthropicPreChain builds and runs the server-side pre-transform chain
-// for Anthropic requests (req is *anthropic.MessageNewParams or
-// *anthropic.BetaMessageNewParams — the transforms type-switch internally).
-// Currently only MaxTokens validation remains at scenario level; other
-// scenario-level transforms (ThinkingEffort, CleanHeader) are handled via rule
-// flags injection in resolveRuleFlagsWithScenario.
-//
-// target is the provider protocol this attempt is sent in. An OpenAI Chat or
-// Responses provider never receives budget_tokens — the budget only picks the
-// reasoning-effort tier — so the thinking-budget clamp is skipped for them
-// (#1897); max_tokens is still capped.
-// Returns an error that should be mapped to HTTP 400.
-func ExecuteAnthropicPreChain[T *anthropic.MessageNewParams | *anthropic.BetaMessageNewParams](
-	req T,
-	scenarioConfig *typ.ScenarioConfig,
-	defaultMaxTokens, maxAllowed int,
-	isStreaming bool,
-	target protocol.APIType,
-) error {
-	ctx := transform.NewTransformContext(
-		req,
-		transform.WithScenarioFlags(scenarioFlagsOrNil(scenarioConfig)),
-		transform.WithStreaming(isStreaming),
-	)
-	maxTokens := servertransform.NewMaxTokensTransform(defaultMaxTokens, maxAllowed)
-	maxTokens.KeepThinkingBudget = target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses
-	chain := transform.NewTransformChain([]transform.Transform{maxTokens})
-	_, err := chain.Execute(ctx)
-	return err
 }
 
 // mcpServesPair reports whether server tools (MCP) are offered for a client
