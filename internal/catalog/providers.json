@@ -1776,7 +1776,7 @@
       "name": "Qwen Coding Plan",
       "status": "active",
       "valid": true,
-      "canonical_domain": "coding.dashscope.aliyuncs.com",
+      "canonical_domain": "coding-intl.dashscope.aliyuncs.com",
       "vendor_family": "alibaba",
       "region": "intl",
       "plan": "coding",
@@ -1786,8 +1786,8 @@
       "api_doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
       "model_doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
       "pricing_doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
-      "base_url_openai": "https://coding.dashscope.aliyuncs.com/v1",
-      "base_url_anthropic": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+      "base_url_openai": "https://coding-intl.dashscope.aliyuncs.com/v1",
+      "base_url_anthropic": "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic",
       "models": [
         {
           "id": "qwen3-coder-plus",
