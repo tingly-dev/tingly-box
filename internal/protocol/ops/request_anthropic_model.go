@@ -78,6 +78,9 @@ func clampAnthropicEffort(effort anthropic.OutputConfigEffort, caps catalog.Clau
 //   - enabled(budget) requested on an adaptive-only model (Opus 4.7+) →
 //     adaptive, with output_config.effort derived from the budget via
 //     typ.ThinkingEffortFromBudget (effort is the fallback in that direction).
+//   - thinking disabled on a mandatory-thinking model (Opus/Sonnet 5.5, Fable)
+//     → adaptive: those models 400 on thinking.type=disabled, so a client's
+//     "off" or the thinking_effort=off rule flag degrades to adaptive.
 //   - output_config.effort clamped to the model's supported levels independently
 //     of thinking mode. Anthropic effort controls the whole response and is
 //     valid without explicitly enabled thinking.
@@ -116,6 +119,10 @@ func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model strin
 			// No thinking dialect at all (e.g. claude-3-haiku).
 			req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 		}
+	}
+
+	if caps.ThinkingMandatory && req.Thinking.OfDisabled != nil {
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
 	}
 
 	req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort, caps)
@@ -157,6 +164,10 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 			// No thinking dialect at all (e.g. claude-3-haiku).
 			req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 		}
+	}
+
+	if caps.ThinkingMandatory && req.Thinking.OfDisabled != nil {
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
 	}
 
 	req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(

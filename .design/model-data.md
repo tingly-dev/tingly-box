@@ -28,9 +28,15 @@
   的调用方从不接触 wire 协议差异,由 OpenRouter 自己的代理层吸收;而这个包**就是**
   面向 Anthropic 的那层代理,必须知道该发哪种原始请求形状,所以补了这一个字段,其余
   照抄 OpenRouter 命名。
-  `mandatory` / `default_enabled` / `default_effort`(OpenRouter schema 里有)目前**未采用**——
-  没有可核实的官方数据支撑每个模型的取值,填 false/编造属于捏造事实,等有可靠来源
-  (或代码出现真实消费方)再补。
+  `mandatory`(OpenRouter 同名字段)= 该模型拒绝 `thinking.type=disabled`(400 要求改用
+  adaptive),即"thinking 不可关闭"。这是**模型属性,只在 catalog 里声明**:目前为
+  fable-5 / fable-5-1 / opus-5-5 / sonnet-5-5。消费方读 `ClaudeThinkingCaps.ThinkingMandatory`,
+  不再各处硬编码模型名白名单(原 `client.rejectsDisabledThinking` 的字符串白名单已删除):
+  vendor 阶段 `ApplyAnthropic{V1,Beta}ModelTransform` 把 disabled 改写为 adaptive(覆盖客户端
+  显式 off 与 `thinking_effort=off` 规则),OAuth `Guard/GuardBeta` 另外在 thinking 未设置时
+  也补 adaptive。新增强制 thinking 的模型只需在 JSON 里加 `"mandatory": true`。
+  `default_enabled` / `default_effort` 仍**未采用**——没有可核实的官方数据也没有真实消费方,
+  填值属于捏造事实。
 - 每个 vendor 一对文件:`claude.models.json`(数据)+ `claude_model_catalog.go`(加载与查询,如
   `catalog.LookupClaudeThinkingCaps`)。openai / gemini 需要能力判定时按同样模式扩展,
   字段集合由各自实际消费方决定,不必与 claude 的 schema 一致。
@@ -61,6 +67,6 @@
 
 ## 注意
 
-- opus-4-7 / opus-4-8 / sonnet-5 / opus-5 / fable-5 的 effort 档位按 Anthropic
+- opus-4-7 / opus-4-8 / sonnet-5 / sonnet-5-5 / opus-5 / opus-5-5 / fable-5 / fable-5-1 的 effort 档位按 Anthropic
   官方 effort 文档维护；这些模型明确支持 `xhigh`，运行时不得提前折叠为 `high`。
   thinking dialect 仍需按官方模型 capabilities 持续核对。

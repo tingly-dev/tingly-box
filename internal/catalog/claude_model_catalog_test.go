@@ -55,6 +55,21 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 		assert.True(t, caps.EffortLevels["xhigh"])
 	})
 
+	t.Run("mandatory thinking is a catalog property", func(t *testing.T) {
+		for _, m := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1"} {
+			caps, ok := LookupClaudeThinkingCaps(m)
+			require.True(t, ok, m)
+			assert.True(t, caps.ThinkingMandatory, m)
+			assert.True(t, caps.ThinkingAdaptive, m)
+			assert.False(t, caps.ThinkingEnabled, m)
+		}
+		// "claude-sonnet-5-5" must not be shadowed by the "claude-sonnet-5" family key.
+		caps, _ := LookupClaudeThinkingCaps("claude-sonnet-5")
+		assert.False(t, caps.ThinkingMandatory)
+		caps, _ = LookupClaudeThinkingCaps("claude-opus-4-8")
+		assert.False(t, caps.ThinkingMandatory)
+	})
+
 	t.Run("no thinking at all", func(t *testing.T) {
 		caps, ok := LookupClaudeThinkingCaps("claude-3-haiku-20240307")
 		require.True(t, ok)

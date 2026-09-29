@@ -690,3 +690,33 @@ func TestExtractFirstUserMessageText(t *testing.T) {
 	text := extractFirstUserMessageText(req.Messages)
 	assert.Equal(t, "hello world", text, "should extract first user message text")
 }
+
+func TestAnthropicModelTransform_MandatoryThinkingRejectsDisabled(t *testing.T) {
+	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"} {
+		v1 := &anthropic.MessageNewParams{
+			Model:     anthropic.Model(model),
+			MaxTokens: 4096,
+			Thinking:  anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}},
+		}
+		ApplyAnthropicV1ModelTransform(v1, model)
+		assert.NotNil(t, v1.Thinking.OfAdaptive, model)
+		assert.Nil(t, v1.Thinking.OfDisabled, model)
+
+		beta := &anthropic.BetaMessageNewParams{
+			Model:     anthropic.Model(model),
+			MaxTokens: 4096,
+			Thinking:  anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}},
+		}
+		ApplyAnthropicBetaModelTransform(beta, model)
+		assert.NotNil(t, beta.Thinking.OfAdaptive, model)
+		assert.Nil(t, beta.Thinking.OfDisabled, model)
+	}
+
+	// Non-mandatory adaptive models still honor an explicit disable.
+	req := &anthropic.MessageNewParams{
+		Model:    anthropic.Model("claude-opus-4-8"),
+		Thinking: anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}},
+	}
+	ApplyAnthropicV1ModelTransform(req, "claude-opus-4-8")
+	assert.NotNil(t, req.Thinking.OfDisabled)
+}

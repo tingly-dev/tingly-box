@@ -18,8 +18,9 @@
 // differences between backends — OpenRouter's own proxy absorbs that. This
 // package IS that proxy layer for Anthropic, so it has to know which raw
 // request shape a model accepts: "budget" (thinking.type=enabled +
-// budget_tokens) and/or "adaptive" (thinking.type=adaptive). Models with no
-// `reasoning` block at all do not support extended thinking.
+// budget_tokens) and/or "adaptive" (thinking.type=adaptive). `mandatory: true`
+// (also an OpenRouter field) marks models that reject thinking.type=disabled.
+// Models with no `reasoning` block at all do not support extended thinking.
 //
 // Update the JSON when new models land instead of hardcoding model names in
 // code; the completeness test in this package fails when providers.json
@@ -54,6 +55,10 @@ type ClaudeThinkingCaps struct {
 	ThinkingEnabled bool
 	// ThinkingAdaptive: accepts thinking.type=adaptive.
 	ThinkingAdaptive bool
+	// ThinkingMandatory: thinking cannot be turned off — the API rejects
+	// thinking.type=disabled with a 400 asking for adaptive. Consumers must
+	// send adaptive instead of disabling (see ops.ApplyAnthropic*ModelTransform).
+	ThinkingMandatory bool
 	// EffortLevels: supported output_config.effort values (e.g. "low", "max").
 	// Empty means the model has no effort support.
 	EffortLevels map[string]bool
@@ -66,6 +71,7 @@ type catalogModel struct {
 	ID        string `json:"id"`
 	Reasoning *struct {
 		Dialects         []string `json:"dialects"`
+		Mandatory        bool     `json:"mandatory"`
 		SupportedEfforts []string `json:"supported_efforts"`
 	} `json:"reasoning"`
 }
@@ -105,6 +111,7 @@ func buildClaudeCapsIndex() []claudeCapsEntry {
 	for _, m := range models {
 		var caps ClaudeThinkingCaps
 		if m.Reasoning != nil {
+			caps.ThinkingMandatory = m.Reasoning.Mandatory
 			for _, d := range m.Reasoning.Dialects {
 				switch d {
 				case "budget":

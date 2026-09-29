@@ -10,6 +10,7 @@ import (
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
@@ -371,8 +372,10 @@ func (c *ClaudeClient) Client() *anthropic.Client {
 // rejectsDisabledThinking reports whether the upstream API rejects
 // thinking.type.disabled for model with a 400 asking for thinking.type.adaptive.
 // Guard sends adaptive thinking for these instead of forcing thinking off.
+// The answer comes from the model catalog's `mandatory` flag, not a list here.
 func rejectsDisabledThinking(model string) bool {
-	return strings.Contains(model, "claude-fable") || strings.Contains(model, "claude-opus-5-5")
+	caps, ok := catalog.LookupClaudeThinkingCaps(model)
+	return ok && caps.ThinkingMandatory
 }
 
 // stripBetaClearThinkingEdit removes any clear_thinking_20251015 context-management

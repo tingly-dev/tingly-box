@@ -5,6 +5,23 @@
       "dialects": [
         "adaptive"
       ],
+      "mandatory": true,
+      "supported_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  {
+    "id": "claude-sonnet-5-5",
+    "reasoning": {
+      "dialects": [
+        "adaptive"
+      ],
+      "mandatory": true,
       "supported_efforts": [
         "low",
         "medium",
@@ -20,6 +37,7 @@
       "dialects": [
         "adaptive"
       ],
+      "mandatory": true,
       "supported_efforts": [
         "low",
         "medium",
@@ -35,6 +53,7 @@
       "dialects": [
         "adaptive"
       ],
+      "mandatory": true,
       "supported_efforts": [
         "low",
         "medium",
