@@ -3,6 +3,7 @@
 protocolserver 如何把一次请求接到 Protocol Stage 上：每个 failover attempt 经过哪些阶段、
 rule flag / 输出上限 / vendor 规则这类请求整形步骤各放在哪一段、两条执行路径怎么装配。
 Stage / Bridge 自身的契约见 `.design/protocol-stage.md`；各 flag 的注入手法见 `.design/rule-flags.md`。
+图示见 `.design/protocol-stage-pipeline.pencil.md`，与本文逐节对应。
 
 Status: 规则已定；偏差 1、2 的迁移见 #1901、#1902，进度见文末"现状偏差与迁移"
 Date: 2026-09-29
@@ -25,6 +26,8 @@ Stage 之后多了一条路径，问题更明显。
 两个 bug 的共同点：步骤放错了阶段，或者同一个事实有多个生产者。本文给出判定规则，让新步骤有唯一的位置。
 
 ## 一次请求经过的阶段
+
+> 图：`protocol-stage-pipeline.pencil.md`「一次请求经过的阶段」
 
 ```
 handler 前段（每个请求一次，与 provider 无关）
@@ -51,6 +54,8 @@ Source 半段与 Target 半段在两条路径上是**同一组** Transform（`so
 | 其余（同协议、OpenAI ↔ OpenAI、→ Google） | 旧整链（`buildTransformChain`） | `BaseTransform` | 整链内一次 |
 
 ## 放置规则
+
+> 图：`protocol-stage-pipeline.pencil.md`「放置规则」
 
 判定时只问一句：**这一步读的、改的，是哪一方的东西？**
 
@@ -80,6 +85,8 @@ Source 半段与 Target 半段在两条路径上是**同一组** Transform（`so
 Source 侧把意图归一，Target 侧按线路约束落地。
 
 ## 装配
+
+> 图：`protocol-stage-pipeline.pencil.md`「装配」
 
 ```
 run*Attempt（每个 failover attempt）      transformRequest                       执行
@@ -111,6 +118,8 @@ run*Attempt（每个 failover attempt）      transformRequest                  
   `ExecuteAnthropicPreChain`（输出上限），见下方偏差 1、2。
 
 ## 现状偏差与迁移
+
+> 图：`protocol-stage-pipeline.pencil.md`「现状偏差与迁移」
 
 | # | 偏差 | 目标 | 状态 |
 |---|---|---|---|
