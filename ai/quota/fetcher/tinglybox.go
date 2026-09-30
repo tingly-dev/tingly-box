@@ -65,8 +65,8 @@ func (f *TinglyBoxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusForbidden:
-		// Say why rather than show a generic failure.
-		return nil, fmt.Errorf("upstream tingly-box does not share quota with this key")
+		// Say whom to ask rather than show a generic failure.
+		return nil, fmt.Errorf("upstream team does not share quota with this key")
 	case http.StatusNotFound:
 		return nil, fmt.Errorf("upstream tingly-box does not serve quota (upgrade it to share quota)")
 	default:

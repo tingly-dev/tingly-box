@@ -8,6 +8,9 @@ type CreateRequest struct {
 
 type UpdateRequest struct {
 	Name string `json:"name" binding:"required"`
+	// QuotaVisible, when set, changes whether the team's sharing keys may read
+	// the remaining quota of the team's models. Omitted leaves it unchanged.
+	QuotaVisible *bool `json:"quota_visible,omitempty"`
 }
 
 type TeamInfo struct {
@@ -18,6 +21,8 @@ type TeamInfo struct {
 	IsDefault bool      `json:"is_default"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	QuotaVisible bool `json:"quota_visible"`
 }
 
 type ListResponse struct {

@@ -20,11 +20,11 @@ type QuotaReader interface {
 // HandleScenarioQuota serves GET /tingly/:scenario[/v1]/quota: the quota of
 // the providers behind the scenario's rules, relayed as one
 // ProviderUsage for a downstream tingly-box to display
-// (.design/quota-relay.md). Only the owner's model token reads it; sharing
-// keys are refused until a team can opt in.
+// (.design/quota-relay.md). A sharing key reads it only when its team shares
+// quota.
 func (ph *ProtocolHandler) HandleScenarioQuota(c *gin.Context) {
-	if c.GetString(constant.CtxKeyAuthKind) == constant.AuthKindSharingKey {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: ErrorDetail{Message: "Quota is not shared with sharing keys", Type: "forbidden_error"}})
+	if c.GetString(constant.CtxKeyAuthKind) == constant.AuthKindSharingKey && !ph.teamSharesQuota(c.GetString(constant.CtxKeyTeamID)) {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: ErrorDetail{Message: "Quota is not shared with this team's keys", Type: "forbidden_error"}})
 		return
 	}
 	if ph.deps.QuotaReader == nil {
@@ -50,4 +50,15 @@ func (ph *ProtocolHandler) HandleScenarioQuota(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, quota.RelayUsage(upstreams))
+}
+
+// teamSharesQuota reads the team's setting on every request, so a change in
+// Team settings applies to the next read.
+func (ph *ProtocolHandler) teamSharesQuota(teamID string) bool {
+	sm := ph.deps.Config.StoreManager()
+	if sm == nil || teamID == "" {
+		return false
+	}
+	team, err := sm.Team().Get(teamID)
+	return err == nil && team.Enabled && team.QuotaVisible
 }

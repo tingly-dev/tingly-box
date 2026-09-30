@@ -3,7 +3,7 @@ import type { Team } from '@/types/team';
 import { groupByTeam, orderTeams, teamPath } from './team';
 
 const team = (id: string, isDefault = false): Team => ({
-    id, name: id, slug: id, enabled: true, is_default: isDefault, created_at: '', updated_at: '',
+    id, name: id, slug: id, enabled: true, quota_visible: false, is_default: isDefault, created_at: '', updated_at: '',
 });
 const teams = [team('t2'), team('default', true), team('t1')];
 

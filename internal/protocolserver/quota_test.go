@@ -11,6 +11,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -50,6 +51,7 @@ func TestHandleScenarioQuota(t *testing.T) {
 		router := gin.New()
 		router.GET("/tingly/:scenario/quota", func(c *gin.Context) {
 			c.Set(constant.CtxKeyAuthKind, authKind)
+			c.Set(constant.CtxKeyTeamID, db.DefaultTeamID)
 		}, h.HandleScenarioQuota)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tingly/team/quota", nil))
@@ -57,14 +59,22 @@ func TestHandleScenarioQuota(t *testing.T) {
 	}
 
 	if rec := call(constant.AuthKindSharingKey); rec.Code != http.StatusForbidden {
-		t.Fatalf("sharing key: status = %d, want 403", rec.Code)
+		t.Fatalf("team not sharing: status = %d, want 403", rec.Code)
 	}
-	rec := call(constant.AuthKindGlobalModelToken)
-	var u quota.ProviderUsage
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &u) != nil {
-		t.Fatalf("owner: status = %d: %s", rec.Code, rec.Body.String())
+	if rec := call(constant.AuthKindGlobalModelToken); rec.Code != http.StatusOK {
+		t.Fatalf("owner is not gated by the team switch: status = %d", rec.Code)
 	}
-	if len(u.Windows) != 1 || u.Windows[0].Label != "Anthropic Max · 5h" || u.Windows[0].Used != 30 {
-		t.Errorf("windows = %+v, want the shared account once, as a percentage", u.Windows)
+	if err := cfg.StoreManager().Team().SetQuotaVisible(db.DefaultTeamID, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{constant.AuthKindSharingKey, constant.AuthKindGlobalModelToken} {
+		rec := call(kind)
+		var u quota.ProviderUsage
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &u) != nil {
+			t.Fatalf("%s: status = %d: %s", kind, rec.Code, rec.Body.String())
+		}
+		if len(u.Windows) != 1 || u.Windows[0].Label != "Anthropic Max · 5h" || u.Windows[0].Used != 30 {
+			t.Errorf("%s: windows = %+v, want the shared account once, as a percentage", kind, u.Windows)
+		}
 	}
 }
