@@ -4,11 +4,10 @@ package constant
 // when reading or writing typed ScenarioFlags fields through the
 // GetScenarioFlag / SetScenarioFlag string-keyed API (e.g. the HTTP endpoint).
 const (
-	FlagUnified      = "unified"
-	FlagSeparate     = "separate"
-	FlagSmart        = "smart"
-	FlagSmartCompact = "smart_compact"
-	FlagSkipUsage    = "skip_usage"
+	FlagUnified   = "unified"
+	FlagSeparate  = "separate"
+	FlagSmart     = "smart"
+	FlagSkipUsage = "skip_usage"
 )
 
 // ScenarioFlags string field keys. Same contract as above but for

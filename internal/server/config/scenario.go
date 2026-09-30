@@ -119,8 +119,6 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.Unified
 	case constant.FlagSeparate:
 		return flags.Separate
-	case constant.FlagSmartCompact:
-		return flags.SmartCompact
 	case constant.FlagSkipUsage:
 		return flags.SkipUsage
 	default:
@@ -183,8 +181,6 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Flags.Unified = false
 			c.setClaudeCodeModeRulesActiveLocked(false, true)
 		}
-	case constant.FlagSmartCompact:
-		config.Flags.SmartCompact = value
 	case constant.FlagSkipUsage:
 		config.Flags.SkipUsage = value
 	default:

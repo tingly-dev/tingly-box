@@ -76,8 +76,7 @@ type transformSourceOptions struct {
 
 	// defaultScenarioFlags selects how scenario flags are resolved: the
 	// Anthropic entry points go through ScenarioConfig.GetDefaultFlags()
-	// (which also enables the SmartCompact chain prepend), while the OpenAI
-	// entry points use the raw ScenarioConfig.Flags pointer.
+	// while the OpenAI entry points use the raw ScenarioConfig.Flags pointer.
 	defaultScenarioFlags bool
 
 	hasNativeAdvisor bool
@@ -117,12 +116,6 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 		if src.defaultScenarioFlags {
 			flags := scenarioConfig.GetDefaultFlags()
 			scenarioFlags = &flags
-			if flags.SmartCompact {
-				chain.SetTransforms(append(
-					[]transform.Transform{servertransform.NewThinkingCompactTransform(2)},
-					chain.GetTransforms()...,
-				))
-			}
 		} else {
 			scenarioFlags = &scenarioConfig.Flags
 		}

@@ -108,22 +108,22 @@ func TestProfileScenarioFlagWriteInheritsBaseConfig(t *testing.T) {
 		t.Fatalf("expected profile to inherit base separate=true via fallback before any profile write, got false")
 	}
 
-	// Writing an unrelated flag on the profile (e.g. toggling Smart Compact
+	// Writing an unrelated flag on the profile (e.g. toggling Skip Usage
 	// from the profile page's plugin panel) must not orphan the profile from
 	// the base scenario's already-set flags.
-	if err := cfg.SetScenarioFlag(profile, constant.FlagSmartCompact, true); err != nil {
-		t.Fatalf("SetScenarioFlag(profile, smart_compact) error: %v", err)
+	if err := cfg.SetScenarioFlag(profile, constant.FlagSkipUsage, true); err != nil {
+		t.Fatalf("SetScenarioFlag(profile, skip_usage) error: %v", err)
 	}
 
 	if v := cfg.GetScenarioFlag(profile, constant.FlagSeparate); !v {
 		t.Errorf("profile lost inherited separate=true after an unrelated profile-local flag write")
 	}
-	if v := cfg.GetScenarioFlag(profile, constant.FlagSmartCompact); !v {
-		t.Errorf("profile-local smart_compact write did not persist")
+	if v := cfg.GetScenarioFlag(profile, constant.FlagSkipUsage); !v {
+		t.Errorf("profile-local skip_usage write did not persist")
 	}
 	// Base scenario itself must be unaffected by the profile write.
-	if v := cfg.GetScenarioFlag(base, constant.FlagSmartCompact); v {
-		t.Errorf("smart_compact leaked into the base scenario config")
+	if v := cfg.GetScenarioFlag(base, constant.FlagSkipUsage); v {
+		t.Errorf("skip_usage leaked into the base scenario config")
 	}
 
 	// Same guarantee for the string-flag setter (e.g. thinking_effort set on

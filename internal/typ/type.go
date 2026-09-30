@@ -151,7 +151,7 @@ type ScenarioFlags struct {
 	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
+	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Deprecated: smart compact is offline; field kept only so persisted configs still parse
 	// RecordingV2 is the scenario-wide recording default: a comma-separated
 	// set of capture points (see RecordingPoint; legacy enum values still
 	// accepted). Individual rules override it via RuleFlags.Recording.
