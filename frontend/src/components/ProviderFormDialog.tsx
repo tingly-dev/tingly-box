@@ -619,7 +619,7 @@ const ProviderFormDialog = ({
                                     onUrlChange={updateDecisionUrl}
                                     onUrlBlur={commitDecisionSlot}
                                     helperText={slotDecision.enabled
-                                        ? t('providerDialog.protocol.helperDecision', {defaultValue: 'Structured-decision fork endpoint (e.g. a Jev-compatible /api/v1 base). Leave off when the model has none.'})
+                                        ? t('providerDialog.protocol.helperDecision', {defaultValue: 'Optional structured-decision fork endpoint (e.g. a Jev-compatible /api/v1 base) — adds decision capability without changing the chat style'})
                                         : undefined}
                                 />
                             </Stack>

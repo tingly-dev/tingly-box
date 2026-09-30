@@ -51,7 +51,7 @@ const BRAND: Record<ProtocolKind, BrandDef> = {
 const DEFAULT_HELPERS: Record<ProtocolKind, string> = {
     openai: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers',
     anthropic: 'For Anthropic-compatible AI providers, commonly used with Claude Code',
-    decision: 'Optional structured-decision fork endpoint — adds decision capability without changing the chat style',
+    decision: 'Optional structured-decision fork endpoint (e.g. a Jev-compatible /api/v1 base) — adds decision capability without changing the chat style',
 };
 
 const ProtocolSlot: React.FC<ProtocolSlotProps> = ({

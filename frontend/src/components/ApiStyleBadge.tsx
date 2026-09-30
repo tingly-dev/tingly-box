@@ -46,14 +46,6 @@ export const ApiStyleBadge = ({
     minimalSize = 'small',
 }: ApiStyleBadgeProps) => {
     const theme = useTheme();
-    const isOpenAI = apiStyle === 'openai';
-    const isAnthropic = apiStyle === 'anthropic';
-    const isGoogle = apiStyle === 'google';
-    const isDecision = apiStyle === 'decision';
-
-    if (!isOpenAI && !isAnthropic && !isGoogle && !isDecision) {
-        return null; // Don't show badge for unknown styles
-    }
 
     // The badge floats (position:absolute) over the service node's own text
     // (provider name), so its background must be FULLY OPAQUE — any alpha lets
@@ -72,7 +64,10 @@ export const ApiStyleBadge = ({
         google:    { label: 'Google',    Mark: GoogleStyleMark, tint: '#4285F4',               fill: isDark ? 0.22 : 0.14, hoverFill: isDark ? 0.32 : 0.22, border: alpha('#4285F4', 0.4) },
         decision:  { label: 'Decision',  Mark: Psychology, tint: '#7C4DFF',                    fill: isDark ? 0.24 : 0.15, hoverFill: isDark ? 0.34 : 0.24, border: alpha('#7C4DFF', 0.45) },
     } as const;
-    const p = isOpenAI ? providers.openai : isAnthropic ? providers.anthropic : isGoogle ? providers.google : providers.decision;
+    const p = (providers as Record<string, (typeof providers)[keyof typeof providers]>)[apiStyle];
+    if (!p) {
+        return null; // Don't show badge for unknown styles
+    }
 
     const backgroundColor = blend(p.tint, p.fill, paperRgb); // opaque — no bleed-through
     const hoverBackgroundColor = blend(p.tint, p.hoverFill, paperRgb);
