@@ -139,13 +139,40 @@ func TestDuplicateTeam(t *testing.T) {
 		t.Error("the copy stopped inheriting the Default team's flags")
 	}
 
-	// A failed copy doesn't leave an empty team behind.
-	before := len(teams.List())
+	// A failed save leaves neither an empty team nor copied rules behind.
+	teamsBefore, rulesBefore := len(teams.List()), len(cfg.Rules)
 	cfg.ConfigFile = "" // Save now fails
 	if _, err := cfg.Duplicate(typ.ScenarioTeam, MainScopeID, "Broken"); err == nil {
 		t.Fatal("expected the save failure to surface")
 	}
-	if after := len(teams.List()); after != before {
-		t.Errorf("team count %d → %d after a failed duplicate", before, after)
+	if len(teams.List()) != teamsBefore || len(cfg.Rules) != rulesBefore {
+		t.Errorf("failed duplicate left state: teams %d→%d, rules %d→%d", teamsBefore, len(teams.List()), rulesBefore, len(cfg.Rules))
+	}
+}
+
+// A failed save must not leave the copy in memory, where the next unrelated
+// save would persist it and a retry with the same name would be refused.
+func TestDuplicateProfile_RollsBackOnSaveFailure(t *testing.T) {
+	cfg := newDuplicateTestConfig(t)
+	cc := typ.ScenarioClaudeCode
+	src, err := cfg.CreateProfile(cc, "work", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rulesBefore, scenariosBefore := len(cfg.Rules), len(cfg.Scenarios)
+
+	configFile := cfg.ConfigFile
+	cfg.ConfigFile = "" // Save now fails
+	_, err = cfg.Duplicate(cc, src.ID, "work-copy")
+	cfg.ConfigFile = configFile
+	if err == nil {
+		t.Fatal("expected the save failure to surface")
+	}
+	if len(cfg.Rules) != rulesBefore || len(cfg.Scenarios) != scenariosBefore || len(cfg.GetProfiles(cc)) != 1 {
+		t.Fatalf("failed save left state: rules %d→%d, scenarios %d→%d, profiles=%d",
+			rulesBefore, len(cfg.Rules), scenariosBefore, len(cfg.Scenarios), len(cfg.GetProfiles(cc)))
+	}
+	if _, err := cfg.Duplicate(cc, src.ID, "work-copy"); err != nil {
+		t.Fatalf("retry after rollback: %v", err)
 	}
 }

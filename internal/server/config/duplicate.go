@@ -62,9 +62,11 @@ func (c *Config) duplicateTeam(sourceID, name string) (DuplicateResult, error) {
 
 	dst := db.TeamScenario(record.ID)
 	c.mu.Lock()
-	err = c.cloneScenarioLocked(db.TeamScenario(sourceID), dst, nil)
+	undo, err := c.cloneScenarioLocked(db.TeamScenario(sourceID), dst, nil)
 	if err == nil {
-		err = c.Save()
+		if err = c.Save(); err != nil {
+			undo()
+		}
 	}
 	c.mu.Unlock()
 	if err != nil {
@@ -112,20 +114,28 @@ func (c *Config) duplicateProfile(base typ.RuleScenario, sourceID, name string) 
 	}
 	meta.ID = id
 	dst := typ.ProfiledScenarioName(base, id)
-	if err := c.cloneScenarioLocked(src, dst, keep); err != nil {
+	undo, err := c.cloneScenarioLocked(src, dst, keep)
+	if err != nil {
 		return DuplicateResult{}, err
 	}
-	c.Profiles[string(base)] = append(c.Profiles[string(base)], meta)
-	return DuplicateResult{ID: id, Name: name, Scenario: dst}, c.Save()
+	profiles := c.Profiles[string(base)]
+	c.Profiles[string(base)] = append(slices.Clip(profiles), meta)
+	if err := c.Save(); err != nil {
+		undo()
+		c.Profiles[string(base)] = profiles
+		return DuplicateResult{}, err
+	}
+	return DuplicateResult{ID: id, Name: name, Scenario: dst}, nil
 }
 
 // cloneScenarioLocked deep-copies src's rules (those keep accepts; all when
 // nil) and src's own scenario config onto the empty scenario dst. Callers
-// must hold c.mu.
-func (c *Config) cloneScenarioLocked(src, dst typ.RuleScenario, keep func(*typ.Rule) bool) error {
+// must hold c.mu, and call undo if the following Save fails — otherwise the
+// next unrelated save would persist the half-made copy.
+func (c *Config) cloneScenarioLocked(src, dst typ.RuleScenario, keep func(*typ.Rule) bool) (undo func(), err error) {
 	if slices.ContainsFunc(c.Rules, func(r typ.Rule) bool { return r.Scenario == dst }) ||
 		slices.ContainsFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool { return sc.Scenario == dst }) {
-		return fmt.Errorf("scenario %q is not empty", dst)
+		return nil, fmt.Errorf("scenario %q is not empty", dst)
 	}
 
 	var rules []typ.Rule
@@ -136,7 +146,7 @@ func (c *Config) cloneScenarioLocked(src, dst typ.RuleScenario, keep func(*typ.R
 		}
 		var cp typ.Rule
 		if err := deepCopyJSON(r, &cp); err != nil {
-			return err
+			return nil, err
 		}
 		cp.Scenario = dst
 		// Built-in rules are addressed by UUID — a profile's settings look
@@ -148,6 +158,7 @@ func (c *Config) cloneScenarioLocked(src, dst typ.RuleScenario, keep func(*typ.R
 		}
 		rules = append(rules, cp)
 	}
+	nRules, nScenarios := len(c.Rules), len(c.Scenarios)
 	c.Rules = append(c.Rules, rules...)
 
 	// When src is dst's base (Default team, main config), dst already
@@ -156,13 +167,17 @@ func (c *Config) cloneScenarioLocked(src, dst typ.RuleScenario, keep func(*typ.R
 		if i := slices.IndexFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool { return sc.Scenario == src }); i >= 0 {
 			var cp typ.ScenarioConfig
 			if err := deepCopyJSON(c.Scenarios[i], &cp); err != nil {
-				return err
+				c.Rules = c.Rules[:nRules]
+				return nil, err
 			}
 			cp.Scenario = dst
 			c.Scenarios = append(c.Scenarios, cp)
 		}
 	}
-	return nil
+	return func() {
+		c.Rules = c.Rules[:nRules]
+		c.Scenarios = c.Scenarios[:nScenarios]
+	}, nil
 }
 
 func deepCopyJSON(src, dst any) error {
