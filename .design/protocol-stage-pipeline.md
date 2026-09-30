@@ -1,4 +1,8 @@
-# 请求管线：Flag、Pre-chain 与 Transform 的放置
+# Protocol Stage 请求管线
+
+protocolserver 如何把一次请求接到 Protocol Stage 上：每个 failover attempt 经过哪些阶段、
+rule flag / 输出上限 / vendor 规则这类请求整形步骤各放在哪一段、两条执行路径怎么装配。
+Stage / Bridge 自身的契约见 `.design/protocol-stage.md`；各 flag 的注入手法见 `.design/rule-flags.md`。
 
 Status: 规则已定；偏差 1、2 的迁移见 #1901、#1902，进度见文末"现状偏差与迁移"
 Date: 2026-09-29
@@ -68,10 +72,43 @@ Source 半段与 Target 半段在两条路径上是**同一组** Transform（`so
    也不再把同一个 preVendor 列表传两遍。
 4. **跨协议事实在转换处产出一次。** Bridge 与 `BaseTransform` 必须调用同一个产出函数
    （例：`request.OpenAIConfigFromResponses`），不能各写一份字面量。
-5. **Vendor 之后只有录制。** 沿用 `rule-flags.md` §2 的不变式。
+5. **Vendor 之后只有录制。** `Vendor` 直面 provider、做最终且不可逆的改写（model alias、metadata、
+   billing header、DeepSeek thinking patch 等），必须是最后一个 mutation；rule 的 preVendor transforms
+   因此装在 `Consistency` 之后、`Vendor` **之前**，StagePost 录制落在 `Vendor` 之后，抓到的是真正发出的请求。
 
 新增一个步骤时，按上表选位置；如果它需要同时知道客户端形态和 target，通常说明它应该拆成两步：
 Source 侧把意图归一，Target 侧按线路约束落地。
+
+## 装配
+
+```
+run*Attempt（每个 failover attempt）      transformRequest                       执行
+  │                                          │                                      │
+  │ target := provider 风格 → 解析           │                                      │
+  │ flags  := ResolveRuleFlagsWithScenario(…)│                                      │
+  │ preBase   := RulePreBaseTransforms(flags)│                                      │
+  │ preVendor := RulePreVendorTransforms(…)  │                                      │
+  ├─────── preBase, preVendor ──────────────►│                                      │
+  │                                          │ 旧整链：buildTransformChain(          │
+  │                                          │   preBase, preVendor) → Execute     ─┤ 一次
+  │                                          │ Stage：sourceOnly → 只跑             │
+  │                                          │   sourceTransforms(preBase)         ─┤ 一次
+  │ Stage 路径：serve*(…, preVendor)         │                                      │
+  │   → targetTransformStage(                │                                      │
+  │       targetTransforms(preVendor))      ─┼──────────────────────────────────────┤ 每轮
+```
+
+- `sourceTransforms` / `targetTransforms`（`internal/protocolserver/protocol_transform.go`）是 chain
+  两半的唯一装配点。`buildTransformChain` 把它们与 `BaseTransform` 串成旧整链；Stage 路径
+  （`serveAnthropicOnOpenAI` / `serveOpenAIOnAnthropic`）只在 source 侧跑前半段，后半段包成
+  `targetTransformStage`（`stage_transform.go`），放在终端 Endpoint 外面，每轮 provider 调用前各跑一次。
+  preBase / preVendor 在两条路径上落在同一位置，handler 不自行 prepend / append。
+- 4 个入口（Anthropic V1 / Beta、OpenAI Chat / Responses）都经 `transformRequest` 进入 chain，
+  preBase / preVendor 以参数透传。（`smart_compact` 由 `transformRequest` 在 Anthropic 入口按
+  scenario 默认 flag 单独 prepend 到最前。）
+- chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。
+- target 解析、flag 解析目前仍由四个 `run*Attempt` 各写一份，Anthropic 入口另有一段在 chain 之外执行的
+  `ExecuteAnthropicPreChain`（输出上限），见下方偏差 1、2。
 
 ## 现状偏差与迁移
 
@@ -95,4 +132,5 @@ Source 侧把意图归一，Target 侧按线路约束落地。
 
 - `rule-flags.md` 描述每个 flag 用哪种注入手法（Type 1b-pre / 1b-post / 2 / 3 / 4 / 5）。
   本文决定这些手法在管线中的位置：Type 1b-pre = Source 半段，Type 1b-post = Target 半段，Type 4 = Plan。
+  chain 的骨架与装配以本文为准，`rule-flags.md` 不再重复。
 - `protocol-stage.md` 描述 Stage / Bridge 的契约；本文描述 protocolserver 如何把 flag 与 Transform 接到这条管线上。

@@ -153,7 +153,7 @@ When `X-Tingly-Debug-Routing: 1` is present, the routing decision is emitted acr
 | `X-Tingly-Routing-Source`       | `affinity`, `smartrouting`, `load_balancer`, or `probe_pin` |
 | `X-Tingly-Matched-Smart-Rule`   | Index of matched smart rule (omitted if none) |
 
-**Dispatch stage** — `setProbeUpstreamHeaders` in `dispatchChainResult` (protocol_dispatch.go), the single point where the resolved upstream API + matched rule + applied flags are all known, before any response byte is written:
+**Dispatch stage** — `setProbeUpstreamHeaders`, called where the resolved upstream API + matched rule + applied flags are all known, before any response byte is written: `dispatchChainResult` (protocol_dispatch.go) on the full-chain path, and `serveAnthropicOnOpenAI` / `serveOpenAIOnAnthropic` on the Stage path (see `.design/protocol-stage-pipeline.md`):
 
 | Header                        | Content                                                        |
 |-------------------------------|---------------------------------------------------------------|

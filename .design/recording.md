@@ -57,16 +57,15 @@ scenario 的 `recording_v2`,不再有全局 fallback。
 handler 入口 (EnsureProtocolRecorder, 读 GetScenarioRecordMode)
   │  recorder 存 gin ctx;sink 按 scenario 懒建 (scenarioRecordSinks)
   ▼
-BuildTransformChain: StagePre 录原始请求 → … → Vendor → StagePost 录最终(SDK 形态)请求
+chain: StagePre 录原始请求 → … → Vendor → StagePost 录最终(SDK 形态)请求
+      (装配见 protocol-stage-pipeline.md;Stage 路径上 StagePost 每轮 provider 调用录一次)
   ▼
 流式 hooks / RecordResponse / RecordError → sink.Emit
 ```
 
-- 只接了 **Anthropic 入站** handler(`anthropic_message.go` V1 + Beta)。
-- **OpenAI Chat / Responses handler 传 `nil` recorder**
-  (`openai_chat.go`、`openai_responses.go` 里 `TransformOpenAIChat/
-  Responses(..., nil, ...)`)——OpenAI 入站流量即使开了 `recording_v2`
-  也不录。
+- 四个入口(Anthropic V1 / Beta、OpenAI Chat / Responses)都在 handler 入口
+  `EnsureProtocolRecorder`,chain 经 `recording.FromGin` 取 recorder,入站协议
+  不再影响是否录制。
 - mode 语义:`request` = 只录 transformed request;`request_response`
   再加最终响应;`staged_request_response` 再加原始(客户端)请求。
 

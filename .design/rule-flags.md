@@ -54,45 +54,24 @@
                                     │ rule resolved at request time
                                     ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │  per-attempt handler (internal/protocolserver:                 │
-   │    openai_chat.go / openai_responses.go / anthropic_message.go)│
+   │  每个 failover attempt（internal/protocolserver）              │
    │                                                                │
    │   flags := ResolveRuleFlagsWithScenario(c, rule, …)            │
    │   ├─ WithRuleFlags(ctx, flags) — 解析结果整包挂 ctx            │  Type 2
    │   ├─ ctx.Extra["skip_usage"] = flags.SkipUsage                 │  Type 3
    │   ├─ preBase   := RulePreBaseTransforms(flags)                 │  Type 1b-pre
-   │   │   → [transform.OpenAICursorCompatTransform{}]              │
-   │   └─ preVendor := RulePreVendorTransforms(flags)               │  Type 1b-post
-   │       → [transform.OpenAIMaxTokensRewriteTransform{...}]       │
-   └───────────────────────────┬───────────────────────────────────┘
-                               │
-                               ▼
-   ┌───────────────────────────────────────────────────────────────┐
-   │   sourceTransforms:  preBase → ▸StagePre 录制                  │
-   │   转换:              BaseTransform（旧整链）| Bridge（Stage）  │
-   │   targetTransforms:  MCP → Consistency → preVendor → Vendor    │
-   │                      → ▸StagePost 录制                         │
-   │                                                                │
-   │   旧整链：buildTransformChain 把三段串成一条 chain 执行一次    │
-   │   Stage：source 段先跑一次；target 段由 targetTransformStage   │
-   │          在每轮 provider 调用前各跑一次                        │
-   │                              Vendor + 录制 = 不可逾越的尾段     │
+   │   ├─ preVendor := RulePreVendorTransforms(flags)               │  Type 1b-post
+   │   └─ ResolveOpenAIEndpoint(…, flags, …)                        │  Type 4
    └───────────────────────────┬───────────────────────────────────┘
                                ▼
-                       upstream provider
+         Protocol Stage 请求管线（source 半段 → 转换 → target 半段）
+         见 .design/protocol-stage-pipeline.md
 ```
 
-两个动态插入位置本质都是"在某步之前"：**preBase**（Base 之前，看见入站形态）
-与 **preVendor**（Vendor 之前，看见目标形态）。两个 slot 在管线中各属于哪一半、
-非 flag 的步骤（输出上限、target 解析等）应该放在哪，见
-`.design/protocol-pipeline-placement.md`。
-
-**不变式：除录制外，没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
-provider、做最终且不可逆的改写（model alias、metadata、billing header、
-DeepSeek thinking patch 等），必须是最后一个 mutation；因此 rule 的 preVendor
-transforms 装在 `Consistency` 之后、`Vendor` **之前**。这同时修掉了一个隐患：
-StagePost 录制现在落在 `Vendor` 之后，抓到的是真正发出的请求（此前这些 transform
-跑在录制之后，录到的"最终请求"与实际出站不一致）。
+两个动态插入位置本质都是"在某步之前"：**preBase**（Base 之前，看见入站形态，属于
+source 半段）与 **preVendor**（Vendor 之前，看见目标形态，属于 target 半段）。chain 的
+骨架、两个 slot 的确切位置、"Vendor 之后只有录制"的不变式，以及非 flag 的请求整形步骤
+（输出上限、target 解析等）放在哪，统一见 `.design/protocol-stage-pipeline.md`。
 
 ---
 
@@ -206,11 +185,8 @@ Type 5   Routing behavior (service selection)
 个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 装在 preBase slot
 （BaseTransform 之前，看见 inbound 形态），post 装在 preVendor slot
 （Consistency 之后、Vendor 之前，看见目标形态）。聚合点
-`RulePreBaseTransforms` / `RulePreVendorTransforms` 决定 flag 装哪边。两个 slot
-之外，chain 的骨架（StagePre 录制 → Base → MCP → Consistency → Vendor →
-StagePost 录制）由 `sourceTransforms` / `targetTransforms` 固定（旧整链由
-`buildTransformChain` 串起来，Stage 路径分两段执行），**Vendor + 录制是不可逾越的
-尾段**。
+`RulePreBaseTransforms` / `RulePreVendorTransforms` 决定 flag 装哪边；chain 的骨架
+与装配见 `.design/protocol-stage-pipeline.md`。
 
 ---
 
@@ -251,33 +227,9 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 
 ## 7. 链路 wiring
 
-```
-run*Attempt（每个 failover attempt）      transformRequest                       执行
-  │                                          │                                      │
-  │ target := provider 风格 → 解析           │                                      │
-  │ flags  := ResolveRuleFlagsWithScenario(…)│                                      │
-  │ preBase   := RulePreBaseTransforms(flags)│                                      │
-  │ preVendor := RulePreVendorTransforms(…)  │                                      │
-  ├─────── preBase, preVendor ──────────────►│                                      │
-  │                                          │ 旧整链：buildTransformChain(          │
-  │                                          │   preBase, preVendor) → Execute     ─┤ 一次
-  │                                          │ Stage：sourceOnly → 只跑             │
-  │                                          │   sourceTransforms(preBase)         ─┤ 一次
-  │ Stage 路径：serve*(…, preVendor)         │                                      │
-  │   → targetTransformStage(                │                                      │
-  │       targetTransforms(preVendor))      ─┼──────────────────────────────────────┤ 每轮
-```
+chain 的装配（两条执行路径、source / target 两半、每轮执行）见
+`.design/protocol-stage-pipeline.md`"装配"。与 flag 相关的约束只有两条：
 
-关键约束：
-
-- `sourceTransforms` / `targetTransforms`（`internal/protocolserver/protocol_transform.go`）是 chain
-  两半的唯一装配点。`buildTransformChain` 把它们与 `BaseTransform` 串成旧整链；Stage 路径
-  （`serveAnthropicOnOpenAI` / `serveOpenAIOnAnthropic`）只在 source 侧跑前半段，后半段由
-  `targetTransformStage` 在每轮 provider 调用前执行。preBase / preVendor 在两条路径上落在同一位置，
-  handler 不自行 prepend / append。
-- 4 个入口（Anthropic V1 / Beta、OpenAI Chat / Responses）都经 `transformRequest` 进入 chain，
-  preBase / preVendor 以参数透传。（`smart_compact` 由 `transformRequest` 在 Anthropic 入口按
-  scenario 默认 flag 单独 prepend 到最前，行为不变。）
 - `RulePreBaseTransforms(flags)` 和 `RulePreVendorTransforms(flags)`
   （`internal/protocolserver/rule_flags.go`）是 rule→Transform 的两个聚合点。
   新增 rule-driven Transform 时，按"作用于 inbound 形态" / "作用于目标
@@ -285,9 +237,6 @@ run*Attempt（每个 failover attempt）      transformRequest                  
 - chain 顺序的回归护栏在
   `internal/protocolserver/protocol_transform_test.go`：`preVendor` 必须落在
   `consistency_normalize` 之后、`vendor_adjust` 之前。
-- target 解析、flag 解析目前仍由四个 `run*Attempt` 各写一份，Anthropic 入口另有一段在 chain 之外执行的
-  `ExecuteAnthropicPreChain`（输出上限）。这两处是已知偏差，收敛方案见
-  `.design/protocol-pipeline-placement.md`"现状偏差与迁移"。
 
 ---
 
