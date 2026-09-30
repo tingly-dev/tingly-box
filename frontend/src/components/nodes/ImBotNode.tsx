@@ -10,6 +10,7 @@ import {
 import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import type {BotSettings} from '@/types/bot';
+import {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {PLATFORM_BRAND_ICONS, platformDisplayName} from '@/constants/platformGuides';
 
@@ -57,9 +58,20 @@ const StyledImBotNode = styled(Box, {
 const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, variant = 'full'}) => {
     const {t} = useTranslation();
     const clickable = !!onClick && active;
-    const platformLabel = platformDisplayName(imbot.platform, t);
+    // platformDisplayName builds every platform's guide to read one name, so
+    // memoize it rather than paying that on every graph re-render.
+    const platformLabel = useMemo(() => platformDisplayName(imbot.platform, t), [imbot.platform, t]);
     const name = imbot.name || 'Bot';
     const BrandIcon = PLATFORM_BRAND_ICONS[imbot.platform || ''];
+    const labelSx = {
+        ...NODE_LAYER_STYLES.typography,
+        fontSize: '0.75rem',
+        color: active ? 'text.primary' : 'text.disabled',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        maxWidth: '100%',
+    } as const;
 
     return (
         <NodeTooltip
@@ -80,57 +92,32 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
             }
             placement="top"
         >
-            {variant === 'platform' ? (
-                <StyledImBotNode active={active} clickable={clickable} onClick={onClick} sx={{gap: 0.75}}>
-                    {BrandIcon && <BrandIcon size={24} grayscale={!active}/>}
-                    <Box
-                        component="span"
-                        sx={{
-                            ...NODE_LAYER_STYLES.typography,
-                            fontSize: '0.75rem',
-                            color: active ? 'text.primary' : 'text.disabled',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            maxWidth: '100%',
-                        }}
-                    >
-                        {platformLabel}
-                    </Box>
-                </StyledImBotNode>
-            ) : (
-                <StyledImBotNode active={active} clickable={clickable} onClick={onClick}>
-                    {/* Top - bot name (the identity the notify API targets) */}
-                    <Box sx={NODE_LAYER_STYLES.topLayer}>
-                        <Box
-                            component="span"
-                            sx={{
-                                ...NODE_LAYER_STYLES.typography,
-                                fontStyle: !imbot.name ? 'italic' : 'normal',
-                                textAlign: 'center',
-                                color: active ? 'text.primary' : 'text.disabled',
-                                fontSize: '0.75rem',
-                                lineHeight: 1.1,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                maxWidth: '100%',
-                            }}
-                        >
-                            {name}
+            <StyledImBotNode active={active} clickable={clickable} onClick={onClick} sx={variant === 'platform' ? {gap: 0.75} : undefined}>
+                {variant === 'platform' ? (
+                    <>
+                        {BrandIcon && <BrandIcon size={24} grayscale={!active}/>}
+                        <Box component="span" sx={labelSx}>{platformLabel}</Box>
+                    </>
+                ) : (
+                    <>
+                        {/* Top - bot name (the identity the notify API targets) */}
+                        <Box sx={NODE_LAYER_STYLES.topLayer}>
+                            <Box component="span" sx={{...labelSx, fontStyle: !imbot.name ? 'italic' : 'normal', textAlign: 'center', lineHeight: 1.1}}>
+                                {name}
+                            </Box>
                         </Box>
-                    </Box>
 
-                    <Box sx={{width: '70%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
+                        <Box sx={{width: '70%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
 
-                    {/* Bottom - platform tag (the channel this bot runs on),
-                        matching the NodeTag the sibling nodes carry on the
-                        bottom row) */}
-                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                        <NodeTag label={platformLabel}/>
-                    </Box>
-                </StyledImBotNode>
-            )}
+                        {/* Bottom - platform tag (the channel this bot runs on),
+                            matching the NodeTag the sibling nodes carry on the
+                            bottom row) */}
+                        <Box sx={NODE_LAYER_STYLES.bottomLayer}>
+                            <NodeTag label={platformLabel} active={active}/>
+                        </Box>
+                    </>
+                )}
+            </StyledImBotNode>
         </NodeTooltip>
     );
 };

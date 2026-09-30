@@ -1,20 +1,22 @@
 import { Security } from '@/components/icons';
 import { api } from '@/services/api';
 import type {BotCapability, BotGroupDetail, BotSettings, DirectChatDetail, CapabilityName} from '@/types/bot';
-import { isPairingRequired } from '@/types/bot';
+import { chatCanControl, chatPermissionAllowed, isPairingRequired, remoteChatState } from '@/types/bot';
 import {
     Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Divider, FormControlLabel, Stack, Switch, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
+import type {ReactNode} from 'react';
 import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import PairingCodePanel from './PairingCodePanel';
+import type {RemoteAccess} from './useRemoteAccess';
 
 interface Props {
     open: boolean;
     bot: BotSettings | null;
     onClose: () => void;
-    onChanged: () => void;
+    onChanged?: () => void;
     /**
      * 'all' (Bots page): the bot resource's whole access surface — UUID,
      * capability switches, Notify and Remote per chat.
@@ -23,21 +25,54 @@ interface Props {
      * to IM Notify, so neither is repeated here.
      */
     scope?: 'all' | 'remote_control';
+    /**
+     * scope='remote_control' only: the card's own useRemoteAccess. The dialog
+     * renders and reloads that copy instead of fetching the same chats and
+     * groups again, so the card's summary and the dialog can't drift.
+     */
+    remoteAccess?: RemoteAccess;
 }
 
 type ChatControl = 'control' | 'none' | 'blocked';
 
-const permissionAllowed = (chat: DirectChatDetail, capability: CapabilityName, action: string) =>
-    chat.permissions.some((permission) =>
-        permission.capability === capability && permission.action === action && permission.effect === 'allow');
+const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
 
-const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) => {
+const rowHeader = (title: ReactNode, id: string) => (
+    <Box sx={{minWidth: 0}}>
+        <Typography sx={{fontWeight: 600}}>{title}</Typography>
+        <Typography variant="caption" sx={{fontFamily: 'monospace', color: 'text.primary', overflowWrap: 'anywhere'}}>{id}</Typography>
+    </Box>
+);
+
+const section = (title: string, hint: string, body: ReactNode) => (
+    <Box>
+        <Typography variant="h6">{title}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>{hint}</Typography>
+        {body}
+    </Box>
+);
+
+// Remote rows are always written as one atomic batch: a partial failure must
+// never leave start=allow with approve=deny, which silently breaks permission
+// replies. Privileged stays denied from the UI.
+const remoteRows = (allow: boolean) => {
+    const effect = allow ? 'allow' as const : 'deny' as const;
+    return [
+        {capability: 'remote_control', action: 'access', effect},
+        {capability: 'remote_control', action: 'remote_control.start', effect},
+        {capability: 'remote_control', action: 'remote_control.approve', effect},
+        {capability: 'remote_control', action: 'remote_control.privileged', effect: 'deny' as const},
+    ];
+};
+
+const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAccess}: Props) => {
     const {t} = useTranslation();
     const remoteOnly = scope === 'remote_control';
+    const shared = remoteOnly ? remoteAccess : undefined;
     const [capabilities, setCapabilities] = useState<BotCapability[]>([]);
-    const [chats, setChats] = useState<DirectChatDetail[]>([]);
-    const [groups, setGroups] = useState<BotGroupDetail[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [ownChats, setOwnChats] = useState<DirectChatDetail[]>([]);
+    const [ownGroups, setOwnGroups] = useState<BotGroupDetail[]>([]);
+    const [ownLoading, setOwnLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [actorGroup, setActorGroup] = useState<BotGroupDetail | null>(null);
@@ -45,9 +80,9 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
     const [actorName, setActorName] = useState('');
 
     const botUuid = bot?.uuid;
-    const load = useCallback(async () => {
+    const loadOwn = useCallback(async () => {
         if (!botUuid) return;
-        setLoading(true);
+        setOwnLoading(true);
         setError('');
         try {
             const [capabilityData, chatData, groupData] = await Promise.all([
@@ -55,14 +90,19 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
             ]);
             const details = await Promise.all((groupData.groups || []).map((group) => api.getBotGroup(botUuid, group.id)));
             setCapabilities(capabilityData.capabilities || []);
-            setChats(chatData.chats || []);
-            setGroups(details);
+            setOwnChats(chatData.chats || []);
+            setOwnGroups(details);
         } catch (e) {
             setError((e as Error).message);
         } finally {
-            setLoading(false);
+            setOwnLoading(false);
         }
     }, [botUuid]);
+    const load = shared?.reload ?? loadOwn;
+    const chats = shared ? shared.chats : ownChats;
+    const groups = shared ? shared.groups : ownGroups;
+    const loading = shared ? shared.loading : ownLoading;
+    const shownError = error || shared?.error || '';
 
     useEffect(() => { if (open) void load(); }, [open, load]);
 
@@ -72,7 +112,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
         try {
             await action();
             await load();
-            onChanged();
+            onChanged?.();
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -81,18 +121,6 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
     };
     const capabilityOn = (name: CapabilityName) => capabilities.find((item) => item.capability === name)?.enabled === true;
 
-    // Remote rows are always written as one atomic batch: a partial failure
-    // must never leave start=allow with approve=deny, which silently breaks
-    // permission replies. Privileged stays denied from the UI.
-    const remoteRows = (allow: boolean) => {
-        const effect = allow ? 'allow' as const : 'deny' as const;
-        return [
-            {capability: 'remote_control', action: 'access', effect},
-            {capability: 'remote_control', action: 'remote_control.start', effect},
-            {capability: 'remote_control', action: 'remote_control.approve', effect},
-            {capability: 'remote_control', action: 'remote_control.privileged', effect: 'deny' as const},
-        ];
-    };
     const setPreset = (chat: DirectChatDetail, preset: 'full' | 'notify') => mutate(async () => {
         const notifyRows = ['access', 'notify.receive', 'notify.reply'].map((action) =>
             ({capability: 'notify', action, effect: 'allow' as const}));
@@ -107,58 +135,39 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
         await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control'));
     });
 
-    // Show the real state of both actions remote control depends on: start
-    // (launch runs) AND approve (answer permission/question prompts). A mixed
-    // state silently breaks prompt replies, so it must be loud.
-    const remoteState = (chat: DirectChatDetail): 'on' | 'off' | 'broken' => {
-        const start = permissionAllowed(chat, 'remote_control', 'remote_control.start');
-        const approve = permissionAllowed(chat, 'remote_control', 'remote_control.approve');
-        if (start && approve) return 'on';
-        if (!start && !approve) return 'off';
-        return 'broken';
-    };
-
-    const chatHeader = (chat: DirectChatDetail) => (
-        <Box sx={{minWidth: 0}}>
-            <Typography sx={{fontWeight: 600}}>
-                {chat.chat.peer_actor_id
-                    ? t('botAccess.pairedPerson', {defaultValue: 'Paired person'})
-                    : t('botAccess.unpairedChat', {defaultValue: 'Unpaired chat'})}
-            </Typography>
-            <Typography variant="caption" sx={{fontFamily: 'monospace', color: 'text.primary', overflowWrap: 'anywhere'}}>
-                {chat.chat.external_chat_id}
-            </Typography>
-        </Box>
+    const chatHeader = (chat: DirectChatDetail) => rowHeader(
+        chat.chat.peer_actor_id
+            ? t('botAccess.pairedPerson', {defaultValue: 'Paired person'})
+            : t('botAccess.unpairedChat', {defaultValue: 'Unpaired chat'}),
+        chat.chat.external_chat_id,
     );
 
     const remoteChatRow = (chat: DirectChatDetail) => {
-        const state = remoteState(chat);
-        const value: ChatControl = chat.chat.blocked
-            ? 'blocked'
-            : state === 'on' && permissionAllowed(chat, 'remote_control', 'access') ? 'control' : 'none';
+        const state = remoteChatState(chat);
+        const value: ChatControl = chat.chat.blocked ? 'blocked' : chatCanControl(chat) ? 'control' : 'none';
         const canPair = Boolean(chat.chat.peer_actor_id);
         return (
-            <Box key={chat.chat.id} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>
+            <Box key={chat.chat.id} sx={rowSx}>
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', alignItems: {sm: 'center'}, gap: 1}}>
                     {chatHeader(chat)}
                     <ToggleButtonGroup
                         exclusive
                         size="small"
                         color="primary"
-                        sx={{width: {xs: '100%', sm: 'auto'}, '& .MuiToggleButton-root': {flex: {xs: 1, sm: 'none'}, whiteSpace: 'nowrap'}}}
+                        sx={{
+                            width: {xs: '100%', sm: 'auto'},
+                            '& .MuiToggleButton-root': {flex: {xs: 1, sm: 'none'}, whiteSpace: 'nowrap', textTransform: 'none', px: {xs: 0.5, sm: 1.5}},
+                        }}
                         value={value}
                         disabled={saving}
-                        onChange={(_, next: ChatControl | null) => { if (next && next !== value) void setChatControl(chat, next); }}
+                        // exclusive: re-clicking the selected button yields null
+                        onChange={(_, next: ChatControl | null) => { if (next) void setChatControl(chat, next); }}
                     >
-                        <ToggleButton value="control" disabled={saving || !canPair} sx={{textTransform: 'none', px: {xs: 0.5, sm: 1.5}}}>
+                        <ToggleButton value="control" disabled={saving || !canPair}>
                             {t('botAccess.canControl', {defaultValue: 'Can control'})}
                         </ToggleButton>
-                        <ToggleButton value="none" sx={{textTransform: 'none', px: {xs: 0.5, sm: 1.5}}}>
-                            {t('botAccess.noAccess', {defaultValue: 'No access'})}
-                        </ToggleButton>
-                        <ToggleButton value="blocked" sx={{textTransform: 'none', px: {xs: 0.5, sm: 1.5}}}>
-                            {t('botAccess.blocked', {defaultValue: 'Blocked'})}
-                        </ToggleButton>
+                        <ToggleButton value="none">{t('botAccess.noAccess', {defaultValue: 'No access'})}</ToggleButton>
+                        <ToggleButton value="blocked">{t('botAccess.blocked', {defaultValue: 'Blocked'})}</ToggleButton>
                     </ToggleButtonGroup>
                 </Stack>
                 {!canPair && (
@@ -166,7 +175,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
                         {t('botAccess.unpairedHint', {defaultValue: 'Pair first — an unpaired chat can\'t be given control.'})}
                     </Typography>
                 )}
-                {state === 'broken' && !chat.chat.blocked && (
+                {(state === 'startDenied' || state === 'approveDenied') && !chat.chat.blocked && (
                     <Typography variant="caption" sx={{display: 'block', mt: 0.5, color: 'warning.main'}}>
                         {t('botAccess.partial', {defaultValue: 'Partly allowed, so permission prompts can\'t be answered. Choose Can control to repair.'})}
                     </Typography>
@@ -176,23 +185,22 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
     };
 
     const fullChatRow = (chat: DirectChatDetail) => {
-        const state = remoteState(chat);
-        const start = permissionAllowed(chat, 'remote_control', 'remote_control.start');
+        const state = remoteChatState(chat);
         return (
-            <Box key={chat.chat.id} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>
+            <Box key={chat.chat.id} sx={rowSx}>
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
                     {chatHeader(chat)}
                     <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', alignItems: 'center'}}>
                         {state === 'on' && <Chip size="small" color="primary" label={t('botAccess.chipRemote', {defaultValue: 'Remote Control'})}/>}
                         {state === 'off' && <Chip size="small" label={t('botAccess.chipNoRemote', {defaultValue: 'No Remote Control'})}/>}
-                        {state === 'broken' && (
+                        {(state === 'startDenied' || state === 'approveDenied') && (
                             <Tooltip title={t('botAccess.chipRemoteBrokenHint', {defaultValue: 'start launches runs; approve answers permission/question prompts. Re-apply Full access to repair.'})}>
-                                <Chip size="small" color="warning" label={start
+                                <Chip size="small" color="warning" label={state === 'approveDenied'
                                     ? t('botAccess.chipApproveDenied', {defaultValue: 'Remote Control broken: approve denied'})
                                     : t('botAccess.chipStartDenied', {defaultValue: 'Remote Control broken: start denied'})}/>
                             </Tooltip>
                         )}
-                        <Chip size="small" label={permissionAllowed(chat, 'notify', 'notify.receive')
+                        <Chip size="small" label={chatPermissionAllowed(chat, 'notify', 'notify.receive')
                             ? t('botAccess.chipNotify', {defaultValue: 'Notify'})
                             : t('botAccess.chipNoNotify', {defaultValue: 'No Notify'})}/>
                         <FormControlLabel
@@ -226,12 +234,9 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
             />
         );
         return (
-            <Box key={group.id} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>
+            <Box key={group.id} sx={rowSx}>
                 <Stack direction={{xs: 'column', sm: 'row'}} sx={{justifyContent: 'space-between', gap: 1}}>
-                    <Box sx={{minWidth: 0}}>
-                        <Typography sx={{fontWeight: 600}}>{group.name || t('botAccess.group', {defaultValue: 'Group'})}</Typography>
-                        <Typography variant="caption" sx={{fontFamily: 'monospace', color: 'text.primary', overflowWrap: 'anywhere'}}>{group.external_group_id}</Typography>
-                    </Box>
+                    {rowHeader(group.name || t('botAccess.group', {defaultValue: 'Group'}), group.external_group_id)}
                     <Stack direction="row">
                         {!remoteOnly && capSwitch('notify', t('botAccess.notify', {defaultValue: 'Notify'}))}
                         {capSwitch('remote_control', t('botAccess.remoteControl', {defaultValue: 'Remote Control'}))}
@@ -286,14 +291,12 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
                         {bot && <PairingCodePanel bot={bot}/>}
                     </Box>
                 )}
-                {error && <Alert severity="error">{error}</Alert>}
+                {shownError && <Alert severity="error">{shownError}</Alert>}
                 {loading ? <Box sx={{display: 'flex', justifyContent: 'center', py: 6}}><CircularProgress/></Box> : <>
                     {!remoteOnly && <>
-                        <Box>
-                            <Typography variant="h6">{t('botAccess.capabilities', {defaultValue: 'Capabilities'})}</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                                {t('botAccess.capabilitiesHint', {defaultValue: 'What this Bot can provide. Turning off the last capability stops the connection without deleting its configuration.'})}
-                            </Typography>
+                        {section(
+                            t('botAccess.capabilities', {defaultValue: 'Capabilities'}),
+                            t('botAccess.capabilitiesHint', {defaultValue: 'What this Bot can provide. Turning off the last capability stops the connection without deleting its configuration.'}),
                             <Stack direction={{xs: 'column', sm: 'row'}} spacing={3}>
                                 {(['remote_control', 'notify'] as CapabilityName[]).map((cap) => (
                                     <FormControlLabel
@@ -305,33 +308,29 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all'}: Props) 
                                             : t('botAccess.notify', {defaultValue: 'Notify'})}
                                     />
                                 ))}
-                            </Stack>
-                        </Box>
+                            </Stack>,
+                        )}
                         <Divider/>
                     </>}
-                    <Box>
-                        <Typography variant="h6">{t('botAccess.directChats', {defaultValue: 'Direct Chats'})}</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                            {remoteOnly
-                                ? t('botAccess.directChatsRemoteHint', {defaultValue: 'People who reached the bot in a direct message, and whether each can control it.'})
-                                : t('botAccess.directChatsHint', {defaultValue: 'Who is paired, what they can do, and the concrete platform chat ID.'})}
-                        </Typography>
-                        {chats.length === 0
+                    {section(
+                        t('botAccess.directChats', {defaultValue: 'Direct Chats'}),
+                        remoteOnly
+                            ? t('botAccess.directChatsRemoteHint', {defaultValue: 'People who reached the bot in a direct message, and whether each can control it.'})
+                            : t('botAccess.directChatsHint', {defaultValue: 'Who is paired, what they can do, and the concrete platform chat ID.'}),
+                        chats.length === 0
                             ? <Alert severity="info">{t('botAccess.noDirectChats', {defaultValue: 'No Direct Chats yet.'})}</Alert>
-                            : <Stack spacing={1.5}>{chats.map((chat) => remoteOnly ? remoteChatRow(chat) : fullChatRow(chat))}</Stack>}
-                    </Box>
+                            : <Stack spacing={1.5}>{chats.map((chat) => remoteOnly ? remoteChatRow(chat) : fullChatRow(chat))}</Stack>,
+                    )}
                     <Divider/>
-                    <Box>
-                        <Typography variant="h6">{t('botAccess.groups', {defaultValue: 'Groups'})}</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                            {remoteOnly
-                                ? t('botAccess.groupsRemoteHint', {defaultValue: 'Allow Remote Control in a group, then add the people in it who may use it.'})
-                                : t('botAccess.groupsHint', {defaultValue: 'Group capability access and authorized Actors are separate controls.'})}
-                        </Typography>
-                        {groups.length === 0
+                    {section(
+                        t('botAccess.groups', {defaultValue: 'Groups'}),
+                        remoteOnly
+                            ? t('botAccess.groupsRemoteHint', {defaultValue: 'Allow Remote Control in a group, then add the people in it who may use it.'})
+                            : t('botAccess.groupsHint', {defaultValue: 'Group capability access and authorized Actors are separate controls.'}),
+                        groups.length === 0
                             ? <Alert severity="info">{t('botAccess.noGroups', {defaultValue: 'No Groups observed yet. Add the Bot to a group and send it a message; new groups start with no access.'})}</Alert>
-                            : <Stack spacing={1.5}>{groups.map(groupRow)}</Stack>}
-                    </Box>
+                            : <Stack spacing={1.5}>{groups.map(groupRow)}</Stack>,
+                    )}
                 </>}
             </Stack>
         </DialogContent>

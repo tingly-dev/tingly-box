@@ -92,7 +92,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
             <Divider sx={NODE_LAYER_STYLES.divider} />
             {/* Bottom Layer - type tag */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                <NodeTag label="Model"/>
+                <NodeTag label="Model" active={active}/>
             </Box>
         </StyledBotGraphNode>
     );

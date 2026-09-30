@@ -188,7 +188,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                 <Divider sx={NODE_LAYER_STYLES.divider} />
 
                 <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                    <NodeTag label={displayLabel}/>
+                    <NodeTag label={displayLabel} active={active}/>
                 </Box>
             </StyledBotGraphNode>
         </NodeTooltip>

@@ -96,9 +96,9 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // English in both locales.
 
 // The full set of bot platform ids, in display order. Single source of
-// truth for anything that needs to list "every platform" (e.g. the Remote
-// page's in-page platform tabs) — keeps that list from drifting out of sync
-// with the guides below or with the routes in App.tsx.
+// truth for anything that needs to list "every platform" (e.g. the Bots
+// page's platform picker, or which platforms Connect a bot offers) — keeps
+// that list from drifting out of sync with the guides below or the routes.
 export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
 
 // Brand icon per platform, keyed the same as BOT_PLATFORM_IDS — locale-

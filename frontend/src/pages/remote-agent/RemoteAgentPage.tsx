@@ -27,14 +27,12 @@ const RemoteAgentPage = () => {
 
     // The SHARED bot-resource dialog, opened in place — no bouncing to the
     // Bots section. mode 'add' from the Add button / empty state; mode 'edit'
-    // from a card's edit action while the Bots nav section is hidden.
+    // from a card's edit action.
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [dialogEditUuid, setDialogEditUuid] = useState<string | null>(null);
-    const [dialogPlatformId, setDialogPlatformId] = useState<string>(BOT_PLATFORM_IDS[0]);
     const openAddDialog = useCallback(() => {
         setDialogMode('add');
-        setDialogPlatformId(BOT_PLATFORM_IDS[0]);
         setDialogEditUuid(null);
         setDialogOpen(true);
     }, []);
@@ -223,7 +221,6 @@ const RemoteAgentPage = () => {
                             onDelete={() => handleDeleteBot(bot.uuid!)}
                             isToggling={togglingBotUuid === bot.uuid}
                             isRestarting={restartingBotUuid === bot.uuid}
-                            onAccessChanged={() => void loadBots()}
                         />
                     ))}
                 </Box>
@@ -233,7 +230,7 @@ const RemoteAgentPage = () => {
                 open={dialogOpen}
                 mode={dialogMode}
                 editUuid={dialogEditUuid}
-                platformId={dialogPlatformId}
+                platformId={BOT_PLATFORM_IDS[0]}
                 lockPlatform={false}
                 bots={bots}
                 onClose={() => setDialogOpen(false)}

@@ -1,31 +1,28 @@
 import {api} from '@/services/api';
 import type {BotGroupDetail, DirectChatDetail} from '@/types/bot';
+import {chatCanControl, chatPermissionAllowed, groupCanControl} from '@/types/bot';
 import {useCallback, useEffect, useState} from 'react';
 
-const remoteAllowed = (chat: DirectChatDetail, action: string) =>
-    chat.permissions.some((permission) =>
-        permission.capability === 'remote_control' &&
-        permission.action === action &&
-        permission.effect === 'allow');
-
-export interface RemoteAccessSummary {
+export interface RemoteAccess {
     loading: boolean;
     error: string;
-    /** Direct chats that can actually start runs (access + start allowed, not blocked). */
+    /** Every Direct Chat and Group the bot has seen — the Remote access dialog renders these. */
+    chats: DirectChatDetail[];
+    groups: BotGroupDetail[];
+    /** Direct chats that can drive the bot now (see chatCanControl). */
     controllers: DirectChatDetail[];
-    /** Groups with Remote Control allowed AND at least one authorized actor. */
+    /** Groups where someone can drive the bot now (see groupCanControl). */
     controllingGroups: BotGroupDetail[];
-    /** Paired (or observed) direct chats that don't have Remote Control yet. */
+    /** Unblocked direct chats that reached the bot but have no Remote Control access. */
     pendingChats: DirectChatDetail[];
     reload: () => Promise<void>;
 }
 
 // useRemoteAccess answers "who can control this bot right now?" for the
-// Remote page. A group only counts once someone in it is authorized — Remote
-// Control allowed on a group with zero actors still lets nobody in, and
-// counting it would hide exactly the "nobody can use this" state the page
-// has to surface.
-export function useRemoteAccess(botUuid?: string): RemoteAccessSummary {
+// Remote page, and is also the data source of the Remote-scoped access
+// dialog, so the card and the dialog read one copy. Pass enabled=false to
+// skip fetching (an off card shows none of this until it is expanded).
+export function useRemoteAccess(botUuid: string | undefined, enabled = true): RemoteAccess {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [chats, setChats] = useState<DirectChatDetail[]>([]);
@@ -51,16 +48,17 @@ export function useRemoteAccess(botUuid?: string): RemoteAccessSummary {
         }
     }, [botUuid]);
 
-    useEffect(() => { void reload(); }, [reload]);
+    useEffect(() => { if (enabled) void reload(); }, [enabled, reload]);
 
-    const open = chats.filter((detail) => !detail.chat.blocked);
     return {
         loading,
         error,
-        controllers: open.filter((detail) => remoteAllowed(detail, 'access') && remoteAllowed(detail, 'remote_control.start')),
-        controllingGroups: groups.filter((detail) =>
-            !detail.group.blocked && detail.capabilities.remote_control === 'allow' && detail.actors.length > 0),
-        pendingChats: open.filter((detail) => !remoteAllowed(detail, 'access')),
+        chats,
+        groups,
+        controllers: chats.filter(chatCanControl),
+        controllingGroups: groups.filter(groupCanControl),
+        pendingChats: chats.filter((detail) =>
+            !detail.chat.blocked && !chatPermissionAllowed(detail, 'remote_control', 'access')),
         reload,
     };
 }

@@ -24,13 +24,11 @@ import {capabilityEnabled, ccProfileIdFromDefaultAgent, isPairingRequired} from 
 import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
 import type {Provider} from '@/types/provider';
 import type {ProfileInfo} from '@/contexts/ProfileContext';
-import {botCardSx} from './botCardStyles';
 import RemoteControlGraph from './RemoteControlGraph';
 import BotAccessDialog from './BotAccessDialog';
 import PairingCodePanel from './PairingCodePanel';
 import {useRemoteAccess} from './useRemoteAccess';
 import {useState} from 'react';
-import type {ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
 
 interface RemoteAgentBotCardProps {
@@ -48,14 +46,14 @@ interface RemoteAgentBotCardProps {
     onDelete: () => void;
     isToggling?: boolean;
     isRestarting?: boolean;
-    onAccessChanged?: () => void;
 }
 
 // RemoteAgentBotCard is the PURPOSE card: one row per bot on the Remote page.
 // The switch decides whether this bot drives Claude Code / SmartGuide from
 // chat. Below it, the bot's route (RemoteControlGraph): who can send commands
-// in → this bot → @tb / @cc forks; each node opens its editor. Access and pairing live in the Access work surface
-// opened from the entry node, keeping authorization under one source of
+// in → this bot → @tb / @cc forks; each node opens its editor. Access and
+// pairing live in the Access work surface opened from the entry node, which
+// reads this card's own access data, so authorization has one source of
 // truth. Edit / restart / delete stay here so the page is self-sufficient.
 const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     bot,
@@ -69,7 +67,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     onDelete,
     isToggling = false,
     isRestarting = false,
-    onAccessChanged,
 }) => {
     const {t} = useTranslation();
     const isMounted = capabilityEnabled(bot,'remote_control');
@@ -79,8 +76,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [accessDialogOpen, setAccessDialogOpen] = useState(false);
-    const access = useRemoteAccess(bot.uuid);
-    const controllerCount = access.controllers.length + access.controllingGroups.length;
 
     // Off when this purpose isn't live: unmounted, or the bot itself is
     // disabled. An off card is quiet rather than struck through: no paper
@@ -90,6 +85,13 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     const isActive = isMounted && isEnabled;
     const [showSettings, setShowSettings] = useState(false);
     const expanded = isActive || showSettings;
+    // Nothing on a folded off card shows access, so it doesn't fetch it.
+    const access = useRemoteAccess(bot.uuid, expanded);
+    const controllerCount = access.controllers.length + access.controllingGroups.length;
+    // Live, loaded, and nobody can drive it. The notice (which needs the
+    // loaded chats to pick its next step) additionally requires no load error.
+    const unusable = isActive && !access.loading && controllerCount === 0;
+    const nobody = unusable && !access.error;
     const ccProfileName = ccProfiles?.find((p) => p.id === ccProfileId)?.name;
     const BrandIcon = PLATFORM_BRAND_ICONS[bot.platform || ''];
 
@@ -99,47 +101,31 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
         ? t('remoteAgent.card.statusOff', {defaultValue: 'Remote Control off'})
         : access.loading
             ? t('remoteAgent.card.statusChecking', {defaultValue: 'Checking access…'})
-            : controllerCount > 0
-                ? t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount})
-                : t('remoteAgent.card.statusNobody', {defaultValue: 'Nobody can control yet'});
-    const statusColor = !isActive ? 'text.secondary' : (!access.loading && controllerCount === 0 ? 'warning.main' : 'success.main');
+            : unusable
+                ? t('remoteAgent.card.statusNobody', {defaultValue: 'Nobody can control yet'})
+                : t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount});
+    const statusColor = !isActive ? 'text.secondary' : unusable ? 'warning.main' : 'success.main';
 
-    // Readiness: the first thing that stops a live bot from being usable,
-    // with the concrete next step in the same row (see ux-principles #11).
-    let notice: ReactNode = null;
-    if (isActive && !access.loading && !access.error && controllerCount === 0) {
-        const manageAccess = (
-            <Button color="inherit" size="small" onClick={() => setAccessDialogOpen(true)}>
-                {t('remoteAgent.card.manageAccess', {defaultValue: 'Manage access'})}
-            </Button>
-        );
-        if (access.pendingChats.length > 0) {
-            notice = (
-                <Alert severity="warning" action={manageAccess}>
-                    {t('remoteAgent.card.pendingChats', {
-                        defaultValue: '{{count}} direct chats reached this bot but none can control it. Grant Remote Control to the right one.',
-                        count: access.pendingChats.length,
-                    })}
-                </Alert>
-            );
-        } else if (isPairingRequired(bot)) {
-            notice = (
-                <Alert severity="warning" action={manageAccess}>
-                    {t('remoteAgent.card.pairHint', {defaultValue: 'Nobody can control this bot yet. Send this to the bot in a direct message:'})}
-                    <PairingCodePanel bot={bot} revealByDefault/>
-                </Alert>
-            );
-        } else {
-            notice = (
-                <Alert severity="warning" action={manageAccess}>
-                    {t('remoteAgent.card.messageHint', {defaultValue: 'Nobody can control this bot yet. Message the bot directly, then grant Remote Control to that chat.'})}
-                </Alert>
-            );
-        }
-    }
+    // Readiness: while a live bot is unusable, the concrete next step sits in
+    // the same row (see ux-principles #11).
+    const pairing = isPairingRequired(bot);
+    const noticeText = access.pendingChats.length > 0
+        ? t('remoteAgent.card.pendingChats', {
+            defaultValue: '{{count}} direct chats reached this bot but none can control it. Grant Remote Control to the right one.',
+            count: access.pendingChats.length,
+        })
+        : pairing
+            ? t('remoteAgent.card.pairHint', {defaultValue: 'Nobody can control this bot yet. Send this to the bot in a direct message:'})
+            : t('remoteAgent.card.messageHint', {defaultValue: 'Nobody can control this bot yet. Message the bot directly, then grant Remote Control to that chat.'});
 
     return (
-        <Box sx={botCardSx(isActive)}>
+        <Box sx={{
+            bgcolor: isActive ? 'background.paper' : 'transparent',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            transition: 'background-color 0.18s ease-out',
+        }}>
             {/* Header: platform + bot name, one status line, one switch */}
             <Box sx={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
@@ -190,21 +176,35 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 </Box>
             </Box>
 
-            {notice && <Box sx={{px: 2, pb: 1}}>{notice}</Box>}
+            {nobody && (
+                <Box sx={{px: 2, pb: 1}}>
+                    <Alert
+                        severity="warning"
+                        action={<Button color="inherit" size="small" onClick={() => setAccessDialogOpen(true)}>
+                            {t('remoteAgent.card.manageAccess', {defaultValue: 'Manage access'})}
+                        </Button>}
+                    >
+                        {noticeText}
+                        {pairing && access.pendingChats.length === 0 && <PairingCodePanel bot={bot} revealByDefault/>}
+                    </Alert>
+                </Box>
+            )}
 
             {!isActive && (
                 // Off: one line saying what the bot WOULD do when turned on.
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 2, pb: expanded ? 0 : 1.25, mt: -0.5}}>
-                    <Typography variant="caption" noWrap sx={{flex: 1, minWidth: 0, color: 'text.secondary', visibility: expanded ? 'hidden' : 'visible'}}>
-                        <Box component="span" sx={{fontFamily: 'monospace'}}>@tb</Box>{' '}
-                        {bot.smartguide_model || '—'}
-                        {'  ·  '}
-                        <Box component="span" sx={{fontFamily: 'monospace'}}>@cc</Box>{' '}
-                        {ccProfileId
-                            ? (ccProfileName || ccProfileId)
-                            : t('remoteAgent.ccProfile.default', {defaultValue: 'Default'})}
-                    </Typography>
-                    <Button size="small" color="inherit" sx={{color: 'text.secondary', flexShrink: 0}} onClick={() => setShowSettings((v) => !v)}>
+                    {!expanded && (
+                        <Typography variant="caption" noWrap sx={{minWidth: 0, color: 'text.secondary'}}>
+                            <Box component="span" sx={{fontFamily: 'monospace'}}>@tb</Box>{' '}
+                            {bot.smartguide_model || '—'}
+                            {'  ·  '}
+                            <Box component="span" sx={{fontFamily: 'monospace'}}>@cc</Box>{' '}
+                            {ccProfileId
+                                ? (ccProfileName || ccProfileId)
+                                : t('remoteAgent.ccProfile.default', {defaultValue: 'Default'})}
+                        </Typography>
+                    )}
+                    <Button size="small" color="inherit" sx={{ml: 'auto', color: 'text.secondary', flexShrink: 0}} onClick={() => setShowSettings((v) => !v)}>
                         {showSettings
                             ? t('remoteAgent.card.hideSettings', {defaultValue: 'Hide settings'})
                             : t('remoteAgent.card.showSettings', {defaultValue: 'Settings'})}
@@ -243,13 +243,10 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
             />
             <BotAccessDialog
                 scope="remote_control"
+                remoteAccess={access}
                 open={accessDialogOpen}
                 bot={bot}
                 onClose={() => setAccessDialogOpen(false)}
-                onChanged={() => {
-                    void access.reload();
-                    onAccessChanged?.();
-                }}
             />
         </Box>
     );

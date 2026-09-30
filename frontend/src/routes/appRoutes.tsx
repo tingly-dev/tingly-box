@@ -229,7 +229,6 @@ export const appRoutes = (
             <Route path="/remote-agent" element={<RemoteAgentPage />} />
             {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}
             <Route path="/remote-agent/:platform" element={<LegacyRemoteAgentRedirect />} />
-            <Route path="/remote-control" element={<LegacyRemoteAgentRedirect />} />
             <Route path="/remote-control/*" element={<LegacyRemoteAgentRedirect />} />
             {/* Guardrails */}
             <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />

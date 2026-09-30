@@ -74,7 +74,7 @@ const CCProfileNode: React.FC<CCProfileNodeProps> = ({
             </Box>
             <Divider sx={NODE_LAYER_STYLES.divider} />
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                <NodeTag label={t('remoteAgent.ccProfile.chip', { defaultValue: 'Profile' })} tone={missing ? 'warning' : 'default'}/>
+                <NodeTag label={t('remoteAgent.ccProfile.chip', { defaultValue: 'Profile' })} tone={missing ? 'warning' : 'default'} active={active}/>
             </Box>
         </StyledBotGraphNode>
     );

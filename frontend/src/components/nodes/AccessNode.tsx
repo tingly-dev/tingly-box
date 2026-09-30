@@ -36,8 +36,8 @@ const AccessNode: React.FC<AccessNodeProps> = ({directChats, groups, active = tr
                 </Box>
                 <Box sx={{width: '85%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
                 <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                    <NodeTag outlined label={loading ? '… direct' : `${directChats} direct`}/>
-                    <NodeTag outlined label={loading ? '… groups' : `${groups} ${groups === 1 ? 'group' : 'groups'}`}/>
+                    <NodeTag outlined active={active} label={loading ? '… direct' : `${directChats} direct`}/>
+                    <NodeTag outlined active={active} label={loading ? '… groups' : `${groups} ${groups === 1 ? 'group' : 'groups'}`}/>
                 </Box>
             </StyledBotGraphNode>
         </NodeTooltip>

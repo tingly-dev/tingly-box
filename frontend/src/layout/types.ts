@@ -24,8 +24,7 @@ export interface NavItemBase {
      * Optional override for "is this item active": receives the current
      * pathname, returns whether this item should highlight. Defaults to an
      * exact match on `path`. Use this for an item whose route has a dynamic
-     * segment (e.g. `/bots/:platform`, navigated via in-page tabs
-     * rather than one sidebar row per value) so the row stays highlighted —
+     * segment or sub-pages (e.g. `/desk/...`) so the row stays highlighted —
      * and the parent activity stays selected — across the whole sub-tree.
      */
     match?: (pathname: string) => boolean;
