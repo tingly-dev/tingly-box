@@ -125,7 +125,7 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// Schema generation only references these handlers, so no live token store
 	// is required here.
 	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
-	team.RegisterRoutes(apiV1, team.NewHandler(nil))
+	team.RegisterRoutes(apiV1, team.NewHandler(nil, nil))
 
 	// Provider quota API routes — nil manager; schema generation only
 	// references the handler, and available() guards every method at

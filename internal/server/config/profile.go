@@ -272,23 +272,18 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		delete(c.Profiles, base)
 	}
 
-	// Remove all rules belonging to this profile
-	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
-	var removedUUIDs []string
-	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
-		if r.Scenario == profiledScenario {
-			removedUUIDs = append(removedUUIDs, r.UUID)
-			return true
-		}
-		return false
-	})
-
-	// Remove scenario config for this profile (if it exists)
-	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool {
-		return sc.Scenario == profiledScenario
-	})
-
+	c.removeScenarioLocked(typ.ProfiledScenarioName(baseScenario, profileID))
 	return c.Save()
+}
+
+// removeScenarioLocked drops every rule of scenario and its own scenario
+// config — what a deleted profile or team leaves behind. Callers must hold
+// c.mu. Reports whether anything was removed.
+func (c *Config) removeScenarioLocked(scenario typ.RuleScenario) bool {
+	nRules, nScenarios := len(c.Rules), len(c.Scenarios)
+	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool { return r.Scenario == scenario })
+	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool { return sc.Scenario == scenario })
+	return len(c.Rules) != nRules || len(c.Scenarios) != nScenarios
 }
 
 // ResolveProfileNameOrID resolves a profile identifier to a profile ID.

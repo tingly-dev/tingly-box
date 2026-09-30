@@ -29,6 +29,10 @@ configuration). Implementation: `Config.Duplicate` in
   `builtin:<dst>:<x>`; other rules get fresh UUIDs. Getting this wrong fails
   silently (the profile falls back to an unrouted model name) — the handler
   test asserts the generated `ANTHROPIC_MODEL`.
-- **Failure:** validation runs before any write; a team whose routing copy
-  fails is deleted again. Unknown source → 404, other errors → 400, like the
-  rest of the scenario API.
+- **Failure:** validation runs before any write; a failed save is undone in
+  memory, and a team whose routing copy fails is deleted again. Unknown
+  source → 404, other errors → 400, like the rest of the scenario API.
+- **Deleting a team removes its routing** (`Config.DeleteTeam`): duplicates
+  make teams with rules common, and a deleted team's `team:<id>` rules would
+  otherwise linger unreachable. The baseline migration
+  `drop-orphan-team-scopes` sweeps routing of teams that no longer exist.

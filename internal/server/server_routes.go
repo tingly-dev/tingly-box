@@ -104,5 +104,5 @@ func (s *Server) UseTokenManagementEndpoints() {
 	api := manager.NewGroup("api", "v1", "")
 	api.Router.Use(s.getUserAuthMiddleware())
 	sharing.RegisterRoutes(api, sharing.NewHandler(store))
-	team.RegisterRoutes(api, team.NewHandler(sm.Team()))
+	team.RegisterRoutes(api, team.NewHandler(sm.Team(), s.config))
 }
