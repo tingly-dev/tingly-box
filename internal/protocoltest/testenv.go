@@ -729,11 +729,10 @@ func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResu
 		r = sse.AssembleAnthropicStream(events)
 	case protocol.APIStyleGoogle:
 		r = sse.AssembleGoogleStream(events)
-	case protocol.APIStyleDecision:
-		// Decision is single-shot JSON with no SSE variant; a "streaming"
-		// decision cell just returns the JSON body, which stays in RawBody.
-		r = &sse.ParsedResult{}
 	}
+	// Decision (and any future non-SSE family) intentionally has no case:
+	// it is single-shot JSON with no SSE variant, so r stays nil and the
+	// empty result below signals "nothing streamed".
 	if r == nil {
 		return sse.ParsedResult{}
 	}

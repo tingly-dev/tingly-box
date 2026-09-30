@@ -337,9 +337,6 @@ func (p *Provider) IsDual() bool {
 // APIBase already points at the decisions surface) or it declares a decision
 // fork URL next to its chat endpoints.
 func (p *Provider) HasDecisionEndpoint() bool {
-	if p == nil {
-		return false
-	}
 	return p.APIStyle == APIStyleDecision || p.APIBaseDecision != ""
 }
 

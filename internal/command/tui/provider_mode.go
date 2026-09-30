@@ -11,6 +11,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
+// defaultDecisionBaseURL is the Jev decisions surface offered as the default
+// when adding a decision-style provider or a decision fork URL.
+const defaultDecisionBaseURL = "https://www.jevai.org/api/v1"
+
 // RunProviderMode is the entry point for the Provider mode loop. It returns
 // nil when the user backs out to the top-level menu.
 func RunProviderMode(cfg *serverconfig.Config) error {
@@ -96,7 +100,7 @@ func providerAdd(cfg *serverconfig.Config) error {
 	if styleR.Value == protocol.APIStyleAnthropic {
 		defURL = "https://api.anthropic.com"
 	} else if styleR.Value == protocol.APIStyleDecision {
-		defURL = "https://www.jevai.org/api/v1"
+		defURL = defaultDecisionBaseURL
 	}
 	baseR, err := Input("Base URL:", InputOptions{Placeholder: defURL, CanGoBack: true})
 	if err != nil || baseR.IsCancel() || baseR.IsBack() {
@@ -114,7 +118,7 @@ func providerAdd(cfg *serverconfig.Config) error {
 
 	// Optional decision fork: gives the provider decision capability without
 	// changing its chat style. Leave blank when the model has none.
-	decisionR, err := Input("Decision endpoint URL (optional):", InputOptions{Placeholder: "https://www.jevai.org/api/v1", CanGoBack: true})
+	decisionR, err := Input("Decision endpoint URL (optional):", InputOptions{Placeholder: defaultDecisionBaseURL, CanGoBack: true})
 	if err != nil || decisionR.IsCancel() || decisionR.IsBack() {
 		return nil
 	}

@@ -3,6 +3,8 @@ package scenario
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 func TestAllScenarios_Registered(t *testing.T) {
@@ -78,15 +80,20 @@ func TestBuildErrorFromSpec_RateLimit(t *testing.T) {
 
 // TestDecisionResponse_RandomButRight pins the decision mock's contract: the
 // answer varies across calls (it is not a fixed echo a passthrough bug could
-// satisfy by accident), yet every body is internally consistent — the chosen
-// option is the argmax of its own probability map and usage is non-zero.
+// satisfy by accident), yet every body is internally consistent — checked via
+// the same AssertDecisionAnswerConsistent the matrix runs — and usage is
+// non-zero.
 func TestDecisionResponse_RandomButRight(t *testing.T) {
 	builder := decisionResponse()
+	consistent := check.AssertDecisionAnswerConsistent()
 	answers := make(map[string]bool)
 	for i := 0; i < 40; i++ {
 		status, body := builder.NonStream()
 		if status != 200 {
 			t.Fatalf("call %d: status = %d", i, status)
+		}
+		if err := consistent.Check(&check.RoundTripResult{RawBody: body}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
 		}
 		var parsed struct {
 			Answers struct {
@@ -94,8 +101,7 @@ func TestDecisionResponse_RandomButRight(t *testing.T) {
 					Answer string `json:"answer"`
 				} `json:"q_route"`
 			} `json:"answers"`
-			Probabilities map[string]map[string]float64 `json:"probabilities"`
-			Usage         struct {
+			Usage struct {
 				InputTokens  int `json:"input_tokens"`
 				OutputTokens int `json:"output_tokens"`
 			} `json:"usage"`
@@ -103,24 +109,10 @@ func TestDecisionResponse_RandomButRight(t *testing.T) {
 		if err := json.Unmarshal(body, &parsed); err != nil {
 			t.Fatalf("call %d: body is not JSON: %v", i, err)
 		}
-		answer := parsed.Answers.QRoute.Answer
-		probs := parsed.Probabilities["q_route"]
-		if _, ok := probs[answer]; !ok {
-			t.Fatalf("call %d: answer %q missing from probabilities %v", i, answer, probs)
-		}
-		best, bestP := "", -1.0
-		for opt, p := range probs {
-			if p > bestP {
-				best, bestP = opt, p
-			}
-		}
-		if answer != best {
-			t.Fatalf("call %d: answer %q is not the argmax (%q=%.2f)", i, answer, best, bestP)
-		}
 		if parsed.Usage.InputTokens <= 0 || parsed.Usage.OutputTokens <= 0 {
 			t.Fatalf("call %d: usage is zero: %+v", i, parsed.Usage)
 		}
-		answers[answer] = true
+		answers[parsed.Answers.QRoute.Answer] = true
 	}
 	if len(answers) < 2 {
 		t.Errorf("expected randomized answers across 40 calls, got only %v", answers)
