@@ -85,6 +85,40 @@ Config, memory, logs and the database all live under a single directory tree
 - `docker.build.Dockerfile`: `/home/tingly/.tingly-box`
 - `docker.npm.Dockerfile` / `docker-compose.yml`: `/app/.tingly-box`
 
+#### Docker Desktop (macOS / Windows): prefer a named volume
+
+The data directory holds a SQLite database in WAL mode. SQLite relies on
+file locks and a shared-memory file (`tingly.db-shm`) that host-directory
+bind mounts on Docker Desktop (virtiofs / gRPC-FUSE) do not honour reliably,
+and SQLite's own documentation rules WAL out on such filesystems. On Linux
+hosts a bind mount is a plain local directory and is fine.
+
+On Docker Desktop, keep the database on a named volume, which lives inside
+the Docker VM's own filesystem:
+
+```bash
+docker volume create tingly-data
+docker run -d \
+  --name tingly-box \
+  -p 12580:12580 \
+  -v tingly-data:/app/.tingly-box \
+  ghcr.io/tingly-dev/tingly-box
+```
+
+To copy an existing bind-mounted directory into the volume, stop the
+container first so the WAL is checkpointed, then:
+
+```bash
+docker run --rm -v "$(pwd)/tingly-data:/src:ro" -v tingly-data:/dst alpine \
+  sh -c 'cp -a /src/. /dst/'
+```
+
+Whatever the mount type, only the server process should open the database.
+The images' health checks probe `/api/v1/info/health` over HTTP for that
+reason, and `tingly-box version` never opens the data directory; do not add
+a cron or sidecar that runs other `tingly-box` subcommands against a live
+server's data directory.
+
 ### Running as a specific host UID/GID
 
 The entrypoint only fixes ownership when the container starts as root (the
@@ -137,6 +171,25 @@ tar czf tingly-config-backup.tar.gz -C data .tingly-box
    - Check the volume mount path matches the image you're running
      (`/home/tingly/.tingly-box` for the source-build image,
      `/app/.tingly-box` for the npm image / Compose).
+
+4. **`database disk image is malformed` / usage dashboard returns HTTP 500**
+   - The SQLite file was written by more than one process, or lives on a
+     filesystem whose locking SQLite cannot trust — on Docker Desktop this is
+     a host-directory bind mount (see *Docker Desktop: prefer a named volume*
+     above). Images before this note also ran a `tingly-box` CLI process as
+     the container health check, which opened the database every 30s.
+   - To recover, stop the container and rebuild the database from whatever
+     is still readable:
+     ```bash
+     cd <data-dir>/db
+     sqlite3 tingly.db ".recover" | sqlite3 tingly.recovered.db
+     sqlite3 tingly.recovered.db "PRAGMA integrity_check"
+     mv tingly.db tingly.db.corrupt && rm -f tingly.db-wal tingly.db-shm
+     mv tingly.recovered.db tingly.db
+     ```
+     Rows on damaged pages are lost; everything else (providers, rules,
+     tokens, the remaining usage history) comes back. Then move the data
+     directory to a named volume before starting the container again.
 
 ## Building for Different Platforms
 

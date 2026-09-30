@@ -219,6 +219,53 @@ message path**:
    profile before touching any code — don't reason about the win from first
    principles; measure it.
 
+## Process model: one process opens tingly.db
+
+Status: shipped with the fix for #1912.
+
+Every store assumes it is the **sole writer of its table** (that is what
+makes the write-through caches above sound). The deployment invariant behind
+it is stronger than "one `StoreManager` per process": **only the server
+process should have tingly.db open at all.** SQLite in WAL mode coordinates
+concurrent processes through `fcntl` locks and an mmapped `tingly.db-shm`
+index, and both are exactly what Docker Desktop's host-directory bind mounts
+(virtiofs / gRPC-FUSE on macOS and Windows) fail to honour across processes.
+
+The invariant was being broken by accident. `cli/tingly-box/main.go` built an
+`AppManager` for **every** subcommand before dispatching — and
+`appconfig.NewAppConfig` → `config.NewConfig` → `db.NewStoreManager` opens the
+database and runs every store's `AutoMigrate` (plus the deprecated-table
+`DROP`, legacy-JSON imports and config migrations). So `tingly-box version`,
+which Docker's `HEALTHCHECK` ran every 30s for the life of the container, was
+a second, short-lived writer racing the server. A user on Docker Desktop for
+macOS with a bind-mounted data directory hit `database disk image is
+malformed` in `usage_records` / `idx_provider_model` right after an upgrade,
+when both processes were also migrating schema (#1912); the pre-upgrade
+backup passed `integrity_check`, and nothing in `internal/db` had changed
+between the two releases.
+
+Rules that follow:
+
+1. **A command that only reports on the binary must not build an
+   `AppManager`.** `needsAppConfig` in `cli/tingly-box/main.go` lists them
+   (`version` today); their `Run` methods take no `*app.AppManager`, and
+   `TestVersionRunsWithoutTouchingConfigDir` asserts the config dir stays
+   empty after running one.
+2. **Container health checks probe the server over HTTP**
+   (`/api/v1/info/health`, unauthenticated), never a CLI subcommand — the
+   diagnostic should traverse the real path (`.design/ux-principles.md`),
+   and a CLI process is a database client.
+3. **Docs steer Docker Desktop users to a named volume** (`docs/docker.md`).
+   Linux bind mounts are local directories and are fine.
+
+Not done, deliberately: a startup `PRAGMA quick_check`. It is O(database)
+on every boot, and it would report a corruption it cannot prevent; the
+prevention is the process model above. The other CLI subcommands
+(`status`, `provider …`, `rule …`, `quota …`) still open the database — that
+is what they are for — and remain fine on any filesystem SQLite supports;
+against a live server on a Docker Desktop bind mount they carry the same
+risk the health check did, which the docs now say.
+
 ## GORM feature adoption
 
 Status: **evaluation only** — nothing in this section is implemented yet.

@@ -78,6 +78,26 @@ type CLI struct {
 	Version command.VersionCmdKong `kong:"cmd,help='Show version'"`
 }
 
+// needsAppConfig reports whether the parsed command needs an AppManager.
+//
+// Building one is not free of side effects: appconfig.NewAppConfig creates
+// the config directory, opens tingly.db (SQLite, WAL) through
+// db.NewStoreManager and runs every store's AutoMigrate. For any command
+// that only reports on the binary itself that is wasted work — and, worse,
+// a second process opening the server's database. Docker's HEALTHCHECK runs
+// `tingly-box version` every 30s for the life of the container; on Docker
+// Desktop (macOS/Windows) bind mounts, where SQLite's locking and WAL shared
+// memory are not reliable across processes, that extra writer corrupted a
+// user's usage_records table (#1912). Such commands run through ctx.Run()
+// with no bindings, so their Run methods must not take *app.AppManager.
+func needsAppConfig(command string) bool {
+	switch command {
+	case "version":
+		return false
+	}
+	return true
+}
+
 func main() {
 	command.BuildVersion = version
 	command.BuildGitCommit = gitCommit
@@ -138,6 +158,16 @@ func main() {
 	// Setup verbose logging
 	if cli.Verbose {
 		logrus.SetLevel(logrus.TraceLevel)
+	}
+
+	// Commands that only report on the binary run before any config or data
+	// directory is touched — see needsAppConfig.
+	if !needsAppConfig(ctx.Command()) {
+		if err := ctx.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	var appConfig *appconfig.AppConfig

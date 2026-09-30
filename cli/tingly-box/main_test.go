@@ -383,7 +383,7 @@ func TestVersionCmdPrintsAllFields(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		cmd := &command.VersionCmdKong{}
-		if err := cmd.Run(nil); err != nil {
+		if err := cmd.Run(); err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 	})
@@ -398,6 +398,59 @@ func TestVersionCmdPrintsAllFields(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in output, got:\n%s", want, out)
+		}
+	}
+}
+
+// TestVersionRunsWithoutTouchingConfigDir pins the fix for #1912: `tingly-box
+// version` (Docker's HEALTHCHECK) must run through the config-free path and
+// leave the data directory untouched — no config.json, no db/tingly.db, no
+// WAL — so a healthcheck can never become a second SQLite writer next to
+// the running server.
+func TestVersionRunsWithoutTouchingConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	cli, parser := newTestParser(t)
+
+	ctx, err := parser.Parse([]string{"--config-dir", dir, "version"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cli.ConfigDir != dir {
+		t.Fatalf("config dir not parsed: %q", cli.ConfigDir)
+	}
+	if needsAppConfig(ctx.Command()) {
+		t.Fatalf("%q must not need an AppConfig", ctx.Command())
+	}
+
+	// The same call main() makes on this path: no bindings, so a Run method
+	// that grew an *app.AppManager parameter fails here rather than in a
+	// container's healthcheck.
+	captureStdout(t, func() {
+		if err := ctx.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read config dir: %v", err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("version wrote into the config dir: %v", names)
+	}
+}
+
+func TestNeedsAppConfig(t *testing.T) {
+	if needsAppConfig("version") {
+		t.Error("version must not open the data directory")
+	}
+	for _, cmd := range []string{"start", "status", "stop", "provider list"} {
+		if !needsAppConfig(cmd) {
+			t.Errorf("%q must keep its AppConfig", cmd)
 		}
 	}
 }

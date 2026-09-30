@@ -18,8 +18,11 @@ services:
       - TINGLY_HOST=0.0.0.0
       - TINGLY_DEBUG=false
     restart: unless-stopped
+    # HTTP probe, not a second `tingly-box` process: a CLI process opens the
+    # server's SQLite database too, and two writers on a Docker Desktop bind
+    # mount corrupted usage data (#1912). Mirrors the image's HEALTHCHECK.
     healthcheck:
-      test: ["CMD", "tingly-box", "version"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.TINGLY_PORT||12580)+'/api/v1/info/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

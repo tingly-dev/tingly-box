@@ -180,10 +180,17 @@ func (o *OpenCmdKong) Run(appManager *app.AppManager, source LaunchSource) error
 	return startServer(appManager, opts, source)
 }
 
-// VersionCmdKong is the Kong version of version command
+// VersionCmdKong is the Kong version of version command.
+//
+// Run deliberately takes no *app.AppManager: printing build metadata must
+// never open the data directory. Docker's HEALTHCHECK runs `tingly-box
+// version` every 30s, and building an AppManager opens tingly.db (WAL) and
+// runs every store's AutoMigrate — a second writer process against the
+// server's database, which on Docker Desktop bind mounts (macOS/Windows)
+// can corrupt it. See cli/tingly-box/main.go needsAppConfig.
 type VersionCmdKong struct{}
 
-func (v *VersionCmdKong) Run(appManager *app.AppManager) error {
+func (v *VersionCmdKong) Run() error {
 	fmt.Printf("Tingly Box CLI\n")
 	fmt.Printf("Version:    %s\n", BuildVersion)
 	fmt.Printf("Git Commit: %s\n", BuildGitCommit)

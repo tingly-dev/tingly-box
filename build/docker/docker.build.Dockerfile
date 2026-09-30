@@ -99,12 +99,14 @@ EXPOSE 12580
 ENV TINGLY_PORT=12580
 ENV TINGLY_HOST=0.0.0.0
 
-# Health check. Runs via `docker exec`-like mechanics under the image's
-# default user, which is root now that ENTRYPOINT starts as root to chown
-# the bind mount (see docker-entrypoint.sh) — su-exec drops back to the
-# unprivileged "tingly" for this one command, matching the main process.
+# Health check: probe the running server over HTTP instead of running a
+# second `tingly` process. `tingly status` opened the same SQLite database
+# as the server (WAL mode, plus every store's AutoMigrate) every 30s; a
+# second writer on a Docker Desktop bind mount corrupted a user's
+# usage_records table (#1912). /api/v1/info/health needs no auth token;
+# busybox wget ships with alpine.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD su-exec tingly tingly status || exit 1
+    CMD wget -qO- "http://127.0.0.1:${TINGLY_PORT}/api/v1/info/health" >/dev/null || exit 1
 
 # Default command (server mode)
 CMD ["sh", "-c", "echo '======================================' && \

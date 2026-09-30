@@ -71,7 +71,14 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 EXPOSE 12580
 VOLUME ["/app/.tingly-box"]
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD ["tingly-box", "version"]
+# Probe the running server over HTTP rather than spawning a second
+# `tingly-box` process. A CLI process opens the same SQLite database as the
+# server (WAL mode, plus every store's AutoMigrate), and a second writer on a
+# Docker Desktop bind mount corrupted a user's usage_records table (#1912).
+# The unauthenticated /api/v1/info/health route is what the server itself
+# answers; node is already in the image, node:*-slim has no curl/wget.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.TINGLY_PORT||12580)+'/api/v1/info/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 
 # PM2 supervises the actual foreground server instead of starting a second
 # `pm2 logs` process. `--` separates PM2 flags from Tingly Box arguments.
