@@ -36,7 +36,8 @@ func sendStoreError(c *gin.Context, err error, defaultStatus int, errType string
 func recordToInfo(record *db.TeamRecord) TeamInfo {
 	return TeamInfo{
 		ID: record.ID, Name: record.Name, Slug: record.Slug,
-		Enabled: record.Enabled, IsDefault: record.ID == db.DefaultTeamID,
+		Enabled: record.Enabled, QuotaVisible: record.QuotaVisible,
+		IsDefault: record.ID == db.DefaultTeamID,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
 }
@@ -79,6 +80,13 @@ func (h *Handler) Update(c *gin.Context) {
 	if err != nil {
 		sendStoreError(c, err, http.StatusBadRequest, "invalid_request_error")
 		return
+	}
+	if req.QuotaVisible != nil {
+		if err := h.store.SetQuotaVisible(id, *req.QuotaVisible); err != nil {
+			sendStoreError(c, err, http.StatusBadRequest, "invalid_request_error")
+			return
+		}
+		record, _ = h.store.Get(id)
 	}
 	c.JSON(http.StatusOK, recordToInfo(record))
 }

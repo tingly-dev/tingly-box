@@ -8,7 +8,7 @@
 - **端侧**：API base 路径含 `/tingly/<scenario>` 即识别为 `tingly_box`（先于 host
   规则，因为中央可在任何 host 上）。fetcher 用 provider 已存的 key 请求同一 host 的
   `<prefix>/tingly/<scenario>/quota`，把返回的 `ProviderUsage` 原样存下。
-  403 提示「上游不向此 key 共享 quota」，404 提示「上游版本不支持」。
+  403 提示「上游 Team 未共享 quota」，404 提示「上游版本不支持」。
 - **中央**：`GET /tingly/:scenario[/v1]/quota`，与 `/models` 同一条鉴权链。取该
   scenario 下 active rule 的 provider，去重后合成一个 `ProviderUsage`：
   - 窗口标签为 `<provider 名> · <窗口>`（无名称时退回 `upstream N`）；
@@ -17,8 +17,9 @@
 
 ## 权限
 
-- 只有 owner 的 model token 可读。
-- Sharing Key 一律 403（先实验 owner 场景；Team 级开关另行加入）。
+- Sharing Key：仅当其 Team 打开「向共享密钥开放 quota」（`teams.quota_visible`，
+  默认关，Team 设置对话框里）才可读，否则 403；范围限于自己 Team 的 rule。
+- Owner 的 model token：不受开关约束。
 
 ## 暂不做
 

@@ -98,7 +98,7 @@ export const tokenApi = {
     createTeam: async (data: {name: string}): Promise<any> =>
         teamApiCall((client, headers) => client.POST('/api/v1/teams', {headers, body: data})),
 
-    updateTeam: async (teamId: string, data: {name: string}): Promise<any> =>
+    updateTeam: async (teamId: string, data: {name: string; quota_visible?: boolean}): Promise<any> =>
         teamApiCall((client, headers) => client.PUT('/api/v1/teams/{team_id}', {
             headers,
             params: {path: {team_id: teamId}},

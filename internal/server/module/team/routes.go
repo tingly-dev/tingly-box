@@ -16,7 +16,7 @@ func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
 	)
 	group.PUT("/teams/:team_id", h.Update,
 		swagger.WithTags("teams"),
-		swagger.WithDescription("Update a team"),
+		swagger.WithDescription("Update a team's name and whether its sharing keys may read quota"),
 		swagger.WithRequestModel(UpdateRequest{}),
 		swagger.WithResponseModel(TeamInfo{}),
 	)
