@@ -28,6 +28,7 @@ const (
 	ProviderTypeCursor     ProviderType = "cursor"
 	ProviderTypeCodex      ProviderType = "codex"
 	ProviderTypeOpenCode   ProviderType = "opencode"
+	ProviderTypeTinglyBox  ProviderType = "tingly_box" // another tingly-box gateway (see gateway.go)
 )
 
 // WindowType window type enumeration
