@@ -65,15 +65,19 @@ export function useActivityItems(): ActivityItem[] {
             window.removeEventListener('storage', sync);
         };
     }, []);
-    // Aggregate across every platform for the Bots row's subtitle — the
-    // per-platform breakdown lives on the Bots page itself now, not in
-    // the nav (see .design/bot-arch.md §10).
-    const botOverviewSubtitle = useMemo(() => {
+    // Aggregate across every platform for the Bots row's count — the
+    // per-platform breakdown lives on the Bots page itself, not in the nav
+    // (see .design/bot-arch.md §10). A trailing "2/3" on the label's line
+    // rather than a second line, so the row matches its one-line siblings.
+    const botOverviewCount = useMemo(() => {
         const totals = Object.values(botSummary).reduce(
             (acc, s) => ({ active: acc.active + s.active, total: acc.total + s.total }),
             { active: 0, total: 0 }
         );
-        return totals.total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: totals.active, total: totals.total }) : undefined;
+        return totals.total > 0 ? {
+            value: `${totals.active}/${totals.total}`,
+            title: t('layout.botsRunning', { defaultValue: '{{active}} of {{total}} bots running', active: totals.active, total: totals.total }),
+        } : undefined;
     }, [botSummary, t]);
 
     const promptMenuItems = useMemo(() => {
@@ -239,7 +243,8 @@ export function useActivityItems(): ActivityItem[] {
             // ("Bots"). Bot is the front door (every connected bot, every
             // platform, credentials live there); Remote Control and Notify are
             // the purposes mounted onto those bots. New purposes append here
-            // as new rows — the rail icon never grows. See bot-arch.md §10.
+            // as new rows — the rail icon never grows. Desk (no bot, browser
+            // only) closes the list behind its own divider. See bot-arch.md §10.
             // (key stays 'bots' — internal id, not user-visible.)
             // Hidden via the Remote power-up switch on /agent (same hidden set as
             // Team/Image) — hides the rail item only, bots keep running.
@@ -249,11 +254,17 @@ export function useActivityItems(): ActivityItem[] {
                 label: t('layout.remote'),
                 defaultPath: '/bots/overview',
                 children: [
-                    { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
+                    { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, count: botOverviewCount },
                     { type: 'divider' },
                     { path: '/remote-agent', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
-                    ...(enableDesk ? [{ path: '/desk', label: t('layout.desk', { defaultValue: 'Desk' }), icon: <IconCode sx={{ fontSize: 20 }} />, match: (p: string) => p.startsWith('/desk') }] : []),
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
+                    // Desk is remote work WITHOUT a bot (Claude Code driven
+                    // from the browser), so it sits in its own group after
+                    // the bot purposes rather than between them.
+                    ...(enableDesk ? [
+                        { type: 'divider' as const },
+                        { path: '/desk', label: t('layout.desk', { defaultValue: 'Desk' }), icon: <IconCode sx={{ fontSize: 20 }} />, match: (p: string) => p.startsWith('/desk') },
+                    ] : []),
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(isFullEdition && promptMenuItems.length > 0 ? [{

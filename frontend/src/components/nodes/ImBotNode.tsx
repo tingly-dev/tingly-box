@@ -1,4 +1,4 @@
-import {Box, Chip, styled} from '@mui/material';
+import {Box, styled} from '@mui/material';
 import {
     SMALL_NODE_STYLES,
     BOT_NODE_STYLES,
@@ -7,21 +7,30 @@ import {
     graphNodeBaseHoverStyles,
     graphNodeHoverStyles,
 } from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import type {BotSettings} from '@/types/bot';
 import {useTranslation} from 'react-i18next';
-import {platformDisplayName} from '@/constants/platformGuides';
+import {PLATFORM_BRAND_ICONS, platformDisplayName} from '@/constants/platformGuides';
 
 interface ImBotNodeProps {
     imbot: BotSettings;
     active?: boolean;
     onClick?: () => void;
+    /**
+     * 'full' (default): bot name + platform tag — for graphs with no other
+     * place naming the bot.
+     * 'platform': just the platform's icon and name — for a graph drawn
+     * inside a card whose header already names the bot (Remote Control),
+     * where repeating the name only adds a truncated second copy.
+     */
+    variant?: 'full' | 'platform';
 }
 
 // ImBotNode is the bot channel the notify API drives — sized to the same
 // 100×76 footprint as PlatformNode so the two read as siblings in the notify
 // graph, but text-based: the bot name (top) and the platform as a tag on the
-// bottom row, matching the type-Chip the other nodes carry. Name + UUID
+// bottom row, matching the NodeTag type tag the other nodes carry. Name + UUID
 // repeat in the tooltip.
 const StyledImBotNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable',
@@ -45,11 +54,12 @@ const StyledImBotNode = styled(Box, {
     ...(clickable && {'&:hover': graphNodeHoverStyles(theme)}),
 }));
 
-const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick}) => {
+const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, variant = 'full'}) => {
     const {t} = useTranslation();
     const clickable = !!onClick && active;
     const platformLabel = platformDisplayName(imbot.platform, t);
     const name = imbot.name || 'Bot';
+    const BrandIcon = PLATFORM_BRAND_ICONS[imbot.platform || ''];
 
     return (
         <NodeTooltip
@@ -70,41 +80,57 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick}) =>
             }
             placement="top"
         >
-            <StyledImBotNode active={active} clickable={clickable} onClick={onClick}>
-                {/* Top - bot name (the identity the notify API targets) */}
-                <Box sx={NODE_LAYER_STYLES.topLayer}>
+            {variant === 'platform' ? (
+                <StyledImBotNode active={active} clickable={clickable} onClick={onClick} sx={{gap: 0.75}}>
+                    {BrandIcon && <BrandIcon size={24} grayscale={!active}/>}
                     <Box
                         component="span"
                         sx={{
                             ...NODE_LAYER_STYLES.typography,
-                            fontStyle: !imbot.name ? 'italic' : 'normal',
-                            textAlign: 'center',
-                            color: active ? 'text.primary' : 'text.disabled',
                             fontSize: '0.75rem',
-                            lineHeight: 1.1,
+                            color: active ? 'text.primary' : 'text.disabled',
+                            whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
                             maxWidth: '100%',
                         }}
                     >
-                        {name}
+                        {platformLabel}
                     </Box>
-                </Box>
+                </StyledImBotNode>
+            ) : (
+                <StyledImBotNode active={active} clickable={clickable} onClick={onClick}>
+                    {/* Top - bot name (the identity the notify API targets) */}
+                    <Box sx={NODE_LAYER_STYLES.topLayer}>
+                        <Box
+                            component="span"
+                            sx={{
+                                ...NODE_LAYER_STYLES.typography,
+                                fontStyle: !imbot.name ? 'italic' : 'normal',
+                                textAlign: 'center',
+                                color: active ? 'text.primary' : 'text.disabled',
+                                fontSize: '0.75rem',
+                                lineHeight: 1.1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '100%',
+                            }}
+                        >
+                            {name}
+                        </Box>
+                    </Box>
 
-                <Box sx={{width: '70%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
+                    <Box sx={{width: '70%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
 
-                {/* Bottom - platform tag (the channel this bot runs on),
-                    matching the type-Chip the sibling nodes carry on the
-                    bottom row) */}
-                <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                    <Chip
-                        label={platformLabel}
-                        size="small"
-                        sx={{height: 24, fontSize: '0.7rem', fontWeight: 500}}
-                    />
-                </Box>
-            </StyledImBotNode>
+                    {/* Bottom - platform tag (the channel this bot runs on),
+                        matching the NodeTag the sibling nodes carry on the
+                        bottom row) */}
+                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
+                        <NodeTag label={platformLabel}/>
+                    </Box>
+                </StyledImBotNode>
+            )}
         </NodeTooltip>
     );
 };

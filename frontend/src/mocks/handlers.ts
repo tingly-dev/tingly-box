@@ -3207,18 +3207,6 @@ export const handlers = [
                     ],
                 },
                 {
-                    platform: 'slack', display_name: 'Slack', auth_type: 'token', category: 'im',
-                    fields: [
-                        { key: 'token', label: 'Bot Token', placeholder: 'xoxb-your-token-here', required: true, secret: true, helperText: "Must start with 'xoxb-'. Get from Slack API" },
-                    ],
-                },
-                {
-                    platform: 'discord', display_name: 'Discord', auth_type: 'token', category: 'im',
-                    fields: [
-                        { key: 'token', label: 'Bot Token', placeholder: 'MTIzNDU2Nzg5OABCDEF123456789', required: true, secret: true, helperText: "Must start with 'Bot ' prefix. Get from Discord Developer Portal" },
-                    ],
-                },
-                {
                     platform: 'dingtalk', display_name: 'DingTalk', auth_type: 'oauth', category: 'enterprise',
                     fields: [
                         { key: 'clientId', label: 'App Key', placeholder: 'ding-your-app-key', required: true, secret: true, helperText: 'Also known as AppKey or ClientId' },
@@ -3275,31 +3263,31 @@ export const handlers = [
                 },
                 {
                     uuid: 'mock-bot-002',
-                    name: 'Team Slack Bot',
-                    platform: 'slack',
+                    name: 'Team Feishu Bot',
+                    platform: 'feishu',
                     enabled: true,
                     auth_type: 'oauth',
                     default_cwd: '/home/user/workspace',
                     default_agent: 'claude_code',
                     smartguide_provider: 'mock-provider-openai',
                     smartguide_model: 'gpt-5.6-sol',
-                    chat_id_lock: 'C0123456789',
+                    chat_id_lock: 'oc_mock_chat_0001',
                     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: {},
                 },
                 {
                     uuid: 'mock-bot-003',
-                    name: 'Dev Discord Bot',
-                    platform: 'discord',
+                    name: 'Dev DingTalk Bot',
+                    platform: 'dingtalk',
                     enabled: false,
-                    auth_type: 'token',
+                    auth_type: 'oauth',
                     default_cwd: '/home/user/dev',
                     default_agent: 'claude_code',
                     smartguide_provider: 'mock-provider-anthropic',
                     smartguide_model: 'claude-opus-4-8',
                     chat_id_lock: '',
                     created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-                    auth: { token: 'mock-discord-token-****' },
+                    auth: { clientId: 'ding-mock-app-key' },
                 },
             ],
         })
@@ -3364,7 +3352,14 @@ export const handlers = [
         })
     }),
 
-    http.get('/api/v1/bots/:bot/chats', () => {
+    http.get('/api/v1/bots/:bot/chats', ({ params }) => {
+        // mock-bot-001 has one chat with full Remote Control so the Remote
+        // page shows a ready bot next to ones that nobody can control yet.
+        const remote = params.bot === 'mock-bot-001' ? [
+            {capability: 'remote_control', action: 'access', effect: 'allow'},
+            {capability: 'remote_control', action: 'remote_control.start', effect: 'allow'},
+            {capability: 'remote_control', action: 'remote_control.approve', effect: 'allow'},
+        ] : []
         return HttpResponse.json({
             chats: [
                 {
@@ -3373,6 +3368,7 @@ export const handlers = [
                         {capability: 'notify', action: 'access', effect: 'allow'},
                         {capability: 'notify', action: 'notify.receive', effect: 'allow'},
                         {capability: 'notify', action: 'notify.reply', effect: 'allow'},
+                        ...remote,
                     ],
                 },
                 {

@@ -2,6 +2,8 @@ import BotAuthForm from './BotAuthForm';
 import BotPlatformSelector from './BotPlatformSelector';
 import { ExpandMore } from '@/components/icons';
 import { api } from '@/services/api';
+import { BOT_PLATFORM_IDS, usePlatformGuide } from '@/constants/platformGuides';
+import GuideAction from '@/components/GuideAction';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
 import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
@@ -64,6 +66,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
     const [proxyDraft, setProxyDraft] = useState('');
     const [bashAllowlistDraft, setBashAllowlistDraft] = useState('');
     const [saving, setSaving] = useState(false);
+    const platformGuide = usePlatformGuide(platformDraft);
 
     // Load platform configs once (first open).
     useEffect(() => {
@@ -73,7 +76,11 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                 setPlatformsLoading(true);
                 const data = await api.getImBotPlatforms();
                 if (data?.success && data?.platforms) {
-                    setBotPlatforms(data.platforms);
+                    // The backend still registers adapters the UI doesn't
+                    // support yet (Slack, Discord); only offer the platforms
+                    // the rest of the UI can actually show and manage.
+                    setBotPlatforms((data.platforms as BotPlatformConfig[]).filter(p =>
+                        (BOT_PLATFORM_IDS as readonly string[]).includes(p.platform)));
                 }
             } catch (err) {
                 console.error('Failed to load bot platforms:', err);
@@ -209,9 +216,23 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                     </Typography>
                     <Stack spacing={2}>
                         <Stack spacing={1}>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {t('remoteControl.dialog.platform', { defaultValue: 'Platform' })}
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    {t('remoteControl.dialog.platform', { defaultValue: 'Platform' })}
+                                </Typography>
+                                {/* The setup guide for whichever platform is picked —
+                                    creating the bot on the platform side is the step
+                                    people get stuck on, and it happens right here. */}
+                                {dialogMode === 'add' && platformGuide?.guide && (
+                                    <GuideAction
+                                        label={t('remoteControl.guide.action', { defaultValue: 'Setup guide' })}
+                                        title={t('remoteControl.guide.title', { defaultValue: '{{platform}} Setup Guide', platform: platformGuide.name })}
+                                        description={t('remoteControl.guide.drawerHint', { defaultValue: 'Connection steps, credentials, and examples' })}
+                                    >
+                                        {platformGuide.guide}
+                                    </GuideAction>
+                                )}
+                            </Box>
                             <BotPlatformSelector
                                 value={platformDraft}
                                 onChange={(platform) => {

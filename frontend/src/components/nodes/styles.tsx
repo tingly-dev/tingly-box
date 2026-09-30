@@ -19,26 +19,11 @@ export const getRouteGraphActiveBg = (theme: Theme) =>
 export const getRouteGraphBorderColor = (theme: Theme) =>
     alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.48 : 0.50);
 
-// Diagonal-hatch overlay for anything "deliberately not running" (off bot
-// card, unmounted purpose, blocklisted chat leaf) — distinct from dimmed =
+// Diagonal-hatch overlay for anything "deliberately not running" (notify
+// graph: disabled bot group, blocklisted chat leaf) — distinct from dimmed =
 // "upstream is off". Host must be position: relative; pointer-transparent so
-// everything underneath stays interactive.
-/** @deprecated Use getInactiveHatchSx(theme) — this static variant is invisible in dark mode. */
-export const inactiveHatchSx = {
-    '&::before': {
-        content: '""',
-        position: 'absolute' as const,
-        inset: 0,
-        borderRadius: 'inherit',
-        zIndex: 2,
-        pointerEvents: 'none' as const,
-        backgroundImage:
-            'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.035) 10px, rgba(0,0,0,0.035) 20px)',
-    },
-} as const;
-
-// Theme-aware hatch: dark paper needs light stripes (the rgba-black variant
-// above disappears against it).
+// everything underneath stays interactive. Theme-aware: dark paper needs
+// light stripes.
 export const getInactiveHatchSx = (theme: Theme) => ({
     '&::before': {
         content: '""',

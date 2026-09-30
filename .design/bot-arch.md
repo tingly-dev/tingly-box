@@ -399,12 +399,14 @@ each page as a filter/tab instead of a nav level:
    │                                  chips). Picking a platform tile filters
    │                                  the list AND brings back that platform's
    │                                  setup guide.
-   ├─ Remote Control  /remote-agent/:platform   purpose: mount switch,
-   │  "which bot drives Claude Code?"     SmartGuide model graph, chat ID lock,
-   │                                      bash allowlist, platform setup guide,
-   │                                      Add Bot (shared dialog, in place).
-   │                                      ONE sidebar row; platform is
-   │                                      selected in-page instead.
+   ├─ Remote Control  /remote-agent       purpose: every bot as one card —
+   │  "who can control which bot,         status line + switch, a readiness
+   │   and where do @tb/@cc go?"          notice with the next step (/bind
+   │                                      command, Manage access), and the
+   │                                      bot's route graph (below). Connect
+   │                                      a bot (shared dialog, platform +
+   │                                      setup guide chosen inside it). No
+   │                                      platform picker — see below.
    └─ Notify    /notify                   purpose: read-only for now — shows
       "which bot notifies me?"            mount status + route names derived
                                            from each bot's scenarios JSON.
@@ -417,15 +419,20 @@ everywhere in the UI (nav row, the BotCard purpose chip, the page title),
 aligning with the product description's "remote control" pillar; the
 backend keeps the `remote_agent` mount name and the `remoteAgent.*` /
 `bots.card.remoteAgentChip` i18n **keys** (values changed, keys stable).
-The routes are still `/remote-agent/:platform` — unchanged, so deep links
-and the purpose chip keep working. No nav label or purpose page ever says
+The route is `/remote-agent`; the old `/remote-agent/:platform` and
+`/remote-control/*` links redirect to it. No nav label or purpose page ever says
 "channel" — that word stays reserved for the backend architecture
 vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
 
-**Platform selection lives in the page, as a grid of equal-size tiles.**
-Overview and Remote both need a platform picker (Notify doesn't — it has no
-per-platform-specific content). Several earlier approaches didn't survive
+**Platform selection lives in the page, as a grid of equal-size tiles** —
+on Overview. Remote Control used one too until 2026-09, then dropped it:
+platform is a property of a bot, not a question the user brings to that
+page; most setups have one or two bots, so the picker mostly made people
+choose before they could see anything and advertised empty platforms. Its
+cards carry the platform icon instead, and the setup guide moved into
+`BotConfigDialog` next to the platform selector (add mode), which is where
+a platform actually gets chosen. Notify has no picker either. Several earlier approaches didn't survive
 contact with real content and narrow viewports:
 
 - MUI `Tabs`: dropped the `active X / Y` count next to each platform, and —
@@ -449,16 +456,47 @@ one per platform — the same pattern as the dashboard's `StatCard` grid
 Fixed tiles keep every option the same shape regardless of label length, and
 the grid reflows cleanly from 6-up on wide screens to 2-up on narrow ones.
 Overview's grid gets a leading "All" tile (no per-platform guide makes sense
-there); Remote's doesn't, since Remote has no cross-platform view. Selecting
+there). Selecting
 a platform on Overview also locks `BotConfigDialog`'s platform selector
-(`lockPlatform={true}`) for that add flow, same as Remote already did —
-"All" leaves it unlocked.
+(`lockPlatform={true}`) for that add flow; "All" leaves it unlocked.
 
 **Shared add/edit interaction, unchanged.** The bot-resource form is still
 one component (`components/bot/BotConfigDialog`). Overview has no fixed
 platform, so it opens the dialog with `lockPlatform={false}` (new prop,
-defaults to `true`) so the platform selector is live; Remote keeps opening
-it locked to whichever platform tab is active, exactly as before. `?add=1`
+defaults to `true`) so the platform selector is live; Remote does the same.
+The add-bot platform list is filtered to `BOT_PLATFORM_IDS`: the backend
+still registers Slack and Discord adapters, but the UI doesn't support
+them, so they aren't offered.
+
+**Remote keeps its route graph, built from the shared nodes.** Each card
+draws `RemoteControlGraph`: AccessNode → ImBotNode → a fork into
+@tb (AtNode → AgentNode → BotModelNode) and @cc (AtNode → AgentNode →
+CCProfileNode). These are the same node components and visual language
+as the Agent and IM Notify graphs. Routing is the product's mental model,
+so the one page that configures a route has to show one.
+
+In 2026-09 there were two detours, both reverted. The first replaced the
+graph with three setting rows: values were easier to read, but the entry
+→ fork → ends structure was lost. The second drew the route with a
+one-off node style: that broke consistency with the other graphs. The
+original problems were in composition and sizing, not in the node
+design, and were fixed in place. BotModelNode's fixed 100px / 70px name
+slots, which truncated model ids, now size by content. The graph is
+always the full left-to-right route; when a card is narrower than the
+route, that card's graph scrolls sideways on its own and never folds into
+a vertical stack, because the flow is what it shows. Node type tags share
+one style (`NodeTag`: a soft fill in the route-graph accent), and warning
+color appears only on a node that needs attention.
+
+**Remote's access dialog is scoped.** `BotAccessDialog` takes
+`scope: 'all' | 'remote_control'`. Bots opens `'all'` (UUID, capability
+switches, Notify + Remote per chat). The Remote card opens
+`'remote_control'`: the revealed `/bind` command as "how to add someone",
+one Can control / No access / Blocked choice per direct chat, and only the
+Remote Control switch + actors per group — the capability switch already
+lives on the card and Notify belongs to its own page. A group counts as a
+controller only once it has an authorized actor (Remote allowed on an
+empty group still lets nobody in). `?add=1`
 on `/bots/overview` still deep-links into the create flow.
 
 **Notify's write-path gap.** `notifyConsumer.Mounted` is implicit — at
@@ -479,7 +517,8 @@ breaks. New work should go through `/bots/overview`.
 
 **Nav active-state matching.** The Sidebar previously matched a row active
 by exact pathname equality, which is correct for one-row-per-route items
-but breaks for Remote's single row covering nine platform routes. `NavItem`
+but breaks for a single row covering several routes (Remote's row used to
+cover one route per platform; its legacy redirects still live under it). `NavItem`
 gained an optional `match?: (pathname) => boolean` (`layout/types.ts`),
 consulted by both `Sidebar.tsx` (row highlight) and `Layout.tsx`
 (`activeActivity` detection, which decides which rail icon — and thus which
@@ -489,7 +528,8 @@ behavior).
 
 Route history: `/remote-control/*` (original combined) → `/remote-agent/*`
 (rename) → twin resource/purpose sections → the Overview/Remote/Notify
-siblings above. Legacy `/remote-control/*` redirects to `/remote-agent/*`.
+siblings above → Remote Control as a single unpaginated page. Legacy
+`/remote-control/*` and `/remote-agent/:platform` redirect to `/remote-agent`.
 
 ## 11. Notes / trade-offs
 

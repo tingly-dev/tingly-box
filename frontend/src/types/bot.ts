@@ -151,8 +151,6 @@ export const REMOTE_AGENT_SCENARIO = 'remote_agent';
 // PairingCodePanel (decides whether to render at all) so the two stay in sync.
 const PLATFORM_DEFAULT_REQUIRE_PAIRING: Record<string, boolean> = {
     telegram: true,
-    discord: true,
-    slack: true,
 };
 
 // isPairingRequired reports whether a bot enforces TOFU pairing — either via an

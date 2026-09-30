@@ -189,6 +189,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                     slotProps={navRowTextSlotProps(active)}
                                     sx={{ minWidth: 0 }}
                                 />
+                                {item.count && (
+                                    <Tooltip title={item.count.title} placement="right">
+                                        <Typography
+                                            component="span"
+                                            variant="caption"
+                                            sx={{
+                                                flexShrink: 0,
+                                                ml: 1,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary',
+                                            }}
+                                        >
+                                            {item.count.value}
+                                        </Typography>
+                                    </Tooltip>
+                                )}
                                 {item.tooltip && (
                                     <IconInfoCircle
                                         sx={{

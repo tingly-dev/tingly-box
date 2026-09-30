@@ -5,7 +5,7 @@ import {useTranslation} from 'react-i18next';
 
 // useBotList is the single owner of the "load the ImBot list" operation plus
 // the restart / delete actions shared by the bot pages (PlatformBotPage,
-// BotOverviewPage, PlatformRemoteAgentPage). It owns the bots state, the
+// BotOverviewPage, RemoteAgentPage). It owns the bots state, the
 // loading flag, the in-flight restart UUID, and the success/error toasts, then
 // reloads so the caller's view stays in sync.
 //
@@ -19,7 +19,7 @@ export interface UseBotListOptions {
      *  page's showNotification wrapper over useNotify. */
     notify: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
     /** Re-show the loading spinner on every load, not just the initial one.
-     *  The Bots pages did this; PlatformRemoteAgentPage only spins on first
+     *  The Bots pages did this; RemoteAgentPage only spins on first
      *  load (default). */
     spinnerOnRefresh?: boolean;
 }

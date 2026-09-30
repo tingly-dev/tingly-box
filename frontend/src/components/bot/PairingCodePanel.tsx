@@ -31,9 +31,11 @@ const formatRemaining = (expiresAt: string): string | null => {
 
 interface Props {
     bot: BotSettings;
+    /** Show the full `/bind <code>` up front — for surfaces whose whole point is handing the user that command. */
+    revealByDefault?: boolean;
 }
 
-const PairingCodePanel: React.FC<Props> = ({ bot }) => {
+const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => {
     const { t } = useTranslation();
     const required = useMemo(() => isPairingRequired(bot), [bot]);
 
@@ -42,7 +44,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
     const [code, setCode] = useState('');
     const [expiresAt, setExpiresAt] = useState('');
     const [message, setMessage] = useState('');
-    const [revealed, setRevealed] = useState(false);
+    const [revealed, setRevealed] = useState(revealByDefault);
 
     // Re-render countdown once per second while a code is active and revealed
     const [, setTick] = useState(0);

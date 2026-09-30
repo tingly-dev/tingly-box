@@ -209,7 +209,8 @@ export default {
     "help": "Tips & Help",
     "helpShort": "Help",
     "tools": "Tools",
-    "servertool": "Servertool"
+    "servertool": "Servertool",
+    "botsRunning": "{{active}} of {{total}} bots running"
   },
   "health": {
     "connected": "Connected",
@@ -2311,6 +2312,52 @@ export default {
       "team": "Shared central model deployment for your whole team."
     }
   },
+  "botAccess": {
+    "actorId": "Platform actor ID",
+    "actorIdHint": "Use the concrete user ID reported by the IM platform.",
+    "actors_one": "{{count}} authorized actor",
+    "actors_other": "{{count}} authorized actors",
+    "addActor": "Add actor",
+    "addActorInfo": "This grants Start and Approve in this Group. Privileged access stays denied.",
+    "addActorTitle": "Add authorized actor",
+    "addController": "Add controller",
+    "addMessage": "To add someone, they message the bot in a direct chat. The chat then shows up below.",
+    "addPairing": "To add someone, they send this to the bot in a direct message:",
+    "blocked": "Blocked",
+    "botUuid": "Bot UUID",
+    "canControl": "Can control",
+    "capabilities": "Capabilities",
+    "capabilitiesHint": "What this Bot can provide. Turning off the last capability stops the connection without deleting its configuration.",
+    "chipApproveDenied": "Remote Control broken: approve denied",
+    "chipNoNotify": "No Notify",
+    "chipNoRemote": "No Remote Control",
+    "chipNotify": "Notify",
+    "chipRemote": "Remote Control",
+    "chipRemoteBrokenHint": "start launches runs; approve answers permission/question prompts. Re-apply Full access to repair.",
+    "chipStartDenied": "Remote Control broken: start denied",
+    "directChats": "Direct Chats",
+    "directChatsHint": "Who is paired, what they can do, and the concrete platform chat ID.",
+    "directChatsRemoteHint": "People who reached the bot in a direct message, and whether each can control it.",
+    "displayName": "Display name (optional)",
+    "fullAccess": "Full access",
+    "group": "Group",
+    "groups": "Groups",
+    "groupsHint": "Group capability access and authorized Actors are separate controls.",
+    "groupsRemoteHint": "Allow Remote Control in a group, then add the people in it who may use it.",
+    "noAccess": "No access",
+    "noDirectChats": "No Direct Chats yet.",
+    "noGroups": "No Groups observed yet. Add the Bot to a group and send it a message; new groups start with no access.",
+    "nobodyInGroup": "nobody here can control this Bot yet.",
+    "notify": "Notify",
+    "notifyOnly": "Notify only",
+    "pairedPerson": "Paired person",
+    "partial": "Partly allowed, so permission prompts can't be answered. Choose Can control to repair.",
+    "remoteControl": "Remote Control",
+    "titleAll": "{{name}} access",
+    "titleRemote": "Who can control {{name}}",
+    "unpairedChat": "Unpaired chat",
+    "unpairedHint": "Pair first — an unpaired chat can't be given control."
+  },
   "bots": {
     "activeCount": "active {{active}} / {{total}}",
     "card": {
@@ -2445,33 +2492,45 @@ export default {
     "toggleFailed": "Failed to update Notify"
   },
   "remoteAgent": {
+    "card": {
+      "manageAccess": "Manage access",
+      "messageHint": "Nobody can control this bot yet. Message the bot directly, then grant Remote Control to that chat.",
+      "pairHint": "Nobody can control this bot yet. Send this to the bot in a direct message:",
+      "pendingChats_one": "{{count}} direct chat reached this bot but can't control it. Grant it Remote Control if it's yours.",
+      "pendingChats_other": "{{count}} direct chats reached this bot but none can control it. Grant Remote Control to the right one.",
+      "statusChecking": "Checking access…",
+      "statusControllers_one": "{{count}} chat can control",
+      "statusControllers_other": "{{count}} chats can control",
+      "statusNobody": "Nobody can control yet",
+      "statusOff": "Remote Control off",
+      "hideSettings": "Hide settings",
+      "showSettings": "Settings"
+    },
     "ccProfile": {
-      "chip": "Profile",
       "default": "Default",
       "defaultSecondary": "Main claude_code scenario",
-      "defaultTooltip": "Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.",
       "dialogSubtitle": "Remote @cc sessions route through the selected profile — its rules, model mapping, and settings overrides.",
       "dialogTitle": "Claude Code Profile for @cc",
       "empty": "No Claude Code profiles yet. Create one on the Claude Code scenario page first.",
-      "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
       "persistentSession": "Keep the process warm between messages",
       "persistentSessionCaption": "Experimental: skips process startup cost on every @cc message by reusing one Claude Code process across a chat's turns.",
-      "profileTooltip": "Claude Code profile",
-      "scenario": "Scenario",
       "separate": "separate",
-      "unified": "unified"
+      "unified": "unified",
+      "chip": "Profile",
+      "defaultTooltip": "Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.",
+      "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
+      "profileTooltip": "Claude Code profile",
+      "scenario": "Scenario"
     },
-    "emptyDescription": "Remote Control runs on top of a bot. Create a {{platform}} bot connection first, then mount it here.",
-    "emptyTitle": "No {{platform}} Bots Yet",
     "notify": {
       "ccProfileUpdateFailed": "Failed to update Claude Code profile",
       "ccProfileUpdated": "Claude Code profile updated",
       "persistentSessionUpdateFailed": "Failed to update persistent-session setting"
     },
-    "pageSubtitle": "Choose who can control each bot and where chat commands route.",
     "pageTitle": "Remote Control",
-    "routesSubtitle": "Access → Bot → Agent. Click a node to change that part of the route.",
-    "routesTitle": "{{platform}} routes"
+    "emptyTitle": "No bots yet",
+    "emptyDescription": "Connect a Telegram, Feishu, DingTalk or other chat bot, then drive Claude Code and SmartGuide from that chat.",
+    "pageSubtitle": "Who can control each bot, and where @tb and @cc messages go."
   },
   "remoteControl": {
     "authForm": {
@@ -2570,9 +2629,6 @@ export default {
         "step2Text": "Select \"Connect a bot\" and enter the App Key and App Secret to create your bot.",
         "tip": "Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed."
       },
-      "discord": {
-        "description": "Voice, video, and text communication"
-      },
       "feishu": {
         "description": "Enterprise collaboration platform",
         "step1TextAfter": ", and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.",
@@ -2598,9 +2654,6 @@ export default {
       },
       "qq": {
         "description": "Tencent instant messaging platform"
-      },
-      "slack": {
-        "description": "Business communication platform"
       },
       "telegram": {
         "description": "Popular cloud-based instant messaging service",

@@ -46,7 +46,7 @@ async function botAccessCall<T>(call: ClientCall<T>): Promise<T> {
 // a bare string (no enum in the Go source), while the app's own types narrow
 // it to the two real values the backend ever sends — same reasoning as
 // enrichBotsWithCapabilities above. Consumers (BotAccessDialog.tsx,
-// RemoteAgentBotCard.tsx, BotNotifyGroup.tsx, PlatformRemoteAgentPage.tsx)
+// RemoteAgentBotCard.tsx, BotNotifyGroup.tsx, RemoteAgentPage.tsx)
 // already code against types/bot.ts; this keeps that contract stable.
 
 export const listBotCapabilities = (botUUID: string): Promise<{capabilities: BotCapability[]; bot_running: boolean}> =>

@@ -207,7 +207,8 @@ export default {
     "help": "帮助与技巧",
     "helpShort": "帮助",
     "tools": "工具",
-    "servertool": "服务端工具"
+    "servertool": "服务端工具",
+    "botsRunning": "{{total}} 个 bot 中 {{active}} 个在运行"
   },
   "health": {
     "connected": "已连接",
@@ -2286,15 +2287,20 @@ export default {
     "descriptions": {}
   },
   "remoteAgent": {
+    "card": {
+      "manageAccess": "管理访问",
+      "messageHint": "还没有人能遥控这个 bot。先私聊 bot 发一条消息，再给该会话开通遥控权限。",
+      "pairHint": "还没有人能遥控这个 bot。在私聊中把下面这条发给 bot：",
+      "pendingChats": "有 {{count}} 个私聊会话连上了这个 bot，但都没有遥控权限。给正确的会话开通遥控权限。",
+      "statusChecking": "正在检查访问权限…",
+      "statusControllers": "{{count}} 个会话可遥控",
+      "statusNobody": "还没有人能遥控",
+      "statusOff": "遥控已关闭",
+      "hideSettings": "收起设置",
+      "showSettings": "设置"
+    },
     "title": "{{platform}} 远程控制",
     "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
-    "emptyTitle": "还没有 {{platform}} Bot",
-    "emptyDescription": "远程控制运行在 Bot 之上。请先创建一个 {{platform}} Bot 连接，再回到这里挂载。",
-    "card": {
-      "botDisabled": "Bot 已停用",
-      "botDisabledHint": "Bot 本身处于停用状态——挂载时会自动重新启用",
-      "saveAgentSettings": "保存 Agent 设置"
-    },
     "notify": {
       "agentSettingsSaved": "Agent 设置已保存",
       "ccProfileUpdated": "Claude Code Profile 已更新",
@@ -2302,25 +2308,70 @@ export default {
       "persistentSessionUpdateFailed": "更新常驻会话设置失败"
     },
     "pageTitle": "远程控制",
-    "pageSubtitle": "设置谁可以控制每个 Bot，以及聊天指令的路由去向。",
-    "routesTitle": "{{platform}} 路由",
-    "routesSubtitle": "访问权限 → Bot → Agent。点击节点可修改该环节。",
     "ccProfile": {
-      "chip": "Profile",
       "default": "默认",
       "defaultSecondary": "主 claude_code 场景",
-      "defaultTooltip": "使用主 claude_code 场景。点击可让 @cc 走某个 Claude Code Profile。",
       "dialogTitle": "@cc 使用的 Claude Code Profile",
       "dialogSubtitle": "远程 @cc 会话会走所选 Profile —— 包括它的规则、模型映射与设置覆盖。",
       "empty": "还没有 Claude Code Profile。请先在 Claude Code 场景页创建一个。",
-      "missingTooltip": "Profile「{{id}}」已不存在 —— @cc 回退到默认 claude_code 场景。点击可另选一个。",
       "persistentSession": "在消息之间保持进程常驻",
       "persistentSessionCaption": "实验性功能：复用同一个 Claude Code 进程处理同一会话的多轮消息，省去每条消息的进程启动开销。",
-      "profileTooltip": "Claude Code Profile",
-      "scenario": "场景",
       "separate": "分离",
-      "unified": "统一"
-    }
+      "unified": "统一",
+      "chip": "Profile",
+      "defaultTooltip": "使用主 claude_code 场景。点击可让 @cc 走某个 Claude Code Profile。",
+      "missingTooltip": "Profile「{{id}}」已不存在 —— @cc 回退到默认 claude_code 场景。点击可另选一个。",
+      "profileTooltip": "Claude Code Profile",
+      "scenario": "场景"
+    },
+    "emptyTitle": "还没有 bot",
+    "emptyDescription": "连接一个 Telegram、飞书、钉钉等聊天 bot，然后就能在聊天里驱动 Claude Code 和 SmartGuide。",
+    "pageSubtitle": "每个 bot 谁能遥控，以及 @tb 和 @cc 消息发往哪里。"
+  },
+  "botAccess": {
+    "actorId": "平台用户 ID",
+    "actorIdHint": "填写 IM 平台上报的真实用户 ID。",
+    "actors": "{{count}} 个已授权成员",
+    "addActor": "添加成员",
+    "addActorInfo": "这会授予该成员在此群中的启动与审批权限。特权操作仍保持拒绝。",
+    "addActorTitle": "添加授权成员",
+    "addController": "添加遥控者",
+    "addMessage": "要添加某人：让对方私聊 bot 发一条消息，该会话随后会出现在下方。",
+    "addPairing": "要添加某人：让对方在私聊中把这条发给 bot：",
+    "blocked": "已屏蔽",
+    "botUuid": "Bot UUID",
+    "canControl": "可遥控",
+    "capabilities": "能力",
+    "capabilitiesHint": "这个 Bot 提供哪些能力。关闭最后一个能力会断开连接，但不会删除配置。",
+    "chipApproveDenied": "遥控异常：审批被拒绝",
+    "chipNoNotify": "无通知",
+    "chipNoRemote": "无遥控",
+    "chipNotify": "通知",
+    "chipRemote": "遥控",
+    "chipRemoteBrokenHint": "start 用于发起运行；approve 用于回答权限/问题提示。重新应用「完整权限」即可修复。",
+    "chipStartDenied": "遥控异常：启动被拒绝",
+    "directChats": "私聊会话",
+    "directChatsHint": "谁已配对、能做什么，以及对应的平台会话 ID。",
+    "directChatsRemoteHint": "私聊过这个 bot 的人，以及每个人能否遥控它。",
+    "displayName": "显示名称（可选）",
+    "fullAccess": "完整权限",
+    "group": "群组",
+    "groups": "群组",
+    "groupsHint": "群组的能力开关与授权成员是两项独立的控制。",
+    "groupsRemoteHint": "先在群里允许遥控，再添加群里可以使用它的人。",
+    "noAccess": "无权限",
+    "noDirectChats": "还没有私聊会话。",
+    "noGroups": "还没有发现群组。把 Bot 拉进群并发一条消息；新群组默认没有任何权限。",
+    "nobodyInGroup": "这个群里还没有人能遥控该 Bot。",
+    "notify": "通知",
+    "notifyOnly": "仅通知",
+    "pairedPerson": "已配对的人",
+    "partial": "只开通了一部分权限，权限提示无法被回答。选择「可遥控」即可修复。",
+    "remoteControl": "遥控",
+    "titleAll": "{{name}} 的访问权限",
+    "titleRemote": "谁能遥控 {{name}}",
+    "unpairedChat": "未配对的会话",
+    "unpairedHint": "请先配对 —— 未配对的会话无法授予遥控权限。"
   },
   "bots": {
     "activeCount": "启用 {{active}} / {{total}}",
@@ -2699,9 +2750,6 @@ export default {
       },
       "qq": {
         "description": "腾讯即时通讯平台"
-      },
-      "discord": {
-        "description": "语音、视频与文字通讯平台"
       },
       "slack": {
         "description": "企业沟通协作平台"

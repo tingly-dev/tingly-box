@@ -1,5 +1,6 @@
-import { Box, Chip, Divider, Typography } from '@mui/material';
+import { Box, Divider, Typography } from '@mui/material';
 import { NODE_LAYER_STYLES, StyledBotGraphNode } from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
@@ -20,12 +21,10 @@ interface AgentInfo {
 // files — use the Record<AppLanguage, AgentInfo> pattern below to add translations.
 const AGENT_TYPE_CONFIG: Record<AgentType, {
     label: string;
-    color: 'info' | 'success' | 'default' | 'warning';
     info: Record<AppLanguage, AgentInfo>;
 }> = {
     'claude-code': {
         label: 'Claude Code',
-        color: 'info',
         info: {
             en: {
                 description: 'A full-spectrum development agent (Claude Code CLI) — implementation, refactors, tests, builds, and git operations in your local environment.',
@@ -58,7 +57,6 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
     },
     'smart-guide': {
         label: 'SmartGuide',
-        color: 'success',
         info: {
             en: {
                 description: 'A navigation and coordination assistant (@tb) — explores the project, answers questions, and handles small edits, then hands off heavy implementation to @cc.',
@@ -91,7 +89,6 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
     },
     'custom': {
         label: 'Custom',
-        color: 'warning',
         info: {
             en: {
                 description: 'A custom agent implementation with user-defined behavior and endpoints.',
@@ -112,7 +109,6 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
     },
     'mock': {
         label: 'Mock',
-        color: 'default',
         info: {
             en: {
                 description: 'A mock agent for testing and development. Returns predefined responses without external API calls.',
@@ -192,12 +188,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                 <Divider sx={NODE_LAYER_STYLES.divider} />
 
                 <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                    <Chip
-                        label={displayLabel}
-                        size="small"
-                        color={config.color as any}
-                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
-                    />
+                    <NodeTag label={displayLabel}/>
                 </Box>
             </StyledBotGraphNode>
         </NodeTooltip>

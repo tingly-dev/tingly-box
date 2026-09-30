@@ -1,6 +1,7 @@
 import {Security} from '@/components/icons';
-import {Box, Chip} from '@mui/material';
+import {Box} from '@mui/material';
 import {StyledBotGraphNode, NODE_LAYER_STYLES} from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 
 interface AccessNodeProps {
@@ -35,8 +36,8 @@ const AccessNode: React.FC<AccessNodeProps> = ({directChats, groups, active = tr
                 </Box>
                 <Box sx={{width: '85%', borderTop: '1px solid', borderColor: 'divider', my: 0.25}}/>
                 <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                    <Chip label={loading ? '… direct' : `${directChats} direct`} size="small" variant="outlined" sx={{height: 24, fontSize: '0.7rem'}}/>
-                    <Chip label={loading ? '… groups' : `${groups} ${groups === 1 ? 'group' : 'groups'}`} size="small" variant="outlined" sx={{height: 24, fontSize: '0.7rem'}}/>
+                    <NodeTag outlined label={loading ? '… direct' : `${directChats} direct`}/>
+                    <NodeTag outlined label={loading ? '… groups' : `${groups} ${groups === 1 ? 'group' : 'groups'}`}/>
                 </Box>
             </StyledBotGraphNode>
         </NodeTooltip>

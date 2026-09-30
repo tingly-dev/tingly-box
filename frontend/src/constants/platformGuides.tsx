@@ -1,4 +1,4 @@
-import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ } from '@/components/BrandIcons';
 import { OpenInNew } from '@/components/icons';
 import { Box, Link, Stack, Typography } from '@mui/material';
 import type { ComponentType } from 'react';
@@ -98,10 +98,7 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // The full set of bot platform ids, in display order. Single source of
 // truth for anything that needs to list "every platform" (e.g. the Remote
 // page's in-page platform tabs) — keeps that list from drifting out of sync
-// with the guides below or with the routes in App.tsx. Discord and Slack
-// aren't supported yet — their guide entries and routes stay (so nothing
-// 404s if something still links to them), just left out of this list so
-// they don't show up as pickable platforms.
+// with the guides below or with the routes in App.tsx.
 export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
 
 // Brand icon per platform, keyed the same as BOT_PLATFORM_IDS — locale-
@@ -388,28 +385,6 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         path: '/bots/qq',
         color: '#888',
         guide: buildComingSoonGuide(t, 'QQ'),
-    },
-    discord: {
-        id: 'discord',
-        name: 'Discord',
-        description: t('remoteControl.guides.discord.description', { defaultValue: 'Voice, video, and text communication' }),
-        icon: '🎮',
-        BrandIcon: Discord,
-        status: 'coming-soon',
-        path: '/bots/discord',
-        color: '#888',
-        guide: buildComingSoonGuide(t, 'Discord'),
-    },
-    slack: {
-        id: 'slack',
-        name: 'Slack',
-        description: t('remoteControl.guides.slack.description', { defaultValue: 'Business communication platform' }),
-        icon: '💳',
-        BrandIcon: Slack,
-        status: 'coming-soon',
-        path: '/bots/slack',
-        color: '#888',
-        guide: buildComingSoonGuide(t, 'Slack'),
     },
 });
 

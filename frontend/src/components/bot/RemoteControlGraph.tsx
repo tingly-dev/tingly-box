@@ -1,5 +1,4 @@
-import { Box, useMediaQuery, useTheme } from '@mui/material';
-import type {ReactNode} from 'react';
+import { Box } from '@mui/material';
 import type { BotSettings } from '@/types/bot.ts';
 import { ccProfileIdFromDefaultAgent } from '@/types/bot.ts';
 import type { Provider } from '@/types/provider.ts';
@@ -49,9 +48,6 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
     accessLoading = false,
     accessError,
 }) => {
-    const theme = useTheme();
-    const compact = useMediaQuery(theme.breakpoints.down('md'));
-    const phone = useMediaQuery(theme.breakpoints.down('sm'));
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
     // Which Claude Code configuration serves @cc: '' = main claude_code
@@ -69,7 +65,9 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
             onClick={readOnly ? undefined : onAccessClick}
         />
     );
-    const botNode = <ImBotNode imbot={imbot} active={isBotEnabled} onClick={readOnly ? undefined : onBotClick}/>;
+    // The card header already names the bot, so this node only says which
+    // platform the message arrives through.
+    const botNode = <ImBotNode imbot={imbot} variant="platform" active={isBotEnabled} onClick={readOnly ? undefined : onBotClick}/>;
     const tbNode = <AtNode type="tb"/>;
     const ccNode = <AtNode type="cc"/>;
     const smartGuideNode = <AgentNode agentType="smart-guide" active={isBotEnabled}/>;
@@ -91,42 +89,14 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
         <NodeContainer>{profileNode}</NodeContainer>
     </>);
 
-    if (compact) {
-        return (
-            <Box>
-                <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75}}>
-                    {accessNode}
-                    <ArrowNode direction="down" length={20}/>
-                    {botNode}
-                </Box>
-                <Box sx={{display: 'grid', gap: 1.25, mt: 1.5}}>
-                    {(phone ? [
-                        [tbNode, smartGuideNode, modelNode],
-                        [ccNode, claudeCodeNode, profileNode],
-                    ] : [smartGuideBranch, claudeCodeBranch]).map((branch, index) => (
-                        <Box
-                            key={index === 0 ? 'tb' : 'cc'}
-                            sx={{overflowX: phone ? 'visible' : 'auto', py: 1, px: 1.25, border: 1, borderColor: 'divider', borderRadius: 1.5, scrollbarWidth: 'thin'}}
-                        >
-                            <Box sx={{display: 'flex', flexDirection: phone ? 'column' : 'row', alignItems: 'center', gap: 1, width: phone ? '100%' : 'max-content', minWidth: '100%'}}>
-                                {phone
-                                    ? (branch as ReactNode[]).map((node, nodeIndex) => (
-                                        <Box key={nodeIndex} sx={{display: 'contents'}}>
-                                            <NodeContainer>{node}</NodeContainer>
-                                            {nodeIndex < 2 && <ArrowNode direction="down" length={18}/>}
-                                        </Box>
-                                    ))
-                                    : branch}
-                            </Box>
-                        </Box>
-                    ))}
-                </Box>
-            </Box>
-        );
-    }
-
+    // Always the full route, left to right. When the card is narrower than
+    // the route, THIS graph scrolls sideways on its own; it never folds into
+    // a vertical stack, because the left-to-right flow is the thing being
+    // shown. The padding keeps node borders and hover rings clear of the
+    // scroll box's edge. 8px between items (graphRowStyles' default is 12px)
+    // keeps the full row inside the card at common desktop widths.
     return (
-        <Box sx={graphRowStyles}>
+        <Box sx={(t) => ({...graphRowStyles(t), gap: t.spacing(1), py: 1, px: 0.5})}>
             {/* Access is both the summary and the entry point for concrete
                 authorized resources, so authorization has one work surface. */}
             <NodeContainer>
@@ -153,10 +123,10 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                 }}
             >
                 {/* @tb: SmartGuide agent → model */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>{smartGuideBranch}</Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{smartGuideBranch}</Box>
 
                 {/* @cc: Claude Code agent → profile (default or a claude_code profile) */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>{claudeCodeBranch}</Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{claudeCodeBranch}</Box>
             </Box>
         </Box>
     );

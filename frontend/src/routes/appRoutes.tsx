@@ -65,11 +65,8 @@ const DingTalkPage = lazy(() => import('@/pages/bots/DingTalkPage'));
 const WeixinPage = lazy(() => import('@/pages/bots/WeixinPage'));
 const WeComPage = lazy(() => import('@/pages/bots/WeComPage'));
 const QQPage = lazy(() => import('@/pages/bots/QQPage'));
-const DiscordPage = lazy(() => import('@/pages/bots/DiscordPage'));
-const SlackPage = lazy(() => import('@/pages/bots/SlackPage'));
 const BotOverviewPage = lazy(() => import('@/pages/bots/BotOverviewPage'));
 const RemoteAgentPage = lazy(() => import('@/pages/remote-agent/RemoteAgentPage'));
-const RemoteAgentEntryRedirect = lazy(() => import('@/pages/remote-agent/RemoteAgentPage').then(m => ({ default: m.RemoteAgentEntryRedirect })));
 const NotifyPage = lazy(() => import('@/pages/notify/NotifyPage'));
 const DeskPage = lazy(() => import('@/pages/desk/DeskPage'));
 const MCPLocalMode = lazy(() => import('@/pages/mcp/MCPLocalMode'));
@@ -115,14 +112,12 @@ const OnboardingGate: React.FC = () => {
     return <Navigate to={target} replace />;
 };
 
-// LegacyBotSectionRedirect keeps old /remote-control/* bookmarks working. The
-// combined section was split into Bots (resource) + Remote Agent (purpose)
-// with identical per-platform pagination; old links land on the purpose side,
-// which links onward to Bots.
-const LegacyBotSectionRedirect = () => {
+// LegacyRemoteAgentRedirect keeps old per-platform bookmarks working
+// (/remote-agent/:platform and the older /remote-control/*): Remote Control
+// is one page listing every bot now, so they all land on it.
+const LegacyRemoteAgentRedirect = () => {
     const location = useLocation();
-    const to = location.pathname.replace(/^\/remote-control/, '/remote-agent') + location.search;
-    return <Navigate to={to} replace />;
+    return <Navigate to={`/remote-agent${location.search}`} replace />;
 };
 
 // The original Remote Coder surface has been replaced by Remote Control.
@@ -225,22 +220,17 @@ export const appRoutes = (
             <Route path="/bots/weixin" element={<WeixinPage />} />
             <Route path="/bots/wecom" element={<WeComPage />} />
             <Route path="/bots/qq" element={<QQPage />} />
-            <Route path="/bots/discord" element={<DiscordPage />} />
-            <Route path="/bots/slack" element={<SlackPage />} />
             {/* IM Notify — the other purpose mounted on a bot's channel. */}
             <Route path="/notify" element={<NotifyPage />} />
             {/* Desk — a web-side twin of local `claude`, no IM bot
                 involved. See useActivityItems for the nav row. */}
             <Route path="/desk" element={<ExperimentalFeatureGate feature="desk"><DeskPage /></ExperimentalFeatureGate>} />
-            {/* Remote Control — the purpose pages. One nav row (see useActivityItems);
-                platform selection is an in-page picker (RemoteAgentPage) instead
-                of a route per platform in the sidebar. The routes themselves are
-                unchanged, so deep links and the bot table purpose chip still work. */}
-            <Route path="/remote-agent" element={<RemoteAgentEntryRedirect />} />
-            <Route path="/remote-agent/:platform" element={<RemoteAgentPage />} />
-            {/* Back-compat: old /remote-control/* (the pre-split combined pages) → /remote-agent/* */}
-            <Route path="/remote-control" element={<Navigate to="/remote-agent" replace />} />
-            <Route path="/remote-control/*" element={<LegacyBotSectionRedirect />} />
+            {/* Remote Control — one page, every bot (see RemoteAgentPage). */}
+            <Route path="/remote-agent" element={<RemoteAgentPage />} />
+            {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}
+            <Route path="/remote-agent/:platform" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-control" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-control/*" element={<LegacyRemoteAgentRedirect />} />
             {/* Guardrails */}
             <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />
             <Route path="/guardrails/groups" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsGroupsPage /></ExperimentalFeatureGate>} />

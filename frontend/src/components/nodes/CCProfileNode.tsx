@@ -1,6 +1,7 @@
-import { Box, Chip, Divider, Typography } from '@mui/material';
+import { Box, Divider, Typography } from '@mui/material';
 import { Warning as WarningIcon } from '@/components/icons';
 import { NODE_LAYER_STYLES, StyledBotGraphNode } from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,12 +74,7 @@ const CCProfileNode: React.FC<CCProfileNodeProps> = ({
             </Box>
             <Divider sx={NODE_LAYER_STYLES.divider} />
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                <Chip
-                    label={t('remoteAgent.ccProfile.chip', { defaultValue: 'Profile' })}
-                    size="small"
-                    color={missing ? 'warning' : (hasProfile ? 'info' : 'default')}
-                    sx={{ height: 24, fontSize: '0.7rem', fontWeight: 500 }}
-                />
+                <NodeTag label={t('remoteAgent.ccProfile.chip', { defaultValue: 'Profile' })} tone={missing ? 'warning' : 'default'}/>
             </Box>
         </StyledBotGraphNode>
     );
