@@ -2,8 +2,6 @@ package protocoltest
 
 import (
 	"testing"
-
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // TestCacheControls drives every direct and ABA cache/no-cache request through
@@ -12,10 +10,8 @@ import (
 func TestCacheControls(t *testing.T) {
 	m := DefaultMatrix()
 	for _, pair := range m.Pairs {
-		// Prompt-cache directives are chat-protocol concepts; leaf families
-		// without cache semantics (decision) have no case to run. Mirrors the
-		// filter in ExecuteAllCacheControls.
-		if pair.Source == protocol.TypeDecision {
+		// Same filter as ExecuteAllCacheControls (supportsCacheControls).
+		if !supportsCacheControls(pair.Source) {
 			continue
 		}
 		for _, streaming := range m.Streaming {

@@ -11,6 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -73,13 +74,13 @@ func (ph *ProtocolHandler) HandleDecision(c *gin.Context) {
 	sessionID := resolveSessionID(c, nil)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
 
-	ph.runDecisionAttempt(c, provider, actualModel, sessionID, body, requestModel)
+	ph.runDecisionAttempt(c, provider, actualModel, body, requestModel)
 }
 
 // runDecisionAttempt forwards one decision request. Single-shot by design: a
 // decision is an advisory micro-model call with no retryable stream, so there
 // is no failover gate and no candidate rotation.
-func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Provider, model string, sessionID typ.SessionID, body []byte, requestModel string) {
+func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Provider, model string, body []byte, requestModel string) {
 	rewritten, err := rewriteDecisionModel(body, model)
 	if err != nil {
 		SendErrorResponse(c, fmt.Errorf("failed to encode upstream decision request: %w", err), "decision")
@@ -97,7 +98,7 @@ func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Prov
 			// and body verbatim, so the caller sees the provider's own error
 			// shape and the real status code reaches the access log.
 			ph.trackUsageWithTokenUsage(c, protocol.ZeroTokenUsage(), upstreamErr)
-			decisionWriteResponse(c, upstreamErr.StatusCode, upstreamErr.ContentType, upstreamErr.Body)
+			decisionWriteResponse(c, upstreamErr.Result.StatusCode, upstreamErr.Result.ContentType, upstreamErr.Result.Body)
 			return
 		}
 		// Transport-level failure (no upstream response at all).
@@ -105,8 +106,9 @@ func (ph *ProtocolHandler) runDecisionAttempt(c *gin.Context, provider *typ.Prov
 		return
 	}
 
+	respModel := decisionRewriteResponseModel(resp.Body, requestModel)
 	ph.trackUsageWithTokenUsage(c, decisionUsageFromBody(resp.Body), nil)
-	decisionWriteResponse(c, resp.StatusCode, resp.ContentType, decisionRewriteResponseModel(resp.Body, requestModel))
+	decisionWriteResponse(c, resp.StatusCode, resp.ContentType, respModel)
 }
 
 func decisionWriteResponse(c *gin.Context, status int, contentType string, body []byte) {
@@ -131,21 +133,21 @@ func requireDecisionEndpoint(provider *typ.Provider) error {
 
 // validateDecisionBody checks the two fields the gateway itself needs — model
 // (for routing) and questions (non-empty map) — and leaves everything else
-// opaque so new Jev fields stay forward-compatible.
+// opaque so new Jev fields stay forward-compatible. gjson keeps this a single
+// indexed pass; the body is not copied into an intermediate map.
 func validateDecisionBody(body []byte) (string, error) {
-	var req map[string]json.RawMessage
-	if err := json.Unmarshal(body, &req); err != nil {
-		return "", fmt.Errorf("invalid request body: %w", err)
+	if !gjson.ValidBytes(body) {
+		return "", fmt.Errorf("invalid request body: not valid JSON")
 	}
-	var model string
-	if err := json.Unmarshal(req["model"], &model); err != nil || strings.TrimSpace(model) == "" {
+	modelResult := gjson.GetBytes(body, "model")
+	if modelResult.Type != gjson.String || strings.TrimSpace(modelResult.String()) == "" {
 		return "", fmt.Errorf("model is required")
 	}
-	var questions map[string]json.RawMessage
-	if err := json.Unmarshal(req["questions"], &questions); err != nil || len(questions) == 0 {
+	questions := gjson.GetBytes(body, "questions")
+	if !questions.IsObject() || len(questions.Map()) == 0 {
 		return "", fmt.Errorf("at least one question is required")
 	}
-	return model, nil
+	return modelResult.String(), nil
 }
 
 // rewriteDecisionModel replaces the request model with the routed service
@@ -159,10 +161,12 @@ func rewriteDecisionModel(body []byte, model string) ([]byte, error) {
 // decisionRewriteResponseModel keeps the gateway-wide invariant that the
 // client-visible model is the model the request asked for — the upstream
 // service model is routing internals (see TestResponseCarriesRequestedModel).
-// Only the top-level "model" field of a JSON-object body is touched; anything
-// else passes through byte-identically.
+// Only the top-level "model" field of a JSON-object body is touched; a
+// compliant upstream echo (or a body without a model) passes through
+// byte-identically.
 func decisionRewriteResponseModel(body []byte, requestModel string) []byte {
-	if !gjson.GetBytes(body, "model").Exists() {
+	model := gjson.GetBytes(body, "model")
+	if !model.Exists() || model.String() == requestModel {
 		return body
 	}
 	if out, err := sjson.SetBytes(body, "model", requestModel); err == nil {
@@ -172,33 +176,16 @@ func decisionRewriteResponseModel(body []byte, requestModel string) []byte {
 }
 
 // decisionUsageFromBody extracts the optional usage object the decision
-// upstream may report. Both OpenAI-style (prompt_tokens/completion_tokens)
-// and Anthropic-style (input_tokens/output_tokens) spellings are accepted;
-// absent usage means zero — decision answers are structured, and the
-// micro-model may simply not report tokens.
+// upstream may report (ai.DecisionUsage owns the spelling table); absent
+// usage means zero.
 func decisionUsageFromBody(body []byte) *protocol.TokenUsage {
-	var payload struct {
-		Usage *struct {
-			InputTokens      *int `json:"input_tokens"`
-			OutputTokens     *int `json:"output_tokens"`
-			PromptTokens     *int `json:"prompt_tokens"`
-			CompletionTokens *int `json:"completion_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil || payload.Usage == nil {
+	usage := gjson.GetBytes(body, "usage")
+	if !usage.IsObject() {
 		return protocol.ZeroTokenUsage()
 	}
-	u := payload.Usage
-	input := decisionFirstInt(u.InputTokens, u.PromptTokens)
-	output := decisionFirstInt(u.OutputTokens, u.CompletionTokens)
-	return protocol.NewTokenUsageWithCache(input, output, 0)
-}
-
-func decisionFirstInt(values ...*int) int {
-	for _, v := range values {
-		if v != nil {
-			return *v
-		}
+	var u ai.DecisionUsage
+	if err := json.Unmarshal([]byte(usage.Raw), &u); err != nil {
+		return protocol.ZeroTokenUsage()
 	}
-	return 0
+	return protocol.NewTokenUsageWithCache(u.Input(), u.Output(), 0)
 }

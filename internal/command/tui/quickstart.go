@@ -368,7 +368,7 @@ func qsDetails(ctx StepContext, s quickstartState) (quickstartState, StepResult,
 		if s.apiStyle == protocol.APIStyleAnthropic {
 			defaultURL = "https://api.anthropic.com"
 		} else if s.apiStyle == protocol.APIStyleDecision {
-			defaultURL = "https://www.jevai.org/api/v1"
+			defaultURL = defaultDecisionBaseURL
 		} else {
 			defaultURL = "https://api.example.com/v1"
 		}

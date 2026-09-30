@@ -43,16 +43,6 @@ type DecisionHTTPResult struct {
 	Body        []byte
 }
 
-// DecisionClientInterface is the dispatch-facing surface of the decision
-// client, mirroring OpenAIClientInterface/AnthropicClientInterface so callers
-// (forwarding, tests) can substitute fakes.
-type DecisionClientInterface interface {
-	Decisions(ctx context.Context, body []byte) (*DecisionHTTPResult, error)
-	GetProvider() *typ.Provider
-	APIStyle() ai.APIStyle
-	Close() error
-}
-
 // DecisionClient is the dedicated client for the structured-decision protocol.
 // It is not a chat client with an extra method: the decision surface is an
 // endpoint fork that OpenAI/Anthropic upstreams do not natively have, so it
@@ -94,9 +84,9 @@ func NewDecisionClient(provider *typ.Provider, model string, sessionID typ.Sessi
 	}, nil
 }
 
-// DecisionTimeout returns the request timeout for a decision provider,
+// decisionTimeout returns the request timeout for a decision provider,
 // mirroring the chat clients' provider-timeout defaulting.
-func DecisionTimeout(provider *typ.Provider) time.Duration {
+func decisionTimeout(provider *typ.Provider) time.Duration {
 	timeout := time.Duration(provider.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
@@ -110,7 +100,7 @@ func DecisionTimeout(provider *typ.Provider) time.Duration {
 // comes back in the result so callers can pass the provider's own error JSON
 // through verbatim.
 func (c *DecisionClient) Decisions(ctx context.Context, body []byte) (*DecisionHTTPResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, DecisionTimeout(c.provider))
+	ctx, cancel := context.WithTimeout(ctx, decisionTimeout(c.provider))
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
@@ -138,16 +128,6 @@ func (c *DecisionClient) Decisions(ctx context.Context, body []byte) (*DecisionH
 		ContentType: resp.Header.Get("Content-Type"),
 		Body:        respBody,
 	}, nil
-}
-
-// GetProvider returns the provider this client dispatches to.
-func (c *DecisionClient) GetProvider() *typ.Provider {
-	return c.provider
-}
-
-// APIStyle reports the protocol family this client speaks.
-func (c *DecisionClient) APIStyle() ai.APIStyle {
-	return ai.APIStyleDecision
 }
 
 // Close closes any resources held by the client.

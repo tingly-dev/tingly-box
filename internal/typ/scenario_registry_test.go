@@ -87,26 +87,26 @@ func TestAPIStyleAllowedForScenario(t *testing.T) {
 	// chat family may bind (what matters is the decision fork URL), which is
 	// what lets users configure providers without caring about O vs A.
 	for _, style := range []ai.APIStyle{ai.APIStyleOpenAI, ai.APIStyleAnthropic, ai.APIStyleGoogle, ai.APIStyleDecision} {
-		if !APIStyleAllowedForScenario(ScenarioDecision, style) {
+		if !apiStyleAllowedForScenario(ScenarioDecision, style) {
 			t.Errorf("decision scenario must not style-reject %s providers", style)
 		}
 	}
 	// Chat-family scenarios reject Jev-native providers at the style level:
 	// their APIBase is the decisions endpoint, they cannot serve chat.
 	for _, scenario := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioEmbed, ScenarioImageGen, ScenarioClaudeCode} {
-		if APIStyleAllowedForScenario(scenario, ai.APIStyleDecision) {
+		if apiStyleAllowedForScenario(scenario, ai.APIStyleDecision) {
 			t.Errorf("%s scenario must not accept decision-style providers", scenario)
 		}
 	}
 	// Chat-family providers bind to chat-family scenarios (conversion span),
 	// but embed/imagegen stay openai-only.
-	if !APIStyleAllowedForScenario(ScenarioOpenAI, ai.APIStyleAnthropic) {
+	if !apiStyleAllowedForScenario(ScenarioOpenAI, ai.APIStyleAnthropic) {
 		t.Error("openai scenario must accept anthropic-style providers (cross-style chat conversion)")
 	}
-	if APIStyleAllowedForScenario(ScenarioEmbed, ai.APIStyleAnthropic) {
+	if apiStyleAllowedForScenario(ScenarioEmbed, ai.APIStyleAnthropic) {
 		t.Error("embed scenario must not accept anthropic-style providers")
 	}
-	if !APIStyleAllowedForScenario(ScenarioImageGen, ai.APIStyleOpenAI) {
+	if !apiStyleAllowedForScenario(ScenarioImageGen, ai.APIStyleOpenAI) {
 		t.Error("imagegen scenario must accept openai-style providers")
 	}
 }
@@ -131,10 +131,10 @@ func TestProviderSupportsScenario_DecisionCapability(t *testing.T) {
 	if ProviderSupportsScenario(native, ScenarioOpenAI) {
 		t.Error("a Jev-native provider cannot serve the chat scenario")
 	}
-	if !ScenarioRequiresDecisionCapability(ScenarioDecision) {
+	if !scenarioRequiresDecisionCapability(ScenarioDecision) {
 		t.Error("decision scenario must require decision capability")
 	}
-	if ScenarioRequiresDecisionCapability(ScenarioOpenAI) {
+	if scenarioRequiresDecisionCapability(ScenarioOpenAI) {
 		t.Error("openai scenario must not require decision capability")
 	}
 }

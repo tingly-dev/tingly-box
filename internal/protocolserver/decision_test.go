@@ -31,11 +31,11 @@ func TestValidateDecisionBody(t *testing.T) {
 
 func TestValidateDecisionBody_Rejections(t *testing.T) {
 	cases := map[string]string{
-		"not json":        `[{`,
-		"missing model":   `{"questions": {"q1": {"type": "score"}}}`,
-		"blank model":     `{"model": "  ", "questions": {"q1": {"type": "score"}}}`,
+		"not json":          `[{`,
+		"missing model":     `{"questions": {"q1": {"type": "score"}}}`,
+		"blank model":       `{"model": "  ", "questions": {"q1": {"type": "score"}}}`,
 		"missing questions": `{"model": "jev-small"}`,
-		"empty questions": `{"model": "jev-small", "questions": {}}`,
+		"empty questions":   `{"model": "jev-small", "questions": {}}`,
 	}
 	for name, raw := range cases {
 		if _, err := validateDecisionBody([]byte(raw)); err == nil {

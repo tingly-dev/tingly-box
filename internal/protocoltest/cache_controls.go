@@ -402,6 +402,15 @@ func cacheStateName(cached bool) string {
 }
 
 // ExecuteAllCacheControls runs single-hop and ABA prompt-cache request checks.
+// supportsCacheControls reports whether a protocol family has prompt-cache
+// semantics. Leaf families without a conversation prefix (decision: single-shot
+// typed questions, nothing to cache) have no cache-control case to run — skip
+// them rather than growing cacheControlBody a protocol branch that can never
+// be meaningful.
+func supportsCacheControls(apiType protocol.APIType) bool {
+	return apiType != protocol.TypeDecision
+}
+
 // Each result validates both the positive cache case and the negative no-cache
 // case. Name formats:
 //
@@ -410,12 +419,7 @@ func cacheStateName(cached bool) string {
 func (m *Matrix) ExecuteAllCacheControls() []TestResult {
 	var cases []recorderCase
 	for _, pair := range m.Pairs {
-		// Prompt-cache directives are chat-protocol concepts. Leaf families
-		// without cache semantics (decision: single-shot typed questions, no
-		// conversation prefix to cache) have no cache-control case to run —
-		// skip them here rather than growing cacheControlBody a protocol
-		// branch that can never be meaningful.
-		if pair.Source == protocol.TypeDecision {
+		if !supportsCacheControls(pair.Source) {
 			continue
 		}
 		for _, streaming := range m.Streaming {

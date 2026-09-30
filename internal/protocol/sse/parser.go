@@ -3,6 +3,8 @@ package sse
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // ParsedTokenUsage holds token counts extracted from a parsed response.
@@ -210,25 +212,23 @@ func ParseGoogleResult(m map[string]interface{}) *ParsedResult {
 // ParseDecisionResult extracts fields from a native structured-decision
 // response (.design/decision-protocol.md). A decision answer has no assistant
 // message: the structured answers/probabilities stay in RoundTripResult.RawBody,
-// and only the model and the optional usage object (Anthropic- or OpenAI-style
-// token spellings) are lifted into the parsed result.
+// and only the model and the optional usage object (spelling table in
+// ai.DecisionUsage) are lifted into the parsed result.
 func ParseDecisionResult(m map[string]interface{}) *ParsedResult {
 	r := &ParsedResult{}
 	if model, ok := m["model"].(string); ok {
 		r.Model = model
 	}
 	if usage, ok := m["usage"].(map[string]interface{}); ok {
-		input := usage["input_tokens"]
-		if input == nil {
-			input = usage["prompt_tokens"]
-		}
-		output := usage["output_tokens"]
-		if output == nil {
-			output = usage["completion_tokens"]
-		}
-		r.Usage = &ParsedTokenUsage{
-			InputTokens:  parsedToInt(input),
-			OutputTokens: parsedToInt(output),
+		raw, err := json.Marshal(usage)
+		if err == nil {
+			var u ai.DecisionUsage
+			if json.Unmarshal(raw, &u) == nil {
+				r.Usage = &ParsedTokenUsage{
+					InputTokens:  u.Input(),
+					OutputTokens: u.Output(),
+				}
+			}
 		}
 	}
 	return r
