@@ -88,10 +88,13 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     // Nothing on a folded off card shows access, so it doesn't fetch it.
     const access = useRemoteAccess(bot.uuid, expanded);
     const controllerCount = access.controllers.length + access.controllingGroups.length;
-    // Live, loaded, and nobody can drive it. The notice (which needs the
-    // loaded chats to pick its next step) additionally requires no load error.
-    const unusable = isActive && !access.loading && controllerCount === 0;
-    const nobody = unusable && !access.error;
+    // Nothing is judged until the first fetch has come back — before that,
+    // empty lists mean "not known yet", not "nobody".
+    const checked = isActive && access.loaded && !access.loading;
+    const failed = checked && Boolean(access.error);
+    // Live, checked, and nobody can drive it: the state the notice is for.
+    const nobody = checked && !failed && controllerCount === 0;
+    const noModel = checked && !failed && controllerCount > 0 && !(bot.smartguide_provider && bot.smartguide_model);
     const ccProfileName = ccProfiles?.find((p) => p.id === ccProfileId)?.name;
     const BrandIcon = PLATFORM_BRAND_ICONS[bot.platform || ''];
 
@@ -99,12 +102,16 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     // separate On/Off chip, which only repeated the switch next to it.
     const status = !isActive
         ? t('remoteAgent.card.statusOff', {defaultValue: 'Remote Control off'})
-        : access.loading
+        : !checked
             ? t('remoteAgent.card.statusChecking', {defaultValue: 'Checking access…'})
-            : unusable
-                ? t('remoteAgent.card.statusNobody', {defaultValue: 'Nobody can control yet'})
-                : t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount});
-    const statusColor = !isActive ? 'text.secondary' : unusable ? 'warning.main' : 'success.main';
+            : failed
+                ? t('remoteAgent.card.statusError', {defaultValue: 'Couldn\'t check who can control'})
+                : nobody
+                    ? t('remoteAgent.card.statusNobody', {defaultValue: 'Nobody can control yet'})
+                    : noModel
+                        ? t('remoteAgent.card.statusNoModel', {defaultValue: '@tb has no model yet'})
+                        : t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount});
+    const statusColor = !checked ? 'text.secondary' : (failed || nobody || noModel) ? 'warning.main' : 'success.main';
 
     // Readiness: while a live bot is unusable, the concrete next step sits in
     // the same row (see ux-principles #11).

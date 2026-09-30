@@ -67,6 +67,13 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
     const [bashAllowlistDraft, setBashAllowlistDraft] = useState('');
     const [saving, setSaving] = useState(false);
     const platformGuide = usePlatformGuide(platformDraft);
+    // Connect only offers the platforms the UI supports; the backend (and CLI)
+    // also know Slack and Discord. Editing, or adding under a platform the
+    // caller locked, keeps the full list so an existing bot of any platform
+    // still resolves its config and stays editable.
+    const platformChoices = dialogMode === 'add' && !lockPlatform
+        ? botPlatforms.filter(p => (BOT_PLATFORM_IDS as readonly string[]).includes(p.platform))
+        : botPlatforms;
 
     // Load platform configs once (first open).
     useEffect(() => {
@@ -76,11 +83,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                 setPlatformsLoading(true);
                 const data = await api.getImBotPlatforms();
                 if (data?.success && data?.platforms) {
-                    // The backend still registers adapters the UI doesn't
-                    // support yet (Slack, Discord); only offer the platforms
-                    // the rest of the UI can actually show and manage.
-                    setBotPlatforms((data.platforms as BotPlatformConfig[]).filter(p =>
-                        (BOT_PLATFORM_IDS as readonly string[]).includes(p.platform)));
+                    setBotPlatforms(data.platforms);
                 }
             } catch (err) {
                 console.error('Failed to load bot platforms:', err);
@@ -241,7 +244,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                                     setAuthDraft({});
                                     setCurrentPlatformConfig(botPlatforms.find(p => p.platform === platform) ?? null);
                                 }}
-                                platforms={botPlatforms}
+                                platforms={platformChoices}
                                 loading={platformsLoading}
                                 disabled={saving || (dialogMode === 'add' && lockPlatform)}
                             />

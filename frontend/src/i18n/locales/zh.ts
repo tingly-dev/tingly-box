@@ -2297,7 +2297,9 @@ export default {
       "statusNobody": "还没有人能遥控",
       "statusOff": "遥控已关闭",
       "hideSettings": "收起设置",
-      "showSettings": "设置"
+      "showSettings": "设置",
+      "statusError": "无法检查谁能遥控",
+      "statusNoModel": "@tb 还没有配置模型"
     },
     "title": "{{platform}} 远程控制",
     "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",

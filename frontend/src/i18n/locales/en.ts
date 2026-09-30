@@ -2504,7 +2504,9 @@ export default {
       "statusNobody": "Nobody can control yet",
       "statusOff": "Remote Control off",
       "hideSettings": "Hide settings",
-      "showSettings": "Settings"
+      "showSettings": "Settings",
+      "statusError": "Couldn't check who can control",
+      "statusNoModel": "@tb has no model yet"
     },
     "ccProfile": {
       "default": "Default",

@@ -131,8 +131,10 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
             await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, true);
             return;
         }
-        if (chat.chat.blocked) await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, false);
+        // Rows first, unblock second: if the rows write fails, a chat being
+        // cut off must stay blocked rather than come back with its old allows.
         await api.setBotDirectChatPermissions(bot!.uuid!, chat.chat.id, remoteRows(next === 'control'));
+        if (chat.chat.blocked) await api.setBotDirectChatBlocked(bot!.uuid!, chat.chat.id, false);
     });
 
     const chatHeader = (chat: DirectChatDetail) => rowHeader(
@@ -175,7 +177,7 @@ const BotAccessDialog = ({open, bot, onClose, onChanged, scope = 'all', remoteAc
                         {t('botAccess.unpairedHint', {defaultValue: 'Pair first — an unpaired chat can\'t be given control.'})}
                     </Typography>
                 )}
-                {(state === 'startDenied' || state === 'approveDenied') && !chat.chat.blocked && (
+                {value === 'none' && (state !== 'off' || chatPermissionAllowed(chat, 'remote_control', 'access')) && (
                     <Typography variant="caption" sx={{display: 'block', mt: 0.5, color: 'warning.main'}}>
                         {t('botAccess.partial', {defaultValue: 'Partly allowed, so permission prompts can\'t be answered. Choose Can control to repair.'})}
                     </Typography>
