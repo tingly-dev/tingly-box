@@ -3563,6 +3563,20 @@ export const handlers = [
         })
     }),
 
+    // Duplicate creates the team/profile record only; mock rules aren't copied.
+    http.post('/api/v1/scenario/:scenario/:id/duplicate', async ({ params, request }) => {
+        const { name } = await request.json() as any
+        const now = new Date().toISOString()
+        if (params.scenario === 'team') {
+            const team = { id: crypto.randomUUID(), name, slug: `t${mockTeams.length + 1}`, enabled: true, is_default: false, created_at: now, updated_at: now }
+            mockTeams = [...mockTeams, team]
+            return HttpResponse.json({ success: true, data: { id: team.id, name, scenario: `team:${team.id}` } })
+        }
+        const id = `p${mockClaudeCodeProfiles.length + 1}`
+        mockClaudeCodeProfiles.push({ id, name, description: '', unified: true, created_at: now, updated_at: now })
+        return HttpResponse.json({ success: true, data: { id, name, scenario: `${params.scenario}:${id}` } })
+    }),
+
     http.put('/api/v1/scenario/:scenario/profiles/:profileId', async ({ params, request }) => {
         const { scenario, profileId } = params as { scenario: string; profileId: string }
         const body = await request.json() as any

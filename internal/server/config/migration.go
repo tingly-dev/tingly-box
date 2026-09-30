@@ -56,6 +56,7 @@ var migrationSteps = []migrationStep{
 	{"normalize-builtin-rule-identity", kindBaseline, "", normalizeBuiltinRuleIdentity},
 	{"agent-scenario-to-custom", kindBaseline, "", migrateAgentScenarioToCustom},
 	{"ensure-current-builtin-rules", kindBaseline, "", ensureCurrentBuiltinRules},
+	{"drop-orphan-team-scopes", kindBaseline, "", dropOrphanTeamScopes},
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},

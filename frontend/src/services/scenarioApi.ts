@@ -2,6 +2,15 @@
 import {controlApi} from './openapi';
 
 export const scenarioApi = {
+    // duplicateScope copies team/profile `id` ('default' = main scope) into a new one.
+    duplicateScope: async (scenario: string, id: string, name: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/{id}/duplicate', {
+            headers,
+            params: {path: {scenario, id}},
+            body: {name},
+        }));
+    },
+
     // Scenario API
     getScenarioConfig: async (scenario: string): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}', {

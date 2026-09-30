@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // mockRemoteControlController is a mock implementation of RemoteControlController
@@ -418,4 +419,40 @@ func TestScenarioUpdateResponseStructure(t *testing.T) {
 	if response.Data.Scenario != "claude_code" {
 		t.Errorf("expected Scenario 'claude_code', got %q", response.Data.Scenario)
 	}
+}
+
+// Goes through the real route registration, so a conflict between
+// /scenario/:scenario/:id/duplicate and the static segments at the same depth
+// (profiles, flag, …) fails here rather than at server start.
+func TestDuplicateEndpoint(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	RegisterRoutes(swagger.NewRouteManager(engine).NewGroup("api", "v1", ""), NewHandler(cfg, &mockRemoteControlController{}))
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// A copy of the main config gets settings that route through the copied
+	// rule ("tingly/cc"), not the empty-profile fallback ("cc").
+	rec := call(http.MethodPost, "/scenario/claude_code/default/duplicate", `{"name":"main-copy"}`)
+	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp struct{ Data config.DuplicateResult }
+	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	settings := call(http.MethodGet, "/scenario/claude_code/profiles/"+resp.Data.ID+"/claude-config", "")
+	assert.Contains(t, settings.Body.String(), `"ANTHROPIC_MODEL":"tingly/cc"`)
+
+	assert.Equal(t, http.StatusOK, call(http.MethodPost, "/scenario/team/default/duplicate", `{"name":"Copy"}`).Code)
+	assert.Equal(t, http.StatusNotFound, call(http.MethodPost, "/scenario/claude_code/p99/duplicate", `{"name":"x"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, call(http.MethodPost, "/scenario/openai/default/duplicate", `{"name":"x"}`).Code)
+	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/scenario/claude_code/profiles", "").Code)
 }

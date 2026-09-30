@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func performRequest(router http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -29,7 +31,7 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	}
 	defer manager.Close()
 
-	h := NewHandler(manager.Team())
+	h := NewHandler(manager.Team(), nil)
 	router := gin.New()
 	router.GET("/teams", h.List)
 	router.POST("/teams", h.Create)
@@ -91,5 +93,33 @@ func TestHandler_TeamLifecycle(t *testing.T) {
 	defaultDelete := performRequest(router, http.MethodDelete, "/teams/"+db.DefaultTeamID, "")
 	if defaultDelete.Code != http.StatusConflict {
 		t.Fatalf("default delete status = %d: %s", defaultDelete.Code, defaultDelete.Body.String())
+	}
+}
+
+// Deleting a team through the API also removes its routing.
+func TestHandler_DeleteRemovesRouting(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := cfg.StoreManager().Team().Create("Research")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := db.TeamScenario(team.ID)
+	if err := cfg.AddRule(typ.Rule{Scenario: scope, RequestModel: "shared", Active: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	router := gin.New()
+	router.DELETE("/teams/:team_id", NewHandler(cfg.StoreManager().Team(), cfg).Delete)
+	if rec := performRequest(router, http.MethodDelete, "/teams/"+team.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d: %s", rec.Code, rec.Body.String())
+	}
+	for _, r := range cfg.GetRequestConfigs() {
+		if r.Scenario == scope {
+			t.Fatalf("rule %s of the deleted team survived", r.UUID)
+		}
 	}
 }

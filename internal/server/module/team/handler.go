@@ -7,15 +7,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 )
 
 type Handler struct {
 	store *db.TeamStore
+	// config owns a team's routing ("team:<id>" rules); Delete removes it
+	// together with the team. Nil only for schema generation and tests.
+	config *config.Config
 }
 
-func NewHandler(store *db.TeamStore) *Handler {
-	return &Handler{store: store}
+func NewHandler(store *db.TeamStore, cfg *config.Config) *Handler {
+	return &Handler{store: store, config: cfg}
 }
 
 // sendStoreError maps a TeamStore error to an HTTP response. All four
@@ -98,7 +102,11 @@ func (h *Handler) setEnabled(c *gin.Context, enabled bool) {
 
 func (h *Handler) Delete(c *gin.Context) {
 	id := c.Param("team_id")
-	if err := h.store.Delete(id); err != nil {
+	deleteTeam := h.store.Delete
+	if h.config != nil {
+		deleteTeam = h.config.DeleteTeam
+	}
+	if err := deleteTeam(id); err != nil {
 		sendStoreError(c, err, http.StatusConflict, "conflict_error")
 		return
 	}
