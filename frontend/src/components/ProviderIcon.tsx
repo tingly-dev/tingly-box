@@ -135,6 +135,8 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'dashscope-intl': Qwen,
     'dashscope-cn-coding': Qwen,
     'dashscope-intl-coding': Qwen,
+    'dashscope-cn-token': Qwen,
+    'dashscope-intl-token': Qwen,
     'qwen-code': Qwen,
     'modelscope-cn': ModelScope,
     'z-ai-coding': Zhipu,
