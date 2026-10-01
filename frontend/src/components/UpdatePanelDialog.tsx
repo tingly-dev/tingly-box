@@ -15,7 +15,7 @@ interface UpdatePanelDialogProps {
 }
 
 // Maps a backend launch_source to the matching update method, so the panel
-// opens on the channel the user is already using instead of always 'npx'.
+// opens on the channel the user is already using instead of always 'npm'.
 // null means "no match" (e.g. a downloaded binary, or not loaded yet) —
 // callers keep whatever method is already selected.
 const updateMethodForSource = (source: string | null): 'npx' | 'npm' | null => {
@@ -43,7 +43,9 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
     const theme = useTheme();
     const { currentVersion, latestVersion, checking, releaseURL, checkForUpdates, hasUpdate, launchSource } = useVersion();
 
-    const [selectedMethodId, setSelectedMethodId] = useState<string>('npx');
+    // npm (global install) is the recommended channel, so it's the default
+    // when the launch source doesn't tell us otherwise.
+    const [selectedMethodId, setSelectedMethodId] = useState<string>('npm');
     // Once the launch source arrives, adopt its matching method — but only
     // until the user picks one themselves, so a later poll never yanks the
     // toggle out from under them.
@@ -76,13 +78,6 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
     // time so adding channels doesn't grow the dialog.
     const updateMethods = [
         {
-            id: 'npx',
-            title: t('update.methods.npx.title'),
-            description: t('update.methods.npx.description'),
-            commands: [versionForCommand ? `npx tingly-box@${versionForCommand}` : 'npx tingly-box@latest'],
-            icon: <NPM />,
-        },
-        {
             id: 'npm',
             title: t('update.methods.npm.title'),
             description: t('update.methods.npm.description'),
@@ -92,6 +87,16 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                 versionForCommand ? `npm install -g tingly-box@${versionForCommand}` : 'npm install -g tingly-box@latest',
                 'tingly-box restart',
             ],
+            // Shown under the commands but left out of the copied text: zsh
+            // (macOS default) rejects a pasted `#` comment line by default.
+            note: t('update.methods.npm.aliasNote'),
+            icon: <NPM />,
+        },
+        {
+            id: 'npx',
+            title: t('update.methods.npx.title'),
+            description: t('update.methods.npx.description'),
+            commands: [versionForCommand ? `npx tingly-box@${versionForCommand}` : 'npx tingly-box@latest'],
             icon: <NPM />,
         },
         {
@@ -231,7 +236,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                             {t('update.updateMethods')}
                         </Typography>
 
-                        {/* Channel selector: literal channel names (npx / npm / …) so the
+                        {/* Channel selector: literal channel names (npm / npx / …) so the
                             toggle reads as the real-world install method, with the
                             translated title + description shown for the selected one. */}
                         <ToggleButtonGroup
@@ -291,6 +296,20 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                                     $ {command}
                                 </Typography>
                             ))}
+                            {'note' in selectedMethod && (
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontFamily: fontMono,
+                                        color: 'text.secondary',
+                                        fontSize: '0.8125rem',
+                                        mt: 0.5,
+                                        pr: 5,
+                                    }}
+                                >
+                                    # {selectedMethod.note}
+                                </Typography>
+                            )}
                             <CopyIconButton
                                 value={selectedMethod.commands.join('\n')}
                                 label={t('update.copy')}

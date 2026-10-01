@@ -231,7 +231,8 @@ export default {
       },
       "npm": {
         "title": "Global Install (npm)",
-        "description": "Update the installed CLI, then restart the server to apply"
+        "description": "Update the installed CLI, then restart the server to apply",
+        "aliasNote": "tb is short for tingly-box, so `tb restart` works too"
       },
       "docker": {
         "title": "Docker Image",
