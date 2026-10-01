@@ -2,7 +2,7 @@ package imbot
 
 import "github.com/tingly-dev/tingly-box/swagger"
 
-func RegisterAccessRoutes(router *swagger.RouteGroup, h *Handler) {
+func registerAccessRoutes(router *swagger.RouteGroup, h *Handler) {
 	router.GET("/bots/:bot/capabilities", h.ListCapabilities, swagger.WithTags("bot-access"), swagger.WithDescription("List explicit product capabilities for a bot."), swagger.WithPathParam("bot", "string", "Bot UUID"), swagger.WithResponseModel(CapabilityListResponse{}))
 	router.PUT("/bots/:bot/capabilities/:capability", h.PutCapability, swagger.WithTags("bot-access"), swagger.WithDescription("Enable or disable one bot capability and return the derived runtime state."), swagger.WithPathParam("bot", "string", "Bot UUID"), swagger.WithPathParam("capability", "string", "notify or remote_control"), swagger.WithRequestModel(CapabilityUpdateRequest{}), swagger.WithResponseModel(CapabilityUpdateResponse{}))
 

@@ -1,14 +1,16 @@
 package statusline
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 )
 
+var _ module.Module = (*Handler)(nil)
+
 // RegisterRoutes registers Claude Code status routes
-func RegisterRoutes(engine *gin.Engine, handler *Handler) {
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
 	// Claude Code status line endpoints (no auth required)
 	// These must be registered before the /tingly/:scenario routes
-	ccGroup := engine.Group("/tingly/:scenario")
-	ccGroup.POST("/status", handler.GetClaudeCodeStatus)
-	ccGroup.POST("/statusline", handler.GetClaudeCodeStatusLine)
+	ccGroup := rt.Engine.Group("/tingly/:scenario")
+	ccGroup.POST("/status", h.GetClaudeCodeStatus)
+	ccGroup.POST("/statusline", h.GetClaudeCodeStatusLine)
 }

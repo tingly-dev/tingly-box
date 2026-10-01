@@ -1,48 +1,49 @@
 package oauth
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"html/template"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// RegisterRoutes registers OAuth API routes with swagger documentation
-func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, handler *Handler) {
-	// Register HTML templates
-	// Note: Templates will be registered by RegisterCallbackRoutes which has access to RouteManager
+var _ module.Module = (*Handler)(nil)
 
-	// Authenticated API routes
-	router.Router.Use(authMiddleware)
+// RegisterRoutes registers the authenticated OAuth API routes on the V1 group
+// (which already carries user auth) and the unauthenticated provider callback
+// routes on the engine.
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
+	registerCallbackRoutes(rt.Manager, h)
 
 	// OAuth Provider Management
-	router.GET("/oauth/providers", handler.ListOAuthProviders,
+	router.GET("/oauth/providers", h.ListOAuthProviders,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("List all available OAuth providers"),
 		swagger.WithResponseModel(OAuthProvidersResponse{}),
 	)
 
-	router.GET("/oauth/providers/:type", handler.GetOAuthProvider,
+	router.GET("/oauth/providers/:type", h.GetOAuthProvider,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Get specific OAuth provider configuration"),
 		swagger.WithResponseModel(OAuthProviderDataResponse{}),
 	)
 
-	router.PUT("/oauth/providers/:type", handler.UpdateOAuthProvider,
+	router.PUT("/oauth/providers/:type", h.UpdateOAuthProvider,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Update OAuth provider configuration"),
 		swagger.WithRequestModel(OAuthUpdateProviderRequest{}),
 		swagger.WithResponseModel(OAuthUpdateProviderResponse{}),
 	)
 
-	router.DELETE("/oauth/providers/:type", handler.DeleteOAuthProvider,
+	router.DELETE("/oauth/providers/:type", h.DeleteOAuthProvider,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Delete OAuth provider configuration (clears credentials)"),
 		swagger.WithResponseModel(OAuthUpdateProviderResponse{}),
 	)
 
 	// OAuth Authorization Flow
-	router.POST("/oauth/authorize", handler.AuthorizeOAuth,
+	router.POST("/oauth/authorize", h.AuthorizeOAuth,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Initiate OAuth authorization flow"),
 		swagger.WithRequestModel(OAuthAuthorizeRequest{}),
@@ -50,33 +51,33 @@ func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, 
 	)
 
 	// OAuth Token Management
-	router.GET("/oauth/token", handler.GetOAuthToken,
+	router.GET("/oauth/token", h.GetOAuthToken,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Get OAuth token for a user and provider"),
 		swagger.WithResponseModel(OAuthTokenResponse{}),
 	)
 
-	router.POST("/oauth/refresh", handler.RefreshOAuthToken,
+	router.POST("/oauth/refresh", h.RefreshOAuthToken,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Refresh OAuth token using refresh token"),
 		swagger.WithRequestModel(OAuthRefreshTokenRequest{}),
 		swagger.WithResponseModel(OAuthRefreshTokenResponse{}),
 	)
 
-	router.DELETE("/oauth/token", handler.RevokeOAuthToken,
+	router.DELETE("/oauth/token", h.RevokeOAuthToken,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Revoke OAuth token for a user and provider"),
 		swagger.WithResponseModel(OAuthMessageResponse{}),
 	)
 
-	router.GET("/oauth/tokens", handler.ListOAuthTokens,
+	router.GET("/oauth/tokens", h.ListOAuthTokens,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("List all OAuth tokens for a user"),
 		swagger.WithResponseModel(OAuthTokensResponse{}),
 	)
 
 	// OAuth Session Status
-	router.GET("/oauth/status", handler.GetOAuthSessionStatus,
+	router.GET("/oauth/status", h.GetOAuthSessionStatus,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Get OAuth session status"),
 		swagger.WithQueryRequired("session_id", "string", "OAuth session ID from authorize response"),
@@ -84,7 +85,7 @@ func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, 
 	)
 
 	// OAuth Cancel Session
-	router.POST("/oauth/cancel", handler.CancelOAuthSession,
+	router.POST("/oauth/cancel", h.CancelOAuthSession,
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Cancel an in-progress OAuth session and cleanup resources"),
 		swagger.WithRequestModel(OAuthCancelRequest{}),
@@ -92,9 +93,9 @@ func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, 
 	)
 }
 
-// RegisterCallbackRoutes registers unauthenticated callback routes
-// These must be registered outside the authenticated API group
-func RegisterCallbackRoutes(manager *swagger.RouteManager, handler *Handler) {
+// registerCallbackRoutes registers unauthenticated callback routes.
+// These must be registered outside the authenticated API group.
+func registerCallbackRoutes(manager *swagger.RouteManager, handler *Handler) {
 	// Register HTML templates
 	registerHTMLTemplates(manager)
 

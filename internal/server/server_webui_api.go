@@ -26,8 +26,10 @@ import (
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// UseWebAPIEndpoints configures API routes for web UI using swagger manager
-func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
+// UseWebAPIEndpoints configures the core API routes for the web UI using the
+// swagger manager and returns the shared route groups so the caller can mount
+// further modules on them (see apiModules).
+func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Routes {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",
@@ -56,19 +58,23 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(gin.H{}),
 	)
 
-	// Create authenticated API group
+	// Create authenticated API groups
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.getUserAuthMiddleware())
+	apiV2 := manager.NewGroup("api", "v2", "")
+	apiV2.Router.Use(s.getUserAuthMiddleware())
+
+	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager, UserAuth: s.getUserAuthMiddleware()}
 
 	// Info endpoints: health (unauthenticated) + config/version (authenticated)
 	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir, s.launchSource)
-	info.RegisterRoutes(apiAuth, apiV1, infoHandler)
+	module.Mount(rt, infoHandler)
 
 	// Desktop / start-menu shortcut creation (authenticated) — see
 	// .design/shortcut.md §6. Not shown to Wails GUI users on the frontend
 	// side; the endpoint itself is harmless to call from any runtime mode.
 	shortcutHandler := shortcutmodule.NewHandler(s.launchSource, s.version)
-	shortcutmodule.RegisterRoutes(apiV1, shortcutHandler)
+	module.Mount(rt, shortcutHandler)
 
 	apiV1.GET("/auth/token", s.GetUserToken,
 		swagger.WithDescription("Get current user token (masked)"),
@@ -86,11 +92,6 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("auth"),
 		swagger.WithResponseModel(gin.H{}),
 	)
-
-	apiV2 := manager.NewGroup("api", "v2", "")
-	apiV2.Router.Use(s.getUserAuthMiddleware())
-
-	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager}
 
 	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.webHandler.GetLogs,
@@ -207,7 +208,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	} else {
 		handler := skill.NewHandler(skillManager)
 		// Register routes from skill module
-		skill.RegisterRoutes(apiV2, handler)
+		module.Mount(rt, handler)
 		log.Printf("Skill api initialized")
 	}
 
@@ -238,19 +239,19 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	// Rule Management - register from rule module
 	ruleHandler := rulemodule.NewHandler(s.config)
-	rulemodule.RegisterRoutes(apiV1, ruleHandler)
+	module.Mount(rt, ruleHandler)
 
 	// Scenario Management - register from scenario module
 	// Route previews for the model-tier listing; PreviewRoute needs only the
 	// config and the load balancer, never the status line's cache or quota.
 	scenarioHandler := scenario.NewHandler(s.config, s).
 		WithRoutePreview(statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), nil))
-	scenario.RegisterRoutes(apiV1, scenarioHandler)
+	module.Mount(rt, scenarioHandler)
 
 	// Image generation output directory (authenticated) - lets the frontend
 	// show the user where generated images are saved (~/.tingly-box/image).
 	imagegenHandler := imagegen.NewHandler()
-	imagegen.RegisterRoutes(apiV1, imagegenHandler)
+	module.Mount(rt, imagegenHandler)
 
 	// Guardrails admin API
 	module.Mount(rt, s.guardrailsHandler)
@@ -265,10 +266,10 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Onboarding: extract URLs and possible API tokens from arbitrary pasted
 	// text. Vendor-agnostic — the user picks which URL/token to use.
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
-	onboarding.RegisterRoutes(apiV1, onboardingHandler)
+	module.Mount(rt, onboardingHandler)
 
 	// E2E + lightweight probe endpoints
-	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeE2e, s.probeLight))
+	module.Mount(rt, probemodule.NewHandler(s.probeE2e, s.probeLight))
 
 	// Token Management
 	apiV1.POST("/token", s.webHandler.GenerateToken,
@@ -291,11 +292,13 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	// Provider CRUD + model management + provider export / import
 	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
-	providermodule.RegisterRoutes(apiV2, providerHandler)
+	module.Mount(rt, providerHandler)
 
 	// Provider catalog endpoints
 	providerCatalogHandler := providercatalog.NewHandler(s.templateManager)
-	providercatalog.RegisterRoutes(apiV2, providerCatalogHandler)
+	module.Mount(rt, providerCatalogHandler)
+
+	return rt
 }
 
 // ValidateAuthToken validates an authentication token without requiring auth

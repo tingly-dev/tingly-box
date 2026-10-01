@@ -5,6 +5,7 @@ package uiprefs
 
 import (
 	"encoding/json"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -56,7 +57,10 @@ func (h *Handler) Patch(c *gin.Context) {
 }
 
 // RegisterRoutes registers the UI preference routes.
-func RegisterRoutes(router *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
 	router.GET("/ui-prefs", h.Get,
 		swagger.WithTags("ui-prefs"),
 		swagger.WithDescription("Get the UI-only preferences shared by every UI surface (browser and desktop)"),

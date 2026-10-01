@@ -1,9 +1,15 @@
 package sharing
 
-import "github.com/tingly-dev/tingly-box/swagger"
+import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
+	"github.com/tingly-dev/tingly-box/swagger"
+)
 
 // RegisterRoutes wires all token management endpoints onto the given group.
-func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	group := rt.V1
 	group.POST("/tokens", h.Create,
 		swagger.WithTags("tokens"),
 		swagger.WithDescription("Create a shared API token"),

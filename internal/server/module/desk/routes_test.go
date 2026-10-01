@@ -1,6 +1,7 @@
 package desk
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ func TestRegisterRoutes_GateBlocksWhenDisabled(t *testing.T) {
 	apiV1 := manager.NewGroup("api", "v1", "")
 
 	enabled := false
-	RegisterRoutes(apiV1, NewHandler(nil, nil), func() bool { return enabled })
+	NewHandler(nil, nil).WithGate(func() bool { return enabled }).RegisterRoutes(&module.Routes{V1: apiV1})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/desk/permission-modes", nil)
 	w := httptest.NewRecorder()

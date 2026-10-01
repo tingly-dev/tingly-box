@@ -2,11 +2,15 @@ package probe
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/probe"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all probe-module endpoints on the given route group.
-func RegisterRoutes(router *swagger.RouteGroup, h *Handler) {
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V2
 	router.POST("/probe", h.HandleE2EProbe,
 		swagger.WithDescription("End-to-end probe - SDK-level test for rules, providers, and unsaved provider config"),
 		swagger.WithTags("testing"),

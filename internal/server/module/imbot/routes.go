@@ -2,14 +2,18 @@ package imbot
 
 import (
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all ImBot settings routes with swagger documentation
-func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
-	RegisterAccessRoutes(router, handler)
+var _ module.Module = (*Handler)(nil)
+
+func (h *Handler) RegisterRoutes(rt *module.Routes) {
+	router := rt.V1
+	registerAccessRoutes(router, h)
 	// GET /imbot-settings - List all ImBot configurations
-	router.GET("/imbot-settings", handler.ListSettings,
+	router.GET("/imbot-settings", h.ListSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Returns all ImBot configurations"),
 		// Explicit name: "ListResponse" collides with team.ListResponse in
@@ -23,7 +27,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /imbot-settings/:uuid - Get a single ImBot configuration
-	router.GET("/imbot-settings/:uuid", handler.GetSettings,
+	router.GET("/imbot-settings/:uuid", h.GetSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Returns a single ImBot configuration by UUID"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -34,7 +38,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// POST /imbot-settings - Create a new ImBot configuration
-	router.POST("/imbot-settings", handler.CreateSettings,
+	router.POST("/imbot-settings", h.CreateSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Creates a new ImBot configuration"),
 		// Explicit name: bare "CreateRequest" collides with team.CreateRequest
@@ -47,7 +51,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// PUT /imbot-settings/:uuid - Update an existing ImBot configuration
-	router.PUT("/imbot-settings/:uuid", handler.UpdateSettings,
+	router.PUT("/imbot-settings/:uuid", h.UpdateSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Updates an existing ImBot configuration"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -61,7 +65,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// DELETE /imbot-settings/:uuid - Delete an ImBot configuration
-	router.DELETE("/imbot-settings/:uuid", handler.DeleteSettings,
+	router.DELETE("/imbot-settings/:uuid", h.DeleteSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Deletes an ImBot configuration"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -72,7 +76,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// POST /imbot-settings/:uuid/toggle - Toggle enabled status
-	router.POST("/imbot-settings/:uuid/toggle", handler.ToggleSettings,
+	router.POST("/imbot-settings/:uuid/toggle", h.ToggleSettings,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Toggles the enabled status of an ImBot configuration"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -83,7 +87,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /imbot-settings/:uuid/pairing-code - Reveal current TOFU pairing code
-	router.GET("/imbot-settings/:uuid/pairing-code", handler.GetPairingCode,
+	router.GET("/imbot-settings/:uuid/pairing-code", h.GetPairingCode,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Reveals the bot's current TOFU pairing code; every reveal is audit-logged"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -94,7 +98,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// POST /imbot-settings/:uuid/pairing-code/rotate - Mint a fresh pairing code
-	router.POST("/imbot-settings/:uuid/pairing-code/rotate", handler.RotatePairingCode,
+	router.POST("/imbot-settings/:uuid/pairing-code/rotate", h.RotatePairingCode,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Mints a new TOFU pairing code, invalidating the previous one"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -106,7 +110,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// POST /imbot-admin/restart/:uuid - Restart a single bot in place
-	router.POST("/imbot-admin/restart/:uuid", handler.RestartBot,
+	router.POST("/imbot-admin/restart/:uuid", h.RestartBot,
 		swagger.WithTags("imbot-admin"),
 		swagger.WithDescription("Stops and restarts a single bot without affecting other bots or the HTTP server"),
 		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
@@ -117,7 +121,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// POST /imbot-admin/reload - Reload bot configurations and reconcile enabled state
-	router.POST("/imbot-admin/reload", handler.Reload,
+	router.POST("/imbot-admin/reload", h.Reload,
 		swagger.WithTags("imbot-admin"),
 		swagger.WithDescription("Re-reads bot settings and starts/stops bots to match enabled flags"),
 		swagger.WithErrorResponses(
@@ -126,14 +130,14 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// GET /imbot-platforms - Get all supported platforms
-	router.GET("/imbot-platforms", handler.GetPlatforms,
+	router.GET("/imbot-platforms", h.GetPlatforms,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Returns all supported ImBot platforms with their configurations"),
 		swagger.WithResponseModel(PlatformsResponse{}),
 	)
 
 	// GET /imbot-platform-config - Get platform auth configuration
-	router.GET("/imbot-platform-config", handler.GetPlatformConfig,
+	router.GET("/imbot-platform-config", h.GetPlatformConfig,
 		swagger.WithTags("imbot-settings"),
 		swagger.WithDescription("Returns auth configuration for a specific platform"),
 		swagger.WithQueryConfig("platform", swagger.QueryParamConfig{
@@ -150,7 +154,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	)
 
 	// Feishu/Lark one-click registration endpoints (OAuth 2.0 Device Authorization Grant)
-	if fr := handler.feishuRegHandler; fr != nil {
+	if fr := h.feishuRegHandler; fr != nil {
 		// POST /imbot-settings/:uuid/feishu/qr-start - Start one-click app registration
 		router.POST("/imbot-settings/:uuid/feishu/qr-start", fr.QRStart,
 			swagger.WithTags("imbot-settings", "feishu"),
@@ -179,10 +183,10 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		)
 	}
 
-	// Weixin QR Login endpoints - use handler's persistent QR login handler
-	qrHandler := handler.qrLoginHandler
+	// Weixin QR Login endpoints - use h's persistent QR login h
+	qrHandler := h.qrLoginHandler
 	if qrHandler == nil {
-		logrus.Warn("WeChat QR login handler is nil, QR login endpoints will not be available")
+		logrus.Warn("WeChat QR login h is nil, QR login endpoints will not be available")
 		return
 	}
 
