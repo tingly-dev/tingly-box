@@ -8,6 +8,7 @@ import (
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"google.golang.org/genai"
 
@@ -340,29 +341,41 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 	}
 
 	// thinking
-	config := &protocol.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "medium", // Default to "medium" for OpenAI-compatible APIs
-	}
-	if view.Thinking.OfEnabled != nil || view.Thinking.OfAdaptive != nil || messagesHaveThinking(view.Messages) {
-		config.HasThinking = true
-		config.ReasoningEffort = "medium"
-	}
-	if view.Thinking.OfEnabled != nil && view.Thinking.OfEnabled.BudgetTokens > 0 {
-		// Tier the explicit budget onto the effort ladder instead of flattening
-		// every budget to "medium" (a 32K ultrathink budget is not "medium").
-		config.ReasoningEffort = shared.ReasoningEffort(thinking.EffortFromBudget(view.Thinking.OfEnabled.BudgetTokens))
-	}
-	if view.OutputConfig.Effort != "" {
-		// An explicit effort level wins over the budget-derived tier.
-		config.ReasoningEffort = shared.ReasoningEffort(view.OutputConfig.Effort)
-	}
+	effort, hasThinking := anthropicViewReasoningEffort(view)
+	config := &protocol.OpenAIConfig{HasThinking: hasThinking, ReasoningEffort: effort}
 
 	// Only set stream_options for streaming requests (per OpenAI API spec)
 	if isStreaming && !disableStreamUsage {
 		openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	}
 	return openaiReq, config
+}
+
+// anthropicViewReasoningEffort is the single producer of the reasoning effort
+// an Anthropic request carries to an OpenAI target — Chat reasoning_effort
+// (via OpenAIConfig) and Responses reasoning.effort alike. Thinking counts as
+// on when it is enabled, adaptive, or already present in the history; the
+// level defaults to "medium", an explicit budget is tiered onto the ladder
+// (thinking.EffortFromBudget — a 32K budget is not "medium"), and an explicit
+// output_config.effort wins over both.
+func anthropicViewReasoningEffort(view anthropicRequestView) (effort shared.ReasoningEffort, hasThinking bool) {
+	effort = "medium"
+	hasThinking = view.Thinking.OfEnabled != nil || view.Thinking.OfAdaptive != nil || messagesHaveThinking(view.Messages)
+	if view.Thinking.OfEnabled != nil && view.Thinking.OfEnabled.BudgetTokens > 0 {
+		effort = shared.ReasoningEffort(thinking.EffortFromBudget(view.Thinking.OfEnabled.BudgetTokens))
+	}
+	if view.OutputConfig.Effort != "" {
+		effort = shared.ReasoningEffort(view.OutputConfig.Effort)
+	}
+	return effort, hasThinking
+}
+
+// applyAnthropicThinkingToResponses carries an Anthropic request's thinking to
+// a Responses request as reasoning.effort, the same level a Chat target gets.
+func applyAnthropicThinkingToResponses(params *responses.ResponseNewParams, view anthropicRequestView) {
+	if effort, hasThinking := anthropicViewReasoningEffort(view); hasThinking {
+		params.Reasoning.Effort = effort
+	}
 }
 
 // convertAnthropicViewAssistantToOpenAI converts an assistant message's

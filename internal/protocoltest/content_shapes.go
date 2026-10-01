@@ -715,6 +715,7 @@ func contentShapeCases() []contentShapeCase {
 		}},
 	}
 	cases = append(cases, reasoningEffortToChatCases()...)
+	cases = append(cases, thinkingAcrossProtocolCases()...)
 	return append(cases, outputLimitCases()...)
 }
 
@@ -855,6 +856,53 @@ func outputLimitCases() []contentShapeCase {
 			}
 			assertUpstreamText(t, env, protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses, EndpointResponses,
 				body, number("max_output_tokens"), limit)
+		}},
+	}
+}
+
+// thinkingAcrossProtocolCases pin that an OpenAI client's reasoning effort
+// becomes Anthropic thinking (conversion, ③), and that a tool-loop turn whose
+// history carries no thinking block keeps it off (vendor stage, ④): with
+// budget thinking on, Anthropic requires the final assistant message to start
+// with a signed thinking block, which an OpenAI client never has.
+func thinkingAcrossProtocolCases() []contentShapeCase {
+	thinkingType := func(body map[string]any) (string, bool) {
+		t, _ := body["thinking"].(map[string]any)
+		v, ok := t["type"].(string)
+		return v, ok
+	}
+	firstTurn := func() map[string]any {
+		return map[string]any{
+			"max_tokens":       32000,
+			"reasoning_effort": "high",
+			"messages":         []map[string]any{{"role": "user", "content": "Hello"}},
+		}
+	}
+	toolLoop := func() map[string]any {
+		return map[string]any{
+			"max_tokens":       32000,
+			"reasoning_effort": "high",
+			"tools": []map[string]any{{"type": "function", "function": map[string]any{
+				"name": "shell", "parameters": map[string]any{"type": "object"},
+			}}},
+			"messages": []map[string]any{
+				{"role": "user", "content": "list files"},
+				{"role": "assistant", "tool_calls": []map[string]any{{
+					"id": "call_1", "type": "function",
+					"function": map[string]any{"name": "shell", "arguments": `{"cmd":"ls"}`},
+				}}},
+				{"role": "tool", "tool_call_id": "call_1", "content": "a.txt"},
+			},
+		}
+	}
+	return []contentShapeCase{
+		{name: "chat_to_anthropic/reasoning_effort_enables_thinking", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				firstTurn(), thinkingType, "enabled")
+		}},
+		{name: "chat_to_anthropic/tool_loop_turn_keeps_thinking_off", run: func(t flagTB, env *TestEnv) {
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				toolLoop(), thinkingType, "disabled")
 		}},
 	}
 }

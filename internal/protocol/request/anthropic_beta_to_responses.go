@@ -71,6 +71,8 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
+	applyAnthropicThinkingToResponses(params, viewAnthropicBetaRequest(anthropicReq))
+
 	// Affinity hint for the upstream prompt cache — Anthropic has no equivalent
 	// field, so it is derived from metadata.user_id.
 	params.PromptCacheKey = openAIPromptCacheKey(anthropicReq.Metadata.UserID.Or(""))

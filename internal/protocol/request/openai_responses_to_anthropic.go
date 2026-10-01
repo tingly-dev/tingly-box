@@ -77,6 +77,8 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 		anthropicParams.TopP = AnthropicParamOpt(params.TopP.Value)
 	}
 
+	applyOpenAIEffortAsThinking(anthropicParams, params.Reasoning.Effort)
+
 	// Convert tools
 	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
 		anthropicParams.Tools = ConvertResponsesToolsToAnthropicBeta(params.Tools)

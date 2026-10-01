@@ -6,6 +6,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/shared"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
@@ -164,6 +167,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 	if req.PromptCacheOptions.Mode == "implicit" {
 		params.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
 	}
+	applyOpenAIEffortAsThinking(params, req.ReasoningEffort)
 
 	// Add system blocks if any. Array-form OpenAI content keeps standard
 	// prompt_cache_breakpoint markers from an earlier Anthropic hop.
@@ -288,4 +292,20 @@ func ConvertOpenAIToAnthropicToolChoice(tc *openai.ChatCompletionToolChoiceOptio
 	return anthropic.BetaToolChoiceUnionParam{
 		OfAuto: &anthropic.BetaToolChoiceAutoParam{},
 	}
+}
+
+// applyOpenAIEffortAsThinking carries an OpenAI client's reasoning effort to an
+// Anthropic request: thinking enabled at the ladder's budget for that level
+// (thinking.BudgetMapping) plus output_config.effort. "", "none" and unknown
+// values leave thinking unset. The target half then fits the budget below
+// max_tokens (output_limit), and the vendor stage reconciles both with the
+// model's thinking dialects and with tool-use turns that carry no thinking.
+func applyOpenAIEffortAsThinking(params *anthropic.BetaMessageNewParams, effort shared.ReasoningEffort) {
+	level := string(effort)
+	budget, ok := thinking.BudgetMapping[level]
+	if !ok {
+		return
+	}
+	params.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
+	params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(thinking.AnthropicEffort(level))
 }

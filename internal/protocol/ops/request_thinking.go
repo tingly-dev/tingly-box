@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -180,21 +181,7 @@ func openaiReasoningEffort(effort string) shared.ReasoningEffort {
 }
 
 // anthropicOutputEffort maps a rule effort level to a valid Anthropic
-// output_config.effort. Anthropic's ladder has no "minimal" (collapses to
-// "low"); all other native values remain distinct so the later model-aware
-// transform can clamp them against cataloged support. Unknown values fall
-// back to "medium".
+// output_config.effort (thinking.AnthropicEffort).
 func anthropicOutputEffort(effort string) anthropic.OutputConfigEffort {
-	switch effort {
-	case typ.ThinkingEffortMinimal, typ.ThinkingEffortLow:
-		return anthropic.OutputConfigEffortLow
-	case typ.ThinkingEffortHigh:
-		return anthropic.OutputConfigEffortHigh
-	case typ.ThinkingEffortXHigh:
-		return anthropic.OutputConfigEffortXhigh
-	case typ.ThinkingEffortMax:
-		return anthropic.OutputConfigEffortMax
-	default:
-		return anthropic.OutputConfigEffortMedium
-	}
+	return anthropic.OutputConfigEffort(thinking.AnthropicEffort(effort))
 }

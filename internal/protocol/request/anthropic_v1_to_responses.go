@@ -58,6 +58,8 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 		params.TopP = param.NewOpt(anthropicReq.TopP.Value)
 	}
 
+	applyAnthropicThinkingToResponses(params, viewAnthropicV1Request(anthropicReq))
+
 	// Convert tools
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicV1ToolsToResponses(anthropicReq.Tools)

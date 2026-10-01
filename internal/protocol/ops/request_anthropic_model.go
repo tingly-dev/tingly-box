@@ -176,6 +176,65 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 	return req
 }
 
+// DisableV1ThinkingForUnsignedToolTurn turns budget thinking off when the
+// request continues a tool-use turn whose assistant message carries no
+// thinking block. With budget thinking enabled, Anthropic requires that final
+// assistant message to start with a (signed) thinking block, and a client that
+// never sees thinking blocks — an OpenAI client, or a rule forcing
+// thinking_effort onto one — has none to send back. Run it before any
+// model-specific thinking-block filtering, on the client's own history; a
+// model with mandatory thinking then turns "disabled" into adaptive.
+func DisableV1ThinkingForUnsignedToolTurn(req *anthropic.MessageNewParams) {
+	if req != nil && req.Thinking.OfEnabled != nil && toolTurnWithoutThinking(req.Messages) {
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+	}
+}
+
+// DisableBetaThinkingForUnsignedToolTurn is DisableV1ThinkingForUnsignedToolTurn
+// for Beta requests.
+func DisableBetaThinkingForUnsignedToolTurn(req *anthropic.BetaMessageNewParams) {
+	if req != nil && req.Thinking.OfEnabled != nil && betaToolTurnWithoutThinking(req.Messages) {
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	}
+}
+
+// toolTurnWithoutThinking reports whether the last assistant message calls a
+// tool without starting with a thinking block.
+func toolTurnWithoutThinking(messages []anthropic.MessageParam) bool {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != anthropic.MessageParamRoleAssistant {
+			continue
+		}
+		content := messages[i].Content
+		hasToolUse := false
+		for _, block := range content {
+			if block.OfToolUse != nil {
+				hasToolUse = true
+			}
+		}
+		return hasToolUse && content[0].OfThinking == nil && content[0].OfRedactedThinking == nil
+	}
+	return false
+}
+
+// betaToolTurnWithoutThinking is toolTurnWithoutThinking for Beta messages.
+func betaToolTurnWithoutThinking(messages []anthropic.BetaMessageParam) bool {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != anthropic.BetaMessageParamRoleAssistant {
+			continue
+		}
+		content := messages[i].Content
+		hasToolUse := false
+		for _, block := range content {
+			if block.OfToolUse != nil {
+				hasToolUse = true
+			}
+		}
+		return hasToolUse && content[0].OfThinking == nil && content[0].OfRedactedThinking == nil
+	}
+	return false
+}
+
 // filterThinkingBlocksInMessages removes thinking blocks from message content for v1 API.
 // This handles inline thinking blocks in assistant messages.
 func filterThinkingBlocksInMessages(messages []anthropic.MessageParam) []anthropic.MessageParam {

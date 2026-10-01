@@ -64,3 +64,18 @@ func EffortFromBudget(budget int64) Level {
 		return LevelMax
 	}
 }
+
+// AnthropicEffort maps a ladder level to Anthropic's output_config.effort
+// value. Anthropic's ladder has no "minimal" (collapses to "low"); every other
+// native value stays distinct so the model-aware vendor transform can clamp it
+// against cataloged support. Unknown values fall back to "medium".
+func AnthropicEffort(level Level) string {
+	switch level {
+	case LevelMinimal, LevelLow:
+		return LevelLow
+	case LevelHigh, LevelXHigh, LevelMax:
+		return level
+	default:
+		return LevelMedium
+	}
+}
