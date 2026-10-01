@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tingly Box
+Comment=AI model gateway, remote control and guard rails
+Exec=tingly-box-gui
+Icon=dev.tingly.box
+Terminal=false
+Categories=Development;Utility;
+# The file name, StartupWMClass and the GTK application id
+# (gui/wails3/app.go, Linux.ApplicationID) are all dev.tingly.box: on Wayland
+# the shell matches a window to its launcher by that id, so the dock shows the
+# Tingly Box icon instead of a generic one.
+StartupWMClass=dev.tingly.box

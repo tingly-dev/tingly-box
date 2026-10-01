@@ -20,7 +20,6 @@ frontend/src/bindings
 bin
 frontend/dist
 frontend/node_modules
-build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # `task cli:build` output (a single binary dropped straight into build/,
 # which otherwise holds versioned Dockerfiles/scripts/Taskfiles)

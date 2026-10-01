@@ -292,8 +292,9 @@ jobs:
           path: ./dist/tingly-box${{ matrix.exe }}
           retention-days: 7
 
-  # Unsigned desktop packages (macOS arm64/amd64, Windows amd64); the asset
-  # names are the contract tingly-box-gui's npm shim downloads by.
+  # Unsigned desktop packages (macOS arm64, Windows amd64, Linux amd64
+  # deb/rpm); the macOS asset name is the contract tingly-box-gui's npm shim
+  # downloads by.
   build-gui:
     needs: setup
     if: needs.setup.outputs.build_gui == 'true'
@@ -376,7 +377,7 @@ jobs:
             # GUI artifacts are also in subdirectories
             for artifact_dir in dist/gui/gui-*; do
               if [ -d "$artifact_dir" ]; then
-                cp "$artifact_dir"/*.zip "$RELEASE_DIR/" 2>/dev/null || true
+                cp "$artifact_dir"/*.zip "$artifact_dir"/*.deb "$artifact_dir"/*.rpm "$RELEASE_DIR/" 2>/dev/null || true
               fi
             done
             # Also check for direct files
@@ -392,20 +393,22 @@ jobs:
           | Platform | Download |
           | --- | --- |
           | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` |
-          | macOS Intel | `tingly-box-gui-macos-amd64.zip` |
           | Windows x64 | `tingly-box-gui-windows-amd64.zip` |
+          | Linux x64 — Ubuntu 24.04+ / Debian 13+ | `tingly-box-gui-linux-amd64.deb` |
+          | Linux x64 — Fedora 40+ | `tingly-box-gui-linux-amd64.rpm` |
 
           The desktop builds are not signed by Apple or Microsoft.
 
           - **macOS**: easiest is `npx tingly-box-gui`, which skips Gatekeeper. For a browser download, unzip and open `TinglyBox.app`; when macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine TinglyBox.app`.
           - **Windows**: if SmartScreen appears, choose **More info → Run anyway**.
+          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`.
 
           NOTES
           fi
 
           # Create checksums for all files (only if we have zip files)
           if ls "$RELEASE_DIR"/*.zip 1> /dev/null 2>&1; then
-            (cd "$RELEASE_DIR" && sha256sum *.zip > checksums.txt)
+            (cd "$RELEASE_DIR" && sha256sum $(ls *.zip *.deb *.rpm 2>/dev/null) > checksums.txt)
           else
             echo "No zip files found in release directory"
           fi
@@ -416,6 +419,8 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
             release/*.zip
+            release/*.deb
+            release/*.rpm
             release/checksums.txt
           body_path: release-notes.md
           generate_release_notes: true

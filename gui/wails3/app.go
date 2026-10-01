@@ -72,6 +72,13 @@ func newAppWithServerManager(appManager *app.AppManager, serverManager *app.Serv
 			ActivationPolicy: macActivationPolicy,
 		},
 		Windows: application.WindowsOptions{},
+		Linux: application.LinuxOptions{
+			// Same id as the macOS bundle (CFBundleIdentifier) and the name
+			// of the installed .desktop file (build/linux/dev.tingly.box.desktop):
+			// on Wayland the shell pairs a window with its launcher entry by
+			// this id, so the dock shows our icon rather than a generic one.
+			ApplicationID: "dev.tingly.box",
+		},
 	})
 
 	return app

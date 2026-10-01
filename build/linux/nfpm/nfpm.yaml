@@ -1,80 +1,56 @@
-# Feel free to remove those if you don't want/need to use them.
-# Make sure to check the documentation at https://nfpm.goreleaser.com
+# Linux package for the desktop GUI (deb / rpm), built by
+# `task linux:package:gui` and the GUI workflow (.github/workflows/gui.yml).
+# See https://nfpm.goreleaser.com for the format.
 #
-# The lines below are called `modelines`. See `:help modeline`
+# The package is tingly-box-gui and installs the binary as
+# /usr/bin/tingly-box-gui, never as `tingly-box`: that name belongs to the CLI
+# (npm install -g, release binary), where a bare run prints help. A GUI binary
+# shadowing it on PATH would open a window instead.
+#
+# PKG_VERSION is supplied by the Taskfile: the release tag without its leading
+# "v" (deb/rpm versions must start with a digit).
 
-name: "tingly-box"
-arch: ${GOARCH}
+name: "tingly-box-gui"
+arch: "amd64"
 platform: "linux"
-version: "0.0.1"
-section: "default"
-priority: "extra"
-maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A proxy server for AI model APIs"
+version: "${PKG_VERSION}"
+version_schema: none
+section: "devel"
+priority: "optional"
+maintainer: "Tingly Dev <box@tingly.dev>"
+description: |
+  Tingly Box desktop app.
+  An intelligence orchestrator: LLM gateway, remote control and guard rails,
+  with a tray icon and a native window.
 vendor: "Tingly.Dev"
-homepage: "https://wails.io"
-license: "MIT"
-release: "1"
+homepage: "https://github.com/tingly-dev/tingly-box"
+license: "MPL-2.0"
 
 contents:
   - src: "./bin/tingly-box"
-    dst: "/usr/local/bin/tingly-box"
-  - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/tingly-box.png"
-  - src: "./build/linux/tingly-box.desktop"
-    dst: "/usr/share/applications/tingly-box.desktop"
+    dst: "/usr/bin/tingly-box-gui"
+    file_info:
+      mode: 0755
+  # Pre-sized from build/appicon.png: hicolor has no 1024px directory.
+  - src: "./build/linux/icons/dev.tingly.box-256.png"
+    dst: "/usr/share/icons/hicolor/256x256/apps/dev.tingly.box.png"
+  - src: "./build/linux/icons/dev.tingly.box-512.png"
+    dst: "/usr/share/icons/hicolor/512x512/apps/dev.tingly.box.png"
+  - src: "./build/linux/dev.tingly.box.desktop"
+    dst: "/usr/share/applications/dev.tingly.box.desktop"
 
-# Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
+# GTK4 + WebKitGTK 6.0, the stack wails v3 links by default:
+# Ubuntu 24.04+, Debian 13+, Fedora 40+.
 depends:
   - libgtk-4-1
   - libwebkitgtk-6.0-4
 
-# Distribution-specific overrides for different package formats
 overrides:
-  # RPM packages for Fedora / RHEL / AlmaLinux / Rocky Linux
   rpm:
     depends:
       - gtk4
       - webkitgtk6.0
 
-  # Arch Linux packages
-  archlinux:
-    depends:
-      - gtk4
-      - webkitgtk-6.0
-
-# scripts section to ensure desktop database is updated after install
 scripts:
-  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
-  # You can also add preremove, postremove if needed
-  # preremove: "./build/linux/nfpm/scripts/preremove.sh"
-  # postremove: "./build/linux/nfpm/scripts/postremove.sh"
-
-# If you build your app with -tags gtk3 (legacy WebKit2GTK 4.1 stack — supported through v3.0.x, removed in v3.1),
-# replace the depends/overrides above with these:
-#
-# depends:
-#   - libgtk-3-0
-#   - libwebkit2gtk-4.1-0
-# overrides:
-#   rpm:
-#     depends:
-#       - gtk3
-#       - webkit2gtk4.1
-#   archlinux:
-#     depends:
-#       - gtk3
-#       - webkit2gtk-4.1
-#
-# replaces:
-#   - foobar
-# provides:
-#   - bar
-# recommends:
-#   - whatever
-# suggests:
-#   - something-else
-# conflicts:
-#   - not-foo
-#   - not-bar
-# changelog: "changelog.yaml"
+  postinstall: "./build/linux/nfpm/scripts/refresh-desktop-caches.sh"
+  postremove: "./build/linux/nfpm/scripts/refresh-desktop-caches.sh"

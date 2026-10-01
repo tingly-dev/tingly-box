@@ -4,11 +4,16 @@ name: GUI Build
 # tingly-box-gui npm package distribute:
 #
 #   tingly-box-gui-macos-arm64.zip    TinglyBox.app (Apple Silicon)
-#   tingly-box-gui-macos-amd64.zip    TinglyBox.app (Intel, cross-built)
 #   tingly-box-gui-windows-amd64.zip  tingly-box.exe
+#   tingly-box-gui-linux-amd64.deb    Ubuntu 24.04+ / Debian 13+
+#   tingly-box-gui-linux-amd64.rpm    Fedora 40+
 #
-# The macOS names are a contract: build/npx/tingly-box-gui/bin.js downloads
-# exactly `tingly-box-gui-macos-<arch>.zip` from the release tag. macOS apps
+# Intel Macs are not built: the GUI targets Apple Silicon only (the CLI still
+# ships darwin/amd64). Linux is amd64 only, as distribution packages so the
+# system provides GTK4 / WebKitGTK 6.0 (build/linux/nfpm/nfpm.yaml).
+#
+# The macOS name is a contract: build/npx/tingly-box-gui/bin.js downloads
+# exactly `tingly-box-gui-macos-arm64.zip` from the release tag. macOS apps
 # are ad-hoc signed only (no Developer ID, no notarization) — fine through npm,
 # which never sets the quarantine flag; a browser download needs one
 # "Open Anyway" (see the release notes).
@@ -48,9 +53,9 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, platform: macos, arch: arm64 }
-          # Cross-built on the Apple Silicon runner: cgo passes -arch x86_64.
-          - { os: macos-latest, platform: macos, arch: amd64 }
           - { os: windows-latest, platform: windows, arch: amd64 }
+          # 24.04: the oldest Ubuntu with WebKitGTK 6.0, which wails v3 links.
+          - { os: ubuntu-24.04, platform: linux, arch: amd64 }
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -98,6 +103,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
+      - name: Install GTK4 / WebKitGTK 6.0 headers (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev pkg-config
+
       - name: Install go-task and wails3
         shell: bash
         run: |
@@ -122,10 +133,7 @@ jobs:
           set -euo pipefail
           task darwin:package ARCH=${{ matrix.arch }} VERSION="${{ steps.ver.outputs.version }}"
           codesign --verify --deep --strict --verbose=2 bin/TinglyBox.app
-          # The cross-built amd64 bundle must really be x86_64 — a wrong-arch
-          # app would only fail on an Intel user's machine.
-          EXPECT=$([ "${{ matrix.arch }}" = amd64 ] && echo x86_64 || echo arm64)
-          file bin/TinglyBox.app/Contents/MacOS/tingly-box | tee /dev/stderr | grep -q "Mach-O 64-bit executable ${EXPECT}"
+          file bin/TinglyBox.app/Contents/MacOS/tingly-box | tee /dev/stderr | grep -q "Mach-O 64-bit executable arm64"
           mkdir -p dist
           # --norsrc --noextattr: without them ditto stores extended attributes
           # as "._*" entries, which unzip and the npm shim's unzipper write
@@ -142,9 +150,31 @@ jobs:
           Compress-Archive -Path bin/tingly-box.exe -DestinationPath dist/tingly-box-gui-windows-${{ matrix.arch }}.zip
           Get-ChildItem dist
 
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          task linux:package VERSION="${{ steps.ver.outputs.version }}"
+          # Install the deb on this runner and check what a user would get:
+          # the binary under its own name (never the CLI's `tingly-box`), the
+          # launcher entry, and every shared library resolvable.
+          sudo apt-get install -y ./bin/tingly-box-gui-linux-amd64.deb
+          dpkg-deb -f bin/tingly-box-gui-linux-amd64.deb Package Version Depends
+          test -x /usr/bin/tingly-box-gui
+          test -f /usr/share/applications/dev.tingly.box.desktop
+          # Not `! ldd | grep`: set -e ignores a negated pipeline.
+          if ldd /usr/bin/tingly-box-gui | grep "not found"; then exit 1; fi
+          mkdir -p dist
+          cp bin/tingly-box-gui-linux-amd64.deb bin/tingly-box-gui-linux-amd64.rpm dist/
+          ls -la dist/
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: gui-${{ matrix.platform }}-${{ matrix.arch }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
           retention-days: 7

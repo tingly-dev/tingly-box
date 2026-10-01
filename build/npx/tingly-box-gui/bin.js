@@ -29,8 +29,7 @@ async function getPlatformArchAndBinary() {
 
 	if (platform === "darwin") {
 		platformDir = "macos";
-		if (arch === "arm64") archDir = "arm64";
-		else archDir = "amd64";
+		archDir = "arm64"; // the only macOS GUI build; Intel exits earlier
 	} else if (platform === "linux") {
 		platformDir = "linux";
 		if (arch === "x64") archDir = "amd64";
@@ -55,17 +54,39 @@ async function getPlatformArchAndBinary() {
 
 	const platform = process.platform;
 
-	// For Windows and Linux, show unsupported message
-	if (platform === "win32" || platform === "linux") {
-		const platformName = platform === "win32" ? "Windows" : "Linux";
-		console.error(`\n❌ ${platformName} is not currently supported for tingly-box-gui`);
+	const releasesUrl = "https://github.com/tingly-dev/tingly-box/releases/latest";
+	let unsupported = null;
+	if (platform === "linux") {
+		// Linux ships as distribution packages (they pull in GTK4/WebKitGTK),
+		// not as an npx-launchable bundle.
+		unsupported = {
+			name: "Linux",
+			status: [
+				"Install the desktop app from the .deb / .rpm on the release page:",
+				`  ${releasesUrl}`,
+				"  sudo apt install ./tingly-box-gui-linux-amd64.deb   (Ubuntu 24.04+ / Debian 13+)",
+				"  sudo dnf install ./tingly-box-gui-linux-amd64.rpm   (Fedora 40+)",
+			],
+		};
+	} else if (platform === "win32") {
+		unsupported = {
+			name: "Windows",
+			status: [`Download tingly-box-gui-windows-amd64.zip from ${releasesUrl}`],
+		};
+	} else if (platform === "darwin" && process.arch !== "arm64") {
+		// Only an Apple Silicon build of the desktop app is published.
+		unsupported = {
+			name: "macOS on Intel",
+			status: ["The desktop app is built for Apple Silicon Macs only"],
+		};
+	}
+	if (unsupported) {
+		console.error(`\n❌ ${unsupported.name} is not supported by npx tingly-box-gui`);
 		console.error(`┌─ Status:`);
-		console.error(`│  GUI version is currently only available for macOS`);
-		console.error(`│  ${platformName} support is coming soon`);
+		for (const line of unsupported.status) console.error(`│  ${line}`);
 		console.error(`└─ Platform: ${platform} (${process.arch})`);
 		console.error(`\n💡 Alternatives:`);
 		console.error(`   • Use the CLI version: npx tingly-box`);
-		console.error(`   • Visit: https://github.com/tingly-dev/tingly-box for updates`);
 		process.exit(1);
 	}
 
