@@ -625,7 +625,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </IconButton>
                     </Tooltip>
                 ) : (
-                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, description and settings as a profile with its own page' })}>
+                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
                         <span>
                             <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
                                 {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
