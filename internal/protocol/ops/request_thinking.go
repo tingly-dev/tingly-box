@@ -18,7 +18,7 @@ import (
 //   - "" (default): pass through, no change.
 //   - "off": force thinking disabled. For Anthropic this sets OfDisabled;
 //     for OpenAI this clears reasoning_effort and removes any stray `thinking`
-//     extension (DeepSeek and friends reject requests that carry both). We
+//     extension, so the rule's level is the only thinking signal sent. We
 //     clear rather than send OpenAI's "none" because "none" is rejected by
 //     models older than gpt-5.1.
 //   - "minimal"/"low"/"medium"/"high"/"xhigh"/"max": force thinking enabled at
@@ -144,9 +144,9 @@ func fitAnthropicThinkingBudget(budget, maxTokens int64) (int64, error) {
 }
 
 // stripOpenAIThinkingExtra removes any non-standard `thinking` blob from an
-// OpenAI Chat request's ExtraFields. Several upstreams (DeepSeek, Moonshot)
-// reject requests that carry both the typed `reasoning_effort` and a
-// `thinking.type` extension.
+// OpenAI Chat request's ExtraFields, so a rule's level is not contradicted by
+// a client toggle left on the request. (DeepSeek itself accepts both: its
+// docs send reasoning_effort together with {"thinking": {"type": "enabled"}}.)
 func stripOpenAIThinkingExtra(req *openai.ChatCompletionNewParams) {
 	extra := req.ExtraFields()
 	if extra == nil {

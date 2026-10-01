@@ -322,7 +322,9 @@ func ShouldStripUsage(extra map[string]interface{}) bool {
 // shouldStripChatUsage reports whether the answer to an OpenAI Chat client
 // leaves out usage: the rule's hints (ShouldStripUsage) or the scenario's
 // skip_usage. The flags exist for Chat clients that choke on the usage chunk
-// (Cursor); other client protocols keep their usage.
+// (Cursor); other client protocols keep their usage. Used by the Chat,
+// Responses and Anthropic provider paths; the Google provider path does not
+// read it yet.
 func shouldStripChatUsage(reqCtx *transform.TransformContext) bool {
 	if ShouldStripUsage(reqCtx.Extra) {
 		return true
