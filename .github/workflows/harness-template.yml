@@ -77,6 +77,10 @@ jobs:
             tier: matrix
             focus: thinking_limits
             cmd: matrix --mode=thinking_limits --json
+          - name: matrix-flag-paths
+            tier: matrix
+            focus: flag_paths
+            cmd: matrix --mode=flag_paths --json
           # One matrix leg per client driver: the same matrix driven through
           # real client stacks instead of raw HTTP. gosdk uses the official Go
           # SDKs in-process; python/node/aisdk run the real foreign SDKs via

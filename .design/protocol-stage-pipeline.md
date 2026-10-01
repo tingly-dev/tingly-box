@@ -116,7 +116,8 @@ run*Attempt（每个 failover attempt）
   Stage 路径的 `serve*` 从 plan 取 preVendor，不再单独传参。（`smart_compact` 由 `transformRequest`
   在 Anthropic 入口按 scenario 默认 flag 单独 prepend 到最前。）
 - chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。thinking 与输出上限在
-  ① ② ③ ④ 各段的组合效果由 harness 的 `thinking_limits` 段逐组合校验（`.design/harness-matrix.md` §10.5）。
+  ① ② ③ ④ 各段的组合效果由 harness 的 `thinking_limits` 段逐组合校验（`.design/harness-matrix.md` §10.5）；
+  其余 rule flag 在每个适用的 source → target 与流式组合上的效果由 `flag_paths` 段校验（§10.6）。
 - 非 flag 的请求整形也装在这两半里：Anthropic `max_tokens` 缺省补齐在 source 半段最前
   （`MaxTokensDefaultTransform`），模型输出上限在 target 半段最前（`OutputLimitTransform`）。
   没有 handler 在 chain 之外改请求（原 `ExecuteAnthropicPreChain` 已删除）。
@@ -132,6 +133,9 @@ run*Attempt（每个 failover attempt）
 | 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low` | 见下 | 待定 |
 | 4 | ③ Anthropic → Responses 转换不把客户端的 thinking budget 带成 `reasoning.effort`（只有 rule 的档位能到） | 转换处按 `thinking.EffortFromBudget` 产出，与 → Chat 一致 | 待定（TL2） |
 | 5 | ③ Chat / Responses → Anthropic 转换不把客户端的 reasoning effort 带成 thinking（只有 rule 的档位能到） | 转换处按 `thinking.BudgetMapping` 产出，交给 ④ 与 vendor 按模型能力落地 | 待定（TL3） |
+| 6 | 响应整形只在部分路径上读用量提示：Chat 客户端 → Responses provider 时，`skip_usage` / `cursor_compat` 不剥 usage | 用量提示在 `transformRequest` 已统一写入，所有回写路径统一读 | 待定（harness known gap FP1） |
+| 7 | `skip_usage` 对 Responses 客户端不生效（任何 target） | 同上 | 待定（FP2） |
+| 8 | rule 级 recording：Responses 客户端 → Anthropic / Chat provider 时不出记录（→ Responses 正常） | 录制在两条路径上同样落盘 | 待定（FP3） |
 
 偏差 3 需要先定语义再动代码，目前的开放问题：
 

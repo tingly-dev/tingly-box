@@ -239,8 +239,8 @@ and the rule-flag suite, which would otherwise be go-test-only.
 | `vendor` | — | — | — | — | — | — | ✅ | — |
 | `cache_prefix` | — | — | — | — | — | — | — | ✅ |
 
-`servertool` and `thinking_limits` (§10.5) are further sections with their own
-`--mode` value; both are included in `all`.
+`servertool`, `thinking_limits` (§10.5) and `flag_paths` (§10.6) are further
+sections with their own `--mode` value; all are included in `all`.
 
 This mode → section mapping is declared in one place: the `matrixSections`
 registry in `cli/harness/matrix.go`. Each entry names the section, lists the
@@ -843,3 +843,37 @@ go run ./cli/harness matrix --mode=thinking_limits
 When changing anything on the thinking or output-limit path, run it on the
 base branch and on the change and compare per case (`--json`): a combination
 that flips from pass to fail is a regression even if the totals look similar.
+
+### 10.6 Rule-flag × path suite (`flag_paths.go`)
+
+The flags section (`flags.go`) proves each rule flag once, mostly on OpenAI
+Chat → Chat. A flag is applied at a fixed pipeline step, and the steps run
+differently per path — full chain vs the Stage pipeline (Anthropic → OpenAI,
+OpenAI → Anthropic), streaming vs not — and some flags act before routing
+(vision proxy) or at the transport (headers). This suite crosses every flag
+with every source → target pair it applies to (Google out of scope) and both
+streaming modes, one fresh env per case, and checks the flag's effect where it
+must show:
+
+| Flag | Pairs | Checked on |
+|---|---|---|
+| `custom_user_agent`, `extra_headers` | all | upstream request headers |
+| `block_tools` | all | upstream tool list |
+| `clean_header`, `claude_code_compat` | Anthropic clients | upstream body / roles |
+| `cursor_compat`, `cursor_compat_auto` | Chat clients | upstream content (Chat target), client usage |
+| `skip_usage` | OpenAI clients | client response usage |
+| `vision_proxy_service` | all | describer called, no image upstream, description upstream |
+| `openai_endpoint_override` | all clients × chat / responses | endpoint hit |
+| `context_1m` | → Anthropic | upstream `anthropic-beta` |
+| `recording` | all (non-stream) | client + upstream request recorded |
+| `session_affinity` | all clients → Chat | pinned upstream |
+| `claude_org_id` | Anthropic clients → Claude OAuth | upstream organization header |
+
+`thinking_effort` and `use_max_completion_tokens` / `use_max_tokens` are
+crossed in §10.5. Pre-existing gaps are registered as known gaps FP1–FP3 (see
+the bottom of `flag_paths.go`). Run it with:
+
+```bash
+go test ./internal/protocoltest -run TestFlagPaths -count=1
+go run ./cli/harness matrix --mode=flag_paths
+```

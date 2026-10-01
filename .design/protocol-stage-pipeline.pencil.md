@@ -202,3 +202,19 @@
 
   两条都只在 rule = ""（按客户端）时出现：rule 设了档位时，④ 的 RuleThinkingTransform 会补上，结果正确。
 ```
+
+### 偏差 6–8：rule flag 在部分路径上不生效（harness `flag_paths`，known gap FP1–FP3）
+
+```
+                         → Anthropic       → Chat           → Responses
+  skip_usage / cursor_compat（Chat 客户端）
+                            ✓                 ✓                ✗ FP1  usage 仍回给客户端
+  skip_usage（Responses 客户端）
+                            ✗ FP2             ✗ FP2            ✗ FP2
+  recording（Responses 客户端）
+                            ✗ FP3 无记录      ✗ FP3 无记录     ✓
+
+  ✓ 的格子与 ✗ 的格子走的是同一组 ② / ④；差别在 ⑤ 回写：读不读 Extra 里的用量提示、录不录。
+  其余 flag（headers、block_tools、clean_header、claude_code_compat、vision、override、context_1m、
+  affinity、claude_org_id）在每个适用组合、流式与非流式上都生效。
+```
