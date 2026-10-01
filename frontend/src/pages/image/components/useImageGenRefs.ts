@@ -34,15 +34,17 @@ interface UseImageGenRefsParams {
     // The panel's size selection — a new sketch starts at the canvas size the
     // request would use.
     size: string;
+    // The row's starting contents — a profile's pinned references.
+    initialReferences?: ReferenceImage[];
 }
 
 // Everything waiting in the request's reference row: the images themselves,
 // their drag-to-reorder state, the sketch canvas that is one of the ways an
 // image gets here, and the handlers that put images into (and move them
 // around) the row.
-export const useImageGenRefs = ({ showNotification, size }: UseImageGenRefsParams) => {
+export const useImageGenRefs = ({ showNotification, size, initialReferences }: UseImageGenRefsParams) => {
     const { t } = useTranslation();
-    const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+    const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>(() => initialReferences ?? []);
     // The thumbnail being dragged and the one it is hovering over. Order is
     // part of the request — providers read the reference list in order — so it
     // has to be editable in place rather than by removing and re-adding.

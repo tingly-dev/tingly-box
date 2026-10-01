@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { SCENARIOS, getHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { OpenAI, Anthropic, Claude, Cursor, DeepSeek, OpenCode, Pi, Xcode, VSCode, Codex, ClaudeDesktop } from '../components/BrandIcons';
@@ -35,17 +36,14 @@ import {
     Extension as IconExtension,
     Code as IconCode,
     TestPipe as IconTestPipe,
-    tablerMui,
 } from '@/components/icons';
-import { IconLibraryPhoto as TablerLibraryPhoto } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
-
-const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
 
 // The usage charts' URLs, one per time range (/dashboard/today, /dashboard/7d, …).
 const DASHBOARD_RANGE_PATH = /^\/dashboard\/(today|yesterday|3d|7d|30d|90d)$/;
@@ -54,6 +52,7 @@ export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
     const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk } = useFeatureFlags();
     const { profiles } = useProfileContext();
+    const imageProfiles = useImageProfiles();
     const { teams } = useTeamContext();
     const botSummary = useBotPlatformSummary();
 
@@ -242,9 +241,20 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <IconPhoto sx={{ fontSize: 22 }} />,
                 label: t('layout.image', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
+                // Same shape as Claude Code's profiles: the default Playground,
+                // one row per profile (its own page), then "New profile".
                 children: [
-                    { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), icon: <IconPalette sx={{ fontSize: 20 }} /> },
-                    { path: '/image/entities', label: t('layout.imageEntities', { defaultValue: 'Entities' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
+                    { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), subtitle: t('layout.default'), icon: <IconPalette sx={{ fontSize: 20 }} /> },
+                    ...imageProfiles.map((profile): NavItem => ({
+                        path: `/image/profile/${profile.id}`,
+                        label: profile.name,
+                        subtitle: t('imageProfile.navSubtitle', { defaultValue: 'Profile' }),
+                        icon: profile.refs[0]
+                            ? <Box component="img" src={profile.refs[0].previewUrl} alt="" sx={{ width: 20, height: 20, borderRadius: '4px', objectFit: 'cover', display: 'block' }} />
+                            : <IconPalette sx={{ fontSize: 20 }} />,
+                    })),
+                    { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
                     { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
@@ -358,5 +368,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, teams, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableBench, enableDesk, profiles, imageProfiles, teams, botSummary, hiddenScenarios]);
 }
