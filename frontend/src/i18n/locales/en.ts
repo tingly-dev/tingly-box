@@ -2395,8 +2395,6 @@ export default {
       "deleted": "Chat deleted"
     },
     "emptyDescription": "Connect a bot on the Bots page first, then come back here to send it notifications.",
-    "emptyPlatformDescription": "Pick another platform above, or add one on the Bots page.",
-    "emptyPlatformTitle": "No {{platform}} bots",
     "emptyTitle": "No bots connected yet",
     "group": {
       "allowAndTest": "Allow Notify & Test",
@@ -2450,8 +2448,6 @@ export default {
       "group": "Group",
       "unblocked": "Target unblocked"
     },
-    "targetsSubtitle": "Direct Chats and Groups observed by your connected bots.",
-    "targetsTitle": "Delivery targets",
     "test": {
       "bodyField": "Body (markdown)",
       "level": "Level",

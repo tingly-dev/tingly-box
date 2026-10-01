@@ -2413,10 +2413,6 @@ export default {
     "attachComingSoonHint": "暂不支持从这里添加路由 —— 路由目前按场景单独配置。",
     "loadFailed": "加载通知目标失败",
     "toggleFailed": "更新通知设置失败",
-    "emptyPlatformTitle": "没有 {{platform}} Bot",
-    "emptyPlatformDescription": "在上方换一个平台，或到机器人页面添加一个。",
-    "targetsTitle": "投递目标",
-    "targetsSubtitle": "已连接 Bot 观察到的私聊与群组。",
     "chat": {
       "copied": "目标 UUID 已复制",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",

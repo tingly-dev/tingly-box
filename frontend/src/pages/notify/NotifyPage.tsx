@@ -1,19 +1,15 @@
 import EmptyState from '@/components/EmptyState';
 import GuideAction from '@/components/GuideAction';
 import { PageLayout } from '@/components/PageLayout';
-import UnifiedCard from '@/components/UnifiedCard';
 import NotifyGuide from '@/components/notify/NotifyGuide';
 import BotNotifyGroup from '@/components/notify/BotNotifyGroup';
-import { PlatformPicker } from '@/components/bot';
-import { ListAlt } from '@/components/icons';
-import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName } from '@/constants/platformGuides';
+import { useStableBotOrder } from '@/components/bot/useStableBotOrder';
 import { api, enrichBotsWithCapabilities } from '@/services/api';
 import type { BotSettings } from '@/types/bot';
-import { capabilityEnabled, countBotsByPlatform } from '@/types/bot';
+import { capabilityEnabled } from '@/types/bot';
 import { notify } from '@/utils/notify';
 import { Stack } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // NotifyPage opens up the authenticated bot-interaction API: it teaches how to
@@ -27,10 +23,11 @@ import { useTranslation } from 'react-i18next';
 // was the old read-only framing, surfaced as a misleading "No routes" chip) —
 // it answers the operator's actual question: "what can I send to, right now?"
 // See .design/bot-interaction-api.md and ux-principles #1/#5/#11.
+//
+// Like Remote Control, it lists every bot on one page: platform is a property
+// of a bot (its card's icon), not a filter to pick before seeing anything.
 const NotifyPage = () => {
     const { t } = useTranslation();
-    const [searchParams, setSearchParams] = useSearchParams();
-    const selectedPlatform = searchParams.get('platform') || 'all';
     const [bots, setBots] = useState<BotSettings[]>([]);
     const [loading, setLoading] = useState(true);
     const [toggling, setToggling] = useState<string | null>(null);
@@ -69,110 +66,43 @@ const NotifyPage = () => {
         }
     }, [loadBots]);
 
-    // Platform picker — the same top-level platform tiles the Bots overview
-    // uses (shared PlatformPicker component + ?platform= URL param), so Remote
-    // surfaces navigate identically. Only platforms that actually have bots
-    // get a tile here: this page drives existing bots, it doesn't create them.
-    const isNotifyActive = useCallback((bot: BotSettings) => Boolean(bot.enabled) && capabilityEnabled(bot, 'notify'), []);
-    const platformCounts = useMemo(() => countBotsByPlatform(bots, isNotifyActive), [bots, isNotifyActive]);
-
-    const pickerItems = useMemo(() => {
-        // Defined inside the memo so its only dep (t) is covered by the array.
-        const countLabel = (active: number, total: number): string | undefined =>
-            total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active, total }) : undefined;
-        return [
-            {
-                id: 'all',
-                label: t('bots.overview.allPlatforms', { defaultValue: 'All' }),
-                icon: <ListAlt sx={{fontSize: 20, color: 'text.disabled'}}/>,
-                activeIcon: <ListAlt sx={{fontSize: 20, color: 'primary.main'}}/>,
-                subtitle: countLabel(bots.filter(isNotifyActive).length, bots.length),
-            },
-            ...BOT_PLATFORM_IDS.filter((id) => platformCounts[id]).map((id) => {
-                const BrandIcon = PLATFORM_BRAND_ICONS[id];
-                const c = platformCounts[id];
-                return {
-                    id,
-                    label: platformDisplayName(id, t),
-                    icon: <BrandIcon size={20} grayscale/>,
-                    activeIcon: <BrandIcon size={20} grayscale={false}/>,
-                    subtitle: c ? countLabel(c.active, c.total) : undefined,
-                };
-            }),
-        ];
-    }, [t, bots, platformCounts, isNotifyActive]);
-
-    const selectPlatform = useCallback((id: string) => {
-        // Functional update keeps this callback stable across URL changes
-        // (no searchParams dep → PlatformPicker isn't re-rendered per nav).
-        setSearchParams(prev => {
-            const next = new URLSearchParams(prev);
-            if (id === 'all') next.delete('platform');
-            else next.set('platform', id);
-            return next;
-        });
-    }, [setSearchParams]);
-
-    const filteredBots = useMemo(
-        () => selectedPlatform === 'all' ? bots : bots.filter(b => b.platform === selectedPlatform),
-        [bots, selectedPlatform]
-    );
+    const sortedBots = useStableBotOrder(bots, loading, (bot) =>
+        Boolean(bot.enabled ?? true) && capabilityEnabled(bot, 'notify'));
 
     return (
         <PageLayout
             loading={loading}
             title={t('notify.title', {defaultValue: 'IM Notify'})}
             subtitle={t('notify.subtitle', {defaultValue: 'Authorize a target, send through the production path, and see whether delivery worked.'})}
+            rightAction={(
+                <GuideAction
+                    label={t('notify.guide.action', { defaultValue: 'API guide' })}
+                    title={t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })}
+                    description={t('notify.guide.description', {
+                        defaultValue: 'Authentication, request examples, and target IDs',
+                    })}
+                >
+                    <NotifyGuide />
+                </GuideAction>
+            )}
         >
-            {/* Platform selection changes the work surface. The platform-agnostic
-                API guide lives on that surface as a secondary action. */}
-            <PlatformPicker items={pickerItems} value={selectedPlatform} onChange={selectPlatform} />
-            <UnifiedCard
-                title={t('notify.targetsTitle', { defaultValue: 'Delivery targets' })}
-                subtitle={t('notify.targetsSubtitle', {defaultValue: 'Direct Chats and Groups observed by your connected bots.'})}
-                size="full"
-                sx={{ mb: 2 }}
-                titleHeadingLevel={2}
-                rightAction={(
-                    <GuideAction
-                        label={t('notify.guide.action', { defaultValue: 'API guide' })}
-                        title={t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })}
-                        description={t('notify.guide.description', {
-                            defaultValue: 'Authentication, request examples, and target IDs',
-                        })}
-                    >
-                        <NotifyGuide />
-                    </GuideAction>
-                )}
-            >
-                {filteredBots.length === 0 ? (
-                    bots.length === 0 ? (
-                        <EmptyState
-                            title={t('notify.emptyTitle', { defaultValue: 'No bots connected yet' })}
-                            description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Bots page first, then come back here to send it notifications.' })}
+            {bots.length === 0 ? (
+                <EmptyState
+                    title={t('notify.emptyTitle', { defaultValue: 'No bots connected yet' })}
+                    description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Bots page first, then come back here to send it notifications.' })}
+                />
+            ) : (
+                <Stack spacing={1.5}>
+                    {sortedBots.map((bot) => (
+                        <BotNotifyGroup
+                            key={bot.uuid}
+                            bot={bot}
+                            onToggle={handleToggle}
+                            isToggling={toggling === bot.uuid}
                         />
-                    ) : (
-                        // Bots exist, just none on the selected platform (e.g. a
-                        // stale ?platform= bookmark) — answer that question, not
-                        // "do you have any bots at all?" (ux-principles #1).
-                        <EmptyState
-                            title={t('notify.emptyPlatformTitle', { defaultValue: 'No {{platform}} bots', platform: platformDisplayName(selectedPlatform, t) })}
-                            description={t('notify.emptyPlatformDescription', { defaultValue: 'Pick another platform above, or add one on the Bots page.' })}
-                        />
-                    )
-                ) : (
-                    <Stack spacing={1.5}>
-                        {filteredBots.map((bot) => (
-                            <BotNotifyGroup
-                                key={bot.uuid}
-                                bot={bot}
-                                onToggle={handleToggle}
-                                isToggling={toggling === bot.uuid}
-                            />
-                        ))}
-                    </Stack>
-                )}
-            </UnifiedCard>
+                    ))}
+                </Stack>
+            )}
         </PageLayout>
     );
 };

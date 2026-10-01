@@ -6,12 +6,13 @@ import { api } from '@/services/api';
 import { BOT_PLATFORM_IDS } from '@/constants/platformGuides';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useBotList } from '@/hooks/useBotList';
+import { useStableBotOrder } from '@/components/bot/useStableBotOrder';
 import type { BotSettings } from '@/types/bot';
 import { capabilityEnabled, defaultAgentForCCProfile } from '@/types/bot';
 import type { Provider } from '@/types/provider';
 import { Add } from '@/components/icons';
 import { Box, Button, CircularProgress } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 import { useTranslation } from 'react-i18next';
 
@@ -66,22 +67,8 @@ const RemoteAgentPage = () => {
         remove: handleDeleteBot,
     } = useBotList({notify: showNotification});
 
-    // Bots with Remote Control live come first; off ones (collapsed, quiet)
-    // sink below them. The order is taken once, from the first load: after
-    // that, flipping a card's switch must not move it out from under the
-    // pointer. Bots added later go to the end.
-    const [order, setOrder] = useState<string[] | null>(null);
-    if (order === null && !loading && bots.length > 0) {
-        const live = (bot: BotSettings) => Boolean(bot.enabled ?? true) && capabilityEnabled(bot, 'remote_control');
-        setOrder([...bots].sort((a, b) => Number(live(b)) - Number(live(a))).map((bot) => bot.uuid || ''));
-    }
-    const sortedBots = useMemo(() => {
-        const rank = (bot: BotSettings) => {
-            const i = order ? order.indexOf(bot.uuid || '') : -1;
-            return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-        };
-        return [...bots].sort((a, b) => rank(a) - rank(b));
-    }, [bots, order]);
+    const sortedBots = useStableBotOrder(bots, loading, (bot) =>
+        Boolean(bot.enabled ?? true) && capabilityEnabled(bot, 'remote_control'));
 
     const loadProviders = useCallback(async () => {
         const data = await api.getProviders();
