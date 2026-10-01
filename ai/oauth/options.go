@@ -104,6 +104,17 @@ func WithZCodeEndpoints(apiBase, bizHost string) Option {
 	}
 }
 
+// kimiDeviceIDHeader is the HTTP header Kimi's auth and inference endpoints
+// use to bind a credential to a specific device.
+const kimiDeviceIDHeader = "X-Msh-Device-Id"
+
+// WithKimiDeviceID pins X-Msh-Device-Id on every token-related request the
+// manager makes during a flow. Callers that refresh later (the background
+// token refresher) use it to rehydrate the same id.
+func WithKimiDeviceID(deviceID string) Option {
+	return WithExtraHeader(kimiDeviceIDHeader, deviceID)
+}
+
 // applyOptions creates an Options struct from variadic options
 func applyOptions(opts ...Option) *Options {
 	o := &Options{}

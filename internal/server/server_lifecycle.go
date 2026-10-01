@@ -19,8 +19,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
-	"github.com/tingly-dev/tingly-box/internal/server/module/quotawindow"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/worker/quotawindow"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )

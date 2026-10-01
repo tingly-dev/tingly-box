@@ -76,7 +76,7 @@ Steps are stacked as separate commits on one branch, in this order.
 | 1 | `internal/server/config` → `internal/config` (pure move, no behaviour change) | done |
 | 2 | Shared HTTP helpers: `apierr`, `bind`, `paginate`; remove duplicate CORS | done (see §4) |
 | 3 | `Module` interface + migrate module registration | todo |
-| 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow`, `providerquota`) | todo |
+| 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
 | 5 | Split `guardrails_handler.go` into a module | todo |
 | 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | todo |
 | later | Delete `internal/task`; relocate `protocoltest`/`harness`; protocol/client dedupe; session-store diff; `pkg/notify` decision; fold `swagger`/`afk` | not started |
@@ -90,6 +90,9 @@ Steps are stacked as separate commits on one branch, in this order.
 - Step 2 migrated every single-key `gin.H{"error": …}` / `{"success": false, "error": …}` response under `internal/server` (~460 lines) and 25 `ShouldBindJSON` sites that answered with the bare binder error. 33 other bind sites use bespoke messages and are left as-is; so are 11 multi-key error bodies.
 - `paginate.Limit/Offset` replaced four hand-rolled "default 100, clamp N" parsers (`log_handler` ×3, `model_request_handler`, `sharing`). `desk`'s limit keeps its own semantics (0 = service default, unclamped).
 - `sharing`'s private `sendError` was a copy of `apierr.Send`; removed.
+
+- **`providerquota` stays.** The audit listed it as a runtime service; it is an HTTP module (`handler.go` + `routes.go`) whose `Manager` is only a consumer-side interface. Only `tokenrefresh` and `quotawindow` were background workers, now under `internal/worker/`.
+- `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`, which is where an `oauth.Option` belongs and removes the worker→HTTP-module edge.
 
 ## 5. Open questions
 
