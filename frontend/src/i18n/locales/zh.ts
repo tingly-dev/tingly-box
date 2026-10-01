@@ -149,6 +149,7 @@ export default {
     "remote": "远程",
     "image": "Image",
     "imagePlayground": "Playground",
+    "imageEntities": "设定库",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
     "bots": "机器人",
@@ -2754,5 +2755,76 @@ export default {
     "imBotUUID": "Bot UUID",
     "platformBotUUID": "Bot UUID",
     "platformHint": "此链路所在的 IM 平台"
+  },
+  "imageEntity": {
+    "kind": {
+      "character": "角色",
+      "style": "风格"
+    },
+    "refCount": "{{count}} 张",
+    "saveAs": "存为设定",
+    "saved": "已保存 @{{name}}",
+    "prototypeNote": "原型：生成时暂未带上设定的参考图。",
+    "picker": {
+      "title": "引用设定",
+      "matching": "匹配“{{query}}”的设定",
+      "empty": "没有叫这个名字的设定。",
+      "create": "新建设定…",
+      "createNamed": "新建设定“{{query}}”…",
+      "keys": "↑↓ 选择 · Enter 插入 · Esc 关闭"
+    },
+    "compose": {
+      "reference": "设定",
+      "hint": "输入 @ 引用已保存的角色或风格。",
+      "openLibrary": "设定库",
+      "title": "本次引用",
+      "budget": "参考图 {{used}} / {{limit}}",
+      "budgetWithManual": "参考图 {{used}} + 手动 {{manual}} / {{limit}}",
+      "add": "添加",
+      "truncated": "一次最多带 {{limit}} 张参考图，{{name}} 共 {{available}} 张，这次只带前 {{taken}} 张。想换哪几张，在设定里调整顺序。",
+      "truncatedMore": "（另有 {{count}} 个）",
+      "reorder": "调整顺序",
+      "showPrompt": "实际发送给模型的 prompt",
+      "negative": "避免"
+    },
+    "editor": {
+      "newTitle": "新建设定",
+      "editTitle": "编辑 @{{name}}",
+      "kind": "固定什么",
+      "characterHelp": "固定画面里是谁/是什么：人物、宠物、产品。",
+      "styleHelp": "固定画面怎么画：媒介、光线、配色。",
+      "name": "名称",
+      "nameTaken": "已有同名设定。",
+      "nameInvalid": "不能包含空格或 @，名称就是 prompt 里 @ 后面的那段。",
+      "nameHelp": "在 prompt 中以 @{{name}} 引用。",
+      "refs": "参考图",
+      "refsOrder": "按优先级排列，名额不够时先取前面的。",
+      "moveEarlier": "前移",
+      "moveLater": "后移",
+      "removeRef": "移除图片",
+      "addRef": "添加图片",
+      "prompt": "标准描述",
+      "promptCharacterHelp": "插入到 @{{name}} 所在的位置。",
+      "promptStyleHelp": "追加到 prompt 末尾，风格描述的是整个画面。",
+      "negative": "避免（可选）",
+      "deleteHint": "已经写了 @{{name}} 的 prompt 会保留这段文字。",
+      "use": "在 Playground 中使用",
+      "save": "保存"
+    },
+    "library": {
+      "title": "设定库",
+      "subtitle": "跨多次生成复用的角色和风格。在 prompt 里用 @名称 引用。",
+      "new": "新建设定",
+      "all": "全部",
+      "search": "按名称或描述搜索",
+      "characters": "角色",
+      "charactersHelp": "画面里是谁/是什么",
+      "styles": "风格",
+      "stylesHelp": "画面怎么画",
+      "newCharacter": "新建角色",
+      "newStyle": "新建风格",
+      "fromResultTip": "也可以在 Playground 打开任意结果，选「存为设定」。",
+      "meta": "{{refs}} 张参考图 · 用过 {{uses}} 次"
+    }
   }
 };

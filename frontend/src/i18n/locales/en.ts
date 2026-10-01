@@ -150,6 +150,7 @@ export default {
     "remote": "Remote",
     "image": "Image",
     "imagePlayground": "Playground",
+    "imageEntities": "Entities",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
     "bots": "Bots",
@@ -2755,6 +2756,77 @@ export default {
       "successBody": "Your bot is now connected to Weixin.",
       "successTitle": "Weixin Binding Successful!",
       "uuidRequired": "Bot UUID is required"
+    }
+  },
+  "imageEntity": {
+    "kind": {
+      "character": "Character",
+      "style": "Style"
+    },
+    "refCount": "{{count}} images",
+    "saveAs": "Save as entity",
+    "saved": "Saved @{{name}}",
+    "prototypeNote": "Prototype — runs do not send entity references yet.",
+    "picker": {
+      "title": "Reference an entity",
+      "matching": "Entities matching “{{query}}”",
+      "empty": "No entity by that name.",
+      "create": "New entity…",
+      "createNamed": "New entity “{{query}}”…",
+      "keys": "↑↓ to move · Enter to insert · Esc to close"
+    },
+    "compose": {
+      "reference": "Entity",
+      "hint": "Type @ to bring in a saved character or style.",
+      "openLibrary": "Entity library",
+      "title": "Referenced in this run",
+      "budget": "Reference images {{used}} / {{limit}}",
+      "budgetWithManual": "Reference images {{used}} + {{manual}} attached / {{limit}}",
+      "add": "Add",
+      "truncated": "Only {{limit}} reference images fit in one run. Taking the first {{taken}} of {{name}}'s {{available}} — reorder them in the entity to choose which.",
+      "truncatedMore": "(+{{count}} more)",
+      "reorder": "Reorder",
+      "showPrompt": "Prompt the model receives",
+      "negative": "Avoid"
+    },
+    "editor": {
+      "newTitle": "New entity",
+      "editTitle": "Edit @{{name}}",
+      "kind": "What it pins",
+      "characterHelp": "Pins who or what is in the picture: a person, a pet, a product.",
+      "styleHelp": "Pins how the picture is drawn: medium, light, palette.",
+      "name": "Name",
+      "nameTaken": "Another entity already has this name.",
+      "nameInvalid": "No spaces or @ — the name is what follows @ in a prompt.",
+      "nameHelp": "Referenced as @{{name}} in prompts.",
+      "refs": "Reference images",
+      "refsOrder": "In order of priority — when a run is short on slots, the first ones go.",
+      "moveEarlier": "Move earlier",
+      "moveLater": "Move later",
+      "removeRef": "Remove image",
+      "addRef": "Add image",
+      "prompt": "Standard description",
+      "promptCharacterHelp": "Inserted where @{{name}} appears.",
+      "promptStyleHelp": "Appended to the end of the prompt — a style describes the whole picture.",
+      "negative": "Avoid (optional)",
+      "deleteHint": "Prompts that mention it keep the text @{{name}}.",
+      "use": "Use in Playground",
+      "save": "Save"
+    },
+    "library": {
+      "title": "Entities",
+      "subtitle": "Characters and styles you reuse across generations. Bring one into a prompt with @name.",
+      "new": "New entity",
+      "all": "All",
+      "search": "Search by name or description",
+      "characters": "Characters",
+      "charactersHelp": "Who or what is in the picture",
+      "styles": "Styles",
+      "stylesHelp": "How the picture is drawn",
+      "newCharacter": "New character",
+      "newStyle": "New style",
+      "fromResultTip": "Or open any result in the Playground and choose “Save as entity”.",
+      "meta": "{{refs}} images · used {{uses}} times"
     }
   }
 };

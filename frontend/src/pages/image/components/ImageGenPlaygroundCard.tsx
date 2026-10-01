@@ -20,7 +20,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -42,6 +42,12 @@ import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
+import { useEntities } from '../entities/entityStore';
+import { composeEntities } from '../entities/composeEntities';
+import { useEntityMention } from '../entities/useEntityMention';
+import EntityMentionPicker from '../entities/EntityMentionPicker';
+import EntityCompositionPanel from '../entities/EntityCompositionPanel';
+import EntityEditorDialog, { type EntityDraft } from '../entities/EntityEditorDialog';
 import type {
     GenerationRun,
     ImportedImage,
@@ -353,6 +359,36 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [handleSubmit]);
 
+    // Entities (prototype, .design/image-entity.md): `@name` in the prompt
+    // brings in a saved character or style. Display only for now — the run
+    // itself is unchanged.
+    const entities = useEntities();
+    const promptFieldRef = useRef<HTMLDivElement>(null);
+    const promptInputRef = useRef<HTMLTextAreaElement>(null);
+    const [entityDraft, setEntityDraft] = useState<EntityDraft | null>(null);
+    // Set while a "new entity" dialog opened from the picker is up: the
+    // `@query` it should turn into a finished mention once saved.
+    const [pendingMention, setPendingMention] = useState<{ start: number; end: number } | null>(null);
+    const mention = useEntityMention({ prompt, setPrompt, inputRef: promptInputRef, entities });
+    const composition = useMemo(
+        () => composeEntities(prompt, entities, MAX_EDIT_REFERENCE_IMAGES, referenceImages.length),
+        [entities, prompt, referenceImages.length],
+    );
+    const handlePanelPromptKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (mention.handleKeyDown(event)) return;
+        handlePromptKeyDown(event);
+    }, [handlePromptKeyDown, mention]);
+    // Arriving from the library's "Use in Playground": the entity is already
+    // in the prompt, ready for the rest of the sentence.
+    const [searchParams, setSearchParams] = useSearchParams();
+    useEffect(() => {
+        const use = searchParams.get('use');
+        if (!use) return;
+        setPrompt((current) => (current.includes(`@${use}`) ? current : `@${use} ${current}`));
+        setSearchParams((params) => { params.delete('use'); return params; }, { replace: true });
+        requestAnimationFrame(() => promptInputRef.current?.focus());
+    }, [searchParams, setSearchParams]);
+
     // Re-entry, not just retry: puts a run's entire request back into the
     // panel — prompt, model, size, quality, count and the images it was built
     // from — so the next attempt starts from what was asked and can be edited
@@ -563,6 +599,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             height-constrained column is how text ends up painted
                             past the border. */}
                         <TextField
+                            ref={promptFieldRef}
+                            inputRef={promptInputRef}
                             multiline
                             minRows={3}
                             fullWidth
@@ -575,8 +613,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     ? t('playground.referencePromptPlaceholder', { defaultValue: 'Describe what to make from these images…' })
                                     : t('playground.promptPlaceholder', { defaultValue: 'Describe the image you want to generate…' })}
                             value={prompt}
-                            onChange={(event) => setPrompt(event.target.value)}
-                            onKeyDown={handlePromptKeyDown}
+                            onChange={mention.handleChange}
+                            onKeyDown={handlePanelPromptKeyDown}
+                            onBlur={mention.close}
                             onDragOver={(event) => event.preventDefault()}
                             onDrop={(event) => {
                                 event.preventDefault();
@@ -647,6 +686,28 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     scrollbarWidth: 'thin',
                                 },
                             }}
+                        />
+
+                        <EntityMentionPicker
+                            anchorEl={promptFieldRef.current}
+                            open={mention.open}
+                            query={mention.query}
+                            candidates={mention.candidates}
+                            activeIndex={mention.activeIndex}
+                            onHover={mention.setActiveIndex}
+                            onSelect={mention.select}
+                            onCreate={(name) => {
+                                setPendingMention(mention.range());
+                                mention.close();
+                                setEntityDraft({ name });
+                            }}
+                        />
+                        <EntityCompositionPanel
+                            composition={composition}
+                            manualRefs={referenceImages.length}
+                            limit={MAX_EDIT_REFERENCE_IMAGES}
+                            onBeginMention={mention.begin}
+                            onOpenEntity={setEntityDraft}
                         />
 
                         <Box
@@ -790,6 +851,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onUseAsReference={(src) => {
                     void handleUseAsReference(src);
                     setSelectedImage(null);
+                }}
+                onSaveAsEntity={(image) => {
+                    setEntityDraft({ refs: [image.src], prompt: image.prompt });
+                    setSelectedImage(null);
+                }}
+            />
+            <EntityEditorDialog
+                draft={entityDraft}
+                onClose={() => { setEntityDraft(null); setPendingMention(null); }}
+                onSaved={(entity) => {
+                    // Created from the picker: finish the mention that asked for it.
+                    if (pendingMention) {
+                        const { start, end } = pendingMention;
+                        setPrompt((current) => `${current.slice(0, start)}@${entity.name} ${current.slice(end)}`);
+                    }
+                    showNotification(t('imageEntity.saved', { defaultValue: 'Saved @{{name}}', name: entity.name }), 'success');
                 }}
             />
             <ImageGenGalleryDialog
