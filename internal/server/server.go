@@ -192,8 +192,9 @@ type Server struct {
 	// "npx-bundle") — see WithLaunchSource.
 	launchSource string
 
-	// webHandler is the WebUI Management API's aggregate handler
-	// (internal/server.webHandler). Constructed as the LAST step of
+	// webHandler serves the status, log, request-trace and token endpoints
+	// (log_handler.go, model_request_handler.go, status_handler.go,
+	// token_handler.go). Constructed as the LAST step of
 	// NewServer, after every field it depends on (memoryLogMW, multiLogger,
 	// config, jwtManager, ...) has already been set — do not move this
 	// construction earlier without checking every field it reads.
@@ -205,10 +206,10 @@ type Server struct {
 	guardrailsHandler *GuardrailsHandler
 
 	// aiHandler is the AI Model API's aggregate handler
-	// (internal/server/aimodel.AIHandler), covering MCP-in-gateway dispatch,
-	// recording, and (eventually) protocol dispatch/transform/passthrough.
+	// (internal/protocolserver.ProtocolHandler), covering protocol dispatch,
+	// transform, passthrough, failover, MCP-in-gateway and recording.
 	// Same last-step construction constraint as webHandler above — every
-	// field/callback in aimodel.Deps must already be set.
+	// field/callback in protocolserver.ProtocolHandlerDeps must already be set.
 	aiHandler *protocolserver.ProtocolHandler
 }
 
@@ -281,16 +282,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool()
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, config.HistoryPath(cfg.ConfigDir))
-	grRuntime := server.currentGuardrailsRuntime()
+	grRuntime := server.guardrailsState.Current()
 	if grRuntime == nil {
-		server.setGuardrailsRuntimeRef(&guardrails.Guardrails{History: historyStore})
+		server.guardrailsState.SetRef(&guardrails.Guardrails{History: historyStore})
 	} else if grRuntime.HistoryStore() == nil {
 		grRuntime.SetHistoryStore(historyStore)
 	}
 
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsRuntime()
-	server.refreshGuardrailsCredentialCacheOrWarn("server init")
+	server.guardrailsState.RefreshCredentialCacheOrWarn("server init")
 
 	// Initialize multi-mode memory log middleware for HTTP request logging
 	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
@@ -495,8 +496,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Construct the AI Model API's aggregate handler. Same last-step
 	// constraint as webHandler above. The callback fields reach back into
-	// root state that has not moved to aimodel yet (usage tracking, affinity
-	// store, recording sinks, guardrails runtime) — see aimodel.Deps.
+	// root state that has not moved to protocolserver yet (usage tracking, affinity
+	// store, recording sinks, guardrails runtime) — see ProtocolHandlerDeps.
 	server.aiHandler = protocolserver.NewHandler(protocolserver.ProtocolHandlerDeps{
 		Config:                  server.config,
 		TokenTracker:            server.tokenTracker,
@@ -672,7 +673,7 @@ func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 // applyVisionProxy is the single entry point for the vision proxy plugin,
 // covering both the rule-level and scenario-level scopes. It must run before
 // service selection (after the rule is resolved). Delegates to
-// visionproxy.Service — see internal/server/module/visionproxy and
+// visionproxy.Service — see internal/vision/visionproxy and
 // .design/vision-proxy.md for the design.
 func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
 	s.visionProxyService.Apply(c.Request.Context(), s.config, scenarioType, rule, typedRequest)

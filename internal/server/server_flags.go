@@ -40,7 +40,7 @@ func (s *Server) deskEnabled() bool {
 }
 
 func (s *Server) initGuardrailsRuntime() {
-	runtime := s.currentGuardrailsRuntime()
+	runtime := s.guardrailsState.Current()
 	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
 		return
 	}
@@ -74,7 +74,7 @@ func (s *Server) initGuardrailsRuntime() {
 		return
 	}
 
-	s.setGuardrailsRuntime(&guardrails.Guardrails{Policy: policy}, "guardrails init")
+	s.guardrailsState.Set(&guardrails.Guardrails{Policy: policy}, "guardrails init")
 	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
 }
 
@@ -139,12 +139,12 @@ func (s *Server) syncGuardrailsFromConfig() {
 	}
 
 	if !s.guardrailsEnabled() {
-		s.setGuardrailsRuntime(&guardrails.Guardrails{}, "guardrails disable")
+		s.guardrailsState.Set(&guardrails.Guardrails{}, "guardrails disable")
 		logrus.Debug("Guardrails disabled via config")
 		return
 	}
 
-	if s.currentGuardrailsRuntime() == nil {
+	if s.guardrailsState.Current() == nil {
 		s.initGuardrailsRuntime()
 	}
 }

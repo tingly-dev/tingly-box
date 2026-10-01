@@ -2,12 +2,11 @@ package server
 
 import "github.com/tingly-dev/tingly-box/internal/guardrails"
 
-// The exported methods below adapt the protocolserver-owned GuardrailsState
-// to the webui.GuardrailsRuntime interface, so the WebUI Management API's
-// guardrails admin handler (internal/server.GuardrailsHandler) can drive the
-// runtime without root server depending on webui's types. The unexported
-// helpers keep the pre-move `s.xxx()` call sites in root lifecycle code
-// (server.go, server_flags.go, server_options.go) compiling unchanged.
+// The exported methods below adapt the protocolserver-owned GuardrailsState to
+// the GuardrailsRuntime interface the guardrails admin handler consumes, so the
+// handler can drive the runtime without depending on *Server. Root lifecycle
+// code (server.go, server_flags.go, server_options.go) talks to
+// s.guardrailsState directly.
 
 // CurrentGuardrailsRuntime returns the active guardrails runtime snapshot.
 func (s *Server) CurrentGuardrailsRuntime() *guardrails.Guardrails {
@@ -29,32 +28,4 @@ func (s *Server) GetGuardrailsSupportedScenarios() []string {
 // cache, logging (rather than returning) any failure.
 func (s *Server) RefreshGuardrailsCredentialCacheOrWarn(context string) {
 	s.guardrailsState.RefreshCredentialCacheOrWarn(context)
-}
-
-// Unexported forwarders for root lifecycle code.
-
-func (s *Server) currentGuardrailsRuntime() *guardrails.Guardrails {
-	if s == nil {
-		return nil
-	}
-	return s.guardrailsState.Current()
-}
-
-func (s *Server) setGuardrailsRuntimeRef(runtime *guardrails.Guardrails) {
-	if s == nil {
-		return
-	}
-	s.guardrailsState.SetRef(runtime)
-}
-
-func (s *Server) setGuardrailsRuntime(runtime *guardrails.Guardrails, context string) {
-	s.guardrailsState.Set(runtime, context)
-}
-
-func (s *Server) refreshGuardrailsCredentialCacheOrWarn(context string) {
-	s.guardrailsState.RefreshCredentialCacheOrWarn(context)
-}
-
-func (s *Server) getGuardrailsSupportedScenarios() []string {
-	return s.guardrailsState.SupportedScenarios()
 }
