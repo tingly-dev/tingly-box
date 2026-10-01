@@ -35,6 +35,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
+	guardrailsmodule "github.com/tingly-dev/tingly-box/internal/server/module/guardrails"
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
@@ -201,9 +202,9 @@ type Server struct {
 	webHandler *WebHandler
 
 	// guardrailsHandler is the WebUI Management API's guardrails admin
-	// handler (internal/server.GuardrailsHandler). Same construction
+	// handler (internal/server/module/guardrails.Handler). Same construction
 	// constraint as webHandler above.
-	guardrailsHandler *GuardrailsHandler
+	guardrailsHandler *guardrailsmodule.Handler
 
 	// aiHandler is the AI Model API's aggregate handler
 	// (internal/protocolserver.ProtocolHandler), covering protocol dispatch,
@@ -488,7 +489,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Construct the WebUI Management API's guardrails admin handler. Same
 	// last-step constraint as webHandler above — Runtime is *Server
 	// itself via the exported adapter methods in guardrails_runtime_adapter.go.
-	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
+	server.guardrailsHandler = guardrailsmodule.NewHandler(guardrailsmodule.Deps{
 		Config:             server.config,
 		Runtime:            server,
 		GuardrailsConfigMu: &server.guardrailsConfigMu,

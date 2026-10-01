@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
+	guardrailsmodule "github.com/tingly-dev/tingly-box/internal/server/module/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -41,7 +42,7 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 		// (never invoked) here.
 		webHandler: NewWebHandler(WebDeps{Config: cfg}),
 	}
-	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
+	server.guardrailsHandler = guardrailsmodule.NewHandler(guardrailsmodule.Deps{
 		Config:             cfg,
 		Runtime:            server,
 		GuardrailsConfigMu: &server.guardrailsConfigMu,
