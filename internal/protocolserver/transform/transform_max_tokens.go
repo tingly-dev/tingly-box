@@ -47,9 +47,10 @@ func (t *MaxTokensDefaultTransform) Apply(ctx *protocoltransform.TransformContex
 //
 //   - Every shape: cap the output-token field(s) at MaxAllowed.
 //   - Anthropic: a thinking budget over MaxAllowed shrinks to
-//     max(MaxAllowed/10, 1024), and a budget over max_tokens is capped to it
-//     (Anthropic requires budget_tokens <= max_tokens; max_tokens is the hard
-//     operator limit, so the budget yields rather than the limit).
+//     max(MaxAllowed/10, 1024), and a budget that reaches max_tokens is capped
+//     to max_tokens-1 (Anthropic requires 1024 <= budget_tokens < max_tokens;
+//     max_tokens is the hard operator limit, so the budget yields, and
+//     thinking is turned off when max_tokens leaves no room for it).
 //
 // OpenAI Chat / Responses have no budget: an Anthropic client's budget was
 // already tiered onto reasoning_effort by the conversion, so it is never
@@ -91,13 +92,13 @@ func (t *OutputLimitTransform) applyAnthropicV1(req *anthropic.MessageNewParams)
 	if req.MaxTokens > maxAllowed {
 		req.MaxTokens = maxAllowed
 	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		if *thinkBudget > maxAllowed {
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, maxAllowed/10))
-		}
-		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
-		}
+	if req.Thinking.OfEnabled == nil {
+		return
+	}
+	if budget, ok := fitThinkingBudget(req.Thinking.OfEnabled.BudgetTokens, req.MaxTokens, maxAllowed); ok {
+		req.Thinking.OfEnabled.BudgetTokens = budget
+	} else {
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 	}
 }
 
@@ -106,14 +107,36 @@ func (t *OutputLimitTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewP
 	if req.MaxTokens > maxAllowed {
 		req.MaxTokens = maxAllowed
 	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		if *thinkBudget > maxAllowed {
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, maxAllowed/10))
-		}
-		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
-		}
+	if req.Thinking.OfEnabled == nil {
+		return
 	}
+	if budget, ok := fitThinkingBudget(req.Thinking.OfEnabled.BudgetTokens, req.MaxTokens, maxAllowed); ok {
+		req.Thinking.OfEnabled.BudgetTokens = budget
+	} else {
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	}
+}
+
+// minThinkingBudget is Anthropic's smallest accepted budget_tokens.
+const minThinkingBudget int64 = 1024
+
+// fitThinkingBudget keeps an Anthropic thinking budget within the model limit
+// and within Anthropic's wire rule 1024 <= budget_tokens < max_tokens, without
+// raising max_tokens (the hard operator limit). A budget over the model limit
+// shrinks to max(1024, limit/10); one that still reaches max_tokens is capped
+// to max_tokens-1. ok is false when max_tokens leaves no room for a valid
+// budget (<= 1024): thinking has to be turned off.
+func fitThinkingBudget(budget, maxTokens, maxAllowed int64) (fitted int64, ok bool) {
+	if budget > maxAllowed {
+		budget = max(minThinkingBudget, maxAllowed/10)
+	}
+	if maxTokens <= 0 || budget < maxTokens {
+		return budget, true
+	}
+	if maxTokens <= minThinkingBudget {
+		return 0, false
+	}
+	return maxTokens - 1, true
 }
 
 // applyOpenAIChat caps both of Chat Completions' competing limit fields:

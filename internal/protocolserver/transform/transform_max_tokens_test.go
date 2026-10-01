@@ -87,25 +87,37 @@ func TestOutputLimitTransform_ThinkingBudget(t *testing.T) {
 		name       string
 		maxTokens  int64
 		budget     int64
-		wantBudget int64
+		wantBudget int64 // 0 = thinking turned off
 	}{
 		{name: "budget over maxAllowed shrinks", maxTokens: 40000, budget: 10240, wantBudget: 1024},
 		{name: "budget within limits unchanged", maxTokens: 40000, budget: 4096, wantBudget: 4096},
-		{name: "budget over max_tokens capped to it", maxTokens: 2048, budget: 4096, wantBudget: 2048},
-		{name: "cap never goes below Anthropic's 1024 minimum", maxTokens: 512, budget: 4096, wantBudget: 1024},
+		{name: "budget over max_tokens capped below it", maxTokens: 2048, budget: 4096, wantBudget: 2047},
+		{name: "budget equal to max_tokens capped below it", maxTokens: 4096, budget: 4096, wantBudget: 4095},
+		{name: "max_tokens 1024 leaves no room after shrinking: thinking off", maxTokens: 1024, budget: 10240, wantBudget: 0},
+		{name: "max_tokens leaves no room: thinking off", maxTokens: 512, budget: 4096, wantBudget: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := NewOutputLimitTransform(8192)
 			v1 := &anthropic.MessageNewParams{MaxTokens: tt.maxTokens, Thinking: anthropic.ThinkingConfigParamOfEnabled(tt.budget)}
 			beta := &anthropic.BetaMessageNewParams{MaxTokens: tt.maxTokens, Thinking: anthropic.BetaThinkingConfigParamOfEnabled(tt.budget)}
+			beta.Thinking.OfEnabled.Display = anthropic.BetaThinkingConfigEnabledDisplaySummarized
 			apply(t, tr, v1)
 			apply(t, tr, beta)
+			if tt.wantBudget == 0 {
+				if v1.Thinking.OfDisabled == nil || beta.Thinking.OfDisabled == nil {
+					t.Errorf("thinking not turned off: V1=%+v Beta=%+v", v1.Thinking, beta.Thinking)
+				}
+				return
+			}
 			if got := *v1.Thinking.GetBudgetTokens(); got != tt.wantBudget {
 				t.Errorf("V1 budget = %d, want %d", got, tt.wantBudget)
 			}
 			if got := *beta.Thinking.GetBudgetTokens(); got != tt.wantBudget {
 				t.Errorf("Beta budget = %d, want %d", got, tt.wantBudget)
+			}
+			if beta.Thinking.OfEnabled.Display != anthropic.BetaThinkingConfigEnabledDisplaySummarized {
+				t.Errorf("Beta display = %q, want it kept", beta.Thinking.OfEnabled.Display)
 			}
 		})
 	}
