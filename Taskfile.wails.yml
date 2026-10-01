@@ -140,17 +140,9 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
-  wails:binding:
-    deps:
-      - task: wails:check
-    cmds:
-      - |
-        cd ./gui/wails3
-        wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./ -d ../../frontend/src/bindings
-
   wails:web:
     cmds:
-      - cd frontend; pnpm build:dev:wails
+      - cd frontend; pnpm build:dev
       - |
         mkdir -p gui/wails3/dist/
         cp -R frontend/dist/* gui/wails3/dist/

@@ -33,9 +33,12 @@ tasks:
     label: build:frontend (PRODUCTION={{.PRODUCTION}})
     summary: Build the frontend project
     # darwin:build:universal runs its per-arch builds as parallel deps, each of
-    # which depends on this task. Without run:once the two executions race:
-    # one regenerates frontend/src/bindings (-clean deletes it first) while the
-    # other's bundler is reading it, failing intermittently (#4637).
+    # which depends on this task; run:once keeps them from building the
+    # frontend twice into the same dist concurrently (#4637).
+    #
+    # The same build as the CLI's web UI (`pnpm build`): the page picks its
+    # host bridge at runtime (frontend/src/host), so the desktop window needs
+    # no build of its own and no generated wails bindings.
     run: once
     dir: frontend
     sources:
@@ -45,10 +48,6 @@ tasks:
       - dist/**/*
     deps:
       - task: install:frontend:deps
-      - task: generate:bindings
-        vars:
-          BUILD_FLAGS:
-            ref: .BUILD_FLAGS
     cmds:
       - |
         pnpm run {{.BUILD_COMMAND}}
@@ -61,29 +60,8 @@ tasks:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
       # Our frontend build scripts (see frontend/package.json).
-      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails{{else}}build:dev:wails{{end}}'
+      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build{{else}}build:dev{{end}}'
 
-
-  generate:bindings:
-    label: generate:bindings (BUILD_FLAGS={{.BUILD_FLAGS}})
-    summary: Generates bindings for the frontend
-    run: once
-    deps:
-      - task: go:mod:tidy
-    sources:
-      - "**/*.[jt]s"
-      - exclude: frontend/**/*
-      - frontend/src/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
-      - "**/*.go"
-      - go.mod
-      - go.sum
-    generates:
-      - frontend/src/bindings/**/*
-    cmds:
-      - |
-        cd {{.WAILS_PACKAGE_PATH}}
-        pwd
-        wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true ./ -d ../../frontend/src/bindings
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image

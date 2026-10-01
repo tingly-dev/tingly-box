@@ -12,7 +12,6 @@
     "dist/**",
     "node_modules/**",
     "build/**",
-    "bindings/**",
     "*.config.js",
     "*.config.ts"
   ],

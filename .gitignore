@@ -13,7 +13,6 @@ script
 internal/web/dist
 gui/wails3/dist
 frontend/src/client
-frontend/src/bindings
 
 # wails3
 .task
