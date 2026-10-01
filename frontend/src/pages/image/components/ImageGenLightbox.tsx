@@ -11,11 +11,14 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt } from '@/components/icons';
+import { IconBookmarkPlus } from '@tabler/icons-react';
+import { Brush, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
 import type { ReferenceImage } from './ImageGenReferenceImages';
+
+const BookmarkPlus = tablerMui(IconBookmarkPlus);
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
@@ -44,6 +47,8 @@ interface ImageGenLightboxProps {
     referenceImages: ReferenceImage[];
     onEditSketch: (index: number | null) => void;
     onUseAsReference: (src: string) => void;
+    // Keep this image as a reusable character or style (prototype).
+    onSaveAsEntity?: (image: SelectedImage) => void;
 }
 
 // The full-bleed image viewer shared by every image on the panel — outputs,
@@ -65,6 +70,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     referenceImages,
     onEditSketch,
     onUseAsReference,
+    onSaveAsEntity,
 }) => {
     const { t } = useTranslation();
     // On by default — a mask was painted to be seen — and remembered while
@@ -283,6 +289,20 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                 sx={overlayIconSx}
                             >
                                 <RestartAlt fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                    {/* A result worth keeping is where most entities come
+                        from — so "keep this as a character / style" sits on
+                        the result itself. */}
+                    {onSaveAsEntity && selectedImage && selectedImage.kind !== 'reference' && (
+                        <Tooltip title={t('imageEntity.saveAs', { defaultValue: 'Save as entity' })}>
+                            <IconButton
+                                onClick={() => onSaveAsEntity(selectedImage)}
+                                aria-label={t('imageEntity.saveAs', { defaultValue: 'Save as entity' })}
+                                sx={overlayIconSx}
+                            >
+                                <BookmarkPlus fontSize="small" />
                             </IconButton>
                         </Tooltip>
                     )}
