@@ -1,6 +1,7 @@
-import {Box, Chip, Divider, Typography, styled} from '@mui/material';
+import {Box, Divider, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
-import {NODE_LAYER_STYLES, StyledBotGraphNode, getInactiveHatchSx} from './styles';
+import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import {fontMono} from '@/theme/fonts';
 
@@ -8,16 +9,10 @@ import {fontMono} from '@/theme/fonts';
 // deliver to. Shares StyledBotGraphNode with the rest of the remote/notify
 // graph family.
 //
-// State mapping follows the product's conventions: active=false (bot off)
-// dims the node like every other graph node; blocked (chat disabled) draws
-// the same diagonal-hatch overlay the bot cards use for an off purpose —
-// "hatched = deliberately not running", distinct from "dimmed = upstream is
-// off".
-const StyledChatNode = styled(StyledBotGraphNode, {
-    shouldForwardProp: (prop) => prop !== 'blocked',
-})<{ blocked?: boolean }>(({blocked = false, theme}) => ({
-    ...(blocked && getInactiveHatchSx(theme)),
-}));
+// State mapping: active=false (bot off) or blocked (chat disabled) dims the
+// node like every other graph node; a blocked chat additionally strikes its
+// id through and carries a "disabled" tag, so the reason is spelled out
+// rather than drawn as a hatch.
 
 export interface ChatNodeProps {
     chatID: string;
@@ -36,7 +31,7 @@ export interface ChatNodeProps {
 const ChatNode: React.FC<ChatNodeProps> = ({chatID, kind = 'direct_chat', name, targetID, isPaired, projectPath, updatedAt, active = true, blocked = false}) => {
     const {t} = useTranslation();
     return (
-        <StyledChatNode active={active} blocked={blocked}>
+        <StyledBotGraphNode active={active && !blocked}>
             {/* Top layer identifies the real platform conversation; the tooltip
                 pairs it with the internal UUID used by notify/interact. */}
             <Box sx={NODE_LAYER_STYLES.topLayer}>
@@ -69,21 +64,19 @@ const ChatNode: React.FC<ChatNodeProps> = ({chatID, kind = 'direct_chat', name, 
             <Divider sx={NODE_LAYER_STYLES.divider}/>
             {/* Bottom layer — status chips. */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                <Chip
+                <NodeTag
                     label={kind === 'group'
                         ? t('notify.target.group', {defaultValue: 'Group'})
                         : t('notify.target.direct', {defaultValue: 'Direct'})}
-                    size="small"
-                    color={active && !blocked ? 'info' : 'default'}
-                    sx={{height: 24, fontSize: '0.7rem', fontWeight: 500}}
+                    active={active && !blocked}
                 />
                 {blocked ? (
-                    <Chip label={t('notify.group.disabledChat', {defaultValue: 'disabled'})} size="small" variant="outlined" sx={{height: 24, fontSize: '0.7rem'}}/>
+                    <NodeTag outlined label={t('notify.group.disabledChat', {defaultValue: 'disabled'})} active={false}/>
                 ) : isPaired ? (
-                    <Chip label={t('notify.group.paired', {defaultValue: 'paired'})} size="small" color="success" variant="outlined" sx={{height: 24, fontSize: '0.7rem'}}/>
+                    <NodeTag outlined label={t('notify.group.paired', {defaultValue: 'paired'})} active={active}/>
                 ) : null}
             </Box>
-        </StyledChatNode>
+        </StyledBotGraphNode>
     );
 };
 

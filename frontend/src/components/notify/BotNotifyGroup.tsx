@@ -366,29 +366,25 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 ) : error ? (
                     <Typography variant="body2" sx={{color: 'error.main', py: 1}}>{error}</Typography>
                 ) : (
-                    <Box sx={(theme) => ({
-                        ...graphRowStyles(theme),
-                        [theme.breakpoints.down('md')]: {
-                            display: 'block',
-                            overflowX: 'visible',
-                        },
-                    })}>
+                    // Always the full route, left to right; a narrow card scrolls
+                    // this graph sideways instead of stacking it (the flow is
+                    // the point). Padding keeps borders and hover rings clear.
+                    <Box sx={(theme) => ({...graphRowStyles(theme), gap: theme.spacing(1), py: 1, px: 0.5})}>
                         {/* Source: the authenticated API surface — the concrete
                             path (real uuid, /api/v1 prefix) so the tooltip is a
                             copyable curl target (ux-principles #5/#11). */}
-                        <Box sx={{display: {xs: 'none', md: 'contents'}}}>
+                        <Box sx={{display: 'contents'}}>
                             <NodeContainer>
                                 <ApiEntryNode path={`/api/v1/bots/${bot.uuid}/notify`} active={enabled} />
                             </NodeContainer>
 
                             <ArrowNode direction="forward" />
 
-                            {/* The bot channel the notify API drives — unlike the
-                                remote graph (whose entry is the platform traffic
-                                comes FROM), notify targets this specific bot, so
-                                the node carries the bot identity. */}
+                            {/* The bot channel the notify API drives. The card
+                                header already names the bot, so the node only
+                                says which platform delivery goes through. */}
                             <NodeContainer>
-                                <ImBotNode imbot={bot} active={enabled} />
+                                <ImBotNode imbot={bot} variant="platform" active={enabled} />
                             </NodeContainer>
 
                             <ArrowNode direction="forward" />
@@ -408,11 +404,11 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                     display: 'flex',
                                     flexDirection: 'column',
                                     gap: 2,
-                                    borderLeft: {xs: 0, md: '2px solid'},
+                                    borderLeft: '2px solid',
                                     borderColor: 'divider',
-                                    pl: {xs: 0, md: 2},
+                                    pl: 2,
                                     py: 0.5,
-                                    width: {xs: '100%', md: 'auto'},
+                                    flexShrink: 0,
                                 }}
                             >
                                 {visibleTargets.map((target) => {
@@ -426,9 +422,9 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                     const resultFor = (cap: ChatCapability) => results.find((r) => r.cap === cap)?.result;
                                     const benchUsable = enabled && !target.blocked;
                                     return (
-                                        <Box key={`${target.kind}:${target.id}`} sx={{display: 'flex', flexDirection: {xs: 'column', md: 'row'}, alignItems: 'flex-start', gap: 1}}>
+                                        <Box key={`${target.kind}:${target.id}`} sx={{display: 'flex', alignItems: 'flex-start', gap: 1}}>
                                             {/* The chat leaf. */}
-                                            <NodeContainer sx={{width: {xs: '100%', md: 'auto'}, '& > *': {width: {xs: '100%', md: 220}}}}>
+                                            <NodeContainer>
                                                 <ChatNode
                                                     chatID={target.external_id}
                                                     targetID={target.id}
@@ -444,8 +440,12 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                 row — probe bench left, lifecycle icons pushed
                                                 right — with verdicts underneath. One row, two
                                                 zones: "use the chat" vs "manage the chat". */}
-                                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0, flex: 1, width: '100%', justifyContent: 'center', alignSelf: 'stretch'}}>
-                                                <Box sx={{display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap'}}>
+                                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 0.75, justifyContent: 'center', alignSelf: 'stretch'}}>
+                                                <Box sx={{display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'nowrap'}}>
+                                                    {/* Probe bench in a fixed-width slot, so the
+                                                        lifecycle icons line up across rows that
+                                                        offer different probes. */}
+                                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 0.75, width: 280, flexShrink: 0}}>
                                                     {/* Probe bench — hidden for a disabled chat:
                                                         the backend 404s pushes to it, so the
                                                         buttons would only manufacture failures.
@@ -505,7 +505,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                                                         </Tooltip>
                                                     </>)}
 
-                                                    <Box sx={{flexGrow: 1}} />
+                                                    </Box>
 
                                                     {/* Lifecycle zone: copy · disable · delete. */}
                                                     <Tooltip title={t('notify.group.copyChatId', {defaultValue: 'Copy internal target UUID'})}>

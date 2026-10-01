@@ -1,5 +1,6 @@
-import {Box, Chip, Divider, Typography} from '@mui/material';
+import {Box, Divider, Typography} from '@mui/material';
 import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
+import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import {fontMono} from '@/theme/fonts';
 
@@ -16,8 +17,12 @@ export interface ApiEntryNodeProps {
 }
 
 const ApiEntryNode: React.FC<ApiEntryNodeProps> = ({path, active = true, onClick}) => {
+    // The node shows the call ("POST /notify"); the full path, with the bot
+    // UUID the card header already identifies, is in the tooltip. Showing
+    // the whole path only ever rendered a truncated "/api/v1/bots/…".
+    const action = `/${path.split('/').filter(Boolean).pop() ?? ''}`;
     return (
-        <StyledBotGraphNode active={active} clickable={!!onClick} onClick={onClick}>
+        <StyledBotGraphNode active={active} clickable={!!onClick} onClick={onClick} sx={{width: 140}}>
             <Box sx={NODE_LAYER_STYLES.topLayer}>
                 <NodeTooltip title={<>POST {path}<br/>Authenticated with the operator user token.</>} placement="top">
                     <Typography
@@ -26,23 +31,18 @@ const ApiEntryNode: React.FC<ApiEntryNodeProps> = ({path, active = true, onClick
                         sx={{
                             ...NODE_LAYER_STYLES.typography,
                             fontFamily: fontMono,
-                            fontSize: '0.72rem',
+                            fontSize: '0.8rem',
                             maxWidth: 190,
-                            color: 'text.primary',
+                            color: active ? 'text.primary' : 'text.disabled',
                         }}
                     >
-                        {path}
+                        POST {action}
                     </Typography>
                 </NodeTooltip>
             </Box>
             <Divider sx={NODE_LAYER_STYLES.divider}/>
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                <Chip
-                    label="API"
-                    size="small"
-                    color={active ? 'primary' : 'default'}
-                    sx={{height: 24, fontSize: '0.7rem', fontWeight: 500}}
-                />
+                <NodeTag label="API" active={active}/>
             </Box>
         </StyledBotGraphNode>
     );
