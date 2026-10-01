@@ -219,6 +219,8 @@ gpt-5.6-terra     Direct · T0       →  glm-5.1, deepseek-v4-flash            
 
 ## 4. 一并考虑：Wails v3 WebView GUI
 
+> **现状（2026-10）**：本节描述的是重构前的两份构建。已落地的实现见 `host-bridge.md`：一份构建、运行时选择 HostBridge、按名调用 Go、取消 lite edition。
+
 GUI 确定继续用 **Wails v3**。现状（`gui/wails3`）：
 
 - **full 模式**：网关在进程内运行；Wails asset server 的 Handler 就是同一个 gin engine，`/api`、`/tingly` 走 gin，其余请求返回内嵌的前端构建产物（`app.go:31-67`）。前端由 `vite.config.wails.ts` 单独构建，靠 Vite alias 在 `bindings-wails` / `bindings-web` 之间切换。

@@ -135,7 +135,7 @@ func useSystray(app *application.App, tinglyService *services.TinglyService) (op
 	// The hub panel's jumps reach the same openMain: through the
 	// /api/v1/gui/open HTTP nudge (also used by a second GUI launch, see
 	// run.go's notifyRunningGUI) or the bound TinglyService.OpenMainWindow.
-	tinglyService.SetOpenMainWindowHandler(openMain)
+	tinglyService.OpenMainWindowFn = openMain
 
 	// Prevent window from being destroyed on close - just hide it
 	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {

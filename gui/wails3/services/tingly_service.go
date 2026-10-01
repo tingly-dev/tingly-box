@@ -2,20 +2,14 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/tingly-dev/tingly-box/internal/app"
-	"github.com/tingly-dev/tingly-box/internal/command"
-	exportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
-	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/usecase"
 )
 
 // Wails discovers lifecycle hooks through optional interfaces, so a signature
@@ -27,17 +21,25 @@ var (
 	_ http.Handler                = (*TinglyService)(nil)
 )
 
-// TinglyService manages the web UI and HTTP server functionality
+// TinglyService manages the web UI and HTTP server functionality.
+//
+// It is a Wails service, and Wails binds EVERY exported method (bar
+// ServiceStartup/ServiceShutdown/ServeHTTP/ServiceName) for any script in
+// the window to call by name. So the exported methods are exactly what the
+// page uses (frontend/src/host/desktop.ts BOUND_METHODS) — pinned by
+// TestBoundMethods — and everything main needs that the page must not call
+// (starting the gateway, the gin engine) is unexported or a field.
 type TinglyService struct {
 	appManager    *app.AppManager
 	serverManager *app.ServerManager
 	app           *application.App
 
-	// openMainWindowFn is set by main (systray.go's useSystray) so the hub
+	// OpenMainWindowFn is set by main (systray.go's useSystray) so the hub
 	// panel and the /api/v1/gui/open nudge can open the main app window.
 	// TinglyService lives in this package and can't import main (main
-	// already imports this package), hence the callback.
-	openMainWindowFn func(path string)
+	// already imports this package), hence the callback. A field rather than
+	// a setter method so Wails does not bind it.
+	OpenMainWindowFn func(path string)
 }
 
 // NewTinglyServiceWithServerManager creates a new UI service instance with a pre-configured ServerManager
@@ -52,8 +54,9 @@ func NewTinglyServiceWithServerManager(appManager *app.AppManager, serverManager
 	return res
 }
 
-// Start starts the UI service synchronously and returns any error
-func (s *TinglyService) Start(ctx context.Context) error {
+// start runs the gateway in the background. Unexported: a page script must
+// never be able to start a second one (see the TinglyService doc).
+func (s *TinglyService) start(ctx context.Context) error {
 	go func() {
 		err := s.serverManager.Start()
 		if err != nil {
@@ -63,7 +66,7 @@ func (s *TinglyService) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *TinglyService) GetGinEngine() *gin.Engine {
+func (s *TinglyService) ginEngine() *gin.Engine {
 	return s.serverManager.GetGinEngine()
 }
 
@@ -87,7 +90,7 @@ func (s *TinglyService) ServiceStartup(ctx context.Context, options application.
 	// the engine (not the /api/v1 group) to skip that group's middleware;
 	// the /api/v1 prefix keeps it reachable from the webview, whose asset
 	// middleware only forwards /api and /tingly to Gin (see app.go).
-	s.GetGinEngine().POST("/api/v1/gui/open", func(c *gin.Context) {
+	s.ginEngine().POST("/api/v1/gui/open", func(c *gin.Context) {
 		if c.GetHeader("Authorization") != "Bearer "+s.GetUserAuthToken() {
 			c.Status(http.StatusForbidden)
 			return
@@ -98,14 +101,14 @@ func (s *TinglyService) ServiceStartup(ctx context.Context, options application.
 
 	// Native save dialog for the desktop bridge's saveFile; see
 	// save_file.go. Same token check as /gui/open.
-	s.GetGinEngine().POST("/api/v1/gui/save", saveFileHandler(s.GetUserAuthToken, func(name string) (string, error) {
+	s.ginEngine().POST("/api/v1/gui/save", saveFileHandler(s.GetUserAuthToken, func(name string) (string, error) {
 		return wailsApp.Dialog.SaveFile().
 			SetFilename(name).
 			CanCreateDirectories(true).
 			PromptForSingleSelection()
 	}))
 
-	s.Start(ctx)
+	s.start(ctx)
 
 	return nil
 }
@@ -135,81 +138,10 @@ func (s *TinglyService) GetPort() int {
 	return port
 }
 
-// SetOpenMainWindowHandler wires "open the main app window" to main's window
-// management. Called once from useSystray after the windows exist.
-func (s *TinglyService) SetOpenMainWindowHandler(fn func(path string)) {
-	s.openMainWindowFn = fn
-}
-
 // OpenMainWindow shows the main app window at path, creating it on first use.
 // Bound for the hub panel as the fallback to its /api/v1/gui/open request.
 func (s *TinglyService) OpenMainWindow(path string) {
-	if s.openMainWindowFn != nil {
-		s.openMainWindowFn(path)
+	if s.OpenMainWindowFn != nil {
+		s.OpenMainWindowFn(path)
 	}
-}
-
-// ChoosePath opens a native file dialog and returns a selected file or directory path.
-func (s *TinglyService) ChoosePath() (string, error) {
-	if s.app == nil {
-		return "", fmt.Errorf("application is not ready")
-	}
-
-	return s.app.Dialog.OpenFile().
-		SetTitle("Choose File or Directory").
-		CanChooseFiles(true).
-		CanChooseDirectories(true).
-		ShowHiddenFiles(true).
-		PromptForSingleSelection()
-}
-
-// ============
-// Provider Management (exposed to GUI)
-// ============
-
-// ListProviders returns all configured providers
-func (s *TinglyService) ListProviders() []*typ.Provider {
-	return usecase.NewProviderUseCase(s.appManager.GetGlobalConfig()).List().Providers
-}
-
-// AddProvider adds a new AI provider
-func (s *TinglyService) AddProvider(name, apiBase, token, apiStyle string) (string, error) {
-	result, err := usecase.NewProviderUseCase(s.appManager.GetGlobalConfig()).Add(usecase.CreateProviderRequest{
-		Name: name, APIBase: apiBase, Token: token, APIStyle: protocol.APIStyle(apiStyle),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to add provider: %w", err)
-	}
-	return result.Provider.UUID, nil
-}
-
-// DeleteProvider removes an AI provider by UUID.
-func (s *TinglyService) DeleteProvider(uuid string) error {
-	if err := usecase.NewProviderUseCase(s.appManager.GetGlobalConfig()).Delete(usecase.DeleteProviderRequest{UUID: uuid}); err != nil {
-		return fmt.Errorf("failed to delete provider: %w", err)
-	}
-	return nil
-}
-
-// GetProvider returns a provider by UUID.
-func (s *TinglyService) GetProvider(uuid string) (*typ.Provider, error) {
-	return s.appManager.GetGlobalConfig().GetProviderByUUID(uuid)
-}
-
-// ============
-// Rule Management (exposed to GUI)
-// ============
-
-// ListRules returns all configured rules
-func (s *TinglyService) ListRules() []typ.Rule {
-	return usecase.NewRuleUseCase(s.appManager.GetGlobalConfig()).List().Rules
-}
-
-// ImportRule imports providers from JSONL/base64 export data. Despite the
-// name (kept for call-site compatibility), only providers are imported —
-// dataio export/import no longer carries rule data.
-func (s *TinglyService) ImportRule(data string) (*command.ImportResult, error) {
-	return command.ImportProviders(s.appManager.GetGlobalConfig(), data, exportpkg.FormatAuto, command.ImportOptions{
-		Quiet: true,
-	})
 }

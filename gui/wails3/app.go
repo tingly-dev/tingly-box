@@ -39,7 +39,7 @@ func newAppWithServerManager(appManager *app.AppManager, serverManager *app.Serv
 			application.NewService(tinglyService),
 		},
 		Assets: application.AssetOptions{
-			Handler: tinglyService.GetGinEngine(),
+			Handler: tinglyService,
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
