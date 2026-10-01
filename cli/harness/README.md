@@ -64,7 +64,7 @@ Every hermetic mode runs in
 (shared leg definitions live in `harness-template.yml`, also called directly
 by `release.yml` to gate releases): matrix (single / transitive / idempotent
 / flags / content_shapes / cache_controls / cache_prefix / vendor /
-servertool), one
+servertool / thinking_limits), one
 matrix leg per client driver (gosdk / python / node / aisdk), `replay batch`
 on the virtual and vmodel upstreams, `lb --all`, `duo --skip-memory`, and
 `routing` — gated by a single required `Harness result` status check.

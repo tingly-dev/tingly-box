@@ -239,6 +239,9 @@ and the rule-flag suite, which would otherwise be go-test-only.
 | `vendor` | — | — | — | — | — | — | ✅ | — |
 | `cache_prefix` | — | — | — | — | — | — | — | ✅ |
 
+`servertool` and `thinking_limits` (§10.5) are further sections with their own
+`--mode` value; both are included in `all`.
+
 This mode → section mapping is declared in one place: the `matrixSections`
 registry in `cli/harness/matrix.go`. Each entry names the section, lists the
 `--mode` values that include it, marks whether it is http-only (`flags`,
@@ -794,3 +797,49 @@ success while the real Responses API 400s. Only the unit tests in
 `internal/protocol/request` catch that class of bug today.
 
 
+
+### 10.5 Thinking × output-limit combination suite (`thinking_limits.go`)
+
+Thinking effort and output limits are each set in more than one place — the
+client's own request, the rule's `thinking_effort` flag, the model's output
+limit, the rule's `use_max_completion_tokens` / `use_max_tokens` — and each is
+applied at a different step of the pipeline
+(`.design/protocol-stage-pipeline.md`). One case per knob cannot show how they
+combine, so this suite crosses them:
+
+```
+source (anthropic_v1/beta, openai_chat, openai_responses)
+  × target (anthropic_beta, openai_chat, openai_responses)       — no Google
+  × client thinking level (none + minimal…max; budget for Anthropic,
+                           reasoning effort for OpenAI clients)
+  × client max_tokens (2048, 40000; OpenAI clients also absent)
+  × rule thinking_effort ("" / off / low / medium / high / max)
+  × rule max-tokens field flag (Chat targets: none / use_max_completion_tokens
+                                / use_max_tokens)
+  × streaming
+= 4200 combinations, one route (env) per source × target × rule flags
+```
+
+Each combination asserts properties of the request that reached the provider
+rather than a hand-written expected body:
+
+- output-token field(s) within the model limit (the test model is not in the
+  catalog, so the 8192 fallback), and on Chat the field the flag asks for;
+- on an Anthropic target, `1024 <= budget_tokens < max_tokens`;
+- the effort that arrives is the effective one — the rule's level when set,
+  none when the rule says off, else the client's — collapsed through the
+  generic tier map on a Chat target whenever the gateway derived it (a Chat
+  client's own `reasoning_effort` is forwarded verbatim).
+
+Pre-existing gaps it exposed are registered as known gaps TL2–TL3 (see the
+bottom of `thinking_limits.go`). It also caught TL1 — a budget capped to equal
+`max_tokens`, which Anthropic rejects — fixed in the same change set. Run it with:
+
+```bash
+go test ./internal/protocoltest -run TestThinkingLimits -count=1
+go run ./cli/harness matrix --mode=thinking_limits
+```
+
+When changing anything on the thinking or output-limit path, run it on the
+base branch and on the change and compare per case (`--json`): a combination
+that flips from pass to fail is a regression even if the totals look similar.

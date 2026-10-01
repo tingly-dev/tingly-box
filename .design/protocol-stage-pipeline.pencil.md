@@ -186,3 +186,19 @@
 
   以后（待定，见正文开放问题）：请求上一个 effort 字段 + "是否由网关推导"，③ 写一次，④ 只读这一处
 ```
+
+### 偏差 4–5：组合校验发现的缺口（harness `thinking_limits`，known gap TL2–TL3）
+
+```
+  偏差 4（TL2）  ③ Anthropic → Responses
+    client: thinking.budget_tokens 10240               rule thinking_effort = ""（按客户端）
+      现在：Bridge 不产出 effort ──► reasoning.effort 缺失                     ✗
+      以后：EffortFromBudget(10240) = medium ──► reasoning.effort "medium"      （与 → Chat 同一个产出）
+
+  偏差 5（TL3）  ③ Chat / Responses → Anthropic
+    client: reasoning_effort "high"                     rule thinking_effort = ""（按客户端）
+      现在：边缘转 Beta 不产出 thinking ──► 上游没有 thinking                    ✗
+      以后：BudgetMapping[high] = 20480 ──► thinking.enabled ──► ④ output_limit 与 vendor 按模型落地
+
+  两条都只在 rule = ""（按客户端）时出现：rule 设了档位时，④ 的 RuleThinkingTransform 会补上，结果正确。
+```

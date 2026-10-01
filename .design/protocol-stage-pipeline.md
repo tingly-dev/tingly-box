@@ -115,7 +115,8 @@ run*Attempt（每个 failover attempt）
   attempt plan（target、flags、preBase / preVendor），再经 `transformRequest` 进入 chain；
   Stage 路径的 `serve*` 从 plan 取 preVendor，不再单独传参。（`smart_compact` 由 `transformRequest`
   在 Anthropic 入口按 scenario 默认 flag 单独 prepend 到最前。）
-- chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。
+- chain 顺序的回归护栏：`internal/protocolserver/protocol_transform_test.go`。thinking 与输出上限在
+  ① ② ③ ④ 各段的组合效果由 harness 的 `thinking_limits` 段逐组合校验（`.design/harness-matrix.md` §10.5）。
 - 非 flag 的请求整形也装在这两半里：Anthropic `max_tokens` 缺省补齐在 source 半段最前
   （`MaxTokensDefaultTransform`），模型输出上限在 target 半段最前（`OutputLimitTransform`）。
   没有 handler 在 chain 之外改请求（原 `ExecuteAnthropicPreChain` 已删除）。
@@ -129,6 +130,8 @@ run*Attempt（每个 failover attempt）
 | 1 | 四个 `run*Attempt` 各自解析 target（三份 provider 风格 switch，Chat 另有一次 `tempFlags`）；preVendor 列表同时传给 `transformRequest` 与 `serve*`；`skip_usage` / `cursor_compat` 提示只在 OpenAI 入口写入 `Extra` | 共用的 attempt plan（规则 3）：`internal/protocolserver/attempt_plan.go` 的 `planAttempt` 解析 provider、target、flags、preBase / preVendor 与输出上限；`transformRequest` 按 `servedByStage()` 决定跑整链还是只跑 source 半段，并统一写入用量提示 | 已完成（#1901） |
 | 2 | 输出上限分散在三处且各不相同：Anthropic 入口的 `ExecuteAnthropicPreChain`（Source 侧，补齐 + 上限 + budget 截断）、Chat 入口 handler 内联截断 `max_tokens`、Responses 入口不截断 | Source 侧只补齐 Anthropic 必填的 `max_tokens`（`MaxTokensDefaultTransform`）；上限与 budget 截断移到 Target 半段的 `OutputLimitTransform`，按形态生效（规则 1、2）。删除 `ExecuteAnthropicPreChain`、handler 内联截断与 `KeepThinkingBudget`。统一后 Chat 的 `max_completion_tokens` 与 Responses 的 `max_output_tokens` 也按模型上限截断（此前不截） | 已完成（#1902） |
 | 3 | Chat 形态的 thinking 意图有两个来源：`req.ReasoningEffort`（客户端原值，原样透传）与 `OpenAIConfig.ReasoningEffort`（网关推导值，按 vendor 分档），靠 `RuleThinkingTransform.syncConfig` 同步；`buildOpenAIConfigFromRequest` 在 Chat 客户端带 `thinking` 扩展字段时猜一个 `low` | 见下 | 待定 |
+| 4 | ③ Anthropic → Responses 转换不把客户端的 thinking budget 带成 `reasoning.effort`（只有 rule 的档位能到） | 转换处按 `thinking.EffortFromBudget` 产出，与 → Chat 一致 | 待定（TL2） |
+| 5 | ③ Chat / Responses → Anthropic 转换不把客户端的 reasoning effort 带成 thinking（只有 rule 的档位能到） | 转换处按 `thinking.BudgetMapping` 产出，交给 ④ 与 vendor 按模型能力落地 | 待定（TL3） |
 
 偏差 3 需要先定语义再动代码，目前的开放问题：
 
