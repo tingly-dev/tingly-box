@@ -291,3 +291,13 @@ func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
 func registerDeskRoutes(apiV1 *swagger.RouteGroup, svc *desksvc.Service, routes deskmodule.RouteResolver, enabled func() bool) {
 	deskmodule.RegisterRoutes(apiV1, deskmodule.NewHandler(svc, routes), enabled)
 }
+
+// RuntimeAuditSink builds the AuditFunc the scenario runtime hands to
+// plugins. Plugin actions (e.g. claude_code.interactive.start / .done /
+// .error) land here as regular structured log lines — no separate audit
+// trail is needed on top of the application log.
+func RuntimeAuditSink() remotescenario.AuditFunc {
+	return func(action string, fields map[string]any) {
+		logrus.WithFields(logrus.Fields(fields)).WithField("action", action).Info(action)
+	}
+}

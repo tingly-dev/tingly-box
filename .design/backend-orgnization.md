@@ -78,7 +78,7 @@ Steps are stacked as separate commits on one branch, in this order.
 | 3 | `Module` interface + migrate module registration | todo |
 | 4 | Move non-HTTP modules out of `server/module/` (`tokenrefresh`, `quotawindow` → `internal/worker/`) | done (see §4) |
 | 5 | Split `guardrails_handler.go` into a module | todo |
-| 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | todo |
+| 6 | Remove `webui_handler.go` / `guardrails_runtime_adapter.go` migration leftovers | done (see §4) |
 | later | Delete `internal/task`; relocate `protocoltest`/`harness`; protocol/client dedupe; session-store diff; `pkg/notify` decision; fold `swagger`/`afk` | not started |
 
 ## 4. Decisions
@@ -93,6 +93,8 @@ Steps are stacked as separate commits on one branch, in this order.
 
 - **`providerquota` stays.** The audit listed it as a runtime service; it is an HTTP module (`handler.go` + `routes.go`) whose `Manager` is only a consumer-side interface. Only `tokenrefresh` and `quotawindow` were background workers, now under `internal/worker/`.
 - `tokenrefresh` depended on the OAuth HTTP module for one 3-line `oauth.Option`; `WithKimiDeviceID` moved to `ai/oauth/options.go`, which is where an `oauth.Option` belongs and removes the worker→HTTP-module edge.
+
+- **Step 6 findings.** `WebHandler` was not half-finished: it already carries status, log, request-trace and token handlers; only its comments (and `server.go`'s, which still said `aimodel`/`module/visionproxy`) were stale and are corrected. The unexported guardrails forwarders were inlined to `s.guardrailsState.*`; the exported ones stay because they implement `GuardrailsRuntime`. Static-asset serving moved to `webui_static.go`, `RuntimeAuditSink` to `server_control.go` next to its only use.
 
 ## 5. Open questions
 

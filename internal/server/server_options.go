@@ -81,7 +81,7 @@ func WithRecordingCAS(enabled bool) ServerOption {
 // WithGuardrails sets a guardrails runtime for stream evaluation.
 func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 	return func(s *Server) {
-		s.setGuardrailsRuntimeRef(runtime)
+		s.guardrailsState.SetRef(runtime)
 	}
 }
 
