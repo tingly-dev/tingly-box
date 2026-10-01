@@ -176,21 +176,18 @@ export const VersionDisplay: React.FC<VersionDisplayProps> = ({
     );
 };
 
-export type IndicatorBadgeColor = 'info' | 'warning' | 'success';
+type IndicatorBadgeColor = 'info' | 'warning' | 'success';
 
 /** The version badge's colour: checking, update available, or up to date. */
-export function useVersionBadgeColor(): IndicatorBadgeColor {
+function useVersionBadgeColor(): IndicatorBadgeColor {
     const { currentVersion, latestVersion, checking, hasUpdate } = useVersion();
     if (checking) return 'info';
     if (hasUpdate && latestVersion && currentVersion) return 'warning';
     return 'success';
 }
 
-/**
- * The 14px round badge after the version text. Exported so neighbours in
- * the same footer (the GitHub star link) share its exact size and colour.
- */
-export const IndicatorBadge: React.FC<{ color: IndicatorBadgeColor; children: ReactNode }> = ({ color, children }) => (
+/** The 14px round badge after the version text. */
+const IndicatorBadge: React.FC<{ color: IndicatorBadgeColor; children: ReactNode }> = ({ color, children }) => (
     <Box
         component="span"
         className="indicator-badge"

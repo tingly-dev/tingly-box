@@ -133,7 +133,6 @@ export default {
     "easterEgg": "Привет, я Tingly-Box, ваш умный ИИ-оркестратор",
     "githubStar": {
       "text": "Нравится Tingly-Box? Поставьте звезду на GitHub, чтобы помочь другим найти проект.",
-      "label": "star",
       "cta": "Star на GitHub"
     },
     "dashboard": "Панель",
