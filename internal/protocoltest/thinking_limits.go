@@ -338,6 +338,13 @@ func checkThinkingLimits(env *TestEnv, c thinkingLimitsCase, model string) []str
 			if budget < 1024 || budget >= maxTokens {
 				failures = append(failures, fmt.Sprintf("upstream budget_tokens = %.0f with max_tokens = %.0f; Anthropic needs 1024 <= budget < max_tokens", budget, maxTokens))
 			}
+			// Thinking carried from an OpenAI client's own effort must leave
+			// the answer at least half the output (Anthropic counts thinking
+			// inside max_tokens). A rule level or an Anthropic client's own
+			// budget may take more: that is what they asked for.
+			if !isAnthropicAPI(c.source) && c.rule == typ.ThinkingEffortDefault && maxTokens-budget < maxTokens/2 {
+				failures = append(failures, fmt.Sprintf("upstream budget_tokens = %.0f leaves %.0f of max_tokens = %.0f for the answer; a client-carried budget takes at most half", budget, maxTokens-budget, maxTokens))
+			}
 		}
 	}
 	return failures

@@ -85,9 +85,9 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rule for every Anthropic-shaped target, before model-specific
+	// Wire rules for every Anthropic-shaped target, before model-specific
 	// thinking reconciliation.
-	ops.DisableV1ThinkingForUnsignedToolTurn(req)
+	ops.ReconcileV1ThinkingWithRequest(req)
 	switch {
 	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
@@ -104,9 +104,9 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		return req
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
-	// Wire rule for every Anthropic-shaped target, before model-specific
+	// Wire rules for every Anthropic-shaped target, before model-specific
 	// thinking reconciliation.
-	ops.DisableBetaThinkingForUnsignedToolTurn(req)
+	ops.ReconcileBetaThinkingWithRequest(req)
 	switch {
 	case isClaudeCodeBackend(ctx, host):
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))

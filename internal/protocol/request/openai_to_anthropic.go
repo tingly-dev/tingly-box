@@ -153,9 +153,14 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		}
 	}
 
-	// Determine max_tokens - use default if not set
-	maxTokens := req.MaxTokens.Value
+	// Determine max_tokens: the modern max_completion_tokens first, then the
+	// deprecated max_tokens, else the default.
+	maxTokens := req.MaxCompletionTokens.Value
 	if maxTokens == 0 {
+		maxTokens = req.MaxTokens.Value
+	}
+	limitSet := maxTokens != 0
+	if !limitSet {
 		maxTokens = defaultMaxTokens
 	}
 
@@ -167,7 +172,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 	if req.PromptCacheOptions.Mode == "implicit" {
 		params.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
 	}
-	applyOpenAIEffortAsThinking(params, req.ReasoningEffort)
+	applyOpenAIEffortAsThinking(params, req.ReasoningEffort, limitSet)
 
 	// Add system blocks if any. Array-form OpenAI content keeps standard
 	// prompt_cache_breakpoint markers from an earlier Anthropic hop.
@@ -297,15 +302,36 @@ func ConvertOpenAIToAnthropicToolChoice(tc *openai.ChatCompletionToolChoiceOptio
 // applyOpenAIEffortAsThinking carries an OpenAI client's reasoning effort to an
 // Anthropic request: thinking enabled at the ladder's budget for that level
 // (thinking.BudgetMapping) plus output_config.effort. "", "none" and unknown
-// values leave thinking unset. The target half then fits the budget below
-// max_tokens (output_limit), and the vendor stage reconciles both with the
-// model's thinking dialects and with tool-use turns that carry no thinking.
-func applyOpenAIEffortAsThinking(params *anthropic.BetaMessageNewParams, effort shared.ReasoningEffort) {
+// values leave thinking unset.
+//
+// Anthropic counts thinking inside max_tokens, so the budget must leave room
+// for the answer:
+//   - the client set no output limit (limitSet false): max_tokens, the
+//     default answer room, grows by the budget;
+//   - the client set one: the client's limit is the whole output, so the
+//     budget takes at most half of it, and a limit too small for the 1024
+//     minimum leaves thinking off.
+//
+// The target half then caps both at the model limit (output_limit), and the
+// vendor stage reconciles thinking with the model's dialects and the rest of
+// the request (ops.ReconcileBetaThinkingWithRequest).
+func applyOpenAIEffortAsThinking(params *anthropic.BetaMessageNewParams, effort shared.ReasoningEffort, limitSet bool) {
 	level := string(effort)
 	budget, ok := thinking.BudgetMapping[level]
 	if !ok {
 		return
 	}
+	if limitSet {
+		if params.MaxTokens <= minThinkingBudget {
+			return
+		}
+		budget = min(budget, max(minThinkingBudget, params.MaxTokens/2))
+	} else {
+		params.MaxTokens += budget
+	}
 	params.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
 	params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(thinking.AnthropicEffort(level))
 }
+
+// minThinkingBudget is Anthropic's smallest accepted budget_tokens.
+const minThinkingBudget int64 = 1024

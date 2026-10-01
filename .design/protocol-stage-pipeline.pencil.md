@@ -195,15 +195,18 @@
       以前：Bridge 不产出 effort ──► reasoning.effort 缺失                     ✗
       现在：anthropicViewReasoningEffort ── EffortFromBudget(10240) = medium
               ──► reasoning.effort "medium"                                   （与 → Chat 同一个 helper）
+            只认请求本身的 thinking（enabled / adaptive）；只在历史里有 thinking 块、或 disabled ──► 不带
 
   偏差 5（TL3）  ③ Chat / Responses → Anthropic
     client: reasoning_effort "high"                     rule thinking_effort = ""（按客户端）
       以前：边缘转 Beta 不产出 thinking ──► 上游没有 thinking                    ✗
       现在：③ applyOpenAIEffortAsThinking ── BudgetMapping[high] = 20480
               ──► thinking.enabled + output_config.effort "high"
-              ──► ④ output_limit 截 budget ──► ④ vendor 守卫：
+                  并给回答留空间：没设上限 max_tokens 4096 + 20480；设了 32000 → budget ≤ 16000
+              ──► ④ output_limit 截到模型上限 ──► ④ vendor ReconcileBetaThinkingWithRequest：
                     最后一条 assistant tool_use 消息没有 thinking 块？ ── 是 ──► thinking.disabled
-                                                                    └ 否 ──► 保持 enabled
+                    tool_choice 强制用工具（any / tool）？         ── 是 ──► thinking.disabled
+                    否则 temperature ≠ 1、top_k 丢掉，top_p 抬到 0.95
 
   以前两条都只在 rule = ""（按客户端）时出现：rule 设了档位时，④ 的 RuleThinkingTransform 会补上。
 ```

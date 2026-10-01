@@ -371,11 +371,17 @@ func anthropicViewReasoningEffort(view anthropicRequestView) (effort shared.Reas
 }
 
 // applyAnthropicThinkingToResponses carries an Anthropic request's thinking to
-// a Responses request as reasoning.effort, the same level a Chat target gets.
+// a Responses request as reasoning.effort, the same level a Chat target gets —
+// but only when the request itself turns thinking on (enabled or adaptive).
+// Thinking blocks left in the history, or thinking switched off, carry nothing:
+// reasoning.effort is a typed field a Responses provider validates against the
+// model, unlike the Chat side's vendor-tiered hint.
 func applyAnthropicThinkingToResponses(params *responses.ResponseNewParams, view anthropicRequestView) {
-	if effort, hasThinking := anthropicViewReasoningEffort(view); hasThinking {
-		params.Reasoning.Effort = effort
+	if view.Thinking.OfEnabled == nil && view.Thinking.OfAdaptive == nil {
+		return
 	}
+	effort, _ := anthropicViewReasoningEffort(view)
+	params.Reasoning.Effort = effort
 }
 
 // convertAnthropicViewAssistantToOpenAI converts an assistant message's

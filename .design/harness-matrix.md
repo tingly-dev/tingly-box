@@ -825,7 +825,9 @@ rather than a hand-written expected body:
 
 - output-token field(s) within the model limit (the test model is not in the
   catalog, so the 8192 fallback), and on Chat the field the flag asks for;
-- on an Anthropic target, `1024 <= budget_tokens < max_tokens`;
+- on an Anthropic target, `1024 <= budget_tokens < max_tokens`, and a budget
+  carried from an OpenAI client's own effort leaves the answer at least half
+  of `max_tokens`;
 - the effort that arrives is the effective one — the rule's level when set,
   none when the rule says off, else the client's — collapsed through the
   generic tier map on a Chat target whenever the gateway derived it (a Chat

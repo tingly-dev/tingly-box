@@ -30,6 +30,7 @@ var irGaps = map[string][]string{
 	"TestIRRoundTripRequest/openai_chat->openai_chat/tool_history":           {"I1"},
 	"TestIRRoundTripRequest/openai_chat->openai_chat/tools":                  {"I1"},
 	"TestIRRoundTripRequest/openai_chat->openai_responses/sampling":          {"I2"},
+	"TestIRRoundTripRequest/openai_chat->openai_responses/reasoning":         {"I1"},
 	"TestIRRoundTripRequest/openai_responses->openai_chat/reasoning":         {"I4"},
 	"TestIRRoundTripRequest/openai_responses->openai_chat/sampling":          {"I2"},
 	"TestIRRoundTripRequest/openai_responses->openai_responses/basic":        {"I1"},

@@ -61,7 +61,8 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 	}
 
 	// Convert max_output_tokens to max_tokens
-	if !param.IsOmitted(params.MaxOutputTokens) {
+	limitSet := !param.IsOmitted(params.MaxOutputTokens)
+	if limitSet {
 		anthropicParams.MaxTokens = params.MaxOutputTokens.Value
 	} else {
 		anthropicParams.MaxTokens = defaultMaxTokens
@@ -77,7 +78,7 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 		anthropicParams.TopP = AnthropicParamOpt(params.TopP.Value)
 	}
 
-	applyOpenAIEffortAsThinking(anthropicParams, params.Reasoning.Effort)
+	applyOpenAIEffortAsThinking(anthropicParams, params.Reasoning.Effort, limitSet)
 
 	// Convert tools
 	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
