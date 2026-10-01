@@ -39,10 +39,15 @@ export interface ImportedImage {
     width?: number;
     height?: number;
     createdAt: number;
+    // The image profile whose page it was brought into; unset = the default
+    // Playground. Each surface shows only its own history.
+    profileId?: string;
 }
 
 export interface GenerationRun {
     id: string;
+    // The image profile whose page made it; unset = the default Playground.
+    profileId?: string;
     endpoint: Endpoint;
     createdAt: number;
     prompt: string;

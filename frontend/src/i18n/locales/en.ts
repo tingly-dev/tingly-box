@@ -2760,22 +2760,23 @@ export default {
   "imageProfile": {
     "untitled": "Untitled profile",
     "new": "New profile",
-    "navSubtitle": "Profile",
     "notFound": "This profile no longer exists.",
     "backToPlayground": "Open Playground",
     "name": "Profile name",
     "rename": "Rename",
     "delete": "Delete profile",
     "deleteTitle": "Delete {{name}}?",
-    "deleteBody": "Its references, description and settings are removed. Images already generated stay in the output folder.",
+    "deleteBody": "Its references, prompts, settings and history are removed. Image files already generated stay in the output folder.",
     "saveAs": "Save as profile",
     "saveAsHint": "Keep these references, description and settings as a profile with its own page",
-    "subtitle": "Changes save to this profile as you make them.",
     "prompts": "Prompts",
     "promptN": "Prompt {{n}}",
     "addPrompt": "New prompt",
     "renamePrompt": "Prompt name",
     "renameHint": "Double-click to rename",
-    "removePrompt": "Remove {{name}}"
+    "removePrompt": "Remove {{name}}",
+    "saved": "Saved",
+    "promptRemoved": "Removed “{{name}}”",
+    "undo": "Undo"
   }
 };

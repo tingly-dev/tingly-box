@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
@@ -38,14 +38,28 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, rej
 
 type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 
+// Forgets one image profile's history — its runs and imports — when the
+// profile itself is deleted, so nothing is left behind that no page shows.
+export const dropProfileSession = (profileId: string) => {
+    imageGenSessionRuns = imageGenSessionRuns.filter((run) => run.profileId !== profileId);
+    imageGenSessionImports = imageGenSessionImports.filter((item) => item.profileId !== profileId);
+    void savePlaygroundSession({ runs: imageGenSessionRuns, imports: imageGenSessionImports });
+};
+
 // The session half of the playground: the run/import history that survives
 // page navigation (module-level copy) and page reloads (IndexedDB), plus the
 // submission side of a run — firing the request, cancelling it, retrying a
 // failed one.
-export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) => {
+//
+// One session store holds every surface's history; `profileId` scopes what
+// this panel sees and stamps what it adds (unset = the default Playground),
+// so a profile's page shows that profile's work and nothing else.
+export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, profileId?: string) => {
     const { t } = useTranslation();
-    const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
-    const [imported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
+    const [allRuns, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
+    const [allImported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
+    const runs = useMemo(() => allRuns.filter((run) => run.profileId === profileId), [allRuns, profileId]);
+    const imported = useMemo(() => allImported.filter((item) => item.profileId === profileId), [allImported, profileId]);
     const historyTrackRef = useRef<HTMLDivElement>(null);
     // The in-flight request behind each pending card, so its Cancel button
     // can abort the fetch instead of leaving the user to wait out the
@@ -96,8 +110,8 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
 
     useEffect(() => {
         if (!sessionRestored) return;
-        void savePlaygroundSession({ runs, imports: imported });
-    }, [imported, runs, sessionRestored]);
+        void savePlaygroundSession({ runs: allRuns, imports: allImported });
+    }, [allImported, allRuns, sessionRestored]);
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -119,6 +133,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
         const endpoint: Endpoint = request.sources.length > 0 ? 'edits' : 'generations';
         const pendingRun: GenerationRun = {
             id: runId,
+            ...(profileId ? { profileId } : {}),
             createdAt: Date.now(),
             endpoint,
             prompt: request.prompt,
@@ -183,7 +198,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
         } finally {
             inFlightRef.current.delete(runId);
         }
-    }, [showNotification, t, updateRuns]);
+    }, [profileId, showNotification, t, updateRuns]);
 
     const handleCancelRun = useCallback((id: string) => {
         inFlightRef.current.get(id)?.abort();
@@ -242,11 +257,12 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
                 name: file.name,
                 bytes: file.size,
                 createdAt: Date.now(),
+                ...(profileId ? { profileId } : {}),
                 ...(await readImageSize(src) ?? {}),
             };
         }));
         updateImports((current) => [...current, ...items]);
-    }, [updateImports]);
+    }, [profileId, updateImports]);
 
     const removeRun = useCallback((id: string) => {
         updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== id));
@@ -256,14 +272,21 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification) =
         updateImports((current) => current.filter((item) => item.id !== id));
     }, [updateImports]);
 
+    // Empties this surface's history only — clearing a profile's page must
+    // not take the default Playground's (or another profile's) work with it.
+    const clearSession = useCallback(() => {
+        runs.forEach((run) => inFlightRef.current.get(run.id)?.abort());
+        updateRuns((current) => current.filter((run) => run.profileId !== profileId));
+        updateImports((current) => current.filter((item) => item.profileId !== profileId));
+    }, [profileId, runs, updateImports, updateRuns]);
+
     return {
         runs,
         imported,
         pendingCount,
         historyTrackRef,
         inFlightRef,
-        updateRuns,
-        updateImports,
+        clearSession,
         runGeneration,
         handleCancelRun,
         handleRetry,

@@ -248,8 +248,9 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), subtitle: t('layout.default'), icon: <IconPalette sx={{ fontSize: 20 }} /> },
                     ...imageProfiles.map((profile): NavItem => ({
                         path: `/image/profile/${profile.id}`,
+                        // The cover thumbnail already marks it as a profile;
+                        // a repeated "Profile" caption on every row is noise.
                         label: profile.name,
-                        subtitle: t('imageProfile.navSubtitle', { defaultValue: 'Profile' }),
                         icon: profile.refs[0]
                             ? <Box component="img" src={profile.refs[0].previewUrl} alt="" sx={{ width: 20, height: 20, borderRadius: '4px', objectFit: 'cover', display: 'block' }} />
                             : <IconPalette sx={{ fontSize: 20 }} />,
