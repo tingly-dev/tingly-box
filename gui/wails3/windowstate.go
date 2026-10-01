@@ -8,16 +8,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// WindowState is the persisted main-window geometry, stored as JSON at
-// <configDir>/gui-state.json. A missing file means "first run": the window
-// maximises once and starts persisting from there; afterwards the user's
-// size/position always wins (no forced Maximise on show).
+// WindowState is the main window's last normal (un-maximised) frame, stored
+// as JSON at <configDir>/gui-state.json. The window always opens maximised
+// (window.go); this is the frame "restore down" returns to. A missing file
+// just means restore down uses the default size.
 type WindowState struct {
-	X         int  `json:"x"`
-	Y         int  `json:"y"`
-	Width     int  `json:"width"`
-	Height    int  `json:"height"`
-	Maximised bool `json:"maximised"`
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 // minVisible is how many pixels of the saved frame must land on some screen
@@ -27,8 +26,8 @@ type WindowState struct {
 const minVisible = 50
 
 // loadWindowState reads the saved state. (nil, nil) means no saved state
-// (first run); a corrupt file is treated the same way rather than erroring —
-// worst case is one extra maximised launch.
+// (never saved yet); a corrupt file is treated the same way rather than erroring —
+// worst case is restore down using the default size once.
 func loadWindowState(path string) *WindowState {
 	data, err := os.ReadFile(path)
 	if err != nil {

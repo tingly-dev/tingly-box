@@ -163,7 +163,7 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 	useAppMenu(app, openMain, opts.EnableDebug)
 
 	// Launching a desktop app should show its window: open the main window
-	// at startup (first run maximised, later runs at the saved geometry).
+	// at startup, maximised (see showMainWindow).
 	showMainWindow(app, tinglyService, "")
 
 	// Clicking the dock icon while the window is hidden should bring it

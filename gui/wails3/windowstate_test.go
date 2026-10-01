@@ -22,7 +22,7 @@ func TestWindowStateRoundTrip(t *testing.T) {
 		t.Fatalf("missing file: want nil, got %+v", got)
 	}
 
-	want := WindowState{X: 10, Y: 20, Width: 800, Height: 600, Maximised: true}
+	want := WindowState{X: 10, Y: 20, Width: 800, Height: 600}
 	if err := saveWindowState(path, want); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -86,5 +86,18 @@ func TestClampWindowStateShrinksOversized(t *testing.T) {
 	got := clampWindowState(s, screens)
 	if got.Width != 1280 || got.Height != 720 || got.X != 0 || got.Y != 0 {
 		t.Fatalf("oversized not clamped to work area: %+v", got)
+	}
+}
+
+// Files written before the window always opened maximised carry a
+// "maximised" flag; they must still load, as the frame to restore down to.
+func TestLoadWindowStateLegacyMaximisedFlag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gui-state.json")
+	if err := os.WriteFile(path, []byte(`{"x":10,"y":20,"width":800,"height":600,"maximised":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := loadWindowState(path)
+	if want := (WindowState{X: 10, Y: 20, Width: 800, Height: 600}); got == nil || *got != want {
+		t.Fatalf("legacy file: want %+v, got %+v", want, got)
 	}
 }
