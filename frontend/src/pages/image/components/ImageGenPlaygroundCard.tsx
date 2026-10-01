@@ -42,8 +42,9 @@ import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
-import type { ImageProfile } from '../profiles/imageProfileTypes';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
+import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
+import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
 import type {
     GenerationRun,
     ImportedImage,
@@ -84,16 +85,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
     const [selectedModel, setSelectedModel] = useState(profile?.model ?? '');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
-    const [prompt, setPrompt] = useState('');
+    // A profile's saved prompts; the field below edits the active one in
+    // place. Outside a profile both stay empty and the field is free text.
+    const [profilePrompts, setProfilePrompts] = useState<ProfilePrompt[]>(profile?.prompts ?? []);
+    const [activePromptId, setActivePromptId] = useState(profile?.activePromptId ?? '');
+    const [prompt, setPrompt] = useState(
+        () => profile?.prompts.find((item) => item.id === profile.activePromptId)?.text ?? '',
+    );
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [size, setSize] = useState(profile?.size ?? '1024x1024');
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
     const [count, setCount] = useState(profile?.count ?? 1);
-    // A profile's fixed description: sent ahead of the prompt on every run,
-    // so the prompt field only holds what changes this time.
-    const [basePrompt, setBasePrompt] = useState(profile?.basePrompt ?? '');
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
     const [outputDir, setOutputDir] = useState('');
@@ -339,20 +343,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         }
     }, [showNotification, t]);
 
-    const fullPrompt = [basePrompt.trim(), prompt.trim()].filter(Boolean).join('\n');
-    const canSubmit = Boolean(fullPrompt) && Boolean(model);
+    const canSubmit = Boolean(prompt.trim()) && Boolean(model);
 
     const handleSubmit = useCallback(async () => {
         if (!canSubmit) return;
         await runGeneration({
-            prompt: fullPrompt,
+            prompt: prompt.trim(),
             model,
             size,
             quality,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, fullPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, model, prompt, quality, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -370,10 +373,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const handleReuseRun = useCallback(async (run: GenerationRun) => {
         try {
             const sources = await runSourcesToReferences(run);
-            // On a profile, a run's prompt starts with the fixed description —
-            // put back only the part that was typed for that run.
-            const base = basePrompt.trim();
-            setPrompt(base && run.prompt.startsWith(`${base}\n`) ? run.prompt.slice(base.length + 1) : run.prompt);
+            // On a profile, a run made from one of its saved prompts goes back
+            // to that prompt's tab rather than overwriting whichever is open.
+            const saved = profilePrompts.find((item) => item.text.trim() === run.prompt.trim());
+            if (saved) setActivePromptId(saved.id);
+            setPrompt(run.prompt);
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
@@ -400,7 +404,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch {
             showNotification(t('playground.reuse.failed', { defaultValue: 'Could not load this request' }), 'error');
         }
-    }, [basePrompt, models, runSourcesToReferences, setReferenceImages, showNotification, t]);
+    }, [models, profilePrompts, runSourcesToReferences, setReferenceImages, showNotification, t]);
 
     // Opens one of a run's source images in the same lightbox its outputs use.
     const handleOpenRunSource = useCallback((run: GenerationRun, index: number) => {
@@ -463,10 +467,47 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // so there is no "unsaved" state to manage. The prompt is per-run and
     // never saved.
     const profileId = profile?.id;
+    // The field edits the active saved prompt in place.
     useEffect(() => {
         if (!profileId) return;
-        updateImageProfile(profileId, { refs: referenceImages, basePrompt, model: selectedModel, size, quality, count });
-    }, [basePrompt, count, profileId, quality, referenceImages, selectedModel, size]);
+        setProfilePrompts((current) => current.map((item) => (
+            item.id === activePromptId && item.text !== prompt ? { ...item, text: prompt } : item
+        )));
+    }, [activePromptId, profileId, prompt]);
+    useEffect(() => {
+        if (!profileId) return;
+        updateImageProfile(profileId, {
+            refs: referenceImages,
+            prompts: profilePrompts,
+            activePromptId,
+            model: selectedModel,
+            size,
+            quality,
+            count,
+        });
+    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+
+    const selectPrompt = (id: string) => {
+        setActivePromptId(id);
+        setPrompt(profilePrompts.find((item) => item.id === id)?.text ?? '');
+    };
+    const addPrompt = () => {
+        const id = newPromptId();
+        setProfilePrompts((current) => [
+            ...current,
+            { id, name: t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: current.length + 1 }), text: '' },
+        ]);
+        setActivePromptId(id);
+        setPrompt('');
+    };
+    const removePrompt = (id: string) => {
+        const remaining = profilePrompts.filter((item) => item.id !== id);
+        setProfilePrompts(remaining);
+        if (id === activePromptId && remaining[0]) {
+            setActivePromptId(remaining[0].id);
+            setPrompt(remaining[0].text);
+        }
+    };
 
     const location = useLocation();
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
@@ -486,7 +527,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         const created = createImageProfile({
             name: t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
             refs: referenceImages,
-            basePrompt: prompt.trim(),
+            prompts: [{ id: 'p1', name: t('imageProfile.promptN', { defaultValue: 'Prompt {{n}}', n: 1 }), text: prompt.trim() }],
+            activePromptId: 'p1',
             model: selectedModel,
             size,
             quality,
@@ -551,7 +593,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     </Tooltip>
                 )}
                 subtitle={profile ? (
-                    t('imageProfile.subtitle', { defaultValue: 'Changes to references and settings save to this profile. The prompt is for this run only.' })
+                    t('imageProfile.subtitle', { defaultValue: 'Changes save to this profile as you make them.' })
                 ) : outputDir ? (
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Box component="span">
@@ -656,17 +698,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             height-constrained column is how text ends up painted
                             past the border. */}
                         {profile && (
-                            <TextField
-                                multiline
-                                minRows={2}
-                                maxRows={4}
-                                fullWidth
-                                size="small"
-                                label={t('imageProfile.basePrompt', { defaultValue: 'Fixed description · sent with every run' })}
-                                placeholder={t('imageProfile.basePromptPlaceholder', { defaultValue: 'Who is in it, how it is drawn — what stays the same every time' })}
-                                value={basePrompt}
-                                onChange={(event) => setBasePrompt(event.target.value)}
-                                disabled={noModels}
+                            <ProfilePromptTabs
+                                prompts={profilePrompts}
+                                activeId={activePromptId}
+                                onSelect={selectPrompt}
+                                onAdd={addPrompt}
+                                onRename={(id, name) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item)))}
+                                onRemove={removePrompt}
                             />
                         )}
 
@@ -674,12 +712,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             multiline
                             minRows={3}
                             fullWidth
-                            label={profile
-                                ? t('imageProfile.prompt', { defaultValue: 'This time' })
-                                : t('playground.prompt', { defaultValue: 'Prompt' })}
-                            placeholder={profile
-                                ? t('imageProfile.promptPlaceholder', { defaultValue: 'What changes this run — the action, the place, the moment…' })
-                                : hasMaskedReference
+                            // On a profile the tabs above already name the field.
+                            label={profile ? undefined : t('playground.prompt', { defaultValue: 'Prompt' })}
+                            placeholder={hasMaskedReference
                                 ? t('playground.mask.promptPlaceholder', { defaultValue: 'Describe what should appear in the painted area…' })
                                 : hasSketchReference
                                 ? t('playground.sketch.promptPlaceholder', { defaultValue: 'Describe what this sketch should become…' })
@@ -698,6 +733,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             }}
                             disabled={noModels}
                             slotProps={{
+                                htmlInput: { 'aria-label': t('playground.prompt', { defaultValue: 'Prompt' }) },
                                 input: {
                                     endAdornment: (
                                         <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5, mr: -0.5, gap: 0.25 }}>

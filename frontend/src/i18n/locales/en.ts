@@ -2773,11 +2773,13 @@ export default {
     "deleteBody": "Its references, description and settings are removed. Images already generated stay in the output folder.",
     "saveAs": "Save as profile",
     "saveAsHint": "Keep these references, description and settings as a profile with its own page",
-    "subtitle": "Changes to references and settings save to this profile. The prompt is for this run only.",
-    "basePrompt": "Fixed description · sent with every run",
-    "basePromptPlaceholder": "Who is in it, how it is drawn — what stays the same every time",
-    "prompt": "This time",
-    "promptPlaceholder": "What changes this run — the action, the place, the moment…"
+    "subtitle": "Changes save to this profile as you make them.",
+    "prompts": "Prompts",
+    "promptN": "Prompt {{n}}",
+    "addPrompt": "New prompt",
+    "renamePrompt": "Prompt name",
+    "renameHint": "Double-click to rename",
+    "removePrompt": "Remove {{name}}"
   },
   "desk": {
     "noBackgroundTasks": "No background tasks",

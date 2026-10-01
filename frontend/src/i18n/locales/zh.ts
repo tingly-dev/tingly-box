@@ -2771,11 +2771,13 @@ export default {
     "deleteBody": "会移除它的参考图、固定描述和参数。已经生成的图片仍保留在输出目录里。",
     "saveAs": "存为 Profile",
     "saveAsHint": "把当前的参考图、描述和参数存成一个 Profile，它有自己的页面",
-    "subtitle": "参考图和参数的改动会自动存进这个 Profile，prompt 只管这一次。",
-    "basePrompt": "固定描述 · 每次都会带上",
-    "basePromptPlaceholder": "画面里是谁、怎么画——每次都不变的部分",
-    "prompt": "这一次",
-    "promptPlaceholder": "这次要变的部分：动作、地点、时刻…"
+    "subtitle": "改动会自动存进这个 Profile。",
+    "prompts": "提示词",
+    "promptN": "提示词 {{n}}",
+    "addPrompt": "新建提示词",
+    "renamePrompt": "提示词名称",
+    "renameHint": "双击重命名",
+    "removePrompt": "移除 {{name}}"
   },
   "desk": {
     "noBackgroundTasks": "暂无后台任务",
