@@ -66,7 +66,7 @@ AuthorizeOAuth  ──▶  SessionState (pending)  ──▶  user signs in upst
 - **Expiry** — `OAuthDetail.IsExpired` (`ai/provider.go`) treats a token as expired
   within a 5-minute buffer; `Provider.IsOAuthExpired` exposes it.
 - **Background refresh** — `OAuthRefresher`
-  (`internal/server/module/tokenrefresh/refresher.go`) ticks every ~2 min (+≤10%
+  (`internal/worker/tokenrefresh/refresher.go`) ticks every ~2 min (+≤10%
   jitter) and refreshes any token due within 15 min, using the stored refresh
   token. It gives up on credentials expired more than ~72h ago.
 - **Manual refresh** — `POST /oauth/refresh` (`RefreshOAuthToken`) overwrites the
@@ -108,7 +108,7 @@ a broken credential on one service falls over to a sibling and is reported to th
 health monitor, instead of surfacing to the client as "Please run /login".
 
 - **Quota window nudge** — `quotawindow.Run`
-  (`internal/server/module/quotawindow/quotawindow.go`) sends one tiny model
+  (`internal/worker/quotawindow/quotawindow.go`) sends one tiny model
   request per hour to every enabled OAuth provider (direct SDK call via
   `E2EProber`, any cached model that goes through). Subscription windows only
   start counting on the first real request, so this keeps them moving while idle.
@@ -183,7 +183,7 @@ authorize(provider_uuid) ──▶ SessionState.TargetProviderUUID
 | `internal/server/module/oauth/handler.go` | authorize, callback, device-code poll, refresh, revoke; `createProviderFromToken` (create + re-auth) |
 | `internal/server/module/oauth/types.go` | request/response models; `OAuthAuthorizeRequest.provider_uuid` |
 | `internal/server/module/oauth/routes.go` | route registration |
-| `internal/server/module/tokenrefresh/refresher.go` | periodic background refresh; expiry/credential guards |
+| `internal/worker/tokenrefresh/refresher.go` | periodic background refresh; expiry/credential guards |
 | `ai/oauth/zcode.go` | ZCode (GLM Coding Plan) server-poll login + credential resolver; `zcode-oauth.md` |
 | `internal/config/provider.go` | `AddProvider` / `UpdateProvider` / `DeleteProvider` + rule cleanup |
 | `frontend/src/components/OAuthDialog.tsx` | provider picker + direct/re-auth mode (`reauthProviderUuid`) |

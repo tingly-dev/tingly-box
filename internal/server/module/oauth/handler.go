@@ -386,7 +386,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	var kimiDeviceID string
 	if issuer == ai.IssuerKimiCode {
 		kimiDeviceID = uuid.New().String()
-		deviceOpts = append(deviceOpts, WithKimiDeviceID(kimiDeviceID))
+		deviceOpts = append(deviceOpts, oauth.WithKimiDeviceID(kimiDeviceID))
 	}
 
 	// Handle device code flow
@@ -486,7 +486,7 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 
 	pollOpts := OAuthOptions(proxyURL, "")
 	if kimiDeviceID != "" {
-		pollOpts = append(pollOpts, WithKimiDeviceID(kimiDeviceID))
+		pollOpts = append(pollOpts, oauth.WithKimiDeviceID(kimiDeviceID))
 	}
 	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil, pollOpts...)
 	if err != nil {
@@ -690,7 +690,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	// Refresh token
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
 	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
-		refreshOpts = append(refreshOpts, WithKimiDeviceID(provider.OAuthDetail.DeviceID))
+		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
 	var token *oauth.Token
 	if oauth.IsZCodeIssuer(issuer) {
