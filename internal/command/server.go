@@ -28,12 +28,35 @@ import (
 
 // ============== Kong Command Structures ==============
 
+// ServerFlagsKong are the flags that configure the gateway itself. They are
+// shared by every entry point that can start one: the CLI's start / restart /
+// open (through StartCmdKong) and the GUI binary's root command
+// (gui/wails3/main.go), so a server flag added here reaches both.
+//
+// Host has no default on purpose: the CLI binds every interface when it is
+// empty (Docker relies on that), while the GUI pins it to localhost itself.
+type ServerFlagsKong struct {
+	Port        int    `kong:"flag,name='port',short='p',help='Server port'"`
+	Host        string `kong:"flag,name='host',help='Server host'"`
+	EnableUI    bool   `kong:"flag,name='ui',short='u',default='true',help='Enable web UI'"`
+	EnableDebug bool   `kong:"flag,name='debug',help='Enable debug mode'"`
+}
+
+// Resolve merges these flags into rest (the caller's own flags, e.g. daemon
+// or log file) and resolves the result against the config: an explicit
+// --debug wins over the config's debug setting, a zero --port falls back to
+// the config and a non-zero one is persisted to it.
+func (f ServerFlagsKong) Resolve(appConfig *appconfig.AppConfig, rest options.StartFlags) options.StartServerOptions {
+	rest.Port = f.Port
+	rest.Host = f.Host
+	rest.EnableUI = f.EnableUI
+	rest.EnableDebug = f.EnableDebug
+	return options.ResolveStartOptions(newKongShimCmd(f.EnableDebug), rest, appConfig)
+}
+
 // StartCmdKong is the Kong version of start command
 type StartCmdKong struct {
-	Port                 int    `kong:"flag,name='port',short='p',help='Server port'"`
-	Host                 string `kong:"flag,name='host',help='Server host'"`
-	EnableUI             bool   `kong:"flag,name='ui',short='u',default='true',help='Enable web UI'"`
-	EnableDebug          bool   `kong:"flag,name='debug',help='Enable debug mode'"`
+	ServerFlagsKong
 	EnableOpenBrowser    bool   `kong:"flag,name='browser',default='true',help='Auto-open browser'"`
 	EnableStyleTransform bool   `kong:"flag,name='adapter',default='true',help='Enable API style transform'"`
 	Daemon               bool   `kong:"flag,name='daemon',default='true',negatable,help='Run in the background (default; pass --no-daemon for foreground)'"`
@@ -45,21 +68,16 @@ type StartCmdKong struct {
 // portOverride, when non-zero, replaces the flag port (restart uses it to
 // continue on the live port).
 func (s *StartCmdKong) resolveOptions(appConfig *appconfig.AppConfig, portOverride int) options.StartServerOptions {
-	port := s.Port
+	server := s.ServerFlagsKong
 	if portOverride != 0 {
-		port = portOverride
+		server.Port = portOverride
 	}
-	flags := options.StartFlags{
-		Port:                 port,
-		Host:                 s.Host,
-		EnableUI:             s.EnableUI,
-		EnableDebug:          s.EnableDebug,
+	return server.Resolve(appConfig, options.StartFlags{
 		EnableOpenBrowser:    s.EnableOpenBrowser,
 		EnableStyleTransform: s.EnableStyleTransform,
 		Daemon:               s.Daemon,
 		LogFile:              s.LogFile,
-	}
-	return options.ResolveStartOptions(newKongShimCmd(s.EnableDebug), flags, appConfig)
+	})
 }
 
 func (s *StartCmdKong) Run(appManager *app.AppManager, source LaunchSource) error {

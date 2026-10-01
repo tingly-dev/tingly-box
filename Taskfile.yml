@@ -40,7 +40,7 @@ tasks:
     cmds:
       - |
         rm -rf internal/web/dist/assets
-        rm -rf internal/web_wails3/dist/assets
+        rm -rf gui/wails3/dist/assets
   
   dev:
     aliases:

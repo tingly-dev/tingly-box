@@ -159,6 +159,19 @@ config dir that does not exist and asserts it still does not. A `Run`
 method that grows an `*app.AppManager` parameter it does not need fails
 that test rather than a container's health check.
 
+### The GUI binary follows the same boundary
+
+`gui/wails3` starts the same gateway, so it uses the same rules: a lazy
+`AppManager`, and the single-instance lock taken from `ConfigDir()` *before*
+anything builds `AppConfig`. A second launch that only asks the running
+instance to show its window (`notifyRunningGUI`) reads the runtime port file
+and `UserTokenFromFile`, like `open` on a running server, and never opens
+the database. Its server flags are the CLI's own `command.ServerFlagsKong`
+(also embedded in `StartCmdKong`), and `AppLauncher.Start` receives those
+flags unresolved, because resolving them is what builds `AppConfig`. The
+one deliberate difference is an empty `--host`: the CLI binds every
+interface (Docker relies on it), the GUI pins it to `localhost`.
+
 ### What this does not solve
 
 The yes-rows are correct on any filesystem SQLite supports. Against a live

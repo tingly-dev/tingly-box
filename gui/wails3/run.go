@@ -10,6 +10,7 @@ import (
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -31,8 +32,11 @@ import (
 // the CLI already uses in server.go to detect a running instance, and unlike
 // a TCP probe it can't be fooled by an unrelated listener answering on the
 // same port.
+//
+// It runs before AppConfig is built and reads only ConfigDir, so losing the
+// race never opens the running instance's database.
 func acquireSingleInstanceLock(appManager *app.AppManager) (*lock.FileLock, error) {
-	fileLock := lock.NewFileLock(appManager.AppConfig().ConfigDir())
+	fileLock := lock.NewFileLock(appManager.ConfigDir())
 	if fileLock.IsLocked() {
 		pid, _ := fileLock.GetPID()
 		return nil, fmt.Errorf("Tingly Box is already running (pid %d).\n\nUse the running instance, or stop it first (e.g. `tingly-box stop`).", pid)
@@ -54,13 +58,16 @@ func acquireSingleInstanceLock(appManager *app.AppManager) (*lock.FileLock, erro
 // error-app paths — and the HTTP nudge also distinguishes a running GUI
 // (route exists → 200) from a running CLI server (route absent → 404) for
 // free.
-func notifyRunningGUI(appConfig *appconfig.AppConfig) error {
-	url := fmt.Sprintf("http://localhost:%d/api/v1/gui/open", appConfig.GetServerPort())
+//
+// Like the CLI's `open` on a running server, it reads only the runtime port
+// file and config.json, never the database the running instance owns.
+func notifyRunningGUI(appManager *app.AppManager) error {
+	url := fmt.Sprintf("http://localhost:%d/api/v1/gui/open", appManager.GetRuntimeServerPort())
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+appConfig.GetGlobalConfig().GetUserToken())
+	req.Header.Set("Authorization", "Bearer "+appconfig.UserTokenFromFile(appManager.ConfigDir()))
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Do(req)
@@ -84,22 +91,30 @@ func NewAppLauncher() commandgui.AppLauncher {
 
 // Start launches the unified GUI application: in-process server + tray icon
 // with hub panel + main app window.
-func (l *appLauncher) Start(appManager *app.AppManager, opts options.StartServerOptions) error {
-	log.Printf("Starting GUI with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
-
+func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlagsKong) error {
 	// Single-instance check FIRST: catches a running tingly-box (CLI/npx/GUI)
 	// that the port probe below can't reliably tell apart from an unrelated
 	// process on the same port. See acquireSingleInstanceLock's doc comment.
 	// If the holder is another GUI instance, focus it and exit quietly
 	// instead of showing an error.
 	if _, err := acquireSingleInstanceLock(appManager); err != nil {
-		if notifyErr := notifyRunningGUI(appManager.AppConfig()); notifyErr == nil {
+		if notifyErr := notifyRunningGUI(appManager); notifyErr == nil {
 			log.Printf("Another GUI instance is running; asked it to show its window")
 			return nil
 		}
 		runErrorApp(err.Error())
 		return err
 	}
+
+	// Only now, holding the lock, build AppConfig (via Resolve). A desktop
+	// app serves localhost unless --host says otherwise (the CLI's empty
+	// default binds every interface), and never opens a browser — the main
+	// window is the UI — so the browser/daemon/log-file options stay zero.
+	if flags.Host == "" {
+		flags.Host = "localhost"
+	}
+	opts := flags.Resolve(appManager.AppConfig(), options.StartFlags{})
+	log.Printf("Starting GUI with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
 
 	// Check if port is available before starting the app
 	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
@@ -110,9 +125,6 @@ func (l *appLauncher) Start(appManager *app.AppManager, opts options.StartServer
 		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
 		return fmt.Errorf("port %d is already in use", opts.Port)
 	}
-
-	// GUI mode should NOT auto-open browser (user uses the GUI window instead)
-	opts.EnableOpenBrowser = false
 
 	// Create ServerManager with options
 	serverManager := app.NewServerManager(

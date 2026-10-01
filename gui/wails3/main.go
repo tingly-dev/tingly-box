@@ -12,7 +12,6 @@ import (
 
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
 	"github.com/tingly-dev/tingly-box/internal/app"
-	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
@@ -29,18 +28,25 @@ var (
 // subcommands: the GUI has a single unified mode (server + tray with hub
 // panel + main window), so the server flags live directly on the root and
 // bare `tingly-box-gui` (or `tingly-box-gui --config-dir X --port Y`)
-// launches straight into it. --config-dir is parsed here, before Run —
-// AppConfig is built from it up front, same as cli/tingly-box/main.go.
+// launches straight into it. The server flags are the CLI's own
+// (command.ServerFlagsKong), so the two entry points cannot drift apart.
 type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 
-	commandgui.StartFlagsKong
+	command.ServerFlagsKong
+
+	// Accepted and ignored, so a launch line written for the CLI's `start`
+	// still opens the GUI: the window is the UI (no browser) and a desktop
+	// app is never daemonized.
+	EnableOpenBrowser bool   `kong:"flag,name='browser',hidden,help='Unused in GUI mode'"`
+	Daemon            bool   `kong:"flag,name='daemon',hidden,help='Unused in GUI mode'"`
+	LogFile           string `kong:"flag,name='log-file',hidden,help='Unused in GUI mode'"`
 }
 
 // Run launches the unified GUI mode. Kong invokes this on the root node
 // since the grammar has no subcommands.
 func (c *CLI) Run(appManager *app.AppManager, launcher commandgui.AppLauncher) error {
-	return launcher.Start(appManager, c.Resolve(appManager.AppConfig()))
+	return launcher.Start(appManager, c.ServerFlagsKong)
 }
 
 // main function serves as the application's entry point. It uses Kong to
@@ -75,24 +81,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	var appConfig *appconfig.AppConfig
-	if cli.ConfigDir != "" {
-		expandedDir, expandErr := fs.ExpandConfigDir(cli.ConfigDir)
-		if expandErr == nil {
-			appConfig, err = appconfig.NewAppConfig(appconfig.WithConfigDir(expandedDir))
-		} else {
-			err = expandErr
+	// Lazy, same as cli/tingly-box/main.go: AppConfig — and with it
+	// tingly.db and every store's migration — is built only once the
+	// launcher holds the single-instance lock (see run.go), so a second
+	// launch that just focuses the running instance never becomes a second
+	// SQLite writer next to it (#1912).
+	configDir := cli.ConfigDir
+	if configDir != "" {
+		configDir, err = fs.ExpandConfigDir(configDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)
+			os.Exit(1)
 		}
 	}
-	if appConfig == nil && err == nil {
-		appConfig, err = appconfig.NewAppConfig()
-	}
-	if err != nil {
+	appManager := app.NewLazyAppManager(configDir, func(err error) {
 		fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)
 		os.Exit(1)
-	}
-
-	appManager := app.NewAppManagerWithConfig(appConfig)
+	})
+	appManager.SetVersion(version)
 
 	if err := ctx.Run(appManager); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

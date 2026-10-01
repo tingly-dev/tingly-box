@@ -11,7 +11,7 @@ script
 
 # codegen
 internal/web/dist
-internal/web_wails3/dist
+gui/wails3/dist
 frontend/src/client
 frontend/src/bindings
 
